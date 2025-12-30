@@ -16,16 +16,38 @@ def gerar_codigo_venda():
     return f"V-{data_atual}-{random_part}"
 
 
-@vendas_bp.route("/", methods=["POST"])
+@vendas_bp.route("/", methods=["POST", "OPTIONS"], strict_slashes=False)
 def criar_venda():
+
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", "http://localhost:5173")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return response
     """Cria uma nova venda (finalizar compra no PDV)"""
     try:
         data = request.get_json()
         print(f"📦 Dados da venda recebidos: {data}")
 
-        # Validações
+        # VALIDAÇÕES BÁSICAS
+        if not data:
+            return jsonify({"error": "Dados não fornecidos"}), 400
+
         if not data.get("items") or len(data["items"]) == 0:
             return jsonify({"error": "Carrinho vazio"}), 400
+
+        # Validação de valores numéricos
+        try:
+            subtotal = float(data.get("subtotal", 0))
+            desconto = float(data.get("desconto", 0))
+            total = float(data.get("total", 0))
+            valor_recebido = float(data.get("cashReceived", 0))
+
+            if subtotal < 0 or desconto < 0 or total < 0 or valor_recebido < 0:
+                return jsonify({"error": "Valores não podem ser negativos"}), 400
+        except ValueError:
+            return jsonify({"error": "Valores numéricos inválidos"}), 400
 
         # 1. GERAR CÓDIGO DA VENDA
         codigo_venda = gerar_codigo_venda()
@@ -38,12 +60,14 @@ def criar_venda():
         nova_venda = Venda(
             codigo=codigo_venda,
             cliente_id=data.get("cliente_id"),
-            funcionario_id=1,  # Temporário - depois pegar do usuário logado
-            subtotal=float(data.get("subtotal", 0)),
-            desconto=float(data.get("desconto", 0)),
-            total=float(data.get("total", 0)),
+            # IMPORTANTE: Você precisa pegar o funcionário do usuário logado
+            # Por enquanto deixamos como 1, mas isso deve ser corrigido depois
+            funcionario_id=data.get("funcionario_id", 1),
+            subtotal=subtotal,
+            desconto=desconto,
+            total=total,
             forma_pagamento=data.get("paymentMethod", "dinheiro"),
-            valor_recebido=float(data.get("cashReceived", 0)),
+            valor_recebido=valor_recebido,
             troco=float(data.get("change", 0)),
             status="finalizada",
             observacoes=data.get("observacoes", ""),
@@ -56,6 +80,22 @@ def criar_venda():
         for item_data in data["items"]:
             produto_id = item_data.get("productId")
             quantidade = item_data.get("quantity", 1)
+            preco_unitario = float(item_data.get("price", 0))
+            total_item = float(item_data.get("total", 0))
+
+            # Validações do item
+            if not produto_id:
+                db.session.rollback()
+                return jsonify({"error": "ID do produto não informado"}), 400
+
+            if quantidade <= 0:
+                db.session.rollback()
+                return (
+                    jsonify(
+                        {"error": f"Quantidade inválida para produto {produto_id}"}
+                    ),
+                    400,
+                )
 
             # Buscar produto
             produto = Produto.query.get(produto_id)
@@ -80,9 +120,9 @@ def criar_venda():
                 venda_id=nova_venda.id,
                 produto_id=produto_id,
                 quantidade=quantidade,
-                preco_unitario=float(item_data.get("price", 0)),
+                preco_unitario=preco_unitario,
                 desconto=0.0,  # Poderia receber desconto por item
-                total_item=float(item_data.get("total", 0)),
+                total_item=total_item,
                 produto_nome=produto.nome,
                 produto_codigo=produto.codigo_barras,
                 produto_unidade=produto.unidade_medida,
@@ -105,7 +145,7 @@ def criar_venda():
                 motivo=f"Venda #{codigo_venda}",
                 observacoes=f"Venda realizada via PDV",
                 venda_id=nova_venda.id,
-                funcionario_id=1,  # Temporário
+                funcionario_id=nova_venda.funcionario_id,
             )
 
             db.session.add(movimentacao)
@@ -113,7 +153,7 @@ def criar_venda():
             # 6. VERIFICAR SE ESTOQUE ESTÁ BAIXO (alerta)
             if produto.quantidade <= produto.quantidade_minima:
                 print(
-                    f"⚠️ ALERTA: Estoque baixo para {produto.nome} - {produto.quantidade} unidades"
+                    f"⚠️ ALERTA: Estoque baixo para {produto.nome} - {produto.quantidade} unidades (mínimo: {produto.quantidade_minima})"
                 )
 
         # 7. FINALIZAR TRANSAÇÃO
@@ -155,6 +195,7 @@ def criar_venda():
         }
 
         print(f"✅ Venda {codigo_venda} finalizada - Total: R$ {nova_venda.total:.2f}")
+        print(f"📋 Itens vendidos: {len(nova_venda.itens)}")
 
         return jsonify(resposta), 201
 

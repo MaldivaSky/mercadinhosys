@@ -42,10 +42,18 @@ const PdvPage: React.FC = () => {
     const [newProduct, setNewProduct] = useState({
         name: '',
         barcode: '',
-        price: '',
+        preco_custo: '',  // ← NOVO
+        preco_venda: '',  // ← Mude de 'price' para 'preco_venda'
+        margem_lucro: '30',  // ← NOVO (30% padrão)
         stock: '0',
+        quantidade_minima: '10',  // ← NOVO
+        marca: 'Sem Marca',  // ← NOVO
+        fabricante: '',  // ← NOVO
+        tipo: 'unidade',  // ← NOVO ('unidade', 'granel', 'fracionado')
+        unidade_medida: 'un',  // ← Mantém
         isBulk: false,
-        unit: 'un'
+        categoria_id: '',  // ← NOVO
+        descricao: '',  // ← NOVO
     });
 
     // Estados para checkout
@@ -297,6 +305,7 @@ const PdvPage: React.FC = () => {
             if (barcodeInputRef.current) {
                 barcodeInputRef.current.focus();
             }
+            
 
         } catch (error: any) {
             console.error('❌ Erro ao finalizar venda:', error);
@@ -346,19 +355,26 @@ const PdvPage: React.FC = () => {
             return;
         }
 
-        if (!newProduct.price || parseFloat(newProduct.price) <= 0) {
-            alert('Preço inválido');
+        if (!newProduct.preco_venda || parseFloat(newProduct.preco_venda) <= 0) {
+            alert('Preço de venda inválido');
             return;
         }
 
         try {
             const productData = {
-                name: newProduct.name,
-                barcode: newProduct.barcode || null,
-                price: parseFloat(newProduct.price),
-                stock: parseInt(newProduct.stock) || 0,
-                isBulk: newProduct.isBulk,
-                unit: newProduct.isBulk ? newProduct.unit : 'un'
+                nome: newProduct.name,
+                codigo_barras: newProduct.barcode || null,
+                preco_custo: parseFloat(newProduct.preco_custo) || 0,
+                preco_venda: parseFloat(newProduct.preco_venda),
+                margem_lucro: parseFloat(newProduct.margem_lucro) || 30,
+                quantidade: parseInt(newProduct.stock) || 0,
+                quantidade_minima: parseInt(newProduct.quantidade_minima) || 10,
+                marca: newProduct.marca,
+                fabricante: newProduct.fabricante || null,
+                tipo: newProduct.isBulk ? 'granel' : 'unidade',
+                unidade_medida: newProduct.isBulk ? newProduct.unidade_medida : 'un',
+                categoria_id: newProduct.categoria_id || null,
+                descricao: newProduct.descricao || null,
             };
 
             const response = await api.post('/api/produtos/quick-add', productData);
@@ -370,10 +386,18 @@ const PdvPage: React.FC = () => {
             setNewProduct({
                 name: '',
                 barcode: '',
-                price: '',
+                preco_custo: '',
+                preco_venda: '',
+                margem_lucro: '30',
                 stock: '0',
+                quantidade_minima: '10',
+                marca: 'Sem Marca',
+                fabricante: '',
+                tipo: 'unidade',
+                unidade_medida: 'un',
                 isBulk: false,
-                unit: 'un'
+                categoria_id: '',
+                descricao: '',
             });
 
             setShowQuickAddModal(false);
@@ -383,6 +407,9 @@ const PdvPage: React.FC = () => {
             if (barcodeInputRef.current) {
                 barcodeInputRef.current.focus();
             }
+            console.log('📤 Dados que serão enviados:', productData);
+            console.log('📤 Tipo de dados:', typeof productData);
+            console.log('📤 Chaves do objeto:', Object.keys(productData));
 
         } catch (error) {
             console.error('Erro ao cadastrar produto:', error);
@@ -684,13 +711,14 @@ const PdvPage: React.FC = () => {
             {/* Modal de Cadastro Rápido */}
             {showQuickAddModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg w-full max-w-md">
+                    <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
                         <div className="p-6 border-b">
                             <h3 className="text-xl font-bold">Cadastrar Produto Rápido</h3>
                             <p className="text-sm text-gray-600 mt-1">Produto será salvo e adicionado ao carrinho</p>
                         </div>
 
                         <div className="p-6 space-y-4">
+                            {/* Nome */}
                             <div>
                                 <label className="block text-sm font-medium mb-1">Nome do Produto *</label>
                                 <input
@@ -702,16 +730,80 @@ const PdvPage: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Código de Barras */}
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Código de Barras</label>
+                                <input
+                                    type="text"
+                                    className="w-full p-3 border border-gray-300 rounded-lg"
+                                    value={newProduct.barcode}
+                                    onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
+                                    placeholder="Opcional"
+                                />
+                            </div>
+
+                            {/* Preços */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Preço (R$) *</label>
+                                    <label className="block text-sm font-medium mb-1">Preço de Custo (R$)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                        value={newProduct.preco_custo}
+                                        onChange={(e) => {
+                                            const custo = e.target.value;
+                                            const venda = newProduct.preco_venda || '0';
+                                            const margem = custo && parseFloat(custo) > 0
+                                                ? ((parseFloat(venda) - parseFloat(custo)) / parseFloat(custo) * 100).toFixed(2)
+                                                : '30';
+                                            setNewProduct({
+                                                ...newProduct,
+                                                preco_custo: custo,
+                                                margem_lucro: margem
+                                            });
+                                        }}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Preço de Venda (R$) *</label>
                                     <input
                                         type="number"
                                         step="0.01"
                                         min="0.01"
                                         className="w-full p-3 border border-gray-300 rounded-lg"
-                                        value={newProduct.price}
-                                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                                        value={newProduct.preco_venda}
+                                        onChange={(e) => {
+                                            const venda = e.target.value;
+                                            const custo = newProduct.preco_custo || '0';
+                                            const margem = custo && parseFloat(custo) > 0
+                                                ? ((parseFloat(venda) - parseFloat(custo)) / parseFloat(custo) * 100).toFixed(2)
+                                                : '30';
+                                            setNewProduct({
+                                                ...newProduct,
+                                                preco_venda: venda,
+                                                margem_lucro: margem
+                                            });
+                                        }}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Margem e Estoque */}
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Margem (%)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                        value={newProduct.margem_lucro}
+                                        onChange={(e) => setNewProduct({ ...newProduct, margem_lucro: e.target.value })}
+                                        placeholder="30"
                                     />
                                 </div>
 
@@ -725,25 +817,56 @@ const PdvPage: React.FC = () => {
                                         onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
                                     />
                                 </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Estoque Mínimo</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                        value={newProduct.quantidade_minima}
+                                        onChange={(e) => setNewProduct({ ...newProduct, quantidade_minima: e.target.value })}
+                                        placeholder="10"
+                                    />
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Código de Barras</label>
-                                <input
-                                    type="text"
-                                    className="w-full p-3 border border-gray-300 rounded-lg"
-                                    value={newProduct.barcode}
-                                    onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
-                                    placeholder="Opcional - preenchido automaticamente"
-                                />
+                            {/* Marca e Fabricante */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Marca</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                        value={newProduct.marca}
+                                        onChange={(e) => setNewProduct({ ...newProduct, marca: e.target.value })}
+                                        placeholder="Sem Marca"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Fabricante</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-3 border border-gray-300 rounded-lg"
+                                        value={newProduct.fabricante}
+                                        onChange={(e) => setNewProduct({ ...newProduct, fabricante: e.target.value })}
+                                        placeholder="Opcional"
+                                    />
+                                </div>
                             </div>
 
+                            {/* Produto a Granel */}
                             <div className="flex items-center">
                                 <input
                                     type="checkbox"
                                     id="isBulk"
                                     checked={newProduct.isBulk}
-                                    onChange={(e) => setNewProduct({ ...newProduct, isBulk: e.target.checked })}
+                                    onChange={(e) => setNewProduct({
+                                        ...newProduct,
+                                        isBulk: e.target.checked,
+                                        tipo: e.target.checked ? 'granel' : 'unidade'
+                                    })}
                                     className="h-5 w-5 text-blue-500 rounded"
                                 />
                                 <label htmlFor="isBulk" className="ml-2 text-sm font-medium">
@@ -756,8 +879,8 @@ const PdvPage: React.FC = () => {
                                     <label className="block text-sm font-medium mb-1">Unidade de Medida</label>
                                     <select
                                         className="w-full p-3 border border-gray-300 rounded-lg"
-                                        value={newProduct.unit}
-                                        onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
+                                        value={newProduct.unidade_medida}
+                                        onChange={(e) => setNewProduct({ ...newProduct, unidade_medida: e.target.value })}
                                     >
                                         <option value="kg">Quilo (kg)</option>
                                         <option value="g">Grama (g)</option>
@@ -765,6 +888,18 @@ const PdvPage: React.FC = () => {
                                     </select>
                                 </div>
                             )}
+
+                            {/* Descrição */}
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Descrição</label>
+                                <textarea
+                                    className="w-full p-3 border border-gray-300 rounded-lg"
+                                    value={newProduct.descricao}
+                                    onChange={(e) => setNewProduct({ ...newProduct, descricao: e.target.value })}
+                                    placeholder="Descrição opcional do produto"
+                                    rows={2}
+                                />
+                            </div>
                         </div>
 
                         <div className="p-6 border-t flex justify-end gap-3">
@@ -774,10 +909,18 @@ const PdvPage: React.FC = () => {
                                     setNewProduct({
                                         name: '',
                                         barcode: '',
-                                        price: '',
+                                        preco_custo: '',
+                                        preco_venda: '',
+                                        margem_lucro: '30',
                                         stock: '0',
+                                        quantidade_minima: '10',
+                                        marca: 'Sem Marca',
+                                        fabricante: '',
+                                        tipo: 'unidade',
+                                        unidade_medida: 'un',
                                         isBulk: false,
-                                        unit: 'un'
+                                        categoria_id: '',
+                                        descricao: '',
                                     });
                                 }}
                                 className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
