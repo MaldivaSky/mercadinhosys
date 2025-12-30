@@ -8,7 +8,7 @@ import os
 
 # Inicializa as extensões
 db = SQLAlchemy()
-migrate = Migrate()
+migrate = Migrate(app=db)
 jwt = JWTManager()
 cors = CORS(
     resources={
