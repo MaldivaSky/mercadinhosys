@@ -3,11 +3,14 @@ import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
 import Dashboard from './pages/Dashboard/Dashboard';
 import PdvPage from './pages/PDV/PdvPage';
+import HistoricoVendas from './pages/Vendas/HistoricoVendas';
 import './App.css';
+
+type PageType = 'dashboard' | 'pdv' | 'historico' | 'estoque' | 'agenda' | 'alerts';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'pdv'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -21,7 +24,9 @@ function App() {
         />
 
         <main className="flex-1 p-4 md:p-6">
-          {currentPage === 'dashboard' ? <Dashboard /> : <PdvPage />}
+          {currentPage === 'dashboard' ? <Dashboard /> :
+            currentPage === 'pdv' ? <PdvPage /> :
+              <HistoricoVendas />}
 
           <footer className="mt-8 pt-6 border-t border-gray-200">
             <div className="text-center text-gray-500 text-sm">

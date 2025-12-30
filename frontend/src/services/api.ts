@@ -1,57 +1,51 @@
 import axios from 'axios';
 
-// Verifique qual URL seu backend está usando
-//const API_URL = 'http://localhost:5000/api'; // ou 3000, 8000, etc.
+// SEU BACKEND NA PORTA 5000
+const API_URL = 'http://localhost:5000';
 
-const api = axios.create({
-    baseURL: '/api',  // ← Usa proxy
+export const api = axios.create({
+    baseURL: API_URL,
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-
-
-// Adicionar interceptors para debug
+// Interceptor para log
 api.interceptors.request.use(
     (config) => {
-        console.log(`➡️ Enviando requisição: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-        console.log('📦 Dados:', config.data);
-
-        const token = localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-
+        console.log(`🌐 [Frontend] ${config.method?.toUpperCase()} ${config.url}`);
         return config;
     },
     (error) => {
-        console.error('❌ Erro na requisição:', error);
+        console.error('❌ [Frontend] Erro na requisição:', error);
         return Promise.reject(error);
     }
 );
 
 api.interceptors.response.use(
     (response) => {
-        console.log(`⬅️ Resposta recebida: ${response.status} ${response.config.url}`);
-        console.log('📄 Dados da resposta:', response.data);
+        console.log(`✅ [Frontend] ${response.status} ${response.config.url}`);
         return response;
     },
     (error) => {
-        console.error('❌ Erro na resposta:', {
+        console.error('❌ [Frontend] Erro:', {
+            url: error.config?.url,
             status: error.response?.status,
             message: error.message,
-            url: error.config?.url,
             data: error.response?.data
         });
 
-        if (error.response?.status === 404) {
-            console.error('⚠️ Endpoint não encontrado. Verifique se o backend está rodando.');
+        if (error.code === 'ERR_NETWORK') {
+            alert('⚠️ Backend offline! Verifique se o Flask está rodando na porta 5000.');
         }
 
         return Promise.reject(error);
     }
 );
 
-export default api;
+export const setAuthToken = (token: string) => {
+    if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+};
