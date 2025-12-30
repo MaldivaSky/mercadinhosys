@@ -1,4 +1,4 @@
-import api from './api';
+import { api } from './api';
 
 // Interfaces ajustadas para snake_case (como o backend espera)
 interface ItemVendaDTO {

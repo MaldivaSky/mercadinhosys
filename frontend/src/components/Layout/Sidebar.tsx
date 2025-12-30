@@ -3,47 +3,41 @@ import {
     LayoutDashboard,
     ShoppingCart,
     Package,
-    Users,
-    BarChart3,
+    Receipt,
+    Calendar,
     Bell,
     Settings,
-    CreditCard,
-    FileText,
-    Calendar,
-    X,
-    LogOut
-} from 'lucide-react';
-
+    LogOut,
+    X
+} from 'lucide-react'; // ou a biblioteca que você está usando
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
-    onNavigate: (page: 'dashboard' | 'pdv') => void; // Adicione esta linha
+    onNavigate: (page: PageType) => void;
 }
-
+type PageType = 'dashboard' | 'pdv' | 'historico' | 'estoque' | 'agenda' | 'alerts';
 interface MenuItem {
     icon: React.ReactNode;
     label: string;
     active: boolean;
-    page: 'dashboard' | 'pdv'; // Adicione esta linha
+    page: PageType;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate }) => {
     const menuItems: MenuItem[] = [
         { icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard', active: true, page: 'dashboard' },
         { icon: <ShoppingCart className="h-5 w-5" />, label: 'Ponto de Venda', active: false, page: 'pdv' },
-        { icon: <Package className="h-5 w-5" />, label: 'Estoque', active: false, page: 'dashboard' },
-        { icon: <Users className="h-5 w-5" />, label: 'Clientes', active: false, page: 'dashboard' },
-        { icon: <CreditCard className="h-5 w-5" />, label: 'Fornecedores', active: false, page: 'dashboard' },
-        { icon: <BarChart3 className="h-5 w-5" />, label: 'Relatórios', active: false, page: 'dashboard' },
-        { icon: <FileText className="h-5 w-5" />, label: 'Vendas', active: false, page: 'dashboard' },
-        { icon: <Calendar className="h-5 w-5" />, label: 'Agenda', active: false, page: 'dashboard' },
-        { icon: <Bell className="h-5 w-5" />, label: 'Alertas', active: false, page: 'dashboard' },
+        { icon: <Package className="h-5 w-5" />, label: 'Estoque', active: false, page: 'estoque' }, // Ajuste este valor se necessário
+        { icon: <Receipt className="h-5 w-5" />, label: 'Histórico de Vendas', active: false, page: 'historico' },
+        { icon: <Calendar className="h-5 w-5" />, label: 'Agenda', active: false, page: 'agenda' }, // Ajuste este valor se necessário
+        { icon: <Bell className="h-5 w-5" />, label: 'Alertas', active: false, page: 'alerts' } // Ajuste este valor se necessário
     ];
 
     const configItems = [
         { icon: <Settings className="h-5 w-5" />, label: 'Configurações' },
         { icon: <LogOut className="h-5 w-5" />, label: 'Sair' },
     ];
+
 
     return (
         <>
