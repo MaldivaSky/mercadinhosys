@@ -8,8 +8,9 @@ export const api = axios.create({
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
-    },
-});
+    }
+    
+   });
 
 // Interceptor para log
 api.interceptors.request.use(
