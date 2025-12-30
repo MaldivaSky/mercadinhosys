@@ -10,15 +10,6 @@ import os
 db = SQLAlchemy()
 migrate = Migrate(app=db)
 jwt = JWTManager()
-cors = CORS(
-    resources={
-        r"/api/*": {
-            "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "Accept"],
-        }
-    }
-)
 
 
 def create_app(config_name="default"):
@@ -32,7 +23,7 @@ def create_app(config_name="default"):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # Cria pasta de uploads se não existir
     if not os.path.exists(app.config["UPLOAD_FOLDER"]):
