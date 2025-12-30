@@ -1,222 +1,182 @@
-from datetime import datetime, date
-from app import db
+# app/models.py
+
+from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import event, func
+
+db = SQLAlchemy()
 
 
-# ==================== TABELAS BASE ====================
+class Estabelecimento(db.Model):
+    """Tabela de estabelecimentos (cada mercado/loja)"""
 
-
-class Fornecedor(db.Model):
-    """Modelo de fornecedores - ESSENCIAL para gestão de compras"""
-
-    __tablename__ = "fornecedores"
+    __tablename__ = "estabelecimentos"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # Identificação
-    nome = db.Column(db.String(200), nullable=False, index=True)
-    razao_social = db.Column(db.String(200))
-    cnpj = db.Column(db.String(18), unique=True, index=True)
-    inscricao_estadual = db.Column(db.String(20))
-
-    # Contato
+    nome = db.Column(db.String(100), nullable=False)
+    cnpj = db.Column(db.String(20), unique=True, nullable=False)
     telefone = db.Column(db.String(20))
-    celular = db.Column(db.String(20))
     email = db.Column(db.String(100))
-    site = db.Column(db.String(200))
-
-    # Endereço
-    endereco = db.Column(db.String(200))
-    numero = db.Column(db.String(10))
-    complemento = db.Column(db.String(50))
-    bairro = db.Column(db.String(100))
-    cidade = db.Column(db.String(100))
+    endereco = db.Column(db.Text)
+    cidade = db.Column(db.String(50))
     estado = db.Column(db.String(2))
-    cep = db.Column(db.String(9))
-
-    # Contato comercial
-    contato_nome = db.Column(db.String(100))
-    contato_telefone = db.Column(db.String(20))
-    contato_email = db.Column(db.String(100))
-
-    # Dados financeiros
-    prazo_entrega = db.Column(db.Integer, default=7)  # dias
-    condicao_pagamento = db.Column(db.String(100))
-    limite_credito = db.Column(db.Float, default=0.0)
-
-    # Status
-    ativo = db.Column(db.Boolean, nullable=False, default=True)
-    observacoes = db.Column(db.Text)
-    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
-    data_atualizacao = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    data_cadastro = db.Column(db.DateTime, default=datetime.now)
+    ativo = db.Column(db.Boolean, default=True)
 
     # Relacionamentos
-    produtos = db.relationship("Produto", backref="fornecedor_rel", lazy=True)
-    compras = db.relationship("Compra", backref="fornecedor", lazy=True)
+    configuracao = db.relationship(
+        "Configuracao", backref="estabelecimento", uselist=False
+    )
+    produtos = db.relationship("Produto", backref="estabelecimento")
+    vendas = db.relationship("Venda", backref="estabelecimento")
+    funcionarios = db.relationship("Funcionario", backref="estabelecimento")
+    clientes = db.relationship("Cliente", backref="estabelecimento")
+    fornecedores = db.relationship("Fornecedor", backref="estabelecimento")
 
     def to_dict(self):
         return {
             "id": self.id,
             "nome": self.nome,
-            "razao_social": self.razao_social,
             "cnpj": self.cnpj,
             "telefone": self.telefone,
             "email": self.email,
+            "endereco": self.endereco,
             "cidade": self.cidade,
             "estado": self.estado,
-            "contato_nome": self.contato_nome,
+            "data_cadastro": (
+                self.data_cadastro.isoformat() if self.data_cadastro else None
+            ),
             "ativo": self.ativo,
-            "quantidade_produtos": len(self.produtos),
-            "data_cadastro": self.data_cadastro.isoformat(),
-            "data_atualizacao": self.data_atualizacao.isoformat(),
         }
 
-    def __repr__(self):
-        return f"<Fornecedor {self.cnpj or 'Sem CNPJ'}: {self.nome}>"
 
+class Configuracao(db.Model):
+    """Configurações do sistema por estabelecimento"""
 
-class Produto(db.Model):
-    """Modelo de produtos - ATUALIZADO com fornecedor"""
-
-    __tablename__ = "produtos"
+    __tablename__ = "configuracoes"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # Identificação (ÍNDICES para busca rápida)
-    codigo_barras = db.Column(db.String(50), unique=True, nullable=True, index=True)
-    codigo_interno = db.Column(db.String(50), unique=True, nullable=True, index=True)
-    nome = db.Column(db.String(200), nullable=False, index=True)
-    descricao = db.Column(db.Text)
-
-    # Fornecedor (NOVO CAMPO ESSENCIAL)
-    fornecedor_id = db.Column(
-        db.Integer, db.ForeignKey("fornecedores.id"), nullable=True
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), unique=True, nullable=False
     )
 
-    # Preços
-    preco_custo = db.Column(db.Float, nullable=False, default=0.0)
-    preco_venda = db.Column(db.Float, nullable=False, default=0.0)
-    margem_lucro = db.Column(db.Float, nullable=False, default=30.0)
+    # Configurações Gerais
+    logo_url = db.Column(db.String(255))
+    cor_principal = db.Column(db.String(7), default="#4F46E5")  # Indigo
+    tema_escuro = db.Column(db.Boolean, default=False)
 
-    # Estoque
-    quantidade = db.Column(db.Float, nullable=False, default=0.0)  # Float para granel
-    quantidade_minima = db.Column(db.Float, nullable=False, default=10.0)
-    localizacao = db.Column(db.String(50))  # Corredor, prateleira, etc
+    # Configurações de Venda/PDV
+    impressao_automatica = db.Column(db.Boolean, default=False)
+    tipo_impressora = db.Column(db.String(20), default="termica")
+    exibir_preco_tela = db.Column(db.Boolean, default=True)
+    permitir_venda_sem_estoque = db.Column(db.Boolean, default=False)
+    desconto_maximo_percentual = db.Column(db.Float, default=10.0)
+    arredondamento_valores = db.Column(db.Float, default=0.05)
 
-    # Categorização SIMPLIFICADA
-    categoria = db.Column(db.String(100), nullable=False, default="Geral")
-    marca = db.Column(db.String(100), nullable=False, default="Sem Marca")
+    # Configurações de Estoque
+    dias_alerta_validade = db.Column(db.Integer, default=15)
+    estoque_minimo_padrao = db.Column(db.Integer, default=10)
 
-    # Controle de validade
-    data_validade = db.Column(db.Date)
-    lote = db.Column(db.String(50))
+    # Configurações de Segurança
+    tempo_sessao_minutos = db.Column(db.Integer, default=30)
+    tentativas_senha_bloqueio = db.Column(db.Integer, default=3)
 
-    # Tipo de produto
-    tipo = db.Column(db.String(20), nullable=False, default="unidade")
-    unidade_medida = db.Column(db.String(20), nullable=False, default="un")
-    peso_unidade = db.Column(db.Float)  # Para conversões
-
-    # Impostos
-    ncm = db.Column(db.String(10))
-    cest = db.Column(db.String(10))
-
-    # Status
-    ativo = db.Column(db.Boolean, nullable=False, default=True)
-    controla_estoque = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    # Formas de Pagamento
+    formas_pagamento = db.Column(
+        db.JSON,
+        default=lambda: {
+            "dinheiro": {"ativo": True, "taxa": 0, "exige_troco": True},
+            "cartao_credito": {"ativo": True, "taxa": 2.5, "parcelas": 12},
+            "cartao_debito": {"ativo": True, "taxa": 1.5},
+            "pix": {"ativo": True, "taxa": 0},
+        },
     )
 
-    # Relacionamentos EXPLÍCITOS
-    venda_itens = db.relationship("VendaItem", backref="produto_rel", lazy=True)
-    movimentacoes = db.relationship(
-        "MovimentacaoEstoque", backref="produto_mov", lazy=True
-    )
-    compra_itens = db.relationship("CompraItem", backref="produto_compra", lazy=True)
+    # Configurações de Notificação
+    alertas_email = db.Column(db.Boolean, default=False)
+    alertas_whatsapp = db.Column(db.Boolean, default=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     def to_dict(self):
         return {
             "id": self.id,
-            "codigo_barras": self.codigo_barras,
-            "codigo_interno": self.codigo_interno,
-            "nome": self.nome,
-            "descricao": self.descricao,
-            "fornecedor_id": self.fornecedor_id,
-            "fornecedor_nome": (
-                self.fornecedor_rel.nome if self.fornecedor_rel else None
-            ),
-            "preco_custo": self.preco_custo,
-            "preco_venda": self.preco_venda,
-            "margem_lucro": self.margem_lucro,
-            "quantidade": self.quantidade,
-            "quantidade_minima": self.quantidade_minima,
-            "localizacao": self.localizacao,
-            "categoria": self.categoria,
-            "marca": self.marca,
-            "data_validade": (
-                self.data_validade.isoformat() if self.data_validade else None
-            ),
-            "lote": self.lote,
-            "tipo": self.tipo,
-            "unidade_medida": self.unidade_medida,
-            "ativo": self.ativo,
-            "controla_estoque": self.controla_estoque,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "estabelecimento_id": self.estabelecimento_id,
+            "logo_url": self.logo_url,
+            "cor_principal": self.cor_principal,
+            "tema_escuro": self.tema_escuro,
+            "impressao_automatica": self.impressao_automatica,
+            "tipo_impressora": self.tipo_impressora,
+            "exibir_preco_tela": self.exibir_preco_tela,
+            "permitir_venda_sem_estoque": self.permitir_venda_sem_estoque,
+            "desconto_maximo_percentual": self.desconto_maximo_percentual,
+            "arredondamento_valores": self.arredondamento_valores,
+            "dias_alerta_validade": self.dias_alerta_validade,
+            "estoque_minimo_padrao": self.estoque_minimo_padrao,
+            "tempo_sessao_minutos": self.tempo_sessao_minutos,
+            "tentativas_senha_bloqueio": self.tentativas_senha_bloqueio,
+            "formas_pagamento": self.formas_pagamento,
+            "alertas_email": self.alertas_email,
+            "alertas_whatsapp": self.alertas_whatsapp,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
-    def __repr__(self):
-        return f"<Produto {self.codigo_barras or 'Sem código'}: {self.nome}>"
 
-
-class Funcionario(db.Model):
-    """Modelo de funcionários - MANTIDO E MELHORADO"""
+class Funcionario(db.Model, UserMixin):
+    """Funcionários do estabelecimento"""
 
     __tablename__ = "funcionarios"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # Dados pessoais
-    nome = db.Column(db.String(200), nullable=False)
-    cpf = db.Column(db.String(14), unique=True, nullable=False)
-    rg = db.Column(db.String(20))
-    data_nascimento = db.Column(db.Date)
-
-    # Contato
-    telefone = db.Column(db.String(20))
-    celular = db.Column(db.String(20))
-    email = db.Column(db.String(100))
-    endereco = db.Column(db.Text)
-
-    # Dados profissionais
-    cargo = db.Column(db.String(50), nullable=False, default="Atendente")
-    salario = db.Column(db.Float, default=0.0)
-    data_admissao = db.Column(db.Date, nullable=False, default=date.today)
-    data_demissao = db.Column(db.Date)
-
-    # Acesso ao sistema
-    usuario = db.Column(db.String(50), unique=True, nullable=False, index=True)
-    senha_hash = db.Column(db.String(255), nullable=False)
-    nivel_acesso = db.Column(db.String(20), nullable=False, default="atendente")
-    pin_pdv = db.Column(db.String(255))
-
-    # Status
-    ativo = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
     )
+
+    # Dados Pessoais
+    nome = db.Column(db.String(100), nullable=False)
+    cpf = db.Column(db.String(14), unique=True, nullable=False)
+    telefone = db.Column(db.String(20))
+    email = db.Column(db.String(100))
+    senha_hash = db.Column(db.String(255))
+    foto_url = db.Column(db.String(255))
+
+    # Dados Profissionais
+    cargo = db.Column(
+        db.String(50), nullable=False
+    )  # 'dono', 'gerente', 'caixa', 'repositor'
+    comissao_percentual = db.Column(db.Float, default=0.0)
+    data_admissao = db.Column(db.Date, nullable=False)
+    data_demissao = db.Column(db.Date)
+    ativo = db.Column(db.Boolean, default=True)
+
+    # Permissões
+    permissoes = db.Column(
+        db.JSON,
+        default=lambda: {
+            "acesso_pdv": True,
+            "acesso_estoque": True,
+            "acesso_relatorios": False,
+            "acesso_configuracoes": False,
+            "acesso_financeiro": False,
+            "pode_dar_desconto": True,
+            "limite_desconto": 5.0,
+            "pode_cancelar_venda": False,
+        },
+    )
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relacionamentos
-    vendas = db.relationship("Venda", backref="funcionario", lazy=True)
-    movimentacoes = db.relationship(
-        "MovimentacaoEstoque", backref="funcionario_mov", lazy=True
-    )
-    auditorias = db.relationship("Auditoria", backref="funcionario_aud", lazy=True)
+    vendas = db.relationship("Venda", backref="funcionario")
+
+    @property
+    def is_active(self):
+        """Sobrescreve o is_active padrão do UserMixin"""
+        return self.ativo
 
     def set_senha(self, senha):
         self.senha_hash = generate_password_hash(senha)
@@ -224,188 +184,275 @@ class Funcionario(db.Model):
     def check_senha(self, senha):
         return check_password_hash(self.senha_hash, senha)
 
-    def set_pin(self, pin):
-        self.pin_pdv = generate_password_hash(str(pin))
-
-    def check_pin(self, pin):
-        if self.pin_pdv:
-            return check_password_hash(self.pin_pdv, str(pin))
-        return False
-
     def to_dict(self):
         return {
             "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
             "nome": self.nome,
             "cpf": self.cpf,
-            "rg": self.rg,
-            "data_nascimento": (
-                self.data_nascimento.isoformat() if self.data_nascimento else None
-            ),
             "telefone": self.telefone,
-            "celular": self.celular,
             "email": self.email,
-            "endereco": self.endereco,
+            "foto_url": self.foto_url,
             "cargo": self.cargo,
-            "salario": self.salario,
+            "comissao_percentual": self.comissao_percentual,
             "data_admissao": (
                 self.data_admissao.isoformat() if self.data_admissao else None
             ),
             "data_demissao": (
                 self.data_demissao.isoformat() if self.data_demissao else None
             ),
-            "usuario": self.usuario,
-            "nivel_acesso": self.nivel_acesso,
             "ativo": self.ativo,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "permissoes": self.permissoes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
-
-    def __repr__(self):
-        return f"<Funcionario {self.usuario}: {self.nome}>"
 
 
 class Cliente(db.Model):
-    """Modelo de clientes - MANTIDO E MELHORADO"""
+    """Clientes do estabelecimento"""
 
     __tablename__ = "clientes"
 
     id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+    )
 
-    # Dados pessoais
-    nome = db.Column(db.String(200), nullable=False)
-    cpf = db.Column(db.String(14), unique=True, nullable=True)
-    rg = db.Column(db.String(20))
-    data_nascimento = db.Column(db.Date)
-
-    # Contato
+    # Dados Pessoais
+    nome = db.Column(db.String(100), nullable=False)
+    cpf_cnpj = db.Column(db.String(20))
     telefone = db.Column(db.String(20))
-    celular = db.Column(db.String(20))
     email = db.Column(db.String(100))
     endereco = db.Column(db.Text)
 
-    # Dados comerciais
-    limite_credito = db.Column(db.Float, default=0.0)
-    dia_vencimento = db.Column(db.Integer, default=10)
+    # Dados de Fidelidade
+    data_cadastro = db.Column(db.DateTime, default=datetime.now)
+    total_compras = db.Column(db.Float, default=0.0)
+    ultima_compra = db.Column(db.DateTime)
+
+    # Observações
     observacoes = db.Column(db.Text)
 
-    # Status
-    ativo = db.Column(db.Boolean, nullable=False, default=True)
-    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
-    data_atualizacao = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relacionamentos
-    vendas = db.relationship("Venda", backref="cliente", lazy=True)
+    vendas = db.relationship("Venda", backref="cliente")
 
     def to_dict(self):
         return {
             "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
             "nome": self.nome,
-            "cpf": self.cpf,
-            "rg": self.rg,
-            "data_nascimento": (
-                self.data_nascimento.isoformat() if self.data_nascimento else None
-            ),
+            "cpf_cnpj": self.cpf_cnpj,
             "telefone": self.telefone,
-            "celular": self.celular,
             "email": self.email,
             "endereco": self.endereco,
-            "limite_credito": self.limite_credito,
-            "dia_vencimento": self.dia_vencimento,
+            "data_cadastro": (
+                self.data_cadastro.isoformat() if self.data_cadastro else None
+            ),
+            "total_compras": self.total_compras,
+            "ultima_compra": (
+                self.ultima_compra.isoformat() if self.ultima_compra else None
+            ),
             "observacoes": self.observacoes,
-            "ativo": self.ativo,
-            "data_cadastro": self.data_cadastro.isoformat(),
-            "data_atualizacao": self.data_atualizacao.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
-    def __repr__(self):
-        return f"<Cliente {self.cpf or 'Sem CPF'}: {self.nome}>"
+
+class Fornecedor(db.Model):
+    """Fornecedores de produtos"""
+
+    __tablename__ = "fornecedores"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+    )
+
+    # Dados do Fornecedor
+    nome = db.Column(db.String(100), nullable=False)
+    cnpj = db.Column(db.String(20))
+    telefone = db.Column(db.String(20))
+    email = db.Column(db.String(100))
+    endereco = db.Column(db.Text)
+    contato = db.Column(db.String(100))
+
+    # Informações de Compra
+    prazo_entrega = db.Column(db.Integer)  # dias
+    forma_pagamento = db.Column(db.String(50))
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Relacionamentos
+    produtos = db.relationship("Produto", backref="fornecedor")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
+            "nome": self.nome,
+            "cnpj": self.cnpj,
+            "telefone": self.telefone,
+            "email": self.email,
+            "endereco": self.endereco,
+            "contato": self.contato,
+            "prazo_entrega": self.prazo_entrega,
+            "forma_pagamento": self.forma_pagamento,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
-# ==================== VENDAS E FINANCEIRO ====================
+class Produto(db.Model):
+    """Produtos do estoque"""
+
+    __tablename__ = "produtos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+    )
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
+
+    # Identificação
+    codigo_barras = db.Column(db.String(50), unique=True)
+    nome = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.Text)
+    categoria = db.Column(db.String(50))
+    unidade_medida = db.Column(db.String(20), default="UN")
+
+    # Estoque
+    quantidade = db.Column(db.Integer, default=0)
+    quantidade_minima = db.Column(db.Integer, default=10)
+    localizacao = db.Column(db.String(50))  # Prateleira, corredor
+
+    # Preços
+    preco_custo = db.Column(db.Float, nullable=False)
+    preco_venda = db.Column(db.Float, nullable=False)
+    margem_lucro = db.Column(db.Float)  # percentual
+
+    # Validade
+    data_validade = db.Column(db.Date)
+    lote = db.Column(db.String(50))
+
+    # Imagem
+    imagem_url = db.Column(db.String(255))
+
+    # Status
+    ativo = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Relacionamentos
+    itens_venda = db.relationship("VendaItem", backref="produto")
+    movimentacoes = db.relationship("MovimentacaoEstoque", backref="produto")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
+            "fornecedor_id": self.fornecedor_id,
+            "codigo_barras": self.codigo_barras,
+            "nome": self.nome,
+            "descricao": self.descricao,
+            "categoria": self.categoria,
+            "unidade_medida": self.unidade_medida,
+            "quantidade": self.quantidade,
+            "quantidade_minima": self.quantidade_minima,
+            "localizacao": self.localizacao,
+            "preco_custo": self.preco_custo,
+            "preco_venda": self.preco_venda,
+            "margem_lucro": self.margem_lucro,
+            "data_validade": (
+                self.data_validade.isoformat() if self.data_validade else None
+            ),
+            "lote": self.lote,
+            "imagem_url": self.imagem_url,
+            "ativo": self.ativo,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class Venda(db.Model):
-    """Modelo de vendas - MELHORADO com mais detalhes"""
+    """Vendas realizadas"""
 
     __tablename__ = "vendas"
 
     id = db.Column(db.Integer, primary_key=True)
-    codigo = db.Column(db.String(20), unique=True, nullable=False, index=True)
-
-    # Relacionamentos
-    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), nullable=True)
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+    )
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
     funcionario_id = db.Column(
         db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
     )
 
+    # Código único da venda
+    codigo = db.Column(db.String(50), unique=True, nullable=False)
+
     # Valores
     subtotal = db.Column(db.Float, nullable=False, default=0.0)
-    desconto = db.Column(db.Float, nullable=False, default=0.0)
-    acrescimo = db.Column(db.Float, nullable=False, default=0.0)
+    desconto = db.Column(db.Float, default=0.0)
     total = db.Column(db.Float, nullable=False, default=0.0)
 
     # Pagamento
-    forma_pagamento = db.Column(db.String(20), nullable=False, default="dinheiro")
-    parcelas = db.Column(db.Integer, default=1)
-    valor_recebido = db.Column(db.Float, default=0.0)
+    forma_pagamento = db.Column(db.String(50), nullable=False)
+    valor_recebido = db.Column(db.Float, nullable=False)
     troco = db.Column(db.Float, default=0.0)
 
     # Status
-    status = db.Column(db.String(20), nullable=False, default="finalizada")
+    status = db.Column(
+        db.String(20), default="finalizada"
+    )  # 'finalizada', 'cancelada', 'pendente'
+
+    # Observações
     observacoes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+
+    # Datas
+    data_venda = db.Column(db.DateTime, default=datetime.now)
+    data_cancelamento = db.Column(db.DateTime)
+    motivo_cancelamento = db.Column(db.String(255))
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relacionamentos
-    itens = db.relationship(
-        "VendaItem", backref="venda_rel", lazy=True, cascade="all, delete-orphan"
-    )
-    pagamentos = db.relationship("Pagamento", backref="venda_pag", lazy=True)
-    movimentacoes = db.relationship(
-        "MovimentacaoEstoque", backref="venda_mov", lazy=True
-    )
-
-    def calcular_totais(self):
-        self.subtotal = sum(item.total_item for item in self.itens)
-        self.total = self.subtotal - self.desconto + self.acrescimo
-        if self.valor_recebido > 0:
-            self.troco = max(0, self.valor_recebido - self.total)
+    itens = db.relationship("VendaItem", backref="venda", cascade="all, delete-orphan")
+    movimentacoes = db.relationship("MovimentacaoEstoque", backref="venda")
 
     def to_dict(self):
-        self.calcular_totais()
         return {
             "id": self.id,
-            "codigo": self.codigo,
+            "estabelecimento_id": self.estabelecimento_id,
             "cliente_id": self.cliente_id,
-            "cliente_nome": self.cliente.nome if self.cliente else None,
             "funcionario_id": self.funcionario_id,
-            "funcionario_nome": self.funcionario.nome if self.funcionario else None,
+            "codigo": self.codigo,
             "subtotal": self.subtotal,
             "desconto": self.desconto,
-            "acrescimo": self.acrescimo,
             "total": self.total,
             "forma_pagamento": self.forma_pagamento,
-            "parcelas": self.parcelas,
             "valor_recebido": self.valor_recebido,
             "troco": self.troco,
             "status": self.status,
             "observacoes": self.observacoes,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "data_venda": self.data_venda.isoformat() if self.data_venda else None,
+            "data_cancelamento": (
+                self.data_cancelamento.isoformat() if self.data_cancelamento else None
+            ),
+            "motivo_cancelamento": self.motivo_cancelamento,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "itens": [item.to_dict() for item in self.itens],
-            "pagamentos": [p.to_dict() for p in self.pagamentos],
         }
-
-    def __repr__(self):
-        return f"<Venda {self.codigo}: R$ {self.total:.2f}>"
 
 
 class VendaItem(db.Model):
-    """Modelo dos itens de uma venda - MANTIDO"""
+    """Itens de uma venda"""
 
     __tablename__ = "venda_itens"
 
@@ -413,447 +460,195 @@ class VendaItem(db.Model):
     venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=False)
     produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
 
-    # Quantidade e preço
-    quantidade = db.Column(db.Float, nullable=False, default=1)
-    preco_unitario = db.Column(db.Float, nullable=False)
-    desconto = db.Column(db.Float, nullable=False, default=0.0)
-    total_item = db.Column(db.Float, nullable=False)
-
-    # Informações do produto no momento da venda
-    produto_nome = db.Column(db.String(200))
+    # Dados do produto no momento da venda
+    produto_nome = db.Column(db.String(100), nullable=False)
     produto_codigo = db.Column(db.String(50))
     produto_unidade = db.Column(db.String(20))
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def calcular_total(self):
-        self.total_item = (self.preco_unitario * self.quantidade) - self.desconto
-        return self.total_item
-
-    def to_dict(self):
-        self.calcular_total()
-        return {
-            "id": self.id,
-            "venda_id": self.venda_id,
-            "produto_id": self.produto_id,
-            "produto_nome": self.produto_nome
-            or (self.produto_rel.nome if self.produto_rel else None),
-            "produto_codigo": self.produto_codigo
-            or (self.produto_rel.codigo_barras if self.produto_rel else None),
-            "produto_unidade": self.produto_unidade
-            or (self.produto_rel.unidade_medida if self.produto_rel else None),
-            "quantidade": self.quantidade,
-            "preco_unitario": self.preco_unitario,
-            "desconto": self.desconto,
-            "total_item": self.total_item,
-            "created_at": self.created_at.isoformat(),
-        }
-
-    def __repr__(self):
-        return f"<VendaItem {self.produto_nome}: {self.quantidade} x R$ {self.preco_unitario}>"
-
-
-class Pagamento(db.Model):
-    """Modelo de pagamentos - NOVO para controle financeiro"""
-
-    __tablename__ = "pagamentos"
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    # Identificação
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=True)
-    compra_id = db.Column(db.Integer, db.ForeignKey("compras.id"), nullable=True)
-
-    descricao = db.Column(db.String(200))
-
-    # Valores
-    valor = db.Column(db.Float, nullable=False)
-    valor_pago = db.Column(db.Float, default=0.0)
-    desconto = db.Column(db.Float, default=0.0)
-    acrescimo = db.Column(db.Float, default=0.0)
-
-    # Datas
-    data_vencimento = db.Column(db.Date, nullable=False)
-    data_pagamento = db.Column(db.Date)
-
-    # Forma de pagamento
-    forma_pagamento = db.Column(db.String(20), nullable=False, default="dinheiro")
-    banco = db.Column(db.String(50))
-    agencia = db.Column(db.String(10))
-    conta = db.Column(db.String(20))
-    cheque_numero = db.Column(db.String(50))
-
-    # Status
-    status = db.Column(db.String(20), nullable=False, default="pendente")
-    observacoes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "venda_id": self.venda_id,
-            "descricao": self.descricao,
-            "valor": self.valor,
-            "valor_pago": self.valor_pago,
-            "desconto": self.desconto,
-            "acrescimo": self.acrescimo,
-            "data_vencimento": self.data_vencimento.isoformat(),
-            "data_pagamento": (
-                self.data_pagamento.isoformat() if self.data_pagamento else None
-            ),
-            "forma_pagamento": self.forma_pagamento,
-            "banco": self.banco,
-            "agencia": self.agencia,
-            "conta": self.conta,
-            "cheque_numero": self.cheque_numero,
-            "status": self.status,
-            "observacoes": self.observacoes,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
-
-    def __repr__(self):
-        return f"<Pagamento {self.descricao}: R$ {self.valor:.2f}>"
-
-
-# ==================== COMPRAS ====================
-
-
-class Compra(db.Model):
-    """Modelo de compras - NOVO para gestão de entradas"""
-
-    __tablename__ = "compras"
-
-    id = db.Column(db.Integer, primary_key=True)
-    codigo = db.Column(db.String(20), unique=True, nullable=False, index=True)
-
-    # Fornecedor
-    fornecedor_id = db.Column(
-        db.Integer, db.ForeignKey("fornecedores.id"), nullable=False
-    )
-
-    # Valores
-    subtotal = db.Column(db.Float, nullable=False, default=0.0)
-    frete = db.Column(db.Float, default=0.0)
-    outras_despesas = db.Column(db.Float, default=0.0)
-    desconto = db.Column(db.Float, default=0.0)
-    total = db.Column(db.Float, nullable=False, default=0.0)
-
-    # Status
-    status = db.Column(db.String(20), nullable=False, default="pendente")
-    data_compra = db.Column(db.Date, default=date.today)
-    data_entrega = db.Column(db.Date)
-    observacoes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    # Relacionamentos
-    itens = db.relationship(
-        "CompraItem", backref="compra_rel", lazy=True, cascade="all, delete-orphan"
-    )
-    
-
-    def calcular_totais(self):
-        self.subtotal = sum(item.total_item for item in self.itens)
-        self.total = self.subtotal + self.frete + self.outras_despesas - self.desconto
-
-    def to_dict(self):
-        self.calcular_totais()
-        return {
-            "id": self.id,
-            "codigo": self.codigo,
-            "fornecedor_id": self.fornecedor_id,
-            "fornecedor_nome": self.fornecedor.nome if self.fornecedor else None,
-            "subtotal": self.subtotal,
-            "frete": self.frete,
-            "outras_despesas": self.outras_despesas,
-            "desconto": self.desconto,
-            "total": self.total,
-            "status": self.status,
-            "data_compra": self.data_compra.isoformat(),
-            "data_entrega": (
-                self.data_entrega.isoformat() if self.data_entrega else None
-            ),
-            "observacoes": self.observacoes,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-            "itens": [item.to_dict() for item in self.itens],
-            "pagamentos": [p.to_dict() for p in self.pagamentos],
-        }
-
-    def __repr__(self):
-        return f"<Compra {self.codigo}: R$ {self.total:.2f}>"
-
-
-class CompraItem(db.Model):
-    """Modelo de itens de compra"""
-
-    __tablename__ = "compra_itens"
-
-    id = db.Column(db.Integer, primary_key=True)
-    compra_id = db.Column(db.Integer, db.ForeignKey("compras.id"), nullable=False)
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
-
-    # Quantidade e preço
-    quantidade = db.Column(db.Float, nullable=False)
+    # Quantidade e preços
+    quantidade = db.Column(db.Integer, nullable=False)
     preco_unitario = db.Column(db.Float, nullable=False)
     desconto = db.Column(db.Float, default=0.0)
     total_item = db.Column(db.Float, nullable=False)
 
-    # Informações do produto
-    produto_nome = db.Column(db.String(200))
-    produto_codigo = db.Column(db.String(50))
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def calcular_total(self):
-        self.total_item = (self.preco_unitario * self.quantidade) - self.desconto
-        return self.total_item
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def to_dict(self):
-        self.calcular_total()
         return {
             "id": self.id,
-            "compra_id": self.compra_id,
+            "venda_id": self.venda_id,
             "produto_id": self.produto_id,
-            "produto_nome": self.produto_nome
-            or (self.produto_compra.nome if self.produto_compra else None),
-            "produto_codigo": self.produto_codigo
-            or (self.produto_compra.codigo_barras if self.produto_compra else None),
+            "produto_nome": self.produto_nome,
+            "produto_codigo": self.produto_codigo,
+            "produto_unidade": self.produto_unidade,
             "quantidade": self.quantidade,
             "preco_unitario": self.preco_unitario,
             "desconto": self.desconto,
             "total_item": self.total_item,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
-
-    def __repr__(self):
-        return f"<CompraItem {self.produto_nome}: {self.quantidade} x R$ {self.preco_unitario}>"
-
-
-# ==================== CONTROLES ====================
 
 
 class MovimentacaoEstoque(db.Model):
-    """Modelo de movimentações de estoque - MANTIDO"""
+    """Movimentações de estoque (entrada/saída)"""
 
     __tablename__ = "movimentacoes_estoque"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # Identificação
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+    )
     produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)
-    quantidade = db.Column(db.Float, nullable=False)
-    quantidade_anterior = db.Column(db.Float, nullable=False)
-    quantidade_atual = db.Column(db.Float, nullable=False)
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+
+    # Tipo de movimentação
+    tipo = db.Column(db.String(20), nullable=False)  # 'entrada', 'saida', 'ajuste'
+
+    # Quantidades
+    quantidade = db.Column(db.Integer, nullable=False)
+    quantidade_anterior = db.Column(db.Integer, nullable=False)
+    quantidade_atual = db.Column(db.Integer, nullable=False)
 
     # Motivo
     motivo = db.Column(db.String(100), nullable=False)
     observacoes = db.Column(db.Text)
 
-    # Relacionamentos
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=True)
-    compra_id = db.Column(db.Integer, db.ForeignKey("compras.id"), nullable=True)
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
-    )
-
-    # Data
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def to_dict(self):
         return {
             "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
             "produto_id": self.produto_id,
-            "produto_nome": self.produto_mov.nome if self.produto_mov else None,
+            "venda_id": self.venda_id,
+            "funcionario_id": self.funcionario_id,
             "tipo": self.tipo,
             "quantidade": self.quantidade,
             "quantidade_anterior": self.quantidade_anterior,
             "quantidade_atual": self.quantidade_atual,
             "motivo": self.motivo,
             "observacoes": self.observacoes,
-            "venda_id": self.venda_id,
-            "compra_id": self.compra_id,
-            "funcionario_id": self.funcionario_id,
-            "funcionario_nome": (
-                self.funcionario_mov.nome if self.funcionario_mov else None
-            ),
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
-    def __repr__(self):
-        return f"<MovimentacaoEstoque {self.tipo}: {self.quantidade} unidades>"
 
+class DashboardMetrica(db.Model):
+    """Métricas pré-calculadas para dashboard"""
 
-class Auditoria(db.Model):
-    """Modelo de auditoria - NOVO para logs do sistema"""
-
-    __tablename__ = "auditoria"
+    __tablename__ = "dashboard_metricas"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # Identificação
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=True
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
     )
-    funcionario_nome = db.Column(db.String(100))
+    data_referencia = db.Column(db.Date, nullable=False)  # Dia de referência
 
-    # Ação
-    acao = db.Column(db.String(50), nullable=False)
-    modulo = db.Column(db.String(50), nullable=False)
-    registro_id = db.Column(db.Integer, nullable=True)
+    # Métricas do dia
+    total_vendas_dia = db.Column(db.Float, default=0.0)
+    quantidade_vendas_dia = db.Column(db.Integer, default=0)
+    ticket_medio_dia = db.Column(db.Float, default=0.0)
+    clientes_atendidos_dia = db.Column(db.Integer, default=0)
 
-    # Detalhes
-    dados_anteriores = db.Column(db.Text)
-    dados_novos = db.Column(db.Text)
-    ip_address = db.Column(db.String(45))
-    user_agent = db.Column(db.Text)
+    # Métricas do mês
+    total_vendas_mes = db.Column(db.Float, default=0.0)
+    total_despesas_mes = db.Column(db.Float, default=0.0)
+    lucro_bruto_mes = db.Column(db.Float, default=0.0)
 
-    # Data
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Produtos
+    top_produtos_json = db.Column(db.JSON)  # {produto_id: quantidade_vendida}
+    produtos_validade_json = db.Column(
+        db.JSON
+    )  # Lista de produtos próximos da validade
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # Índice único para garantir uma entrada por dia por estabelecimento
+    __table_args__ = (
+        db.UniqueConstraint(
+            "estabelecimento_id", "data_referencia", name="uix_estab_data"
+        ),
+    )
 
     def to_dict(self):
         return {
             "id": self.id,
-            "funcionario_id": self.funcionario_id,
-            "funcionario_nome": self.funcionario_nome
-            or (self.funcionario_aud.nome if self.funcionario_aud else None),
-            "acao": self.acao,
-            "modulo": self.modulo,
-            "registro_id": self.registro_id,
-            "dados_anteriores": self.dados_anteriores,
-            "dados_novos": self.dados_novos,
-            "ip_address": self.ip_address,
-            "user_agent": self.user_agent,
-            "created_at": self.created_at.isoformat(),
+            "estabelecimento_id": self.estabelecimento_id,
+            "data_referencia": (
+                self.data_referencia.isoformat() if self.data_referencia else None
+            ),
+            "total_vendas_dia": self.total_vendas_dia,
+            "quantidade_vendas_dia": self.quantidade_vendas_dia,
+            "ticket_medio_dia": self.ticket_medio_dia,
+            "clientes_atendidos_dia": self.clientes_atendidos_dia,
+            "total_vendas_mes": self.total_vendas_mes,
+            "total_despesas_mes": self.total_despesas_mes,
+            "lucro_bruto_mes": self.lucro_bruto_mes,
+            "top_produtos_json": self.top_produtos_json,
+            "produtos_validade_json": self.produtos_validade_json,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
-    def __repr__(self):
-        return f"<Auditoria {self.modulo}.{self.acao} por {self.funcionario_nome}>"
 
+class RelatorioAgendado(db.Model):
+    """Relatórios agendados para geração automática"""
 
-class Configuracao(db.Model):
-    """Modelo de configurações do sistema - NOVO"""
-
-    __tablename__ = "configuracoes"
+    __tablename__ = "relatorios_agendados"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    chave = db.Column(db.String(100), unique=True, nullable=False)
-    valor = db.Column(db.Text)
-    tipo = db.Column(db.String(20), default="texto")
-    descricao = db.Column(db.Text)
-    categoria = db.Column(db.String(50), default="geral")
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    estabelecimento_id = db.Column(
+        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
     )
 
-    def get_valor(self):
-        if self.tipo == "numero":
-            return float(self.valor) if self.valor else 0
-        elif self.tipo == "booleano":
-            return self.valor.lower() == "true"
-        elif self.tipo == "json":
-            import json
+    # Configuração do relatório
+    nome = db.Column(db.String(100), nullable=False)
+    tipo = db.Column(
+        db.String(50), nullable=False
+    )  # 'vendas', 'estoque', 'financeiro', 'clientes'
+    formato = db.Column(db.String(10), nullable=False)  # 'pdf', 'excel', 'csv'
+    frequencia = db.Column(
+        db.String(20), nullable=False
+    )  # 'diario', 'semanal', 'mensal'
+    horario_envio = db.Column(db.Time, nullable=False)
 
-            return json.loads(self.valor) if self.valor else {}
-        return self.valor
+    # Destinatários
+    destinatarios_email = db.Column(db.JSON)  # Lista de emails
+    enviar_para_proprietario = db.Column(db.Boolean, default=True)
 
-    def __repr__(self):
-        return f"<Configuracao {self.chave}>"
+    # Parâmetros do relatório
+    parametros = db.Column(db.JSON)  # Filtros específicos
 
+    # Status
+    ativo = db.Column(db.Boolean, default=True)
+    ultima_execucao = db.Column(db.DateTime)
+    proxima_execucao = db.Column(db.DateTime)
 
-# ==================== EVENTOS ====================
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
-
-def gerar_codigo_venda(mapper, connection, target):
-    """Gera código único para a venda"""
-    if not target.codigo:
-        data_atual = datetime.utcnow().strftime("%Y%m%d")
-        contador = (
-            db.session.query(func.count(Venda.id))
-            .filter(db.cast(Venda.created_at, db.Date) == date.today())
-            .scalar()
-            or 0
-        )
-        target.codigo = f"V-{data_atual}-{contador + 1:04d}"
-
-
-def gerar_codigo_compra(mapper, connection, target):
-    """Gera código único para compra"""
-    if not target.codigo:
-        data_atual = datetime.utcnow().strftime("%Y%m%d")
-        contador = (
-            db.session.query(func.count(Compra.id))
-            .filter(db.cast(Compra.created_at, db.Date) == date.today())
-            .scalar()
-            or 0
-        )
-        target.codigo = f"C-{data_atual}-{contador + 1:04d}"
-
-
-# Registrar eventos
-event.listen(Venda, "before_insert", gerar_codigo_venda)
-event.listen(Compra, "before_insert", gerar_codigo_compra)
-
-
-# ==================== INICIALIZAÇÃO ====================
-
-
-def criar_configuracoes_iniciais():
-    """Cria configurações padrão do sistema"""
-    configuracoes_padrao = [
-        Configuracao(
-            chave="empresa_nome",
-            valor="Minha Empresa",
-            tipo="texto",
-            descricao="Nome da empresa",
-            categoria="empresa",
-        ),
-        Configuracao(
-            chave="empresa_cnpj",
-            valor="00.000.000/0000-00",
-            tipo="texto",
-            descricao="CNPJ da empresa",
-            categoria="empresa",
-        ),
-        Configuracao(
-            chave="sistema_taxa_padrao",
-            valor="10",
-            tipo="numero",
-            descricao="Taxa de serviço padrão (%)",
-            categoria="financeiro",
-        ),
-        Configuracao(
-            chave="pdv_requer_pin",
-            valor="true",
-            tipo="booleano",
-            descricao="Requer PIN para abrir PDV",
-            categoria="pdv",
-        ),
-        Configuracao(
-            chave="estoque_alerta_baixo",
-            valor="true",
-            tipo="booleano",
-            descricao="Alertar quando estoque estiver baixo",
-            categoria="estoque",
-        ),
-    ]
-
-    for config in configuracoes_padrao:
-        if not Configuracao.query.filter_by(chave=config.chave).first():
-            db.session.add(config)
-
-    db.session.commit()
-
-
-# Executar ao iniciar o sistema (em app/__init__.py ou similar)
-# criar_configuracoes_iniciais()
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
+            "nome": self.nome,
+            "tipo": self.tipo,
+            "formato": self.formato,
+            "frequencia": self.frequencia,
+            "horario_envio": (
+                self.horario_envio.strftime("%H:%M") if self.horario_envio else None
+            ),
+            "destinatarios_email": self.destinatarios_email,
+            "enviar_para_proprietario": self.enviar_para_proprietario,
+            "parametros": self.parametros,
+            "ativo": self.ativo,
+            "ultima_execucao": (
+                self.ultima_execucao.isoformat() if self.ultima_execucao else None
+            ),
+            "proxima_execucao": (
+                self.proxima_execucao.isoformat() if self.proxima_execucao else None
+            ),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
