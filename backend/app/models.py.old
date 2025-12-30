@@ -462,8 +462,6 @@ class Pagamento(db.Model):
 
     # Identificação
     venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=True)
-    compra_id = db.Column(db.Integer, db.ForeignKey("compras.id"), nullable=True)
-
     descricao = db.Column(db.String(200))
 
     # Valores
@@ -556,7 +554,7 @@ class Compra(db.Model):
     itens = db.relationship(
         "CompraItem", backref="compra_rel", lazy=True, cascade="all, delete-orphan"
     )
-    
+    pagamentos = db.relationship("Pagamento", backref="compra_pag", lazy=True)
 
     def calcular_totais(self):
         self.subtotal = sum(item.total_item for item in self.itens)
