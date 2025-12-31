@@ -1,13 +1,12 @@
 from flask import Flask, jsonify, request  # ✅ ADICIONE "request" AQUI!
-from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from app.models import db
 from config import config
 import os
 
 # Inicializa as extensões
-db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 

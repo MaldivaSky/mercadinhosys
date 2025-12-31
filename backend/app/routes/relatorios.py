@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 from sqlalchemy import func, extract
-from utils.decorator import funcionario_required, admin_required, gerente_ou_admin_required
+from app.decorator import funcionario_required, gerente_ou_admin_required
 
 matplotlib.use("Agg")  # Para não precisar de display GUI
 
