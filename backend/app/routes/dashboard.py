@@ -14,7 +14,7 @@ from app.models import (
 )
 from datetime import datetime, timedelta, date
 from sqlalchemy import func, extract
-from utils.decorator import funcionario_required
+from app.decorator import funcionario_required
 
 dashboard_bp = Blueprint("dashboard", __name__)
 

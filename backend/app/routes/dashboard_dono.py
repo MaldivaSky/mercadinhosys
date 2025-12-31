@@ -21,7 +21,7 @@ import numpy as np
 from scipy import stats
 import json
 from collections import defaultdict
-from utils.decorator import admin_required
+from app.decorator import admin_required
 
 dashboard_dono_bp = Blueprint("dashboard_dono", __name__)
 
