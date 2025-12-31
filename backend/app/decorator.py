@@ -1,5 +1,6 @@
+# decorator.py - VERSÃO CORRIGIDA
 from functools import wraps
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from flask import jsonify
 
 
@@ -9,23 +10,20 @@ def funcionario_required(f):
     @wraps(f)
     @jwt_required()
     def decorated_function(*args, **kwargs):
-        current_user = get_jwt_identity()
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()  # ✅ Agora pega os claims adicionais
 
         # Verifica se o usuário está autenticado
-        if not current_user:
+        if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se é funcionário (tem user_id)
-        if "user_id" not in current_user:
-            return jsonify({"error": "Token inválido"}), 401
-
-        # Verifica se não está bloqueado
-        if current_user.get("status") != "ativo":
+        # Verifica se não está bloqueado - agora usa claims
+        if claims.get("status") != "ativo":
             return (
                 jsonify(
                     {
                         "error": "Acesso bloqueado",
-                        "message": f"Sua conta está {current_user.get('status')}. Contate o administrador.",
+                        "message": f"Sua conta está {claims.get('status')}. Contate o administrador.",
                     }
                 ),
                 403,
@@ -42,14 +40,15 @@ def admin_required(f):
     @wraps(f)
     @jwt_required()
     def decorated_function(*args, **kwargs):
-        current_user = get_jwt_identity()
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()  # ✅ Agora pega os claims adicionais
 
         # Verifica se o usuário está autenticado
-        if not current_user:
+        if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se é admin
-        if current_user.get("role") != "admin":
+        # Verifica se é admin - agora usa claims
+        if claims.get("role") != "admin":
             return (
                 jsonify(
                     {
@@ -60,8 +59,8 @@ def admin_required(f):
                 403,
             )
 
-        # Verifica se não está bloqueado
-        if current_user.get("status") != "ativo":
+        # Verifica se não está bloqueado - agora usa claims
+        if claims.get("status") != "ativo":
             return jsonify({"error": "Acesso bloqueado"}), 403
 
         return f(*args, **kwargs)
@@ -75,15 +74,16 @@ def gerente_ou_admin_required(f):
     @wraps(f)
     @jwt_required()
     def decorated_function(*args, **kwargs):
-        current_user = get_jwt_identity()
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()  # ✅ Agora pega os claims adicionais
 
         # Verifica se o usuário está autenticado
-        if not current_user:
+        if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se é gerente ou admin
+        # Verifica se é gerente ou admin - agora usa claims
         allowed_roles = ["gerente", "admin"]
-        if current_user.get("role") not in allowed_roles:
+        if claims.get("role") not in allowed_roles:
             return (
                 jsonify(
                     {
@@ -94,8 +94,42 @@ def gerente_ou_admin_required(f):
                 403,
             )
 
-        # Verifica se não está bloqueado
-        if current_user.get("status") != "ativo":
+        # Verifica se não está bloqueado - agora usa claims
+        if claims.get("status") != "ativo":
+            return jsonify({"error": "Acesso bloqueado"}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def gerente_required(f):
+    """Decorator para exigir autenticação de gerente"""
+
+    @wraps(f)
+    @jwt_required()
+    def decorated_function(*args, **kwargs):
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()  # ✅ Agora pega os claims adicionais
+
+        # Verifica se o usuário está autenticado
+        if not current_user_id:
+            return jsonify({"error": "Token inválido ou expirado"}), 401
+
+        # Verifica se é gerente - agora usa claims
+        if claims.get("role") != "gerente":
+            return (
+                jsonify(
+                    {
+                        "error": "Acesso restrito",
+                        "message": "Apenas gerentes podem acessar esta funcionalidade",
+                    }
+                ),
+                403,
+            )
+
+        # Verifica se não está bloqueado - agora usa claims
+        if claims.get("status") != "ativo":
             return jsonify({"error": "Acesso bloqueado"}), 403
 
         return f(*args, **kwargs)

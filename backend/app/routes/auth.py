@@ -24,7 +24,7 @@ def login():
 
         username = data.get("username")
         senha = data.get("senha")
-        estabelecimento_id = data.get("estabelecimento_id", 1)
+        estabelecimento_id = data.get("estabelecimento_id", 4)  # Default para 4
 
         if not username or not senha:
             return (
@@ -50,8 +50,7 @@ def login():
             current_app.logger.warning(f"Senha incorreta para username: {username}")
             return jsonify({"success": False, "error": "Credenciais inválidas"}), 401
 
-        # Verificar status (usando o campo ativo ou status)
-        # Se tiver o campo status, usa ele, senão usa o ativo
+        # Verificar status
         if hasattr(funcionario, "status"):
             status = funcionario.status
         else:
@@ -69,33 +68,39 @@ def login():
                 403,
             )
 
-        # Preparar os dados para o token
-        identity_data = {
-            "user_id": funcionario.id,
+        # Identity como string (user_id)
+        identity = str(funcionario.id)
+
+        # Claims adicionais
+        additional_claims = {
             "username": funcionario.username,
             "nome": funcionario.nome,
             "estabelecimento_id": funcionario.estabelecimento_id,
             "status": status,
         }
 
-        # Adicionar role se existir
+        # Adicionar role
         if hasattr(funcionario, "role"):
-            identity_data["role"] = funcionario.role
+            additional_claims["role"] = funcionario.role
         else:
-            # Mapear cargo para role
             cargo = funcionario.cargo
             if cargo == "dono":
-                identity_data["role"] = "admin"
+                additional_claims["role"] = "admin"
             elif cargo == "gerente":
-                identity_data["role"] = "gerente"
+                additional_claims["role"] = "gerente"
             else:
-                identity_data["role"] = "funcionario"
+                additional_claims["role"] = "funcionario"
 
+        # Criar tokens
         access_token = create_access_token(
-            identity=identity_data, expires_delta=timedelta(hours=8)
+            identity=identity,
+            additional_claims=additional_claims,
+            expires_delta=timedelta(hours=8),
         )
 
-        refresh_token = create_refresh_token(identity=identity_data)
+        refresh_token = create_refresh_token(
+            identity=identity, additional_claims=additional_claims
+        )
 
         current_app.logger.info(f"Login bem-sucedido: {username} ({funcionario.nome})")
 
@@ -107,7 +112,16 @@ def login():
                     "data": {
                         "access_token": access_token,
                         "refresh_token": refresh_token,
-                        "user": funcionario.to_dict(),
+                        "user": {
+                            "id": funcionario.id,
+                            "nome": funcionario.nome,
+                            "username": funcionario.username,
+                            "email": funcionario.email,
+                            "cargo": funcionario.cargo,
+                            "role": additional_claims["role"],
+                            "status": status,
+                            "estabelecimento_id": funcionario.estabelecimento_id,
+                        },
                         "token_type": "bearer",
                         "expires_in": 28800,
                     },
@@ -135,8 +149,21 @@ def login():
 def refresh():
     try:
         current_user = get_jwt_identity()
+        claims = get_jwt()
+
+        # Extrair claims adicionais
+        additional_claims = {
+            "username": claims.get("username"),
+            "nome": claims.get("nome"),
+            "estabelecimento_id": claims.get("estabelecimento_id"),
+            "status": claims.get("status"),
+            "role": claims.get("role"),
+        }
+
         access_token = create_access_token(
-            identity=current_user, expires_delta=timedelta(hours=8)
+            identity=current_user,
+            additional_claims=additional_claims,
+            expires_delta=timedelta(hours=8),
         )
 
         return (
@@ -160,18 +187,31 @@ def refresh():
 @jwt_required()
 def validate_token():
     try:
-        current_user = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user.get("user_id"))
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()
+
+        # Buscar funcionário para garantir que ainda existe
+        funcionario = Funcionario.query.get(int(current_user_id))
 
         if not funcionario:
             return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+
+        # Usar dados do token (mais rápidos)
+        user_data = {
+            "id": int(current_user_id),
+            "username": claims.get("username"),
+            "nome": claims.get("nome"),
+            "estabelecimento_id": claims.get("estabelecimento_id"),
+            "role": claims.get("role"),
+            "status": claims.get("status"),
+        }
 
         return (
             jsonify(
                 {
                     "success": True,
                     "message": "Token válido",
-                    "data": {"user": funcionario.to_dict(), "is_valid": True},
+                    "data": {"user": user_data, "is_valid": True},
                 }
             ),
             200,
@@ -186,8 +226,8 @@ def validate_token():
 @jwt_required()
 def logout():
     try:
-        current_user = get_jwt_identity()
-        current_app.logger.info(f"Logout: {current_user.get('username')}")
+        current_user_id = get_jwt_identity()
+        current_app.logger.info(f"Logout: {current_user_id}")
 
         return (
             jsonify({"success": True, "message": "Logout realizado com sucesso"}),
@@ -197,5 +237,3 @@ def logout():
     except Exception as e:
         current_app.logger.error(f"Erro no logout: {str(e)}")
         return jsonify({"success": False, "error": "Erro no logout"}), 500
-
-# Outras rotas (alterar senha, setup, etc.) podem ser adicionadas depois
