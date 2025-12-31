@@ -139,6 +139,7 @@ class Funcionario(db.Model, UserMixin):
 
     # Dados Pessoais
     nome = db.Column(db.String(100), nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
     cpf = db.Column(db.String(14), unique=True, nullable=False)
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(100))
@@ -149,6 +150,12 @@ class Funcionario(db.Model, UserMixin):
     cargo = db.Column(
         db.String(50), nullable=False
     )  # 'dono', 'gerente', 'caixa', 'repositor'
+    role = db.Column(
+        db.String(20), default="funcionario"
+    )  # 'admin', 'gerente', 'funcionario'
+    status = db.Column(
+        db.String(20), default="ativo"
+    )  # 'ativo', 'inativo', 'bloqueado'
     comissao_percentual = db.Column(db.Float, default=0.0)
     data_admissao = db.Column(db.Date, nullable=False)
     data_demissao = db.Column(db.Date)
@@ -196,6 +203,9 @@ class Funcionario(db.Model, UserMixin):
             "email": self.email,
             "foto_url": self.foto_url,
             "cargo": self.cargo,
+            "username": self.username,
+            "role": self.role,
+            "status": self.status,
             "comissao_percentual": self.comissao_percentual,
             "data_admissao": (
                 self.data_admissao.isoformat() if self.data_admissao else None

@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 from sqlalchemy import func, extract
+from utils.decorator import funcionario_required, admin_required, gerente_ou_admin_required
 
 matplotlib.use("Agg")  # Para não precisar de display GUI
 
@@ -35,6 +36,7 @@ relatorios_bp = Blueprint("relatorios", __name__)
 
 
 @relatorios_bp.route("/vendas", methods=["GET"])
+@gerente_ou_admin_required
 def relatorio_vendas():
     """Gera relatório de vendas por período"""
     try:
@@ -146,7 +148,7 @@ def gerar_json_vendas(estabelecimento_id, data_inicio, data_fim, agrupar_por):
 
     return jsonify(resultado), 200
 
-
+@gerente_ou_admin_required
 def agrupar_vendas_por_dia(vendas):
     """Agrupa vendas por dia"""
     from collections import defaultdict
@@ -161,7 +163,7 @@ def agrupar_vendas_por_dia(vendas):
 
     return [{"data": str(data), **dados} for data, dados in sorted(agrupado.items())]
 
-
+@gerente_ou_admin_required
 def agrupar_vendas_por_produto(vendas):
     """Agrupa vendas por produto"""
     from collections import defaultdict
@@ -176,7 +178,7 @@ def agrupar_vendas_por_produto(vendas):
 
     return [{"produto_id": pid, **dados} for pid, dados in produtos.items()]
 
-
+@gerente_ou_admin_required
 def agrupar_vendas_por_funcionario(vendas):
     """Agrupa vendas por funcionário"""
     from collections import defaultdict
@@ -697,6 +699,7 @@ def gerar_csv_vendas(estabelecimento_id, data_inicio, data_fim):
 
 
 @relatorios_bp.route("/estoque", methods=["GET"])
+@gerente_ou_admin_required
 def relatorio_estoque():
     """Gera relatório de estoque"""
     try:
@@ -1335,6 +1338,7 @@ def gerar_csv_estoque(produtos, tipo):
 
 
 @relatorios_bp.route("/clientes", methods=["GET"])
+@gerente_ou_admin_required
 def relatorio_clientes():
     """Gera relatório de clientes"""
     try:
@@ -1878,6 +1882,7 @@ def gerar_csv_clientes(clientes, tipo):
 
 
 @relatorios_bp.route("/financeiro", methods=["GET"])
+@gerente_ou_admin_required
 def relatorio_financeiro():
     """Gera relatório financeiro consolidado"""
     try:
@@ -2316,6 +2321,7 @@ def gerar_pdf_financeiro(
 
 
 @relatorios_bp.route("/produtos-mais-vendidos", methods=["GET"])
+@funcionario_required
 def produtos_mais_vendidos():
     """Relatório dos produtos mais vendidos"""
     try:
@@ -2651,6 +2657,7 @@ def gerar_pdf_produtos_mais_vendidos(
 
 # Adicionar gráficos aos relatórios (opcional)
 @relatorios_bp.route("/grafico-vendas", methods=["GET"])
+@gerente_ou_admin_required
 def gerar_grafico_vendas():
     """Gera gráfico de vendas em formato de imagem"""
     try:
