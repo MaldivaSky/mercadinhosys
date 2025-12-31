@@ -1,6 +1,7 @@
 # app/routes/dashboard.py
 
 from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models import (
     DashboardMetrica,
@@ -13,12 +14,18 @@ from app.models import (
 )
 from datetime import datetime, timedelta, date
 from sqlalchemy import func, extract
+from utils.decorator import funcionario_required
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
 @dashboard_bp.route("/resumo", methods=["GET"])
+@funcionario_required
 def resumo_dashboard():
+    current_user = get_jwt_identity()
+
+    if not current_user.get('is_admin'):    
+        return jsonify({"error": "Acesso negado"}), 403
     """Retorna resumo completo para o dashboard"""
     try:
         estabelecimento_id = request.args.get("estabelecimento_id", 1, type=int)
