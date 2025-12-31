@@ -47,8 +47,11 @@ def create_app(config_name="default"):
     from app.routes.configuracao import config_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.relatorios import relatorios_bp
+    from app.routes.dashboard_dono import dashboard_dono_bp
+    from app.routes.auth import auth_bp
 
     # 🎯 CADA BLUEPRINT COM SEU PRÓPRIO NAMESPACE
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(produtos_bp, url_prefix="/api/produtos")
     app.register_blueprint(fornecedores_bp, url_prefix="/api/fornecedores")
     app.register_blueprint(funcionarios_bp, url_prefix="/api/funcionarios")
@@ -56,6 +59,7 @@ def create_app(config_name="default"):
     app.register_blueprint(vendas_bp, url_prefix="/api/vendas")
     app.register_blueprint(config_bp, url_prefix="/api/config")
     app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
+    app.register_blueprint(dashboard_dono_bp, url_prefix="/api/dashboard_dono")
     app.register_blueprint(relatorios_bp, url_prefix="/api/relatorios")
 
     # 📊 Rota de saúde expandida
@@ -83,6 +87,7 @@ def create_app(config_name="default"):
                     "/api/fornecedores",
                     "/api/config",
                     "/api/dashboard",
+                    "/api/dashboard_dono",
                     "/api/relatorios",
                 ],
             }
@@ -107,6 +112,7 @@ def create_app(config_name="default"):
                     "fornecedores": "/api/fornecedores",
                     "configuracoes": "/api/config",
                     "dashboard": "/api/dashboard",
+                    "dashboard_dono": "/api/dashboard_dono",
                     "relatorios": "/api/relatorios",
                     "health": "/api/health",
                 },
