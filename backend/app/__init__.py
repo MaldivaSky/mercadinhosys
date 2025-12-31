@@ -81,6 +81,9 @@ def create_app(config_name="default"):
                     "/api/clientes",
                     "/api/funcionarios",
                     "/api/fornecedores",
+                    "/api/config",
+                    "/api/dashboard",
+                    "/api/relatorios",
                 ],
             }
         )
@@ -102,6 +105,9 @@ def create_app(config_name="default"):
                     "clientes": "/api/clientes",
                     "funcionarios": "/api/funcionarios",
                     "fornecedores": "/api/fornecedores",
+                    "configuracoes": "/api/config",
+                    "dashboard": "/api/dashboard",
+                    "relatorios": "/api/relatorios",
                     "health": "/api/health",
                 },
                 "status": "operacional",
