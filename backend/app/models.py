@@ -18,6 +18,7 @@ class Estabelecimento(db.Model):
     cnpj = db.Column(db.String(20), unique=True, nullable=False)
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(100))
+    cep = db.Column(db.String(10))
     endereco = db.Column(db.Text)
     cidade = db.Column(db.String(50))
     estado = db.Column(db.String(2))
@@ -41,6 +42,7 @@ class Estabelecimento(db.Model):
             "cnpj": self.cnpj,
             "telefone": self.telefone,
             "email": self.email,
+            "cep": self.cep,
             "endereco": self.endereco,
             "cidade": self.cidade,
             "estado": self.estado,
@@ -247,6 +249,7 @@ class Cliente(db.Model):
             "cpf_cnpj": self.cpf_cnpj,
             "telefone": self.telefone,
             "email": self.email,
+            "cep": self.cep,
             "endereco": self.endereco,
             "data_cadastro": (
                 self.data_cadastro.isoformat() if self.data_cadastro else None
@@ -277,7 +280,8 @@ class Fornecedor(db.Model):
     telefone = db.Column(db.String(20))
     email = db.Column(db.String(100))
     endereco = db.Column(db.Text)
-    contato = db.Column(db.String(100))
+    contato_comercial = db.Column(db.String(100))
+    celular_comercial = db.Column(db.String(20))
 
     # Informações de Compra
     prazo_entrega = db.Column(db.Integer)  # dias
@@ -298,7 +302,8 @@ class Fornecedor(db.Model):
             "telefone": self.telefone,
             "email": self.email,
             "endereco": self.endereco,
-            "contato": self.contato,
+            "contato_comercial": self.contato_comercial,
+            "celular_comercial": self.celular_comercial,
             "prazo_entrega": self.prazo_entrega,
             "forma_pagamento": self.forma_pagamento,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -321,6 +326,8 @@ class Produto(db.Model):
     codigo_barras = db.Column(db.String(50), unique=True)
     nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text)
+    marca = db.Column(db.String(50))
+    fabricante = db.Column(db.String(50))
     categoria = db.Column(db.String(50))
     unidade_medida = db.Column(db.String(20), default="UN")
 
@@ -358,6 +365,8 @@ class Produto(db.Model):
             "fornecedor_id": self.fornecedor_id,
             "codigo_barras": self.codigo_barras,
             "nome": self.nome,
+            "marca": self.marca,
+            "fabricante": self.fabricante,
             "descricao": self.descricao,
             "categoria": self.categoria,
             "unidade_medida": self.unidade_medida,
@@ -462,6 +471,7 @@ class VendaItem(db.Model):
 
     # Dados do produto no momento da venda
     produto_nome = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.Text)
     produto_codigo = db.Column(db.String(50))
     produto_unidade = db.Column(db.String(20))
 
@@ -479,6 +489,7 @@ class VendaItem(db.Model):
             "venda_id": self.venda_id,
             "produto_id": self.produto_id,
             "produto_nome": self.produto_nome,
+            "descricao": self.descricao,
             "produto_codigo": self.produto_codigo,
             "produto_unidade": self.produto_unidade,
             "quantidade": self.quantidade,
