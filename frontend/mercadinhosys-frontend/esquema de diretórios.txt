@@ -1,0 +1,23 @@
+src/
+├── api/                    # Configurações e chamadas à API
+├── components/             # Componentes React
+│   ├── ui/                # Componentes de UI reutilizáveis
+│   ├── layout/            # Layout principal (Header, Sidebar)
+│   └── shared/            # Componentes compartilhados
+├── features/              # Funcionalidades por módulo
+│   ├── auth/              # Autenticação (Login, Logout)
+│   ├── dashboard/         # Dashboard principal
+│   ├── pdv/               # Ponto de Venda
+│   ├── products/          # Gestão de Produtos
+│   ├── customers/         # Gestão de Clientes
+│   ├── employees/         # Gestão de Funcionários
+│   ├── expenses/          # Gestão de Despesas
+│   └── settings/          # Configurações do Sistema
+├── hooks/                 # Custom Hooks do React
+├── lib/                   # Bibliotecas/configurações
+├── routes/                # Configuração de rotas
+├── stores/                # Gerenciamento de estado (Redux)
+│   └── slices/            # Redux slices
+├── theme/                 # Configuração de temas
+├── types/                 # Tipos TypeScript
+└── utils/                 # Funções utilitárias
