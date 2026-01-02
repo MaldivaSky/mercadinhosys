@@ -1,6 +1,8 @@
 import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { ReactNode, createContext, useContext, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { ThemeContext } from './ThemeContext';
 
 // Cores para tema escuro
 const darkPalette = {
@@ -47,22 +49,6 @@ const lightPalette = {
     },
     divider: 'rgba(0, 0, 0, 0.12)',
 };
-
-// Contexto para controle do tema
-interface ThemeContextType {
-    mode: 'dark' | 'light';
-    toggleTheme: () => void;
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-export function useTheme() {
-    const context = useContext(ThemeContext);
-    if (!context) {
-        throw new Error('useTheme must be used within ThemeProvider');
-    }
-    return context;
-}
 
 interface ThemeProviderProps {
     children: ReactNode;
