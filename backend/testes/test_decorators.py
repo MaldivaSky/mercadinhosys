@@ -123,7 +123,7 @@ def test_endpoint():
     jwt = JWTManager(app)
 
     # Importar decorators corrigidos
-    from app.decorator import (
+    from app.decorators.decorator_jwt import (
         admin_required,
         gerente_ou_admin_required,
         funcionario_required,
