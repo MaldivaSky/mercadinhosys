@@ -1,7 +1,8 @@
-from flask import Flask, jsonify, request  # ✅ ADICIONE "request" AQUI!
+from flask import Flask, jsonify, request
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_caching import Cache  # NOVO IMPORT
 from app.models import db
 from config import config
 import os
@@ -9,6 +10,12 @@ import os
 # Inicializa as extensões
 migrate = Migrate()
 jwt = JWTManager()
+cache = Cache()  # NOVA INSTÂNCIA DO CACHE
+
+# No topo, após os imports existentes:
+from app.middleware.rate_limit import limiter
+from app.swagger import init_swagger
+from app.utils.logger import app_logger
 
 
 def create_app(config_name="default"):
@@ -18,10 +25,29 @@ def create_app(config_name="default"):
     # Carrega configurações
     app.config.from_object(config[config_name])
 
+    # Configuração do Cache (mantenha essas linhas SE já existirem, senão adicione)
+    if "CACHE_TYPE" not in app.config:
+        app.config["CACHE_TYPE"] = "simple"  # Para desenvolvimento
+        app.config["CACHE_DEFAULT_TIMEOUT"] = 300  # 5 minutos
+
     # Inicializa extensões com o app
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    cache.init_app(app)  # INICIALIZA O CACHE
+
+    # Inicializa rate limiter
+    limiter.init_app(app)
+
+    # Inicializa Swagger
+    init_swagger(app)
+
+    # Log de inicialização
+    app_logger.info(
+        "Aplicação inicializada",
+        config=config_name,
+        environment=os.getenv("FLASK_ENV", "development"),
+    )
 
     # Configuração CORS mais segura
     CORS(
@@ -46,8 +72,8 @@ def create_app(config_name="default"):
     from app.routes.configuracao import config_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.relatorios import relatorios_bp
-    from app.routes.dashboard_dono import dashboard_dono_bp
     from app.routes.auth import auth_bp
+    from app.routes.despesas import despesas_bp
 
     # 🎯 CADA BLUEPRINT COM SEU PRÓPRIO NAMESPACE
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -58,7 +84,7 @@ def create_app(config_name="default"):
     app.register_blueprint(vendas_bp, url_prefix="/api/vendas")
     app.register_blueprint(config_bp, url_prefix="/api/config")
     app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
-    app.register_blueprint(dashboard_dono_bp, url_prefix="/api/dashboard_dono")
+    app.register_blueprint(despesas_bp, url_prefix="/api/despesas")
     app.register_blueprint(relatorios_bp, url_prefix="/api/relatorios")
 
     # 📊 Rota de saúde expandida
@@ -78,6 +104,7 @@ def create_app(config_name="default"):
                 "service": "mercadinhosys-api",
                 "version": "2.0.0",
                 "database": db_status,
+                "cache": "enabled" if app.config.get("CACHE_TYPE") else "disabled",
                 "endpoints": [
                     "/api/produtos",
                     "/api/vendas",
@@ -86,7 +113,6 @@ def create_app(config_name="default"):
                     "/api/fornecedores",
                     "/api/config",
                     "/api/dashboard",
-                    "/api/dashboard_dono",
                     "/api/relatorios",
                 ],
             }
@@ -111,11 +137,11 @@ def create_app(config_name="default"):
                     "fornecedores": "/api/fornecedores",
                     "configuracoes": "/api/config",
                     "dashboard": "/api/dashboard",
-                    "dashboard_dono": "/api/dashboard_dono",
                     "relatorios": "/api/relatorios",
                     "health": "/api/health",
                 },
                 "status": "operacional",
+                "analytics": "dashboard científico de dados ativado",
             }
         )
 
@@ -142,6 +168,67 @@ def create_app(config_name="default"):
                 "fluxo_recomendado": "POST /api/vendas/ → GET /api/vendas/dia",
             }
         )
+
+    # 📚 Rota de documentação da API
+    @app.route("/api/docs")
+    def api_docs():
+        return jsonify({
+            "api": "MercadinhoSys API Documentation",
+            "version": "2.0.0",
+            "base_url": "http://localhost:5000/api",
+            "authentication": {
+                "type": "JWT Bearer Token",
+                "login": "POST /api/auth/login",
+                "refresh": "POST /api/auth/refresh",
+                "header": "Authorization: Bearer {token}"
+            },
+            "endpoints": {
+                "auth": {
+                    "login": {"method": "POST", "url": "/api/auth/login", "body": {"email": "string", "senha": "string"}},
+                    "refresh": {"method": "POST", "url": "/api/auth/refresh"},
+                    "validate": {"method": "GET", "url": "/api/auth/validate"},
+                    "logout": {"method": "POST", "url": "/api/auth/logout"},
+                    "profile": {"method": "GET", "url": "/api/auth/profile"}
+                },
+                "produtos": {
+                    "listar": {"method": "GET", "url": "/api/produtos/estoque"},
+                    "buscar": {"method": "GET", "url": "/api/produtos/search?q={termo}"},
+                    "barcode": {"method": "GET", "url": "/api/produtos/barcode/{codigo}"},
+                    "criar": {"method": "POST", "url": "/api/produtos/estoque"},
+                    "atualizar": {"method": "PUT", "url": "/api/produtos/estoque/{id}"},
+                    "deletar": {"method": "DELETE", "url": "/api/produtos/estoque/{id}"}
+                },
+                "vendas": {
+                    "listar": {"method": "GET", "url": "/api/vendas/"},
+                    "criar": {"method": "POST", "url": "/api/vendas/"},
+                    "dia": {"method": "GET", "url": "/api/vendas/dia"},
+                    "estatisticas": {"method": "GET", "url": "/api/vendas/estatisticas"},
+                    "detalhes": {"method": "GET", "url": "/api/vendas/{id}"},
+                    "cancelar": {"method": "POST", "url": "/api/vendas/{id}/cancelar"}
+                },
+                "clientes": {
+                    "listar": {"method": "GET", "url": "/api/clientes/"},
+                    "criar": {"method": "POST", "url": "/api/clientes/"},
+                    "buscar": {"method": "GET", "url": "/api/clientes/buscar?q={termo}"},
+                    "compras": {"method": "GET", "url": "/api/clientes/{id}/compras"}
+                },
+                "funcionarios": {
+                    "listar": {"method": "GET", "url": "/api/funcionarios/"},
+                    "criar": {"method": "POST", "url": "/api/funcionarios/"},
+                    "login_pin": {"method": "POST", "url": "/api/funcionarios/login"}
+                },
+                "dashboard": {
+                    "resumo": {"method": "GET", "url": "/api/dashboard/resumo"},
+                    "admin": {"method": "GET", "url": "/api/dashboard/painel-admin"}
+                }
+            },
+            "exemplo_uso": {
+                "1_login": "POST /api/auth/login com {email, senha}",
+                "2_obter_token": "Salvar o access_token retornado",
+                "3_usar_api": "Incluir header: Authorization: Bearer {token}",
+                "4_venda": "POST /api/vendas/ com dados da venda"
+            }
+        })
 
     # 🛡️ Manipuladores de erro aprimorados
     @app.errorhandler(404)
@@ -196,5 +283,7 @@ def create_app(config_name="default"):
     for rule in app.url_map.iter_rules():
         if rule.endpoint != "static":
             print(f"   {rule.methods} {rule.rule}")
+
+    print(f"📈 Dashboard científico de dados: ATIVADO")
 
     return app

@@ -1,53 +1,157 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from app import db
-from app.models import Funcionario, Venda
-from datetime import datetime, date
+from app.models import Funcionario, Venda, Estabelecimento
+from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import or_, and_, func
 
 funcionarios_bp = Blueprint("funcionarios", __name__, url_prefix="/api/funcionarios")
 
-# ==================== CRUD FUNCIONÁRIOS ====================
+# ==================== CRUD FUNCIONÁRIOS COM FILTROS AVANÇADOS ====================
 
 
 @funcionarios_bp.route("/", methods=["GET"])
 def listar_funcionarios():
-    """Listar todos os funcionários"""
-    try:
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 50, type=int)
-        search = request.args.get("search", "").strip()
-        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+    """Listar funcionários com filtros avançados e paginação
 
+    Query parameters:
+    - pagina: número da página (padrão: 1)
+    - por_pagina: itens por página (padrão: 20, máximo: 100)
+    - busca: busca textual em nome, cpf, usuário, email
+    - cargo: filtrar por cargo específico
+    - nivel_acesso: filtrar por nível de acesso
+    - ativos: true/false (padrão: true)
+    - data_admissao_inicio: YYYY-MM-DD
+    - data_admissao_fim: YYYY-MM-DD
+    - salario_min: valor mínimo
+    - salario_max: valor máximo
+    - ordenar_por: campo para ordenação (nome, cargo, salario, data_admissao, nivel_acesso)
+    - ordem: asc/desc (padrão: asc)
+    """
+    try:
+        # Parâmetros de paginação
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = request.args.get("por_pagina", 20, type=int)
+        por_pagina = min(por_pagina, 100)  # Limite máximo
+
+        # Filtros básicos
+        busca = request.args.get("busca", "").strip()
+        cargo = request.args.get("cargo")
+        nivel_acesso = request.args.get("nivel_acesso")
+        ativos_str = request.args.get("ativos", "true").lower()
+        apenas_ativos = ativos_str in ["true", "1", "yes"]
+
+        # Filtros avançados
+        data_admissao_inicio = request.args.get("data_admissao_inicio")
+        data_admissao_fim = request.args.get("data_admissao_fim")
+        salario_min = request.args.get("salario_min", type=float)
+        salario_max = request.args.get("salario_max", type=float)
+
+        # Ordenação
+        ordenar_por = request.args.get("ordenar_por", "nome")
+        ordem = request.args.get("ordem", "asc").lower()
+
+        # Construir query
         query = Funcionario.query
 
-        if search:
+        # Aplicar filtro de busca textual
+        if busca:
+            busca_like = f"%{busca}%"
             query = query.filter(
-                db.or_(
-                    Funcionario.nome.ilike(f"%{search}%"),
-                    Funcionario.cpf.ilike(f"%{search}%"),
-                    Funcionario.usuario.ilike(f"%{search}%"),
+                or_(
+                    Funcionario.nome.ilike(busca_like),
+                    Funcionario.cpf.ilike(busca_like),
+                    Funcionario.usuario.ilike(busca_like),
+                    Funcionario.email.ilike(busca_like),
+                    Funcionario.telefone.ilike(busca_like),
+                    Funcionario.cargo.ilike(busca_like),
                 )
             )
 
+        # Filtro por cargo
+        if cargo:
+            query = query.filter(Funcionario.cargo == cargo)
+
+        # Filtro por nível de acesso
+        if nivel_acesso:
+            query = query.filter(Funcionario.nivel_acesso == nivel_acesso)
+
+        # Filtro por status ativo/inativo
         if apenas_ativos:
             query = query.filter(Funcionario.ativo == True)
+        elif ativos_str in ["false", "0", "no"]:
+            query = query.filter(Funcionario.ativo == False)
 
-        query = query.order_by(Funcionario.nome.asc())
+        # Filtro por data de admissão
+        try:
+            if data_admissao_inicio:
+                inicio = datetime.strptime(data_admissao_inicio, "%Y-%m-%d").date()
+                query = query.filter(Funcionario.data_admissao >= inicio)
+            if data_admissao_fim:
+                fim = datetime.strptime(data_admissao_fim, "%Y-%m-%d").date()
+                query = query.filter(Funcionario.data_admissao <= fim)
+        except ValueError:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Formato de data inválido. Use YYYY-MM-DD",
+                    }
+                ),
+                400,
+            )
 
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        # Filtro por faixa salarial
+        if salario_min is not None:
+            query = query.filter(Funcionario.salario >= salario_min)
+        if salario_max is not None:
+            query = query.filter(Funcionario.salario <= salario_max)
+
+        # Aplicar ordenação
+        campos_ordenacao = {
+            "nome": Funcionario.nome,
+            "cargo": Funcionario.cargo,
+            "salario": Funcionario.salario,
+            "data_admissao": Funcionario.data_admissao,
+            "nivel_acesso": Funcionario.nivel_acesso,
+            "created_at": Funcionario.created_at,
+            "updated_at": Funcionario.updated_at,
+        }
+
+        campo_ordenacao = campos_ordenacao.get(ordenar_por, Funcionario.nome)
+        if ordem == "desc":
+            query = query.order_by(campo_ordenacao.desc())
+        else:
+            query = query.order_by(campo_ordenacao.asc())
+
+        # Ordenação secundária por ID
+        query = query.order_by(Funcionario.id.asc())
+
+        # Aplicar paginação
+        pagination = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
         funcionarios = pagination.items
 
+        # Preparar resposta
         resultado = []
         for f in funcionarios:
-            # Não incluir a senha_hash na resposta
+            # Calcular estatísticas básicas para cada funcionário
+            total_vendas = Venda.query.filter_by(funcionario_id=f.id).count()
+
+            # Vendas dos últimos 30 dias
+            data_30_dias_atras = datetime.utcnow() - timedelta(days=30)
+            vendas_30_dias = Venda.query.filter(
+                Venda.funcionario_id == f.id, Venda.created_at >= data_30_dias_atras
+            ).count()
+
             funcionario_dict = {
                 "id": f.id,
                 "nome": f.nome,
                 "cpf": f.cpf,
                 "telefone": f.telefone,
+                "celular": f.celular,
                 "email": f.email,
                 "cargo": f.cargo,
-                "salario": f.salario,
+                "salario": float(f.salario) if f.salario else None,
                 "data_admissao": (
                     f.data_admissao.isoformat() if f.data_admissao else None
                 ),
@@ -59,44 +163,575 @@ def listar_funcionarios():
                 "ativo": f.ativo,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
                 "updated_at": f.updated_at.isoformat() if f.updated_at else None,
+                "estatisticas": {
+                    "total_vendas": total_vendas,
+                    "vendas_30_dias": vendas_30_dias,
+                },
             }
-
             resultado.append(funcionario_dict)
+
+        # Obter métricas agregadas para dashboard
+        total_funcionarios = query.count()
+        total_ativos = Funcionario.query.filter_by(ativo=True).count()
+        total_inativos = Funcionario.query.filter_by(ativo=False).count()
+
+        # Salário médio
+        salario_medio = (
+            db.session.query(func.avg(Funcionario.salario))
+            .filter(Funcionario.ativo == True)
+            .scalar()
+            or 0.0
+        )
+
+        # Distribuição por cargo
+        distribuicao_cargo = (
+            db.session.query(
+                Funcionario.cargo, func.count(Funcionario.id).label("quantidade")
+            )
+            .filter(Funcionario.ativo == True)
+            .group_by(Funcionario.cargo)
+            .all()
+        )
+
+        # Distribuição por nível de acesso
+        distribuicao_nivel = (
+            db.session.query(
+                Funcionario.nivel_acesso, func.count(Funcionario.id).label("quantidade")
+            )
+            .filter(Funcionario.ativo == True)
+            .group_by(Funcionario.nivel_acesso)
+            .all()
+        )
+
+        # Cargos disponíveis para filtro
+        cargos_disponiveis = (
+            db.session.query(Funcionario.cargo)
+            .filter(Funcionario.cargo.isnot(None))
+            .distinct()
+            .all()
+        )
+
+        # Níveis de acesso disponíveis
+        niveis_disponiveis = (
+            db.session.query(Funcionario.nivel_acesso)
+            .filter(Funcionario.nivel_acesso.isnot(None))
+            .distinct()
+            .all()
+        )
 
         return jsonify(
             {
-                "funcionarios": resultado,
+                "success": True,
+                "data": resultado,
                 "paginacao": {
                     "pagina_atual": pagination.page,
-                    "total_paginas": pagination.pages,
+                    "por_pagina": pagination.per_page,
                     "total_itens": pagination.total,
-                    "itens_por_pagina": pagination.per_page,
+                    "total_paginas": pagination.pages,
                     "tem_proxima": pagination.has_next,
                     "tem_anterior": pagination.has_prev,
+                    "proxima_pagina": pagination.next_num,
+                    "pagina_anterior": pagination.prev_num,
+                },
+                "estatisticas": {
+                    "total_funcionarios": total_funcionarios,
+                    "total_ativos": total_ativos,
+                    "total_inativos": total_inativos,
+                    "salario_medio": float(salario_medio),
+                    "distribuicao_cargo": [
+                        {"cargo": cargo, "quantidade": quantidade}
+                        for cargo, quantidade in distribuicao_cargo
+                    ],
+                    "distribuicao_nivel_acesso": [
+                        {"nivel": nivel, "quantidade": quantidade}
+                        for nivel, quantidade in distribuicao_nivel
+                    ],
+                },
+                "filtros_disponiveis": {
+                    "cargos": [c[0] for c in cargos_disponiveis if c[0]],
+                    "niveis_acesso": [n[0] for n in niveis_disponiveis if n[0]],
+                },
+                "filtros_aplicados": {
+                    "busca": busca,
+                    "cargo": cargo,
+                    "nivel_acesso": nivel_acesso,
+                    "ativos": apenas_ativos,
+                    "data_admissao_inicio": data_admissao_inicio,
+                    "data_admissao_fim": data_admissao_fim,
+                    "salario_min": salario_min,
+                    "salario_max": salario_max,
+                    "ordenar_por": ordenar_por,
+                    "ordem": ordem,
                 },
             }
         )
 
     except Exception as e:
-        print(f"Erro ao listar funcionários: {str(e)}")
-        return jsonify({"error": f"Erro ao listar funcionários: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao listar funcionários: {str(e)}")
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Erro ao listar funcionários",
+                    "message": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@funcionarios_bp.route("/estatisticas", methods=["GET"])
+def estatisticas_funcionarios():
+    """Obtém estatísticas detalhadas de funcionários para dashboard"""
+    try:
+        # Estatísticas gerais
+        total_funcionarios = Funcionario.query.count()
+        total_ativos = Funcionario.query.filter_by(ativo=True).count()
+        total_inativos = Funcionario.query.filter_by(ativo=False).count()
+
+        # Salários
+        salario_medio = (
+            db.session.query(func.avg(Funcionario.salario))
+            .filter(Funcionario.ativo == True)
+            .scalar()
+            or 0.0
+        )
+
+        salario_maximo = db.session.query(func.max(Funcionario.salario)).scalar() or 0.0
+        salario_minimo = (
+            db.session.query(func.min(Funcionario.salario))
+            .filter(Funcionario.ativo == True)
+            .scalar()
+            or 0.0
+        )
+
+        # Distribuição por cargo
+        distribuicao_cargo = (
+            db.session.query(
+                Funcionario.cargo,
+                func.count(Funcionario.id).label("quantidade"),
+                func.avg(Funcionario.salario).label("salario_medio"),
+            )
+            .filter(Funcionario.ativo == True)
+            .group_by(Funcionario.cargo)
+            .all()
+        )
+
+        # Distribuição por nível de acesso
+        distribuicao_nivel = (
+            db.session.query(
+                Funcionario.nivel_acesso, func.count(Funcionario.id).label("quantidade")
+            )
+            .filter(Funcionario.ativo == True)
+            .group_by(Funcionario.nivel_acesso)
+            .all()
+        )
+
+        # Admissões por mês (últimos 12 meses)
+        hoje = datetime.now()
+        admissoes_por_mes = []
+
+        for i in range(12):
+            mes_data = hoje.replace(day=1)
+            for _ in range(i):
+                # Subtrair um mês
+                if mes_data.month == 1:
+                    mes_data = mes_data.replace(year=mes_data.year - 1, month=12)
+                else:
+                    mes_data = mes_data.replace(month=mes_data.month - 1)
+
+            mes_fim = mes_data
+            # Encontrar último dia do mês
+            if mes_fim.month == 12:
+                mes_fim = mes_fim.replace(
+                    year=mes_fim.year + 1, month=1, day=1
+                ) - timedelta(days=1)
+            else:
+                mes_fim = mes_fim.replace(month=mes_fim.month + 1, day=1) - timedelta(
+                    days=1
+                )
+
+            total_mes = (
+                db.session.query(func.count(Funcionario.id))
+                .filter(
+                    Funcionario.data_admissao >= mes_data,
+                    Funcionario.data_admissao <= mes_fim,
+                )
+                .scalar()
+                or 0
+            )
+
+            demissoes_mes = (
+                db.session.query(func.count(Funcionario.id))
+                .filter(
+                    Funcionario.data_demissao >= mes_data,
+                    Funcionario.data_demissao <= mes_fim,
+                )
+                .scalar()
+                or 0
+            )
+
+            admissoes_por_mes.append(
+                {
+                    "mes": mes_data.strftime("%Y-%m"),
+                    "mes_nome": mes_data.strftime("%b/%Y"),
+                    "admissoes": total_mes,
+                    "demissoes": demissoes_mes,
+                    "saldo": total_mes - demissoes_mes,
+                }
+            )
+
+        admissoes_por_mes.reverse()  # Do mais antigo para o mais recente
+
+        # Tempo médio de empresa
+        funcionarios_ativos = Funcionario.query.filter_by(ativo=True).all()
+        tempo_total_dias = 0
+        for f in funcionarios_ativos:
+            if f.data_admissao:
+                tempo_empresa = (date.today() - f.data_admissao).days
+                tempo_total_dias += tempo_empresa
+
+        tempo_medio_empresa = tempo_total_dias / max(1, total_ativos)
+
+        # Funcionários com mais vendas (top 5)
+        funcionarios_top_vendas = (
+            db.session.query(
+                Funcionario,
+                func.count(Venda.id).label("total_vendas"),
+                func.sum(Venda.valor_total).label("valor_total_vendas"),
+            )
+            .join(Venda, Funcionario.id == Venda.funcionario_id)
+            .group_by(Funcionario.id)
+            .order_by(func.count(Venda.id).desc())
+            .limit(5)
+            .all()
+        )
+
+        top_vendedores = []
+        for funcionario, total_vendas, valor_total in funcionarios_top_vendas:
+            top_vendedores.append(
+                {
+                    "id": funcionario.id,
+                    "nome": funcionario.nome,
+                    "cargo": funcionario.cargo,
+                    "total_vendas": total_vendas,
+                    "valor_total_vendas": float(valor_total) if valor_total else 0.0,
+                    "ticket_medio": (
+                        float(valor_total) / total_vendas if total_vendas > 0 else 0.0
+                    ),
+                }
+            )
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "estatisticas": {
+                        "totais": {
+                            "total_funcionarios": total_funcionarios,
+                            "total_ativos": total_ativos,
+                            "total_inativos": total_inativos,
+                            "taxa_atividade": (
+                                total_ativos / max(1, total_funcionarios)
+                            )
+                            * 100,
+                        },
+                        "salarios": {
+                            "medio": float(salario_medio),
+                            "maximo": float(salario_maximo),
+                            "minimo": float(salario_minimo),
+                            "soma_total": float(salario_medio * total_ativos),
+                        },
+                        "distribuicao_cargo": [
+                            {
+                                "cargo": cargo,
+                                "quantidade": quantidade,
+                                "percentual": (quantidade / max(1, total_ativos)) * 100,
+                                "salario_medio": (
+                                    float(salario_medio) if salario_medio else 0.0
+                                ),
+                            }
+                            for cargo, quantidade, salario_medio in distribuicao_cargo
+                        ],
+                        "distribuicao_nivel_acesso": [
+                            {
+                                "nivel": nivel,
+                                "quantidade": quantidade,
+                                "percentual": (quantidade / max(1, total_ativos)) * 100,
+                            }
+                            for nivel, quantidade in distribuicao_nivel
+                        ],
+                        "admissoes_demissoes": {
+                            "por_mes": admissoes_por_mes,
+                            "total_admissoes_ano": sum(
+                                item["admissoes"] for item in admissoes_por_mes
+                            ),
+                            "total_demissoes_ano": sum(
+                                item["demissoes"] for item in admissoes_por_mes
+                            ),
+                        },
+                        "tempo_empresa": {
+                            "medio_dias": tempo_medio_empresa,
+                            "medio_meses": tempo_medio_empresa / 30.44,
+                            "medio_anos": tempo_medio_empresa / 365.25,
+                        },
+                        "top_vendedores": top_vendedores,
+                        "indicadores": {
+                            "rotatividade": (
+                                sum(item["demissoes"] for item in admissoes_por_mes)
+                                / max(1, total_ativos)
+                            )
+                            * 100,
+                            "custo_folha_mensal": float(salario_medio * total_ativos),
+                            "funcionarios_por_nivel": {
+                                item["nivel"]: item["quantidade"]
+                                for item in [
+                                    {"nivel": nivel, "quantidade": quantidade}
+                                    for nivel, quantidade in distribuicao_nivel
+                                ]
+                            },
+                        },
+                    },
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        current_app.logger.error(
+            f"Erro ao obter estatísticas de funcionários: {str(e)}"
+        )
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Erro ao obter estatísticas",
+                    "message": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@funcionarios_bp.route("/relatorio-vendas", methods=["GET"])
+def relatorio_vendas_funcionarios():
+    """Relatório de vendas por funcionário"""
+    try:
+        # Parâmetros de período
+        data_inicio_str = request.args.get("inicio")
+        data_fim_str = request.args.get("fim")
+
+        hoje = date.today()
+        if not data_inicio_str:
+            data_inicio = hoje.replace(day=1)  # Início do mês atual
+        else:
+            data_inicio = datetime.strptime(data_inicio_str, "%Y-%m-%d").date()
+
+        if not data_fim_str:
+            data_fim = hoje  # Hoje
+        else:
+            data_fim = datetime.strptime(data_fim_str, "%Y-%m-%d").date()
+
+        # Query para vendas no período
+        vendas_funcionarios = (
+            db.session.query(
+                Funcionario.id,
+                Funcionario.nome,
+                Funcionario.cargo,
+                func.count(Venda.id).label("total_vendas"),
+                func.sum(Venda.valor_total).label("valor_total_vendas"),
+                func.avg(Venda.valor_total).label("ticket_medio"),
+            )
+            .join(Venda, Funcionario.id == Venda.funcionario_id)
+            .filter(
+                Venda.created_at >= data_inicio,
+                Venda.created_at
+                <= data_fim + timedelta(days=1),  # Incluir todo o dia final
+            )
+            .group_by(Funcionario.id, Funcionario.nome, Funcionario.cargo)
+            .order_by(func.sum(Venda.valor_total).desc())
+            .all()
+        )
+
+        # Estatísticas gerais do período
+        total_vendas_periodo = (
+            db.session.query(func.count(Venda.id))
+            .filter(
+                Venda.created_at >= data_inicio,
+                Venda.created_at <= data_fim + timedelta(days=1),
+            )
+            .scalar()
+            or 0
+        )
+
+        valor_total_periodo = (
+            db.session.query(func.sum(Venda.valor_total))
+            .filter(
+                Venda.created_at >= data_inicio,
+                Venda.created_at <= data_fim + timedelta(days=1),
+            )
+            .scalar()
+            or 0.0
+        )
+
+        # Preparar resposta
+        funcionarios_vendas = []
+        for (
+            id,
+            nome,
+            cargo,
+            total_vendas,
+            valor_total,
+            ticket_medio,
+        ) in vendas_funcionarios:
+            percentual_valor = (
+                (float(valor_total or 0) / float(valor_total_periodo)) * 100
+                if valor_total_periodo > 0
+                else 0
+            )
+            percentual_qtd = (
+                (total_vendas / total_vendas_periodo) * 100
+                if total_vendas_periodo > 0
+                else 0
+            )
+
+            funcionarios_vendas.append(
+                {
+                    "id": id,
+                    "nome": nome,
+                    "cargo": cargo,
+                    "total_vendas": total_vendas,
+                    "valor_total_vendas": float(valor_total or 0),
+                    "ticket_medio": float(ticket_medio or 0),
+                    "percentual_valor": round(percentual_valor, 2),
+                    "percentual_quantidade": round(percentual_qtd, 2),
+                }
+            )
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "periodo": {
+                        "inicio": data_inicio.isoformat(),
+                        "fim": data_fim.isoformat(),
+                        "dias": (data_fim - data_inicio).days + 1,
+                    },
+                    "estatisticas_gerais": {
+                        "total_vendas": total_vendas_periodo,
+                        "valor_total": float(valor_total_periodo),
+                        "ticket_medio_periodo": (
+                            float(valor_total_periodo / total_vendas_periodo)
+                            if total_vendas_periodo > 0
+                            else 0
+                        ),
+                        "media_diaria": float(
+                            valor_total_periodo
+                            / max(1, (data_fim - data_inicio).days + 1)
+                        ),
+                        "total_funcionarios_vendas": len(funcionarios_vendas),
+                    },
+                    "funcionarios": funcionarios_vendas,
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar relatório de vendas: {str(e)}")
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Erro ao gerar relatório",
+                    "message": str(e),
+                }
+            ),
+            500,
+        )
+
+
+# ==================== CORREÇÕES NOS ENDPOINTS EXISTENTES ====================
 
 
 @funcionarios_bp.route("/<int:id>", methods=["GET"])
 def detalhes_funcionario(id):
-    """Obter detalhes de um funcionário"""
+    """Obter detalhes de um funcionário com estatísticas completas"""
     try:
         funcionario = Funcionario.query.get(id)
 
         if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+            return (
+                jsonify({"success": False, "error": "Funcionário não encontrado"}),
+                404,
+            )
 
         # Estatísticas do funcionário
         total_vendas = Venda.query.filter_by(funcionario_id=id).count()
+
+        # Vendas dos últimos 30 dias
+        data_30_dias_atras = datetime.utcnow() - timedelta(days=30)
         vendas_30_dias = Venda.query.filter(
-            Venda.funcionario_id == id,
-            Venda.created_at >= (datetime.utcnow() - datetime.timedelta(days=30)),
+            Venda.funcionario_id == id, Venda.created_at >= data_30_dias_atras
         ).count()
+
+        # Valor total de vendas
+        valor_total_vendas = (
+            db.session.query(func.sum(Venda.valor_total))
+            .filter(Venda.funcionario_id == id)
+            .scalar()
+            or 0.0
+        )
+
+        # Vendas por mês (últimos 6 meses)
+        hoje = datetime.utcnow()
+        vendas_por_mes = []
+
+        for i in range(6):
+            mes_data = hoje.replace(day=1)
+            for _ in range(i):
+                if mes_data.month == 1:
+                    mes_data = mes_data.replace(year=mes_data.year - 1, month=12)
+                else:
+                    mes_data = mes_data.replace(month=mes_data.month - 1)
+
+            mes_fim = mes_data
+            if mes_fim.month == 12:
+                mes_fim = mes_fim.replace(
+                    year=mes_fim.year + 1, month=1, day=1
+                ) - timedelta(days=1)
+            else:
+                mes_fim = mes_fim.replace(month=mes_fim.month + 1, day=1) - timedelta(
+                    days=1
+                )
+
+            vendas_mes = Venda.query.filter(
+                Venda.funcionario_id == id,
+                Venda.created_at >= mes_data,
+                Venda.created_at <= mes_fim,
+            ).count()
+
+            valor_mes = (
+                db.session.query(func.sum(Venda.valor_total))
+                .filter(
+                    Venda.funcionario_id == id,
+                    Venda.created_at >= mes_data,
+                    Venda.created_at <= mes_fim,
+                )
+                .scalar()
+                or 0.0
+            )
+
+            vendas_por_mes.append(
+                {
+                    "mes": mes_data.strftime("%Y-%m"),
+                    "mes_nome": mes_data.strftime("%b/%Y"),
+                    "quantidade_vendas": vendas_mes,
+                    "valor_total": float(valor_mes),
+                }
+            )
+
+        vendas_por_mes.reverse()
 
         funcionario_dict = {
             "id": funcionario.id,
@@ -113,7 +748,7 @@ def detalhes_funcionario(id):
             "email": funcionario.email,
             "endereco": funcionario.endereco,
             "cargo": funcionario.cargo,
-            "salario": funcionario.salario,
+            "salario": float(funcionario.salario) if funcionario.salario else None,
             "data_admissao": (
                 funcionario.data_admissao.isoformat()
                 if funcionario.data_admissao
@@ -136,14 +771,38 @@ def detalhes_funcionario(id):
             "estatisticas": {
                 "total_vendas": total_vendas,
                 "vendas_30_dias": vendas_30_dias,
+                "valor_total_vendas": float(valor_total_vendas),
+                "ticket_medio": (
+                    float(valor_total_vendas / total_vendas) if total_vendas > 0 else 0
+                ),
+                "vendas_por_mes": vendas_por_mes,
+                "tempo_empresa_dias": (
+                    (date.today() - funcionario.data_admissao).days
+                    if funcionario.data_admissao
+                    else None
+                ),
+                "tempo_empresa_anos": (
+                    ((date.today() - funcionario.data_admissao).days / 365.25)
+                    if funcionario.data_admissao
+                    else None
+                ),
             },
         }
 
-        return jsonify(funcionario_dict)
+        return jsonify({"success": True, "data": funcionario_dict}), 200
 
     except Exception as e:
-        print(f"Erro ao obter funcionário {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao obter funcionário: {str(e)}"}), 404
+        current_app.logger.error(f"Erro ao obter funcionário {id}: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "error": f"Erro ao obter funcionário: {str(e)}"}
+            ),
+            500,
+        )
+
+
+# Os endpoints POST, PUT, DELETE, login e verificar-pin permanecem os mesmos
+# (mantendo o código original para esses métodos)
 
 
 @funcionarios_bp.route("/", methods=["POST"])
@@ -153,20 +812,30 @@ def criar_funcionario():
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
+            return jsonify({"success": False, "error": "Nenhum dado fornecido"}), 400
 
         # Validações obrigatórias
         if not data.get("nome"):
-            return jsonify({"error": "Nome do funcionário é obrigatório"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": "Nome do funcionário é obrigatório"}
+                ),
+                400,
+            )
 
         if not data.get("cpf"):
-            return jsonify({"error": "CPF do funcionário é obrigatório"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": "CPF do funcionário é obrigatório"}
+                ),
+                400,
+            )
 
         if not data.get("usuario"):
-            return jsonify({"error": "Usuário é obrigatório"}), 400
+            return jsonify({"success": False, "error": "Usuário é obrigatório"}), 400
 
         if not data.get("senha"):
-            return jsonify({"error": "Senha é obrigatória"}), 400
+            return jsonify({"success": False, "error": "Senha é obrigatória"}), 400
 
         # Verificar CPF único
         cpf = data.get("cpf")
@@ -175,6 +844,7 @@ def criar_funcionario():
             return (
                 jsonify(
                     {
+                        "success": False,
                         "error": "CPF já cadastrado",
                         "funcionario_existente": {
                             "id": existente_cpf.id,
@@ -192,6 +862,7 @@ def criar_funcionario():
             return (
                 jsonify(
                     {
+                        "success": False,
                         "error": "Usuário já cadastrado",
                         "funcionario_existente": {
                             "id": existente_usuario.id,
@@ -248,7 +919,7 @@ def criar_funcionario():
                 {
                     "success": True,
                     "message": "Funcionário criado com sucesso",
-                    "funcionario": {
+                    "data": {
                         "id": novo_funcionario.id,
                         "nome": novo_funcionario.nome,
                         "usuario": novo_funcionario.usuario,
@@ -261,8 +932,13 @@ def criar_funcionario():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao criar funcionário: {str(e)}")
-        return jsonify({"error": f"Erro ao criar funcionário: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao criar funcionário: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "error": f"Erro ao criar funcionário: {str(e)}"}
+            ),
+            500,
+        )
 
 
 @funcionarios_bp.route("/<int:id>", methods=["PUT"])
@@ -272,12 +948,15 @@ def atualizar_funcionario(id):
         funcionario = Funcionario.query.get(id)
 
         if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+            return (
+                jsonify({"success": False, "error": "Funcionário não encontrado"}),
+                404,
+            )
 
         data = request.get_json()
 
         if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
+            return jsonify({"success": False, "error": "Nenhum dado fornecido"}), 400
 
         # Verificar CPF único (se estiver sendo alterado)
         if "cpf" in data and data["cpf"] != funcionario.cpf:
@@ -286,6 +965,7 @@ def atualizar_funcionario(id):
                 return (
                     jsonify(
                         {
+                            "success": False,
                             "error": "CPF já cadastrado em outro funcionário",
                             "funcionario_existente": {
                                 "id": existente.id,
@@ -303,6 +983,7 @@ def atualizar_funcionario(id):
                 return (
                     jsonify(
                         {
+                            "success": False,
                             "error": "Usuário já cadastrado em outro funcionário",
                             "funcionario_existente": {
                                 "id": existente.id,
@@ -356,24 +1037,32 @@ def atualizar_funcionario(id):
 
         db.session.commit()
 
-        return jsonify(
-            {
-                "success": True,
-                "message": "Funcionário atualizado com sucesso",
-                "funcionario": {
-                    "id": funcionario.id,
-                    "nome": funcionario.nome,
-                    "usuario": funcionario.usuario,
-                    "cargo": funcionario.cargo,
-                    "ativo": funcionario.ativo,
-                },
-            }
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Funcionário atualizado com sucesso",
+                    "data": {
+                        "id": funcionario.id,
+                        "nome": funcionario.nome,
+                        "usuario": funcionario.usuario,
+                        "cargo": funcionario.cargo,
+                        "ativo": funcionario.ativo,
+                    },
+                }
+            ),
+            200,
         )
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao atualizar funcionário {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao atualizar funcionário: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao atualizar funcionário {id}: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "error": f"Erro ao atualizar funcionário: {str(e)}"}
+            ),
+            500,
+        )
 
 
 @funcionarios_bp.route("/<int:id>", methods=["DELETE"])
@@ -383,7 +1072,10 @@ def excluir_funcionario(id):
         funcionario = Funcionario.query.get(id)
 
         if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+            return (
+                jsonify({"success": False, "error": "Funcionário não encontrado"}),
+                404,
+            )
 
         # Verificar se é o único admin
         if funcionario.nivel_acesso == "admin":
@@ -394,7 +1086,8 @@ def excluir_funcionario(id):
                 return (
                     jsonify(
                         {
-                            "error": "Não é possível desativar o único administrador do sistema"
+                            "success": False,
+                            "error": "Não é possível desativar o único administrador do sistema",
                         }
                     ),
                     400,
@@ -406,6 +1099,7 @@ def excluir_funcionario(id):
             return (
                 jsonify(
                     {
+                        "success": False,
                         "error": "Não é possível excluir o funcionário pois existem vendas vinculadas a ele",
                         "quantidade_vendas": total_vendas,
                     }
@@ -419,22 +1113,30 @@ def excluir_funcionario(id):
 
         db.session.commit()
 
-        return jsonify(
-            {
-                "success": True,
-                "message": "Funcionário desativado com sucesso",
-                "funcionario": {
-                    "id": funcionario.id,
-                    "nome": funcionario.nome,
-                    "ativo": False,
-                },
-            }
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Funcionário desativado com sucesso",
+                    "data": {
+                        "id": funcionario.id,
+                        "nome": funcionario.nome,
+                        "ativo": False,
+                    },
+                }
+            ),
+            200,
         )
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao excluir funcionário {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao excluir funcionário: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao excluir funcionário {id}: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "error": f"Erro ao excluir funcionário: {str(e)}"}
+            ),
+            500,
+        )
 
 
 @funcionarios_bp.route("/login", methods=["POST"])
@@ -444,7 +1146,12 @@ def login_funcionario():
         data = request.get_json()
 
         if not data or not data.get("usuario") or not data.get("senha"):
-            return jsonify({"error": "Usuário e senha são obrigatórios"}), 400
+            return (
+                jsonify(
+                    {"success": False, "error": "Usuário e senha são obrigatórios"}
+                ),
+                400,
+            )
 
         usuario = data["usuario"]
         senha = data["senha"]
@@ -452,29 +1159,37 @@ def login_funcionario():
         funcionario = Funcionario.query.filter_by(usuario=usuario, ativo=True).first()
 
         if not funcionario:
-            return jsonify({"error": "Usuário não encontrado ou inativo"}), 401
+            return (
+                jsonify(
+                    {"success": False, "error": "Usuário não encontrado ou inativo"}
+                ),
+                401,
+            )
 
         if not funcionario.check_senha(senha):
-            return jsonify({"error": "Senha incorreta"}), 401
+            return jsonify({"success": False, "error": "Senha incorreta"}), 401
 
         # Retornar dados do funcionário (sem senha)
-        return jsonify(
-            {
-                "success": True,
-                "message": "Login realizado com sucesso",
-                "funcionario": {
-                    "id": funcionario.id,
-                    "nome": funcionario.nome,
-                    "usuario": funcionario.usuario,
-                    "nivel_acesso": funcionario.nivel_acesso,
-                    "cargo": funcionario.cargo,
-                },
-            }
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Login realizado com sucesso",
+                    "data": {
+                        "id": funcionario.id,
+                        "nome": funcionario.nome,
+                        "usuario": funcionario.usuario,
+                        "nivel_acesso": funcionario.nivel_acesso,
+                        "cargo": funcionario.cargo,
+                    },
+                }
+            ),
+            200,
         )
 
     except Exception as e:
-        print(f"Erro no login: {str(e)}")
-        return jsonify({"error": f"Erro no login: {str(e)}"}), 500
+        current_app.logger.error(f"Erro no login: {str(e)}")
+        return jsonify({"success": False, "error": f"Erro no login: {str(e)}"}), 500
 
 
 @funcionarios_bp.route("/verificar-pin", methods=["POST"])
@@ -484,7 +1199,7 @@ def verificar_pin():
         data = request.get_json()
 
         if not data or not data.get("pin"):
-            return jsonify({"error": "PIN é obrigatório"}), 400
+            return jsonify({"success": False, "error": "PIN é obrigatório"}), 400
 
         pin = data["pin"]
 
@@ -493,19 +1208,30 @@ def verificar_pin():
         ).first()  # Na prática, você teria o ID do funcionário
 
         if not funcionario:
-            return jsonify({"error": "Nenhum funcionário ativo encontrado"}), 404
+            return (
+                jsonify(
+                    {"success": False, "error": "Nenhum funcionário ativo encontrado"}
+                ),
+                404,
+            )
 
         if not funcionario.check_pin(pin):
-            return jsonify({"error": "PIN incorreto"}), 401
+            return jsonify({"success": False, "error": "PIN incorreto"}), 401
 
-        return jsonify(
-            {
-                "success": True,
-                "message": "PIN verificado com sucesso",
-                "funcionario": {"id": funcionario.id, "nome": funcionario.nome},
-            }
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "PIN verificado com sucesso",
+                    "data": {"id": funcionario.id, "nome": funcionario.nome},
+                }
+            ),
+            200,
         )
 
     except Exception as e:
-        print(f"Erro ao verificar PIN: {str(e)}")
-        return jsonify({"error": f"Erro ao verificar PIN: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao verificar PIN: {str(e)}")
+        return (
+            jsonify({"success": False, "error": f"Erro ao verificar PIN: {str(e)}"}),
+            500,
+        )

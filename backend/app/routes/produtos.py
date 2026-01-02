@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Produto, Fornecedor
 from datetime import datetime
+from sqlalchemy import or_, and_, func
 
 produtos_bp = Blueprint("produtos", __name__, url_prefix="/api/produtos")
 
@@ -13,6 +14,7 @@ produtos_bp = Blueprint("produtos", __name__, url_prefix="/api/produtos")
 def search_products():
     """Buscar produtos por nome ou código de barras - PARA PDV"""
     query = request.args.get("q", "").strip()
+    limit = request.args.get("limit", 20, type=int)
 
     if not query:
         return jsonify([])
@@ -25,7 +27,7 @@ def search_products():
             )
         )
         .filter_by(ativo=True)
-        .limit(20)
+        .limit(limit)
         .all()
     )
 
@@ -179,17 +181,68 @@ def quick_add():
 
 @produtos_bp.route("/estoque", methods=["GET"])
 def listar_estoque():
-    """Listar todos os produtos com paginação e filtros"""
+    """
+    Listar todos os produtos com paginação e filtros avançados
+
+    Parâmetros de consulta (query parameters):
+    - pagina: Número da página (padrão: 1)
+    - por_pagina: Itens por página (padrão: 50, máximo: 100)
+    - busca: Texto para busca (nome, código de barras, marca, descrição)
+    - categoria: Filtrar por categoria específica
+    - fornecedor_id: Filtrar por ID do fornecedor
+    - ativos: 'true' para apenas ativos, 'false' para incluir inativos (padrão: 'true')
+    - preco_min: Preço mínimo de venda
+    - preco_max: Preço máximo de venda
+    - estoque_status: 'baixo', 'esgotado', 'normal'
+    - tipo: Tipo de produto (unidade, granel, etc.)
+    - ordenar_por: Campo para ordenação (nome, preco_venda, quantidade, created_at, etc.)
+    - direcao: Direção da ordenação ('asc' ou 'desc', padrão: 'asc')
+    """
     try:
+        # ==================== PARÂMETROS DE PAGINAÇÃO ====================
         pagina = request.args.get("pagina", 1, type=int)
-        por_pagina = request.args.get("por_pagina", 50, type=int)
+        por_pagina = min(
+            request.args.get("por_pagina", 50, type=int), 100
+        )  # Máximo 100
+
+        # ==================== PARÂMETROS DE FILTRO ====================
         busca = request.args.get("busca", "").strip()
-        categoria = request.args.get("categoria")
+        categoria = request.args.get("categoria", "").strip()
         fornecedor_id = request.args.get("fornecedor_id", type=int)
         apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+        preco_min = request.args.get("preco_min", type=float)
+        preco_max = request.args.get("preco_max", type=float)
+        estoque_status = request.args.get("estoque_status", "").strip()
+        tipo_produto = request.args.get("tipo", "").strip()
 
+        # ==================== PARÂMETROS DE ORDENAÇÃO ====================
+        ordenar_por = request.args.get("ordenar_por", "nome")
+        direcao = request.args.get("direcao", "asc").lower()
+
+        # Mapeamento seguro de campos para ordenação
+        campos_ordenacao = {
+            "id": Produto.id,
+            "nome": Produto.nome,
+            "codigo_barras": Produto.codigo_barras,
+            "preco_custo": Produto.preco_custo,
+            "preco_venda": Produto.preco_venda,
+            "quantidade": Produto.quantidade,
+            "quantidade_minima": Produto.quantidade_minima,
+            "categoria": Produto.categoria,
+            "marca": Produto.marca,
+            "tipo": Produto.tipo,
+            "created_at": Produto.created_at,
+            "updated_at": Produto.updated_at,
+            "ativo": Produto.ativo,
+        }
+
+        # Campo padrão se o campo solicitado não existir
+        campo_ordenacao = campos_ordenacao.get(ordenar_por, Produto.nome)
+
+        # ==================== CONSTRUÇÃO DA QUERY ====================
         query = Produto.query
 
+        # Filtro de busca por texto
         if busca:
             query = query.filter(
                 db.or_(
@@ -200,27 +253,59 @@ def listar_estoque():
                 )
             )
 
+        # Filtro por categoria
         if categoria:
             query = query.filter(Produto.categoria == categoria)
 
+        # Filtro por fornecedor
         if fornecedor_id:
             query = query.filter(Produto.fornecedor_id == fornecedor_id)
 
+        # Filtro por status ativo/inativo
         if apenas_ativos:
             query = query.filter(Produto.ativo == True)
 
-        query = query.order_by(Produto.nome.asc())
+        # Filtro por faixa de preço
+        if preco_min is not None:
+            query = query.filter(Produto.preco_venda >= preco_min)
+        if preco_max is not None:
+            query = query.filter(Produto.preco_venda <= preco_max)
 
+        # Filtro por status de estoque
+        if estoque_status:
+            if estoque_status == "baixo":
+                query = query.filter(
+                    Produto.quantidade < Produto.quantidade_minima,
+                    Produto.quantidade > 0,
+                )
+            elif estoque_status == "esgotado":
+                query = query.filter(Produto.quantidade <= 0)
+            elif estoque_status == "normal":
+                query = query.filter(Produto.quantidade >= Produto.quantidade_minima)
+
+        # Filtro por tipo de produto
+        if tipo_produto:
+            query = query.filter(Produto.tipo == tipo_produto)
+
+        # ==================== APLICAÇÃO DA ORDENAÇÃO ====================
+        if direcao == "desc":
+            query = query.order_by(campo_ordenacao.desc())
+        else:
+            query = query.order_by(campo_ordenacao.asc())
+
+        # ==================== PAGINAÇÃO ====================
         paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
         produtos = paginacao.items
 
+        # ==================== FORMATANDO RESULTADOS ====================
         resultado = []
         for p in produtos:
-            estoque_status = "normal"
+            # Determinar status do estoque
+            estoque_status_local = "normal"
             if p.quantidade <= 0:
-                estoque_status = "esgotado"
+                estoque_status_local = "esgotado"
             elif p.quantidade < p.quantidade_minima:
-                estoque_status = "baixo"
+                estoque_status_local = "baixo"
 
             produto_dict = {
                 "id": p.id,
@@ -234,7 +319,7 @@ def listar_estoque():
                 "margem_lucro": float(p.margem_lucro),
                 "quantidade": p.quantidade,
                 "quantidade_minima": p.quantidade_minima,
-                "estoque_status": estoque_status,
+                "estoque_status": estoque_status_local,
                 "categoria": p.categoria,
                 "marca": p.marca,
                 "tipo": p.tipo,
@@ -247,15 +332,22 @@ def listar_estoque():
 
             resultado.append(produto_dict)
 
-        # Estatísticas
-        total_produtos = query.count()
-        produtos_baixo_estoque = sum(
-            1
-            for p in query.all()
-            if p.quantidade < p.quantidade_minima and p.quantidade > 0
-        )
-        produtos_esgotados = sum(1 for p in query.all() if p.quantidade <= 0)
+        # ==================== ESTATÍSTICAS ====================
+        # Para estatísticas, precisamos contar com os mesmos filtros
+        total_produtos = paginacao.total
+        produtos_baixo_estoque = 0
+        produtos_esgotados = 0
 
+        # Podemos calcular estatísticas com uma query separada ou reutilizando
+        # Vamos fazer uma query para contar os status
+        if query.count() > 0:
+            produtos_baixo_estoque = query.filter(
+                Produto.quantidade < Produto.quantidade_minima, Produto.quantidade > 0
+            ).count()
+
+            produtos_esgotados = query.filter(Produto.quantidade <= 0).count()
+
+        # ==================== RESPOSTA ====================
         return jsonify(
             {
                 "produtos": resultado,
@@ -266,11 +358,27 @@ def listar_estoque():
                     "itens_por_pagina": paginacao.per_page,
                     "tem_proxima": paginacao.has_next,
                     "tem_anterior": paginacao.has_prev,
+                    "primeira_pagina": 1,
+                    "ultima_pagina": paginacao.pages,
                 },
                 "estatisticas": {
                     "total_produtos": total_produtos,
                     "produtos_baixo_estoque": produtos_baixo_estoque,
                     "produtos_esgotados": produtos_esgotados,
+                    "produtos_normal": total_produtos
+                    - (produtos_baixo_estoque + produtos_esgotados),
+                },
+                "filtros_aplicados": {
+                    "busca": busca if busca else None,
+                    "categoria": categoria if categoria else None,
+                    "fornecedor_id": fornecedor_id if fornecedor_id else None,
+                    "apenas_ativos": apenas_ativos,
+                    "preco_min": preco_min,
+                    "preco_max": preco_max,
+                    "estoque_status": estoque_status if estoque_status else None,
+                    "tipo": tipo_produto if tipo_produto else None,
+                    "ordenar_por": ordenar_por,
+                    "direcao": direcao,
                 },
             }
         )
@@ -608,7 +716,15 @@ def ajustar_estoque(id):
 def listar_categorias():
     """Listar todas as categorias de produtos"""
     try:
-        produtos = Produto.query.filter_by(ativo=True).all()
+        # Adicionar filtro por ativos apenas
+        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+
+        query = Produto.query
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        produtos = query.all()
         categorias = set()
 
         for p in produtos:
@@ -629,19 +745,51 @@ def listar_categorias():
 
 @produtos_bp.route("/relatorio/estoque", methods=["GET"])
 def relatorio_estoque():
-    """Gerar relatório de estoque"""
+    """Gerar relatório de estoque com paginação e filtros"""
     try:
-        produtos = (
-            Produto.query.filter_by(ativo=True).order_by(Produto.nome.asc()).all()
-        )
+        # ==================== PARÂMETROS DE PAGINAÇÃO ====================
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = min(request.args.get("por_pagina", 100, type=int), 500)
+
+        # ==================== PARÂMETROS DE FILTRO ====================
+        categoria = request.args.get("categoria", "").strip()
+        estoque_status = request.args.get("estoque_status", "").strip()
+        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+
+        # ==================== CONSTRUÇÃO DA QUERY ====================
+        query = Produto.query
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        if categoria:
+            query = query.filter(Produto.categoria == categoria)
+
+        # Filtro por status de estoque
+        if estoque_status:
+            if estoque_status == "baixo":
+                query = query.filter(
+                    Produto.quantidade < Produto.quantidade_minima,
+                    Produto.quantidade > 0,
+                )
+            elif estoque_status == "esgotado":
+                query = query.filter(Produto.quantidade <= 0)
+            elif estoque_status == "normal":
+                query = query.filter(Produto.quantidade >= Produto.quantidade_minima)
+
+        query = query.order_by(Produto.nome.asc())
+
+        # ==================== PAGINAÇÃO ====================
+        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
+        produtos = paginacao.items
 
         resultado = []
         for p in produtos:
-            estoque_status = "normal"
+            estoque_status_local = "normal"
             if p.quantidade <= 0:
-                estoque_status = "esgotado"
+                estoque_status_local = "esgotado"
             elif p.quantidade < p.quantidade_minima:
-                estoque_status = "baixo"
+                estoque_status_local = "baixo"
 
             resultado.append(
                 {
@@ -650,7 +798,7 @@ def relatorio_estoque():
                     "codigo_barras": p.codigo_barras,
                     "quantidade": p.quantidade,
                     "quantidade_minima": p.quantidade_minima,
-                    "estoque_status": estoque_status,
+                    "estoque_status": estoque_status_local,
                     "preco_custo": float(p.preco_custo),
                     "preco_venda": float(p.preco_venda),
                     "valor_estoque": float(p.preco_custo * p.quantidade),
@@ -671,11 +819,20 @@ def relatorio_estoque():
             1 for p in resultado if p["estoque_status"] == "esgotado"
         )
 
+        # ==================== RESPOSTA ====================
         return jsonify(
             {
                 "produtos": resultado,
+                "paginacao": {
+                    "pagina_atual": paginacao.page,
+                    "total_paginas": paginacao.pages,
+                    "total_itens": paginacao.total,
+                    "itens_por_pagina": paginacao.per_page,
+                    "tem_proxima": paginacao.has_next,
+                    "tem_anterior": paginacao.has_prev,
+                },
                 "totais": {
-                    "total_produtos": len(resultado),
+                    "total_produtos": paginacao.total,
                     "total_valor_estoque": float(total_valor_estoque),
                     "produtos_baixo_estoque": produtos_baixo_estoque,
                     "produtos_esgotados": produtos_esgotados,
@@ -687,3 +844,51 @@ def relatorio_estoque():
     except Exception as e:
         print(f"Erro ao gerar relatório: {str(e)}")
         return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
+
+
+@produtos_bp.route("/exportar/csv", methods=["GET"])
+def exportar_csv():
+    """Exportar produtos para CSV (simplificado)"""
+    try:
+        # Parâmetros básicos de filtro
+        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+
+        query = Produto.query
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        produtos = query.order_by(Produto.nome.asc()).all()
+
+        # Cabeçalho CSV
+        csv_lines = [
+            "ID;Nome;Código de Barras;Categoria;Marca;Quantidade;Quantidade Mínima;Preço Custo;Preço Venda;Status Estoque;Fornecedor"
+        ]
+
+        for p in produtos:
+            estoque_status = "NORMAL"
+            if p.quantidade <= 0:
+                estoque_status = "ESGOTADO"
+            elif p.quantidade < p.quantidade_minima:
+                estoque_status = "BAIXO"
+
+            fornecedor_nome = p.fornecedor_rel.nome if p.fornecedor_rel else ""
+
+            csv_lines.append(
+                f'{p.id};"{p.nome}";{p.codigo_barras};{p.categoria};{p.marca};'
+                f"{p.quantidade};{p.quantidade_minima};{p.preco_custo};{p.preco_venda};"
+                f'{estoque_status};"{fornecedor_nome}"'
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "csv": "\n".join(csv_lines),
+                "total_produtos": len(produtos),
+                "data_exportacao": datetime.now().isoformat(),
+            }
+        )
+
+    except Exception as e:
+        print(f"Erro ao exportar CSV: {str(e)}")
+        return jsonify({"error": f"Erro ao exportar CSV: {str(e)}"}), 500
