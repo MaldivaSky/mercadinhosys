@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+  /* Estilos base para tema claro */
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  /* Estilos para tema escuro quando a classe 'dark' está presente */
+  .dark body {
+    @apply bg-dark-900 text-gray-100;
+  }
+}
+
+@layer components {
+
+  /* Componentes reutilizáveis */
+  .card {
+    @apply rounded-lg border border-gray-200 bg-white shadow-sm;
+  }
+
+  .dark .card {
+    @apply border-dark-700 bg-dark-800;
+  }
+
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg border border-gray-300 transition-colors;
+  }
+
+  .dark .btn-secondary {
+    @apply bg-dark-700 hover:bg-dark-600 text-gray-200 border-dark-600;
+  }
+
+  .input-primary {
+    @apply border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+
+  .dark .input-primary {
+    @apply border-dark-600 bg-dark-800 text-gray-100 focus:ring-primary-400;
+  }
+}
