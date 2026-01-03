@@ -38,32 +38,42 @@ def login():
                 400,
             )
 
-        username = data.get("username", "").strip()
+        # Aceitar tanto 'email' quanto 'username' no campo de login
+        identifier = data.get("email", data.get("username", "")).strip()
         senha = data.get("senha", "")
         estabelecimento_id = data.get("estabelecimento_id", 4)
         dispositivo = request.headers.get("User-Agent", "Desconhecido")
         ip_address = request.remote_addr
 
-        if not username or not senha:
+        if not identifier or not senha:
             return (
                 jsonify(
                     {
                         "success": False,
-                        "error": "Username e senha são obrigatórios",
+                        "error": "Email/Username e senha são obrigatórios",
                         "code": "CREDENTIALS_REQUIRED",
                     }
                 ),
                 400,
             )
 
-        # Buscar funcionário pelo username e estabelecimento_id
-        funcionario = Funcionario.query.filter_by(
-            username=username, estabelecimento_id=estabelecimento_id
+        # Buscar funcionário por username OU email e estabelecimento_id
+        funcionario = Funcionario.query.filter(
+            db.or_(
+                db.and_(
+                    Funcionario.username == identifier,
+                    Funcionario.estabelecimento_id == estabelecimento_id
+                ),
+                db.and_(
+                    db.func.lower(Funcionario.email) == identifier.lower(),
+                    Funcionario.estabelecimento_id == estabelecimento_id
+                )
+            )
         ).first()
 
         # Registrar tentativa de login (sucesso ou falha)
         login_history = LoginHistory(
-            username=username,
+            username=identifier,  # Pode ser email ou username
             estabelecimento_id=estabelecimento_id,
             ip_address=ip_address,
             dispositivo=dispositivo[:200],  # Limitar tamanho
@@ -72,7 +82,7 @@ def login():
 
         if not funcionario:
             current_app.logger.warning(
-                f"Tentativa de login com username não encontrado: {username} "
+                f"Tentativa de login com credencial não encontrada: {identifier} "
                 f"de IP: {ip_address}"
             )
 
@@ -94,7 +104,7 @@ def login():
         # Verificar senha
         if not funcionario.check_senha(senha):
             current_app.logger.warning(
-                f"Senha incorreta para username: {username} " f"de IP: {ip_address}"
+                f"Senha incorreta para: {identifier} " f"de IP: {ip_address}"
             )
 
             login_history.funcionario_id = funcionario.id
@@ -193,7 +203,7 @@ def login():
         db.session.commit()
 
         current_app.logger.info(
-            f"Login bem-sucedido: {username} ({funcionario.nome}) "
+            f"Login bem-sucedido: {identifier} ({funcionario.nome}) "
             f"de IP: {ip_address}"
         )
 
