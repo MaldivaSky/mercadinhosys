@@ -1,21 +1,42 @@
-// src/features/products/productsService.ts
-import apiClient from '../../api/apiClient';
+import { apiClient } from '../../api/apiClient';
+import { ApiResponse, Produto } from '../../types';
 
 export const productsService = {
-    async getEstoque() {
-        const response = await apiClient.get('/api/produtos/estoque');
-        return response.data;
-    },
-
-    async searchProdutos(query: string) {
-        const response = await apiClient.get('/api/produtos/search', {
-            params: { q: query }
+    getAll: async (page = 1, perPage = 20, filters?: any): Promise<ApiResponse<Produto[]>> => {
+        const response = await apiClient.get<ApiResponse<Produto[]>>('/produtos', {
+            params: { page, per_page: perPage, ...filters },
         });
         return response.data;
     },
 
-    async getProdutoByBarcode(codigo: string) {
-        const response = await apiClient.get(`/api/produtos/barcode/${codigo}`);
-        return response.data;
-    }
+    getById: async (id: number): Promise<Produto> => {
+        const response = await apiClient.get<ApiResponse<Produto>>(`/produtos/${id}`);
+        return response.data.data!;
+    },
+
+    create: async (data: Partial<Produto>): Promise<Produto> => {
+        const response = await apiClient.post<ApiResponse<Produto>>('/produtos', data);
+        return response.data.data!;
+    },
+
+    update: async (id: number, data: Partial<Produto>): Promise<Produto> => {
+        const response = await apiClient.put<ApiResponse<Produto>>(`/produtos/${id}`, data);
+        return response.data.data!;
+    },
+
+    delete: async (id: number): Promise<void> => {
+        await apiClient.delete(`/produtos/${id}`);
+    },
+
+    updateStock: async (id: number, quantidade: number): Promise<Produto> => {
+        const response = await apiClient.patch<ApiResponse<Produto>>(`/produtos/${id}/estoque`, {
+            quantidade,
+        });
+        return response.data.data!;
+    },
+
+    getLowStock: async (): Promise<Produto[]> => {
+        const response = await apiClient.get<ApiResponse<Produto[]>>('/produtos/baixo-estoque');
+        return response.data.data!;
+    },
 };

@@ -1,25 +1,25 @@
-// src/features/auth/authService.ts
-import apiClient from '../../api/apiClient';
+import { apiClient } from '../../api/apiClient';
+import { LoginRequest, LoginResponse, ApiResponse } from '../../types';
 
 export const authService = {
-    async login(email: string, password: string) {
-        const response = await apiClient.post('/auth/login', { email, password });
-        if (response.data.token) {
-            localStorage.setItem('token', response.data.token);
-        }
-        return response.data;
+    login: async (credentials: LoginRequest): Promise<LoginResponse> => {
+        const response = await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', credentials);
+        return response.data.data!;
     },
 
-    async logout() {
-        localStorage.removeItem('token');
+    logout: async (): Promise<void> => {
+        await apiClient.post('/auth/logout');
     },
 
-    async validateSession() {
-        try {
-            const response = await apiClient.get('/auth/validate');
-            return response.data.valid === true;
-        } catch {
-            return false;
-        }
-    }
+    refreshToken: async (refreshToken: string): Promise<{ access_token: string }> => {
+        const response = await apiClient.post<ApiResponse<{ access_token: string }>>('/auth/refresh', {
+            refresh_token: refreshToken,
+        });
+        return response.data.data!;
+    },
+
+    getProfile: async (): Promise<any> => {
+        const response = await apiClient.get<ApiResponse>('/auth/profile');
+        return response.data.data;
+    },
 };

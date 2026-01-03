@@ -49,13 +49,15 @@ def create_app(config_name="default"):
         environment=os.getenv("FLASK_ENV", "development"),
     )
 
-    # Configuração CORS mais segura
+    # Configuração CORS mais segura - permite tanto /api/* quanto rotas diretas
     CORS(
         app,
         resources={
-            r"/api/*": {"origins": ["http://localhost:5173", "http://localhost:3000"]}
+            r"/*": {"origins": ["http://localhost:5173", "http://localhost:3000"]}
         },
         supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
 
     # Cria pasta de uploads se não existir
