@@ -29,14 +29,14 @@ export function LoginPage() {
   const mode = theme.palette.mode;
   
   // Estados do formulário
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(''); // Aceita email ou username
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   // Validação simples
-  const isFormValid = email.length > 0 && password.length >= 6;
+  const isFormValid = identifier.length > 0 && password.length >= 6;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +46,7 @@ export function LoginPage() {
     setError('');
     
     try {
-      await authService.login(email, password);
+      await authService.login(identifier, password);
       navigate('/dashboard'); // Redirecionar após login
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.');
@@ -56,9 +56,11 @@ export function LoginPage() {
   };
 
   const handleDemoLogin = async () => {
-    setEmail('demo@mercadinhosys.com');
+    setIdentifier('demo@mercadinhosys.com');
     setPassword('demo123');
   };
+
+  
 
   return (
     <Container maxWidth={false} sx={{ minHeight: '100vh', p: 0 }}>
@@ -156,13 +158,14 @@ export function LoginPage() {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                label="Email ou Usuário"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 margin="normal"
                 variant="outlined"
                 required
+                placeholder="Digite seu email ou nome de usuário"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">

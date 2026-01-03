@@ -1,73 +1,54 @@
+# MercadinhoSys Frontend - Business Intelligence Dashboard
+
+Sistema de dashboard avançado para gestão de mercados com foco em Business Intelligence (BI).
+
+## 🚀 Funcionalidades Principais
+
+### 📊 Dashboards
+- **Dashboard Principal**: Visão geral para funcionários
+- **Painel Admin**: BI completo para administradores
+- **Análise de Tendência**: Gráficos avançados com previsões
+- **Resumo Executivo**: Tomada de decisão rápida
+
+### 📈 Análises Avançadas
+- **Heatmaps**: Padrões sazonais de vendas
+- **Sankey Diagrams**: Fluxo de cross-selling
+- **Radar Charts**: Análise multi-dimensional
+- **Classificação ABC**: Gestão de estoque inteligente
+
+### 🧠 Inteligência Artificial
+- **Insights Automáticos**: Detecção de padrões
+- **Recomendações**: Sugestões baseadas em dados
+- **Alertas Inteligentes**: Priorização automática
+- **Previsões**: Machine Learning para demandas
+
+### 📱 UX/UI Moderna
+- **Design Responsivo**: Mobile-first
+- **Dark/Light Mode**: Suporte completo
+- **Interações Ricas**: Animações fluidas
+- **Performance Otimizada**: Caching inteligente
+
+## 🛠 Tecnologias
+
+### Frontend
+- **React 18** + TypeScript
+- **Material-UI** + Recharts
+- **Framer Motion** para animações
+- **Vite** para build e dev server
+
+### Estado e Comunicação
+- **React Hooks** personalizados
+- **WebSocket** para tempo real
+- **Axios** para API REST
+- **Notistack** para notificações
+
+### Estilos
+- **CSS Modules** + CSS Variables
+- **Tailwind CSS** para utilitários
+- **Design System** completo
+
+## 📁 Estrutura do Projeto
+
+
+
 # React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
