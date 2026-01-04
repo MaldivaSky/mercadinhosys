@@ -4,7 +4,11 @@ import { ApiResponse, Produto } from '../../types';
 export const productsService = {
     getAll: async (page = 1, perPage = 20, filters?: any): Promise<ApiResponse<Produto[]>> => {
         const response = await apiClient.get<ApiResponse<Produto[]>>('/produtos', {
-            params: { page, per_page: perPage, ...filters },
+            params: {
+                page,
+                per_page: perPage,
+                ...filters
+            },
         });
         return response.data;
     },
@@ -37,6 +41,26 @@ export const productsService = {
 
     getLowStock: async (): Promise<Produto[]> => {
         const response = await apiClient.get<ApiResponse<Produto[]>>('/produtos/baixo-estoque');
+        return response.data.data!;
+    },
+
+    // Novas funções baseadas no models.py
+    search: async (query: string): Promise<Produto[]> => {
+        const response = await apiClient.get<ApiResponse<Produto[]>>('/produtos/buscar', {
+            params: { q: query },
+        });
+        return response.data.data!;
+    },
+
+    getByCategory: async (categoria: string): Promise<Produto[]> => {
+        const response = await apiClient.get<ApiResponse<Produto[]>>('/produtos/categoria', {
+            params: { categoria },
+        });
+        return response.data.data!;
+    },
+
+    getByBarcode: async (codigo: string): Promise<Produto> => {
+        const response = await apiClient.get<ApiResponse<Produto>>(`/produtos/codigo/${codigo}`);
         return response.data.data!;
     },
 };

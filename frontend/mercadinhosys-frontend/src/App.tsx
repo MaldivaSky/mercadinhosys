@@ -1,29 +1,21 @@
-import React from 'react';
-import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from './theme/ThemeProvider';
+// src/App.tsx
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
-import './App.css';
+import DebugRoutes from './components/DebugRoutes';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+const App: React.FC = () => {
+  useEffect(() => {
+    console.log('App iniciando...');
+    console.log('Token no localStorage:', localStorage.getItem('access_token'));
+  }, []);
 
-function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ThemeProvider>
-          <AppRoutes />
-        </ThemeProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <Router>
+      <DebugRoutes />
+      <AppRoutes />
+    </Router>
   );
-}
+};
 
 export default App;

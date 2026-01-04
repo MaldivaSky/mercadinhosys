@@ -1,5 +1,5 @@
 // Tipos base para todas as entidades do sistema
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
     success: boolean;
     data?: T;
     message?: string;
@@ -12,16 +12,74 @@ export interface ApiResponse<T = any> {
     };
 }
 
-// Tipos de autenticação
-export interface User {
-    id: number;
-    username: string;
-    role: 'admin' | 'employee' | 'owner';
-    nome?: string;
-    email?: string;
-    ativo: boolean;
-    criado_em: string;
+// NOVO: Adicionar este tipo para a resposta completa do login
+export interface LoginApiResponse {
+    success: boolean;
+    message?: string;
+    data?: {
+        access_token: string;
+        refresh_token: string;
+        user: User;
+        session: {
+            login_time: string;
+            expires_in: number;
+            refresh_expires_in: number;
+            token_type: string;
+        };
+        estabelecimento: {
+            id: number;
+            nome: string;
+            cnpj: string;
+            telefone?: string;
+            email?: string;
+            endereco?: string;
+            cidade?: string;
+            estado?: string;
+        };
+    };
+    error?: string;
+    code?: string;
 }
+
+// TIPOS BASE - REFLETINDO OS MODELS PYTHON
+export interface Estabelecimento {
+    id: number;
+    nome: string;
+    cnpj: string;
+    telefone?: string;
+    email?: string;
+    cep?: string;
+    endereco?: string;
+    cidade?: string;
+    estado?: string;
+    data_cadastro: string;
+    ativo: boolean;
+}
+
+// Tipos de autenticação (baseado no models.py - Funcionario)
+export interface Funcionario {
+    id: number;
+    estabelecimento_id: number;
+    nome: string;
+    username: string;
+    cpf: string;
+    telefone?: string;
+    email?: string;
+    foto_url?: string;
+    cargo: string;  // Não restringir a valores fixos
+    role: string;   // Não restringir a valores fixos
+    status: string; // Não restringir a valores fixos
+    comissao_percentual: number;
+    data_admissao: string;
+    data_demissao?: string;
+    ativo: boolean;
+    permissoes: Record<string, boolean>; // Chave-valor de permissões
+    created_at?: string;
+    updated_at?: string;
+}
+
+// Alias para compatibilidade (User = Funcionario)
+export type User = Funcionario;
 
 export interface LoginRequest {
     username: string;
@@ -34,103 +92,161 @@ export interface LoginResponse {
     user: User;
 }
 
-// Tipos para clientes
+// Tipos para clientes (atualizado conforme models.py)
 export interface Cliente {
     id: number;
+    estabelecimento_id: number;
     nome: string;
-    email?: string;
-    telefone?: string;
     cpf_cnpj?: string;
+    telefone?: string;
+    email?: string;
     endereco?: string;
-    data_nascimento?: string;
-    ativo: boolean;
-    pontos_fidelidade: number;
+    data_cadastro: string;
     total_compras: number;
-    criado_em: string;
-    atualizado_em: string;
+    ultima_compra?: string;
+    frequencia_compras: number;
+    valor_medio_compra: number;
+    dias_ultima_compra: number;
+    segmento_rfm: 'champion' | 'loyal' | 'potential' | 'new' | 'at_risk' | 'lost';
+    observacoes?: string;
+    created_at: string;
+    updated_at: string;
 }
 
-// Tipos para produtos
+// Tipos para produtos (atualizado conforme models.py)
 export interface Produto {
     id: number;
-    codigo_barras: string;
+    estabelecimento_id: number;
+    fornecedor_id?: number;
+    codigo_barras?: string;
     nome: string;
     descricao?: string;
+    marca?: string;
+    fabricante?: string;
     categoria: string;
+    subcategoria?: string;
+    unidade_medida: string;
+    quantidade: number;
+    quantidade_minima: number;
+    localizacao?: string;
+    dias_estoque?: number;
+    giro_estoque: number;
     preco_custo: number;
     preco_venda: number;
-    margem_lucro: number;
-    quantidade_estoque: number;
-    estoque_minimo: number;
-    unidade_medida: string;
-    fornecedor_id?: number;
-    fornecedor_nome?: string;
-    ativo: boolean;
+    margem_lucro?: number;
+    total_vendido: number;
+    quantidade_vendida: number;
+    frequencia_venda: number;
+    ultima_venda?: string;
+    classificação_abc?: 'A' | 'B' | 'C';
+    data_validade?: string;
+    lote?: string;
     imagem_url?: string;
-    criado_em: string;
-    atualizado_em: string;
+    ativo: boolean;
+    created_at: string;
+    updated_at: string;
 }
 
-// Tipos para vendas (PDV)
-export interface ItemVenda {
+// Tipos para vendas - COMPLETAMENTE ATUALIZADO
+export interface VendaItem {
+    id: number;
+    venda_id: number;
     produto_id: number;
+    produto_nome: string;
+    descricao?: string;
+    produto_codigo?: string;
+    produto_unidade: string;
     quantidade: number;
     preco_unitario: number;
     desconto: number;
-    total: number;
-    produto?: Produto;
+    total_item: number;
+    custo_unitario?: number;
+    margem_item?: number;
+    created_at: string;
 }
 
 export interface Venda {
     id: number;
-    codigo: string;
+    estabelecimento_id: number;
     cliente_id?: number;
     funcionario_id: number;
-    tipo_pagamento: 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix' | 'transferencia';
-    status: 'pendente' | 'concluida' | 'cancelada';
+    codigo: string;
     subtotal: number;
     desconto: number;
     total: number;
-    troco?: number;
+    forma_pagamento: string;
+    valor_recebido: number;
+    troco: number;
+    status: 'finalizada' | 'cancelada' | 'pendente';
+    quantidade_itens: number;
+    tipo_venda: 'normal' | 'atacado' | 'promocional';
     observacoes?: string;
-    itens: ItemVenda[];
+    data_venda: string;
+    data_cancelamento?: string;
+    motivo_cancelamento?: string;
+    created_at: string;
+    updated_at: string;
+    itens: VendaItem[];
     cliente?: Cliente;
-    funcionario?: User;
-    criado_em: string;
+    funcionario?: Funcionario;
 }
 
-// Tipos para despesas
+// Tipos para fornecedores
+export interface Fornecedor {
+    id: number;
+    estabelecimento_id: number;
+    nome: string;
+    cnpj?: string;
+    telefone?: string;
+    email?: string;
+    endereco?: string;
+    cidade?: string;
+    estado?: string;
+    contato_comercial?: string;
+    contato_nome?: string;
+    celular_comercial?: string;
+    ativo: boolean;
+    prazo_entrega?: number;
+    forma_pagamento?: string;
+    avaliacao: number;
+    tempo_medio_entrega?: number;
+    taxa_atendimento: number;
+    created_at: string;
+    updated_at: string;
+}
+
+// Tipos para despesas (atualizado conforme models.py)
 export interface Despesa {
     id: number;
+    estabelecimento_id: number;
     descricao: string;
     categoria: string;
+    tipo: 'fixa' | 'variavel';
     valor: number;
-    data_vencimento: string;
-    data_pagamento?: string;
-    status: 'pendente' | 'pago' | 'atrasado';
+    data_despesa: string;
     forma_pagamento?: string;
+    recorrente: boolean;
     observacoes?: string;
-    criado_em: string;
-    criado_por: number;
+    created_at: string;
+    updated_at: string;
 }
 
-// Tipos para funcionários
-export interface Funcionario {
+// Tipos para movimentação de estoque
+export interface MovimentacaoEstoque {
     id: number;
-    nome: string;
-    email: string;
-    telefone?: string;
-    cpf: string;
-    cargo: string;
-    salario: number;
-    data_admissao: string;
-    data_demissao?: string;
-    ativo: boolean;
-    usuario_id?: number;
-    usuario?: User;
-    endereco?: string;
+    estabelecimento_id: number;
+    produto_id: number;
+    venda_id?: number;
+    funcionario_id?: number;
+    tipo: 'entrada' | 'saida' | 'ajuste';
+    quantidade: number;
+    quantidade_anterior: number;
+    quantidade_atual: number;
+    custo_unitario?: number;
+    valor_total?: number;
+    motivo: string;
     observacoes?: string;
-    criado_em: string;
+    created_at: string;
 }
 
 // Tipos para dashboard
@@ -166,4 +282,66 @@ export interface DashboardDonoMetrics extends DashboardMetrics {
         nome: string;
         total_compras: number;
     }>;
+}
+
+// Tipos para configurações
+export interface Configuracao {
+    id: number;
+    estabelecimento_id: number;
+    logo_url?: string;
+    cor_principal: string;
+    tema_escuro: boolean;
+    impressao_automatica: boolean;
+    tipo_impressora: string;
+    exibir_preco_tela: boolean;
+    permitir_venda_sem_estoque: boolean;
+    desconto_maximo_percentual: number;
+    arredondamento_valores: number;
+    dias_alerta_validade: number;
+    estoque_minimo_padrao: number;
+    tempo_sessao_minutos: number;
+    tentativas_senha_bloqueio: number;
+    formas_pagamento: {
+        dinheiro: { ativo: boolean; taxa: number; exige_troco: boolean };
+        cartao_credito: { ativo: boolean; taxa: number; parcelas: number };
+        cartao_debito: { ativo: boolean; taxa: number };
+        pix: { ativo: boolean; taxa: number };
+    };
+    meta_vendas_diaria: number;
+    meta_vendas_mensal: number;
+    alerta_estoque_minimo: boolean;
+    alerta_validade_proxima: boolean;
+    alerta_churn_clientes: boolean;
+    dashboard_analytics_avancado: boolean;
+    alertas_email: boolean;
+    alertas_whatsapp: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+// Tipos para relatórios
+export interface RelatorioAgendado {
+    id: number;
+    estabelecimento_id: number;
+    nome: string;
+    tipo: 'vendas' | 'estoque' | 'financeiro' | 'clientes' | 'analytics';
+    formato: 'pdf' | 'excel' | 'csv' | 'json';
+    frequencia: 'diario' | 'semanal' | 'mensal' | 'trimestral';
+    analises_incluidas: {
+        tendencia: boolean;
+        sazonalidade: boolean;
+        previsao: boolean;
+        segmentacao: boolean;
+        anomalias: boolean;
+        benchmarking: boolean;
+    };
+    horario_envio: string;
+    destinatarios_email?: string[];
+    enviar_para_proprietario: boolean;
+    parametros?: Record<string, unknown>;
+    ativo: boolean;
+    ultima_execucao?: string;
+    proxima_execucao?: string;
+    created_at: string;
+    updated_at: string;
 }

@@ -98,7 +98,7 @@ def resumo_dashboard():
                     "produtos_estrela": identificar_produtos_estrela(
                         estabelecimento_id
                     ),
-                    "cross_selling": analisar_cross_selling(estabelecimento_id),
+                    "cross_selling": [],  # analisar_cross_selling(estabelecimento_id) - Desabilitado temporariamente
                 },
                 "kpis_avancados": {
                     "customer_lifetime_value": calcular_clv(estabelecimento_id),
@@ -147,6 +147,9 @@ def resumo_dashboard():
                 },
                 "analise_temporal": {
                     "vendas_por_hora": dados_realtime["vendas_por_hora"],
+                    "vendas_por_categoria": dados_realtime.get("vendas_por_categoria", []),
+                    "vendas_ultimos_7_dias": dados_realtime.get("vendas_ultimos_7_dias", []),
+                    "clientes_novos_mes": dados_realtime.get("clientes_novos_mes", 0),
                 },
                 "ultimas_vendas": dados_realtime["ultimas_vendas"][:10],
                 "metricas_comparativas": {
@@ -669,8 +672,15 @@ def obter_dados_completos(estabelecimento_id, hoje):
     ).all()
 
     # 3. PRODUTOS COM ESTOQUE BAIXO
-    produtos_estoque_baixo = (
-        Produto.query.filter(
+    produtos_estoque_baixo = [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "quantidade": p.quantidade,
+            "quantidade_minima": p.quantidade_minima,
+            "categoria": p.categoria
+        }
+        for p in Produto.query.filter(
             Produto.estabelecimento_id == estabelecimento_id,
             Produto.quantidade <= Produto.quantidade_minima,
             Produto.ativo == True,
@@ -678,15 +688,22 @@ def obter_dados_completos(estabelecimento_id, hoje):
         .order_by(Produto.quantidade)
         .limit(10)
         .all()
-    )
+    ]
 
     # 4. PRODUTOS PRÓXIMOS DA VALIDADE
     config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
     dias_alerta = config.dias_alerta_validade if config else 15
     data_alerta = hoje + timedelta(days=dias_alerta)
 
-    produtos_validade_proxima = (
-        Produto.query.filter(
+    produtos_validade_proxima = [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "data_validade": p.data_validade.isoformat() if p.data_validade else None,
+            "quantidade": p.quantidade,
+            "categoria": p.categoria
+        }
+        for p in Produto.query.filter(
             Produto.estabelecimento_id == estabelecimento_id,
             Produto.data_validade.between(hoje, data_alerta),
             Produto.quantidade > 0,
@@ -695,10 +712,10 @@ def obter_dados_completos(estabelecimento_id, hoje):
         .order_by(Produto.data_validade)
         .limit(10)
         .all()
-    )
+    ]
 
     # 5. TOP 10 CLIENTES DO MÊS
-    top_clientes = (
+    top_clientes_query = (
         db.session.query(
             Cliente,
             func.sum(Venda.total).label("total_compras_mes"),
@@ -716,6 +733,17 @@ def obter_dados_completos(estabelecimento_id, hoje):
         .limit(10)
         .all()
     )
+    
+    top_clientes = [
+        {
+            "id": c.id,
+            "nome": c.nome,
+            "email": c.email,
+            "total_compras": float(total),
+            "quantidade_compras": int(qtd)
+        }
+        for c, total, qtd in top_clientes_query
+    ]
 
     # 6. VENDAS POR HORA (últimas 24h)
     hora_inicio = datetime.now() - timedelta(hours=24)
@@ -736,7 +764,7 @@ def obter_dados_completos(estabelecimento_id, hoje):
     )
 
     # 7. PRODUTOS MAIS VENDIDOS DO MÊS
-    produtos_mais_vendidos = (
+    produtos_mais_vendidos_query = (
         db.session.query(
             Produto,
             func.sum(VendaItem.quantidade).label("quantidade_vendida"),
@@ -755,6 +783,17 @@ def obter_dados_completos(estabelecimento_id, hoje):
         .limit(10)
         .all()
     )
+    
+    produtos_mais_vendidos = [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "categoria": p.categoria,
+            "quantidade_vendida": int(qtd),
+            "total_vendido": float(total)
+        }
+        for p, qtd, total in produtos_mais_vendidos_query
+    ]
 
     return {
         "vendas_hoje": vendas_hoje,
@@ -1263,9 +1302,10 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
     """Obtém dados em tempo real para o dashboard"""
     inicio_dia = datetime.combine(hoje, datetime.min.time())
     fim_dia = datetime.combine(hoje, datetime.max.time())
+    inicio_mes = datetime(hoje.year, hoje.month, 1)
 
     # Vendas do dia
-    vendas_hoje = (
+    vendas_hoje_query = (
         Venda.query.filter(
             Venda.estabelecimento_id == estabelecimento_id,
             Venda.data_venda >= inicio_dia,
@@ -1276,25 +1316,52 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
         .limit(20)
         .all()
     )
+    
+    vendas_hoje = [
+        {
+            "id": v.id,
+            "codigo": v.codigo,
+            "cliente": v.cliente.nome if v.cliente else "Consumidor Final",
+            "total": float(v.total),
+            "forma_pagamento": v.forma_pagamento,
+            "data_venda": v.data_venda.isoformat() if v.data_venda else None,
+            "status": v.status
+        }
+        for v in vendas_hoje_query
+    ]
 
     # Produtos com estoque baixo
-    produtos_estoque_baixo = (
-        Produto.query.filter(
+    produtos_estoque_baixo = [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "quantidade": p.quantidade,
+            "quantidade_minima": p.quantidade_minima,
+            "categoria": p.categoria
+        }
+        for p in Produto.query.filter(
             Produto.estabelecimento_id == estabelecimento_id,
             Produto.quantidade <= Produto.quantidade_minima,
             Produto.ativo == True,
         )
         .limit(10)
         .all()
-    )
+    ]
 
     # Produtos próximos da validade
     config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
     dias_alerta = config.dias_alerta_validade if config else 15
     data_alerta = hoje + timedelta(days=dias_alerta)
 
-    produtos_validade_proxima = (
-        Produto.query.filter(
+    produtos_validade_proxima = [
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "data_validade": p.data_validade.isoformat() if p.data_validade else None,
+            "quantidade": p.quantidade,
+            "categoria": p.categoria
+        }
+        for p in Produto.query.filter(
             Produto.estabelecimento_id == estabelecimento_id,
             Produto.data_validade.between(hoje, data_alerta),
             Produto.quantidade > 0,
@@ -1303,7 +1370,7 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
         .order_by(Produto.data_validade)
         .limit(10)
         .all()
-    )
+    ]
 
     # Vendas por hora (últimas 24 horas)
     hora_inicio = datetime.now() - timedelta(hours=24)
@@ -1324,6 +1391,59 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
         .all()
     )
 
+    # NOVO: Vendas por categoria (mês atual)
+    vendas_por_categoria_query = (
+        db.session.query(
+            Produto.categoria,
+            func.sum(VendaItem.total_item).label("total")
+        )
+        .join(VendaItem, Produto.id == VendaItem.produto_id)
+        .join(Venda)
+        .filter(
+            Venda.estabelecimento_id == estabelecimento_id,
+            Venda.data_venda >= inicio_mes,
+            Venda.data_venda <= fim_dia,
+            Venda.status == "finalizada"
+        )
+        .group_by(Produto.categoria)
+        .order_by(func.sum(VendaItem.total_item).desc())
+        .all()
+    )
+
+    vendas_por_categoria = [
+        {
+            "categoria": cat if cat else "Sem Categoria",
+            "total": float(total) if total else 0.0
+        }
+        for cat, total in vendas_por_categoria_query
+    ]
+
+    # NOVO: Vendas últimos 7 dias
+    vendas_ultimos_7_dias = []
+    for i in range(6, -1, -1):  # 6 dias atrás até hoje
+        dia = hoje - timedelta(days=i)
+        inicio = datetime.combine(dia, datetime.min.time())
+        fim = datetime.combine(dia, datetime.max.time())
+        
+        total_dia = db.session.query(
+            func.sum(Venda.total)
+        ).filter(
+            Venda.estabelecimento_id == estabelecimento_id,
+            Venda.data_venda.between(inicio, fim),
+            Venda.status == "finalizada"
+        ).scalar() or 0
+        
+        vendas_ultimos_7_dias.append({
+            "data": dia.isoformat(),
+            "total": float(total_dia)
+        })
+
+    # NOVO: Clientes novos do mês
+    clientes_novos_mes = Cliente.query.filter(
+        Cliente.estabelecimento_id == estabelecimento_id,
+        Cliente.data_cadastro >= inicio_mes
+    ).count()
+
     return {
         "vendas_hoje": vendas_hoje,
         "estoque_baixo": produtos_estoque_baixo,
@@ -1336,17 +1456,10 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
             }
             for vph in vendas_por_hora
         ],
-        "ultimas_vendas": [
-            {
-                "id": v.id,
-                "codigo": v.codigo,
-                "cliente": v.cliente.nome if v.cliente else "Consumidor Final",
-                "total": v.total,
-                "forma_pagamento": v.forma_pagamento,
-                "hora": v.data_venda.strftime("%H:%M"),
-            }
-            for v in vendas_hoje[:5]
-        ],
+        "vendas_por_categoria": vendas_por_categoria,
+        "vendas_ultimos_7_dias": vendas_ultimos_7_dias,
+        "clientes_novos_mes": clientes_novos_mes,
+        "ultimas_vendas": vendas_hoje[:10],
     }
 
 
@@ -1551,7 +1664,7 @@ def analisar_cross_selling(estabelecimento_id):
         JOIN venda v ON vi1.venda_id = v.id
         WHERE v.estabelecimento_id = :estabelecimento_id
             AND v.status = 'finalizada'
-            AND v.data_venda >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            AND v.data_venda >= date('now', '-30 days')
         GROUP BY vi1.produto_id, vi2.produto_id
         HAVING frequencia >= 5
         ORDER BY frequencia DESC

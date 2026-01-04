@@ -1,6 +1,5 @@
 // src/features/auth/LoginPage.tsx
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -22,45 +21,116 @@ import {
   Storefront,
 } from '@mui/icons-material';
 import { authService } from './authService';
+import { LoginApiResponse } from '../../types';
 
 export function LoginPage() {
-  const navigate = useNavigate();
   const theme = useTheme();
   const mode = theme.palette.mode;
-  
+
   // Estados do formulário
-  const [identifier, setIdentifier] = useState(''); // Aceita email ou username
+  const [identifier, setIdentifier] = useState('admin'); // ← Valor inicial 'admin'
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  // Validação simples
-  const isFormValid = identifier.length > 0 && password.length >= 6;
+  const [debugInfo, setDebugInfo] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Função de login com useCallback para evitar recriação
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
-    
+
+    // Validação básica
+    if (!identifier.trim() || password.length < 6) {
+      setError('Preencha email/usuário e senha (mínimo 6 caracteres)');
+      return;
+    }
+
     setLoading(true);
     setError('');
-    
+
     try {
-      await authService.login(identifier, password);
-      navigate('/dashboard'); // Redirecionar após login
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.');
+      console.log('🔐 Tentando login:', identifier);
+      const response: LoginApiResponse = await authService.login(identifier, password);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Falha no login');
+      }
+
+      if (!response.data) {
+        throw new Error('Dados de login não retornados');
+      }
+
+      const { access_token, refresh_token, user } = response.data;
+
+      // ✅ Salva no localStorage
+      localStorage.setItem('access_token', access_token);
+      localStorage.setItem('refresh_token', refresh_token);
+      localStorage.setItem('user_data', JSON.stringify(user));
+
+      console.log('✅ Login bem-sucedido para:', user.nome);
+
+      // Dispara evento - AppRoutes detectará e redirecionará
+      window.dispatchEvent(new Event('auth-change'));
+
+    } catch (err: unknown) {
+      console.error('❌ Erro no login:', err);
+
+      let errorMessage = 'Erro ao fazer login';
+
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response?: { status?: number }; request?: unknown };
+        if (axiosError.response?.status === 401) {
+          errorMessage = 'Credenciais inválidas';
+        } else if (axiosError.response?.status === 404) {
+          errorMessage = 'Usuário não encontrado';
+        } else if (axiosError.request) {
+          errorMessage = 'Servidor não respondeu. Verifique se o backend está rodando.';
+        }
+      }
+
+      setError(errorMessage);
+      authService.logout(); // Limpa tokens inválidos
+
     } finally {
       setLoading(false);
     }
+  }, [identifier, password]);
+
+  // ✅ Handle de teclas corrigido
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && identifier && password.length >= 6 && !loading) {
+      handleSubmit(e as unknown as React.FormEvent);
+    }
   };
 
-  const handleDemoLogin = async () => {
-    setIdentifier('demo@mercadinhosys.com');
-    setPassword('demo123');
+  // ✅ Login demo simplificado
+  const handleDemoLogin = useCallback(() => {
+    // Login demo sempre disponível em desenvolvimento
+    setIdentifier('admin');
+    setPassword('admin123');
+
+      // Dispara login após preencher campos
+      setTimeout(() => {
+        const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
+        handleSubmit(fakeEvent);
+      }, 100);
+  }, [handleSubmit]);
+
+  // ✅ Teste de conexão corrigido
+  const testBackendConnection = async () => {
+    try {
+      setDebugInfo('Testando conexão...');
+      const response = await fetch('http://localhost:5000/api/auth/health', {
+        method: 'GET',
+      });
+      setDebugInfo(`✅ Backend respondeu: ${response.status} ${response.statusText}`);
+    } catch {
+      setDebugInfo('❌ Backend offline. Execute: cd backend && npm start');
+    }
   };
 
-  
+  // ✅ Validação de formulário
+  const isFormValid = identifier.trim().length > 0 && password.length >= 6;
 
   return (
     <Container maxWidth={false} sx={{ minHeight: '100vh', p: 0 }}>
@@ -68,12 +138,12 @@ export function LoginPage() {
         sx={{
           display: 'flex',
           minHeight: '100vh',
-          background: mode === 'dark' 
+          background: mode === 'dark'
             ? 'linear-gradient(135deg, #121212 0%, #1a1a2e 50%, #16213e 100%)'
             : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
         }}
       >
-        {/* Lado esquerdo - Ilustração/Logo */}
+        {/* Lado esquerdo - Logo */}
         <Box
           sx={{
             display: { xs: 'none', md: 'flex' },
@@ -90,18 +160,38 @@ export function LoginPage() {
             MercadinhoSys
           </Typography>
           <Typography variant="h5" sx={{ opacity: 0.8, textAlign: 'center' }}>
-            Sistema de Gestão Comercial Completo
+            Sistema de Gestão Comercial
           </Typography>
-          <Box sx={{ mt: 6, textAlign: 'center' }}>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              🚀 PDV Integrado
+
+          {/* Informações de debug */}
+          <Box sx={{ mt: 4, p: 3, bgcolor: 'rgba(0,0,0,0.1)', borderRadius: 2, width: '80%' }}>
+            <Typography variant="body2" fontWeight="bold" gutterBottom>
+              🔧 Informações Técnicas:
             </Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              📊 Dashboard em Tempo Real
+            <Typography variant="caption" sx={{ display: 'block' }}>
+              • Backend: http://localhost:5000
             </Typography>
-            <Typography variant="body1">
-              📱 Totalmente Responsivo
+            <Typography variant="caption" sx={{ display: 'block' }}>
+              • Rota de login: POST /api/auth/login
             </Typography>
+            <Typography variant="caption" sx={{ display: 'block' }}>
+              • Credenciais teste: admin / admin123
+            </Typography>
+
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={testBackendConnection}
+              sx={{ mt: 2 }}
+            >
+              Testar Conexão Backend
+            </Button>
+
+            {debugInfo && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="caption">{debugInfo}</Typography>
+              </Alert>
+            )}
           </Box>
         </Box>
 
@@ -116,41 +206,29 @@ export function LoginPage() {
           }}
         >
           <Paper
-            elevation={mode === 'dark' ? 0 : 3}
+            elevation={3}
             sx={{
               p: { xs: 3, sm: 5 },
               width: '100%',
               maxWidth: 450,
               borderRadius: 3,
-              border: mode === 'dark' ? '1px solid #333' : 'none',
-              background: mode === 'dark' 
-                ? 'rgba(30, 30, 30, 0.9)' 
-                : 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(10px)',
+              background: mode === 'dark'
+                ? 'rgba(30, 30, 30, 0.95)'
+                : 'rgba(255, 255, 255, 0.98)',
             }}
           >
             <Box sx={{ textAlign: 'center', mb: 4 }}>
-              <LockOutlined 
-                sx={{ 
-                  fontSize: 50, 
-                  color: '#3b82f6',
-                  mb: 2,
-                }} 
-              />
+              <LockOutlined sx={{ fontSize: 50, color: '#3b82f6', mb: 2 }} />
               <Typography variant="h4" fontWeight="bold" gutterBottom>
                 Acessar Sistema
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                Entre com suas credenciais para acessar o painel
+                Use seu email ou nome de usuário
               </Typography>
             </Box>
 
             {error && (
-              <Alert 
-                severity="error" 
-                sx={{ mb: 3, borderRadius: 2 }}
-                onClose={() => setError('')}
-              >
+              <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
                 {error}
               </Alert>
             )}
@@ -158,14 +236,14 @@ export function LoginPage() {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Email ou Usuário"
-                type="text"
+                label="Email ou Usuário *"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
+                onKeyPress={handleKeyPress}
                 margin="normal"
                 variant="outlined"
                 required
-                placeholder="Digite seu email ou nome de usuário"
+                disabled={loading}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -178,13 +256,15 @@ export function LoginPage() {
 
               <TextField
                 fullWidth
-                label="Senha"
+                label="Senha *"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyPress={handleKeyPress}
                 margin="normal"
                 variant="outlined"
                 required
+                disabled={loading}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -196,6 +276,7 @@ export function LoginPage() {
                       <IconButton
                         onClick={() => setShowPassword(!showPassword)}
                         edge="end"
+                        disabled={loading}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -206,10 +287,11 @@ export function LoginPage() {
               />
 
               <Box sx={{ textAlign: 'right', mb: 3 }}>
-                <Button 
-                  size="small" 
+                <Button
+                  size="small"
                   sx={{ textTransform: 'none' }}
-                  onClick={() => alert('Funcionalidade em desenvolvimento')}
+                  onClick={() => alert('Contate o administrador do sistema')}
+                  disabled={loading}
                 >
                   Esqueceu a senha?
                 </Button>
@@ -234,36 +316,46 @@ export function LoginPage() {
                 {loading ? (
                   <CircularProgress size={24} color="inherit" />
                 ) : (
-                  'Entrar no Sistema'
+                  'ENTRAR NO SISTEMA'
                 )}
               </Button>
 
-              <Button
-                fullWidth
-                variant="outlined"
-                size="large"
-                onClick={handleDemoLogin}
-                sx={{
-                  py: 1.5,
-                  borderRadius: 2,
-                  borderColor: '#10b981',
-                  color: '#10b981',
-                  '&:hover': {
-                    borderColor: '#059669',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  },
-                }}
-              >
-                Usar Credenciais de Demonstração
-              </Button>
+              {/* Login demo sempre disponível */}
+              {import.meta.env.DEV && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="large"
+                  onClick={handleDemoLogin}
+                  disabled={loading}
+                  sx={{
+                    py: 1.5,
+                    borderRadius: 2,
+                    borderColor: '#10b981',
+                    color: '#10b981',
+                    '&:hover': {
+                      borderColor: '#059669',
+                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    },
+                  }}
+                >
+                  Login Automático (Admin)
+                </Button>
+              )}
             </form>
 
             <Box sx={{ mt: 4, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                © {new Date().getFullYear()} MercadinhoSys • v1.0.0
+                <strong>Instruções:</strong>
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Ambiente de Desenvolvimento • Backend: localhost:5000
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                • Email ou usuário: admin
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                • Senha padrão: admin123
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                • Certifique-se que o backend está rodando na porta 5000
               </Typography>
             </Box>
           </Paper>
