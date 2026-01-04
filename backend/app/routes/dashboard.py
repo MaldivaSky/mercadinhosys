@@ -60,6 +60,14 @@ def resumo_dashboard():
         acesso_avancado = is_admin or funcionario.permissoes.get(
             "acesso_dashboard_avancado", False
         )
+        
+        print(f"\n🔐 === VERIFICAÇÃO DE PERMISSÕES ===")
+        print(f"   👤 Funcionário: {funcionario.nome} (ID: {funcionario.id})")
+        print(f"   🎭 Role: {funcionario.role}")
+        print(f"   👑 Is Admin: {is_admin}")
+        print(f"   🔑 Acesso Avançado: {acesso_avancado}")
+        print(f"   📋 Permissões: {funcionario.permissoes}")
+        print("=" * 50)
 
         # Verificar se já temos métricas calculadas para hoje
         metrica = DashboardMetrica.query.filter_by(
@@ -164,6 +172,8 @@ def resumo_dashboard():
 
         # Adicionar análises avançadas apenas se tiver permissão
         if acesso_avancado:
+            print(f"\n✅ ACESSO AVANÇADO CONCEDIDO - Gerando análises de produtos...")
+            
             response_data["data"]["previsoes"] = previsoes
             response_data["data"]["insights"] = insights
             response_data["data"].update(analises_avancadas)
@@ -176,6 +186,12 @@ def resumo_dashboard():
                 "top_por_categoria": calcular_top_por_categoria(estabelecimento_id),
                 "previsao_demanda": prever_demanda_produtos(estabelecimento_id),
             }
+            
+            print(f"   ✅ Análise de produtos concluída!")
+            print(f"   📊 Produtos Estrela: {len(response_data['data']['analise_produtos']['produtos_estrela'])}")
+            print(f"   🐌 Produtos Lentos: {len(response_data['data']['analise_produtos']['produtos_lentos'])}")
+        else:
+            print(f"\n❌ ACESSO AVANÇADO NEGADO - Análises de produtos não disponíveis")
             
             response_data["data"]["analise_financeira"] = {
                 "despesas_mes": metrica.total_despesas_mes,
@@ -1735,12 +1751,17 @@ def analisar_cross_selling(estabelecimento_id):
 
 
 def identificar_produtos_estrela(estabelecimento_id):
-    """Identifica produtos estrela usando matriz BCG"""
+    """Identifica produtos estrela usando matriz BCG - VERSÃO INTELIGENTE"""
+    print(f"\n🌟 === IDENTIFICAR PRODUTOS ESTRELA - Estabelecimento {estabelecimento_id} ===")
+    
     produtos = (
         db.session.query(
             Produto.id,
             Produto.nome,
-            label("crescimento", func.sum(VendaItem.quantidade)),
+            Produto.preco_venda,
+            Produto.preco_custo,
+            label("total_vendido", func.sum(VendaItem.quantidade)),
+            label("faturamento", func.sum(VendaItem.total_item)),
             label(
                 "market_share",
                 func.sum(VendaItem.quantidade)
@@ -1755,23 +1776,51 @@ def identificar_produtos_estrela(estabelecimento_id):
             Venda.data_venda >= date.today() - timedelta(days=90),
             Venda.status == "finalizada",
         )
-        .group_by(Produto.id, Produto.nome)
+        .group_by(Produto.id, Produto.nome, Produto.preco_venda, Produto.preco_custo)
+        .having(func.sum(VendaItem.quantidade) > 3)  # Pelo menos 3 vendas em 90 dias
         .all()
     )
+    
+    print(f"   📦 Total de produtos com vendas: {len(produtos)}")
 
-    estrelas = []
+    if not produtos:
+        print("   ❌ Nenhum produto encontrado!")
+        return []
+
+    # Calcular margem de lucro para cada produto
+    produtos_com_margem = []
     for p in produtos:
-        if p.crescimento > 50 and p.market_share > 5:
-            estrelas.append(
-                {
-                    "produto_id": p.id,
-                    "nome": p.nome,
-                    "crescimento": float(p.crescimento),
-                    "market_share": float(p.market_share),
-                }
-            )
+        margem = 0
+        if p.preco_venda and p.preco_custo and p.preco_venda > 0:
+            margem = ((p.preco_venda - p.preco_custo) / p.preco_venda) * 100
+        
+        produtos_com_margem.append({
+            "produto_id": p.id,
+            "nome": p.nome,
+            "total_vendido": float(p.total_vendido),
+            "faturamento": float(p.faturamento),
+            "market_share": float(p.market_share),
+            "margem_lucro": float(margem),
+            "score": float(p.total_vendido) * float(margem) / 100  # Score: volume * margem
+        })
+    
+    # Ordenar por score (vendas * margem) e pegar top 10
+    produtos_com_margem.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Filtrar apenas produtos com boa margem (>20%) e bom volume (top 30%)
+    threshold_volume = sorted([p['total_vendido'] for p in produtos_com_margem], reverse=True)[min(len(produtos_com_margem)//3, len(produtos_com_margem)-1)] if produtos_com_margem else 0
+    
+    # Produtos estrela: margem > 10% E vendas > 20% do threshold (MAIS INCLUSIVO)
+    estrelas = [
+        p for p in produtos_com_margem 
+        if p['margem_lucro'] > 10 and p['total_vendido'] >= threshold_volume * 0.2
+    ]
+    
+    print(f"   ⭐ Produtos ESTRELA encontrados: {len(estrelas)}")
+    if estrelas:
+        print(f"   📊 Top 3: {[p['nome'][:30] for p in estrelas[:3]]}")
 
-    return estrelas[:5]
+    return estrelas[:10]  # Top 10 produtos estrela
 
 
 def gerar_insights_automaticos(estabelecimento_id, metrica):
@@ -2396,31 +2445,69 @@ def calcular_valor_estoque(estabelecimento_id):
 
 
 def identificar_produtos_lentos(estabelecimento_id):
-    """Identifica produtos com baixa movimentação"""
-    data_limite = date.today() - timedelta(days=90)
+    """Identifica produtos com baixa movimentação - VERSÃO INTELIGENTE"""
+    print(f"\n🐌 === IDENTIFICAR PRODUTOS LENTOS - Estabelecimento {estabelecimento_id} ===")
+    
+    data_limite = date.today() - timedelta(days=60)  # Últimos 60 dias
 
-    produtos_lentos = (
-        db.session.query(Produto)
+    # Pegar todos os produtos ativos
+    todos_produtos = (
+        db.session.query(
+            Produto.id,
+            Produto.nome,
+            Produto.quantidade,
+            Produto.preco_venda,
+            func.coalesce(func.sum(VendaItem.quantidade), 0).label('vendas_60dias')
+        )
         .outerjoin(VendaItem, Produto.id == VendaItem.produto_id)
-        .outerjoin(Venda, VendaItem.venda_id == Venda.id)
+        .outerjoin(Venda, and_(
+            VendaItem.venda_id == Venda.id,
+            Venda.data_venda >= data_limite,
+            Venda.status == 'finalizada'
+        ))
         .filter(
             Produto.estabelecimento_id == estabelecimento_id,
             Produto.ativo == True,
-            or_(Venda.data_venda < data_limite, Venda.id.is_(None)),
+            Produto.quantidade > 0  # Tem estoque
         )
-        .group_by(Produto.id)
-        .having(
-            func.sum(VendaItem.quantidade).is_(None)
-            | (func.sum(VendaItem.quantidade) < 10)
-        )
-        .limit(10)
+        .group_by(Produto.id, Produto.nome, Produto.quantidade, Produto.preco_venda)
         .all()
     )
+    
+    print(f"   📦 Total de produtos ativos com estoque: {len(todos_produtos)}")
 
-    return [
-        {"id": p.id, "nome": p.nome, "quantidade": p.quantidade, "ultima_venda": None}
-        for p in produtos_lentos
-    ]
+    if not todos_produtos:
+        print("   ❌ Nenhum produto com estoque encontrado!")
+        return []
+
+    # Calcular média de vendas
+    vendas_totais = sum(p.vendas_60dias for p in todos_produtos)
+    media_vendas = vendas_totais / len(todos_produtos) if todos_produtos else 0
+    
+    print(f"   📊 Média de vendas (60 dias): {media_vendas:.2f}")
+
+    # Produtos lentos: venderam menos que 50% da média E têm estoque >= 3 (MAIS FLEXÍVEL)
+    produtos_lentos = []
+    for p in todos_produtos:
+        if p.vendas_60dias < (media_vendas * 0.5) and p.quantidade >= 3:
+            dias_parado = 60 - (p.vendas_60dias * 2) if p.vendas_60dias > 0 else 60
+            produtos_lentos.append({
+                "id": p.id,
+                "nome": p.nome,
+                "quantidade": p.quantidade,
+                "vendas_60dias": int(p.vendas_60dias),
+                "dias_parado": int(min(dias_parado, 60)),
+                "valor_parado": float(p.quantidade * p.preco_venda) if p.preco_venda else 0
+            })
+
+    # Ordenar por valor parado (mais dinheiro preso no estoque)
+    produtos_lentos.sort(key=lambda x: x['valor_parado'], reverse=True)
+    
+    print(f"   🐌 Produtos LENTOS encontrados: {len(produtos_lentos)}")
+    if produtos_lentos:
+        print(f"   📊 Top 3: {[p['nome'][:30] for p in produtos_lentos[:3]]}")
+    
+    return produtos_lentos[:15]  # Top 15 produtos lentos
 
 
 def calcular_confianca_previsao(series_historica, previsao):
@@ -2818,111 +2905,103 @@ def calcular_despesas_mes(estabelecimento_id, inicio_mes, fim_dia):
 
 
 def prever_demanda_produtos(estabelecimento_id):
-    """Previsão simples de demanda por produto baseada em histórico recente.
-
-    Estratégia (v1):
-    - Usa os últimos 60 dias de vendas finalizadas.
-    - Seleciona os produtos com maior quantidade vendida.
-    - Para cada produto, calcula série diária e prevê 7 dias via média móvel.
-    """
+    """Previsão INTELIGENTE de demanda baseada em vendas reais - VERSÃO SIMPLIFICADA"""
+    print(f"\n📈 === PREVER DEMANDA DE PRODUTOS - Estabelecimento {estabelecimento_id} ===")
+    
     try:
         hoje = date.today()
-        inicio = hoje - timedelta(days=60)
-
-        # Quantidade vendida por produto no período (para escolher top N)
-        top_produtos = (
+        inicio_60d = hoje - timedelta(days=60)
+        inicio_30d = hoje - timedelta(days=30)
+        
+        # Pegar vendas dos últimos 60 dias por produto
+        vendas_por_produto = (
             db.session.query(
-                VendaItem.produto_id.label("produto_id"),
-                func.sum(VendaItem.quantidade).label("qtd"),
+                Produto.id,
+                Produto.nome,
+                Produto.quantidade.label('estoque_atual'),
+                func.sum(VendaItem.quantidade).label('total_vendido_60d'),
+                func.count(func.distinct(func.date(Venda.data_venda))).label('dias_com_venda')
             )
-            .join(Venda, Venda.id == VendaItem.venda_id)
+            .join(VendaItem, Produto.id == VendaItem.produto_id)
+            .join(Venda, VendaItem.venda_id == Venda.id)
             .filter(
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.status == "finalizada",
-                Venda.data_venda >= inicio,
+                Produto.estabelecimento_id == estabelecimento_id,
+                Produto.ativo == True,
+                Venda.status == 'finalizada',
+                Venda.data_venda >= inicio_60d
             )
-            .group_by(VendaItem.produto_id)
+            .group_by(Produto.id, Produto.nome, Produto.quantidade)
             .order_by(func.sum(VendaItem.quantidade).desc())
-            .limit(20)
+            .limit(30)  # Top 30 produtos
             .all()
         )
-
-        if not top_produtos:
+        
+        print(f"   📦 Produtos analisados: {len(vendas_por_produto)}")
+        
+        if not vendas_por_produto:
+            print("   ❌ Nenhuma venda nos últimos 60 dias!")
             return {
                 "periodo_dias": 60,
                 "forecast_dias": 7,
                 "produtos": [],
-                "observacao": "Sem vendas suficientes para previsão",
+                "observacao": "Sem vendas suficientes"
             }
-
-        produto_ids = [int(p.produto_id) for p in top_produtos if p.produto_id]
-
-        # Série diária por produto
-        vendas_diarias = (
-            db.session.query(
-                VendaItem.produto_id.label("produto_id"),
-                func.date(Venda.data_venda).label("data"),
-                func.sum(VendaItem.quantidade).label("quantidade"),
-            )
-            .join(Venda, Venda.id == VendaItem.venda_id)
-            .filter(
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.status == "finalizada",
-                Venda.data_venda >= inicio,
-                VendaItem.produto_id.in_(produto_ids),
-            )
-            .group_by(VendaItem.produto_id, func.date(Venda.data_venda))
-            .all()
-        )
-
-        # Indexar por produto -> {data: qtd}
-        por_produto = defaultdict(dict)
-        for row in vendas_diarias:
-            if not row.produto_id or not row.data:
-                continue
-            por_produto[int(row.produto_id)][row.data] = int(row.quantidade or 0)
-
-        produtos = Produto.query.filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.id.in_(produto_ids),
-        ).all()
-        produtos_map = {int(p.id): p for p in produtos}
-
-        datas = [inicio + timedelta(days=i) for i in range((hoje - inicio).days + 1)]
-
+        
         previsoes = []
-        for produto_id in produto_ids:
-            produto = produtos_map.get(int(produto_id))
-            if not produto:
-                continue
-
-            serie = [float(por_produto[produto_id].get(d, 0)) for d in datas]
-            forecast = calcular_moving_average(serie, window=7, forecast_days=7)
-            forecast_7d = [float(x) for x in forecast[-7:]] if forecast else [0.0] * 7
-
-            demanda_diaria_prevista = float(np.mean(forecast_7d)) if forecast_7d else 0.0
-            estoque_atual = int(produto.quantidade or 0)
-
-            previsoes.append(
-                {
-                    "produto_id": int(produto.id),
-                    "produto_nome": produto.nome,
-                    "estoque_atual": estoque_atual,
-                    "demanda_diaria_prevista": round(demanda_diaria_prevista, 2),
-                    "previsao_7_dias": [round(v, 2) for v in forecast_7d],
-                    "risco_ruptura": estoque_atual < (demanda_diaria_prevista * 7),
-                }
-            )
-
+        produtos_em_risco = 0
+        
+        for produto in vendas_por_produto:
+            # Calcular demanda diária REAL (vendas / dias com venda)
+            # Isso é mais preciso que média móvel
+            if produto.dias_com_venda > 0:
+                demanda_diaria = produto.total_vendido_60d / 60.0  # Média sobre 60 dias
+            else:
+                demanda_diaria = 0.0
+            
+            estoque_atual = produto.estoque_atual or 0
+            
+            # Risco de ruptura: estoque não dura 7 dias
+            dias_restantes = (estoque_atual / demanda_diaria) if demanda_diaria > 0 else 999
+            risco_ruptura = dias_restantes < 7
+            
+            if risco_ruptura:
+                produtos_em_risco += 1
+            
+            previsoes.append({
+                "produto_id": produto.id,
+                "produto_nome": produto.nome,
+                "estoque_atual": estoque_atual,
+                "demanda_diaria_prevista": round(demanda_diaria, 2),
+                "dias_restantes": round(dias_restantes, 1) if demanda_diaria > 0 else 999,
+                "total_vendido_60d": int(produto.total_vendido_60d),
+                "dias_com_venda": int(produto.dias_com_venda),
+                "risco_ruptura": risco_ruptura,
+                "previsao_7_dias": [round(demanda_diaria, 2)] * 7  # Previsão flat (média)
+            })
+        
+        print(f"   ✅ Previsões geradas: {len(previsoes)}")
+        print(f"   🚨 Produtos em RISCO: {produtos_em_risco}")
+        if produtos_em_risco > 0:
+            print(f"   📋 Top 3 em risco: {[p['produto_nome'][:30] for p in sorted(previsoes, key=lambda x: x['dias_restantes'])[:3]]}")
+        
         return {
             "periodo_dias": 60,
             "forecast_dias": 7,
             "produtos": previsoes,
+            "total_em_risco": produtos_em_risco
         }
-
+        
     except Exception as e:
-        current_app.logger.error(f"Erro ao prever demanda de produtos: {str(e)}")
-        return {"status": "erro", "message": str(e)}
+        print(f"   ❌ ERRO: {str(e)}")
+        current_app.logger.error(f"Erro ao prever demanda: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "periodo_dias": 60,
+            "forecast_dias": 7,
+            "produtos": [],
+            "erro": str(e)
+        }
 
 
 def analisar_sazonalidade_detalhada(estabelecimento_id):

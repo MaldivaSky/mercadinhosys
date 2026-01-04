@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 import DebugRoutes from './components/DebugRoutes';
+import { ThemeProvider } from './theme/ThemeProvider';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -11,10 +12,12 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <Router>
-      <DebugRoutes />
-      <AppRoutes />
-    </Router>
+    <ThemeProvider defaultMode="dark">
+      <Router>
+        <DebugRoutes />
+        <AppRoutes />
+      </Router>
+    </ThemeProvider>
   );
 };
 

@@ -11,17 +11,32 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderProps) {
-    const [mode, setMode] = useState<'dark' | 'light'>(defaultMode);
+    // Carregar tema do localStorage ou usar padrão
+    const [mode, setMode] = useState<'dark' | 'light'>(() => {
+        const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
+        return savedTheme || defaultMode;
+    });
 
     const toggleTheme = () => {
+        console.log('🎨 TOGGLE THEME CHAMADO!');
         setMode((prevMode) => {
             const newMode = prevMode === 'light' ? 'dark' : 'light';
+            console.log(`🔄 Alterando de ${prevMode} para ${newMode}`);
+            
+            // Salvar no localStorage
+            localStorage.setItem('theme', newMode);
+            console.log('💾 Tema salvo no localStorage:', newMode);
+            
             // Atualizar a classe no HTML para Tailwind
             if (newMode === 'dark') {
                 document.documentElement.classList.add('dark');
+                console.log('✅ Classe "dark" ADICIONADA ao <html>');
             } else {
                 document.documentElement.classList.remove('dark');
+                console.log('❌ Classe "dark" REMOVIDA do <html>');
             }
+            
+            console.log('📋 Classes atuais no <html>:', document.documentElement.className);
             return newMode;
         });
     };
@@ -33,7 +48,7 @@ export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderP
         } else {
             document.documentElement.classList.remove('dark');
         }
-    }, []);
+    }, [mode]);
 
     const theme = useMemo(() => {
         return createTheme({
