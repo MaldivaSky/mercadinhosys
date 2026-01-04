@@ -11,7 +11,7 @@
 
   /* Estilos para tema escuro quando a classe 'dark' está presente */
   .dark body {
-    @apply bg-dark-900 text-gray-100;
+    @apply bg-gray-900 text-gray-100;
   }
 }
 
@@ -23,7 +23,7 @@
   }
 
   .dark .card {
-    @apply border-dark-700 bg-dark-800;
+    @apply border-gray-700 bg-gray-800;
   }
 
   .btn-primary {
@@ -35,7 +35,7 @@
   }
 
   .dark .btn-secondary {
-    @apply bg-dark-700 hover:bg-dark-600 text-gray-200 border-dark-600;
+    @apply bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600;
   }
 
   .input-primary {
@@ -43,6 +43,6 @@
   }
 
   .dark .input-primary {
-    @apply border-dark-600 bg-dark-800 text-gray-100 focus:ring-primary-400;
+    @apply border-gray-600 bg-gray-800 text-gray-100 focus:ring-primary-400;
   }
 }

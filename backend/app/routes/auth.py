@@ -11,6 +11,8 @@ from app import db
 from app.models import Funcionario, Estabelecimento, LoginHistory
 import traceback
 import pytz
+import hashlib
+import secrets
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -41,7 +43,6 @@ def login():
         # Aceitar tanto 'email' quanto 'username' no campo de login
         identifier = data.get("email", data.get("username", "")).strip()
         senha = data.get("senha", "")
-        estabelecimento_id = data.get("estabelecimento_id", 4)
         dispositivo = request.headers.get("User-Agent", "Desconhecido")
         ip_address = request.remote_addr
 
@@ -57,27 +58,20 @@ def login():
                 400,
             )
 
-        # Buscar funcionário por username OU email e estabelecimento_id
+        # Buscar funcionário por username OU email (sem estabelecimento_id)
         funcionario = Funcionario.query.filter(
             db.or_(
-                db.and_(
-                    Funcionario.username == identifier,
-                    Funcionario.estabelecimento_id == estabelecimento_id
-                ),
-                db.and_(
-                    db.func.lower(Funcionario.email) == identifier.lower(),
-                    Funcionario.estabelecimento_id == estabelecimento_id
-                )
+                Funcionario.username == identifier,
+                db.func.lower(Funcionario.email) == identifier.lower(),
             )
         ).first()
 
         # Registrar tentativa de login (sucesso ou falha)
         login_history = LoginHistory(
-            username=identifier,  # Pode ser email ou username
-            estabelecimento_id=estabelecimento_id,
+            username=identifier,
             ip_address=ip_address,
-            dispositivo=dispositivo[:200],  # Limitar tamanho
-            success=False,  # Inicialmente falha
+            dispositivo=dispositivo[:200],
+            success=False,
         )
 
         if not funcionario:
@@ -101,13 +95,17 @@ def login():
                 401,
             )
 
+        # Adicionar estabelecimento_id do funcionário ao histórico
+        login_history.estabelecimento_id = funcionario.estabelecimento_id
+        login_history.funcionario_id = funcionario.id
+
         # Verificar senha
         if not funcionario.check_senha(senha):
             current_app.logger.warning(
-                f"Senha incorreta para: {identifier} " f"de IP: {ip_address}"
+                f"Senha incorreta para: {identifier} (ID: {funcionario.id}) "
+                f"de IP: {ip_address}"
             )
 
-            login_history.funcionario_id = funcionario.id
             login_history.observacoes = "Senha incorreta"
             db.session.add(login_history)
             db.session.commit()
@@ -124,13 +122,8 @@ def login():
             )
 
         # Verificar status
-        status = getattr(
-            funcionario, "status", "ativo" if funcionario.ativo else "inativo"
-        )
-
-        if status != "ativo":
-            login_history.funcionario_id = funcionario.id
-            login_history.observacoes = f"Conta {status}"
+        if funcionario.status != "ativo":
+            login_history.observacoes = f"Conta {funcionario.status}"
             db.session.add(login_history)
             db.session.commit()
 
@@ -139,7 +132,25 @@ def login():
                     {
                         "success": False,
                         "error": "Conta inativa",
-                        "message": f"Sua conta está {status}. Contate o administrador.",
+                        "message": f"Sua conta está {funcionario.status}. Contate o administrador.",
+                        "code": "ACCOUNT_INACTIVE",
+                    }
+                ),
+                403,
+            )
+
+        # Verificar se está ativo (campo ativo)
+        if not funcionario.ativo:
+            login_history.observacoes = "Conta inativa (campo ativo=False)"
+            db.session.add(login_history)
+            db.session.commit()
+
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Conta inativa",
+                        "message": "Sua conta está desativada. Contate o administrador.",
                         "code": "ACCOUNT_INACTIVE",
                     }
                 ),
@@ -149,32 +160,38 @@ def login():
         # Identity como string (user_id)
         identity = str(funcionario.id)
 
+        # Buscar estabelecimento do funcionário
+        estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
+
+        if not estabelecimento:
+            login_history.observacoes = "Estabelecimento não encontrado"
+            db.session.add(login_history)
+            db.session.commit()
+
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Estabelecimento não configurado",
+                        "code": "ESTABLISHMENT_NOT_FOUND",
+                    }
+                ),
+                404,
+            )
+
         # Claims adicionais
         additional_claims = {
             "username": funcionario.username,
             "nome": funcionario.nome,
             "estabelecimento_id": funcionario.estabelecimento_id,
-            "status": status,
+            "estabelecimento_nome": estabelecimento.nome,
+            "status": funcionario.status,
+            "role": funcionario.role,
+            "cargo": funcionario.cargo,
             "login_time": datetime.utcnow().isoformat(),
             "ip_address": ip_address,
             "dispositivo": dispositivo[:100],
         }
-
-        # Adicionar role
-        if hasattr(funcionario, "role"):
-            additional_claims["role"] = funcionario.role
-        else:
-            cargo = funcionario.cargo.lower()
-            if cargo == "dono" or cargo == "admin":
-                additional_claims["role"] = "admin"
-            elif cargo == "gerente":
-                additional_claims["role"] = "gerente"
-            elif cargo == "caixa":
-                additional_claims["role"] = "caixa"
-            elif cargo == "vendedor":
-                additional_claims["role"] = "vendedor"
-            else:
-                additional_claims["role"] = "funcionario"
 
         # Criar tokens
         access_token = create_access_token(
@@ -189,26 +206,22 @@ def login():
             expires_delta=timedelta(days=7),
         )
 
-        # Registrar login bem-sucedido
-        login_history.funcionario_id = funcionario.id
-        login_history.success = True
-        login_history.token_hash = (
-            hash(access_token) % 1000000
-        )  # Hash simples para referência
-        db.session.add(login_history)
-        db.session.commit()
+        # Hash do token para auditoria (usando hashlib para consistência)
+        token_hash = (
+            int(hashlib.sha256(access_token.encode()).hexdigest(), 16) % 1000000
+        )
 
-        # Atualizar último login do funcionário
-        funcionario.ultimo_login = datetime.utcnow()
+        # Registrar login bem-sucedido
+        login_history.success = True
+        login_history.token_hash = token_hash
+        db.session.add(login_history)
         db.session.commit()
 
         current_app.logger.info(
             f"Login bem-sucedido: {identifier} ({funcionario.nome}) "
+            f"Estabelecimento: {estabelecimento.nome} "
             f"de IP: {ip_address}"
         )
-
-        # Buscar informações do estabelecimento
-        estabelecimento = Estabelecimento.query.get(estabelecimento_id)
 
         return (
             jsonify(
@@ -224,25 +237,23 @@ def login():
                             "username": funcionario.username,
                             "email": funcionario.email,
                             "cargo": funcionario.cargo,
-                            "role": additional_claims["role"],
-                            "status": status,
+                            "role": funcionario.role,
+                            "status": funcionario.status,
+                            "cpf": funcionario.cpf,
+                            "telefone": funcionario.telefone,
+                            "foto_url": funcionario.foto_url,
+                            "comissao_percentual": funcionario.comissao_percentual,
+                            "permissoes": funcionario.permissoes,
+                            "data_admissao": (
+                                funcionario.data_admissao.isoformat()
+                                if funcionario.data_admissao
+                                else None
+                            ),
                             "estabelecimento_id": funcionario.estabelecimento_id,
-                            "estabelecimento_nome": (
-                                estabelecimento.nome if estabelecimento else None
-                            ),
-                            "avatar": (
-                                funcionario.avatar
-                                if hasattr(funcionario, "avatar")
-                                else None
-                            ),
-                            "telefone": (
-                                funcionario.telefone
-                                if hasattr(funcionario, "telefone")
-                                else None
-                            ),
-                            "ultimo_login": (
-                                funcionario.ultimo_login.isoformat()
-                                if funcionario.ultimo_login
+                            "estabelecimento_nome": estabelecimento.nome,
+                            "created_at": (
+                                funcionario.created_at.isoformat()
+                                if funcionario.created_at
                                 else None
                             ),
                         },
@@ -253,12 +264,14 @@ def login():
                             "token_type": "bearer",
                         },
                         "estabelecimento": {
-                            "id": estabelecimento.id if estabelecimento else None,
-                            "nome": estabelecimento.nome if estabelecimento else None,
-                            "cnpj": estabelecimento.cnpj if estabelecimento else None,
-                            "telefone": (
-                                estabelecimento.telefone if estabelecimento else None
-                            ),
+                            "id": estabelecimento.id,
+                            "nome": estabelecimento.nome,
+                            "cnpj": estabelecimento.cnpj,
+                            "telefone": estabelecimento.telefone,
+                            "email": estabelecimento.email,
+                            "endereco": estabelecimento.endereco,
+                            "cidade": estabelecimento.cidade,
+                            "estado": estabelecimento.estado,
                         },
                     },
                 }
@@ -311,8 +324,10 @@ def refresh():
             "username": claims.get("username"),
             "nome": claims.get("nome"),
             "estabelecimento_id": claims.get("estabelecimento_id"),
+            "estabelecimento_nome": claims.get("estabelecimento_nome"),
             "status": claims.get("status"),
             "role": claims.get("role"),
+            "cargo": claims.get("cargo"),
             "refresh_time": datetime.utcnow().isoformat(),
             "ip_address": request.remote_addr,
             "dispositivo": request.headers.get("User-Agent", "Desconhecido")[:100],
@@ -395,10 +410,7 @@ def validate_token():
             )
 
         # Verificar se usuário ainda está ativo
-        status = getattr(
-            funcionario, "status", "ativo" if funcionario.ativo else "inativo"
-        )
-        if status != "ativo":
+        if funcionario.status != "ativo" or not funcionario.ativo:
             return (
                 jsonify(
                     {
@@ -419,20 +431,15 @@ def validate_token():
             "username": claims.get("username"),
             "nome": claims.get("nome"),
             "estabelecimento_id": claims.get("estabelecimento_id"),
+            "estabelecimento_nome": claims.get("estabelecimento_nome"),
             "role": claims.get("role"),
-            "status": status,
-            "cargo": funcionario.cargo,
+            "status": funcionario.status,
+            "cargo": claims.get("cargo"),
             "email": funcionario.email,
-            "avatar": funcionario.avatar if hasattr(funcionario, "avatar") else None,
-            "telefone": (
-                funcionario.telefone if hasattr(funcionario, "telefone") else None
-            ),
-            "ultimo_login": (
-                funcionario.ultimo_login.isoformat()
-                if funcionario.ultimo_login
-                else None
-            ),
-            "estabelecimento_nome": estabelecimento.nome if estabelecimento else None,
+            "foto_url": funcionario.foto_url,
+            "telefone": funcionario.telefone,
+            "cpf": funcionario.cpf,
+            "permissoes": funcionario.permissoes,
         }
 
         return (
@@ -488,8 +495,14 @@ def logout():
             dispositivo=request.headers.get("User-Agent", "Desconhecido")[:200],
             success=True,
             observacoes="Logout realizado",
-            token_hash=hash(claims.get("jti", "")) % 1000000,
         )
+
+        # Calcular hash do token atual para auditoria
+        if claims.get("jti"):
+            login_history.token_hash = (
+                int(hashlib.sha256(claims.get("jti").encode()).hexdigest(), 16)
+                % 1000000
+            )
 
         db.session.add(login_history)
         db.session.commit()
@@ -542,12 +555,11 @@ def get_profile():
         estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
 
         # Estatísticas do usuário (se aplicável)
-        # Exemplo: total de vendas hoje
         hoje = datetime.utcnow().date()
         total_vendas_hoje = 0
         if hasattr(funcionario, "vendas"):
             total_vendas_hoje = len(
-                [v for v in funcionario.vendas if v.created_at.date() == hoje]
+                [v for v in funcionario.vendas if v.data_venda.date() == hoje]
             )
 
         profile_data = {
@@ -555,50 +567,41 @@ def get_profile():
             "nome": funcionario.nome,
             "username": funcionario.username,
             "email": funcionario.email,
+            "cpf": funcionario.cpf,
+            "telefone": funcionario.telefone,
+            "foto_url": funcionario.foto_url,
             "cargo": funcionario.cargo,
-            "role": getattr(funcionario, "role", funcionario.cargo),
-            "status": getattr(
-                funcionario, "status", "ativo" if funcionario.ativo else "inativo"
-            ),
-            "avatar": funcionario.avatar if hasattr(funcionario, "avatar") else None,
-            "telefone": (
-                funcionario.telefone if hasattr(funcionario, "telefone") else None
-            ),
-            "data_nascimento": (
-                funcionario.data_nascimento.isoformat()
-                if hasattr(funcionario, "data_nascimento")
-                and funcionario.data_nascimento
-                else None
-            ),
-            "endereco": (
-                funcionario.endereco if hasattr(funcionario, "endereco") else None
-            ),
+            "role": funcionario.role,
+            "status": funcionario.status,
+            "ativo": funcionario.ativo,
+            "comissao_percentual": funcionario.comissao_percentual,
             "data_admissao": (
                 funcionario.data_admissao.isoformat()
-                if hasattr(funcionario, "data_admissao") and funcionario.data_admissao
+                if funcionario.data_admissao
                 else None
             ),
-            "ultimo_login": (
-                funcionario.ultimo_login.isoformat()
-                if funcionario.ultimo_login
+            "data_demissao": (
+                funcionario.data_demissao.isoformat()
+                if funcionario.data_demissao
                 else None
             ),
+            "permissoes": funcionario.permissoes,
             "estabelecimento": {
                 "id": estabelecimento.id if estabelecimento else None,
                 "nome": estabelecimento.nome if estabelecimento else None,
                 "cnpj": estabelecimento.cnpj if estabelecimento else None,
                 "telefone": estabelecimento.telefone if estabelecimento else None,
+                "email": estabelecimento.email if estabelecimento else None,
                 "endereco": estabelecimento.endereco if estabelecimento else None,
+                "cidade": estabelecimento.cidade if estabelecimento else None,
+                "estado": estabelecimento.estado if estabelecimento else None,
             },
-            "permissions": get_permissions_for_role(funcionario.cargo),
+            "permissions": get_permissions_for_role(
+                funcionario.role, funcionario.permissoes
+            ),
             "estatisticas": {
                 "total_vendas_hoje": total_vendas_hoje,
-                "online": True,  # Poderia verificar último heartbeat
-            },
-            "configuracoes": {
-                "tema": getattr(funcionario, "tema_preferido", "claro"),
-                "notificacoes": getattr(funcionario, "receber_notificacoes", True),
-                "idioma": getattr(funcionario, "idioma_preferido", "pt-BR"),
+                "online": True,
             },
         }
 
@@ -657,12 +660,7 @@ def update_profile():
             "nome",
             "email",
             "telefone",
-            "avatar",
-            "data_nascimento",
-            "endereco",
-            "tema_preferido",
-            "receber_notificacoes",
-            "idioma_preferido",
+            "foto_url",
         ]
 
         updated_fields = []
@@ -689,7 +687,7 @@ def update_profile():
             funcionario.set_senha(data["nova_senha"])
             updated_fields.append("senha")
 
-        funcionario.data_atualizacao = datetime.utcnow()
+        funcionario.updated_at = datetime.utcnow()
         db.session.commit()
 
         return (
@@ -701,7 +699,9 @@ def update_profile():
                     "data": {
                         "nome": funcionario.nome,
                         "email": funcionario.email,
-                        "data_atualizacao": funcionario.data_atualizacao.isoformat(),
+                        "telefone": funcionario.telefone,
+                        "foto_url": funcionario.foto_url,
+                        "updated_at": funcionario.updated_at.isoformat(),
                     },
                 }
             ),
@@ -846,27 +846,26 @@ def password_reset_request():
             )
 
         # Aqui você implementaria o envio de email
-        # Por enquanto, apenas logamos
         current_app.logger.info(
             f"Solicitação de reset de senha para: {email} (ID: {funcionario.id})"
         )
 
-        # Gerar token de reset (em produção, use uma biblioteca segura)
-        import secrets
-
+        # Gerar token de reset
         reset_token = secrets.token_urlsafe(32)
 
-        # Salvar token no banco (implementação básica)
+        # Salvar token no banco
         funcionario.reset_token = reset_token
         funcionario.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
         db.session.commit()
+
+        # EM PRODUÇÃO: Enviar email com link de reset
+        # Exemplo: f"{current_app.config['APP_URL']}/reset-password?token={reset_token}"
 
         return (
             jsonify(
                 {
                     "success": True,
                     "message": "Se o email estiver cadastrado, você receberá instruções para redefinir sua senha",
-                    "token": reset_token,  # Em produção, não enviar o token na resposta
                     "expires_in": 3600,
                 }
             ),
@@ -888,52 +887,52 @@ def password_reset_request():
         )
 
 
-def get_permissions_for_role(cargo):
-    """Retornar permissões baseadas no cargo"""
-    cargo = cargo.lower() if cargo else ""
+def get_permissions_for_role(role, permissoes_db=None):
+    """Retornar permissões baseadas no role e nas permissões do banco"""
 
-    permissions = {
-        "admin": ["full_access"],
-        "dono": ["full_access"],
+    # Permissões baseadas no role
+    role_permissions = {
+        "admin": [
+            "full_access",
+            "acesso_configuracoes",
+            "acesso_financeiro",
+            "acesso_relatorios",
+        ],
         "gerente": [
             "view_reports",
             "manage_products",
             "manage_clients",
             "manage_sales",
             "view_financial",
-            "manage_staff",
         ],
-        "caixa": ["process_sales", "view_products", "view_clients"],
-        "vendedor": ["process_sales", "view_products", "view_clients"],
         "funcionario": ["view_products", "view_clients"],
+        "caixa": ["process_sales", "view_products", "view_clients"],
     }
 
-    for key in permissions:
-        if key in cargo:
-            return permissions[key]
+    # Permissões padrão baseadas no role
+    permissions = role_permissions.get(role, ["view_products", "view_clients"])
 
-    return permissions["funcionario"]
+    # Adicionar permissões específicas do banco de dados
+    if permissoes_db and isinstance(permissoes_db, dict):
+        for key, value in permissoes_db.items():
+            if value and key.startswith("acesso_") or key.startswith("pode_"):
+                # Converter nomes de permissões do banco para formato padrão
+                if key == "acesso_pdv":
+                    permissions.append("process_sales")
+                elif key == "acesso_estoque":
+                    permissions.append("manage_products")
+                elif key == "acesso_relatorios":
+                    permissions.append("view_reports")
+                elif key == "acesso_configuracoes":
+                    permissions.append("manage_settings")
+                elif key == "acesso_financeiro":
+                    permissions.append("view_financial")
+                elif key == "pode_dar_desconto":
+                    permissions.append("give_discount")
+                elif key == "pode_cancelar_venda":
+                    permissions.append("cancel_sale")
+                elif key == "acesso_dashboard_avancado":
+                    permissions.append("view_advanced_dashboard")
 
-
-# Modelo para LoginHistory (adicione ao models.py se necessário):
-"""
-class LoginHistory(db.Model):
-    __tablename__ = 'login_history'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
-    username = db.Column(db.String(100), nullable=False)
-    estabelecimento_id = db.Column(db.Integer, nullable=False)
-    ip_address = db.Column(db.String(45), nullable=False)  # IPv6 suporta 45 caracteres
-    dispositivo = db.Column(db.String(200))
-    success = db.Column(db.Boolean, default=False)
-    token_hash = db.Column(db.Integer)  # Hash do token para referência
-    observacoes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
-    
-    funcionario = db.relationship('Funcionario', backref='login_history')
-    
-    def __repr__(self):
-        return f'<LoginHistory {self.username} {self.created_at}>'
-"""
+    # Remover duplicatas
+    return list(set(permissions))

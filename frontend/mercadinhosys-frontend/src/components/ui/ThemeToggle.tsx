@@ -13,4 +13,5 @@ export function ThemeToggle() {
             </IconButton>
         </Tooltip>
     );
-}
+};
+export default ThemeToggle;
