@@ -1,7 +1,7 @@
 // src/theme/ThemeProvider.tsx - VERSÃO FINAL CORRIGIDA
 import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { ThemeContext } from './ThemeContext';
 
@@ -14,8 +14,26 @@ export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderP
     const [mode, setMode] = useState<'dark' | 'light'>(defaultMode);
 
     const toggleTheme = () => {
-        setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+        setMode((prevMode) => {
+            const newMode = prevMode === 'light' ? 'dark' : 'light';
+            // Atualizar a classe no HTML para Tailwind
+            if (newMode === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            return newMode;
+        });
     };
+
+    // Aplicar classe dark no mount
+    useEffect(() => {
+        if (mode === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, []);
 
     const theme = useMemo(() => {
         return createTheme({
