@@ -20,6 +20,27 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 
+// Adicionar estilos de animação
+const styles = `
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
+  }
+  .hover\\:scale-102:hover {
+    transform: scale(1.02);
+  }
+`;
+
+// Injetar estilos
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = styles;
+  document.head.appendChild(styleSheet);
+}
+
 interface DashboardData {
   success: boolean;
   usuario: {
@@ -154,6 +175,9 @@ const DashboardPage: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [expandedRecomendacao, setExpandedRecomendacao] = useState<string | null>(null);
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -165,10 +189,13 @@ const DashboardPage: React.FC = () => {
       setError(null);
       const response = await apiClient.get('/dashboard/resumo');
       console.log('📊 Dashboard completo:', response.data);
-      console.log('🔍 Insights:', response.data?.data?.insights);
-      console.log('🔮 Previsões:', response.data?.data?.previsoes);
-      console.log('💳 Formas pagamento:', response.data?.data?.hoje?.vendas_por_forma_pagamento);
-      console.log('⏰ Vendas por hora:', response.data?.data?.analise_temporal?.vendas_por_hora);
+      console.log('� Usuário:', response.data?.usuario);
+      console.log('🔑 Acesso Avançado:', response.data?.usuario?.acesso_avancado);
+      console.log('📦 ANÁLISE PRODUTOS:', response.data?.data?.analise_produtos);
+      console.log('⭐ Produtos Estrela:', response.data?.data?.analise_produtos?.produtos_estrela);
+      console.log('🐌 Produtos Lentos:', response.data?.data?.analise_produtos?.produtos_lentos);
+      console.log('📊 ABC:', response.data?.data?.analise_produtos?.classificacao_abc);
+      console.log('🚨 Previsão Demanda:', response.data?.data?.analise_produtos?.previsao_demanda);
       setData(response.data);
     } catch (error) {
       console.error('Erro ao carregar dashboard:', error);
@@ -276,10 +303,11 @@ const DashboardPage: React.FC = () => {
             Dashboard Executivo
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Bem-vindo, {data.usuario.nome} • {hoje?.data ? new Date(hoje.data).toLocaleDateString('pt-BR', { 
+            Bem-vindo, {data.usuario.nome} • {hoje?.data ? new Date(hoje.data + 'T00:00:00').toLocaleDateString('pt-BR', { 
               weekday: 'long', 
               day: 'numeric', 
-              month: 'long' 
+              month: 'long',
+              year: 'numeric'
             }) : ''}
           </p>
         </div>
@@ -383,17 +411,47 @@ const DashboardPage: React.FC = () => {
                   Urgente
                 </h3>
                 <div className="space-y-3">
-                  {data.data.recomendacoes.urgentes.map((rec: any, idx: number) => (
-                    <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg border-l-4 border-red-500 shadow-md hover:shadow-lg transition-shadow">
-                      <h4 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{rec.titulo}</h4>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{rec.descricao}</p>
-                      <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded mt-2">
-                        <p className="text-xs font-semibold text-red-700 dark:text-red-400">
-                          ✓ {rec.acao}
-                        </p>
+                  {data.data.recomendacoes.urgentes.map((rec: any, idx: number) => {
+                    const isExpanded = expandedRecomendacao === `urgente-${idx}`;
+                    return (
+                      <div 
+                        key={idx} 
+                        onClick={() => setExpandedRecomendacao(isExpanded ? null : `urgente-${idx}`)}
+                        className={`bg-white dark:bg-gray-800 p-4 rounded-lg border-l-4 border-red-500 cursor-pointer transform transition-all duration-300 ${
+                          isExpanded 
+                            ? 'shadow-2xl scale-105 ring-2 ring-red-300 dark:ring-red-600' 
+                            : 'shadow-md hover:shadow-xl hover:scale-102'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <h4 className="font-bold text-gray-800 dark:text-white text-sm mb-1 flex-1">{rec.titulo}</h4>
+                          <div className={`text-red-500 transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                            ▼
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{rec.descricao}</p>
+                        <div className={`bg-red-50 dark:bg-red-900/20 p-2 rounded mt-2 transition-all duration-300 ${
+                          isExpanded ? 'bg-red-100 dark:bg-red-900/40' : ''
+                        }`}>
+                          <p className="text-xs font-semibold text-red-700 dark:text-red-400">
+                            ✓ {rec.acao}
+                          </p>
+                        </div>
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800 animate-fadeIn">
+                            <div className="flex gap-2">
+                              <button className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-3 rounded transition-colors duration-200">
+                                Executar Ação
+                              </button>
+                              <button className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white text-xs font-bold py-2 px-3 rounded transition-colors duration-200">
+                                Mais Tarde
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -476,7 +534,7 @@ const DashboardPage: React.FC = () => {
                   return (
                     <tr key={idx} className={`border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${isCritico ? 'bg-red-50 dark:bg-red-900/10' : isRisco ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}>
                       <td className="py-3 px-4 font-medium text-gray-800 dark:text-white">{produto.produto_nome}</td>
-                      <td className="py-3 px-4 text-center font-semibold">{produto.estoque_atual}</td>
+                      <td className="py-3 px-4 text-center font-semibold text-gray-600 dark:text-gray-300">{produto.estoque_atual}</td>
                       <td className="py-3 px-4 text-center text-blue-600 dark:text-blue-400">{produto.demanda_diaria_prevista.toFixed(1)}</td>
                       <td className="py-3 px-4 text-center">
                         <span className={`font-bold ${isCritico ? 'text-red-600' : isRisco ? 'text-orange-600' : 'text-green-600'}`}>
@@ -507,19 +565,26 @@ const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Cards Principais */}
+      {/* Cards Principais - INTERATIVOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {mainStats.map((stat) => (
           <div
             key={stat.title}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow"
+            onClick={() => setSelectedCard(selectedCard === stat.title ? null : stat.title)}
+            className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border-2 cursor-pointer transform transition-all duration-300 ${
+              selectedCard === stat.title
+                ? 'border-blue-500 dark:border-blue-400 scale-105 shadow-2xl'
+                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-xl hover:scale-102'
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className={`${stat.color} p-3 rounded-lg shadow-md`}>
+              <div className={`${stat.color} p-3 rounded-lg shadow-md transform transition-transform duration-300 ${
+                selectedCard === stat.title ? 'scale-110' : 'group-hover:scale-105'
+              }`}>
                 <stat.icon className="w-6 h-6 text-white" />
               </div>
               {stat.trend !== 0 && (
-                <div className={`flex items-center ${stat.trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                <div className={`flex items-center animate-pulse ${stat.trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
                   {stat.trend > 0 ? (
                     <TrendingUp className="w-4 h-4 mr-1" />
                   ) : (
@@ -534,6 +599,43 @@ const DashboardPage: React.FC = () => {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stat.subtitle}</p>
             {stat.meta && (
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium">{stat.meta}</p>
+            )}
+            
+            {/* Indicador de clique */}
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                {selectedCard === stat.title ? (
+                  <>
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-ping"></span>
+                    Clique para fechar
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block w-2 h-2 bg-gray-400 rounded-full"></span>
+                    Clique para detalhes
+                  </>
+                )}
+              </p>
+            </div>
+            
+            {/* Conteúdo Expandido */}
+            {selectedCard === stat.title && (
+              <div className="mt-4 pt-4 border-t-2 border-blue-200 dark:border-blue-800 animate-fadeIn">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Variação do dia:</span>
+                    <span className={`font-bold ${stat.trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {stat.trend > 0 ? '+' : ''}{stat.trend.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Performance:</span>
+                    <span className="font-semibold text-gray-800 dark:text-white">
+                      {stat.trend > 5 ? '🚀 Excelente' : stat.trend > 0 ? '📈 Bom' : stat.trend === 0 ? '➡️ Estável' : '📉 Atenção'}
+                    </span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         ))}
@@ -713,46 +815,347 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Segmentação de Clientes RFM */}
-      {data.data.analise_clientes?.segmentacao && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
+      {/* Inteligência de Produtos - SUPER INTERATIVO */}
+      {data.data.analise_produtos && (
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl shadow-lg p-6 border-2 border-purple-200 dark:border-purple-800">
           <div className="mb-4">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Segmentação de Clientes por Valor</h2>
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+              <Package className="w-6 h-6 text-purple-600" />
+              🎯 Inteligência de Produtos
+            </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Análise baseada em <span className="font-semibold">Recência</span> (quando comprou), 
-              <span className="font-semibold"> Frequência</span> (quantas vezes compra) e 
-              <span className="font-semibold"> Valor Monetário</span> (quanto gasta)
+              Clique nos cards para ver detalhes e tomar ações
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-green-50 dark:bg-green-900/20 p-5 rounded-lg border-l-4 border-green-500">
-              <p className="text-4xl font-bold text-green-600 mb-2">{data.data.analise_clientes.segmentacao.champions ?? 0}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-white">Campeões</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Compram frequentemente e gastam muito
-              </p>
-            </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-lg border-l-4 border-blue-500">
-              <p className="text-4xl font-bold text-blue-600 mb-2">{data.data.analise_clientes.segmentacao.loyal ?? 0}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-white">Fiéis</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Clientes regulares e confiáveis
-              </p>
-            </div>
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-5 rounded-lg border-l-4 border-yellow-500">
-              <p className="text-4xl font-bold text-yellow-600 mb-2">{data.data.analise_clientes.segmentacao.at_risk ?? 0}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-white">Em Risco</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Não compram há algum tempo
-              </p>
-            </div>
-            <div className="bg-red-50 dark:bg-red-900/20 p-5 rounded-lg border-l-4 border-red-500">
-              <p className="text-4xl font-bold text-red-600 mb-2">{data.data.analise_clientes.segmentacao.lost ?? 0}</p>
-              <p className="text-sm font-semibold text-gray-800 dark:text-white">Perdidos</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Inativos por muito tempo
-              </p>
-            </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 1: Produtos Estrela */}
+            {data.data.analise_produtos.produtos_estrela && (
+              <div 
+                onClick={() => setSelectedCard(selectedCard === 'estrela' ? null : 'estrela')}
+                className={`relative overflow-hidden cursor-pointer transform transition-all duration-500 ${
+                  selectedCard === 'estrela' 
+                    ? 'lg:col-span-2 scale-105 shadow-2xl' 
+                    : 'hover:scale-105 hover:shadow-xl'
+                } bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/30 dark:to-orange-900/30 rounded-xl p-6 border-2 ${
+                  selectedCard === 'estrela' 
+                    ? 'border-yellow-400 dark:border-yellow-600 ring-4 ring-yellow-200 dark:ring-yellow-900/50' 
+                    : 'border-yellow-200 dark:border-yellow-800'
+                }`}
+              >
+                {/* Badge animado */}
+                <div className="absolute -top-1 -right-1 bg-yellow-500 text-white px-3 py-1 rounded-bl-lg text-xs font-bold animate-pulse">
+                  🌟 TOP
+                </div>
+                
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`bg-gradient-to-br from-yellow-500 to-orange-500 p-3 rounded-xl shadow-lg transform transition-transform duration-300 ${
+                    selectedCard === 'estrela' ? 'scale-110 rotate-12' : ''
+                  }`}>
+                    <Star className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-4xl font-black text-yellow-600 dark:text-yellow-400">
+                      {Array.isArray(data.data.analise_produtos.produtos_estrela) 
+                        ? data.data.analise_produtos.produtos_estrela.length 
+                        : 0}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">produtos</p>
+                  </div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-1">
+                  Produtos Estrela ⭐
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Alta venda + Alta margem
+                </p>
+                
+                {/* Conteúdo Expandido */}
+                {selectedCard === 'estrela' && (
+                  <div className="mt-4 pt-4 border-t-2 border-yellow-200 dark:border-yellow-800 animate-fadeIn">
+                    <div className="space-y-2 mb-4">
+                      {data.data.analise_produtos.produtos_estrela.slice(0, 3).map((prod: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-white/70 dark:bg-gray-800/70 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                              {idx + 1}
+                            </span>
+                            <span className="text-sm font-medium text-gray-800 dark:text-white truncate">
+                              {prod.nome}
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold text-yellow-600">
+                            {prod.market_share?.toFixed(1)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <button className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+                      📊 Ver Análise Completa
+                    </button>
+                  </div>
+                )}
+                
+                {/* Indicador de clique */}
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
+                  <div className={`w-2 h-2 rounded-full ${selectedCard === 'estrela' ? 'bg-yellow-500 animate-ping' : 'bg-gray-300'}`}></div>
+                  {selectedCard === 'estrela' ? 'Clique para fechar' : 'Clique para expandir'}
+                </div>
+              </div>
+            )}
+
+            {/* Card 2: Produtos Lentos */}
+            {data.data.analise_produtos.produtos_lentos && (
+              <div 
+                onClick={() => setSelectedCard(selectedCard === 'lentos' ? null : 'lentos')}
+                className={`relative overflow-hidden cursor-pointer transform transition-all duration-500 ${
+                  selectedCard === 'lentos' 
+                    ? 'lg:col-span-2 scale-105 shadow-2xl' 
+                    : 'hover:scale-105 hover:shadow-xl'
+                } bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/30 dark:to-red-900/30 rounded-xl p-6 border-2 ${
+                  selectedCard === 'lentos' 
+                    ? 'border-orange-400 dark:border-orange-600 ring-4 ring-orange-200 dark:ring-orange-900/50' 
+                    : 'border-orange-200 dark:border-orange-800'
+                }`}
+              >
+                <div className="absolute -top-1 -right-1 bg-orange-500 text-white px-3 py-1 rounded-bl-lg text-xs font-bold">
+                  ⚠️ AÇÃO
+                </div>
+                
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`bg-gradient-to-br from-orange-500 to-red-500 p-3 rounded-xl shadow-lg transform transition-transform duration-300 ${
+                    selectedCard === 'lentos' ? 'scale-110 -rotate-12' : ''
+                  }`}>
+                    <AlertTriangle className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-4xl font-black text-orange-600 dark:text-orange-400">
+                      {Array.isArray(data.data.analise_produtos.produtos_lentos) 
+                        ? data.data.analise_produtos.produtos_lentos.length 
+                        : 0}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">parados</p>
+                  </div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-1">
+                  Produtos Lentos 🐌
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Parados no estoque - Promover!
+                </p>
+                
+                {selectedCard === 'lentos' && (
+                  <div className="mt-4 pt-4 border-t-2 border-orange-200 dark:border-orange-800 animate-fadeIn">
+                    <div className="space-y-2 mb-4">
+                      {data.data.analise_produtos.produtos_lentos.slice(0, 3).map((prod: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-white/70 dark:bg-gray-800/70 rounded-lg">
+                          <span className="text-sm font-medium text-gray-800 dark:text-white truncate">
+                            {prod.nome}
+                          </span>
+                          <span className="text-xs font-bold text-orange-600">
+                            {prod.quantidade} un
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-300 transform hover:scale-105 text-sm">
+                        🎁 Criar Promoção
+                      </button>
+                      <button className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-300 transform hover:scale-105 text-sm">
+                        📉 Baixar Preço
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
+                  <div className={`w-2 h-2 rounded-full ${selectedCard === 'lentos' ? 'bg-orange-500 animate-ping' : 'bg-gray-300'}`}></div>
+                  {selectedCard === 'lentos' ? 'Clique para fechar' : 'Clique para ações'}
+                </div>
+              </div>
+            )}
+
+            {/* Card 3: Curva ABC */}
+            {data.data.analise_produtos.classificacao_abc?.resumo && (
+              <div 
+                onClick={() => setSelectedCard(selectedCard === 'abc' ? null : 'abc')}
+                className={`relative overflow-hidden cursor-pointer transform transition-all duration-500 ${
+                  selectedCard === 'abc' 
+                    ? 'lg:col-span-2 scale-105 shadow-2xl' 
+                    : 'hover:scale-105 hover:shadow-xl'
+                } bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-xl p-6 border-2 ${
+                  selectedCard === 'abc' 
+                    ? 'border-indigo-400 dark:border-indigo-600 ring-4 ring-indigo-200 dark:ring-indigo-900/50' 
+                    : 'border-indigo-200 dark:border-indigo-800'
+                }`}
+              >
+                <div className="absolute -top-1 -right-1 bg-indigo-500 text-white px-3 py-1 rounded-bl-lg text-xs font-bold">
+                  📊 ABC
+                </div>
+                
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`bg-gradient-to-br from-indigo-500 to-purple-500 p-3 rounded-xl shadow-lg transform transition-transform duration-300 ${
+                    selectedCard === 'abc' ? 'scale-110' : ''
+                  }`}>
+                    <BarChart className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-4xl font-black text-indigo-600 dark:text-indigo-400">
+                      {(data.data.analise_produtos.classificacao_abc.resumo.A || 0) + 
+                       (data.data.analise_produtos.classificacao_abc.resumo.B || 0) + 
+                       (data.data.analise_produtos.classificacao_abc.resumo.C || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">itens</p>
+                  </div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-1">
+                  Curva ABC 📈
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Classificação por faturamento
+                </p>
+                
+                {selectedCard === 'abc' && (
+                  <div className="mt-4 pt-4 border-t-2 border-indigo-200 dark:border-indigo-800 animate-fadeIn">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-semibold text-green-600">Classe A</span>
+                            <span className="text-sm font-bold">{data.data.analise_produtos.classificacao_abc.resumo.A || 0}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-3">
+                            <div className="bg-gradient-to-r from-green-400 to-green-600 h-3 rounded-full" style={{
+                              width: `${((data.data.analise_produtos.classificacao_abc.resumo.A || 0) / 
+                                ((data.data.analise_produtos.classificacao_abc.resumo.A || 0) + 
+                                 (data.data.analise_produtos.classificacao_abc.resumo.B || 0) + 
+                                 (data.data.analise_produtos.classificacao_abc.resumo.C || 0)) * 100) || 0}%`
+                            }}></div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-semibold text-yellow-600">Classe B</span>
+                            <span className="text-sm font-bold">{data.data.analise_produtos.classificacao_abc.resumo.B || 0}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-3">
+                            <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-3 rounded-full" style={{
+                              width: `${((data.data.analise_produtos.classificacao_abc.resumo.B || 0) / 
+                                ((data.data.analise_produtos.classificacao_abc.resumo.A || 0) + 
+                                 (data.data.analise_produtos.classificacao_abc.resumo.B || 0) + 
+                                 (data.data.analise_produtos.classificacao_abc.resumo.C || 0)) * 100) || 0}%`
+                            }}></div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-semibold text-gray-600">Classe C</span>
+                            <span className="text-sm font-bold">{data.data.analise_produtos.classificacao_abc.resumo.C || 0}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-3">
+                            <div className="bg-gradient-to-r from-gray-400 to-gray-600 h-3 rounded-full" style={{
+                              width: `${((data.data.analise_produtos.classificacao_abc.resumo.C || 0) / 
+                                ((data.data.analise_produtos.classificacao_abc.resumo.A || 0) + 
+                                 (data.data.analise_produtos.classificacao_abc.resumo.B || 0) + 
+                                 (data.data.analise_produtos.classificacao_abc.resumo.C || 0)) * 100) || 0}%`
+                            }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
+                  <div className={`w-2 h-2 rounded-full ${selectedCard === 'abc' ? 'bg-indigo-500 animate-ping' : 'bg-gray-300'}`}></div>
+                  {selectedCard === 'abc' ? 'Clique para fechar' : 'Clique para ver gráfico'}
+                </div>
+              </div>
+            )}
+
+            {/* Card 4: Previsão de Ruptura */}
+            {data.data.analise_produtos.previsao_demanda?.produtos && (
+              <div 
+                onClick={() => setSelectedCard(selectedCard === 'ruptura' ? null : 'ruptura')}
+                className={`relative overflow-hidden cursor-pointer transform transition-all duration-500 ${
+                  selectedCard === 'ruptura' 
+                    ? 'lg:col-span-2 scale-105 shadow-2xl' 
+                    : 'hover:scale-105 hover:shadow-xl'
+                } bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-900/30 dark:to-pink-900/30 rounded-xl p-6 border-2 ${
+                  selectedCard === 'ruptura' 
+                    ? 'border-red-400 dark:border-red-600 ring-4 ring-red-200 dark:ring-red-900/50' 
+                    : 'border-red-200 dark:border-red-800'
+                }`}
+              >
+                <div className="absolute -top-1 -right-1 bg-red-500 text-white px-3 py-1 rounded-bl-lg text-xs font-bold animate-pulse">
+                  🚨 RISCO
+                </div>
+                
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`bg-gradient-to-br from-red-500 to-pink-500 p-3 rounded-xl shadow-lg transform transition-transform duration-300 ${
+                    selectedCard === 'ruptura' ? 'scale-110 animate-bounce' : ''
+                  }`}>
+                    <Package className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-right">
+                    <p className="text-4xl font-black text-red-600 dark:text-red-400">
+                      {data.data.analise_produtos.previsao_demanda.produtos.filter((p: any) => p.risco_ruptura).length}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">em risco</p>
+                  </div>
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-1">
+                  Risco de Ruptura 🚨
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Produtos acabando - Pedir urgente!
+                </p>
+                
+                {selectedCard === 'ruptura' && (
+                  <div className="mt-4 pt-4 border-t-2 border-red-200 dark:border-red-800 animate-fadeIn">
+                    <div className="space-y-2 mb-4">
+                      {data.data.analise_produtos.previsao_demanda.produtos
+                        .filter((p: any) => p.risco_ruptura)
+                        .slice(0, 3)
+                        .map((prod: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-white/70 dark:bg-gray-800/70 rounded-lg">
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-gray-800 dark:text-white block truncate">
+                                {prod.produto_nome}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                Estoque: {prod.estoque_atual} | Demanda: {prod.demanda_diaria_prevista.toFixed(1)}/dia
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold text-red-600 whitespace-nowrap ml-2">
+                              {Math.floor(prod.estoque_atual / prod.demanda_diaria_prevista)} dias
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                    <button className="w-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+                      🛒 Criar Pedido de Compra
+                    </button>
+                  </div>
+                )}
+                
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
+                  <div className={`w-2 h-2 rounded-full ${selectedCard === 'ruptura' ? 'bg-red-500 animate-ping' : 'bg-gray-300'}`}></div>
+                  {selectedCard === 'ruptura' ? 'Clique para fechar' : 'Clique para ações'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -763,31 +1166,163 @@ const DashboardPage: React.FC = () => {
         {analise_temporal.vendas_por_categoria && analise_temporal.vendas_por_categoria.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-              Vendas por Categoria
+              📊 Vendas por Categoria (Mês)
             </h2>
-            <div className="space-y-4">
-              {analise_temporal.vendas_por_categoria.map((item) => {
-                const maxTotal = Math.max(...analise_temporal.vendas_por_categoria.map(i => i.total));
-                const percentage = (item.total / maxTotal) * 100;
-                return (
-                  <div key={item.categoria}>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
-                        {item.categoria}
-                      </span>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-white">
-                        R$ {(item?.total ?? 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                      <div
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gráfico de Pizza Interativo */}
+              <div className="flex items-center justify-center">
+                <svg width="280" height="280" viewBox="0 0 280 280" className="transform hover:scale-105 transition-transform duration-300">
+                  {(() => {
+                    const total = analise_temporal.vendas_por_categoria.reduce((sum, item) => sum + item.total, 0);
+                    let currentAngle = -90; // Começar do topo
+                    const colors = [
+                      '#3B82F6', '#10B981', '#F59E0B', '#EF4444', 
+                      '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'
+                    ];
+                    
+                    return analise_temporal.vendas_por_categoria.map((item, index) => {
+                      const percentage = (item.total / total) * 100;
+                      const angle = (percentage / 100) * 360;
+                      const startAngle = currentAngle;
+                      const endAngle = currentAngle + angle;
+                      currentAngle = endAngle;
+                      
+                      // Converter ângulos para coordenadas
+                      const startRad = (startAngle * Math.PI) / 180;
+                      const endRad = (endAngle * Math.PI) / 180;
+                      const centerX = 140;
+                      const centerY = 140;
+                      const radius = 100;
+                      
+                      const x1 = centerX + radius * Math.cos(startRad);
+                      const y1 = centerY + radius * Math.sin(startRad);
+                      const x2 = centerX + radius * Math.cos(endRad);
+                      const y2 = centerY + radius * Math.sin(endRad);
+                      
+                      const largeArc = angle > 180 ? 1 : 0;
+                      
+                      const pathData = [
+                        `M ${centerX} ${centerY}`,
+                        `L ${x1} ${y1}`,
+                        `A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`,
+                        'Z'
+                      ].join(' ');
+                      
+                      // Label position (middle of slice)
+                      const midAngle = (startAngle + endAngle) / 2;
+                      const midRad = (midAngle * Math.PI) / 180;
+                      const labelRadius = radius * 0.7;
+                      const labelX = centerX + labelRadius * Math.cos(midRad);
+                      const labelY = centerY + labelRadius * Math.sin(midRad);
+                      
+                      return (
+                        <g key={index}>
+                          <path
+                            d={pathData}
+                            fill={colors[index % colors.length]}
+                            className="cursor-pointer transition-all duration-300 hover:opacity-80"
+                            onMouseEnter={() => setHoveredCategory(item.categoria)}
+                            onMouseLeave={() => setHoveredCategory(null)}
+                            style={{
+                              filter: hoveredCategory === item.categoria ? 'brightness(1.2)' : 'none',
+                              transform: hoveredCategory === item.categoria ? 'scale(1.05)' : 'scale(1)',
+                              transformOrigin: `${centerX}px ${centerY}px`,
+                            }}
+                          />
+                          {percentage > 5 && (
+                            <text
+                              x={labelX}
+                              y={labelY}
+                              textAnchor="middle"
+                              className="fill-white font-bold text-sm pointer-events-none"
+                              style={{ textShadow: '0 0 3px rgba(0,0,0,0.5)' }}
+                            >
+                              {percentage.toFixed(0)}%
+                            </text>
+                          )}
+                        </g>
+                      );
+                    });
+                  })()}
+                  
+                  {/* Centro do donut */}
+                  <circle cx="140" cy="140" r="50" fill="currentColor" className="text-white dark:text-gray-800" />
+                  <text 
+                    x="140" 
+                    y="135" 
+                    textAnchor="middle" 
+                    className="fill-gray-600 dark:fill-gray-300 font-bold text-xs"
+                  >
+                    TOTAL
+                  </text>
+                  <text 
+                    x="140" 
+                    y="152" 
+                    textAnchor="middle" 
+                    className="fill-gray-800 dark:fill-white font-bold text-sm"
+                  >
+                    R$ {analise_temporal.vendas_por_categoria.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                  </text>
+                </svg>
+              </div>
+              
+              {/* Legenda Interativa */}
+              <div className="space-y-2">
+                {(() => {
+                  const total = analise_temporal.vendas_por_categoria.reduce((sum, item) => sum + item.total, 0);
+                  const colors = [
+                    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', 
+                    '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'
+                  ];
+                  
+                  return analise_temporal.vendas_por_categoria.map((item, index) => {
+                    const percentage = (item.total / total) * 100;
+                    const isHovered = hoveredCategory === item.categoria;
+                    
+                    return (
+                      <div 
+                        key={item.categoria}
+                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-300 ${
+                          isHovered 
+                            ? 'bg-gray-100 dark:bg-gray-700 shadow-md transform scale-105' 
+                            : 'bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                        onMouseEnter={() => setHoveredCategory(item.categoria)}
+                        onMouseLeave={() => setHoveredCategory(null)}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div 
+                            className="w-4 h-4 rounded-full flex-shrink-0 transition-transform duration-300"
+                            style={{ 
+                              backgroundColor: colors[index % colors.length],
+                              transform: isHovered ? 'scale(1.3)' : 'scale(1)'
+                            }}
+                          />
+                          <span className={`text-sm font-medium transition-colors duration-300 ${
+                            isHovered 
+                              ? 'text-gray-900 dark:text-white' 
+                              : 'text-gray-700 dark:text-gray-300'
+                          }`}>
+                            {item.categoria}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <div className={`text-sm font-bold transition-colors duration-300 ${
+                            isHovered 
+                              ? 'text-gray-900 dark:text-white' 
+                              : 'text-gray-800 dark:text-gray-200'
+                          }`}>
+                            R$ {item.total.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {percentage.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           </div>
         )}
@@ -930,19 +1465,22 @@ const DashboardPage: React.FC = () => {
               </h2>
             </div>
             <div className="space-y-3">
-              {data.data.analise_clientes.top_clientes.slice(0, 5).map((cliente, idx) => (
+              {data.data.analise_clientes.top_clientes.slice(0, 5).map((cliente: any, idx: number) => (
                 <div 
-                  key={cliente.id}
-                  className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg"
+                  key={cliente.cliente_id || idx}
+                  className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-bold">
+                    <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
                       {idx + 1}
                     </div>
-                    <p className="font-medium text-gray-800 dark:text-white">{cliente?.nome ?? 'Cliente'}</p>
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-white">{cliente?.nome ?? 'Cliente'}</p>
+                      <p className="text-xs text-gray-500">{cliente?.quantidade_compras ?? 0} compras</p>
+                    </div>
                   </div>
-                  <p className="font-semibold text-green-600">
-                    R$ {(cliente?.total_compras ?? 0).toFixed(2)}
+                  <p className="font-semibold text-green-600 text-lg">
+                    R$ {(cliente?.total_gasto ?? cliente?.total_compras ?? 0).toFixed(2)}
                   </p>
                 </div>
               ))}
