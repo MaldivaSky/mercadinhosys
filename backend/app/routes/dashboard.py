@@ -129,6 +129,7 @@ def resumo_dashboard():
                         if hasattr(metrica, "meta_atingida_dia")
                         else None
                     ),
+                    "vendas_por_forma_pagamento": dados_realtime.get("vendas_por_forma_pagamento", {}),
                 },
                 "mes": {
                     "total_vendas": metrica.total_vendas_mes,
@@ -166,6 +167,32 @@ def resumo_dashboard():
             response_data["data"]["previsoes"] = previsoes
             response_data["data"]["insights"] = insights
             response_data["data"].update(analises_avancadas)
+            
+            # NOVAS ANÁLISES DE PRODUTOS E FINANCEIRO
+            response_data["data"]["analise_produtos"] = {
+                "classificacao_abc": calcular_classificacao_abc_estoque(estabelecimento_id),
+                "produtos_estrela": identificar_produtos_estrela(estabelecimento_id),
+                "produtos_lentos": identificar_produtos_lentos(estabelecimento_id),
+                "top_por_categoria": calcular_top_por_categoria(estabelecimento_id),
+                "previsao_demanda": prever_demanda_produtos(estabelecimento_id),
+            }
+            
+            response_data["data"]["analise_financeira"] = {
+                "despesas_mes": metrica.total_despesas_mes,
+                "lucro_bruto": metrica.lucro_bruto_mes,
+                "margem_lucro_percentual": (
+                    (metrica.lucro_bruto_mes / metrica.total_vendas_mes * 100)
+                    if metrica.total_vendas_mes > 0 else 0
+                ),
+                "despesas_por_dia": metrica.total_despesas_mes / datetime.now().day if datetime.now().day > 0 else 0,
+            }
+            
+            # NOVA: Recomendações Acionáveis
+            response_data["data"]["recomendacoes"] = gerar_recomendacoes_acionaveis(
+                estabelecimento_id, 
+                dados_realtime, 
+                metrica
+            )
 
             # Análises do dono (apenas para admin)
             if is_admin:
@@ -1444,6 +1471,27 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
         Cliente.data_cadastro >= inicio_mes
     ).count()
 
+    # NOVO: Vendas por forma de pagamento (hoje)
+    vendas_por_forma_pagamento = (
+        db.session.query(
+            Venda.forma_pagamento,
+            func.sum(Venda.total).label("total")
+        )
+        .filter(
+            Venda.estabelecimento_id == estabelecimento_id,
+            Venda.data_venda >= inicio_dia,
+            Venda.data_venda <= fim_dia,
+            Venda.status == "finalizada"
+        )
+        .group_by(Venda.forma_pagamento)
+        .all()
+    )
+
+    vendas_por_forma_dict = {
+        forma if forma else "outros": float(total) if total else 0.0
+        for forma, total in vendas_por_forma_pagamento
+    }
+
     return {
         "vendas_hoje": vendas_hoje,
         "estoque_baixo": produtos_estoque_baixo,
@@ -1459,6 +1507,7 @@ def obter_dados_tempo_real(estabelecimento_id, hoje, acesso_avancado=False):
         "vendas_por_categoria": vendas_por_categoria,
         "vendas_ultimos_7_dias": vendas_ultimos_7_dias,
         "clientes_novos_mes": clientes_novos_mes,
+        "vendas_por_forma_pagamento": vendas_por_forma_dict,
         "ultimas_vendas": vendas_hoje[:10],
     }
 
@@ -1728,12 +1777,22 @@ def identificar_produtos_estrela(estabelecimento_id):
 def gerar_insights_automaticos(estabelecimento_id, metrica):
     """Gera insights automáticos baseados em dados"""
     insights = []
+    
+    hoje = date.today()
+    inicio_dia = datetime.combine(hoje, datetime.min.time())
+    fim_dia = datetime.combine(hoje, datetime.max.time())
+
+    # Total de vendas hoje
+    vendas_hoje = db.session.query(func.sum(Venda.total)).filter(
+        Venda.estabelecimento_id == estabelecimento_id,
+        Venda.data_venda >= inicio_dia,
+        Venda.data_venda <= fim_dia,
+        Venda.status == "finalizada"
+    ).scalar() or 0
 
     if metrica.vendas_por_hora_json:
         vendas_hora = json.loads(metrica.vendas_por_hora_json)
 
-        # `analisar_vendas_por_hora` pode retornar dict vazio quando não há vendas.
-        # Também tolera formatos inesperados para evitar 500 no dashboard.
         if isinstance(vendas_hora, dict) and vendas_hora:
             hora_pico = max(
                 vendas_hora.items(),
@@ -1743,20 +1802,62 @@ def gerar_insights_automaticos(estabelecimento_id, metrica):
                     else 0
                 ),
             )[0]
-            insights.append(
-                f"🚀 **Horário de Pico**: {hora_pico}:00h - Considere aumentar a equipe neste horário"
-            )
+            insights.append({
+                "tipo": "positivo",
+                "titulo": "Horário de Pico Identificado",
+                "descricao": f"O horário de maior movimento é às {hora_pico}:00h. Considere aumentar a equipe neste período.",
+                "prioridade": "media",
+                "acao": "Ajustar escala de funcionários"
+            })
 
-    if metrica.ticket_medio_dia < 50:
-        insights.append(
-            "💰 **Oportunidade de Upsell**: Ticket médio baixo - Considere treinar a equipe para venda cruzada"
-        )
+    if metrica.ticket_medio_dia > 0 and metrica.ticket_medio_dia < 50:
+        insights.append({
+            "tipo": "alerta",
+            "titulo": "Oportunidade de Aumentar Vendas",
+            "descricao": f"Ticket médio de R$ {metrica.ticket_medio_dia:.2f} está abaixo do esperado. Treine a equipe para venda cruzada.",
+            "prioridade": "alta",
+            "acao": "Implementar técnicas de upsell e cross-sell"
+        })
 
     produtos_lentos = identificar_produtos_lentos(estabelecimento_id)
-    if produtos_lentos:
-        insights.append(
-            f"📦 **Estoque Parado**: {len(produtos_lentos)} produtos com baixa movimentação - Considere promoções"
-        )
+    if produtos_lentos and len(produtos_lentos) > 0:
+        insights.append({
+            "tipo": "alerta",
+            "titulo": "Produtos com Baixa Movimentação",
+            "descricao": f"{len(produtos_lentos)} produtos estão com estoque parado. Considere criar promoções para liquidar.",
+            "prioridade": "media",
+            "acao": "Criar campanha de promoção"
+        })
+
+    # Insight sobre crescimento
+    if vendas_hoje > 0:
+        crescimento = calcular_crescimento_diario(estabelecimento_id, hoje)
+        if crescimento > 20:
+            insights.append({
+                "tipo": "positivo",
+                "titulo": "Crescimento Excelente!",
+                "descricao": f"Vendas de hoje estão {crescimento:.1f}% maiores que ontem. Continue assim!",
+                "prioridade": "baixa",
+                "acao": "Manter estratégias atuais"
+            })
+        elif crescimento < -20:
+            insights.append({
+                "tipo": "negativo",
+                "titulo": "Queda nas Vendas",
+                "descricao": f"Vendas caíram {abs(crescimento):.1f}% em relação a ontem. Investigue possíveis causas.",
+                "prioridade": "alta",
+                "acao": "Analisar motivos da queda"
+            })
+
+    # Se não há insights, adicionar um genérico
+    if not insights:
+        insights.append({
+            "tipo": "positivo",
+            "titulo": "Tudo Funcionando",
+            "descricao": "Não há alertas críticos no momento. Continue monitorando o desempenho.",
+            "prioridade": "baixa",
+            "acao": "Manter monitoramento"
+        })
 
     return insights
 
@@ -2325,6 +2426,189 @@ def identificar_produtos_lentos(estabelecimento_id):
 def calcular_confianca_previsao(series_historica, previsao):
     """Calcula confiança da previsão"""
     if len(series_historica) < 7:
+        return 0
+
+    variancia = np.var(series_historica)
+    if variancia == 0:
+        return 1.0
+
+    erro_medio = np.mean(np.abs(np.diff(series_historica)))
+    confianca = max(0, min(1, 1 - (erro_medio / (np.mean(series_historica) + 1))))
+
+    return float(confianca)
+
+
+def calcular_top_por_categoria(estabelecimento_id, limite=5):
+    """Calcula os top produtos por categoria com métricas detalhadas"""
+    try:
+        inicio_mes = datetime(date.today().year, date.today().month, 1)
+        fim_dia = datetime.combine(date.today(), datetime.max.time())
+        
+        # Query para pegar vendas por produto com categoria
+        produtos_vendidos = (
+            db.session.query(
+                Produto.categoria,
+                Produto.nome,
+                func.sum(VendaItem.quantidade).label("quantidade_vendida"),
+                func.sum(VendaItem.total_item).label("total_vendido"),
+                func.avg(VendaItem.preco_unitario).label("preco_medio"),
+            )
+            .join(VendaItem, Produto.id == VendaItem.produto_id)
+            .join(Venda)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= inicio_mes,
+                Venda.data_venda <= fim_dia,
+                Venda.status == "finalizada",
+            )
+            .group_by(Produto.categoria, Produto.nome)
+            .order_by(Produto.categoria, func.sum(VendaItem.total_item).desc())
+            .all()
+        )
+        
+        # Organizar por categoria
+        por_categoria = {}
+        for row in produtos_vendidos:
+            categoria = row.categoria if row.categoria else "Sem Categoria"
+            if categoria not in por_categoria:
+                por_categoria[categoria] = []
+            
+            por_categoria[categoria].append({
+                "nome": row.nome,
+                "quantidade_vendida": int(row.quantidade_vendida),
+                "total_vendido": float(row.total_vendido),
+                "preco_medio": float(row.preco_medio) if row.preco_medio else 0,
+            })
+        
+        # Limitar a N produtos por categoria
+        resultado = {}
+        for categoria, produtos in por_categoria.items():
+            resultado[categoria] = produtos[:limite]
+        
+        return resultado
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao calcular top por categoria: {str(e)}")
+        return {}
+
+
+def gerar_recomendacoes_acionaveis(estabelecimento_id, dados_realtime, metrica):
+    """Gera recomendações estratégicas acionáveis para o dono"""
+    try:
+        recomendacoes = {
+            "urgentes": [],
+            "oportunidades": [],
+            "atencao": [],
+        }
+        
+        # 1. PRODUTOS EM RISCO DE RUPTURA
+        previsao_demanda = prever_demanda_produtos(estabelecimento_id)
+        produtos_risco = [p for p in previsao_demanda.get("produtos", []) if p.get("risco_ruptura")]
+        
+        if produtos_risco:
+            for produto in produtos_risco[:3]:
+                dias_restantes = (
+                    produto["estoque_atual"] / produto["demanda_diaria_prevista"]
+                    if produto["demanda_diaria_prevista"] > 0 else 999
+                )
+                recomendacoes["urgentes"].append({
+                    "tipo": "ruptura_estoque",
+                    "titulo": f"⚠️ {produto['produto_nome']} acabando",
+                    "descricao": f"Estoque: {produto['estoque_atual']} un. Vai acabar em ~{int(dias_restantes)} dias",
+                    "acao": f"Pedir {int(produto['demanda_diaria_prevista'] * 14)} unidades (2 semanas)",
+                    "prioridade": "alta",
+                })
+        
+        # 2. PRODUTOS PARA PROMOVER (alto estoque + baixa venda)
+        produtos_lentos = identificar_produtos_lentos(estabelecimento_id)
+        for produto in produtos_lentos[:2]:
+            if produto.get("quantidade", 0) > 50:
+                recomendacoes["atencao"].append({
+                    "tipo": "produto_parado",
+                    "titulo": f"💡 Promover {produto['nome']}",
+                    "descricao": f"{produto['quantidade']} unidades paradas no estoque",
+                    "acao": "Criar promoção: 20% OFF ou Leve 2 Pague 1",
+                    "prioridade": "media",
+                })
+        
+        # 3. MARGEM DE LUCRO BAIXA
+        margem = (metrica.lucro_bruto_mes / metrica.total_vendas_mes * 100) if metrica.total_vendas_mes > 0 else 0
+        if margem < 15:
+            recomendacoes["urgentes"].append({
+                "tipo": "margem_baixa",
+                "titulo": f"📉 Margem de lucro crítica ({margem:.1f}%)",
+                "descricao": "Margem abaixo do ideal para supermercado (15-25%)",
+                "acao": "Revisar preços ou negociar com fornecedores",
+                "prioridade": "alta",
+            })
+        
+        # 4. DESPESAS ALTAS
+        if metrica.total_despesas_mes > metrica.total_vendas_mes * 0.7:
+            recomendacoes["atencao"].append({
+                "tipo": "despesas_altas",
+                "titulo": "💸 Despesas acima do recomendado",
+                "descricao": f"Despesas: R$ {metrica.total_despesas_mes:.2f} (>70% das vendas)",
+                "acao": "Revisar custos fixos e despesas operacionais",
+                "prioridade": "media",
+            })
+        
+        # 5. ESTOQUE BAIXO GERAL
+        estoque_baixo = dados_realtime.get("estoque_baixo", [])
+        if len(estoque_baixo) > 10:
+            recomendacoes["urgentes"].append({
+                "tipo": "estoque_critico",
+                "titulo": f"🚨 {len(estoque_baixo)} produtos com estoque baixo",
+                "descricao": "Muitos produtos próximos da ruptura",
+                "acao": "Planejar compra urgente ou ajustar quantidade mínima",
+                "prioridade": "alta",
+            })
+        
+        # 6. PRODUTOS PRÓXIMOS DA VALIDADE
+        validade = dados_realtime.get("validade_proxima", [])
+        if len(validade) > 5:
+            valor_total = sum(
+                (p.get("quantidade", 0) * 10) for p in validade[:5]  # estimativa
+            )
+            recomendacoes["atencao"].append({
+                "tipo": "validade_proxima",
+                "titulo": f"⏰ {len(validade)} produtos próximos da validade",
+                "descricao": f"Risco de perda estimada: R$ {valor_total:.2f}",
+                "acao": "Criar seção de ofertas com desconto progressivo",
+                "prioridade": "media",
+            })
+        
+        # 7. OPORTUNIDADE: HORÁRIO DE PICO
+        vendas_hora = dados_realtime.get("vendas_por_hora", [])
+        if vendas_hora:
+            hora_pico = max(vendas_hora, key=lambda x: x.get("total", 0))
+            recomendacoes["oportunidades"].append({
+                "tipo": "horario_pico",
+                "titulo": f"⏰ Pico de vendas às {hora_pico.get('hora', 0)}h",
+                "descricao": f"R$ {hora_pico.get('total', 0):.2f} neste horário",
+                "acao": "Posicionar produtos de impulso neste horário",
+                "prioridade": "baixa",
+            })
+        
+        # 8. CLIENTES INATIVOS (RFM)
+        segmentacao = segmentar_clientes(estabelecimento_id)
+        clientes_risco = len(segmentacao.get("at_risk", [])) + len(segmentacao.get("lost", []))
+        if clientes_risco > 5:
+            recomendacoes["oportunidades"].append({
+                "tipo": "clientes_inativos",
+                "titulo": f"👥 {clientes_risco} clientes inativos",
+                "descricao": "Clientes que não compram há muito tempo",
+                "acao": "Campanha de reativação: cupom de desconto por SMS/Email",
+                "prioridade": "media",
+            })
+        
+        return recomendacoes
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar recomendações: {str(e)}")
+        return {"urgentes": [], "oportunidades": [], "atencao": []}
+
+
+# ==================== ROTAS ADICIONAIS PARA GRÁFICOS ====================
         return 0
 
     # Cálculo simplificado da confiança
