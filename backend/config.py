@@ -28,6 +28,15 @@ class Config:
 
     # Tamanho máximo de upload (16MB)
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    
+    # ==================== CONFIGURAÇÕES DE EMAIL ====================
+    # Para desenvolvimento, use SMTP do Gmail ou Mailtrap
+    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True') == 'True'
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME', 'seu-email@gmail.com')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', 'sua-senha-app')
+    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@mercadinhosys.com')
 
 
 # Objeto config que o Flask espera
