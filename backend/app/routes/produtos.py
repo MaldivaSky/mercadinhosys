@@ -12,38 +12,42 @@ produtos_bp = Blueprint("produtos", __name__, url_prefix="/api/produtos")
 
 @produtos_bp.route("/search", methods=["GET"])
 def search_products():
-    """Buscar produtos por nome ou código de barras - PARA PDV"""
+    """Buscar produtos por nome, marca, categoria ou código de barras - PARA PDV"""
     query = request.args.get("q", "").strip()
-    limit = request.args.get("limit", 20, type=int)
+    limit = min(request.args.get("limit", 20, type=int), 100)
 
-    if not query:
-        return jsonify([])
+    # Construir query base
+    produtos_query = Produto.query.filter_by(ativo=True)
 
-    produtos = (
-        Produto.query.filter(
+    # Se houver termo de busca, aplicar filtros
+    if query:
+        produtos_query = produtos_query.filter(
             db.or_(
                 Produto.nome.ilike(f"%{query}%"),
+                Produto.marca.ilike(f"%{query}%"),
+                Produto.categoria.ilike(f"%{query}%"),
                 Produto.codigo_barras.ilike(f"%{query}%"),
             )
         )
-        .filter_by(ativo=True)
-        .limit(limit)
-        .all()
-    )
+
+    # Ordenar e limitar
+    produtos = produtos_query.order_by(Produto.nome).limit(limit).all()
 
     resultado = []
     for p in produtos:
         resultado.append(
             {
                 "id": p.id,
-                "name": p.nome,
-                "barcode": p.codigo_barras,
-                "price": float(p.preco_venda),
-                "stock": p.quantidade,
-                "isBulk": p.tipo == "granel",
-                "unit": p.unidade_medida,
-                "fornecedor_id": p.fornecedor_id,
-                "fornecedor_nome": p.fornecedor_rel.nome if p.fornecedor_rel else None,
+                "nome": p.nome,
+                "codigo_barras": p.codigo_barras,
+                "preco_venda": float(p.preco_venda),
+                "preco_custo": float(p.preco_custo) if p.preco_custo else 0,
+                "quantidade_estoque": p.quantidade,
+                "unidade_medida": p.unidade_medida,
+                "categoria": p.categoria,
+                "marca": p.marca,
+                "margem_lucro": float(p.margem_lucro) if p.margem_lucro else 0,
+                "ativo": p.ativo,
             }
         )
 
@@ -61,16 +65,16 @@ def get_by_barcode(codigo):
     return jsonify(
         {
             "id": produto.id,
-            "name": produto.nome,
-            "barcode": produto.codigo_barras,
-            "price": float(produto.preco_venda),
-            "stock": produto.quantidade,
-            "isBulk": produto.tipo == "granel",
-            "unit": produto.unidade_medida,
-            "fornecedor_id": produto.fornecedor_id,
-            "fornecedor_nome": (
-                produto.fornecedor_rel.nome if produto.fornecedor_rel else None
-            ),
+            "nome": produto.nome,
+            "codigo_barras": produto.codigo_barras,
+            "preco_venda": float(produto.preco_venda),
+            "preco_custo": float(produto.preco_custo) if produto.preco_custo else 0,
+            "quantidade_estoque": produto.quantidade,
+            "unidade_medida": produto.unidade_medida,
+            "categoria": produto.categoria,
+            "marca": produto.marca,
+            "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0,
+            "ativo": produto.ativo,
         }
     )
 

@@ -69,6 +69,7 @@ def create_app(config_name="default"):
     from app.routes.funcionarios import funcionarios_bp
     from app.routes.clientes import clientes_bp
     from app.routes.vendas import vendas_bp
+    from app.routes.pdv import pdv_bp  # NOVO - PDV otimizado
     from app.routes.configuracao import config_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.relatorios import relatorios_bp
@@ -82,6 +83,7 @@ def create_app(config_name="default"):
     app.register_blueprint(funcionarios_bp, url_prefix="/api/funcionarios")
     app.register_blueprint(clientes_bp, url_prefix="/api/clientes")
     app.register_blueprint(vendas_bp, url_prefix="/api/vendas")
+    app.register_blueprint(pdv_bp, url_prefix="/api/pdv")  # NOVO - Rotas PDV
     app.register_blueprint(config_bp, url_prefix="/api/config")
     app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
     app.register_blueprint(despesas_bp, url_prefix="/api/despesas")

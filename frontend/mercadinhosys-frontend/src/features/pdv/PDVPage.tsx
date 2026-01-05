@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import {
     ShoppingCart,
     Printer,
@@ -7,11 +8,15 @@ import {
     CreditCard,
     DollarSign,
     Smartphone,
-    TrendingUp
+    TrendingUp,
+    Tag,
+    AlertTriangle
 } from 'lucide-react';
 import ProdutoSearch from './components/ProdutoSearch';
 import CarrinhoItem from './components/CarrinhoItem';
 import ClienteSelect from './components/ClienteSelect';
+import CaixaHeader from './components/CaixaHeader';
+import GerenteAuthModal from './components/GerenteAuthModal';
 import { usePDV } from '../../hooks/usePDV';
 import { Produto } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
@@ -32,7 +37,11 @@ const PDVPage: React.FC = () => {
         setDescontoGeral,
         descontoPercentual,
         setDescontoPercentual,
+        configuracoes,
+        loading,
         subtotal,
+        descontoItens,
+        descontoGeralCalculado,
         descontoTotal,
         total,
         troco,
@@ -40,46 +49,129 @@ const PDVPage: React.FC = () => {
         removerProduto,
         atualizarQuantidade,
         aplicarDescontoItem,
+        validarDescontoPermitido,
         limparCarrinho,
         finalizarVenda,
     } = usePDV();
 
-    const [loading, setLoading] = useState(false);
-    const [mensagem, setMensagem] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
     const [formaPagamentoAberta, setFormaPagamentoAberta] = useState(false);
+    const [mostrarAutorizacao, setMostrarAutorizacao] = useState(false);
+    const [descontoAprovado, setDescontoAprovado] = useState(false);
+
+    // Validar desconto ao alterar
+    useEffect(() => {
+        if (descontoGeral > 0 && !descontoAprovado) {
+            const permitido = validarDescontoPermitido(descontoGeralCalculado);
+            if (!permitido) {
+                toast(
+                    `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`,
+                    {
+                        icon: '⚠️',
+                        duration: 4000,
+                        style: {
+                            background: '#f59e0b',
+                            color: '#fff',
+                        },
+                    }
+                );
+            }
+        }
+    }, [descontoGeral, descontoGeralCalculado, descontoAprovado, validarDescontoPermitido]);
 
     const handleProdutoSelecionado = (produto: Produto) => {
-        if (produto.quantidade_estoque <= 0) {
-            setMensagem({ tipo: 'error', texto: 'Produto sem estoque disponível' });
+        if (!produto.quantidade_estoque || produto.quantidade_estoque <= 0) {
+            toast.error(
+                `${produto.nome} está sem estoque!`,
+                {
+                    icon: '📦',
+                    duration: 5000,
+                    style: {
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                    },
+                }
+            );
             return;
         }
         adicionarProduto(produto);
-        setMensagem({ tipo: 'success', texto: `${produto.nome} adicionado ao carrinho` });
+        toast.success(`${produto.nome} adicionado ao carrinho`, {
+            icon: '✅',
+        });
+    };
+
+    const handleAplicarDesconto = () => {
+        if (descontoGeral > 0) {
+            const permitido = validarDescontoPermitido(descontoGeralCalculado);
+            
+            if (!permitido && !descontoAprovado) {
+                setMostrarAutorizacao(true);
+            }
+        }
+    };
+
+    const handleAutorizacaoAprovada = () => {
+        setDescontoAprovado(true);
+        setMostrarAutorizacao(false);
+        toast.success('Desconto autorizado pelo gerente', {
+            icon: '✅',
+        });
     };
 
     const handleFinalizarVenda = async () => {
         try {
-            setLoading(true);
-            const venda = await finalizarVenda();
+            // Validar desconto antes de finalizar
+            if (descontoGeral > 0) {
+                const permitido = validarDescontoPermitido(descontoGeralCalculado);
+                if (!permitido && !descontoAprovado) {
+                    setMostrarAutorizacao(true);
+                    return;
+                }
+            }
 
-            setMensagem({
-                tipo: 'success',
-                texto: `Venda ${venda.codigo} finalizada com sucesso! Total: ${formatCurrency(venda.total)}`
-            });
+            const venda = await finalizarVenda();
+            console.log('✅ VENDA FINALIZADA:', venda);
+
+            toast.success(
+                `Venda ${venda.codigo} finalizada com sucesso!\nTotal: ${formatCurrency(venda.total)}`,
+                {
+                    icon: '🎉',
+                    duration: 6000,
+                    style: {
+                        background: '#10b981',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                    },
+                }
+            );
 
             // Limpar carrinho após sucesso
             setTimeout(() => {
                 limparCarrinho();
-                setMensagem(null);
-            }, 3000);
+                setDescontoAprovado(false);
+            }, 1000);
 
         } catch (error: any) {
-            setMensagem({
-                tipo: 'error',
-                texto: error.message || 'Erro ao finalizar venda'
-            });
-        } finally {
-            setLoading(false);
+            console.error('❌ ERRO AO FINALIZAR:', error);
+            toast.error(
+                error.response?.data?.error || error.message || 'Erro ao finalizar venda',
+                {
+                    icon: '❌',
+                    duration: 6000,
+                }
+            );
+        }
+    };
+
+    const handleLimparCarrinho = () => {
+        if (carrinho.length > 0) {
+            if (confirm('Tem certeza que deseja cancelar esta venda?')) {
+                limparCarrinho();
+                setDescontoAprovado(false);
+                toast.success('Venda cancelada', {
+                    icon: '🗑️',
+                });
+            }
         }
     };
 
@@ -100,55 +192,11 @@ const PDVPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
             <div className="max-w-7xl mx-auto">
-                {/* Cabeçalho */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-blue-500 rounded-lg">
-                            <ShoppingCart className="w-8 h-8 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-                                Ponto de Venda (PDV)
-                            </h1>
-                            <p className="text-gray-600 dark:text-gray-400">
-                                Sistema de vendas integrado
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center space-x-4">
-                        <button
-                            onClick={limparCarrinho}
-                            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center space-x-2"
-                            disabled={carrinho.length === 0}
-                        >
-                            <X className="w-5 h-5" />
-                            <span>Cancelar Venda</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Mensagens */}
-                {mensagem && (
-                    <div className={`mb-6 p-4 rounded-lg ${mensagem.tipo === 'success'
-                            ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'
-                            : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'
-                        }`}>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                                {mensagem.tipo === 'success' ? (
-                                    <Check className="w-5 h-5" />
-                                ) : (
-                                    <X className="w-5 h-5" />
-                                )}
-                                <span>{mensagem.texto}</span>
-                            </div>
-                            <button onClick={() => setMensagem(null)}>
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                )}
+                {/* Header com informações do caixa */}
+                <CaixaHeader
+                    funcionarioNome={configuracoes?.funcionario.nome}
+                    funcionarioRole={configuracoes?.funcionario.role}
+                />
 
                 {/* Layout Principal */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -231,12 +279,21 @@ const PDVPage: React.FC = () => {
                             </h2>
 
                             <div className="space-y-3">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
+                                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                                    <span>Subtotal</span>
                                     <span className="font-medium text-gray-800 dark:text-white">
                                         {formatCurrency(subtotal)}
                                     </span>
                                 </div>
+
+                                {descontoItens > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-yellow-600 dark:text-yellow-400">Desconto em itens</span>
+                                        <span className="text-yellow-600 dark:text-yellow-400">
+                                            -{formatCurrency(descontoItens)}
+                                        </span>
+                                    </div>
+                                )}
 
                                 <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
                                     <div className="flex items-center justify-between mb-2">
@@ -244,7 +301,11 @@ const PDVPage: React.FC = () => {
                                         <div className="flex items-center space-x-2">
                                             <button
                                                 onClick={() => setDescontoPercentual(!descontoPercentual)}
-                                                className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded"
+                                                className={`px-3 py-1 text-xs rounded transition ${
+                                                    descontoPercentual
+                                                        ? 'bg-blue-500 text-white'
+                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                }`}
                                             >
                                                 {descontoPercentual ? '%' : 'R$'}
                                             </button>
@@ -252,29 +313,57 @@ const PDVPage: React.FC = () => {
                                                 type="number"
                                                 value={descontoGeral}
                                                 onChange={(e) => setDescontoGeral(parseFloat(e.target.value) || 0)}
-                                                className="w-24 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-right"
+                                                onBlur={handleAplicarDesconto}
+                                                className="w-24 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-right bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                                                 step="0.01"
                                                 min="0"
+                                                max={descontoPercentual ? "100" : subtotal.toString()}
                                             />
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="text-red-500">
-                                            -{formatCurrency(descontoTotal)}
-                                        </span>
-                                    </div>
+                                    {descontoGeralCalculado > 0 && (
+                                        <div className="text-right">
+                                            <span className="text-sm text-red-500">
+                                                -{formatCurrency(descontoGeralCalculado)}
+                                            </span>
+                                            {descontoAprovado && (
+                                                <span className="ml-2 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                                                    ✓ Aprovado
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
+                                {descontoTotal > 0 && (
+                                    <div className="flex justify-between text-sm font-medium text-red-600 dark:text-red-400">
+                                        <span>Total em Descontos</span>
+                                        <span>-{formatCurrency(descontoTotal)}</span>
+                                    </div>
+                                )}
+
                                 <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
-                                    <div className="flex justify-between">
+                                    <div className="flex justify-between items-center">
                                         <span className="text-lg font-semibold text-gray-800 dark:text-white">
-                                            Total
+                                            Total a Pagar
                                         </span>
-                                        <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                        <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                                             {formatCurrency(total)}
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Indicador de permissões */}
+                                {configuracoes && (
+                                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                        <div className="flex items-center space-x-2 text-xs text-blue-700 dark:text-blue-300">
+                                            <Tag className="w-4 h-4" />
+                                            <span>
+                                                Limite de desconto: {configuracoes.funcionario.limite_desconto}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -286,7 +375,7 @@ const PDVPage: React.FC = () => {
                                 </h2>
                                 <button
                                     onClick={() => setFormaPagamentoAberta(!formaPagamentoAberta)}
-                                    className="text-sm text-blue-500 hover:text-blue-600"
+                                    className="text-sm text-blue-500 hover:text-blue-600 font-medium"
                                 >
                                     {formaPagamentoAberta ? 'Fechar' : 'Alterar'}
                                 </button>
@@ -300,18 +389,24 @@ const PDVPage: React.FC = () => {
                                             onClick={() => {
                                                 setFormaPagamentoSelecionada(forma.tipo);
                                                 setFormaPagamentoAberta(false);
+                                                if (!forma.permite_troco) {
+                                                    setValorRecebido(0);
+                                                }
                                             }}
-                                            className={`w-full p-3 rounded-lg flex items-center justify-between ${formaPagamentoSelecionada === forma.tipo
-                                                    ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-500'
-                                                    : 'border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                                }`}
+                                            className={`w-full p-4 rounded-lg flex items-center justify-between transition ${
+                                                formaPagamentoSelecionada === forma.tipo
+                                                    ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
+                                                    : 'border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                            }`}
                                         >
                                             <div className="flex items-center space-x-3">
                                                 {renderIconPagamento(forma.tipo)}
-                                                <span className="font-medium">{forma.label}</span>
+                                                <span className="font-medium text-gray-800 dark:text-white">
+                                                    {forma.label}
+                                                </span>
                                             </div>
                                             {forma.taxa > 0 && (
-                                                <span className="text-sm text-gray-500">
+                                                <span className="text-sm text-gray-500 dark:text-gray-400">
                                                     Taxa: {forma.taxa}%
                                                 </span>
                                             )}
@@ -319,16 +414,26 @@ const PDVPage: React.FC = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-3">
-                                            {renderIconPagamento(formaPagamentoSelecionada)}
-                                            <span className="font-medium">
-                                                {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.label || formaPagamentoSelecionada}
-                                            </span>
+                                            <div className="p-2 bg-blue-500 rounded-lg">
+                                                {renderIconPagamento(formaPagamentoSelecionada)}
+                                                <span className="sr-only">Ícone</span>
+                                            </div>
+                                            <div>
+                                                <span className="font-semibold text-gray-800 dark:text-white block">
+                                                    {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.label || formaPagamentoSelecionada}
+                                                </span>
+                                                {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
+                                                    <span className="text-xs text-blue-600 dark:text-blue-400">
+                                                        Aceita troco
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.taxa > 0 && (
-                                            <span className="text-sm text-gray-500">
+                                            <span className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">
                                                 Taxa: {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.taxa}%
                                             </span>
                                         )}
@@ -336,24 +441,38 @@ const PDVPage: React.FC = () => {
                                 </div>
                             )}
 
-                            {formaPagamentoSelecionada === 'dinheiro' && (
-                                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                            {/* Campo de Valor Recebido para Dinheiro */}
+                            {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
+                                <div className="mt-4 p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Valor Recebido
+                                        💵 Valor Recebido
                                     </label>
                                     <input
                                         type="number"
                                         value={valorRecebido}
                                         onChange={(e) => setValorRecebido(parseFloat(e.target.value) || 0)}
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full px-4 py-3 border-2 border-yellow-300 dark:border-yellow-700 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent font-bold text-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                                         step="0.01"
                                         min="0"
+                                        placeholder="0.00"
                                     />
                                     {troco > 0 && (
-                                        <div className="mt-2 text-center">
-                                            <span className="text-sm text-gray-500">Troco:</span>
-                                            <span className="ml-2 font-bold text-green-600 dark:text-green-400">
-                                                {formatCurrency(troco)}
+                                        <div className="mt-3 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-300 dark:border-green-700">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                                                    Troco a devolver:
+                                                </span>
+                                                <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                                                    {formatCurrency(troco)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {valorRecebido > 0 && valorRecebido < total && (
+                                        <div className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
+                                            <AlertTriangle className="w-4 h-4" />
+                                            <span>
+                                                Faltam {formatCurrency(total - valorRecebido)}
                                             </span>
                                         </div>
                                     )}
@@ -381,14 +500,15 @@ const PDVPage: React.FC = () => {
                                 <button
                                     onClick={handleFinalizarVenda}
                                     disabled={carrinho.length === 0 || loading}
-                                    className={`w-full py-4 rounded-lg font-semibold flex items-center justify-center space-x-3 ${carrinho.length === 0 || loading
+                                    className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${
+                                        carrinho.length === 0 || loading
                                             ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                            : 'bg-green-500 hover:bg-green-600 text-white'
-                                        }`}
+                                            : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                                    }`}
                                 >
                                     {loading ? (
                                         <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
                                             <span>Processando...</span>
                                         </>
                                     ) : (
@@ -401,12 +521,13 @@ const PDVPage: React.FC = () => {
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
-                                        onClick={limparCarrinho}
+                                        onClick={handleLimparCarrinho}
                                         disabled={carrinho.length === 0}
-                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 ${carrinho.length === 0
+                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
+                                            carrinho.length === 0
                                                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-red-500 hover:bg-red-600 text-white'
-                                            }`}
+                                                : 'bg-red-500 hover:bg-red-600 text-white shadow'
+                                        }`}
                                     >
                                         <X className="w-5 h-5" />
                                         <span>Cancelar</span>
@@ -414,23 +535,49 @@ const PDVPage: React.FC = () => {
 
                                     <button
                                         onClick={() => {
-                                            // TODO: Implementar impressão
                                             setMensagem({ tipo: 'success', texto: 'Função de impressão em desenvolvimento' });
                                         }}
                                         disabled={carrinho.length === 0}
-                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 ${carrinho.length === 0
+                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
+                                            carrinho.length === 0
                                                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 hover:bg-blue-600 text-white'
-                                            }`}
+                                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow'
+                                        }`}
                                     >
                                         <Printer className="w-5 h-5" />
                                         <span>Imprimir</span>
                                     </button>
                                 </div>
+
+                                {/* Atalhos de Teclado */}
+                                <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                    <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                                        ⌨️ Atalhos de Teclado
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <div>F2 - Buscar Produto</div>
+                                        <div>F9 - Finalizar Venda</div>
+                                        <div>F4 - Cliente</div>
+                                        <div>ESC - Cancelar</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                {/* Modal de Autorização de Gerente */}
+                {mostrarAutorizacao && (
+                    <GerenteAuthModal
+                        acao="desconto"
+                        valorDesconto={descontoGeralCalculado}
+                        onAutorizado={handleAutorizacaoAprovada}
+                        onCancelar={() => {
+                            setMostrarAutorizacao(false);
+                            setDescontoGeral(0);
+                        }}
+                    />
+                )}
             </div>
         </div>
     );
