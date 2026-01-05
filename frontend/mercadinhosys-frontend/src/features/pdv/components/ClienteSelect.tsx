@@ -15,24 +15,20 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
     const [mostrarBusca, setMostrarBusca] = useState(false);
 
     useEffect(() => {
-        if (!query.trim()) {
-            setResultados([]);
-            return;
-        }
-
         const buscarClientes = async () => {
             setLoading(true);
             try {
                 const clientes = await pdvService.buscarClientes(query);
-                setResultados(clientes.slice(0, 5));
+                setResultados(clientes.slice(0, 10));
             } catch (error) {
                 console.error('Erro ao buscar clientes:', error);
+                setResultados([]);
             } finally {
                 setLoading(false);
             }
         };
 
-        const debounce = setTimeout(buscarClientes, 300);
+        const debounce = setTimeout(buscarClientes, 200);
         return () => clearTimeout(debounce);
     }, [query]);
 

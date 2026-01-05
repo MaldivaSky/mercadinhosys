@@ -1309,3 +1309,339 @@ def cancelar_venda(venda_id):
     except Exception as e:
         print(f"❌ Erro no processo de cancelamento: {str(e)}")
         return jsonify({"error": f"Erro no processo de cancelamento: {str(e)}"}), 500
+
+# ADICIONE ESTAS ROTAS NO FINAL DO SEU vendas.py
+
+# ==================== ROTAS PARA PDV ATIVO (CARRINHO EM ANDAMENTO) ====================
+
+
+@vendas_bp.route("/pdv/ativo", methods=["POST"])
+def iniciar_venda_pdv():
+    """Inicia uma nova venda ativa no PDV (carrinho em andamento)"""
+    try:
+        data = request.get_json()
+        funcionario_id = data.get("funcionario_id")
+        cliente_id = data.get("cliente_id")
+
+        if not funcionario_id:
+            return jsonify({"error": "Funcionário é obrigatório"}), 400
+
+        # Gerar código temporário
+        codigo_temp = f"PDV-{datetime.now().strftime('%H%M%S')}-{funcionario_id}"
+
+        # Criar venda com status "em_andamento"
+        venda = Venda(
+            codigo=codigo_temp,
+            cliente_id=cliente_id,
+            funcionario_id=funcionario_id,
+            subtotal=0,
+            desconto=0,
+            total=0,
+            forma_pagamento="pendente",
+            valor_recebido=0,
+            troco=0,
+            status="em_andamento",
+            quantidade_itens=0,
+        )
+
+        db.session.add(venda)
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "venda_id": venda.id,
+                    "codigo_temp": codigo_temp,
+                    "message": "Venda iniciada no PDV",
+                }
+            ),
+            201,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erro ao iniciar venda PDV: {str(e)}")
+        return jsonify({"error": f"Erro ao iniciar venda: {str(e)}"}), 500
+
+
+@vendas_bp.route("/pdv/<int:venda_id>/adicionar-item", methods=["POST"])
+def adicionar_item_pdv(venda_id):
+    """Adiciona um item ao carrinho de uma venda em andamento"""
+    try:
+        data = request.get_json()
+        produto_id = data.get("produto_id")
+        quantidade = data.get("quantidade", 1)
+
+        if not produto_id:
+            return jsonify({"error": "Produto é obrigatório"}), 400
+
+        # Buscar venda
+        venda = Venda.query.get(venda_id)
+        if not venda or venda.status != "em_andamento":
+            return jsonify({"error": "Venda não encontrada ou não está ativa"}), 404
+
+        # Buscar produto
+        produto = Produto.query.get(produto_id)
+        if not produto:
+            return jsonify({"error": "Produto não encontrado"}), 404
+
+        if produto.quantidade < quantidade:
+            return (
+                jsonify(
+                    {"error": f"Estoque insuficiente. Disponível: {produto.quantidade}"}
+                ),
+                400,
+            )
+
+        # Verificar se item já existe no carrinho
+        item_existente = VendaItem.query.filter_by(
+            venda_id=venda_id, produto_id=produto_id
+        ).first()
+
+        if item_existente:
+            # Atualizar quantidade
+            nova_quantidade = item_existente.quantidade + quantidade
+            item_existente.quantidade = nova_quantidade
+            item_existente.total_item = nova_quantidade * item_existente.preco_unitario
+        else:
+            # Criar novo item
+            venda_item = VendaItem(
+                venda_id=venda_id,
+                produto_id=produto_id,
+                produto_nome=produto.nome,
+                produto_codigo=produto.codigo_barras,
+                produto_unidade=produto.unidade_medida,
+                quantidade=quantidade,
+                preco_unitario=produto.preco_venda,
+                total_item=quantidade * produto.preco_venda,
+                desconto=0,
+            )
+            db.session.add(venda_item)
+
+        # Recalcular totais da venda
+        venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
+        venda.subtotal = sum(
+            item.preco_unitario * item.quantidade for item in venda.itens
+        )
+        venda.total = venda.subtotal - venda.desconto
+        venda.quantidade_itens = sum(item.quantidade for item in venda.itens)
+
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "subtotal": venda.subtotal,
+                    "total": venda.total,
+                    "quantidade_itens": venda.quantidade_itens,
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erro ao adicionar item: {str(e)}")
+        return jsonify({"error": f"Erro ao adicionar item: {str(e)}"}), 500
+
+
+@vendas_bp.route("/pdv/<int:venda_id>/remover-item/<int:item_id>", methods=["DELETE"])
+def remover_item_pdv(venda_id, item_id):
+    """Remove um item do carrinho de uma venda em andamento"""
+    try:
+        # Buscar item
+        item = VendaItem.query.filter_by(id=item_id, venda_id=venda_id).first()
+        if not item:
+            return jsonify({"error": "Item não encontrado"}), 404
+
+        db.session.delete(item)
+
+        # Recalcular totais da venda
+        venda = Venda.query.get(venda_id)
+        venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
+        venda.subtotal = sum(
+            item.preco_unitario * item.quantidade for item in venda.itens
+        )
+        venda.total = venda.subtotal - venda.desconto
+        venda.quantidade_itens = sum(item.quantidade for item in venda.itens)
+
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Item removido do carrinho",
+                    "subtotal": venda.subtotal,
+                    "total": venda.total,
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erro ao remover item: {str(e)}")
+        return jsonify({"error": f"Erro ao remover item: {str(e)}"}), 500
+
+
+@vendas_bp.route("/pdv/<int:venda_id>/atualizar-quantidade", methods=["PUT"])
+def atualizar_quantidade_pdv(venda_id):
+    """Atualiza a quantidade de um item no carrinho"""
+    try:
+        data = request.get_json()
+        item_id = data.get("item_id")
+        nova_quantidade = data.get("quantidade", 1)
+
+        if nova_quantidade <= 0:
+            return jsonify({"error": "Quantidade deve ser maior que 0"}), 400
+
+        # Buscar item
+        item = VendaItem.query.filter_by(id=item_id, venda_id=venda_id).first()
+        if not item:
+            return jsonify({"error": "Item não encontrado"}), 404
+
+        # Verificar estoque
+        produto = Produto.query.get(item.produto_id)
+        if produto.quantidade < nova_quantidade:
+            return (
+                jsonify(
+                    {"error": f"Estoque insuficiente. Disponível: {produto.quantidade}"}
+                ),
+                400,
+            )
+
+        # Atualizar quantidade
+        item.quantidade = nova_quantidade
+        item.total_item = nova_quantidade * item.preco_unitario
+
+        # Recalcular totais da venda
+        venda = Venda.query.get(venda_id)
+        venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
+        venda.subtotal = sum(
+            item.preco_unitario * item.quantidade for item in venda.itens
+        )
+        venda.total = venda.subtotal - venda.desconto
+        venda.quantidade_itens = sum(item.quantidade for item in venda.itens)
+
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "subtotal": venda.subtotal,
+                    "total": venda.total,
+                    "quantidade_itens": venda.quantidade_itens,
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Erro ao atualizar quantidade: {str(e)}")
+        return jsonify({"error": f"Erro ao atualizar quantidade: {str(e)}"}), 500
+
+
+@vendas_bp.route("/pdv/configuracoes", methods=["GET"])
+def obter_configuracoes_pdv():
+    """Retorna configurações específicas para o PDV"""
+    try:
+        # Aqui você buscaria as configurações do estabelecimento
+        # Por enquanto, retornamos configurações padrão
+
+        return (
+            jsonify(
+                {
+                    "formas_pagamento": [
+                        {"tipo": "dinheiro", "label": "Dinheiro", "taxa": 0},
+                        {
+                            "tipo": "cartao_credito",
+                            "label": "Cartão Crédito",
+                            "taxa": 2.5,
+                        },
+                        {
+                            "tipo": "cartao_debito",
+                            "label": "Cartão Débito",
+                            "taxa": 1.5,
+                        },
+                        {"tipo": "pix", "label": "PIX", "taxa": 0},
+                    ],
+                    "permitir_venda_sem_estoque": False,
+                    "desconto_maximo_percentual": 10.0,
+                    "arredondamento_valores": 0.05,
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        print(f"❌ Erro ao obter configurações PDV: {str(e)}")
+        return jsonify({"error": f"Erro ao obter configurações: {str(e)}"}), 500
+
+
+@vendas_bp.route("/pdv/calcular-troco", methods=["POST"])
+def calcular_troco():
+    """Calcula o troco com base no total e valor recebido"""
+    try:
+        data = request.get_json()
+        total = data.get("total", 0)
+        valor_recebido = data.get("valor_recebido", 0)
+
+        if valor_recebido < total:
+            return (
+                jsonify(
+                    {
+                        "error": "Valor recebido é menor que o total",
+                        "troco": 0,
+                        "faltante": total - valor_recebido,
+                    }
+                ),
+                400,
+            )
+
+        troco = valor_recebido - total
+
+        return (
+            jsonify({"troco": troco, "valor_recebido": valor_recebido, "total": total}),
+            200,
+        )
+
+    except Exception as e:
+        print(f"❌ Erro ao calcular troco: {str(e)}")
+        return jsonify({"error": f"Erro ao calcular troco: {str(e)}"}), 500
+
+
+@vendas_bp.route("/pdv/carrinhos-ativos", methods=["GET"])
+def listar_carrinhos_ativos():
+    """Lista todas as vendas em andamento (carrinhos ativos)"""
+    try:
+        # Buscar vendas em andamento
+        vendas_ativas = Venda.query.filter_by(status="em_andamento").all()
+
+        return (
+            jsonify(
+                {
+                    "carrinhos_ativos": [
+                        {
+                            "venda_id": v.id,
+                            "codigo_temp": v.codigo,
+                            "funcionario_id": v.funcionario_id,
+                            "cliente_id": v.cliente_id,
+                            "total": float(v.total),
+                            "quantidade_itens": v.quantidade_itens,
+                            "iniciada_em": v.created_at.isoformat(),
+                        }
+                        for v in vendas_ativas
+                    ]
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        print(f"❌ Erro ao listar carrinhos ativos: {str(e)}")
+        return jsonify({"error": f"Erro ao listar carrinhos ativos: {str(e)}"}), 500
