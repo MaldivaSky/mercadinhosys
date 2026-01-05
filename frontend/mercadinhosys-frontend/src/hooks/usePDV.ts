@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Produto, Cliente } from '../types';
-import { pdvService } from '../features/pdv/pdvService';
+import { pdvService, ConfiguracoesPDV } from '../features/pdv/pdvService';
 
 interface ItemCarrinho {
     produto: Produto;
     quantidade: number;
     precoUnitario: number;
     desconto: number;
+    descontoPercentual: boolean;
     total: number;
 }
 
@@ -14,12 +15,11 @@ interface FormaPagamento {
     tipo: string;
     label: string;
     taxa: number;
-    ativo: boolean;
-    exigeTroco?: boolean;
-    parcelas?: number;
+    permite_troco: boolean;
 }
 
 export const usePDV = () => {
+    // Estado do PDV
     const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
     const [cliente, setCliente] = useState<Cliente | null>(null);
     const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
@@ -28,36 +28,42 @@ export const usePDV = () => {
     const [observacoes, setObservacoes] = useState<string>('');
     const [descontoGeral, setDescontoGeral] = useState<number>(0);
     const [descontoPercentual, setDescontoPercentual] = useState<boolean>(false);
+    
+    // Configurações e permissões
+    const [configuracoes, setConfiguracoes] = useState<ConfiguracoesPDV | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const carregarFormasPagamento = async () => {
-        try {
-            const formas = await pdvService.getFormasPagamento();
-            const formatadas = Object.entries(formas || {}).map(([tipo, config]: [string, any]) => ({
-                tipo,
-                label: tipo.replace('_', ' ').toUpperCase(),
-                taxa: config.taxa || 0,
-                ativo: config.ativo !== false,
-                exigeTroco: config.exige_troco,
-                parcelas: config.parcelas,
-            }));
-            setFormasPagamento(formatadas.filter(f => f.ativo));
-        } catch (error) {
-            console.error('Erro ao carregar formas de pagamento:', error);
-        }
-    };
-
-    // Carregar formas de pagamento
+    // Carregar configurações do PDV
     useEffect(() => {
-        carregarFormasPagamento();
+        const carregarConfiguracoes = async () => {
+            try {
+                const config = await pdvService.getConfiguracoes();
+                setConfiguracoes(config);
+                setFormasPagamento(config.formas_pagamento);
+            } catch (error) {
+                console.error('Erro ao carregar configurações do PDV:', error);
+            }
+        };
+
+        carregarConfiguracoes();
     }, []);
 
-    // Cálculos
-    const subtotal = carrinho.reduce((sum, item) => sum + item.total, 0);
-    const descontoTotal = descontoPercentual
-        ? subtotal * (descontoGeral / 100)
+    // Cálculos em tempo real
+    const subtotal = carrinho.reduce((sum, item) => {
+        return sum + (item.precoUnitario * item.quantidade);
+    }, 0);
+
+    const descontoItens = carrinho.reduce((sum, item) => sum + item.desconto, 0);
+
+    const descontoGeralCalculado = descontoPercentual
+        ? (subtotal - descontoItens) * (descontoGeral / 100)
         : descontoGeral;
-    const total = subtotal - descontoTotal;
-    const troco = valorRecebido > total ? valorRecebido - total : 0;
+
+    const descontoTotal = descontoItens + descontoGeralCalculado;
+    const total = Math.max(0, subtotal - descontoTotal);
+    
+    const formaPagamento = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
+    const troco = (formaPagamento?.permite_troco && valorRecebido > total) ? valorRecebido - total : 0;
 
     // Adicionar produto ao carrinho
     const adicionarProduto = useCallback((produto: Produto, quantidade: number = 1) => {
@@ -80,6 +86,7 @@ export const usePDV = () => {
                     quantidade,
                     precoUnitario: produto.preco_venda,
                     desconto: 0,
+                    descontoPercentual: false,
                     total: produto.preco_venda * quantidade,
                 };
                 return [...prev, novoItem];
@@ -124,6 +131,7 @@ export const usePDV = () => {
                     return {
                         ...item,
                         desconto: descontoValor,
+                        descontoPercentual: percentual,
                         total: item.precoUnitario * item.quantidade - descontoValor,
                     };
                 }
@@ -132,13 +140,30 @@ export const usePDV = () => {
         );
     }, []);
 
+    // Validar permissão de desconto
+    const validarDescontoPermitido = useCallback((valorDesconto: number): boolean => {
+        if (!configuracoes) return false;
+
+        const percentualDesconto = (valorDesconto / subtotal) * 100;
+        const limiteDesconto = configuracoes.funcionario.limite_desconto || 0;
+
+        // Se exceder o limite, precisa de autorização
+        if (percentualDesconto > limiteDesconto) {
+            return false;
+        }
+
+        return true;
+    }, [configuracoes, subtotal]);
+
     // Limpar carrinho
     const limparCarrinho = useCallback(() => {
         setCarrinho([]);
         setCliente(null);
         setValorRecebido(0);
         setDescontoGeral(0);
+        setDescontoPercentual(false);
         setObservacoes('');
+        setFormaPagamentoSelecionada('dinheiro');
     }, []);
 
     // Finalizar venda
@@ -147,32 +172,43 @@ export const usePDV = () => {
             throw new Error('Adicione produtos ao carrinho');
         }
 
-        if (formaPagamentoSelecionada === 'dinheiro' && valorRecebido < total) {
-            throw new Error('Valor recebido insuficiente');
+        if (!configuracoes?.permite_venda_sem_cliente && !cliente) {
+            throw new Error('Selecione um cliente para continuar');
         }
 
-        const vendaData = {
-            cliente_id: cliente?.id,
-            forma_pagamento: formaPagamentoSelecionada,
-            subtotal,
-            desconto: descontoTotal,
-            total,
-            valor_recebido: formaPagamentoSelecionada === 'dinheiro' ? valorRecebido : total,
-            troco,
-            observacoes,
-            itens: carrinho.map(item => ({
-                produto_id: item.produto.id,
-                quantidade: item.quantidade,
-                preco_unitario: item.precoUnitario,
-                desconto: item.desconto,
-                total_item: item.total,
-            })),
-        };
+        const formaPg = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
+        if (formaPg?.permite_troco && valorRecebido < total) {
+            throw new Error(`Valor recebido insuficiente. Faltam R$ ${(total - valorRecebido).toFixed(2)}`);
+        }
 
-        return await pdvService.criarVenda(vendaData);
+        setLoading(true);
+
+        try {
+            const vendaData = {
+                items: carrinho.map(item => ({
+                    id: item.produto.id,
+                    quantity: item.quantidade,
+                    discount: item.desconto,
+                })),
+                subtotal,
+                desconto: descontoTotal,
+                total,
+                paymentMethod: formaPagamentoSelecionada,
+                valor_recebido: formaPg?.permite_troco ? valorRecebido : total,
+                troco,
+                cliente_id: cliente?.id,
+                observacoes: observacoes.trim() || undefined,
+            };
+
+            const venda = await pdvService.finalizarVenda(vendaData);
+            return venda;
+        } finally {
+            setLoading(false);
+        }
     };
 
     return {
+        // Estado
         carrinho,
         cliente,
         setCliente,
@@ -187,14 +223,23 @@ export const usePDV = () => {
         setDescontoGeral,
         descontoPercentual,
         setDescontoPercentual,
+        configuracoes,
+        loading,
+
+        // Cálculos
         subtotal,
+        descontoItens,
+        descontoGeralCalculado,
         descontoTotal,
         total,
         troco,
+
+        // Ações
         adicionarProduto,
         removerProduto,
         atualizarQuantidade,
         aplicarDescontoItem,
+        validarDescontoPermitido,
         limparCarrinho,
         finalizarVenda,
     };

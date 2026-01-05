@@ -4,6 +4,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 import DebugRoutes from './components/DebugRoutes';
 import { ThemeProvider } from './theme/ThemeProvider';
+import { Toaster } from 'react-hot-toast';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -16,6 +17,30 @@ const App: React.FC = () => {
       <Router>
         <DebugRoutes />
         <AppRoutes />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: '500',
+            },
+            success: {
+              duration: 5000,
+              style: {
+                background: '#10b981',
+              },
+            },
+            error: {
+              duration: 6000,
+              style: {
+                background: '#ef4444',
+              },
+            },
+          }}
+        />
       </Router>
     </ThemeProvider>
   );

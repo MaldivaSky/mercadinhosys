@@ -67,7 +67,7 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                                         type="number"
                                         value={quantidade}
                                         onChange={(e) => onAtualizarQuantidade(parseInt(e.target.value) || 1)}
-                                        className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center"
+                                        className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                                         min="1"
                                     />
 
@@ -119,7 +119,7 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                                     value={valorDesconto}
                                     onChange={(e) => setValorDesconto(e.target.value)}
                                     placeholder={tipoDesconto === 'valor' ? 'Valor' : 'Percentual'}
-                                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded"
+                                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                                     step="0.01"
                                 />
                                 <button

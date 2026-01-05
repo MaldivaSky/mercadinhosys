@@ -997,10 +997,11 @@ def compras_cliente(id):
         return jsonify({"error": f"Erro ao listar compras: {str(e)}"}), 500
 
 
+@clientes_bp.route("/search", methods=["GET"])
 @clientes_bp.route("/buscar", methods=["GET"])
 def buscar_cliente():
     """
-    Buscar cliente por CPF ou nome com filtros avançados
+    Buscar cliente por CPF, nome, telefone (para PDV)
 
     Parâmetros:
     - q: Termo de busca (nome, CPF, telefone, email)
@@ -1014,21 +1015,15 @@ def buscar_cliente():
         apenas_ativos = request.args.get("apenas_ativos", "true").lower() == "true"
         com_compras = request.args.get("com_compras", "false").lower() == "true"
 
-        if not query_term:
-            return jsonify([])
-
         # Construir query base
         busca_query = Cliente.query
 
-        if apenas_ativos:
-            busca_query = busca_query.filter(Cliente.ativo == True)
-
-        # Aplicar filtro de busca
+        # Se houver termo de busca, aplicar filtros
         if query_term:
             busca_query = busca_query.filter(
                 db.or_(
                     Cliente.nome.ilike(f"%{query_term}%"),
-                    Cliente.cpf.ilike(f"%{query_term}%"),
+                    Cliente.cpf_cnpj.ilike(f"%{query_term}%"),
                     Cliente.telefone.ilike(f"%{query_term}%"),
                     Cliente.email.ilike(f"%{query_term}%"),
                 )
@@ -1045,70 +1040,22 @@ def buscar_cliente():
 
         resultado = []
         for cliente in clientes:
-            # Calcular estatísticas básicas
-            total_compras = Venda.query.filter_by(cliente_id=cliente.id).count()
-            total_gasto = (
-                db.session.query(db.func.sum(Venda.total))
-                .filter_by(cliente_id=cliente.id)
-                .scalar()
-                or 0
-            )
-
-            # Última compra
-            ultima_compra = (
-                Venda.query.filter_by(cliente_id=cliente.id)
-                .order_by(Venda.created_at.desc())
-                .first()
-            )
-
             resultado.append(
                 {
                     "id": cliente.id,
                     "nome": cliente.nome,
-                    "cpf": cliente.cpf,
-                    "telefone": cliente.telefone,
-                    "celular": cliente.celular,
-                    "email": cliente.email,
-                    "limite_credito": float(cliente.limite_credito),
-                    "limite_disponivel": float(cliente.limite_credito - total_gasto),
-                    "ativo": cliente.ativo,
-                    "total_compras": total_compras,
-                    "total_gasto": float(total_gasto),
-                    "ultima_compra": (
-                        ultima_compra.created_at.isoformat() if ultima_compra else None
-                    ),
-                    "dias_desde_ultima_compra": (
-                        (datetime.utcnow() - ultima_compra.created_at).days
-                        if ultima_compra
-                        else None
-                    ),
+                    "cpf_cnpj": cliente.cpf_cnpj or "",
+                    "telefone": cliente.telefone or "",
+                    "email": cliente.email or "",
+                    "total_compras": float(cliente.total_compras or 0),
                 }
             )
 
-        # Ordenar resultados por relevância
-        # 1. Clientes com compras recentes primeiro
-        # 2. Clientes com mais compras
-        # 3. Ordem alfabética
-        resultado.sort(
-            key=lambda x: (
-                0 if x["ultima_compra"] else 1,  # Com compras primeiro
-                -x["total_compras"],  # Mais compras primeiro
-                x["nome"].lower(),  # Ordem alfabética
-            )
-        )
+        # Ordenar por nome
+        resultado.sort(key=lambda x: x["nome"].lower())
 
-        return jsonify(
-            {
-                "resultados": resultado[:limite],
-                "total_encontrado": len(resultado),
-                "parametros_busca": {
-                    "termo": query_term,
-                    "limite": limite,
-                    "apenas_ativos": apenas_ativos,
-                    "com_compras": com_compras,
-                },
-            }
-        )
+        # Retornar array direto (compatível com frontend)
+        return jsonify(resultado[:limite])
 
     except Exception as e:
         print(f"Erro ao buscar clientes: {str(e)}")
