@@ -10,7 +10,8 @@ import {
     Smartphone,
     TrendingUp,
     Tag,
-    AlertTriangle
+    AlertTriangle,
+    Mail
 } from 'lucide-react';
 import ProdutoSearch from './components/ProdutoSearch';
 import CarrinhoItem from './components/CarrinhoItem';
@@ -20,6 +21,7 @@ import GerenteAuthModal from './components/GerenteAuthModal';
 import { usePDV } from '../../hooks/usePDV';
 import { Produto } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { pdvService } from './pdvService';
 
 const PDVPage: React.FC = () => {
     const {
@@ -57,6 +59,8 @@ const PDVPage: React.FC = () => {
     const [formaPagamentoAberta, setFormaPagamentoAberta] = useState(false);
     const [mostrarAutorizacao, setMostrarAutorizacao] = useState(false);
     const [descontoAprovado, setDescontoAprovado] = useState(false);
+    const [ultimaVendaId, setUltimaVendaId] = useState<number | null>(null);
+    const [enviandoEmail, setEnviandoEmail] = useState(false);
 
     // Validar desconto ao alterar
     useEffect(() => {
@@ -130,7 +134,8 @@ const PDVPage: React.FC = () => {
             }
 
             const venda = await finalizarVenda();
-            console.log('✅ VENDA FINALIZADA:', venda);
+            // Salvar ID da venda para enviar email depois
+            setUltimaVendaId(venda.id);
 
             toast.success(
                 `Venda ${venda.codigo} finalizada com sucesso!\nTotal: ${formatCurrency(venda.total)}`,
@@ -145,11 +150,8 @@ const PDVPage: React.FC = () => {
                 }
             );
 
-            // Limpar carrinho após sucesso
-            setTimeout(() => {
-                limparCarrinho();
-                setDescontoAprovado(false);
-            }, 1000);
+            // NÃO limpar carrinho imediatamente para permitir envio de email
+            setDescontoAprovado(false);
 
         } catch (error: any) {
             console.error('❌ ERRO AO FINALIZAR:', error);
@@ -159,6 +161,66 @@ const PDVPage: React.FC = () => {
                     icon: '❌',
                     duration: 6000,
                 }
+            );
+        }
+    };
+
+    const handleEnviarEmail = async () => {
+        if (!ultimaVendaId) {
+            toast.error('Nenhuma venda para enviar email');
+            return;
+        }
+
+        if (!cliente?.email) {
+            toast.error('Cliente não possui email cadastrado', {
+                icon: '📧',
+            });
+            return;
+        }
+
+        try {
+            setEnviandoEmail(true);
+            await pdvService.enviarCupomEmail(ultimaVendaId);
+            
+            toast.success(
+                `Cupom fiscal enviado para ${cliente.email}`,
+                {
+                    icon: '📧',
+                    duration: 6000,
+                    style: {
+                        background: '#10b981',
+                        color: '#fff',
+                    },
+                }
+            );
+
+            // Limpar após envio bem-sucedido
+            setTimeout(() => {
+                limparCarrinho();
+                setUltimaVendaId(null);
+            }, 2000);
+
+        } catch (error: any) {
+            console.error('❌ ERRO AO ENVIAR EMAIL:', error);
+            toast.error(
+                error.response?.data?.error || 'Erro ao enviar email',
+                {
+                    icon: '❌',
+                    duration: 6000,
+                }
+            );
+        } finally {
+            setEnviandoEmail(false);
+        }
+    };
+
+    const handleNovaVenda = () => {
+        limparCarrinho();
+        setUltimaVendaId(null);
+        setDescontoAprovado(false);
+        toast.success('Nova venda iniciada', {
+            icon: '🛒',
+        });       }
             );
         }
     };
@@ -497,35 +559,87 @@ const PDVPage: React.FC = () => {
                         {/* Botões de Ação */}
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
                             <div className="space-y-4">
-                                <button
-                                    onClick={handleFinalizarVenda}
-                                    disabled={carrinho.length === 0 || loading}
-                                    className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${
-                                        carrinho.length === 0 || loading
-                                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-                                    }`}
-                                >
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                                            <span>Processando...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Check className="w-6 h-6" />
-                                            <span>FINALIZAR VENDA</span>
-                                        </>
-                                    )}
-                                </button>
-
-                                <div className="grid grid-cols-2 gap-3">
+                                {!ultimaVendaId ? (
+                                    // Antes de finalizar - Mostra botão FINALIZAR
                                     <button
-                                        onClick={handleLimparCarrinho}
-                                        disabled={carrinho.length === 0}
-                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
-                                            carrinho.length === 0
-                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                        onClick={handleFinalizarVenda}
+                                        disabled={carrinho.length === 0 || loading}
+                                        className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${
+                                            carrinho.length === 0 || loading
+                                                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                                        }`}
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                                                <span>Processando...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Check className="w-6 h-6" />
+                                                <span>FINALIZAR VENDA</span>
+                                            </>
+                                        )}
+                                    </button>
+                                ) : (
+                                    // Após finalizar - Mostra botões de EMAIL e NOVA VENDA
+                                    <>
+                                        {cliente?.email && (
+                                            <button
+                                                onClick={handleEnviarEmail}
+                                                disabled={enviandoEmail}
+                                                className="w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white disabled:opacity-50"
+                                            >
+                                                {enviandoEmail ? (
+                                                    <>
+                                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                                                        <span>Enviando...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Mail className="w-6 h-6" />
+                                                        <span>ENVIAR CUPOM POR EMAIL</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                        
+                                        <button
+                                            onClick={handleNovaVenda}
+                                            className="w-full py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+                                        >
+                                            <ShoppingCart className="w-5 h-5" />
+                                            <span>NOVA VENDA</span>
+                                        </button>
+                                    </>
+                                )}
+
+                                {!ultimaVendaId && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={handleLimparCarrinho}
+                                            disabled={carrinho.length === 0}
+                                            className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
+                                                carrinho.length === 0
+                                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                                    : 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
+                                            }`}
+                                        >
+                                            <X className="w-5 h-5" />
+                                            <span>Cancelar</span>
+                                        </button>
+
+                                        <button
+                                            className="py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+                                        >
+                                            <Printer className="w-5 h-5" />
+                                            <span>Imprimir</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                                                 : 'bg-red-500 hover:bg-red-600 text-white shadow'
                                         }`}
                                     >
@@ -534,33 +648,13 @@ const PDVPage: React.FC = () => {
                                     </button>
 
                                     <button
-                                        onClick={() => {
-                                            setMensagem({ tipo: 'success', texto: 'Função de impressão em desenvolvimento' });
-                                        }}
-                                        disabled={carrinho.length === 0}
-                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
-                                            carrinho.length === 0
-                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-blue-500 hover:bg-blue-600 text-white shadow'
-                                        }`}
+                                        className="py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
                                     >
                                         <Printer className="w-5 h-5" />
                                         <span>Imprimir</span>
                                     </button>
                                 </div>
 
-                                {/* Atalhos de Teclado */}
-                                <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                                    <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                                        ⌨️ Atalhos de Teclado
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                        <div>F2 - Buscar Produto</div>
-                                        <div>F9 - Finalizar Venda</div>
-                                        <div>F4 - Cliente</div>
-                                        <div>ESC - Cancelar</div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>

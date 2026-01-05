@@ -235,4 +235,19 @@ export const pdvService = {
         });
         return response.data;
     },
+
+    // ==================== EMAIL ====================
+    
+    /**
+     * Envia cupom fiscal por email
+     */
+    enviarCupomEmail: async (vendaId: number): Promise<{ success: boolean; message: string }> => {
+        const response = await apiClient.post<ApiResponse<any>>('/pdv/enviar-cupom', {
+            venda_id: vendaId,
+        });
+        return {
+            success: true,
+            message: response.data.message || 'Email enviado com sucesso!',
+        };
+    },
 };

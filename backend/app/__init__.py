@@ -3,6 +3,7 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_caching import Cache  # NOVO IMPORT
+from flask_mail import Mail  # NOVO IMPORT PARA EMAIL
 from app.models import db
 from config import config
 import os
@@ -11,6 +12,7 @@ import os
 migrate = Migrate()
 jwt = JWTManager()
 cache = Cache()  # NOVA INSTÂNCIA DO CACHE
+mail = Mail()  # NOVA INSTÂNCIA DO MAIL
 
 # No topo, após os imports existentes:
 from app.middleware.rate_limit import limiter
@@ -35,6 +37,7 @@ def create_app(config_name="default"):
     migrate.init_app(app, db)
     jwt.init_app(app)
     cache.init_app(app)  # INICIALIZA O CACHE
+    mail.init_app(app)  # INICIALIZA O MAIL
 
     # Inicializa rate limiter
     limiter.init_app(app)

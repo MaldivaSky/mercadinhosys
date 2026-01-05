@@ -634,3 +634,91 @@ def estatisticas_rapidas():
     except Exception as e:
         current_app.logger.error(f"Erro nas estatísticas: {str(e)}")
         return jsonify({"error": "Erro ao carregar estatísticas"}), 500
+
+
+# ==================== ENVIAR CUPOM FISCAL POR EMAIL ====================
+
+@pdv_bp.route("/enviar-cupom", methods=["POST"])
+@funcionario_required
+def enviar_cupom_email():
+    """
+    Envia cupom fiscal por email para o cliente
+    Requer: venda_id
+    """
+    try:
+        data = request.get_json()
+        venda_id = data.get("venda_id")
+        
+        if not venda_id:
+            return jsonify({"error": "venda_id é obrigatório"}), 400
+        
+        # Buscar venda com relacionamentos
+        venda = Venda.query.get(venda_id)
+        if not venda:
+            return jsonify({"error": "Venda não encontrada"}), 404
+        
+        # Buscar cliente
+        cliente = Cliente.query.get(venda.cliente_id) if venda.cliente_id else None
+        
+        if not cliente or not cliente.email:
+            return jsonify({"error": "Cliente não possui email cadastrado"}), 400
+        
+        # Buscar estabelecimento
+        from app.models import Estabelecimento
+        estabelecimento = Estabelecimento.query.get(venda.estabelecimento_id)
+        
+        if not estabelecimento:
+            return jsonify({"error": "Estabelecimento não encontrado"}), 404
+        
+        # Preparar dados da venda
+        from app.utils.email_service import send_cupom_email
+        
+        venda_data = {
+            "codigo": venda.codigo,
+            "data_venda": venda.data_venda.strftime("%d/%m/%Y %H:%M"),
+            "subtotal": float(venda.subtotal),
+            "desconto": float(venda.desconto) if venda.desconto else 0.0,
+            "total": float(venda.total),
+            "forma_pagamento": venda.forma_pagamento,
+            "valor_pago": float(venda.valor_pago) if venda.valor_pago else float(venda.total),
+            "troco": float(venda.troco) if venda.troco else 0.0,
+            "itens": [
+                {
+                    "produto_nome": item.produto.nome,
+                    "quantidade": float(item.quantidade),
+                    "unidade": item.produto.unidade_medida,
+                    "preco_unitario": float(item.preco_unitario),
+                    "desconto": float(item.desconto) if item.desconto else 0.0,
+                    "subtotal": float(item.subtotal),
+                }
+                for item in venda.itens
+            ]
+        }
+        
+        estabelecimento_data = {
+            "nome": estabelecimento.nome,
+            "cnpj": estabelecimento.cnpj,
+            "endereco": estabelecimento.endereco,
+            "telefone": estabelecimento.telefone,
+            "email": estabelecimento.email,
+        }
+        
+        # Enviar email
+        sucesso, mensagem = send_cupom_email(venda_data, cliente.email, estabelecimento_data)
+        
+        if sucesso:
+            return jsonify({
+                "success": True,
+                "message": "Cupom fiscal enviado com sucesso!",
+                "email_destino": cliente.email
+            }), 200
+        else:
+            current_app.logger.error(f"Erro ao enviar email: {mensagem}")
+            return jsonify({
+                "error": "Erro ao enviar email",
+                "details": mensagem
+            }), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao enviar cupom: {str(e)}")
+        return jsonify({"error": f"Erro ao enviar cupom: {str(e)}"}), 500
