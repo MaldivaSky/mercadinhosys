@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Minus, Plus, Percent, Tag } from 'lucide-react';
+import { Trash2, Minus, Plus, Tag } from 'lucide-react';
 import { Produto } from '../../../types';
 
 interface CarrinhoItemProps {

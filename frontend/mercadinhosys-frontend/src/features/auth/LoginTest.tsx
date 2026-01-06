@@ -13,7 +13,7 @@ export function LoginTest() {
         setLoading(true);
         try {
             const result = await authService.login(email, password);
-            setMessage(`✅ Login realizado! Token: ${result.token ? 'Recebido' : 'Não recebido'}`);
+            setMessage(`✅ Login realizado! Token: ${result.data?.access_token ? 'Recebido' : 'Não recebido'}`);
         } catch (error: any) {
             setMessage(`❌ Erro no login: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
         } finally {
