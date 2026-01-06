@@ -1,10 +1,46 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Cliente, Venda
+from app.models import Cliente, Venda, VendaItem
 from datetime import datetime, timedelta
 from sqlalchemy import or_, and_, func
 
 clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
+
+@clientes_bp.route("/curva_compras", methods=["GET"])
+def curva_compras():
+    """
+    Retorna a curva de compras agregada por mês (últimos 12 meses) para todos os clientes.
+    """
+    try:
+        hoje = datetime.utcnow()
+        meses = []
+        for i in range(11, -1, -1):
+            mes = (hoje.replace(day=1) - timedelta(days=30*i)).replace(day=1)
+            meses.append(mes)
+        # Buscar vendas agrupadas por ano/mes
+        results = (
+            db.session.query(
+                func.extract('year', Venda.created_at).label('ano'),
+                func.extract('month', Venda.created_at).label('mes'),
+                func.sum(Venda.total).label('total')
+            )
+            .filter(Venda.created_at >= meses[-1])
+            .group_by('ano', 'mes')
+            .order_by('ano', 'mes')
+            .all()
+        )
+        # Montar lista de pontos (YYYY-MM, total)
+        curva = []
+        for r in results:
+            curva.append({
+                'periodo': f"{int(r.ano):04d}-{int(r.mes):02d}",
+                'total': float(r.total or 0)
+            })
+        return jsonify({'curva_compras': curva})
+    except Exception as e:
+        print(f"Erro ao gerar curva de compras: {str(e)}")
+        return jsonify({'error': f'Erro ao gerar curva de compras: {str(e)}'}), 500
+
 
 
 # ==================== CRUD CLIENTES COM PAGINAÇÃO AVANÇADA ====================
@@ -203,16 +239,43 @@ def detalhes_cliente(id):
     - por_pagina_compras: Compras por página (padrão: 10, máximo: 50)
     """
     try:
+        # Produtos preferidos (top 3)
+        produtos_preferidos = (
+            db.session.query(
+                VendaItem.produto_nome,
+                db.func.count(VendaItem.id).label("quantidade"),
+                db.func.sum(VendaItem.total_item).label("valor_total")
+            )
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(Venda.cliente_id == id)
+            .group_by(VendaItem.produto_nome)
+            .order_by(db.func.count(VendaItem.id).desc())
+            .limit(3)
+            .all()
+        )
+        produtos_preferidos_list = [
+            {
+                "nome": nome,
+                "quantidade": int(qtd),
+                "valor_total": float(valor)
+            }
+            for nome, qtd, valor in produtos_preferidos
+        ]
+        # ...restante do código do endpoint detalhes_cliente, tudo dentro da função...
         # Parâmetros para paginação de compras
         pagina_compras = request.args.get("pagina_compras", 1, type=int)
         por_pagina_compras = min(
             request.args.get("por_pagina_compras", 10, type=int), 50
         )
 
-        cliente = Cliente.query.get(id)
 
+        print(f"[DEBUG] Buscando detalhes do cliente id={id}")
+        cliente = Cliente.query.get(id)
         if not cliente:
+            print(f"[DEBUG] Cliente id={id} NÃO encontrado no banco!")
             return jsonify({"error": "Cliente não encontrado"}), 404
+        else:
+            print(f"[DEBUG] Cliente id={id} encontrado: {cliente.nome}")
 
         # ==================== HISTÓRICO DE COMPRAS PAGINADO ====================
         query_compras = Venda.query.filter_by(cliente_id=id).order_by(
@@ -299,27 +362,19 @@ def detalhes_cliente(id):
             "id": cliente.id,
             "nome": cliente.nome,
             "cpf_cnpj": cliente.cpf_cnpj,
-            "rg": cliente.rg,
-            "data_nascimento": (
-                cliente.data_nascimento.isoformat() if cliente.data_nascimento else None
-            ),
-            "idade": (
-                (datetime.utcnow().year - cliente.data_nascimento.year)
-                if cliente.data_nascimento
-                else None
-            ),
+            # "data_nascimento": None,  # Campo não existe
+            # "idade": None,  # Campo não existe
             "telefone": cliente.telefone,
             "celular": cliente.celular,
             "email": cliente.email,
             "endereco": cliente.endereco,
-            "limite_credito": float(cliente.limite_credito),
-            "limite_disponivel": float(cliente.limite_credito - total_gasto),
+            "limite_credito": float(getattr(cliente, "limite_credito", 0)),
+            "limite_disponivel": float(getattr(cliente, "limite_credito", 0) - total_gasto),
             "limite_utilizado_percent": (
-                (total_gasto / cliente.limite_credito * 100)
-                if cliente.limite_credito > 0
-                else 0
+                (total_gasto / getattr(cliente, "limite_credito", 1) * 100)
+                if getattr(cliente, "limite_credito", 0) > 0 else 0
             ),
-            "dia_vencimento": cliente.dia_vencimento,
+            "dia_vencimento": getattr(cliente, "dia_vencimento", None),
             "observacoes": cliente.observacoes,
             "ativo": cliente.ativo,
             "data_cadastro": (
@@ -345,23 +400,15 @@ def detalhes_cliente(id):
             "estatisticas": {
                 "total_compras": total_compras,
                 "total_gasto": float(total_gasto),
+                "ticket_medio": float(total_gasto / total_compras) if total_compras > 0 else 0,
                 "compras_ultimo_mes": compras_ultimo_mes,
                 "gasto_ultimo_mes": float(gasto_ultimo_mes),
-                "valor_medio_compra": (
-                    float(total_gasto / total_compras) if total_compras > 0 else 0
-                ),
                 "media_compras_mensal": float(media_mensal),
-                "ultima_compra": (
-                    ultima_compra.created_at.isoformat() if ultima_compra else None
-                ),
-                "primeira_compra": (
-                    primeira_compra.created_at.isoformat() if primeira_compra else None
-                ),
-                "dias_ultima_compra": (
-                    (datetime.utcnow() - ultima_compra.created_at).days
-                    if ultima_compra
-                    else None
-                ),
+                "ultima_compra_data": ultima_compra.created_at.isoformat() if ultima_compra else None,
+                "ultima_compra_valor": float(ultima_compra.total) if ultima_compra else 0,
+                "primeira_compra_data": primeira_compra.created_at.isoformat() if primeira_compra else None,
+                "dias_ultima_compra": (datetime.utcnow() - ultima_compra.created_at).days if ultima_compra else None,
+                "produtos_preferidos": produtos_preferidos_list,
             },
         }
 
@@ -370,137 +417,6 @@ def detalhes_cliente(id):
     except Exception as e:
         print(f"Erro ao obter cliente {id}: {str(e)}")
         return jsonify({"error": f"Erro ao obter cliente: {str(e)}"}), 404
-
-
-@clientes_bp.route("/", methods=["POST"])
-def criar_cliente():
-    """Criar um novo cliente com validações avançadas"""
-    try:
-        data = request.get_json()
-
-        if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
-
-        # Validações avançadas
-        if not data.get("nome"):
-            return jsonify({"error": "Nome do cliente é obrigatório"}), 400
-
-        # Validar CPF/CNPJ (se fornecido)
-        cpf_cnpj = data.get("cpf_cnpj", "").strip()
-        if cpf_cnpj:
-            # Validar formato básico de CPF/CNPJ (apenas se quiser, senão remova)
-            if not cpf_cnpj.isdigit() or len(cpf_cnpj) not in [11, 14]:
-                return (
-                    jsonify({"error": "CPF/CNPJ inválido. Deve conter 11 ou 14 dígitos numéricos"}),
-                    400,
-                )
-
-            # Verificar se CPF/CNPJ já existe
-            existente = Cliente.query.filter_by(cpf_cnpj=cpf_cnpj).first()
-            if existente:
-                return (
-                    jsonify({
-                        "success": False,
-                        "error": "CPF/CNPJ já cadastrado",
-                        "cliente_existente": {
-                            "id": existente.id,
-                            "nome": existente.nome,
-                            "email": existente.email,
-                            "telefone": existente.telefone,
-                        },
-                    }),
-                    409,
-                )
-
-        # Validar email (se fornecido)
-        email = data.get("email", "").strip()
-        if email:
-            # Verificação básica de formato
-            if "@" not in email or "." not in email:
-                return jsonify({"error": "Email inválido"}), 400
-
-            # Verificar se email já existe
-            existente_email = Cliente.query.filter_by(email=email).first()
-            if existente_email:
-                return (
-                    jsonify({
-                        "success": False,
-                        "error": "Email já cadastrado",
-                        "cliente_existente": {
-                            "id": existente_email.id,
-                            "nome": existente_email.nome,
-                            "cpf_cnpj": existente_email.cpf_cnpj,
-                        },
-                    }),
-                    409,
-                )
-
-        # Validar data de nascimento (se fornecida)
-        data_nascimento = None
-        if data.get("data_nascimento"):
-            try:
-                data_nascimento = datetime.strptime(
-                    data["data_nascimento"], "%Y-%m-%d"
-                ).date()
-                # Verificar se é uma data válida (não futura)
-                if data_nascimento > datetime.utcnow().date():
-                    return (
-                        jsonify({"error": "Data de nascimento não pode ser futura"}),
-                        400,
-                    )
-            except ValueError:
-                return (
-                    jsonify({"error": "Formato de data inválido. Use YYYY-MM-DD"}),
-                    400,
-                )
-
-        # Validar limite de crédito
-        limite_credito = float(data.get("limite_credito", 0))
-        if limite_credito < 0:
-            return jsonify({"error": "Limite de crédito não pode ser negativo"}), 400
-
-        # Validar dia de vencimento
-        dia_vencimento = int(data.get("dia_vencimento", 10))
-        if dia_vencimento < 1 or dia_vencimento > 31:
-            return jsonify({"error": "Dia de vencimento deve estar entre 1 e 31"}), 400
-
-        # Criar cliente
-        estabelecimento_id = data.get("estabelecimento_id")
-        if not estabelecimento_id:
-            return jsonify({"error": "estabelecimento_id é obrigatório"}), 400
-
-        novo_cliente = Cliente(
-            estabelecimento_id=estabelecimento_id,
-            nome=data["nome"].strip(),
-            cpf_cnpj=cpf_cnpj,
-            telefone=data.get("telefone", "").strip(),
-            celular=data.get("celular", "").strip(),
-            email=email,
-            endereco=data.get("endereco", "").strip(),
-            observacoes=data.get("observacoes", "").strip(),
-            ativo=data.get("ativo", True),
-            data_cadastro=datetime.utcnow(),
-            data_atualizacao=datetime.utcnow(),
-        )
-
-        db.session.add(novo_cliente)
-        db.session.commit()
-
-        return (
-            jsonify(
-                {
-                    "success": True,
-                    "message": "Cliente criado com sucesso",
-                    "cliente": novo_cliente.to_dict(),
-                }
-            ),
-            201,
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Erro ao criar cliente: {str(e)}")
-        return jsonify({"error": f"Erro ao criar cliente: {str(e)}"}), 500
 
 
 @clientes_bp.route("/<int:id>", methods=["PUT"])
@@ -610,7 +526,7 @@ def atualizar_cliente(id):
         campos_permitidos = [
             "nome",
             "cpf_cnpj",
-            "rg",
+            # "rg",  # Removido pois não existe no model
             "data_nascimento",
             "telefone",
             "celular",
@@ -676,75 +592,6 @@ def atualizar_cliente(id):
         return jsonify({"error": f"Erro ao atualizar cliente: {str(e)}"}), 500
 
 
-@clientes_bp.route("/<int:id>", methods=["DELETE"])
-def excluir_cliente(id):
-    """Excluir (desativar) um cliente com verificações"""
-    try:
-        cliente = Cliente.query.get(id)
-
-        if not cliente:
-            return jsonify({"error": "Cliente não encontrado"}), 404
-
-        # Verificar se cliente tem compras com paginação
-        total_compras = Venda.query.filter_by(cliente_id=id).count()
-        if total_compras > 0:
-            # Buscar detalhes das últimas compras
-            ultimas_compras = (
-                Venda.query.filter_by(cliente_id=id)
-                .order_by(Venda.created_at.desc())
-                .limit(5)
-                .all()
-            )
-
-            compras_info = []
-            for compra in ultimas_compras:
-                compras_info.append(
-                    {
-                        "id": compra.id,
-                        "codigo": compra.codigo,
-                        "data": (
-                            compra.created_at.isoformat() if compra.created_at else None
-                        ),
-                        "total": float(compra.total),
-                    }
-                )
-
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Não é possível excluir o cliente pois existem compras vinculadas",
-                        "quantidade_compras": total_compras,
-                        "ultimas_compras": compras_info,
-                        "sugestao": "Desative o cliente em vez de excluí-lo",
-                    }
-                ),
-                400,
-            )
-
-        # Exclusão lógica
-        cliente.ativo = False
-        cliente.data_atualizacao = datetime.utcnow()
-
-        db.session.commit()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Cliente desativado com sucesso",
-                "cliente": {
-                    "id": cliente.id,
-                    "nome": cliente.nome,
-                    "ativo": False,
-                    "data_desativacao": datetime.utcnow().isoformat(),
-                },
-            }
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Erro ao excluir cliente {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao excluir cliente: {str(e)}"}), 500
 
 
 @clientes_bp.route("/<int:id>/compras", methods=["GET"])
@@ -958,66 +805,48 @@ def compras_cliente(id):
         return jsonify({"error": f"Erro ao listar compras: {str(e)}"}), 500
 
 
-@clientes_bp.route("/search", methods=["GET"])
-@clientes_bp.route("/buscar", methods=["GET"])
-def buscar_cliente():
-    """
-    Buscar cliente por CPF, nome, telefone (para PDV)
 
-    Parâmetros:
-    - q: Termo de busca (nome, CPF, telefone, email)
-    - limite: Número máximo de resultados (padrão: 20, máximo: 50)
-    - apenas_ativos: 'true' para apenas ativos (padrão: 'true')
-    - com_compras: 'true' para apenas clientes com compras
-    """
+# ========== ENDPOINT DE BUSCA DE CLIENTES (CORRIGIDO) ==========
+@clientes_bp.route("/search", methods=["GET"])
+def buscar_clientes():
+    """Buscar clientes por nome, CPF/CNPJ, telefone ou email, com opção de filtrar apenas clientes com compras."""
     try:
-        query_term = request.args.get("q", "").strip()
-        limite = min(request.args.get("limite", 20, type=int), 50)
-        apenas_ativos = request.args.get("apenas_ativos", "true").lower() == "true"
+        busca = request.args.get("busca", "").strip()
+        limite = min(request.args.get("limite", 20, type=int), 100)
         com_compras = request.args.get("com_compras", "false").lower() == "true"
 
-        # Construir query base
         busca_query = Cliente.query
-
-        # Se houver termo de busca, aplicar filtros
-        if query_term:
+        if busca:
             busca_query = busca_query.filter(
-                db.or_(
-                    Cliente.nome.ilike(f"%{query_term}%"),
-                    Cliente.cpf_cnpj.ilike(f"%{query_term}%"),
-                    Cliente.telefone.ilike(f"%{query_term}%"),
-                    Cliente.email.ilike(f"%{query_term}%"),
+                or_(
+                    Cliente.nome.ilike(f"%{busca}%"),
+                    Cliente.cpf_cnpj.ilike(f"%{busca}%"),
+                    Cliente.telefone.ilike(f"%{busca}%"),
+                    Cliente.email.ilike(f"%{busca}%"),
                 )
             )
 
-        # Filtro por clientes com compras
         if com_compras:
-            # Subquery para clientes com compras
             clientes_com_compras = db.session.query(Venda.cliente_id).distinct()
             busca_query = busca_query.filter(Cliente.id.in_(clientes_com_compras))
 
-        # Ordenar por relevância (clientes com compras primeiro, depois por nome)
         clientes = busca_query.order_by(Cliente.nome.asc()).limit(limite).all()
 
         resultado = []
         for cliente in clientes:
-            resultado.append(
-                {
-                    "id": cliente.id,
-                    "nome": cliente.nome,
-                    "cpf_cnpj": cliente.cpf_cnpj or "",
-                    "telefone": cliente.telefone or "",
-                    "email": cliente.email or "",
-                    "total_compras": float(cliente.total_compras or 0),
-                }
-            )
+            # Buscar total de compras
+            total_compras = Venda.query.filter_by(cliente_id=cliente.id).count()
+            resultado.append({
+                "id": cliente.id,
+                "nome": cliente.nome,
+                "cpf_cnpj": getattr(cliente, "cpf_cnpj", "") or "",
+                "telefone": getattr(cliente, "telefone", "") or "",
+                "email": getattr(cliente, "email", "") or "",
+                "total_compras": total_compras,
+            })
 
-        # Ordenar por nome
         resultado.sort(key=lambda x: x["nome"].lower())
-
-        # Retornar array direto (compatível com frontend)
         return jsonify(resultado[:limite])
-
     except Exception as e:
         print(f"Erro ao buscar clientes: {str(e)}")
         return jsonify({"error": f"Erro ao buscar clientes: {str(e)}"}), 500
@@ -1178,7 +1007,7 @@ def exportar_clientes():
             "ID",
             "Nome",
             "CPF",
-            "RG",
+            # "RG",  # Removido pois não existe no model
             "Data Nascimento",
             "Telefone",
             "Celular",
@@ -1202,8 +1031,8 @@ def exportar_clientes():
                 str(cliente.id),
                 f'"{cliente.nome}"',
                 cliente.cpf,
-                cliente.rg,
-                cliente.data_nascimento.isoformat() if cliente.data_nascimento else "",
+                # cliente.rg,  # Removido pois não existe no model
+                cliente.data_nascimento.isoformat() if hasattr(cliente, "data_nascimento") and cliente.data_nascimento else "",
                 cliente.telefone,
                 cliente.celular,
                 cliente.email,
