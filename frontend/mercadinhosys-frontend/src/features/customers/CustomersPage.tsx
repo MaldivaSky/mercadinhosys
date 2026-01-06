@@ -73,10 +73,16 @@ const CustomersPage: React.FC = () => {
         try {
             const res = await apiClient.get(`/clientes/${cliente.id}`);
             setClienteDetalhado(res.data);
-        } catch (err: any) {
+        } catch (err: unknown) {
             setClienteDetalhado(null);
             setSelectedCliente(null);
-            if (err?.response?.status === 404) {
+            if (
+                typeof err === 'object' &&
+                err !== null &&
+                'response' in err &&
+                typeof (err as { response?: { status?: number } }).response === 'object' &&
+                (err as { response?: { status?: number } }).response?.status === 404
+            ) {
                 setSnackbar({open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error'});
             } else {
                 setSnackbar({open: true, message: 'Erro ao buscar detalhes do cliente', severity: 'error'});
