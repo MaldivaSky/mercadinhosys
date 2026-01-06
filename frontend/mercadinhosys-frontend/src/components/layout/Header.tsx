@@ -1,37 +1,73 @@
 import React from 'react';
-import ThemeToggle from '../ui/ThemeToggle';
-import { User, Bell } from 'lucide-react';
+import { AppBar, Toolbar, Typography, Avatar, IconButton, Menu, MenuItem, Box } from '@mui/material';
+import { Logout } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import logo from '../../../logoprincipal.png';
 
 const Header: React.FC = () => {
-    return (
-        <header className="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div className="px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                    <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
-                        MercadinhoSys
-                    </h1>
-                </div>
+  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const navigate = useNavigate();
 
-                <div className="flex items-center space-x-4">
-                    <button className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">
-                        <Bell className="w-5 h-5" />
-                    </button>
+  // Busca dados do usuário do localStorage
+  const user = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user_data') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
 
-                    <ThemeToggle />
+  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
 
-                    <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                            <User className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="hidden md:block">
-                            <p className="text-sm font-medium text-gray-800 dark:text-white">Usuário Admin</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Administrador</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
-    );
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_data');
+    window.dispatchEvent(new Event('auth-change'));
+    navigate('/login');
+  };
+
+  // Avatar: foto se existir, senão inicial do nome
+  const avatarContent = user.foto_url ? (
+    <Avatar src={user.foto_url} alt={user.nome} />
+  ) : (
+    <Avatar>{user.nome ? user.nome[0].toUpperCase() : '?'}</Avatar>
+  );
+
+  return (
+    <AppBar position="static" color="default" elevation={1} sx={{ zIndex: 1201 }}>
+      <Toolbar>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+          <img src={logo} alt="Logo MercadinhoSys" style={{ height: 40, marginRight: 12, borderRadius: 6, width:'auto' }} />
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body1" sx={{ fontWeight: 500, mr: 1 }}>
+            {user.nome || 'Usuário'}
+          </Typography>
+          <IconButton onClick={handleMenu} size="large" sx={{ p: 0 }}>
+            {avatarContent}
+          </IconButton>
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={handleLogout}>
+              <Logout fontSize="small" sx={{ mr: 1 }} /> Sair
+            </MenuItem>
+          </Menu>
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
 };
 
 export default Header;
