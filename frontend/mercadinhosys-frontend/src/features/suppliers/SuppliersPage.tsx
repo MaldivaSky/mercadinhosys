@@ -14,6 +14,8 @@ interface SupplierFormData {
     estado: string;
     cep: string;
     contato_principal: string;
+    contato_comercial: string;
+    celular_comercial: string;
     observacoes: string;
     ativo: boolean;
 }
@@ -21,6 +23,7 @@ interface SupplierFormData {
 const SuppliersPage: React.FC = () => {
     const [suppliers, setSuppliers] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingCep, setLoadingCep] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [selectedSupplier, setSelectedSupplier] = useState<Fornecedor | null>(null);
@@ -37,6 +40,8 @@ const SuppliersPage: React.FC = () => {
         estado: '',
         cep: '',
         contato_principal: '',
+        contato_comercial: '',
+        celular_comercial: '',
         observacoes: '',
         ativo: true,
     });
@@ -95,6 +100,55 @@ const SuppliersPage: React.FC = () => {
         loadSuppliers();
     }, [loadSuppliers]);
 
+    // Função para buscar CEP
+    // Funções de formatação
+    const formatCep = (value: string) => {
+        const numbers = value.replace(/\D/g, '').slice(0, 8);
+        if (numbers.length <= 5) return numbers;
+        return `${numbers.slice(0, 5)}-${numbers.slice(5)}`;
+    };
+
+    const formatPhone = (value: string) => {
+        const numbers = value.replace(/\D/g, '').slice(0, 11);
+        if (numbers.length <= 2) return numbers;
+        if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+        return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
+    };
+
+    const handleCepBlur = async () => {
+        const cep = formData.cep.replace(/\D/g, '');
+        
+        if (cep.length !== 8) return;
+
+        setLoadingCep(true);
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await response.json();
+            
+            if (data.erro) {
+                toast.error('CEP não encontrado');
+                return;
+            }
+
+            if (data && data.logradouro) {
+                setFormData(prev => ({
+                    ...prev,
+                    endereco: data.logradouro,
+                    cidade: data.localidade,
+                    estado: data.uf
+                }));
+                toast.success('Endereço preenchido automaticamente!');
+            } else {
+                toast.error('CEP não encontrado');
+            }
+        } catch (error) {
+            console.error('Erro ao buscar CEP:', error);
+            toast.error('Erro ao buscar CEP. Verifique sua conexão.');
+        } finally {
+            setLoadingCep(false);
+        }
+    };
+
     const resetForm = () => {
         setFormData({
             nome: '',
@@ -106,6 +160,8 @@ const SuppliersPage: React.FC = () => {
             estado: '',
             cep: '',
             contato_principal: '',
+            contato_comercial: '',
+            celular_comercial: '',
             observacoes: '',
             ativo: true,
         });
@@ -147,6 +203,8 @@ const SuppliersPage: React.FC = () => {
             estado: supplier.estado || '',
             cep: supplier.cep || '',
             contato_principal: supplier.contato_principal || '',
+            contato_comercial: supplier.contato_comercial || '',
+            celular_comercial: supplier.celular_comercial || '',
             observacoes: supplier.observacoes || '',
             ativo: supplier.ativo,
         });
@@ -433,7 +491,8 @@ const SuppliersPage: React.FC = () => {
                                     <input
                                         type="text"
                                         value={formData.telefone}
-                                        onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, telefone: formatPhone(e.target.value) })}
+                                        placeholder="(00) 00000-0000"
                                         className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
@@ -446,6 +505,22 @@ const SuppliersPage: React.FC = () => {
                                         type="email"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                {/* CEP - Primeiro para autocompletar endereço */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        CEP {loadingCep && <span className="text-blue-500 text-xs">(carregando...)</span>}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.cep}
+                                        onChange={(e) => setFormData({ ...formData, cep: formatCep(e.target.value) })}
+                                        onBlur={handleCepBlur}
+                                        maxLength={9}
+                                        placeholder="00000-000"
                                         className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
@@ -489,24 +564,39 @@ const SuppliersPage: React.FC = () => {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        CEP
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.cep}
-                                        onChange={(e) => setFormData({ ...formData, cep: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Contato Principal
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.contato_principal}
                                         onChange={(e) => setFormData({ ...formData, contato_principal: e.target.value })}
+                                        placeholder="Nome do responsável"
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Contato Comercial
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.contato_comercial}
+                                        onChange={(e) => setFormData({ ...formData, contato_comercial: e.target.value })}
+                                        placeholder="Nome do vendedor"
+                                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Celular Comercial
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={formData.celular_comercial}
+                                        onChange={(e) => setFormData({ ...formData, celular_comercial: formatPhone(e.target.value) })}
+                                        placeholder="(00) 00000-0000"
                                         className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
