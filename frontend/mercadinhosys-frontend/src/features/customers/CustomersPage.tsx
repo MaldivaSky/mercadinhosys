@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Cliente } from '../../types';
 import CustomerTable from './components/CustomerTable';
+import CustomerDetailsModal from './components/CustomerDetailsModal';
 import CustomerForm from './components/CustomerForm';
 import CustomerDashboard from './components/CustomerDashboard';
 import { customerService } from './customerService';
@@ -14,6 +15,7 @@ const CustomersPage: React.FC = () => {
     const [formOpen, setFormOpen] = useState(false);
     const [editData, setEditData] = useState<Partial<Cliente> | undefined>(undefined);
     const [saving, setSaving] = useState(false);
+    const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success'|'error'}>({open: false, message: '', severity: 'success'});
     const [dashboard, setDashboard] = useState<{total: number, ativos: number, inativos: number, novos: number, vip: number}>({total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0});
     // const [dashboardFilter, setDashboardFilter] = useState<string | null>(null);
@@ -60,6 +62,11 @@ const CustomersPage: React.FC = () => {
     const handleEdit = (cliente: Cliente) => {
         setEditData(cliente);
         setFormOpen(true);
+        setSelectedCliente(null);
+    };
+
+    const handleRowClick = (cliente: Cliente) => {
+        setSelectedCliente(cliente);
     };
 
     const handleDelete = async (cliente: Cliente) => {
@@ -100,8 +107,15 @@ const CustomersPage: React.FC = () => {
             <Typography variant="h4" gutterBottom>Gestão de Clientes</Typography>
             <CustomerDashboard {...dashboard} />
             <Button variant="contained" color="primary" onClick={handleAdd} sx={{ mb: 2 }}>Novo Cliente</Button>
-            <CustomerTable clientes={clientes} onEdit={handleEdit} onDelete={handleDelete} loading={loading} />
+            <CustomerTable clientes={clientes} onEdit={handleEdit} onDelete={handleDelete} loading={loading} onRowClick={handleRowClick} />
             <CustomerForm open={formOpen} onClose={() => setFormOpen(false)} onSave={handleSave} initialData={editData} loading={saving} />
+            <CustomerDetailsModal
+                open={!!selectedCliente}
+                cliente={selectedCliente}
+                onClose={() => setSelectedCliente(null)}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+            />
             <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({...snackbar, open: false})}>
                 <Alert onClose={() => setSnackbar({...snackbar, open: false})} severity={snackbar.severity} sx={{ width: '100%' }}>
                     {snackbar.message}
