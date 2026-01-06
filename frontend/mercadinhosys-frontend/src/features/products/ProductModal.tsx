@@ -212,6 +212,9 @@ const ProductModal: React.FC<ProductModalProps> = ({
                             >
                                 <option value="Higiene">Higiene</option>
                                 <option value="Limpeza">Limpeza</option>
+                                <option value="Utilidades Domésticas">Utilidades Domésticas</option>
+                                <option value="Perfumaria">Perfumaria</option>
+                                <option value="Descartáveis">Descartáveis</option>
                                 <option value="Hortifruti">Hortifruti</option>
                                 <option value="Padaria">Padaria</option>
                                 <option value="Carnes">Carnes (Açougue)</option>
