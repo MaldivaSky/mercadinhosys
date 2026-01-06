@@ -207,14 +207,14 @@ const PDVPage: React.FC = () => {
         }
     };
 
-    const handleNovaVenda = () => {
-        limparCarrinho();
-        setUltimaVendaId(null);
-        setDescontoAprovado(false);
-        toast.success('Nova venda iniciada', {
-            icon: '🛒',
-        });
-    };
+    // const handleNovaVenda = () => {
+    //     limparCarrinho();
+    //     setUltimaVendaId(null);
+    //     setDescontoAprovado(false);
+    //     toast.success('Nova venda iniciada', {
+    //         icon: '🛒',
+    //     });
+    // };
 
     const handleLimparCarrinho = () => {
         if (carrinho.length > 0) {
@@ -485,11 +485,14 @@ const PDVPage: React.FC = () => {
                                                 )}
                                             </div>
                                         </div>
-                                        {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.taxa > 0 && (
-                                            <span className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">
-                                                Taxa: {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.taxa}%
-                                            </span>
-                                        )}
+                                        {(() => {
+                                            const forma = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
+                                            return forma && forma.taxa > 0 ? (
+                                                <span className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">
+                                                    Taxa: {forma.taxa}%
+                                                </span>
+                                            ) : null;
+                                        })()}
                                     </div>
                                 </div>
                             )}
