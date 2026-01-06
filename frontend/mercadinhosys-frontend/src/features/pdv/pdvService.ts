@@ -1,5 +1,5 @@
 import { apiClient } from '../../api/apiClient';
-import { ApiResponse, Produto, Cliente, Venda } from '../../types';
+import { ApiResponse, Produto, Cliente } from '../../types';
 
 // Tipos específicos do PDV
 export interface ConfiguracoesPDV {
