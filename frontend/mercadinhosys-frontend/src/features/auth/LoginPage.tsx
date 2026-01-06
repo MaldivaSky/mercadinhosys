@@ -18,10 +18,10 @@ import {
   VisibilityOff,
   LockOutlined,
   EmailOutlined,
-  Storefront,
 } from '@mui/icons-material';
 import { authService } from './authService';
 import { LoginApiResponse } from '../../types';
+import logo from '../../../logoprincipal.png';
 
 export function LoginPage() {
   const theme = useTheme();
@@ -155,10 +155,8 @@ export function LoginPage() {
             color: mode === 'dark' ? 'white' : '#1e293b',
           }}
         >
-          <Storefront sx={{ fontSize: 120, mb: 4, color: '#3b82f6' }} />
-          <Typography variant="h2" fontWeight="bold" gutterBottom>
-            MercadinhoSys
-          </Typography>
+          <img src={logo} alt="Logo MercadinhoSys" style={{ height: 120, marginBottom: 32, borderRadius: 12, boxShadow: '0 2px 12px #0002' }} />
+          
           <Typography variant="h5" sx={{ opacity: 0.8, textAlign: 'center' }}>
             Sistema de Gestão Comercial
           </Typography>
