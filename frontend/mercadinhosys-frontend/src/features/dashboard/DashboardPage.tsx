@@ -1,3 +1,35 @@
+// Tipos auxiliares para produtos e clientes
+interface ProdutoPrevisao {
+  produto_nome: string;
+  estoque_atual: number;
+  demanda_diaria_prevista: number;
+  risco_ruptura?: boolean;
+}
+interface ProdutoEstrela {
+  id: number;
+  nome: string;
+  classificacao?: string;
+  margem?: number;
+  market_share?: number;
+  total_vendido?: number;
+}
+interface ProdutoLento {
+  id: number;
+  nome: string;
+  quantidade?: number;
+  total_vendido?: number;
+}
+interface ProdutoCategoria {
+  id: number;
+  nome: string;
+  total_vendido: number;
+  quantidade_vendida?: number;
+}
+interface Cliente {
+  id: number;
+  nome: string;
+  total_compras: number;
+}
 import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
@@ -241,6 +273,9 @@ const DashboardPage: React.FC = () => {
       setError(null);
       const response = await apiClient.get('/dashboard/resumo');
       console.log('📊 Dashboard completo:', response.data);
+      // LOGS DETALHADOS PARA DEBUG
+      console.log('🟦 Meta do Mês:', response.data?.data?.dono?.projecoes?.meta);
+      console.log('🟧 Crescimento Semanal:', response.data?.data?.metricas_comparativas?.vs_semana_passada);
       console.log('� Usuário:', response.data?.usuario);
       console.log('🔑 Acesso Avançado:', response.data?.usuario?.acesso_avancado);
       console.log('📦 ANÁLISE PRODUTOS:', response.data?.data?.analise_produtos);
@@ -426,9 +461,11 @@ const DashboardPage: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-l-4 border-orange-500">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">vs Semana Passada</p>
               <p className={`text-2xl font-bold ${
-                data.data.metricas_comparativas?.vs_semana_passada?.percentual_crescimento > 0 
-                  ? 'text-green-600' 
-                  : data.data.metricas_comparativas?.vs_semana_passada?.percentual_crescimento < 0
+                data.data.metricas_comparativas?.vs_semana_passada?.percentual_crescimento !== undefined &&
+                data.data.metricas_comparativas.vs_semana_passada.percentual_crescimento > 0
+                  ? 'text-green-600'
+                  : data.data.metricas_comparativas?.vs_semana_passada?.percentual_crescimento !== undefined &&
+                    data.data.metricas_comparativas.vs_semana_passada.percentual_crescimento < 0
                     ? 'text-red-600'
                     : 'text-gray-600'
               }`}>
@@ -463,7 +500,7 @@ const DashboardPage: React.FC = () => {
                   Urgente
                 </h3>
                 <div className="space-y-3">
-                  {data.data.recomendacoes.urgentes.map((rec: any, idx: number) => {
+                  {data.data.recomendacoes?.urgentes?.map((rec: { titulo: string; descricao: string; acao?: string }, idx: number) => {
                     const isExpanded = expandedRecomendacao === `urgente-${idx}`;
                     return (
                       <div 
@@ -516,7 +553,7 @@ const DashboardPage: React.FC = () => {
                   Atenção
                 </h3>
                 <div className="space-y-3">
-                  {data.data.recomendacoes.atencao.map((rec: any, idx: number) => (
+                  {data.data.recomendacoes?.atencao?.map((rec: { titulo: string; descricao: string; acao?: string }, idx: number) => (
                     <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg border-l-4 border-orange-500 shadow-md hover:shadow-lg transition-shadow">
                       <h4 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{rec.titulo}</h4>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{rec.descricao}</p>
@@ -539,7 +576,7 @@ const DashboardPage: React.FC = () => {
                   Oportunidades
                 </h3>
                 <div className="space-y-3">
-                  {data.data.recomendacoes.oportunidades.map((rec: any, idx: number) => (
+                  {data.data.recomendacoes?.oportunidades?.map((rec: { titulo: string; descricao: string; acao?: string }, idx: number) => (
                     <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg border-l-4 border-green-500 shadow-md hover:shadow-lg transition-shadow">
                       <h4 className="font-bold text-gray-800 dark:text-white text-sm mb-1">{rec.titulo}</h4>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{rec.descricao}</p>
@@ -585,7 +622,7 @@ const DashboardPage: React.FC = () => {
                   
                   return (
                     <tr key={idx} className={`border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${isCritico ? 'bg-red-50 dark:bg-red-900/10' : isRisco ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}`}>
-                      <td className="py-3 px-4 font-medium text-gray-800 dark:text-white">{produto.produto_nome}</td>
+                      <td className="py-3 px-4 font-medium text-gray-800 dark:text-white">{produto.produto_nome || produto.nome}</td>
                       <td className="py-3 px-4 text-center font-semibold text-gray-600 dark:text-gray-300">{produto.estoque_atual}</td>
                       <td className="py-3 px-4 text-center text-blue-600 dark:text-blue-400">{produto.demanda_diaria_prevista.toFixed(1)}</td>
                       <td className="py-3 px-4 text-center">
