@@ -6,7 +6,7 @@ basedir = Path(__file__).parent.absolute()
 
 
 class Config:
-    SECRET_KEY = "sua-chave-secreta-2025-mercadinho"
+    SECRET_KEY = os.getenv("SECRET_KEY", "sua-chave-secreta-2025-mercadinho")
 
     # Banco de dados - SQLite na pasta instance
     db_path = basedir / "instance" / "mercadinho.db"
@@ -16,19 +16,19 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # JWT
-    JWT_SECRET_KEY = "sua-chave-jwt-mercadinho-2025"
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "sua-chave-jwt-mercadinho-2025")
 
     # CORS
     CORS_HEADERS = "Content-Type"
     # CORS - PERMITE REQUISIÇÕES DO FRONTEND
-    CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "*"]
 
     # Upload folder
     UPLOAD_FOLDER = basedir / "instance" / "uploads"
 
     # Tamanho máximo de upload (16MB)
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
-    
+
     # ==================== CONFIGURAÇÕES DE EMAIL ====================
     # Para desenvolvimento, use SMTP do Gmail ou Mailtrap
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
