@@ -269,9 +269,42 @@ class Funcionario(db.Model):
 
 
 class Cliente(db.Model):
-    """Modelo de clientes - MANTIDO (já está bom)"""
+    """Modelo de clientes"""
 
-    # ... (mantenha como está) ...
+    __tablename__ = "clientes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    cpf_cnpj = db.Column(db.String(20), unique=True, index=True)
+    telefone = db.Column(db.String(20))
+    celular = db.Column(db.String(20))
+    email = db.Column(db.String(100))
+    endereco = db.Column(db.Text)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    observacoes = db.Column(db.Text)
+
+    # Relacionamentos
+    vendas = db.relationship("Venda", backref="cliente", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "cpf_cnpj": self.cpf_cnpj,
+            "telefone": self.telefone,
+            "celular": self.celular,
+            "email": self.email,
+            "endereco": self.endereco,
+            "data_cadastro": self.data_cadastro.isoformat() if self.data_cadastro else None,
+            "data_atualizacao": self.data_atualizacao.isoformat() if self.data_atualizacao else None,
+            "ativo": self.ativo,
+            "observacoes": self.observacoes,
+        }
+
+    def __repr__(self):
+        return f"<Cliente {self.cpf_cnpj or 'Sem CPF/CNPJ'}: {self.nome}>"
 
 
 # ==================== VENDAS E FINANCEIRO ====================

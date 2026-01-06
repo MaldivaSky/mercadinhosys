@@ -238,43 +238,33 @@ class Funcionario(db.Model, UserMixin):
 
 
 class Cliente(db.Model):
-    """Clientes do estabelecimento"""
+    """Modelo de clientes"""
 
     __tablename__ = "clientes"
 
     id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-
-    # Dados Pessoais
-    nome = db.Column(db.String(100), nullable=False)
-    cpf_cnpj = db.Column(db.String(20))
+    estabelecimento_id = db.Column(db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False)
+    nome = db.Column(db.String(200), nullable=False)
+    cpf_cnpj = db.Column(db.String(20), unique=True, index=True)
     telefone = db.Column(db.String(20))
+    celular = db.Column(db.String(20))
     email = db.Column(db.String(100))
     endereco = db.Column(db.Text)
-
-    # Dados de Fidelidade
-    data_cadastro = db.Column(db.DateTime, default=datetime.now)
-    total_compras = db.Column(db.Float, default=0.0)
-    ultima_compra = db.Column(db.DateTime)
-    frequencia_compras = db.Column(db.Integer, default=0)  # NOVO
-    valor_medio_compra = db.Column(db.Float, default=0.0)  # NOVO
-    dias_ultima_compra = db.Column(db.Integer, default=0)  # NOVO
-
-    # Segmentação RFM
-    segmento_rfm = db.Column(
-        db.String(20), default="novo"
-    )  # NOVO: 'champion', 'loyal', 'potential', 'new', 'at_risk', 'lost'
-
-    # Observações
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
     observacoes = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.now)
-    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    # Campos de fidelidade e RFM
+    total_compras = db.Column(db.Float, default=0.0)
+    ultima_compra = db.Column(db.DateTime)
+    frequencia_compras = db.Column(db.Integer, default=0)
+    valor_medio_compra = db.Column(db.Float, default=0.0)
+    dias_ultima_compra = db.Column(db.Integer, default=0)
+    segmento_rfm = db.Column(db.String(20), default="novo")
 
     # Relacionamentos
-    vendas = db.relationship("Venda", backref="cliente")
+    vendas = db.relationship("Venda", backref="cliente", lazy=True)
 
     def to_dict(self):
         return {
@@ -283,24 +273,23 @@ class Cliente(db.Model):
             "nome": self.nome,
             "cpf_cnpj": self.cpf_cnpj,
             "telefone": self.telefone,
+            "celular": self.celular,
             "email": self.email,
             "endereco": self.endereco,
-            "data_cadastro": (
-                self.data_cadastro.isoformat() if self.data_cadastro else None
-            ),
+            "data_cadastro": self.data_cadastro.isoformat() if self.data_cadastro else None,
+            "data_atualizacao": self.data_atualizacao.isoformat() if self.data_atualizacao else None,
+            "ativo": self.ativo,
+            "observacoes": self.observacoes,
             "total_compras": self.total_compras,
-            "ultima_compra": (
-                self.ultima_compra.isoformat() if self.ultima_compra else None
-            ),
+            "ultima_compra": self.ultima_compra.isoformat() if self.ultima_compra else None,
             "frequencia_compras": self.frequencia_compras,
             "valor_medio_compra": self.valor_medio_compra,
             "dias_ultima_compra": self.dias_ultima_compra,
             "segmento_rfm": self.segmento_rfm,
-            "observacoes": self.observacoes,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
+    def __repr__(self):
+        return f"<Cliente {self.cpf_cnpj or 'Sem CPF/CNPJ'}: {self.nome}>"
 
 class Fornecedor(db.Model):
     """Fornecedores de produtos"""
