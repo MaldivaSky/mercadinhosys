@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Cliente } from '../../types';
 import CustomerTable from './components/CustomerTable';
-import CustomerDetailsModal from './components/CustomerDetailsModal';
+import CustomerDetailsModal from './components/CustomerDetailsModal.tsx';
 import CustomerForm from './components/CustomerForm';
 import CustomerDashboard from './components/CustomerDashboard';
 import { customerService } from './customerService';
@@ -107,7 +107,7 @@ const CustomersPage: React.FC = () => {
             <Typography variant="h4" gutterBottom>Gestão de Clientes</Typography>
             <CustomerDashboard {...dashboard} />
             <Button variant="contained" color="primary" onClick={handleAdd} sx={{ mb: 2 }}>Novo Cliente</Button>
-            <CustomerTable clientes={clientes} onEdit={handleEdit} onDelete={handleDelete} loading={loading} onRowClick={handleRowClick} />
+            <CustomerTable clientes={clientes} loading={loading} onRowClick={handleRowClick} />
             <CustomerForm open={formOpen} onClose={() => setFormOpen(false)} onSave={handleSave} initialData={editData} loading={saving} />
             <CustomerDetailsModal
                 open={!!selectedCliente}
