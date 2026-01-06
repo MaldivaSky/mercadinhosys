@@ -506,21 +506,29 @@ def atualizar_cliente(id):
 
         # Validar limite de crédito (se fornecido)
         if "limite_credito" in data:
-            limite_credito = float(data["limite_credito"])
+            try:
+                limite_credito = float(data["limite_credito"] or 0)
+            except (TypeError, ValueError):
+                limite_credito = 0
             if limite_credito < 0:
                 return (
                     jsonify({"error": "Limite de crédito não pode ser negativo"}),
                     400,
                 )
+            data["limite_credito"] = limite_credito
 
         # Validar dia de vencimento (se fornecido)
         if "dia_vencimento" in data:
-            dia_vencimento = int(data["dia_vencimento"])
+            try:
+                dia_vencimento = int(data["dia_vencimento"] or 1)
+            except (TypeError, ValueError):
+                dia_vencimento = 1
             if dia_vencimento < 1 or dia_vencimento > 31:
                 return (
                     jsonify({"error": "Dia de vencimento deve estar entre 1 e 31"}),
                     400,
                 )
+            data["dia_vencimento"] = dia_vencimento
 
         # ==================== ATUALIZAR CAMPOS ====================
         campos_permitidos = [
