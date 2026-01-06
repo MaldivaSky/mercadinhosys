@@ -10,12 +10,14 @@ import {
     CreditCard,
     UserCog,
     FileText,
+    Truck,
 } from 'lucide-react';
 
 const menuItems = [
     { to: '/dashboard', icon: Home, label: 'Dashboard' },
     { to: '/pdv', icon: ShoppingCart, label: 'PDV' },
     { to: '/products', icon: Package, label: 'Produtos' },
+    { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
     { to: '/customers', icon: Users, label: 'Clientes' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
