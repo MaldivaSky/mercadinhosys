@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Produto, Fornecedor
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import or_, and_, func
 
 produtos_bp = Blueprint("produtos", __name__, url_prefix="/api/produtos")
@@ -130,6 +130,7 @@ def quick_add():
 
         # Criar produto
         novo_produto = Produto(
+            estabelecimento_id=1,
             nome=nome,
             preco_venda=preco_venda_float,
             preco_custo=float(data.get("preco_custo", 0)),
@@ -164,9 +165,7 @@ def quick_add():
                     "unit": novo_produto.unidade_medida,
                     "fornecedor_id": novo_produto.fornecedor_id,
                     "fornecedor_nome": (
-                        novo_produto.fornecedor_rel.nome
-                        if novo_produto.fornecedor_rel
-                        else None
+                        novo_produto.fornecedor.nome if novo_produto.fornecedor else None
                     ),
                     "success": True,
                 }
@@ -257,9 +256,9 @@ def listar_estoque():
                 )
             )
 
-        # Filtro por categoria
+        # Filtro por categoria (case-insensitive)
         if categoria:
-            query = query.filter(Produto.categoria == categoria)
+            query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
 
         # Filtro por fornecedor
         if fornecedor_id:
@@ -287,9 +286,9 @@ def listar_estoque():
             elif estoque_status == "normal":
                 query = query.filter(Produto.quantidade >= Produto.quantidade_minima)
 
-        # Filtro por tipo de produto
+        # Filtro por tipo de produto (case-insensitive)
         if tipo_produto:
-            query = query.filter(Produto.tipo == tipo_produto)
+            query = query.filter(Produto.tipo.ilike(f"%{tipo_produto}%"))
 
         # ==================== APLICAÇÃO DA ORDENAÇÃO ====================
         if direcao == "desc":
@@ -317,19 +316,19 @@ def listar_estoque():
                 "codigo_barras": p.codigo_barras,
                 "descricao": p.descricao,
                 "fornecedor_id": p.fornecedor_id,
-                "fornecedor_nome": p.fornecedor_rel.nome if p.fornecedor_rel else None,
-                "preco_custo": float(p.preco_custo),
-                "preco_venda": float(p.preco_venda),
-                "margem_lucro": float(p.margem_lucro),
-                "quantidade": p.quantidade,
-                "quantidade_minima": p.quantidade_minima,
+                "fornecedor_nome": p.fornecedor.nome if p.fornecedor else None,
+                "preco_custo": float(p.preco_custo) if p.preco_custo else 0.0,
+                "preco_venda": float(p.preco_venda) if p.preco_venda else 0.0,
+                "margem_lucro": float(p.margem_lucro) if p.margem_lucro else 0.0,
+                "quantidade": p.quantidade if p.quantidade is not None else 0,
+                "quantidade_minima": p.quantidade_minima if p.quantidade_minima is not None else 0,
                 "estoque_status": estoque_status_local,
                 "categoria": p.categoria,
                 "marca": p.marca,
-                "tipo": p.tipo,
+                "fabricante": p.fabricante if hasattr(p, 'fabricante') else None,
+                "tipo": p.tipo if hasattr(p, 'tipo') else "unidade",
                 "unidade_medida": p.unidade_medida,
                 "ativo": p.ativo,
-                "controla_estoque": p.controla_estoque,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
                 "updated_at": p.updated_at.isoformat() if p.updated_at else None,
             }
@@ -414,9 +413,8 @@ def detalhes_produto(id):
                 "codigo_barras": produto.codigo_barras,
                 "descricao": produto.descricao,
                 "fornecedor_id": produto.fornecedor_id,
-                "fornecedor_nome": (
-                    produto.fornecedor_rel.nome if produto.fornecedor_rel else None
-                ),
+                    "fornecedor_nome": produto.fornecedor.nome if produto.fornecedor else None,
+                "fabricante": produto.fabricante,
                 "preco_custo": float(produto.preco_custo),
                 "preco_venda": float(produto.preco_venda),
                 "margem_lucro": float(produto.margem_lucro),
@@ -425,10 +423,10 @@ def detalhes_produto(id):
                 "estoque_status": estoque_status,
                 "categoria": produto.categoria,
                 "marca": produto.marca,
+                "fabricante": produto.fabricante,
                 "tipo": produto.tipo,
                 "unidade_medida": produto.unidade_medida,
                 "ativo": produto.ativo,
-                "controla_estoque": produto.controla_estoque,
                 "created_at": (
                     produto.created_at.isoformat() if produto.created_at else None
                 ),
@@ -481,12 +479,29 @@ def criar_produto():
                     409,
                 )
 
+        # Converter datas de string para objetos date
+        data_fabricacao = None
+        if data.get("data_fabricacao"):
+            try:
+                data_fabricacao = datetime.strptime(data["data_fabricacao"], "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
+        data_validade = None
+        if data.get("data_validade"):
+            try:
+                data_validade = datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
         # Criar produto
         novo_produto = Produto(
+            estabelecimento_id=1,  # ID do estabelecimento padrão
             nome=data["nome"],
             codigo_barras=codigo_barras or "",
             descricao=data.get("descricao", ""),
             fornecedor_id=data.get("fornecedor_id"),
+            fabricante=data.get("fabricante", ""),
             preco_custo=float(data.get("preco_custo", 0)),
             preco_venda=preco_venda,
             margem_lucro=float(data.get("margem_lucro", 30.0)),
@@ -497,7 +512,9 @@ def criar_produto():
             tipo=data.get("tipo", "unidade"),
             unidade_medida=data.get("unidade_medida", "un"),
             ativo=data.get("ativo", True),
-            controla_estoque=data.get("controla_estoque", True),
+            lote=data.get("lote"),
+            data_fabricacao=data_fabricacao,
+            data_validade=data_validade,
         )
 
         db.session.add(novo_produto)
@@ -583,15 +600,33 @@ def atualizar_produto(id):
             "quantidade_minima",
             "categoria",
             "marca",
+            "fabricante",
             "tipo",
             "unidade_medida",
             "ativo",
-            "controla_estoque",
+            "lote",
         ]
 
         for campo in campos_permitidos:
             if campo in data:
                 setattr(produto, campo, data[campo])
+
+        # Converter datas de string para objetos date
+        if "data_fabricacao" in data and data["data_fabricacao"]:
+            try:
+                produto.data_fabricacao = datetime.strptime(data["data_fabricacao"], "%Y-%m-%d").date()
+            except ValueError:
+                produto.data_fabricacao = None
+        elif "data_fabricacao" in data:
+            produto.data_fabricacao = None
+
+        if "data_validade" in data and data["data_validade"]:
+            try:
+                produto.data_validade = datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
+            except ValueError:
+                produto.data_validade = None
+        elif "data_validade" in data:
+            produto.data_validade = None
 
         db.session.commit()
 
@@ -767,7 +802,7 @@ def relatorio_estoque():
             query = query.filter_by(ativo=True)
 
         if categoria:
-            query = query.filter(Produto.categoria == categoria)
+            query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
 
         # Filtro por status de estoque
         if estoque_status:
@@ -809,7 +844,7 @@ def relatorio_estoque():
                     "marca": p.marca,
                     "categoria": p.categoria,
                     "fornecedor_nome": (
-                        p.fornecedor_rel.nome if p.fornecedor_rel else None
+                        p.fornecedor.nome if p.fornecedor else None
                     ),
                 }
             )
@@ -876,7 +911,7 @@ def exportar_csv():
             elif p.quantidade < p.quantidade_minima:
                 estoque_status = "BAIXO"
 
-            fornecedor_nome = p.fornecedor_rel.nome if p.fornecedor_rel else ""
+            fornecedor_nome = p.fornecedor.nome if p.fornecedor else ""
 
             csv_lines.append(
                 f'{p.id};"{p.nome}";{p.codigo_barras};{p.categoria};{p.marca};'
