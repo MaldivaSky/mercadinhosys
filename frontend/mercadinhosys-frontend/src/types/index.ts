@@ -113,11 +113,12 @@ export interface Cliente {
     updated_at: string;
 }
 
-// Tipos para produtos (atualizado conforme models.py)
+// Tipos para produtos (atualizado conforme models.py e produtos.py backend)
 export interface Produto {
     id: number;
-    estabelecimento_id: number;
+    estabelecimento_id?: number;
     fornecedor_id?: number;
+    fornecedor_nome?: string;
     codigo_barras?: string;
     nome: string;
     descricao?: string;
@@ -125,26 +126,68 @@ export interface Produto {
     fabricante?: string;
     categoria: string;
     subcategoria?: string;
+    tipo?: string; // 'unidade', 'granel', etc
     unidade_medida: string;
     quantidade: number;
+    quantidade_estoque?: number; // Alias para quantidade
     quantidade_minima: number;
+    estoque_minimo?: number; // Alias para quantidade_minima
+    estoque_status?: 'normal' | 'baixo' | 'esgotado';
     localizacao?: string;
     dias_estoque?: number;
-    giro_estoque: number;
+    giro_estoque?: number;
     preco_custo: number;
     preco_venda: number;
     margem_lucro?: number;
-    total_vendido: number;
-    quantidade_vendida: number;
-    frequencia_venda: number;
+    total_vendido?: number;
+    quantidade_vendida?: number;
+    frequencia_venda?: number;
     ultima_venda?: string;
     classificação_abc?: 'A' | 'B' | 'C';
+    data_fabricacao?: string;
     data_validade?: string;
     lote?: string;
     imagem_url?: string;
     ativo: boolean;
-    created_at: string;
-    updated_at: string;
+    controla_estoque?: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+// Response da API de produtos com estatísticas
+export interface ProdutosResponse {
+    produtos: Produto[];
+    paginacao: {
+        pagina_atual: number;
+        total_paginas: number;
+        total_itens: number;
+        itens_por_pagina: number;
+        tem_proxima: boolean;
+        tem_anterior: boolean;
+        primeira_pagina: number;
+        ultima_pagina: number;
+    };
+    estatisticas?: {
+        total_produtos: number;
+        produtos_baixo_estoque: number;
+        produtos_esgotados: number;
+        produtos_normal: number;
+    };
+    filtros_aplicados?: Record<string, any>;
+}
+
+// Filtros para listagem de produtos
+export interface ProdutoFiltros {
+    busca?: string;
+    categoria?: string;
+    fornecedor_id?: number;
+    ativos?: boolean;
+    preco_min?: number;
+    preco_max?: number;
+    estoque_status?: 'baixo' | 'esgotado' | 'normal';
+    tipo?: string;
+    ordenar_por?: string;
+    direcao?: 'asc' | 'desc';
 }
 
 // Tipos para vendas - COMPLETAMENTE ATUALIZADO

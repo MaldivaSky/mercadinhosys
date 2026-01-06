@@ -249,61 +249,233 @@ def seed_produtos(
     fornecedores: List[Fornecedor],
     n: int = 120,
 ) -> List[Produto]:
-    print("📦 Criando produtos...")
-    categorias = ["Alimentos", "Bebidas", "Limpeza", "Higiene", "Padaria", "Açougue"]
-    marcas = ["BomPreço", "Qualitá", "TopMix", "Vida", "Sabor+", "Eco"]
-    unidades = ["UN", "KG", "LT"]
+    print("📦 Criando produtos realistas...")
+    
+    # Produtos reais brasileiros por categoria e tipo de seção
+    produtos_reais = {
+        "Bebidas Não Alcoólicas": {
+            "tipo": "Bebidas Não Alcoólicas",
+            "items": [
+                ("Coca-Cola 2L", "Coca-Cola", 8.50, 10.99, "L"),
+                ("Guaraná Antarctica 2L", "Ambev", 7.80, 9.99, "L"),
+                ("Suco Del Valle Laranja 1L", "Coca-Cola", 5.20, 7.49, "L"),
+                ("Água Mineral Crystal 1.5L", "Crystal", 1.80, 2.99, "L"),
+                ("Café Pilão 500g", "Pilão", 12.50, 16.90, "KG"),
+                ("Achocolatado Nescau 400g", "Nestlé", 6.80, 9.49, "UN"),
+            ]
+        },
+        "Bebidas Alcoólicas": {
+            "tipo": "Bebidas Alcoólicas",
+            "items": [
+                ("Cerveja Skol Lata 350ml", "Ambev", 2.20, 3.49, "UN"),
+                ("Cerveja Brahma 1L", "Ambev", 5.50, 7.99, "L"),
+                ("Vinho Pérgola Tinto 750ml", "Aurora", 15.00, 22.90, "L"),
+            ]
+        },
+        "Higiene": {
+            "tipo": "Higiene",
+            "items": [
+                ("Sabonete Dove 90g", "Unilever", 2.80, 4.29, "UN"),
+                ("Shampoo Pantene 400ml", "P&G", 12.50, 18.90, "L"),
+                ("Creme Dental Colgate 90g", "Colgate", 4.20, 6.49, "UN"),
+                ("Desodorante Rexona Aerosol", "Unilever", 8.50, 12.99, "UN"),
+                ("Papel Higiênico Neve 4 rolos", "Kimberly", 6.80, 9.99, "UN"),
+            ]
+        },
+        "Limpeza": {
+            "tipo": "Limpeza",
+            "items": [
+                ("Detergente Ypê 500ml", "Ypê", 1.80, 2.99, "L"),
+                ("Água Sanitária Qboa 1L", "Bombril", 2.50, 3.99, "L"),
+                ("Sabão em Pó Omo 1kg", "Unilever", 11.50, 16.90, "KG"),
+                ("Esponja Scotch-Brite", "3M", 3.20, 4.99, "UN"),
+                ("Desinfetante Pinho Sol 500ml", "Reckitt", 5.80, 8.49, "L"),
+            ]
+        },
+        "Mercearia": {
+            "tipo": "Mercearia",
+            "items": [
+                ("Arroz Tio João 5kg", "Tio João", 22.00, 29.90, "KG"),
+                ("Feijão Camil 1kg", "Camil", 6.50, 8.99, "KG"),
+                ("Macarrão Galo Parafuso 500g", "M.Dias", 3.20, 4.79, "KG"),
+                ("Óleo de Soja Liza 900ml", "Cargill", 5.80, 7.99, "L"),
+                ("Açúcar União 1kg", "União", 3.50, 4.99, "KG"),
+                ("Sal Cisne 1kg", "Cisne", 1.20, 1.99, "KG"),
+                ("Farinha de Trigo Dona Benta 1kg", "M.Dias", 4.20, 5.99, "KG"),
+            ]
+        },
+        "Mercearia Seca": {
+            "tipo": "Mercearia Seca",
+            "items": [
+                ("Bolacha Maizena Marilan", "Marilan", 2.80, 4.29, "UN"),
+                ("Biscoito Recheado Bono 126g", "Nestlé", 1.80, 2.99, "UN"),
+                ("Leite em Pó Ninho 400g", "Nestlé", 18.50, 24.90, "UN"),
+            ]
+        },
+        "Frios e Laticínios": {
+            "tipo": "Frios e Laticínios",
+            "items": [
+                ("Leite Integral Parmalat 1L", "Parmalat", 3.80, 5.49, "L"),
+                ("Iogurte Danone 170g", "Danone", 2.20, 3.49, "UN"),
+                ("Queijo Mussarela Tirolez kg", "Tirolez", 32.00, 44.90, "KG"),
+                ("Presunto Sadia kg", "Sadia", 28.00, 38.90, "KG"),
+                ("Manteiga Aviação 200g", "Aviação", 8.50, 12.49, "UN"),
+            ]
+        },
+        "Carnes": {
+            "tipo": "Carnes",
+            "items": [
+                ("Picanha Bovina kg", "Friboi", 58.00, 79.90, "KG"),
+                ("Frango Inteiro Congelado kg", "Seara", 9.50, 13.90, "KG"),
+                ("Linguiça Toscana kg", "Perdigão", 18.00, 24.90, "KG"),
+            ]
+        },
+        "Hortifruti": {
+            "tipo": "Hortifruti",
+            "items": [
+                ("Banana Nanica kg", "Produtor Local", 4.50, 6.99, "KG"),
+                ("Tomate kg", "Produtor Local", 5.80, 8.49, "KG"),
+                ("Batata kg", "Produtor Local", 4.20, 5.99, "KG"),
+                ("Alface un", "Produtor Local", 2.50, 3.99, "UN"),
+            ]
+        },
+        "Padaria": {
+            "tipo": "Padaria",
+            "items": [
+                ("Pão Francês kg", "Produção Própria", 8.50, 12.90, "KG"),
+                ("Pão de Forma Pullman", "Pullman", 6.80, 9.49, "UN"),
+                ("Bolo Caseiro un", "Produção Própria", 12.00, 18.90, "UN"),
+            ]
+        },
+        "Congelados": {
+            "tipo": "Congelados",
+            "items": [
+                ("Pizza Sadia Mussarela", "Sadia", 11.50, 16.90, "UN"),
+                ("Lasanha Seara 600g", "Seara", 13.80, 19.90, "UN"),
+                ("Batata Pré-Frita McCain", "McCain", 8.50, 12.49, "KG"),
+            ]
+        },
+        "Matinais": {
+            "tipo": "Matinais",
+            "items": [
+                ("Cereal Nescau 210g", "Nestlé", 8.50, 12.49, "UN"),
+                ("Aveia Quaker 500g", "Quaker", 6.20, 8.99, "UN"),
+                ("Sucrilhos Kelloggs", "Kelloggs", 9.80, 14.49, "UN"),
+            ]
+        },
+        "Bazar e Utilidades": {
+            "tipo": "Bazar e Utilidades",
+            "items": [
+                ("Pilha Duracell AA c/4", "Duracell", 12.00, 17.90, "UN"),
+                ("Vela Comum Maço", "Imperial", 3.50, 5.49, "UN"),
+                ("Fósforo Fiatux", "Fiatux", 1.50, 2.49, "UN"),
+            ]
+        },
+        "Pet Shop": {
+            "tipo": "Pet Shop",
+            "items": [
+                ("Ração Pedigree Carne 1kg", "Pedigree", 18.00, 25.90, "KG"),
+                ("Ração Whiskas Peixe 1kg", "Whiskas", 16.50, 22.90, "KG"),
+            ]
+        },
+    }
+
     produtos: List[Produto] = []
-
     hoje = date.today()
-    for i in range(n):
-        preco_custo = round(random.uniform(0.8, 40.0), 2)
-        margem = random.uniform(1.25, 2.2)
-        preco_venda = round(preco_custo * margem, 2)
-
-        # Valididade: mistura entre vencidos, próximos e ok
-        if i < max(3, n // 20):
-            data_validade = hoje - timedelta(days=random.randint(1, 15))
-        elif i < max(10, n // 10):
-            data_validade = hoje + timedelta(days=random.randint(1, 10))
-        else:
-            data_validade = hoje + timedelta(days=random.randint(20, 365))
-
-        # Estoque: garante alguns esgotados e alguns baixos
-        if i < max(5, n // 24):
-            quantidade = 0
-        elif i < max(15, n // 8):
-            quantidade = random.randint(1, 5)
-        else:
-            quantidade = random.randint(10, 200)
-
-        quantidade_minima = random.choice([5, 8, 10, 12, 15])
-
-        p = Produto(
-            estabelecimento_id=estabelecimento_id,
-            fornecedor_id=random.choice(fornecedores).id,
-            codigo_barras=fake.unique.ean13(),
-            nome=f"{random.choice(categorias)} - {fake.word().capitalize()} {i+1}",
-            descricao=fake.sentence(nb_words=10),
-            marca=random.choice(marcas),
-            fabricante=random.choice(marcas),
-            categoria=random.choice(categorias),
-            subcategoria=fake.word().capitalize(),
-            unidade_medida=random.choice(unidades),
-            quantidade=quantidade,
-            quantidade_minima=quantidade_minima,
-            localizacao=f"Corredor {random.randint(1, 10)}",
-            preco_custo=preco_custo,
-            preco_venda=preco_venda,
-            margem_lucro=round(((preco_venda - preco_custo) / preco_custo) * 100, 2),
-            data_validade=data_validade,
-            lote=f"L{random.randint(1000,9999)}",
-            ativo=True,
-        )
-        db.session.add(p)
-        produtos.append(p)
+    
+    # Criar produtos reais primeiro
+    for categoria, dados_cat in produtos_reais.items():
+        tipo_secao = dados_cat["tipo"]
+        for nome_prod, marca, custo_base, venda_base, unidade in dados_cat["items"]:
+            # Variação de até 15% nos preços
+            preco_custo = round(custo_base * random.uniform(0.92, 1.08), 2)
+            preco_venda = round(venda_base * random.uniform(0.95, 1.05), 2)
+            
+            # Validação de margem mínima
+            if preco_venda <= preco_custo:
+                preco_venda = round(preco_custo * 1.25, 2)
+            
+            # Estoque realista
+            quantidade = random.choice([0, 0, 3, 8, 15, 25, 40, 60, 100])
+            quantidade_minima = random.choice([5, 8, 10, 12, 15])
+            
+            # Validade
+            if categoria in ["Hortifruti", "Padaria", "Carnes"]:
+                data_validade = hoje + timedelta(days=random.randint(2, 7))
+            elif categoria in ["Frios e Laticínios"]:
+                data_validade = hoje + timedelta(days=random.randint(10, 30))
+            else:
+                data_validade = hoje + timedelta(days=random.randint(60, 365))
+            
+            p = Produto(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=random.choice(fornecedores).id,
+                codigo_barras=fake.unique.ean13(),
+                nome=nome_prod,
+                descricao=f"{nome_prod} - {marca}",
+                marca=marca,
+                fabricante=marca,
+                categoria=categoria,
+                tipo=tipo_secao,
+                unidade_medida=unidade,
+                quantidade=quantidade,
+                quantidade_minima=quantidade_minima,
+                localizacao=f"Corredor {random.randint(1, 10)}",
+                preco_custo=preco_custo,
+                preco_venda=preco_venda,
+                margem_lucro=round(((preco_venda - preco_custo) / preco_custo) * 100, 2),
+                data_validade=data_validade,
+                lote=f"L{random.randint(1000,9999)}",
+                ativo=True,
+            )
+            db.session.add(p)
+            produtos.append(p)
+    
+    # Preencher até n produtos com variações
+    produtos_criados = len(produtos)
+    if produtos_criados < n:
+        categorias_lista = list(produtos_reais.keys())
+        for i in range(n - produtos_criados):
+            cat = random.choice(categorias_lista)
+            dados_cat = produtos_reais[cat]
+            tipo_secao = dados_cat["tipo"]
+            item_base = random.choice(dados_cat["items"])
+            nome_base, marca_base, custo_base, venda_base, unidade = item_base
+            
+            preco_custo = round(random.uniform(custo_base * 0.7, custo_base * 1.3), 2)
+            preco_venda = round(random.uniform(venda_base * 0.8, venda_base * 1.4), 2)
+            
+            if preco_venda <= preco_custo:
+                preco_venda = round(preco_custo * 1.3, 2)
+            
+            quantidade = random.choice([0, 2, 5, 10, 20, 35, 50, 80])
+            
+            p = Produto(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=random.choice(fornecedores).id,
+                codigo_barras=fake.unique.ean13(),
+                nome=f"{nome_base} Var{i+1}",
+                descricao=f"Variação de {nome_base}",
+                marca=marca_base,
+                fabricante=marca_base,
+                categoria=cat,
+                tipo=tipo_secao,
+                unidade_medida=unidade,
+                quantidade=quantidade,
+                quantidade_minima=random.choice([5, 8, 10]),
+                localizacao=f"Corredor {random.randint(1, 10)}",
+                preco_custo=preco_custo,
+                preco_venda=preco_venda,
+                margem_lucro=round(((preco_venda - preco_custo) / preco_custo) * 100, 2),
+                data_validade=hoje + timedelta(days=random.randint(30, 365)),
+                lote=f"L{random.randint(1000,9999)}",
+                ativo=True,
+            )
+            db.session.add(p)
+            produtos.append(p)
 
     db.session.commit()
+    print(f"✓ {len(produtos)} produtos realistas criados")
     return produtos
 
 
