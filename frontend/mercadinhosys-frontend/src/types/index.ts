@@ -248,6 +248,10 @@ export interface Fornecedor {
     contato_comercial?: string;
     contato_nome?: string;
     celular_comercial?: string;
+    cep?: string;
+    contato_principal?: string;
+    observacoes?: string;
+    total_produtos?: number;
     ativo: boolean;
     prazo_entrega?: number;
     forma_pagamento?: string;

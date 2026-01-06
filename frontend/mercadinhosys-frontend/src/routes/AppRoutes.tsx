@@ -9,6 +9,7 @@ import { authService } from '../features/auth/authService';
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
 const PDVPage = lazy(() => import('../features/pdv/PDVPage'));
 const ProductsPage = lazy(() => import('../features/products/ProductsPage'));
+const SuppliersPage = lazy(() => import('../features/suppliers/SuppliersPage'));
 const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 const SalesPage = lazy(() => import('../features/sales/SalesPage'));
 const ExpensesPage = lazy(() => import('../features/expenses/ExpensesPage'));
@@ -51,6 +52,7 @@ const AppRoutes: React.FC = () => {
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="pdv" element={<PDVPage />} />
                         <Route path="products" element={<ProductsPage />} />
+                        <Route path="suppliers" element={<SuppliersPage />} />
                         <Route path="customers" element={<CustomersPage />} />
                         <Route path="sales" element={<SalesPage />} />
                         <Route path="expenses" element={<ExpensesPage />} />
