@@ -1,6 +1,6 @@
 import React from 'react';
 import { Cliente } from '../../../types';
-import { Button } from '@mui/material';
+
 
 interface CustomerTableProps {
   clientes: Cliente[];
