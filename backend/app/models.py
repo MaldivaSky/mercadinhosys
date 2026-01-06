@@ -393,6 +393,7 @@ class Produto(db.Model):
     fabricante = db.Column(db.String(50))
     categoria = db.Column(db.String(50))
     subcategoria = db.Column(db.String(50))  # NOVO
+    tipo = db.Column(db.String(30), default="unidade")  # Ex: Higiene, Mercearia, etc.
     unidade_medida = db.Column(db.String(20), default="UN")
 
     # Estoque
@@ -416,9 +417,11 @@ class Produto(db.Model):
     # Classificação ABC
     classificação_abc = db.Column(db.String(1))  # NOVO: 'A', 'B', 'C'
 
-    # Validade
+    # Validade e Rastreabilidade
+    data_fabricacao = db.Column(db.Date)  # NOVO: Data de fabricação
     data_validade = db.Column(db.Date)
     lote = db.Column(db.String(50))
+    dias_para_vencer = db.Column(db.Integer)  # NOVO: Calculado automaticamente
 
     # Imagem
     imagem_url = db.Column(db.String(255))
@@ -445,6 +448,7 @@ class Produto(db.Model):
             "descricao": self.descricao,
             "categoria": self.categoria,
             "subcategoria": self.subcategoria,
+            "tipo": self.tipo,
             "unidade_medida": self.unidade_medida,
             "quantidade": self.quantidade,
             "quantidade_minima": self.quantidade_minima,

@@ -61,6 +61,7 @@ const PDVPage: React.FC = () => {
     const [descontoAprovado, setDescontoAprovado] = useState(false);
     const [ultimaVendaId, setUltimaVendaId] = useState<number | null>(null);
     const [enviandoEmail, setEnviandoEmail] = useState(false);
+    const [mostrarModalEmail, setMostrarModalEmail] = useState(false);
 
     // Validar desconto ao alterar
     useEffect(() => {
@@ -84,24 +85,13 @@ const PDVPage: React.FC = () => {
 
     const handleProdutoSelecionado = (produto: Produto) => {
         if (!produto.quantidade_estoque || produto.quantidade_estoque <= 0) {
-            toast.error(
-                `${produto.nome} está sem estoque!`,
-                {
-                    icon: '📦',
-                    duration: 5000,
-                    style: {
-                        background: '#ef4444',
-                        color: '#fff',
-                        fontWeight: 'bold',
-                    },
-                }
-            );
+            toast.error(`📦 ${produto.nome} está sem estoque!`, {
+                duration: 5000,
+            });
             return;
         }
         adicionarProduto(produto);
-        toast.success(`${produto.nome} adicionado ao carrinho`, {
-            icon: '✅',
-        });
+        toast.success(`✅ ${produto.nome} adicionado ao carrinho`);
     };
 
     const handleAplicarDesconto = () => {
@@ -134,24 +124,25 @@ const PDVPage: React.FC = () => {
             }
 
             const venda = await finalizarVenda();
-            // Salvar ID da venda para enviar email depois
             setUltimaVendaId(venda.id);
 
             toast.success(
-                `Venda ${venda.codigo} finalizada com sucesso!\nTotal: ${formatCurrency(venda.total)}`,
-                {
-                    icon: '🎉',
-                    duration: 6000,
-                    style: {
-                        background: '#10b981',
-                        color: '#fff',
-                        fontWeight: 'bold',
-                    },
-                }
+                `🎉 Venda ${venda.codigo} finalizada com sucesso! Total: ${formatCurrency(venda.total)}`,
+                { duration: 6000 }
             );
 
-            // NÃO limpar carrinho imediatamente para permitir envio de email
             setDescontoAprovado(false);
+
+            // Perguntar se deseja enviar email ao cliente
+            if (cliente?.email) {
+                setMostrarModalEmail(true);
+            } else {
+                // Se não tem email, limpar automaticamente após 2 segundos
+                setTimeout(() => {
+                    limparCarrinho();
+                    setUltimaVendaId(null);
+                }, 2000);
+            }
 
         } catch (error: any) {
             console.error('❌ ERRO AO FINALIZAR:', error);
@@ -165,16 +156,24 @@ const PDVPage: React.FC = () => {
         }
     };
 
-    const handleEnviarEmail = async () => {
-        if (!ultimaVendaId) {
-            toast.error('Nenhuma venda para enviar email');
+    const handleEnviarEmail = async (enviar: boolean) => {
+        setMostrarModalEmail(false);
+
+        if (!enviar) {
+            // Cliente não quer email, limpar PDV
+            setTimeout(() => {
+                limparCarrinho();
+                setUltimaVendaId(null);
+            }, 1000);
             return;
         }
 
-        if (!cliente?.email) {
-            toast.error('Cliente não possui email cadastrado', {
-                icon: '📧',
-            });
+        if (!ultimaVendaId || !cliente?.email) {
+            // Limpar mesmo sem email
+            setTimeout(() => {
+                limparCarrinho();
+                setUltimaVendaId(null);
+            }, 1000);
             return;
         }
 
@@ -182,17 +181,9 @@ const PDVPage: React.FC = () => {
             setEnviandoEmail(true);
             await pdvService.enviarCupomEmail(ultimaVendaId);
             
-            toast.success(
-                `Cupom fiscal enviado para ${cliente.email}`,
-                {
-                    icon: '📧',
-                    duration: 6000,
-                    style: {
-                        background: '#10b981',
-                        color: '#fff',
-                    },
-                }
-            );
+            toast.success(`📧 Cupom fiscal enviado para ${cliente.email}`, {
+                duration: 6000,
+            });
 
             // Limpar após envio bem-sucedido
             setTimeout(() => {
@@ -202,13 +193,15 @@ const PDVPage: React.FC = () => {
 
         } catch (error: any) {
             console.error('❌ ERRO AO ENVIAR EMAIL:', error);
-            toast.error(
-                error.response?.data?.error || 'Erro ao enviar email',
-                {
-                    icon: '❌',
-                    duration: 6000,
-                }
-            );
+            toast.error(error.response?.data?.error || '❌ Erro ao enviar email', {
+                duration: 6000,
+            });
+            
+            // Limpar mesmo com erro no email
+            setTimeout(() => {
+                limparCarrinho();
+                setUltimaVendaId(null);
+            }, 2000);
         } finally {
             setEnviandoEmail(false);
         }
@@ -220,9 +213,7 @@ const PDVPage: React.FC = () => {
         setDescontoAprovado(false);
         toast.success('Nova venda iniciada', {
             icon: '🛒',
-        });       }
-            );
-        }
+        });
     };
 
     const handleLimparCarrinho = () => {
@@ -559,88 +550,36 @@ const PDVPage: React.FC = () => {
                         {/* Botões de Ação */}
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
                             <div className="space-y-4">
-                                {!ultimaVendaId ? (
-                                    // Antes de finalizar - Mostra botão FINALIZAR
+                                <button
+                                    onClick={handleFinalizarVenda}
+                                    disabled={carrinho.length === 0 || loading || enviandoEmail}
+                                    className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${
+                                        carrinho.length === 0 || loading || enviandoEmail
+                                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                                    }`}
+                                >
+                                    {loading || enviandoEmail ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                                            <span>{enviandoEmail ? 'Enviando email...' : 'Processando...'}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Check className="w-6 h-6" />
+                                            <span>FINALIZAR VENDA</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <div className="grid grid-cols-2 gap-3">
                                     <button
-                                        onClick={handleFinalizarVenda}
-                                        disabled={carrinho.length === 0 || loading}
-                                        className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${
-                                            carrinho.length === 0 || loading
-                                                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-                                        }`}
-                                    >
-                                        {loading ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                                                <span>Processando...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Check className="w-6 h-6" />
-                                                <span>FINALIZAR VENDA</span>
-                                            </>
-                                        )}
-                                    </button>
-                                ) : (
-                                    // Após finalizar - Mostra botões de EMAIL e NOVA VENDA
-                                    <>
-                                        {cliente?.email && (
-                                            <button
-                                                onClick={handleEnviarEmail}
-                                                disabled={enviandoEmail}
-                                                className="w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white disabled:opacity-50"
-                                            >
-                                                {enviandoEmail ? (
-                                                    <>
-                                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                                                        <span>Enviando...</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Mail className="w-6 h-6" />
-                                                        <span>ENVIAR CUPOM POR EMAIL</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        )}
-                                        
-                                        <button
-                                            onClick={handleNovaVenda}
-                                            className="w-full py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-                                        >
-                                            <ShoppingCart className="w-5 h-5" />
-                                            <span>NOVA VENDA</span>
-                                        </button>
-                                    </>
-                                )}
-
-                                {!ultimaVendaId && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            onClick={handleLimparCarrinho}
-                                            disabled={carrinho.length === 0}
-                                            className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
-                                                carrinho.length === 0
-                                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                    : 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
-                                            }`}
-                                        >
-                                            <X className="w-5 h-5" />
-                                            <span>Cancelar</span>
-                                        </button>
-
-                                        <button
-                                            className="py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-                                        >
-                                            <Printer className="w-5 h-5" />
-                                            <span>Imprimir</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                                                : 'bg-red-500 hover:bg-red-600 text-white shadow'
+                                        onClick={handleLimparCarrinho}
+                                        disabled={carrinho.length === 0 || loading || enviandoEmail}
+                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
+                                            carrinho.length === 0 || loading || enviandoEmail
+                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                                : 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
                                         }`}
                                     >
                                         <X className="w-5 h-5" />
@@ -648,13 +587,17 @@ const PDVPage: React.FC = () => {
                                     </button>
 
                                     <button
-                                        className="py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+                                        disabled={carrinho.length === 0}
+                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
+                                            carrinho.length === 0
+                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                                : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                        }`}
                                     >
                                         <Printer className="w-5 h-5" />
                                         <span>Imprimir</span>
                                     </button>
                                 </div>
-
                             </div>
                         </div>
                     </div>
@@ -671,6 +614,55 @@ const PDVPage: React.FC = () => {
                             setDescontoGeral(0);
                         }}
                     />
+                )}
+
+                {/* Modal de Confirmação de Envio de Email */}
+                {mostrarModalEmail && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 animate-fadeIn">
+                            <div className="text-center mb-6">
+                                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Mail className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                                    Enviar Cupom Fiscal por Email?
+                                </h3>
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    Deseja enviar o cupom fiscal para o email do cliente?
+                                </p>
+                                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mt-2">
+                                    📧 {cliente?.email}
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => handleEnviarEmail(false)}
+                                    disabled={enviandoEmail}
+                                    className="px-6 py-3 rounded-lg font-medium transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                                >
+                                    Não, obrigado
+                                </button>
+                                <button
+                                    onClick={() => handleEnviarEmail(true)}
+                                    disabled={enviandoEmail}
+                                    className="px-6 py-3 rounded-lg font-medium transition bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 flex items-center justify-center space-x-2"
+                                >
+                                    {enviandoEmail ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                            <span>Enviando...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Mail className="w-5 h-5" />
+                                            <span>Sim, enviar</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
