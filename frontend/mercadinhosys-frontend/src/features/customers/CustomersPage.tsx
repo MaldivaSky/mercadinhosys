@@ -16,6 +16,8 @@ const CustomersPage: React.FC = () => {
     const [editData, setEditData] = useState<Partial<Cliente> | undefined>(undefined);
     const [saving, setSaving] = useState(false);
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+    const [clienteDetalhado, setClienteDetalhado] = useState<Cliente | null>(null);
+    const [detalheLoading, setDetalheLoading] = useState(false);
     const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success'|'error'}>({open: false, message: '', severity: 'success'});
     const [dashboard, setDashboard] = useState<{total: number, ativos: number, inativos: number, novos: number, vip: number}>({total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0});
     // const [dashboardFilter, setDashboardFilter] = useState<string | null>(null);
@@ -65,8 +67,23 @@ const CustomersPage: React.FC = () => {
         setSelectedCliente(null);
     };
 
-    const handleRowClick = (cliente: Cliente) => {
+    const handleRowClick = async (cliente: Cliente) => {
+        setDetalheLoading(true);
         setSelectedCliente(cliente);
+        try {
+            const res = await apiClient.get(`/clientes/${cliente.id}`);
+            setClienteDetalhado(res.data);
+        } catch (err: any) {
+            setClienteDetalhado(null);
+            setSelectedCliente(null);
+            if (err?.response?.status === 404) {
+                setSnackbar({open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error'});
+            } else {
+                setSnackbar({open: true, message: 'Erro ao buscar detalhes do cliente', severity: 'error'});
+            }
+        } finally {
+            setDetalheLoading(false);
+        }
     };
 
     const handleDelete = async (cliente: Cliente) => {
@@ -111,8 +128,9 @@ const CustomersPage: React.FC = () => {
             <CustomerForm open={formOpen} onClose={() => setFormOpen(false)} onSave={handleSave} initialData={editData} loading={saving} />
             <CustomerDetailsModal
                 open={!!selectedCliente}
-                cliente={selectedCliente}
-                onClose={() => setSelectedCliente(null)}
+                cliente={clienteDetalhado}
+                loading={detalheLoading}
+                onClose={() => { setSelectedCliente(null); setClienteDetalhado(null); }}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
             />
