@@ -574,13 +574,18 @@ def criar_fornecedor():
                 )
 
         novo_fornecedor = Fornecedor(
+            estabelecimento_id=1,  # TODO: pegar do usuário logado
             nome=data["nome"],
             cnpj=cnpj or "",
             telefone=data.get("telefone", ""),
             email=data.get("email", ""),
+            endereco=data.get("endereco", ""),
             cidade=data.get("cidade", ""),
             estado=data.get("estado", ""),
+            cep=data.get("cep", ""),
             contato_nome=data.get("contato_nome", ""),
+            contato_comercial=data.get("contato_comercial", ""),
+            celular_comercial=data.get("celular_comercial", ""),
             ativo=data.get("ativo", True),
         )
 
@@ -645,9 +650,13 @@ def atualizar_fornecedor(id):
             "cnpj",
             "telefone",
             "email",
+            "endereco",
             "cidade",
             "estado",
+            "cep",
             "contato_nome",
+            "contato_comercial",
+            "celular_comercial",
             "ativo",
         ]
 

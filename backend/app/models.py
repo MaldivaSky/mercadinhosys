@@ -320,6 +320,7 @@ class Fornecedor(db.Model):
     endereco = db.Column(db.Text)
     cidade = db.Column(db.String(50))
     estado = db.Column(db.String(2))
+    cep = db.Column(db.String(10))
     contato_comercial = db.Column(db.String(100))
     contato_nome = db.Column(db.String(100))
     celular_comercial = db.Column(db.String(20))
@@ -354,6 +355,7 @@ class Fornecedor(db.Model):
             "endereco": self.endereco,
             "cidade": self.cidade,
             "estado": self.estado,
+            "cep": self.cep,
             "contato_comercial": self.contato_comercial,
             "contato_nome": self.contato_nome,
             "celular_comercial": self.celular_comercial,
