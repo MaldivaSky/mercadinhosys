@@ -21,8 +21,15 @@ from app.utils.logger import app_logger
 
 
 def create_app(config_name="default"):
+
     """Factory function para criar a aplicação Flask"""
     app = Flask(__name__)
+
+    # Middleware global para liberar preflight CORS (OPTIONS) antes de qualquer autenticação
+    @app.before_request
+    def handle_options_preflight():
+        if request.method == 'OPTIONS':
+            return '', 204
 
     # Carrega configurações
     app.config.from_object(config[config_name])
@@ -52,10 +59,10 @@ def create_app(config_name="default"):
         environment=os.getenv("FLASK_ENV", "development"),
     )
 
-    # Configuração CORS
+    # Configuração CORS robusta para API
     CORS(
         app,
-        resources={r"/*": {"origins": "*"}},
+        resources={r"/api/*": {"origins": "*"}},
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
@@ -239,56 +246,12 @@ def create_app(config_name="default"):
     @app.errorhandler(404)
     def not_found(error):
         return (
-            jsonify(
-                {
-                    "error": "Recurso não encontrado",
-                    "message": "Verifique a URL ou consulte a documentação em /api/pdv",
-                    "status_code": 404,
-                }
-            ),
+            jsonify({
+                "error": "Recurso não encontrado",
+                "message": "Verifique a URL ou consulte a documentação em /api/pdv",
+                "status_code": 404,
+            }),
             404,
         )
-
-    @app.errorhandler(500)
-    def internal_error(error):
-        app.logger.error(f"Erro interno: {str(error)}")
-        return (
-            jsonify(
-                {
-                    "error": "Erro interno do servidor",
-                    "message": "Nossa equipe técnica foi notificada",
-                    "status_code": 500,
-                }
-            ),
-            500,
-        )
-
-    @app.errorhandler(405)
-    def method_not_allowed(error):
-        return (
-            jsonify(
-                {
-                    "error": "Método não permitido",
-                    "message": "Verifique o método HTTP (GET, POST, etc.)",
-                    "status_code": 405,
-                }
-            ),
-            405,
-        )
-
-    # 📌 Middleware para logging de requisições (CORRIGIDO!)
-    @app.after_request
-    def after_request(response):
-        # Agora request está disponível porque importamos no topo
-        app.logger.info(f"{request.method} {request.path} - {response.status_code}")
-        return response
-
-    print("✅ Aplicação Flask inicializada com sucesso!")
-    print("📊 Rotas disponíveis:")
-    for rule in app.url_map.iter_rules():
-        if rule.endpoint != "static":
-            print(f"   {rule.methods} {rule.rule}")
-
-    print(f"📈 Dashboard científico de dados: ATIVADO")
 
     return app

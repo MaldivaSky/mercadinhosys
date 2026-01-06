@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Cliente, Venda
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import or_, and_, func
 
 clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
@@ -34,9 +34,10 @@ def listar_clientes():
         # ==================== PARÂMETROS DE FILTRO ====================
         busca = request.args.get("busca", "").strip()
         apenas_ativos = request.args.get("ativos", "true").lower() == "true"
-        limite_min = request.args.get("limite_min", type=float)
-        limite_max = request.args.get("limite_max", type=float)
-        dia_vencimento = request.args.get("dia_vencimento", type=int)
+        # Campos removidos pois não existem no model Cliente
+        limite_min = None
+        limite_max = None
+        dia_vencimento = None
 
         # ==================== PARÂMETROS DE ORDENAÇÃO ====================
         ordenar_por = request.args.get("ordenar_por", "nome")
@@ -46,12 +47,9 @@ def listar_clientes():
         campos_ordenacao = {
             "id": Cliente.id,
             "nome": Cliente.nome,
-            "cpf": Cliente.cpf,
+            "cpf_cnpj": Cliente.cpf_cnpj,
             "email": Cliente.email,
-            "limite_credito": Cliente.limite_credito,
             "data_cadastro": Cliente.data_cadastro,
-            "data_atualizacao": Cliente.data_atualizacao,
-            "dia_vencimento": Cliente.dia_vencimento,
         }
 
         campo_ordenacao = campos_ordenacao.get(ordenar_por, Cliente.nome)
@@ -64,7 +62,7 @@ def listar_clientes():
             query = query.filter(
                 db.or_(
                     Cliente.nome.ilike(f"%{busca}%"),
-                    Cliente.cpf.ilike(f"%{busca}%"),
+                    Cliente.cpf_cnpj.ilike(f"%{busca}%"),
                     Cliente.email.ilike(f"%{busca}%"),
                     Cliente.telefone.ilike(f"%{busca}%"),
                     Cliente.celular.ilike(f"%{busca}%"),
@@ -76,14 +74,7 @@ def listar_clientes():
             query = query.filter(Cliente.ativo == True)
 
         # Filtro por faixa de limite de crédito
-        if limite_min is not None:
-            query = query.filter(Cliente.limite_credito >= limite_min)
-        if limite_max is not None:
-            query = query.filter(Cliente.limite_credito <= limite_max)
-
-        # Filtro por dia de vencimento
-        if dia_vencimento:
-            query = query.filter(Cliente.dia_vencimento == dia_vencimento)
+        # Filtros removidos pois os campos não existem
 
         # ==================== APLICAÇÃO DA ORDENAÇÃO ====================
         if direcao == "desc":
@@ -108,7 +99,7 @@ def listar_clientes():
             )
 
             # Calcular último mês de compras
-            um_mes_atras = datetime.utcnow() - datetime.timedelta(days=30)
+            um_mes_atras = datetime.utcnow() - timedelta(days=30)
             compras_ultimo_mes = Venda.query.filter(
                 Venda.cliente_id == cliente.id, Venda.created_at >= um_mes_atras
             ).count()
@@ -116,15 +107,12 @@ def listar_clientes():
             cliente_dict = {
                 "id": cliente.id,
                 "nome": cliente.nome,
-                "cpf": cliente.cpf,
+                "cpf_cnpj": cliente.cpf_cnpj,
                 "telefone": cliente.telefone,
-                "celular": cliente.celular,
+                "celular": getattr(cliente, "celular", None),
                 "email": cliente.email,
                 "endereco": cliente.endereco,
-                "limite_credito": float(cliente.limite_credito),
-                "limite_disponivel": float(cliente.limite_credito - total_gasto),
-                "dia_vencimento": cliente.dia_vencimento,
-                "ativo": cliente.ativo,
+                "ativo": getattr(cliente, "ativo", True),
                 "total_compras": total_compras,
                 "total_gasto": float(total_gasto),
                 "compras_ultimo_mes": compras_ultimo_mes,
@@ -133,11 +121,6 @@ def listar_clientes():
                 ),
                 "data_cadastro": (
                     cliente.data_cadastro.isoformat() if cliente.data_cadastro else None
-                ),
-                "data_atualizacao": (
-                    cliente.data_atualizacao.isoformat()
-                    if cliente.data_atualizacao
-                    else None
                 ),
                 "observacoes": cliente.observacoes,
             }
@@ -165,12 +148,7 @@ def listar_clientes():
         clientes_inativos = total_clientes - clientes_ativos if not apenas_ativos else 0
 
         # Calcular totais de limite de crédito
-        total_limite_credito = (
-            db.session.query(db.func.sum(Cliente.limite_credito))
-            .filter(Cliente.id.in_([c.id for c in clientes]))
-            .scalar()
-            or 0
-        )
+        total_limite_credito = 0  # Campo removido
 
         # ==================== RESPOSTA ====================
         return jsonify(
@@ -190,10 +168,7 @@ def listar_clientes():
                     "total_clientes": total_clientes,
                     "clientes_ativos": clientes_ativos,
                     "clientes_inativos": clientes_inativos,
-                    "total_limite_credito": float(total_limite_credito),
-                    "media_limite_credito": (
-                        float(total_limite_credito / len(clientes)) if clientes else 0
-                    ),
+                    # Campos removidos: total_limite_credito, media_limite_credito
                     "clientes_novos": sum(
                         1 for c in resultado if c["total_compras"] == 0
                     ),
@@ -204,9 +179,7 @@ def listar_clientes():
                 "filtros_aplicados": {
                     "busca": busca if busca else None,
                     "apenas_ativos": apenas_ativos,
-                    "limite_min": limite_min,
-                    "limite_max": limite_max,
-                    "dia_vencimento": dia_vencimento,
+                    # Filtros removidos: limite_min, limite_max, dia_vencimento
                     "ordenar_por": ordenar_por,
                     "direcao": direcao,
                 },
@@ -214,8 +187,10 @@ def listar_clientes():
         )
 
     except Exception as e:
+        import traceback
         print(f"Erro ao listar clientes: {str(e)}")
-        return jsonify({"error": f"Erro ao listar clientes: {str(e)}"}), 500
+        traceback.print_exc()
+        return jsonify({"error": f"Erro ao listar clientes: {str(e)}", "trace": traceback.format_exc()}), 500
 
 
 @clientes_bp.route("/<int:id>", methods=["GET"])
@@ -277,7 +252,7 @@ def detalhes_cliente(id):
         )
 
         # Últimos 30 dias
-        um_mes_atras = datetime.utcnow() - datetime.timedelta(days=30)
+        um_mes_atras = datetime.utcnow() - timedelta(days=30)
         compras_ultimo_mes = Venda.query.filter(
             Venda.cliente_id == id, Venda.created_at >= um_mes_atras
         ).count()
@@ -323,7 +298,7 @@ def detalhes_cliente(id):
         cliente_dict = {
             "id": cliente.id,
             "nome": cliente.nome,
-            "cpf": cliente.cpf,
+            "cpf_cnpj": cliente.cpf_cnpj,
             "rg": cliente.rg,
             "data_nascimento": (
                 cliente.data_nascimento.isoformat() if cliente.data_nascimento else None
@@ -410,34 +385,30 @@ def criar_cliente():
         if not data.get("nome"):
             return jsonify({"error": "Nome do cliente é obrigatório"}), 400
 
-        # Validar CPF (se fornecido)
-        cpf = data.get("cpf", "").strip()
-        if cpf:
-            # Validar formato básico de CPF
-            if len(cpf) != 11 or not cpf.isdigit():
+        # Validar CPF/CNPJ (se fornecido)
+        cpf_cnpj = data.get("cpf_cnpj", "").strip()
+        if cpf_cnpj:
+            # Validar formato básico de CPF/CNPJ (apenas se quiser, senão remova)
+            if not cpf_cnpj.isdigit() or len(cpf_cnpj) not in [11, 14]:
                 return (
-                    jsonify(
-                        {"error": "CPF inválido. Deve conter 11 dígitos numéricos"}
-                    ),
+                    jsonify({"error": "CPF/CNPJ inválido. Deve conter 11 ou 14 dígitos numéricos"}),
                     400,
                 )
 
-            # Verificar se CPF já existe
-            existente = Cliente.query.filter_by(cpf=cpf).first()
+            # Verificar se CPF/CNPJ já existe
+            existente = Cliente.query.filter_by(cpf_cnpj=cpf_cnpj).first()
             if existente:
                 return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "CPF já cadastrado",
-                            "cliente_existente": {
-                                "id": existente.id,
-                                "nome": existente.nome,
-                                "email": existente.email,
-                                "telefone": existente.telefone,
-                            },
-                        }
-                    ),
+                    jsonify({
+                        "success": False,
+                        "error": "CPF/CNPJ já cadastrado",
+                        "cliente_existente": {
+                            "id": existente.id,
+                            "nome": existente.nome,
+                            "email": existente.email,
+                            "telefone": existente.telefone,
+                        },
+                    }),
                     409,
                 )
 
@@ -452,17 +423,15 @@ def criar_cliente():
             existente_email = Cliente.query.filter_by(email=email).first()
             if existente_email:
                 return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": "Email já cadastrado",
-                            "cliente_existente": {
-                                "id": existente_email.id,
-                                "nome": existente_email.nome,
-                                "cpf": existente_email.cpf,
-                            },
-                        }
-                    ),
+                    jsonify({
+                        "success": False,
+                        "error": "Email já cadastrado",
+                        "cliente_existente": {
+                            "id": existente_email.id,
+                            "nome": existente_email.nome,
+                            "cpf_cnpj": existente_email.cpf_cnpj,
+                        },
+                    }),
                     409,
                 )
 
@@ -496,17 +465,18 @@ def criar_cliente():
             return jsonify({"error": "Dia de vencimento deve estar entre 1 e 31"}), 400
 
         # Criar cliente
+        estabelecimento_id = data.get("estabelecimento_id")
+        if not estabelecimento_id:
+            return jsonify({"error": "estabelecimento_id é obrigatório"}), 400
+
         novo_cliente = Cliente(
+            estabelecimento_id=estabelecimento_id,
             nome=data["nome"].strip(),
-            cpf=cpf,
-            rg=data.get("rg", "").strip(),
-            data_nascimento=data_nascimento,
+            cpf_cnpj=cpf_cnpj,
             telefone=data.get("telefone", "").strip(),
             celular=data.get("celular", "").strip(),
             email=email,
             endereco=data.get("endereco", "").strip(),
-            limite_credito=limite_credito,
-            dia_vencimento=dia_vencimento,
             observacoes=data.get("observacoes", "").strip(),
             ativo=data.get("ativo", True),
             data_cadastro=datetime.utcnow(),
@@ -521,15 +491,7 @@ def criar_cliente():
                 {
                     "success": True,
                     "message": "Cliente criado com sucesso",
-                    "cliente": {
-                        "id": novo_cliente.id,
-                        "nome": novo_cliente.nome,
-                        "cpf": novo_cliente.cpf,
-                        "email": novo_cliente.email,
-                        "telefone": novo_cliente.telefone,
-                        "limite_credito": float(novo_cliente.limite_credito),
-                        "data_cadastro": novo_cliente.data_cadastro.isoformat(),
-                    },
+                    "cliente": novo_cliente.to_dict(),
                 }
             ),
             201,
@@ -556,25 +518,25 @@ def atualizar_cliente(id):
             return jsonify({"error": "Nenhum dado fornecido"}), 400
 
         # ==================== VALIDAÇÕES ====================
-        # Verificar CPF único (se estiver sendo alterado)
-        if "cpf" in data and data["cpf"] != cliente.cpf:
-            cpf_novo = data["cpf"].strip()
-            if cpf_novo:
-                if len(cpf_novo) != 11 or not cpf_novo.isdigit():
+        # Verificar CPF/CNPJ único (se estiver sendo alterado)
+        if "cpf_cnpj" in data and data["cpf_cnpj"] != cliente.cpf_cnpj:
+            cpf_cnpj_novo = data["cpf_cnpj"].strip()
+            if cpf_cnpj_novo:
+                if len(cpf_cnpj_novo) not in [11, 14] or not cpf_cnpj_novo.replace('.', '').replace('-', '').replace('/', '').isdigit():
                     return (
                         jsonify(
-                            {"error": "CPF inválido. Deve conter 11 dígitos numéricos"}
+                            {"error": "CPF/CNPJ inválido. Deve conter 11 ou 14 dígitos numéricos"}
                         ),
                         400,
                     )
 
-                existente = Cliente.query.filter_by(cpf=cpf_novo).first()
+                existente = Cliente.query.filter_by(cpf_cnpj=cpf_cnpj_novo).first()
                 if existente and existente.id != id:
                     return (
                         jsonify(
                             {
                                 "success": False,
-                                "error": "CPF já cadastrado em outro cliente",
+                                "error": "CPF/CNPJ já cadastrado em outro cliente",
                                 "cliente_existente": {
                                     "id": existente.id,
                                     "nome": existente.nome,
@@ -647,7 +609,7 @@ def atualizar_cliente(id):
         # ==================== ATUALIZAR CAMPOS ====================
         campos_permitidos = [
             "nome",
-            "cpf",
+            "cpf_cnpj",
             "rg",
             "data_nascimento",
             "telefone",
@@ -699,11 +661,10 @@ def atualizar_cliente(id):
                 "cliente": {
                     "id": cliente.id,
                     "nome": cliente.nome,
-                    "cpf": cliente.cpf,
+                    "cpf_cnpj": cliente.cpf_cnpj,
                     "email": cliente.email,
                     "ativo": cliente.ativo,
-                    "limite_credito": float(cliente.limite_credito),
-                    "limite_disponivel": float(cliente.limite_credito - total_gasto),
+                    # Adicione outros campos conforme necessário
                     "data_atualizacao": cliente.data_atualizacao.isoformat(),
                 },
             }
