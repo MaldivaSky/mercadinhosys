@@ -1,10 +1,12 @@
 // Tipos auxiliares para produtos e clientes
-interface ProdutoPrevisao {
-  produto_nome: string;
+// ProdutoPrevisao pode vir do backend como { nome, ... } ou { produto_nome, ... }
+type ProdutoPrevisao = {
+  produto_nome?: string;
+  nome?: string;
   estoque_atual: number;
   demanda_diaria_prevista: number;
   risco_ruptura?: boolean;
-}
+};
 interface ProdutoEstrela {
   id: number;
   nome: string;
@@ -25,11 +27,15 @@ interface ProdutoCategoria {
   total_vendido: number;
   quantidade_vendida?: number;
 }
-interface Cliente {
+// Cliente pode vir do backend com mais campos, mas garantimos os principais
+type Cliente = {
   id: number;
   nome: string;
   total_compras: number;
-}
+  quantidade_compras?: number;
+  total_gasto?: number;
+  cliente_id?: number;
+};
 import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
@@ -242,9 +248,9 @@ interface DashboardData {
       };
     };
     recomendacoes?: {
-      urgentes?: Array<{ titulo: string; descricao: string; }>;
-      atencao?: Array<{ titulo: string; descricao: string; }>;
-      oportunidades?: Array<{ titulo: string; descricao: string; }>;
+      urgentes?: Array<{ titulo: string; descricao: string; acao?: string }>;
+      atencao?: Array<{ titulo: string; descricao: string; acao?: string }>;
+      oportunidades?: Array<{ titulo: string; descricao: string; acao?: string }>;
     };
     analise_financeira?: {
       despesas_mes?: number;
@@ -1556,7 +1562,7 @@ const DashboardPage: React.FC = () => {
             <div className="space-y-3">
               {data.data.analise_clientes.top_clientes.slice(0, 5).map((cliente: Cliente, idx: number) => (
                 <div 
-                  key={cliente.cliente_id || idx}
+                  key={cliente.cliente_id ?? cliente.id ?? idx}
                   className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
@@ -1565,11 +1571,11 @@ const DashboardPage: React.FC = () => {
                     </div>
                     <div>
                       <p className="font-medium text-gray-800 dark:text-white">{cliente?.nome ?? 'Cliente'}</p>
-                      <p className="text-xs text-gray-500">{cliente?.quantidade_compras ?? 0} compras</p>
+                      <p className="text-xs text-gray-500">{(cliente.quantidade_compras ?? cliente.total_compras ?? 0)} compras</p>
                     </div>
                   </div>
                   <p className="font-semibold text-green-600 text-lg">
-                    R$ {(cliente?.total_gasto ?? cliente?.total_compras ?? 0).toFixed(2)}
+                    R$ {(cliente.total_gasto ?? cliente.total_compras ?? 0).toFixed(2)}
                   </p>
                 </div>
               ))}
