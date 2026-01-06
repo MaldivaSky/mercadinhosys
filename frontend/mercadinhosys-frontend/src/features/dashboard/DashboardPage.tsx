@@ -119,8 +119,11 @@ interface DashboardData {
       inclinacao?: number;
       intervalo_confianca?: [number, number];
       p_value?: number;
-      previsao?: number;
+      previsao?: number | { valor: number }[];
       r_quadrado?: number;
+      tendencia?: {
+        slope: number;
+      };
     };
     analise_produtos?: {
       top_produtos: Array<{
@@ -134,7 +137,35 @@ interface DashboardData {
         nome: string;
         classificacao: string;
         margem: number;
+        market_share?: number;
       }>;
+      classificacao_abc?: {
+        classificacao?: string;
+        resumo: {
+          A?: number;
+          B?: number;
+          C?: number;
+        };
+      };
+      produtos_lentos?: Array<{
+        id: number;
+        nome: string;
+        quantidade: number;
+      }>;
+      top_por_categoria?: Record<string, Array<{
+        id: number;
+        nome: string;
+        total_vendido: number;
+        quantidade_vendida: number;
+      }>>;
+      previsao_demanda?: {
+        produtos: Array<{
+          nome: string;
+          estoque_atual: number;
+          demanda_diaria_prevista: number;
+          risco_ruptura?: boolean;
+        }>;
+      };
     };
     analise_clientes?: {
       top_clientes: Array<{
@@ -161,12 +192,33 @@ interface DashboardData {
       projecoes?: {
         faturamento_mes?: number;
         lucro_mes?: number;
+        meta?: {
+          atingido_percentual?: number;
+          diferenca?: number;
+        };
       };
       resumo_executivo?: {
         status_geral?: string;
         principais_problemas?: string[];
         oportunidades?: string[];
       };
+    };
+    metricas_comparativas?: {
+      vs_semana_passada?: {
+        percentual_crescimento?: number;
+        diferenca_valor?: number;
+      };
+    };
+    recomendacoes?: {
+      urgentes?: Array<{ titulo: string; descricao: string; }>;
+      atencao?: Array<{ titulo: string; descricao: string; }>;
+      oportunidades?: Array<{ titulo: string; descricao: string; }>;
+    };
+    analise_financeira?: {
+      despesas_mes?: number;
+      despesas_por_dia?: number;
+      lucro_bruto?: number;
+      margem_lucro_percentual?: number;
     };
   };
 }
@@ -333,7 +385,7 @@ const DashboardPage: React.FC = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Próximos 7 Dias</p>
               <p className="text-2xl font-bold text-purple-600">
                 {Array.isArray(data.data.previsoes.previsao) && data.data.previsoes.previsao.length > 0
-                  ? `R$ ${data.data.previsoes.previsao.reduce((sum: number, p: any) => sum + (p.valor || 0), 0).toFixed(2)}`
+                  ? `R$ ${data.data.previsoes.previsao.reduce((sum: number, p: { valor: number }) => sum + (p.valor || 0), 0).toFixed(2)}`
                   : 'R$ 0.00'}
               </p>
               <p className="text-xs text-gray-400 mt-1">Previsão de faturamento</p>
@@ -524,7 +576,7 @@ const DashboardPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.data.analise_produtos.previsao_demanda.produtos.slice(0, 10).map((produto: any, idx: number) => {
+                {data.data.analise_produtos.previsao_demanda.produtos.slice(0, 10).map((produto: ProdutoPrevisao, idx: number) => {
                   const diasRestantes = produto.demanda_diaria_prevista > 0 
                     ? produto.estoque_atual / produto.demanda_diaria_prevista 
                     : 999;
@@ -875,7 +927,7 @@ const DashboardPage: React.FC = () => {
                 {selectedCard === 'estrela' && (
                   <div className="mt-4 pt-4 border-t-2 border-yellow-200 dark:border-yellow-800 animate-fadeIn">
                     <div className="space-y-2 mb-4">
-                      {data.data.analise_produtos.produtos_estrela.slice(0, 3).map((prod: any, idx: number) => (
+                      {data.data.analise_produtos.produtos_estrela.slice(0, 3).map((prod: ProdutoEstrela, idx: number) => (
                         <div key={idx} className="flex items-center justify-between p-2 bg-white/70 dark:bg-gray-800/70 rounded-lg">
                           <div className="flex items-center gap-2">
                             <span className="w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
@@ -949,7 +1001,7 @@ const DashboardPage: React.FC = () => {
                 {selectedCard === 'lentos' && (
                   <div className="mt-4 pt-4 border-t-2 border-orange-200 dark:border-orange-800 animate-fadeIn">
                     <div className="space-y-2 mb-4">
-                      {data.data.analise_produtos.produtos_lentos.slice(0, 3).map((prod: any, idx: number) => (
+                      {data.data.analise_produtos.produtos_lentos.slice(0, 3).map((prod: ProdutoLento, idx: number) => (
                         <div key={idx} className="flex items-center justify-between p-2 bg-white/70 dark:bg-gray-800/70 rounded-lg">
                           <span className="text-sm font-medium text-gray-800 dark:text-white truncate">
                             {prod.nome}
@@ -1432,7 +1484,7 @@ const DashboardPage: React.FC = () => {
               </h2>
             </div>
             <div className="space-y-3">
-              {data.data.analise_produtos.top_produtos.slice(0, 5).map((produto, idx) => (
+              {data.data.analise_produtos.top_produtos.slice(0, 5).map((produto, idx: number) => (
                 <div 
                   key={produto.id}
                   className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
@@ -1465,7 +1517,7 @@ const DashboardPage: React.FC = () => {
               </h2>
             </div>
             <div className="space-y-3">
-              {data.data.analise_clientes.top_clientes.slice(0, 5).map((cliente: any, idx: number) => (
+              {data.data.analise_clientes.top_clientes.slice(0, 5).map((cliente: Cliente, idx: number) => (
                 <div 
                   key={cliente.cliente_id || idx}
                   className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors cursor-pointer"
@@ -1570,7 +1622,7 @@ const DashboardPage: React.FC = () => {
       {data.data.analise_produtos && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Classificação ABC */}
-          {data.data.analise_produtos.classificacao_abc?.classificacao && (
+          {data.data.analise_produtos?.classificacao_abc?.classificacao && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2 mb-4">
                 <BarChart className="w-5 h-5 text-indigo-600" />
@@ -1620,12 +1672,16 @@ const DashboardPage: React.FC = () => {
                 <h3 className="font-semibold text-green-600 dark:text-green-400 mb-2 flex items-center gap-1">
                   🌟 Top Performers
                 </h3>
-                {data.data.analise_produtos.produtos_estrela && data.data.analise_produtos.produtos_estrela.length > 0 ? (
+                {data.data.analise_produtos?.produtos_estrela && data.data.analise_produtos.produtos_estrela.length > 0 ? (
                   <div className="space-y-2">
-                    {data.data.analise_produtos.produtos_estrela.slice(0, 3).map((produto: any, idx: number) => (
+                    {data.data.analise_produtos.produtos_estrela.slice(0, 3).map((produto: ProdutoEstrela, idx: number) => (
                       <div key={idx} className="flex justify-between items-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{produto.nome}</span>
-                        <span className="text-xs font-semibold text-green-600">{produto.market_share?.toFixed(1)}%</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
+                          {produto.nome}
+                        </span>
+                        <span className="text-xs font-bold text-green-600">
+                          {produto.market_share?.toFixed(1)}%
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1639,12 +1695,14 @@ const DashboardPage: React.FC = () => {
                 <h3 className="font-semibold text-orange-600 dark:text-orange-400 mb-2 flex items-center gap-1">
                   🐌 Atenção Necessária
                 </h3>
-                {data.data.analise_produtos.produtos_lentos && data.data.analise_produtos.produtos_lentos.length > 0 ? (
+                {data.data.analise_produtos?.produtos_lentos && data.data.analise_produtos.produtos_lentos.length > 0 ? (
                   <div className="space-y-2">
-                    {data.data.analise_produtos.produtos_lentos.slice(0, 3).map((produto: any, idx: number) => (
+                    {data.data.analise_produtos.produtos_lentos.slice(0, 3).map((produto: ProdutoLento, idx: number) => (
                       <div key={idx} className="flex justify-between items-center p-2 bg-orange-50 dark:bg-orange-900/20 rounded">
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{produto.nome}</span>
-                        <span className="text-xs text-gray-500">{produto.quantidade} un</span>
+                        <span className="text-xs font-bold text-orange-600">
+                          {produto.quantidade} un
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1665,13 +1723,13 @@ const DashboardPage: React.FC = () => {
             <h2 className="text-xl font-bold text-gray-800 dark:text-white">🏆 Top 5 por Categoria</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Object.entries(data.data.analise_produtos.top_por_categoria).map(([categoria, produtos]: [string, any]) => (
+            {Object.entries(data.data.analise_produtos.top_por_categoria).map(([categoria, produtos]: [string, ProdutoCategoria[]]) => (
               <div key={categoria} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <h3 className="font-bold text-gray-800 dark:text-white mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
                   {categoria}
                 </h3>
                 <div className="space-y-2">
-                  {produtos.slice(0, 5).map((produto: any, idx: number) => {
+                  {produtos.slice(0, 5).map((produto: ProdutoCategoria, idx: number) => {
                     const maxTotal = Math.max(...produtos.slice(0, 5).map((p: any) => p.total_vendido));
                     const widthPercent = maxTotal > 0 ? (produto.total_vendido / maxTotal) * 100 : 0;
                     
