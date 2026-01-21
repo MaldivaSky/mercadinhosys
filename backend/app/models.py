@@ -283,7 +283,7 @@ class Fornecedor(db.Model, EnderecoMixin):
     estabelecimento = db.relationship(
         "Estabelecimento", backref=db.backref("fornecedores", lazy="dynamic")
     )
-    produtos = db.relationship("Produto", backref="fornecedor", lazy="dynamic")
+    
     pedidos_compra = db.relationship(
         "PedidoCompra", backref="fornecedor", lazy="dynamic"
     )
@@ -358,7 +358,7 @@ class Produto(db.Model):
         "Estabelecimento", backref=db.backref("produtos", lazy="dynamic")
     )
     fornecedor = db.relationship(
-        "Fornecedor", backref=db.backref("produtos_fornecedor", lazy="dynamic")
+        "Fornecedor", backref=db.backref("produtos", lazy="dynamic")
     )
     itens_venda = db.relationship("VendaItem", backref="produto", lazy="dynamic")
     itens_compra = db.relationship(
