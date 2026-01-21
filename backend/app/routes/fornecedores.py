@@ -1,607 +1,393 @@
-from flask import Blueprint, request, jsonify
-from app import db
-from app.models import Fornecedor, Produto
+# app/fornecedores.py
+# MÓDULO COMPLETO DE FORNECEDORES - ERP INDUSTRIAL BRASILEIRO
+# CRUD completo com todas as operações necessárias
+
+from flask import Blueprint, request, jsonify, current_app
+from flask_login import login_required, current_user
 from datetime import datetime
-from sqlalchemy import or_, and_, distinct
+from decimal import Decimal
+import re
+from app.models import (
+    db,
+    Fornecedor,
+    Estabelecimento,
+    PedidoCompra,
+    Produto,
+    ContaPagar,
+)
+from app.utils import validar_cnpj, validar_email, formatar_telefone
 
-fornecedores_bp = Blueprint("fornecedores", __name__, url_prefix="/api/fornecedores")
+fornecedores_bp = Blueprint("fornecedores", __name__)
 
-# ==================== CONSTANTES E FUNÇÕES AUXILIARES ====================
-
-FILTROS_PERMITIDOS_FORNECEDOR = {
-    "nome": lambda value: Fornecedor.nome.ilike(f"%{value}%"),
-    "cnpj": lambda value: Fornecedor.cnpj.ilike(f"%{value}%"),
-    "contato_nome": lambda value: Fornecedor.contato_nome.ilike(f"%{value}%"),
-    "telefone": lambda value: Fornecedor.telefone.ilike(f"%{value}%"),
-    "email": lambda value: Fornecedor.email.ilike(f"%{value}%"),
-    "cidade": lambda value: Fornecedor.cidade.ilike(f"%{value}%"),
-    "estado": lambda value: Fornecedor.estado.ilike(f"%{value}%"),
-    "ativo": lambda value: Fornecedor.ativo == (value.lower() == "true"),
-}
-
-ORDENACOES_PERMITIDAS = {
-    "nome": Fornecedor.nome,
-    "cnpj": Fornecedor.cnpj,
-    "cidade": Fornecedor.cidade,
-    "estado": Fornecedor.estado,
-    "data_cadastro": Fornecedor.data_cadastro,
-    "data_atualizacao": Fornecedor.data_atualizacao,
-    "contato_nome": Fornecedor.contato_nome,
-}
+# ============================================
+# VALIDAÇÕES ESPECÍFICAS DE FORNECEDOR
+# ============================================
 
 
-def aplicar_filtros_avancados(query, filtros):
-    """Aplica filtros avançados na query"""
-    for filtro, valor in filtros.items():
-        if filtro in FILTROS_PERMITIDOS_FORNECEDOR and valor not in [None, ""]:
-            # Filtros especiais (range de datas)
-            if filtro.startswith("data_"):
-                if filtro.endswith("_inicio"):
-                    campo = filtro.replace("_inicio", "")
-                    if hasattr(Fornecedor, campo):
-                        try:
-                            data_dt = datetime.fromisoformat(valor)
-                            query = query.filter(getattr(Fornecedor, campo) >= data_dt)
-                        except ValueError:
-                            pass
-                elif filtro.endswith("_fim"):
-                    campo = filtro.replace("_fim", "")
-                    if hasattr(Fornecedor, campo):
-                        try:
-                            data_dt = datetime.fromisoformat(valor)
-                            query = query.filter(getattr(Fornecedor, campo) <= data_dt)
-                        except ValueError:
-                            pass
-            # Filtro de produto associado
-            elif filtro == "tem_produtos":
-                if valor.lower() == "true":
-                    # Fornecedores que têm pelo menos 1 produto ativo
-                    subquery = (
-                        db.session.query(Produto.fornecedor_id)
-                        .filter(Produto.ativo == True)
-                        .distinct()
-                    )
-                    query = query.filter(Fornecedor.id.in_(subquery))
-                elif valor.lower() == "false":
-                    # Fornecedores sem produtos ativos
-                    subquery = (
-                        db.session.query(Produto.fornecedor_id)
-                        .filter(Produto.ativo == True)
-                        .distinct()
-                    )
-                    query = query.filter(~Fornecedor.id.in_(subquery))
-            # Filtro por quantidade mínima de produtos
-            elif filtro == "min_produtos":
-                try:
-                    min_prod = int(valor)
-                    subquery = (
-                        db.session.query(
-                            Produto.fornecedor_id,
-                            db.func.count(Produto.id).label("total"),
-                        )
-                        .filter(Produto.ativo == True)
-                        .group_by(Produto.fornecedor_id)
-                        .having(db.func.count(Produto.id) >= min_prod)
-                        .subquery()
-                    )
-                    query = query.filter(
-                        Fornecedor.id.in_(db.session.query(subquery.c.fornecedor_id))
-                    )
-                except ValueError:
-                    pass
-            # Filtros regulares
-            else:
-                query = query.filter(FILTROS_PERMITIDOS_FORNECEDOR[filtro](valor))
+def validar_dados_fornecedor(data, fornecedor_id=None):
+    """Valida todos os dados do fornecedor antes de salvar"""
+    erros = []
 
-    return query
+    # Validação de campos obrigatórios
+    campos_obrigatorios = ["nome_fantasia", "razao_social", "cnpj", "telefone", "email"]
+    for campo in campos_obrigatorios:
+        if not data.get(campo):
+            erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
+
+    # Validação de CNPJ
+    if data.get("cnpj"):
+        cnpj = re.sub(r"\D", "", data["cnpj"])
+        if len(cnpj) != 14:
+            erros.append("CNPJ deve conter 14 dígitos")
+        elif not validar_cnpj(cnpj):
+            erros.append("CNPJ inválido")
+
+        # Verifica se CNPJ já existe (exceto para o próprio fornecedor em atualização)
+        fornecedor_existente = Fornecedor.query.filter_by(
+            cnpj=cnpj, estabelecimento_id=current_user.estabelecimento_id
+        ).first()
+
+        if fornecedor_existente and fornecedor_existente.id != fornecedor_id:
+            erros.append("CNPJ já cadastrado para outro fornecedor")
+
+    # Validação de email
+    if data.get("email") and not validar_email(data["email"]):
+        erros.append("Email inválido")
+
+    # Validação de telefone
+    if data.get("telefone"):
+        telefone = re.sub(r"\D", "", data["telefone"])
+        if len(telefone) < 10 or len(telefone) > 11:
+            erros.append("Telefone inválido")
+
+    # Validação de prazo de entrega
+    if data.get("prazo_entrega"):
+        try:
+            prazo = int(data["prazo_entrega"])
+            if prazo < 0 or prazo > 365:
+                erros.append("Prazo de entrega deve estar entre 0 e 365 dias")
+        except ValueError:
+            erros.append("Prazo de entrega deve ser um número inteiro")
+
+    # Validação de endereço
+    campos_endereco = ["cep", "logradouro", "numero", "bairro", "cidade", "estado"]
+    for campo in campos_endereco:
+        if not data.get(campo):
+            erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
+
+    # Validação de estado
+    if data.get("estado"):
+        estados_brasil = [
+            "AC",
+            "AL",
+            "AP",
+            "AM",
+            "BA",
+            "CE",
+            "DF",
+            "ES",
+            "GO",
+            "MA",
+            "MT",
+            "MS",
+            "MG",
+            "PA",
+            "PB",
+            "PR",
+            "PE",
+            "PI",
+            "RJ",
+            "RN",
+            "RS",
+            "RO",
+            "RR",
+            "SC",
+            "SP",
+            "SE",
+            "TO",
+        ]
+        if data["estado"].upper() not in estados_brasil:
+            erros.append("Estado inválido. Use a sigla de 2 letras (ex: SP)")
+
+    return erros
 
 
-def aplicar_ordenacao(query, ordenar_por, direcao):
-    """Aplica ordenação na query"""
-    if ordenar_por in ORDENACOES_PERMITIDAS:
-        campo = ORDENACOES_PERMITIDAS[ordenar_por]
-        if direcao.lower() == "desc":
-            query = query.order_by(campo.desc())
-        else:
-            query = query.order_by(campo.asc())
+def formatar_cnpj(cnpj):
+    """Formata CNPJ para o padrão 00.000.000/0000-00"""
+    cnpj = re.sub(r"\D", "", cnpj)
+    if len(cnpj) == 14:
+        return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
+    return cnpj
+
+
+def calcular_classificacao_fornecedor(fornecedor):
+    """Calcula classificação do fornecedor baseado em métricas"""
+    if fornecedor.total_compras == 0:
+        return "NOVO"
+
+    # Baseado em volume de compras e prazo médio
+    valor_total = float(fornecedor.valor_total_comprado or 0)
+    total_compras = fornecedor.total_compras or 0
+
+    if valor_total > 100000:
+        return "PREMIUM"
+    elif valor_total > 50000:
+        return "A"
+    elif valor_total > 10000:
+        return "B"
     else:
-        # Ordenação padrão
-        query = query.order_by(Fornecedor.nome.asc())
-
-    return query
+        return "C"
 
 
-# ==================== CRUD FORNECEDORES COM FILTROS AVANÇADOS ====================
+# ============================================
+# ROTAS DE FORNECEDORES
+# ============================================
 
 
-@fornecedores_bp.route("/", methods=["GET"])
+@fornecedores_bp.route("/api/fornecedores", methods=["GET"])
+@login_required
 def listar_fornecedores():
-    """Listar todos os fornecedores com filtros avançados"""
+    """Lista todos os fornecedores com filtros e paginação"""
     try:
-        # Configuração de paginação
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 50, type=int)
-        per_page = min(per_page, 100)  # Limite máximo por página
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = request.args.get("por_pagina", 50, type=int)
+        ativo = request.args.get("ativo", None, type=str)
+        classificacao = request.args.get("classificacao", None, type=str)
+        busca = request.args.get("busca", "", type=str).strip()
 
-        # Configuração de ordenação
-        ordenar_por = request.args.get("ordenar_por", "nome")
-        direcao = request.args.get("direcao", "asc")
+        # Query base
+        query = Fornecedor.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id
+        )
 
-        # Iniciar query
-        query = Fornecedor.query
+        # Filtros
+        if ativo is not None:
+            query = query.filter_by(ativo=ativo.lower() == "true")
 
-        # Aplicar filtro de busca global (mantido para compatibilidade)
-        search = request.args.get("search", "").strip()
-        if search:
+        if classificacao:
+            query = query.filter_by(classificacao=classificacao.upper())
+
+        if busca:
+            busca_termo = f"%{busca}%"
             query = query.filter(
-                or_(
-                    Fornecedor.nome.ilike(f"%{search}%"),
-                    Fornecedor.cnpj.ilike(f"%{search}%"),
-                    Fornecedor.contato_nome.ilike(f"%{search}%"),
-                    Fornecedor.email.ilike(f"%{search}%"),
-                    Fornecedor.cidade.ilike(f"%{search}%"),
-                    Fornecedor.estado.ilike(f"%{search}%"),
+                db.or_(
+                    Fornecedor.nome_fantasia.ilike(busca_termo),
+                    Fornecedor.razao_social.ilike(busca_termo),
+                    Fornecedor.cnpj.ilike(busca_termo),
+                    Fornecedor.email.ilike(busca_termo),
+                    Fornecedor.contato_nome.ilike(busca_termo),
                 )
             )
 
-        # Aplicar filtros avançados
-        filtros_avancados = {}
-        for filtro in FILTROS_PERMITIDOS_FORNECEDOR.keys():
-            valor = request.args.get(filtro, "").strip()
-            if valor:
-                filtros_avancados[filtro] = valor
-
-        # Filtros especiais de data
-        for filtro_data in [
-            "data_cadastro_inicio",
-            "data_cadastro_fim",
-            "data_atualizacao_inicio",
-            "data_atualizacao_fim",
-        ]:
-            valor = request.args.get(filtro_data, "").strip()
-            if valor:
-                filtros_avancados[filtro_data] = valor
-
-        # Filtros relacionais
-        for filtro_rel in ["tem_produtos", "min_produtos"]:
-            valor = request.args.get(filtro_rel, "").strip()
-            if valor:
-                filtros_avancados[filtro_rel] = valor
-
-        # Aplicar todos os filtros
-        query = aplicar_filtros_avancados(query, filtros_avancados)
-
-        # Aplicar ordenação
-        query = aplicar_ordenacao(query, ordenar_por, direcao)
-
-        # Executar paginação
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        fornecedores = pagination.items
-
-        # Construir resposta
-        resultado = []
-        for f in fornecedores:
-            # Contar produtos ativos deste fornecedor
-            total_produtos = Produto.query.filter_by(
-                fornecedor_id=f.id, ativo=True
-            ).count()
-
-            resultado.append(
-                {
-                    "id": f.id,
-                    "nome": f.nome,
-                    "cnpj": f.cnpj,
-                    "telefone": f.telefone,
-                    "email": f.email,
-                    "cidade": f.cidade,
-                    "estado": f.estado,
-                    "contato_nome": f.contato_nome,
-                    "ativo": f.ativo,
-                    "total_produtos": total_produtos,
-                    "data_cadastro": (
-                        f.data_cadastro.isoformat() if f.data_cadastro else None
-                    ),
-                    "data_atualizacao": (
-                        f.data_atualizacao.isoformat() if f.data_atualizacao else None
-                    ),
-                }
-            )
-
-        # Metadados da paginação
-        metadados = {
-            "pagina_atual": pagination.page,
-            "total_paginas": pagination.pages,
-            "total_itens": pagination.total,
-            "itens_por_pagina": pagination.per_page,
-            "tem_proxima": pagination.has_next,
-            "tem_anterior": pagination.has_prev,
-        }
-
-        # Metadados dos filtros aplicados (útil para frontend)
-        if filtros_avancados:
-            metadados["filtros_aplicados"] = filtros_avancados
-        if search:
-            metadados["busca_global"] = search
-
-        metadados["ordenacao"] = {"campo": ordenar_por, "direcao": direcao}
-
-        return jsonify(
-            {
-                "fornecedores": resultado,
-                "paginacao": metadados,
-                "filtros_disponiveis": list(FILTROS_PERMITIDOS_FORNECEDOR.keys()),
-                "ordenacoes_disponiveis": list(ORDENACOES_PERMITIDAS.keys()),
-            }
-        )
-
-    except Exception as e:
-        print(f"Erro ao listar fornecedores: {str(e)}")
-        return jsonify({"error": f"Erro ao listar fornecedores: {str(e)}"}), 500
-
-
-@fornecedores_bp.route("/<int:id>/produtos", methods=["GET"])
-def produtos_fornecedor(id):
-    """Listar produtos de um fornecedor específico com filtros e paginação"""
-    try:
-        # Verificar se fornecedor existe
-        fornecedor = Fornecedor.query.get(id)
-        if not fornecedor:
-            return jsonify({"error": "Fornecedor não encontrado"}), 404
-
-        # Configuração de paginação
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 50, type=int)
-        per_page = min(per_page, 100)
-
-        # Iniciar query para produtos do fornecedor
-        query = Produto.query.filter_by(fornecedor_id=id, ativo=True)
-
-        # Aplicar filtros nos produtos
-        nome_produto = request.args.get("nome", "").strip()
-        categoria = request.args.get("categoria", "").strip()
-        marca = request.args.get("marca", "").strip()
-        estoque_status = request.args.get("estoque_status", "").strip().lower()
-
-        if nome_produto:
-            query = query.filter(Produto.nome.ilike(f"%{nome_produto}%"))
-        if categoria:
-            query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
-        if marca:
-            query = query.filter(Produto.marca.ilike(f"%{marca}%"))
-
-        # Filtro por status de estoque
-        if estoque_status:
-            if estoque_status == "baixo":
-                query = query.filter(Produto.quantidade < Produto.quantidade_minima)
-            elif estoque_status == "esgotado":
-                query = query.filter(Produto.quantidade <= 0)
-            elif estoque_status == "normal":
-                query = query.filter(Produto.quantidade >= Produto.quantidade_minima)
-
         # Ordenação
-        ordenar_por = request.args.get("ordenar_por", "nome")
-        direcao = request.args.get("direcao", "asc")
+        query = query.order_by(
+            Fornecedor.nome_fantasia.asc(), Fornecedor.data_cadastro.desc()
+        )
 
-        if hasattr(Produto, ordenar_por):
-            campo = getattr(Produto, ordenar_por)
-            if direcao.lower() == "desc":
-                query = query.order_by(campo.desc())
-            else:
-                query = query.order_by(campo.asc())
-        else:
-            query = query.order_by(Produto.nome.asc())
+        # Paginação
+        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
 
-        # Executar paginação
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        produtos = pagination.items
-
-        # Construir resposta
-        resultado = []
-        for p in produtos:
-            # Determinar status do estoque
-            if p.quantidade <= 0:
-                status = "esgotado"
-            elif p.quantidade < p.quantidade_minima:
-                status = "baixo"
-            else:
-                status = "normal"
-
-            resultado.append(
-                {
-                    "id": p.id,
-                    "nome": p.nome,
-                    "preco_custo": float(p.preco_custo),
-                    "preco_venda": float(p.preco_venda),
-                    "quantidade": p.quantidade,
-                    "quantidade_minima": p.quantidade_minima,
-                    "estoque_status": status,
-                    "categoria": p.categoria,
-                    "marca": p.marca,
-                    "codigo_barras": p.codigo_barras or "",
-                    "data_cadastro": (
-                        p.data_cadastro.isoformat() if p.data_cadastro else None
-                    ),
-                }
+        fornecedores = []
+        for fornecedor in paginacao.items:
+            fornecedor_dict = fornecedor.to_dict()
+            fornecedor_dict["classificacao"] = calcular_classificacao_fornecedor(
+                fornecedor
+            )
+            fornecedor_dict["ultima_compra"] = (
+                fornecedor.pedidos_compra.order_by(PedidoCompra.data_pedido.desc())
+                .first()
+                .data_pedido.isoformat()
+                if fornecedor.pedidos_compra.first()
+                else None
             )
 
-        # Metadados
-        metadados = {
-            "pagina_atual": pagination.page,
-            "total_paginas": pagination.pages,
-            "total_itens": pagination.total,
-            "itens_por_pagina": pagination.per_page,
-            "tem_proxima": pagination.has_next,
-            "tem_anterior": pagination.has_prev,
-        }
+            # Contar produtos ativos
+            produtos_ativos = Produto.query.filter_by(
+                fornecedor_id=fornecedor.id,
+                ativo=True,
+                estabelecimento_id=current_user.estabelecimento_id,
+            ).count()
+            fornecedor_dict["produtos_ativos"] = produtos_ativos
 
-        # Adicionar filtros aplicados
-        filtros_aplicados = {}
-        if nome_produto:
-            filtros_aplicados["nome"] = nome_produto
-        if categoria:
-            filtros_aplicados["categoria"] = categoria
-        if marca:
-            filtros_aplicados["marca"] = marca
-        if estoque_status:
-            filtros_aplicados["estoque_status"] = estoque_status
-
-        if filtros_aplicados:
-            metadados["filtros_aplicados"] = filtros_aplicados
+            fornecedores.append(fornecedor_dict)
 
         return jsonify(
             {
-                "fornecedor": {
-                    "id": fornecedor.id,
-                    "nome": fornecedor.nome,
-                    "cnpj": fornecedor.cnpj,
+                "success": True,
+                "fornecedores": fornecedores,
+                "total": paginacao.total,
+                "pagina": pagina,
+                "por_pagina": por_pagina,
+                "total_paginas": paginacao.pages,
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar fornecedores: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao listar fornecedores"}
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/<int:id>", methods=["GET"])
+@login_required
+def obter_fornecedor(id):
+    """Obtém detalhes completos de um fornecedor específico"""
+    try:
+        fornecedor = Fornecedor.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
+
+        # Dados básicos
+        dados_fornecedor = fornecedor.to_dict()
+
+        # Estatísticas
+        pedidos = PedidoCompra.query.filter_by(
+            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).all()
+
+        contas_pagar = ContaPagar.query.filter_by(
+            fornecedor_id=id,
+            estabelecimento_id=current_user.estabelecimento_id,
+            status="aberto",
+        ).all()
+
+        produtos = Produto.query.filter_by(
+            fornecedor_id=id,
+            estabelecimento_id=current_user.estabelecimento_id,
+            ativo=True,
+        ).all()
+
+        # Métricas
+        total_pedidos = len(pedidos)
+        pedidos_pendentes = len([p for p in pedidos if p.status == "pendente"])
+        total_contas_abertas = len(contas_pagar)
+        valor_total_devido = sum(float(c.valor_atual) for c in contas_pagar)
+        total_produtos = len(produtos)
+
+        # Últimos pedidos
+        ultimos_pedidos = []
+        for pedido in pedidos[:10]:  # Últimos 10 pedidos
+            ultimos_pedidos.append(
+                {
+                    "id": pedido.id,
+                    "numero_pedido": pedido.numero_pedido,
+                    "data_pedido": (
+                        pedido.data_pedido.isoformat() if pedido.data_pedido else None
+                    ),
+                    "status": pedido.status,
+                    "total": float(pedido.total),
+                    "quantidade_itens": pedido.itens.count(),
+                }
+            )
+
+        # Produtos do fornecedor
+        lista_produtos = []
+        for produto in produtos[:20]:  # Primeiros 20 produtos
+            lista_produtos.append(
+                {
+                    "id": produto.id,
+                    "nome": produto.nome,
+                    "codigo_barras": produto.codigo_barras,
+                    "quantidade": produto.quantidade,
+                    "preco_custo": float(produto.preco_custo),
+                    "preco_venda": float(produto.preco_venda),
+                    "ativo": produto.ativo,
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "fornecedor": dados_fornecedor,
+                "metricas": {
+                    "total_pedidos": total_pedidos,
+                    "pedidos_pendentes": pedidos_pendentes,
+                    "total_contas_abertas": total_contas_abertas,
+                    "valor_total_devido": valor_total_devido,
+                    "total_produtos": total_produtos,
+                    "classificacao": calcular_classificacao_fornecedor(fornecedor),
                 },
-                "produtos": resultado,
-                "paginacao": metadados,
-                "total_produtos": pagination.total,
+                "ultimos_pedidos": ultimos_pedidos,
+                "produtos": lista_produtos,
+                "endereco_completo": fornecedor.endereco_completo(),
             }
         )
 
     except Exception as e:
-        print(f"Erro ao listar produtos do fornecedor {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao listar produtos: {str(e)}"}), 500
-
-
-# ==================== ENDPOINTS DE ESTATÍSTICAS (BÔNUS) ====================
-
-
-@fornecedores_bp.route("/estatisticas", methods=["GET"])
-def estatisticas_fornecedores():
-    """Obter estatísticas agregadas dos fornecedores"""
-    try:
-        # Contagem total
-        total_fornecedores = Fornecedor.query.count()
-        total_ativos = Fornecedor.query.filter_by(ativo=True).count()
-        total_inativos = total_fornecedores - total_ativos
-
-        # Contagem por estado
-        estados = (
-            db.session.query(
-                Fornecedor.estado, db.func.count(Fornecedor.id).label("quantidade")
-            )
-            .filter(Fornecedor.estado != "")
-            .group_by(Fornecedor.estado)
-            .all()
+        current_app.logger.error(f"Erro ao obter fornecedor {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao obter fornecedor"}),
+            500,
         )
 
-        # Contagem de fornecedores com/sem produtos
-        com_produtos = (
-            db.session.query(db.func.count(distinct(Produto.fornecedor_id)))
-            .filter(Produto.ativo == True)
-            .scalar()
-            or 0
-        )
 
-        sem_produtos = total_ativos - com_produtos
-
-        return jsonify(
-            {
-                "total_fornecedores": total_fornecedores,
-                "total_ativos": total_ativos,
-                "total_inativos": total_inativos,
-                "distribuicao_estados": [
-                    {"estado": estado, "quantidade": qtd} for estado, qtd in estados
-                ],
-                "fornecedores_com_produtos": com_produtos,
-                "fornecedores_sem_produtos": sem_produtos,
-            }
-        )
-
-    except Exception as e:
-        print(f"Erro ao obter estatísticas: {str(e)}")
-        return jsonify({"error": f"Erro ao obter estatísticas: {str(e)}"}), 500
-
-
-# ==================== ENDPOINTS DE RELATÓRIOS (BÔNUS) ====================
-
-
-@fornecedores_bp.route("/relatorio", methods=["GET"])
-def relatorio_fornecedores():
-    """Gerar relatório completo de fornecedores"""
-    try:
-        # Filtros básicos
-        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
-        estado = request.args.get("estado", "").strip()
-
-        query = Fornecedor.query
-
-        if apenas_ativos:
-            query = query.filter(Fornecedor.ativo == True)
-
-        if estado:
-            query = query.filter(Fornecedor.estado.ilike(f"%{estado}%"))
-
-        fornecedores = query.order_by(Fornecedor.nome.asc()).all()
-
-        resultado = []
-        for f in fornecedores:
-            # Buscar produtos ativos
-            produtos = Produto.query.filter_by(fornecedor_id=f.id, ativo=True).all()
-
-            # Calcular valor total em estoque
-            valor_estoque = sum(p.quantidade * p.preco_custo for p in produtos)
-
-            resultado.append(
-                {
-                    "id": f.id,
-                    "nome": f.nome,
-                    "cnpj": f.cnpj,
-                    "cidade": f.cidade,
-                    "estado": f.estado,
-                    "contato": f.contato_nome,
-                    "telefone": f.telefone,
-                    "email": f.email,
-                    "ativo": f.ativo,
-                    "quantidade_produtos": len(produtos),
-                    "valor_total_estoque": float(valor_estoque),
-                    "data_cadastro": (
-                        f.data_cadastro.isoformat() if f.data_cadastro else None
-                    ),
-                }
-            )
-
-        # Totais
-        totais = {
-            "total_fornecedores": len(resultado),
-            "total_produtos": sum(f["quantidade_produtos"] for f in resultado),
-            "valor_total_estoque": sum(f["valor_total_estoque"] for f in resultado),
-        }
-
-        return jsonify(
-            {
-                "fornecedores": resultado,
-                "totais": totais,
-                "gerado_em": datetime.utcnow().isoformat(),
-            }
-        )
-
-    except Exception as e:
-        print(f"Erro ao gerar relatório: {str(e)}")
-        return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
-
-
-# ==================== MANTENDO AS OUTRAS ROTAS CRUD (inalteradas) ====================
-
-
-@fornecedores_bp.route("/<int:id>", methods=["GET"])
-def detalhes_fornecedor(id):
-    """Obter detalhes de um fornecedor (mantida igual)"""
-    try:
-        fornecedor = Fornecedor.query.get(id)
-
-        if not fornecedor:
-            return jsonify({"error": "Fornecedor não encontrado"}), 404
-
-        # Listar produtos deste fornecedor
-        produtos = Produto.query.filter_by(fornecedor_id=id, ativo=True).all()
-        produtos_list = []
-
-        for p in produtos:
-            produtos_list.append(
-                {
-                    "id": p.id,
-                    "nome": p.nome,
-                    "preco_custo": float(p.preco_custo),
-                    "preco_venda": float(p.preco_venda),
-                    "quantidade": p.quantidade,
-                }
-            )
-
-        fornecedor_dict = {
-            "id": fornecedor.id,
-            "nome": fornecedor.nome,
-            "cnpj": fornecedor.cnpj,
-            "telefone": fornecedor.telefone,
-            "email": fornecedor.email,
-            "cidade": fornecedor.cidade,
-            "estado": fornecedor.estado,
-            "contato_nome": fornecedor.contato_nome,
-            "ativo": fornecedor.ativo,
-            "data_cadastro": (
-                fornecedor.data_cadastro.isoformat()
-                if fornecedor.data_cadastro
-                else None
-            ),
-            "data_atualizacao": (
-                fornecedor.data_atualizacao.isoformat()
-                if fornecedor.data_atualizacao
-                else None
-            ),
-            "produtos": produtos_list,
-            "total_produtos": len(produtos_list),
-        }
-
-        return jsonify(fornecedor_dict)
-
-    except Exception as e:
-        print(f"Erro ao obter fornecedor {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao obter fornecedor: {str(e)}"}), 404
-
-
-@fornecedores_bp.route("/", methods=["POST"])
+@fornecedores_bp.route("/api/fornecedores", methods=["POST"])
+@login_required
 def criar_fornecedor():
-    """Criar um novo fornecedor (mantida igual)"""
+    """Cria um novo fornecedor"""
     try:
         data = request.get_json()
 
-        if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
+        # Validação dos dados
+        erros = validar_dados_fornecedor(data)
+        if erros:
+            return (
+                jsonify(
+                    {"success": False, "message": "Erros de validação", "errors": erros}
+                ),
+                400,
+            )
 
-        # Validações
-        if not data.get("nome"):
-            return jsonify({"error": "Nome do fornecedor é obrigatório"}), 400
+        # Formatar dados
+        cnpj_formatado = formatar_cnpj(data["cnpj"])
+        telefone_formatado = formatar_telefone(data["telefone"])
 
-        # Verificar CNPJ único
-        cnpj = data.get("cnpj")
-        if cnpj:
-            existente = Fornecedor.query.filter_by(cnpj=cnpj).first()
-            if existente:
-                return (
-                    jsonify(
-                        {
-                            "error": "CNPJ já cadastrado",
-                            "fornecedor_existente": {
-                                "id": existente.id,
-                                "nome": existente.nome,
-                            },
-                        }
-                    ),
-                    409,
-                )
-
-        novo_fornecedor = Fornecedor(
-            estabelecimento_id=1,  # TODO: pegar do usuário logado
-            nome=data["nome"],
-            cnpj=cnpj or "",
-            telefone=data.get("telefone", ""),
-            email=data.get("email", ""),
-            endereco=data.get("endereco", ""),
-            cidade=data.get("cidade", ""),
-            estado=data.get("estado", ""),
-            cep=data.get("cep", ""),
-            contato_nome=data.get("contato_nome", ""),
-            contato_comercial=data.get("contato_comercial", ""),
-            celular_comercial=data.get("celular_comercial", ""),
+        # Criar fornecedor
+        fornecedor = Fornecedor(
+            estabelecimento_id=current_user.estabelecimento_id,
+            nome_fantasia=data["nome_fantasia"].strip(),
+            razao_social=data["razao_social"].strip(),
+            cnpj=cnpj_formatado,
+            inscricao_estadual=data.get("inscricao_estadual", "").strip(),
+            telefone=telefone_formatado,
+            email=data["email"].strip().lower(),
+            contato_nome=data.get("contato_nome", "").strip(),
+            contato_telefone=formatar_telefone(data.get("contato_telefone", "")),
+            prazo_entrega=int(data.get("prazo_entrega", 7)),
+            forma_pagamento=data.get("forma_pagamento", "30 DIAS"),
+            classificacao=data.get("classificacao", "REGULAR"),
+            # Endereço
+            cep=data["cep"].strip(),
+            logradouro=data["logradouro"].strip(),
+            numero=data["numero"].strip(),
+            complemento=data.get("complemento", "").strip(),
+            bairro=data["bairro"].strip(),
+            cidade=data["cidade"].strip(),
+            estado=data["estado"].strip().upper(),
+            pais=data.get("pais", "Brasil").strip(),
             ativo=data.get("ativo", True),
+            total_compras=0,
+            valor_total_comprado=0,
         )
 
-        db.session.add(novo_fornecedor)
+        db.session.add(fornecedor)
         db.session.commit()
+
+        # Log de auditoria
+        current_app.logger.info(
+            f"Fornecedor criado: {fornecedor.id} - {fornecedor.nome_fantasia} por {current_user.username}"
+        )
 
         return (
             jsonify(
                 {
                     "success": True,
                     "message": "Fornecedor criado com sucesso",
-                    "fornecedor": {
-                        "id": novo_fornecedor.id,
-                        "nome": novo_fornecedor.nome,
-                        "cnpj": novo_fornecedor.cnpj,
-                    },
+                    "fornecedor": fornecedor.to_dict(),
                 }
             ),
             201,
@@ -609,124 +395,963 @@ def criar_fornecedor():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao criar fornecedor: {str(e)}")
-        return jsonify({"error": f"Erro ao criar fornecedor: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao criar fornecedor: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao criar fornecedor"}),
+            500,
+        )
 
 
-@fornecedores_bp.route("/<int:id>", methods=["PUT"])
+@fornecedores_bp.route("/api/fornecedores/<int:id>", methods=["PUT"])
+@login_required
 def atualizar_fornecedor(id):
-    """Atualizar informações de um fornecedor (mantida igual)"""
+    """Atualiza um fornecedor existente"""
     try:
-        fornecedor = Fornecedor.query.get(id)
-
-        if not fornecedor:
-            return jsonify({"error": "Fornecedor não encontrado"}), 404
+        fornecedor = Fornecedor.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
 
         data = request.get_json()
 
-        if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
+        # Validação dos dados (passando ID para verificação de CNPJ único)
+        erros = validar_dados_fornecedor(data, fornecedor.id)
+        if erros:
+            return (
+                jsonify(
+                    {"success": False, "message": "Erros de validação", "errors": erros}
+                ),
+                400,
+            )
 
-        # Verificar CNPJ único (se estiver sendo alterado)
-        if "cnpj" in data and data["cnpj"] != fornecedor.cnpj:
-            existente = Fornecedor.query.filter_by(cnpj=data["cnpj"]).first()
-            if existente and existente.id != id:
-                return (
-                    jsonify(
-                        {
-                            "error": "CNPJ já cadastrado em outro fornecedor",
-                            "fornecedor_existente": {
-                                "id": existente.id,
-                                "nome": existente.nome,
-                            },
-                        }
-                    ),
-                    409,
-                )
+        # Formatar dados
+        if "cnpj" in data:
+            fornecedor.cnpj = formatar_cnpj(data["cnpj"])
 
-        # Atualizar campos
-        campos_permitidos = [
-            "nome",
-            "cnpj",
-            "telefone",
+        if "telefone" in data:
+            fornecedor.telefone = formatar_telefone(data["telefone"])
+
+        if "contato_telefone" in data:
+            fornecedor.contato_telefone = formatar_telefone(data["contato_telefone"])
+
+        # Atualizar campos básicos
+        campos_basicos = [
+            "nome_fantasia",
+            "razao_social",
+            "inscricao_estadual",
             "email",
-            "endereco",
-            "cidade",
-            "estado",
-            "cep",
             "contato_nome",
-            "contato_comercial",
-            "celular_comercial",
+            "prazo_entrega",
+            "forma_pagamento",
+            "classificacao",
             "ativo",
         ]
 
-        for campo in campos_permitidos:
+        for campo in campos_basicos:
+            if campo in data:
+                setattr(fornecedor, campo, data[campo])
+
+        # Atualizar endereço
+        campos_endereco = [
+            "cep",
+            "logradouro",
+            "numero",
+            "complemento",
+            "bairro",
+            "cidade",
+            "estado",
+            "pais",
+        ]
+
+        for campo in campos_endereco:
             if campo in data:
                 setattr(fornecedor, campo, data[campo])
 
         fornecedor.data_atualizacao = datetime.utcnow()
+
         db.session.commit()
+
+        # Log de auditoria
+        current_app.logger.info(
+            f"Fornecedor atualizado: {fornecedor.id} por {current_user.username}"
+        )
 
         return jsonify(
             {
                 "success": True,
                 "message": "Fornecedor atualizado com sucesso",
-                "fornecedor": {
-                    "id": fornecedor.id,
-                    "nome": fornecedor.nome,
-                    "cnpj": fornecedor.cnpj,
-                    "ativo": fornecedor.ativo,
-                },
+                "fornecedor": fornecedor.to_dict(),
             }
         )
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao atualizar fornecedor {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao atualizar fornecedor: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao atualizar fornecedor {id}: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao atualizar fornecedor"}
+            ),
+            500,
+        )
 
 
-@fornecedores_bp.route("/<int:id>", methods=["DELETE"])
-def excluir_fornecedor(id):
-    """Excluir (desativar) um fornecedor (mantida igual)"""
+@fornecedores_bp.route("/api/fornecedores/<int:id>/status", methods=["PATCH"])
+@login_required
+def atualizar_status_fornecedor(id):
+    """Ativa/desativa um fornecedor"""
     try:
-        fornecedor = Fornecedor.query.get(id)
+        fornecedor = Fornecedor.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
 
-        if not fornecedor:
-            return jsonify({"error": "Fornecedor não encontrado"}), 404
+        data = request.get_json()
+        novo_status = data.get("ativo")
 
-        # Verificar se fornecedor tem produtos ativos
-        produtos_ativos = Produto.query.filter_by(fornecedor_id=id, ativo=True).count()
-        if produtos_ativos > 0:
+        if novo_status is None:
+            return (
+                jsonify({"success": False, "message": 'Campo "ativo" é obrigatório'}),
+                400,
+            )
+
+        # Verificar se há produtos ativos vinculados
+        if not novo_status:  # Se estiver desativando
+            produtos_ativos = Produto.query.filter_by(
+                fornecedor_id=id,
+                ativo=True,
+                estabelecimento_id=current_user.estabelecimento_id,
+            ).count()
+
+            if produtos_ativos > 0:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": f"Não é possível desativar o fornecedor. Existem {produtos_ativos} produtos ativos vinculados.",
+                        }
+                    ),
+                    400,
+                )
+
+        fornecedor.ativo = novo_status
+        fornecedor.data_atualizacao = datetime.utcnow()
+
+        db.session.commit()
+
+        acao = "ativado" if novo_status else "desativado"
+        current_app.logger.info(
+            f"Fornecedor {acao}: {fornecedor.id} por {current_user.username}"
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Fornecedor {acao} com sucesso",
+                "ativo": fornecedor.ativo,
+            }
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Erro ao atualizar status do fornecedor {id}: {str(e)}"
+        )
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Erro interno ao atualizar status do fornecedor",
+                }
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/<int:id>", methods=["DELETE"])
+@login_required
+def excluir_fornecedor(id):
+    """Exclui um fornecedor (apenas se não houver vínculos)"""
+    try:
+        fornecedor = Fornecedor.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
+
+        # Verificar vínculos
+        # 1. Produtos vinculados
+        produtos_count = Produto.query.filter_by(
+            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).count()
+
+        # 2. Pedidos de compra
+        pedidos_count = PedidoCompra.query.filter_by(
+            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).count()
+
+        # 3. Contas a pagar
+        contas_count = ContaPagar.query.filter_by(
+            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).count()
+
+        if produtos_count > 0 or pedidos_count > 0 or contas_count > 0:
             return (
                 jsonify(
                     {
-                        "error": "Não é possível excluir o fornecedor pois existem produtos ativos vinculados a ele",
-                        "quantidade_produtos": produtos_ativos,
+                        "success": False,
+                        "message": "Não é possível excluir o fornecedor. Existem vínculos ativos.",
+                        "vinculos": {
+                            "produtos": produtos_count,
+                            "pedidos": pedidos_count,
+                            "contas": contas_count,
+                        },
                     }
                 ),
                 400,
             )
 
-        # Exclusão lógica
-        fornecedor.ativo = False
-        fornecedor.data_atualizacao = datetime.utcnow()
+        # Excluir fornecedor
+        db.session.delete(fornecedor)
+        db.session.commit()
+
+        current_app.logger.info(
+            f"Fornecedor excluído: {id} por {current_user.username}"
+        )
+
+        return jsonify({"success": True, "message": "Fornecedor excluído com sucesso"})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao excluir fornecedor {id}: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao excluir fornecedor"}
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/busca", methods=["GET"])
+@login_required
+def buscar_fornecedores():
+    """Busca rápida de fornecedores para autocomplete"""
+    try:
+        termo = request.args.get("q", "", type=str).strip()
+        limite = request.args.get("limite", 20, type=int)
+        apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
+
+        if not termo or len(termo) < 2:
+            return jsonify({"success": True, "fornecedores": []})
+
+        query = Fornecedor.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id
+        )
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        busca_termo = f"%{termo}%"
+        fornecedores = (
+            query.filter(
+                db.or_(
+                    Fornecedor.nome_fantasia.ilike(busca_termo),
+                    Fornecedor.razao_social.ilike(busca_termo),
+                    Fornecedor.cnpj.ilike(busca_termo),
+                    Fornecedor.contato_nome.ilike(busca_termo),
+                )
+            )
+            .limit(limite)
+            .all()
+        )
+
+        resultados = []
+        for fornecedor in fornecedores:
+            resultados.append(
+                {
+                    "id": fornecedor.id,
+                    "nome_fantasia": fornecedor.nome_fantasia,
+                    "razao_social": fornecedor.razao_social,
+                    "cnpj": fornecedor.cnpj,
+                    "telefone": fornecedor.telefone,
+                    "email": fornecedor.email,
+                    "ativo": fornecedor.ativo,
+                    "classificacao": calcular_classificacao_fornecedor(fornecedor),
+                }
+            )
+
+        return jsonify(
+            {"success": True, "fornecedores": resultados, "total": len(resultados)}
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro na busca de fornecedores: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno na busca de fornecedores"}
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/estatisticas", methods=["GET"])
+@login_required
+def estatisticas_fornecedores():
+    """Retorna estatísticas gerais sobre fornecedores"""
+    try:
+        estabelecimento_id = current_user.estabelecimento_id
+
+        # Total de fornecedores
+        total_fornecedores = Fornecedor.query.filter_by(
+            estabelecimento_id=estabelecimento_id
+        ).count()
+
+        # Fornecedores ativos
+        fornecedores_ativos = Fornecedor.query.filter_by(
+            estabelecimento_id=estabelecimento_id, ativo=True
+        ).count()
+
+        # Fornecedores inativos
+        fornecedores_inativos = total_fornecedores - fornecedores_ativos
+
+        # Classificação por tipo
+        classificacoes = (
+            db.session.query(
+                Fornecedor.classificacao, db.func.count(Fornecedor.id).label("total")
+            )
+            .filter_by(estabelecimento_id=estabelecimento_id)
+            .group_by(Fornecedor.classificacao)
+            .all()
+        )
+
+        # Fornecedores por estado
+        fornecedores_por_estado = (
+            db.session.query(
+                Fornecedor.estado, db.func.count(Fornecedor.id).label("total")
+            )
+            .filter_by(estabelecimento_id=estabelecimento_id)
+            .group_by(Fornecedor.estado)
+            .all()
+        )
+
+        # Top 5 fornecedores por volume de compras
+        top_fornecedores = (
+            Fornecedor.query.filter_by(estabelecimento_id=estabelecimento_id)
+            .order_by(Fornecedor.valor_total_comprado.desc())
+            .limit(5)
+            .all()
+        )
+
+        top_fornecedores_list = []
+        for f in top_fornecedores:
+            top_fornecedores_list.append(
+                {
+                    "id": f.id,
+                    "nome": f.nome_fantasia,
+                    "valor_total": float(f.valor_total_comprado or 0),
+                    "total_compras": f.total_compras or 0,
+                }
+            )
+
+        # Últimos fornecedores cadastrados
+        ultimos_cadastrados = (
+            Fornecedor.query.filter_by(estabelecimento_id=estabelecimento_id)
+            .order_by(Fornecedor.data_cadastro.desc())
+            .limit(5)
+            .all()
+        )
+
+        ultimos_cadastrados_list = []
+        for f in ultimos_cadastrados:
+            ultimos_cadastrados_list.append(
+                {
+                    "id": f.id,
+                    "nome": f.nome_fantasia,
+                    "data_cadastro": (
+                        f.data_cadastro.isoformat() if f.data_cadastro else None
+                    ),
+                    "classificacao": calcular_classificacao_fornecedor(f),
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "estatisticas": {
+                    "total": total_fornecedores,
+                    "ativos": fornecedores_ativos,
+                    "inativos": fornecedores_inativos,
+                    "percentual_ativos": (
+                        (fornecedores_ativos / total_fornecedores * 100)
+                        if total_fornecedores > 0
+                        else 0
+                    ),
+                    "classificacoes": {c[0]: c[1] for c in classificacoes},
+                    "por_estado": {e[0]: e[1] for e in fornecedores_por_estado},
+                },
+                "top_fornecedores": top_fornecedores_list,
+                "ultimos_cadastrados": ultimos_cadastrados_list,
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(
+            f"Erro ao obter estatísticas de fornecedores: {str(e)}"
+        )
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao obter estatísticas"}
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/<int:id>/pedidos", methods=["GET"])
+@login_required
+def listar_pedidos_fornecedor(id):
+    """Lista todos os pedidos de um fornecedor"""
+    try:
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = request.args.get("por_pagina", 20, type=int)
+        status = request.args.get("status", None, type=str)
+
+        # Verificar se fornecedor existe
+        fornecedor = Fornecedor.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
+
+        # Query de pedidos
+        query = PedidoCompra.query.filter_by(
+            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+        )
+
+        if status:
+            query = query.filter_by(status=status)
+
+        query = query.order_by(PedidoCompra.data_pedido.desc())
+
+        # Paginação
+        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
+
+        pedidos = []
+        for pedido in paginacao.items:
+            pedidos.append(
+                {
+                    "id": pedido.id,
+                    "numero_pedido": pedido.numero_pedido,
+                    "data_pedido": (
+                        pedido.data_pedido.isoformat() if pedido.data_pedido else None
+                    ),
+                    "data_previsao_entrega": (
+                        pedido.data_previsao_entrega.isoformat()
+                        if pedido.data_previsao_entrega
+                        else None
+                    ),
+                    "status": pedido.status,
+                    "total": float(pedido.total),
+                    "quantidade_itens": pedido.itens.count(),
+                    "funcionario": (
+                        pedido.funcionario.nome if pedido.funcionario else None
+                    ),
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "pedidos": pedidos,
+                "fornecedor": fornecedor.nome_fantasia,
+                "total": paginacao.total,
+                "pagina": pagina,
+                "total_paginas": paginacao.pages,
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar pedidos do fornecedor {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao listar pedidos"}),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/exportar", methods=["GET"])
+@login_required
+def exportar_fornecedores():
+    """Exporta fornecedores em formato CSV ou Excel"""
+    try:
+        formato = request.args.get("formato", "csv", type=str).lower()
+        apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
+
+        # Buscar fornecedores
+        query = Fornecedor.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id
+        )
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        fornecedores = query.order_by(Fornecedor.nome_fantasia.asc()).all()
+
+        if formato == "csv":
+            # Gerar CSV
+            import csv
+            import io
+
+            output = io.StringIO()
+            writer = csv.writer(output, delimiter=";")
+
+            # Cabeçalho
+            writer.writerow(
+                [
+                    "ID",
+                    "Nome Fantasia",
+                    "Razão Social",
+                    "CNPJ",
+                    "Inscrição Estadual",
+                    "Telefone",
+                    "Email",
+                    "Contato",
+                    "Telefone Contato",
+                    "Prazo Entrega",
+                    "Forma Pagamento",
+                    "Classificação",
+                    "CEP",
+                    "Logradouro",
+                    "Número",
+                    "Complemento",
+                    "Bairro",
+                    "Cidade",
+                    "Estado",
+                    "País",
+                    "Ativo",
+                    "Total Compras",
+                    "Valor Total Comprado",
+                    "Data Cadastro",
+                ]
+            )
+
+            # Dados
+            for f in fornecedores:
+                writer.writerow(
+                    [
+                        f.id,
+                        f.nome_fantasia or "",
+                        f.razao_social or "",
+                        f.cnpj or "",
+                        f.inscricao_estadual or "",
+                        f.telefone or "",
+                        f.email or "",
+                        f.contato_nome or "",
+                        f.contato_telefone or "",
+                        f.prazo_entrega or "",
+                        f.forma_pagamento or "",
+                        f.classificacao or "",
+                        f.cep or "",
+                        f.logradouro or "",
+                        f.numero or "",
+                        f.complemento or "",
+                        f.bairro or "",
+                        f.cidade or "",
+                        f.estado or "",
+                        f.pais or "",
+                        "SIM" if f.ativo else "NÃO",
+                        f.total_compras or 0,
+                        float(f.valor_total_comprado or 0),
+                        (
+                            f.data_cadastro.strftime("%d/%m/%Y %H:%M:%S")
+                            if f.data_cadastro
+                            else ""
+                        ),
+                    ]
+                )
+
+            output.seek(0)
+            return (
+                output.getvalue(),
+                200,
+                {
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Disposition": "attachment; filename=fornecedores.csv",
+                },
+            )
+
+        elif formato == "excel":
+            # Gerar Excel
+            import pandas as pd
+
+            dados = []
+            for f in fornecedores:
+                dados.append(
+                    {
+                        "ID": f.id,
+                        "Nome Fantasia": f.nome_fantasia or "",
+                        "Razão Social": f.razao_social or "",
+                        "CNPJ": f.cnpj or "",
+                        "Inscrição Estadual": f.inscricao_estadual or "",
+                        "Telefone": f.telefone or "",
+                        "Email": f.email or "",
+                        "Contato": f.contato_nome or "",
+                        "Telefone Contato": f.contato_telefone or "",
+                        "Prazo Entrega": f.prazo_entrega or "",
+                        "Forma Pagamento": f.forma_pagamento or "",
+                        "Classificação": f.classificacao or "",
+                        "CEP": f.cep or "",
+                        "Logradouro": f.logradouro or "",
+                        "Número": f.numero or "",
+                        "Complemento": f.complemento or "",
+                        "Bairro": f.bairro or "",
+                        "Cidade": f.cidade or "",
+                        "Estado": f.estado or "",
+                        "País": f.pais or "",
+                        "Ativo": "SIM" if f.ativo else "NÃO",
+                        "Total Compras": f.total_compras or 0,
+                        "Valor Total Comprado": float(f.valor_total_comprado or 0),
+                        "Data Cadastro": (
+                            f.data_cadastro.strftime("%d/%m/%Y %H:%M:%S")
+                            if f.data_cadastro
+                            else ""
+                        ),
+                    }
+                )
+
+            df = pd.DataFrame(dados)
+
+            # Salvar em buffer
+            from io import BytesIO
+
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                df.to_excel(writer, sheet_name="Fornecedores", index=False)
+
+            output.seek(0)
+            return (
+                output.getvalue(),
+                200,
+                {
+                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "Content-Disposition": "attachment; filename=fornecedores.xlsx",
+                },
+            )
+
+        else:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": 'Formato não suportado. Use "csv" ou "excel"',
+                    }
+                ),
+                400,
+            )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao exportar fornecedores: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao exportar fornecedores"}
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/importar", methods=["POST"])
+@login_required
+def importar_fornecedores():
+    """Importa fornecedores a partir de arquivo CSV"""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "Nenhum arquivo enviado"}), 400
+
+        arquivo = request.files["file"]
+
+        if arquivo.filename == "":
+            return (
+                jsonify({"success": False, "message": "Nenhum arquivo selecionado"}),
+                400,
+            )
+
+        if not arquivo.filename.endswith(".csv"):
+            return (
+                jsonify(
+                    {"success": False, "message": "Apenas arquivos CSV são suportados"}
+                ),
+                400,
+            )
+
+        import csv
+        import io
+
+        # Ler arquivo CSV
+        stream = io.StringIO(arquivo.read().decode("utf-8-sig"))
+        leitor = csv.DictReader(stream, delimiter=";")
+
+        # Verificar cabeçalho mínimo
+        cabecalhos_necessarios = [
+            "nome_fantasia",
+            "razao_social",
+            "cnpj",
+            "email",
+            "telefone",
+        ]
+        cabecalhos_arquivo = leitor.fieldnames or []
+
+        for cabecalho in cabecalhos_necessarios:
+            if cabecalho not in cabecalhos_arquivo:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": f"Cabeçalho obrigatório não encontrado: {cabecalho}",
+                        }
+                    ),
+                    400,
+                )
+
+        # Processar linhas
+        fornecedores_criados = 0
+        fornecedores_atualizados = 0
+        erros = []
+
+        for linha_num, linha in enumerate(
+            leitor, start=2
+        ):  # start=2 para incluir cabeçalho
+            try:
+                # Verificar se fornecedor já existe pelo CNPJ
+                cnpj_formatado = formatar_cnpj(linha["cnpj"])
+                fornecedor_existente = Fornecedor.query.filter_by(
+                    cnpj=cnpj_formatado,
+                    estabelecimento_id=current_user.estabelecimento_id,
+                ).first()
+
+                if fornecedor_existente:
+                    # Atualizar fornecedor existente
+                    fornecedor_existente.nome_fantasia = linha["nome_fantasia"].strip()
+                    fornecedor_existente.razao_social = linha["razao_social"].strip()
+                    fornecedor_existente.email = linha["email"].strip().lower()
+                    fornecedor_existente.telefone = formatar_telefone(linha["telefone"])
+                    fornecedor_existente.data_atualizacao = datetime.utcnow()
+                    fornecedores_atualizados += 1
+                else:
+                    # Criar novo fornecedor
+                    fornecedor = Fornecedor(
+                        estabelecimento_id=current_user.estabelecimento_id,
+                        nome_fantasia=linha["nome_fantasia"].strip(),
+                        razao_social=linha["razao_social"].strip(),
+                        cnpj=cnpj_formatado,
+                        email=linha["email"].strip().lower(),
+                        telefone=formatar_telefone(linha["telefone"]),
+                        # Campos opcionais
+                        inscricao_estadual=linha.get("inscricao_estadual", "").strip(),
+                        contato_nome=linha.get("contato_nome", "").strip(),
+                        contato_telefone=formatar_telefone(
+                            linha.get("contato_telefone", "")
+                        ),
+                        prazo_entrega=int(linha.get("prazo_entrega", 7)),
+                        forma_pagamento=linha.get("forma_pagamento", "30 DIAS"),
+                        classificacao=linha.get("classificacao", "REGULAR"),
+                        # Endereço
+                        cep=linha.get("cep", "").strip(),
+                        logradouro=linha.get("logradouro", "").strip(),
+                        numero=linha.get("numero", "").strip(),
+                        complemento=linha.get("complemento", "").strip(),
+                        bairro=linha.get("bairro", "").strip(),
+                        cidade=linha.get("cidade", "").strip(),
+                        estado=linha.get("estado", "").strip().upper(),
+                        pais=linha.get("pais", "Brasil").strip(),
+                        ativo=linha.get("ativo", "true").lower() == "true",
+                        total_compras=0,
+                        valor_total_comprado=0,
+                    )
+                    db.session.add(fornecedor)
+                    fornecedores_criados += 1
+
+            except Exception as e:
+                erros.append(f"Linha {linha_num}: {str(e)}")
 
         db.session.commit()
 
         return jsonify(
             {
                 "success": True,
-                "message": "Fornecedor desativado com sucesso",
-                "fornecedor": {
-                    "id": fornecedor.id,
-                    "nome": fornecedor.nome,
-                    "ativo": False,
+                "message": "Importação concluída",
+                "resultado": {
+                    "criados": fornecedores_criados,
+                    "atualizados": fornecedores_atualizados,
+                    "erros": erros,
                 },
             }
         )
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao excluir fornecedor {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao excluir fornecedor: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao importar fornecedores: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao importar fornecedores"}
+            ),
+            500,
+        )
+
+
+@fornecedores_bp.route("/api/fornecedores/relatorio/analitico", methods=["GET"])
+@login_required
+def relatorio_analitico_fornecedores():
+    """Gera relatório analítico detalhado dos fornecedores"""
+    try:
+        # Parâmetros de filtro
+        data_inicio = request.args.get("data_inicio", None)
+        data_fim = request.args.get("data_fim", None)
+        classificacao = request.args.get("classificacao", None, type=str)
+
+        # Query base de fornecedores
+        query = Fornecedor.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id, ativo=True
+        )
+
+        if classificacao:
+            query = query.filter_by(classificacao=classificacao.upper())
+
+        fornecedores = query.all()
+
+        relatorio = []
+        for fornecedor in fornecedores:
+            # Pedidos do fornecedor no período
+            pedidos_query = PedidoCompra.query.filter_by(
+                fornecedor_id=fornecedor.id,
+                estabelecimento_id=current_user.estabelecimento_id,
+            )
+
+            if data_inicio:
+                pedidos_query = pedidos_query.filter(
+                    PedidoCompra.data_pedido >= datetime.fromisoformat(data_inicio)
+                )
+
+            if data_fim:
+                pedidos_query = pedidos_query.filter(
+                    PedidoCompra.data_pedido <= datetime.fromisoformat(data_fim)
+                )
+
+            pedidos = pedidos_query.all()
+
+            # Cálculos
+            total_pedidos = len(pedidos)
+            valor_total = sum(float(p.total) for p in pedidos)
+            pedidos_pendentes = len([p for p in pedidos if p.status == "pendente"])
+            pedidos_concluidos = len([p for p in pedidos if p.status == "concluido"])
+
+            # Média de tempo de entrega (apenas pedidos concluídos)
+            tempos_entrega = []
+            for p in pedidos:
+                if p.status == "concluido" and p.data_pedido and p.data_recebimento:
+                    dias = (p.data_recebimento - p.data_pedido.date()).days
+                    if dias > 0:
+                        tempos_entrega.append(dias)
+
+            media_entrega = (
+                sum(tempos_entrega) / len(tempos_entrega) if tempos_entrega else 0
+            )
+
+            # Produtos fornecidos
+            produtos = Produto.query.filter_by(
+                fornecedor_id=fornecedor.id,
+                estabelecimento_id=current_user.estabelecimento_id,
+                ativo=True,
+            ).all()
+
+            total_produtos = len(produtos)
+
+            # Adicionar ao relatório
+            relatorio.append(
+                {
+                    "fornecedor": {
+                        "id": fornecedor.id,
+                        "nome": fornecedor.nome_fantasia,
+                        "cnpj": fornecedor.cnpj,
+                        "classificacao": fornecedor.classificacao,
+                        "prazo_entrega_padrao": fornecedor.prazo_entrega,
+                    },
+                    "metricas": {
+                        "total_pedidos": total_pedidos,
+                        "valor_total_comprado": valor_total,
+                        "pedidos_pendentes": pedidos_pendentes,
+                        "pedidos_concluidos": pedidos_concluidos,
+                        "taxa_conclusao": (
+                            (pedidos_concluidos / total_pedidos * 100)
+                            if total_pedidos > 0
+                            else 0
+                        ),
+                        "media_tempo_entrega": media_entrega,
+                        "total_produtos": total_produtos,
+                    },
+                    "produtos": [
+                        {
+                            "id": p.id,
+                            "nome": p.nome,
+                            "preco_custo": float(p.preco_custo),
+                            "quantidade_estoque": p.quantidade,
+                        }
+                        for p in produtos[:10]
+                    ],  # Limitar a 10 produtos
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "relatorio": relatorio,
+                "total_fornecedores": len(relatorio),
+                "filtros": {
+                    "data_inicio": data_inicio,
+                    "data_fim": data_fim,
+                    "classificacao": classificacao,
+                },
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar relatório analítico: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao gerar relatório"}),
+            500,
+        )
+
+
+# ============================================
+# UTILITÁRIOS DE FORNECEDOR
+# ============================================
+
+
+def sincronizar_metricas_fornecedor(fornecedor_id):
+    """Sincroniza métricas de um fornecedor (chamar após cada pedido)"""
+    try:
+        fornecedor = Fornecedor.query.get(fornecedor_id)
+        if not fornecedor:
+            return
+
+        # Calcular total de compras
+        pedidos = PedidoCompra.query.filter_by(
+            fornecedor_id=fornecedor_id,
+            estabelecimento_id=fornecedor.estabelecimento_id,
+            status="concluido",
+        ).all()
+
+        total_compras = len(pedidos)
+        valor_total = sum(float(p.total) for p in pedidos)
+
+        # Atualizar fornecedor
+        fornecedor.total_compras = total_compras
+        fornecedor.valor_total_comprado = valor_total
+
+        # Atualizar classificação
+        if valor_total > 100000:
+            fornecedor.classificacao = "PREMIUM"
+        elif valor_total > 50000:
+            fornecedor.classificacao = "A"
+        elif valor_total > 10000:
+            fornecedor.classificacao = "B"
+        else:
+            fornecedor.classificacao = "C"
+
+        db.session.commit()
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Erro ao sincronizar métricas do fornecedor {fornecedor_id}: {str(e)}"
+        )

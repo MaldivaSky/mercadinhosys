@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppBar, Toolbar, Typography, Avatar, IconButton, Menu, MenuItem, Box } from '@mui/material';
-import { Logout } from '@mui/icons-material';
+import { Logout, Brightness4, Brightness7 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../../logoprincipal.png';
 
@@ -33,6 +33,34 @@ const Header: React.FC = () => {
     navigate('/login');
   };
 
+  // Tema: claro/escuro (persistido em localStorage)
+  const [isDark, setIsDark] = React.useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('theme');
+      if (stored) return stored === 'dark';
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      }
+      window.dispatchEvent(new Event('theme-change'));
+    } catch {
+      // ignore
+    }
+  }, [isDark]);
+
+  const handleToggleTheme = () => setIsDark((s) => !s);
+
   // Avatar: foto se existir, senão inicial do nome
   const avatarContent = user.foto_url ? (
     <Avatar src={user.foto_url} alt={user.nome} />
@@ -50,6 +78,9 @@ const Header: React.FC = () => {
           <Typography variant="body1" sx={{ fontWeight: 500, mr: 1 }}>
             {user.nome || 'Usuário'}
           </Typography>
+          <IconButton size="large" color="inherit" onClick={handleToggleTheme} title="Alternar tema">
+            {isDark ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
           <IconButton onClick={handleMenu} size="large" sx={{ p: 0 }}>
             {avatarContent}
           </IconButton>
