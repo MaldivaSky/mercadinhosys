@@ -7,11 +7,8 @@ Objetivos:
   - módulo de despesas
 
 Uso:
-  - `C:/.../python.exe backend/seed_test.py --reset`
-
-Padrões importantes do projeto:
-- Muitos testes e exemplos usam `estabelecimento_id=4`.
-- O dashboard calcula métricas com base em vendas do dia e do mês.
+  - `python seed_test.py --reset` (local)
+  - No Render, roda automático pelo Start Command.
 """
 
 from __future__ import annotations
@@ -62,10 +59,9 @@ def _safe_unique(fake: Faker, attr: str, fallback_fn):
 
 
 def reset_database():
-    """Limpa tabelas principais (modo teste)."""
+    """Limpa tabelas principais de forma compatível (SQLite/Postgres)."""
     print("🧹 Limpando dados existentes...")
 
-    # Ordem inversa de dependência (FK)
     tabelas = [
         "movimentacoes_estoque",
         "venda_itens",
@@ -82,15 +78,42 @@ def reset_database():
         "estabelecimentos",
     ]
 
-    db.session.execute(text("PRAGMA foreign_keys = OFF"))
-    for tabela in tabelas:
-        try:
-            db.session.execute(text(f"DELETE FROM {tabela}"))
-            print(f"  - Limpou {tabela}")
-        except Exception as e:
-            print(f"  - Ignorando {tabela}: {e}")
-    db.session.execute(text("PRAGMA foreign_keys = ON"))
-    db.session.commit()
+    try:
+        # Detecta se é SQLite ou PostgreSQL
+        engine_name = db.engine.name
+        print(f"  - Banco detectado: {engine_name}")
+
+        if engine_name == "sqlite":
+            # Modo SQLite
+            db.session.execute(text("PRAGMA foreign_keys = OFF"))
+            for tabela in tabelas:
+                try:
+                    db.session.execute(text(f"DELETE FROM {tabela}"))
+                    print(f"  - [SQLite] Limpou {tabela}")
+                except Exception as e:
+                    print(f"  - Ignorando {tabela}: {e}")
+            db.session.execute(text("PRAGMA foreign_keys = ON"))
+
+        else:
+            # Modo PostgreSQL (Render/Neon)
+            # TRUNCATE CASCADE limpa a tabela e todas as dependências FK
+            for tabela in tabelas:
+                try:
+                    # RESTART IDENTITY reseta os IDs (autoincrement) para 1
+                    db.session.execute(
+                        text(f"TRUNCATE TABLE {tabela} RESTART IDENTITY CASCADE")
+                    )
+                    print(f"  - [Postgres] Limpou {tabela}")
+                except Exception as e:
+                    # Se a tabela não existir (primeiro deploy), ignora
+                    print(f"  - Nota sobre {tabela}: Tabela vazia ou inexistente")
+
+        db.session.commit()
+
+    except Exception as e:
+        print(f"❌ Erro ao limpar banco: {e}")
+        db.session.rollback()
+        # Não lança erro fatal para permitir que o script tente criar as tabelas se for o caso
 
 
 def ensure_estabelecimento(fake: Faker, estabelecimento_id: int) -> Estabelecimento:
@@ -101,7 +124,11 @@ def ensure_estabelecimento(fake: Faker, estabelecimento_id: int) -> Estabelecime
     est = Estabelecimento(
         id=estabelecimento_id,
         nome=f"Mercadinho {fake.city()}",
-        cnpj=_safe_unique(fake, "cnpj", lambda: f"{random.randint(10,99)}.{random.randint(100,999)}.{random.randint(100,999)}/0001-{random.randint(10,99)}"),
+        cnpj=_safe_unique(
+            fake,
+            "cnpj",
+            lambda: f"{random.randint(10,99)}.{random.randint(100,999)}.{random.randint(100,999)}/0001-{random.randint(10,99)}",
+        ),
         telefone=fake.phone_number(),
         email=fake.company_email(),
         cep=fake.postcode(),
@@ -162,7 +189,11 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
             estabelecimento_id=estabelecimento_id,
             nome=nome,
             username=username,
-            cpf=_safe_unique(fake, "cpf", lambda: f"{random.randint(100, 999)}.{random.randint(100, 999)}.{random.randint(100, 999)}-{random.randint(10, 99)}"),
+            cpf=_safe_unique(
+                fake,
+                "cpf",
+                lambda: f"{random.randint(100, 999)}.{random.randint(100, 999)}.{random.randint(100, 999)}-{random.randint(10, 99)}",
+            ),
             telefone=fake.phone_number(),
             email=fake.email(),
             cargo=cargo,
@@ -214,7 +245,9 @@ def seed_clientes(fake: Faker, estabelecimento_id: int, n: int = 40) -> List[Cli
     return clientes
 
 
-def seed_fornecedores(fake: Faker, estabelecimento_id: int, n: int = 6) -> List[Fornecedor]:
+def seed_fornecedores(
+    fake: Faker, estabelecimento_id: int, n: int = 6
+) -> List[Fornecedor]:
     print("🏭 Criando fornecedores...")
     fornecedores: List[Fornecedor] = []
     for _ in range(n):
@@ -250,7 +283,7 @@ def seed_produtos(
     n: int = 120,
 ) -> List[Produto]:
     print("📦 Criando produtos realistas...")
-    
+
     # Produtos reais brasileiros por categoria e tipo de seção
     produtos_reais = {
         "Bebidas Não Alcoólicas": {
@@ -262,7 +295,7 @@ def seed_produtos(
                 ("Água Mineral Crystal 1.5L", "Crystal", 1.80, 2.99, "L"),
                 ("Café Pilão 500g", "Pilão", 12.50, 16.90, "KG"),
                 ("Achocolatado Nescau 400g", "Nestlé", 6.80, 9.49, "UN"),
-            ]
+            ],
         },
         "Bebidas Alcoólicas": {
             "tipo": "Bebidas Alcoólicas",
@@ -270,7 +303,7 @@ def seed_produtos(
                 ("Cerveja Skol Lata 350ml", "Ambev", 2.20, 3.49, "UN"),
                 ("Cerveja Brahma 1L", "Ambev", 5.50, 7.99, "L"),
                 ("Vinho Pérgola Tinto 750ml", "Aurora", 15.00, 22.90, "L"),
-            ]
+            ],
         },
         "Higiene": {
             "tipo": "Higiene",
@@ -280,7 +313,7 @@ def seed_produtos(
                 ("Creme Dental Colgate 90g", "Colgate", 4.20, 6.49, "UN"),
                 ("Desodorante Rexona Aerosol", "Unilever", 8.50, 12.99, "UN"),
                 ("Papel Higiênico Neve 4 rolos", "Kimberly", 6.80, 9.99, "UN"),
-            ]
+            ],
         },
         "Limpeza": {
             "tipo": "Limpeza",
@@ -290,7 +323,7 @@ def seed_produtos(
                 ("Sabão em Pó Omo 1kg", "Unilever", 11.50, 16.90, "KG"),
                 ("Esponja Scotch-Brite", "3M", 3.20, 4.99, "UN"),
                 ("Desinfetante Pinho Sol 500ml", "Reckitt", 5.80, 8.49, "L"),
-            ]
+            ],
         },
         "Mercearia": {
             "tipo": "Mercearia",
@@ -302,7 +335,7 @@ def seed_produtos(
                 ("Açúcar União 1kg", "União", 3.50, 4.99, "KG"),
                 ("Sal Cisne 1kg", "Cisne", 1.20, 1.99, "KG"),
                 ("Farinha de Trigo Dona Benta 1kg", "M.Dias", 4.20, 5.99, "KG"),
-            ]
+            ],
         },
         "Mercearia Seca": {
             "tipo": "Mercearia Seca",
@@ -310,7 +343,7 @@ def seed_produtos(
                 ("Bolacha Maizena Marilan", "Marilan", 2.80, 4.29, "UN"),
                 ("Biscoito Recheado Bono 126g", "Nestlé", 1.80, 2.99, "UN"),
                 ("Leite em Pó Ninho 400g", "Nestlé", 18.50, 24.90, "UN"),
-            ]
+            ],
         },
         "Frios e Laticínios": {
             "tipo": "Frios e Laticínios",
@@ -320,7 +353,7 @@ def seed_produtos(
                 ("Queijo Mussarela Tirolez kg", "Tirolez", 32.00, 44.90, "KG"),
                 ("Presunto Sadia kg", "Sadia", 28.00, 38.90, "KG"),
                 ("Manteiga Aviação 200g", "Aviação", 8.50, 12.49, "UN"),
-            ]
+            ],
         },
         "Carnes": {
             "tipo": "Carnes",
@@ -328,7 +361,7 @@ def seed_produtos(
                 ("Picanha Bovina kg", "Friboi", 58.00, 79.90, "KG"),
                 ("Frango Inteiro Congelado kg", "Seara", 9.50, 13.90, "KG"),
                 ("Linguiça Toscana kg", "Perdigão", 18.00, 24.90, "KG"),
-            ]
+            ],
         },
         "Hortifruti": {
             "tipo": "Hortifruti",
@@ -337,7 +370,7 @@ def seed_produtos(
                 ("Tomate kg", "Produtor Local", 5.80, 8.49, "KG"),
                 ("Batata kg", "Produtor Local", 4.20, 5.99, "KG"),
                 ("Alface un", "Produtor Local", 2.50, 3.99, "UN"),
-            ]
+            ],
         },
         "Padaria": {
             "tipo": "Padaria",
@@ -345,7 +378,7 @@ def seed_produtos(
                 ("Pão Francês kg", "Produção Própria", 8.50, 12.90, "KG"),
                 ("Pão de Forma Pullman", "Pullman", 6.80, 9.49, "UN"),
                 ("Bolo Caseiro un", "Produção Própria", 12.00, 18.90, "UN"),
-            ]
+            ],
         },
         "Congelados": {
             "tipo": "Congelados",
@@ -353,7 +386,7 @@ def seed_produtos(
                 ("Pizza Sadia Mussarela", "Sadia", 11.50, 16.90, "UN"),
                 ("Lasanha Seara 600g", "Seara", 13.80, 19.90, "UN"),
                 ("Batata Pré-Frita McCain", "McCain", 8.50, 12.49, "KG"),
-            ]
+            ],
         },
         "Matinais": {
             "tipo": "Matinais",
@@ -361,7 +394,7 @@ def seed_produtos(
                 ("Cereal Nescau 210g", "Nestlé", 8.50, 12.49, "UN"),
                 ("Aveia Quaker 500g", "Quaker", 6.20, 8.99, "UN"),
                 ("Sucrilhos Kelloggs", "Kelloggs", 9.80, 14.49, "UN"),
-            ]
+            ],
         },
         "Bazar e Utilidades": {
             "tipo": "Bazar e Utilidades",
@@ -369,20 +402,20 @@ def seed_produtos(
                 ("Pilha Duracell AA c/4", "Duracell", 12.00, 17.90, "UN"),
                 ("Vela Comum Maço", "Imperial", 3.50, 5.49, "UN"),
                 ("Fósforo Fiatux", "Fiatux", 1.50, 2.49, "UN"),
-            ]
+            ],
         },
         "Pet Shop": {
             "tipo": "Pet Shop",
             "items": [
                 ("Ração Pedigree Carne 1kg", "Pedigree", 18.00, 25.90, "KG"),
                 ("Ração Whiskas Peixe 1kg", "Whiskas", 16.50, 22.90, "KG"),
-            ]
+            ],
         },
     }
 
     produtos: List[Produto] = []
     hoje = date.today()
-    
+
     # Criar produtos reais primeiro
     for categoria, dados_cat in produtos_reais.items():
         tipo_secao = dados_cat["tipo"]
@@ -390,15 +423,15 @@ def seed_produtos(
             # Variação de até 15% nos preços
             preco_custo = round(custo_base * random.uniform(0.92, 1.08), 2)
             preco_venda = round(venda_base * random.uniform(0.95, 1.05), 2)
-            
+
             # Validação de margem mínima
             if preco_venda <= preco_custo:
                 preco_venda = round(preco_custo * 1.25, 2)
-            
+
             # Estoque realista
             quantidade = random.choice([0, 0, 3, 8, 15, 25, 40, 60, 100])
             quantidade_minima = random.choice([5, 8, 10, 12, 15])
-            
+
             # Validade
             if categoria in ["Hortifruti", "Padaria", "Carnes"]:
                 data_validade = hoje + timedelta(days=random.randint(2, 7))
@@ -406,7 +439,7 @@ def seed_produtos(
                 data_validade = hoje + timedelta(days=random.randint(10, 30))
             else:
                 data_validade = hoje + timedelta(days=random.randint(60, 365))
-            
+
             p = Produto(
                 estabelecimento_id=estabelecimento_id,
                 fornecedor_id=random.choice(fornecedores).id,
@@ -423,14 +456,16 @@ def seed_produtos(
                 localizacao=f"Corredor {random.randint(1, 10)}",
                 preco_custo=preco_custo,
                 preco_venda=preco_venda,
-                margem_lucro=round(((preco_venda - preco_custo) / preco_custo) * 100, 2),
+                margem_lucro=round(
+                    ((preco_venda - preco_custo) / preco_custo) * 100, 2
+                ),
                 data_validade=data_validade,
                 lote=f"L{random.randint(1000,9999)}",
                 ativo=True,
             )
             db.session.add(p)
             produtos.append(p)
-    
+
     # Preencher até n produtos com variações
     produtos_criados = len(produtos)
     if produtos_criados < n:
@@ -441,15 +476,15 @@ def seed_produtos(
             tipo_secao = dados_cat["tipo"]
             item_base = random.choice(dados_cat["items"])
             nome_base, marca_base, custo_base, venda_base, unidade = item_base
-            
+
             preco_custo = round(random.uniform(custo_base * 0.7, custo_base * 1.3), 2)
             preco_venda = round(random.uniform(venda_base * 0.8, venda_base * 1.4), 2)
-            
+
             if preco_venda <= preco_custo:
                 preco_venda = round(preco_custo * 1.3, 2)
-            
+
             quantidade = random.choice([0, 2, 5, 10, 20, 35, 50, 80])
-            
+
             p = Produto(
                 estabelecimento_id=estabelecimento_id,
                 fornecedor_id=random.choice(fornecedores).id,
@@ -466,7 +501,9 @@ def seed_produtos(
                 localizacao=f"Corredor {random.randint(1, 10)}",
                 preco_custo=preco_custo,
                 preco_venda=preco_venda,
-                margem_lucro=round(((preco_venda - preco_custo) / preco_custo) * 100, 2),
+                margem_lucro=round(
+                    ((preco_venda - preco_custo) / preco_custo) * 100, 2
+                ),
                 data_validade=hoje + timedelta(days=random.randint(30, 365)),
                 lote=f"L{random.randint(1000,9999)}",
                 ativo=True,
@@ -573,7 +610,9 @@ def _criar_venda_com_itens(
         created_at=data_venda,
         updated_at=data_venda,
         quantidade_itens=0,
-        tipo_venda=random.choice(["normal", "normal", "normal", "promocional", "atacado"]),
+        tipo_venda=random.choice(
+            ["normal", "normal", "normal", "promocional", "atacado"]
+        ),
     )
     db.session.add(venda)
     db.session.flush()  # garante venda.id
