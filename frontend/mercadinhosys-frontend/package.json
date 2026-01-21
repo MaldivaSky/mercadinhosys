@@ -18,6 +18,7 @@
     "autoprefixer": "^10.4.23",
     "axios": "^1.13.2",
     "lucide-react": "^0.562.0",
+    "recharts": "^2.6.2",
     "postcss": "^8.5.6",
     "quagga": "^0.6.16",
     "react": "^19.2.0",

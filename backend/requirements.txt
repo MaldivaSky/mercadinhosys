@@ -79,3 +79,6 @@ Werkzeug==3.1.4
 wheel==0.45.1
 wrapt==2.0.1
 psycopg2-binary==2.9.11
+scipy==2.4.0
+statsmodels==0.14.6
+plotly==6.5.1
