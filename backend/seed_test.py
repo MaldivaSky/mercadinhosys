@@ -76,6 +76,7 @@ def reset_database():
         "dashboard_metricas",
         "relatorios_agendados",
         "estabelecimentos",
+        "analises_preditivas",
     ]
 
     try:
@@ -89,31 +90,27 @@ def reset_database():
             for tabela in tabelas:
                 try:
                     db.session.execute(text(f"DELETE FROM {tabela}"))
-                    print(f"  - [SQLite] Limpou {tabela}")
                 except Exception as e:
-                    print(f"  - Ignorando {tabela}: {e}")
+                    pass
             db.session.execute(text("PRAGMA foreign_keys = ON"))
 
         else:
             # Modo PostgreSQL (Render/Neon)
-            # TRUNCATE CASCADE limpa a tabela e todas as dependências FK
+            # O comando TRUNCATE é muito mais rápido e limpa tudo em cascata
             for tabela in tabelas:
                 try:
-                    # RESTART IDENTITY reseta os IDs (autoincrement) para 1
                     db.session.execute(
                         text(f"TRUNCATE TABLE {tabela} RESTART IDENTITY CASCADE")
                     )
-                    print(f"  - [Postgres] Limpou {tabela}")
+                    print(f"  - [Postgres] Tabela {tabela} limpa.")
                 except Exception as e:
-                    # Se a tabela não existir (primeiro deploy), ignora
-                    print(f"  - Nota sobre {tabela}: Tabela vazia ou inexistente")
+                    print(f"  - Aviso: Tabela {tabela} não existe ou vazia.")
 
         db.session.commit()
 
     except Exception as e:
         print(f"❌ Erro ao limpar banco: {e}")
         db.session.rollback()
-        # Não lança erro fatal para permitir que o script tente criar as tabelas se for o caso
 
 
 def ensure_estabelecimento(fake: Faker, estabelecimento_id: int) -> Estabelecimento:
