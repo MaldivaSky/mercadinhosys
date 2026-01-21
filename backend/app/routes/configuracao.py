@@ -7,10 +7,10 @@ from datetime import datetime
 import os
 from werkzeug.utils import secure_filename
 
-config_bp = Blueprint("configuracao", __name__)
+configuracao_bp = Blueprint("configuracao", __name__, url_prefix="/api/configuracao")
 
 
-@config_bp.route("/", methods=["GET"])
+@configuracao_bp.route("/", methods=["GET"])
 def obter_configuracoes():
     """Obtém as configurações do estabelecimento"""
     try:
@@ -42,7 +42,7 @@ def obter_configuracoes():
         )
 
 
-@config_bp.route("/", methods=["PUT"])
+@configuracao_bp.route("/", methods=["PUT"])
 def atualizar_configuracoes():
     """Atualiza as configurações do estabelecimento"""
     try:
@@ -111,7 +111,7 @@ def atualizar_configuracoes():
         )
 
 
-@config_bp.route("/logo", methods=["POST"])
+@configuracao_bp.route("/logo", methods=["POST"])
 def upload_logo():
     """Faz upload da logo do estabelecimento"""
     try:
@@ -196,7 +196,7 @@ def upload_logo():
         )
 
 
-@config_bp.route("/estabelecimento", methods=["GET", "PUT"])
+@configuracao_bp.route("/estabelecimento", methods=["GET", "PUT"])
 def gerenciar_estabelecimento():
     """Obtém ou atualiza dados do estabelecimento"""
     try:

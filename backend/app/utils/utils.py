@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 import json
 from flask import current_app
+import re
 
 
 def calcular_tendencia(series: List[float]) -> Dict[str, Any]:
@@ -360,6 +361,42 @@ def gerar_cor_por_percentual(percentual: float) -> str:
             return f"rgb(200, {max(0, 150 - intensidade)}, {max(0, 150 - intensidade)})"
     except:
         return "rgb(150, 150, 150)"
+
+
+def calcular_margem_lucro(preco_venda, preco_custo):
+    """Calcula a margem de lucro em porcentagem"""
+    if not preco_venda or preco_venda == 0:
+        return 0.0
+    try:
+        lucro = float(preco_venda) - float(preco_custo)
+        return (lucro / float(preco_venda)) * 100
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def validar_cpf(cpf):
+    """Valida CPF (Implementação Simplificada)"""
+    if not cpf:
+        return False
+    # Remove caracteres não numéricos
+    cpf = re.sub(r"[^0-9]", "", str(cpf))
+    return len(cpf) == 11
+
+
+def validar_cnpj(cnpj):
+    """Valida CNPJ (Implementação Simplificada)"""
+    if not cnpj:
+        return False
+    cnpj = re.sub(r"[^0-9]", "", str(cnpj))
+    return len(cnpj) == 14
+
+
+def formatar_moeda(valor):
+    """Formata float para moeda BRL"""
+    try:
+        return f"R$ {float(valor):.2f}".replace(".", ",")
+    except (ValueError, TypeError):
+        return "R$ 0,00"
 
 
 def calcular_meta_atingida(valor_atual: float, meta: float) -> Dict[str, Any]:
@@ -726,3 +763,34 @@ def gerar_insight_automatico(
             "acao": "Verifique os dados",
             "prioridade": "baixa",
         }
+
+
+def formatar_codigo_barras(codigo):
+    """Formata ou valida código de barras simples"""
+    if not codigo:
+        return ""
+    # Remove caracteres não numéricos
+    return re.sub(r"[^0-9]", "", str(codigo))
+
+
+def validar_email(email):
+    """Valida formato de email básico"""
+    if not email:
+        return False
+    # Regex simples para validação
+    padrao = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return re.match(padrao, email) is not None
+
+
+def formatar_telefone(telefone):
+    """Formata telefone para (XX) XXXXX-XXXX ou (XX) XXXX-XXXX"""
+    if not telefone:
+        return ""
+    # Remove tudo que não for número
+    nums = re.sub(r"[^0-9]", "", str(telefone))
+
+    if len(nums) == 11:
+        return f"({nums[:2]}) {nums[2:7]}-{nums[7:]}"
+    elif len(nums) == 10:
+        return f"({nums[:2]}) {nums[2:6]}-{nums[6:]}"
+    return telefone
