@@ -48,6 +48,38 @@ from app.models import (
 DEFAULT_ESTABELECIMENTO_ID = 4
 
 
+def reset_database():
+    """Destrói e recria o esquema do banco (SQLite/Postgres)."""
+    print("🧹 Iniciando RESET NUCLEAR do banco...")
+
+    try:
+        # Detecta se é SQLite ou PostgreSQL
+        engine_name = db.engine.name
+        print(f"  - Banco detectado: {engine_name}")
+
+        # Solução Radical: Apaga TODAS as tabelas e recria
+        # Isso garante que colunas novas (como nome_fantasia) sejam criadas
+        print("  - Apagando todas as tabelas (DROP ALL)...")
+        db.drop_all()
+
+        print("  - Recriando tabelas baseadas nos Models (CREATE ALL)...")
+        db.create_all()
+
+        # Garante que o Alembic (migrações) não fique perdido
+        try:
+            db.session.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            db.session.commit()
+        except:
+            pass
+
+        print("✅ Esquema do banco recriado com sucesso!")
+
+    except Exception as e:
+        print(f"❌ Erro ao resetar banco: {e}")
+        db.session.rollback()
+        # Se falhar o drop, tentamos seguir, mas é crítico reportar o erro
+
+
 def _faker() -> Faker:
     fake = Faker("pt_BR")
     Faker.seed(20260102)
