@@ -1,8 +1,6 @@
-# UPDATE FORCADO RENDER - 001
-
-# app/models.py
+# app/models.py - VERSÃO COMPLETA CORRIGIDA
 # SISTEMA ERP COMERCIAL COMPLETO - PADRÃO INDUSTRIAL BRASILEIRO
-# Modelos completos com todas as tabelas necessárias para um ERP
+# Versão completa com todas as tabelas necessárias
 
 from datetime import datetime, date
 from decimal import Decimal
@@ -34,7 +32,7 @@ class EnderecoMixin:
         end = f"{self.logradouro}, {self.numero}"
         if self.complemento:
             end += f" - {self.complemento}"
-        end += f" - {self.bairro} - {self.cidade}/{self.estado}"
+        end += f" - {self.bairro} - {self.cidade}/{self.estado} - {self.cep}"
         return end
 
 
@@ -49,7 +47,7 @@ class Estabelecimento(db.Model, EnderecoMixin):
     id = db.Column(db.Integer, primary_key=True)
     nome_fantasia = db.Column(db.String(150), nullable=False)
     razao_social = db.Column(db.String(150), nullable=False)
-    cnpj = db.Column(db.String(18), unique=True, nullable=False)
+    cnpj = db.Column(db.String(18), nullable=False)
     inscricao_estadual = db.Column(db.String(20))
     telefone = db.Column(db.String(15), nullable=False)
     email = db.Column(db.String(100), nullable=False)
@@ -59,7 +57,10 @@ class Estabelecimento(db.Model, EnderecoMixin):
     data_abertura = db.Column(db.Date, nullable=False)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relacionamentos serão definidos após as classes
+    __table_args__ = (
+        db.Index("idx_estabelecimento_cnpj", "cnpj"),
+        db.UniqueConstraint("cnpj", name="uq_estabelecimento_cnpj"),
+    )
 
     def to_dict(self):
         return {
@@ -83,7 +84,9 @@ class Configuracao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), unique=True
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        unique=True,
     )
 
     logo_url = db.Column(db.String(500))
@@ -102,7 +105,8 @@ class Configuracao(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("configuracao", uselist=False)
+        "Estabelecimento",
+        backref=db.backref("configuracao", uselist=False, cascade="all, delete-orphan"),
     )
 
     def to_dict(self):
@@ -111,7 +115,11 @@ class Configuracao(db.Model):
             "estabelecimento_id": self.estabelecimento_id,
             "logo_url": self.logo_url,
             "emitir_nfce": self.emitir_nfce,
-            "desconto_maximo_funcionario": float(self.desconto_maximo_funcionario),
+            "desconto_maximo_funcionario": (
+                float(self.desconto_maximo_funcionario)
+                if self.desconto_maximo_funcionario
+                else 0.0
+            ),
         }
 
 
@@ -125,11 +133,13 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     nome = db.Column(db.String(150), nullable=False)
-    cpf = db.Column(db.String(14), unique=True, nullable=False)
+    cpf = db.Column(db.String(14), nullable=False)
     rg = db.Column(db.String(20))
     data_nascimento = db.Column(db.Date, nullable=False)
 
@@ -141,28 +151,76 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
     data_admissao = db.Column(db.Date, nullable=False)
     salario_base = db.Column(db.Numeric(10, 2), default=0)
 
-    username = db.Column(db.String(50), unique=True, nullable=False)
+    username = db.Column(db.String(50), nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False)
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
 
-    permissoes = db.Column(
-        db.JSON,
-        default=lambda: {
-            "pdv": True,
-            "estoque": True,
-            "compras": False,
-            "financeiro": False,
-            "configuracoes": False,
-        },
+    # PROPRIEDADES NECESSÁRIAS PARA FLASK-LOGIN
+    @property
+    def is_authenticated(self):
+        """Retorna True se o usuário está autenticado"""
+        return True if self.ativo else False
+
+    @property
+    def is_active(self):
+        """Retorna True se a conta está ativa"""
+        return self.ativo
+
+    @property
+    def is_anonymous(self):
+        """Retorna False para usuários reais"""
+        return False
+
+    def get_id(self):
+        """Retorna o ID do usuário como string (requerido pelo Flask-Login)"""
+        return str(self.id)
+
+    def get_username(self):
+        """Retorna o username"""
+        return self.username
+
+    # Para compatibilidade com SQLite, usamos Text e fazemos parse manual
+    permissoes_json = db.Column(
+        db.Text,
+        default='{"pdv": true, "estoque": true, "compras": false, "financeiro": false, "configuracoes": false}',
     )
 
     ativo = db.Column(db.Boolean, default=True)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("funcionarios", lazy="dynamic")
+        "Estabelecimento",
+        backref=db.backref("funcionarios", lazy=True, cascade="all, delete-orphan"),
     )
+
+    __table_args__ = (
+        db.Index("idx_funcionario_cpf", "cpf"),
+        db.Index("idx_funcionario_estabelecimento", "estabelecimento_id"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "cpf", name="uq_funcionario_estab_cpf"
+        ),
+        db.UniqueConstraint(
+            "estabelecimento_id", "username", name="uq_funcionario_estab_username"
+        ),
+    )
+
+    @property
+    def permissoes(self):
+        try:
+            return json.loads(self.permissoes_json)
+        except:
+            return {
+                "pdv": True,
+                "estoque": True,
+                "compras": False,
+                "financeiro": False,
+                "configuracoes": False,
+            }
+
+    @permissoes.setter
+    def permissoes(self, value):
+        self.permissoes_json = json.dumps(value)
 
     def set_senha(self, senha):
         self.senha_hash = generate_password_hash(senha)
@@ -184,11 +242,12 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
             "username": self.username,
             "role": self.role,
             "ativo": self.ativo,
+            "permissoes": self.permissoes,
         }
 
 
 # ============================================
-# 4. CLIENTE (APENAS CPF)
+# 4. CLIENTE
 # ============================================
 
 
@@ -197,7 +256,9 @@ class Cliente(db.Model, EnderecoMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     nome = db.Column(db.String(150), nullable=False)
@@ -225,9 +286,15 @@ class Cliente(db.Model, EnderecoMixin):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("clientes", lazy="dynamic")
+        "Estabelecimento",
+        backref=db.backref("clientes", lazy=True, cascade="all, delete-orphan"),
     )
-    
+
+    __table_args__ = (
+        db.Index("idx_cliente_cpf", "cpf"),
+        db.Index("idx_cliente_nome", "nome"),
+        db.UniqueConstraint("estabelecimento_id", "cpf", name="uq_cliente_estab_cpf"),
+    )
 
     def to_dict(self):
         return {
@@ -237,8 +304,10 @@ class Cliente(db.Model, EnderecoMixin):
             "celular": self.celular,
             "email": self.email,
             "endereco_completo": self.endereco_completo(),
-            "limite_credito": float(self.limite_credito),
-            "saldo_devedor": float(self.saldo_devedor),
+            "limite_credito": (
+                float(self.limite_credito) if self.limite_credito else 0.0
+            ),
+            "saldo_devedor": float(self.saldo_devedor) if self.saldo_devedor else 0.0,
             "total_compras": self.total_compras,
             "ativo": self.ativo,
         }
@@ -254,7 +323,9 @@ class Fornecedor(db.Model, EnderecoMixin):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     nome_fantasia = db.Column(db.String(150), nullable=False)
@@ -283,18 +354,22 @@ class Fornecedor(db.Model, EnderecoMixin):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("fornecedores", lazy="dynamic")
+        "Estabelecimento",
+        backref=db.backref("fornecedores", lazy=True, cascade="all, delete-orphan"),
     )
-    
-    pedidos_compra = db.relationship(
-        "PedidoCompra", backref="fornecedor", lazy="dynamic"
+
+    __table_args__ = (
+        db.Index("idx_fornecedor_cnpj", "cnpj"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "cnpj", name="uq_fornecedor_estab_cnpj"
+        ),
     )
 
     def to_dict(self):
         return {
             "id": self.id,
             "nome_fantasia": self.nome_fantasia,
-            "cnpj": self.cnj,
+            "cnpj": self.cnpj,
             "telefone": self.telefone,
             "email": self.email,
             "endereco_completo": self.endereco_completo(),
@@ -304,7 +379,53 @@ class Fornecedor(db.Model, EnderecoMixin):
 
 
 # ============================================
-# 6. PRODUTO
+# 6. CATEGORIA DE PRODUTO
+# ============================================
+
+
+class CategoriaProduto(db.Model):
+    __tablename__ = "categorias_produto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    nome = db.Column(db.String(50), nullable=False)
+    descricao = db.Column(db.Text)
+    codigo = db.Column(db.String(20))
+
+    ativo = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    estabelecimento = db.relationship(
+        "Estabelecimento",
+        backref=db.backref(
+            "categorias_produto", lazy=True, cascade="all, delete-orphan"
+        ),
+    )
+
+    __table_args__ = (
+        db.Index("idx_categoria_nome", "nome"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "nome", name="uq_categoria_estab_nome"
+        ),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "descricao": self.descricao,
+            "codigo": self.codigo,
+            "ativo": self.ativo,
+        }
+
+
+# ============================================
+# 7. PRODUTO
 # ============================================
 
 
@@ -313,18 +434,21 @@ class Produto(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    categoria_id = db.Column(
+        db.Integer, db.ForeignKey("categorias_produto.id"), nullable=False
     )
     fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
 
-    codigo_barras = db.Column(db.String(50), unique=True)
-    codigo_interno = db.Column(db.String(50), unique=True)
+    codigo_barras = db.Column(db.String(50))
+    codigo_interno = db.Column(db.String(50))
     nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text)
     marca = db.Column(db.String(50))
 
-    categoria = db.Column(db.String(50), nullable=False)
-    subcategoria = db.Column(db.String(50))
     unidade_medida = db.Column(db.String(20), default="UN")
 
     quantidade = db.Column(db.Integer, default=0)
@@ -357,72 +481,36 @@ class Produto(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("produtos", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("produtos", lazy=True)
+    )
+    categoria = db.relationship(
+        "CategoriaProduto", backref=db.backref("produtos", lazy=True)
     )
     fornecedor = db.relationship(
-        "Fornecedor", backref=db.backref("produtos", lazy="dynamic")
+        "Fornecedor", backref=db.backref("produtos", lazy=True)
     )
-    itens_venda = db.relationship("VendaItem", backref="produto", lazy="dynamic")
-    itens_compra = db.relationship(
-        "PedidoCompraItem", backref="produto", lazy="dynamic"
-    )
-    movimentacoes = db.relationship(
-        "MovimentacaoEstoque", backref="produto", lazy="dynamic"
+
+    __table_args__ = (
+        db.Index("idx_produto_nome", "nome"),
+        db.Index("idx_produto_codigo", "codigo_interno"),
+        db.Index("idx_produto_categoria", "categoria_id"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "codigo_interno", name="uq_produto_estab_codigo"
+        ),
     )
 
     def to_dict(self):
         return {
             "id": self.id,
             "codigo_barras": self.codigo_barras,
+            "codigo_interno": self.codigo_interno,
             "nome": self.nome,
-            "categoria": self.categoria,
+            "categoria": self.categoria.to_dict() if self.categoria else None,
             "quantidade": self.quantidade,
-            "preco_custo": float(self.preco_custo),
-            "preco_venda": float(self.preco_venda),
+            "preco_custo": float(self.preco_custo) if self.preco_custo else 0.0,
+            "preco_venda": float(self.preco_venda) if self.preco_venda else 0.0,
             "ativo": self.ativo,
             "fornecedor": self.fornecedor.to_dict() if self.fornecedor else None,
-        }
-
-
-# ============================================
-# 7. CATEGORIA DE PRODUTO
-# ============================================
-
-
-class CategoriaProduto(db.Model):
-    __tablename__ = "categorias_produto"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-
-    nome = db.Column(db.String(50), nullable=False)
-    descricao = db.Column(db.Text)
-    codigo = db.Column(db.String(20), unique=True)
-
-    ativo = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("categorias", lazy="dynamic")
-    )
-    produtos = db.relationship(
-        "Produto",
-        backref="categoria_obj",
-        lazy="dynamic",
-        foreign_keys="Produto.categoria",
-        primaryjoin="and_(CategoriaProduto.nome==Produto.categoria, "
-        "CategoriaProduto.estabelecimento_id==Produto.estabelecimento_id)",
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "nome": self.nome,
-            "descricao": self.descricao,
-            "codigo": self.codigo,
-            "ativo": self.ativo,
         }
 
 
@@ -436,21 +524,23 @@ class Venda(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
     funcionario_id = db.Column(
         db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
     )
 
-    codigo = db.Column(db.String(50), unique=True, nullable=False)
+    codigo = db.Column(db.String(50), nullable=False)
 
     subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     desconto = db.Column(db.Numeric(10, 2), default=0)
     total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
 
     forma_pagamento = db.Column(db.String(50), nullable=False)
-    valor_recebido = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_recebido = db.Column(db.Numeric(10, 2), default=0)
     troco = db.Column(db.Numeric(10, 2), default=0)
 
     status = db.Column(db.String(20), default="finalizada")
@@ -468,22 +558,19 @@ class Venda(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("vendas", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("vendas", lazy=True)
     )
-    cliente = db.relationship(
-        "Cliente", backref=db.backref("vendas", lazy="dynamic")
-    )
+    cliente = db.relationship("Cliente", backref=db.backref("vendas", lazy=True))
     funcionario = db.relationship(
-        "Funcionario", backref=db.backref("vendas_funcionario", lazy="dynamic")
+        "Funcionario", backref=db.backref("vendas", lazy=True)
     )
-    itens = db.relationship(
-        "VendaItem", backref="venda", lazy="dynamic", cascade="all, delete-orphan"
-    )
-    movimentacoes = db.relationship(
-        "MovimentacaoEstoque", backref="venda", lazy="dynamic"
-    )
-    pagamentos = db.relationship(
-        "Pagamento", backref="venda", lazy="dynamic", cascade="all, delete-orphan"
+
+    __table_args__ = (
+        db.Index("idx_venda_codigo", "codigo"),
+        db.Index("idx_venda_data", "data_venda"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "codigo", name="uq_venda_estab_codigo"
+        ),
     )
 
     def to_dict(self):
@@ -492,14 +579,12 @@ class Venda(db.Model):
             "codigo": self.codigo,
             "cliente": self.cliente.to_dict() if self.cliente else None,
             "funcionario": self.funcionario.to_dict() if self.funcionario else None,
-            "subtotal": float(self.subtotal),
-            "desconto": float(self.desconto),
-            "total": float(self.total),
+            "subtotal": float(self.subtotal) if self.subtotal else 0.0,
+            "desconto": float(self.desconto) if self.desconto else 0.0,
+            "total": float(self.total) if self.total else 0.0,
             "forma_pagamento": self.forma_pagamento,
             "data_venda": self.data_venda.isoformat() if self.data_venda else None,
             "status": self.status,
-            "itens": [item.to_dict() for item in self.itens],
-            "pagamentos": [pagamento.to_dict() for pagamento in self.pagamentos],
         }
 
 
@@ -512,7 +597,9 @@ class VendaItem(db.Model):
     __tablename__ = "venda_itens"
 
     id = db.Column(db.Integer, primary_key=True)
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=False)
+    venda_id = db.Column(
+        db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False
+    )
     produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
 
     produto_nome = db.Column(db.String(100), nullable=False)
@@ -529,14 +616,26 @@ class VendaItem(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    venda = db.relationship(
+        "Venda", backref=db.backref("itens", lazy=True, cascade="all, delete-orphan")
+    )
+    produto = db.relationship("Produto", backref=db.backref("itens_venda", lazy=True))
+
+    __table_args__ = (
+        db.Index("idx_venda_item_venda", "venda_id"),
+        db.Index("idx_venda_item_produto", "produto_id"),
+    )
+
     def to_dict(self):
         return {
             "id": self.id,
             "produto_id": self.produto_id,
             "produto_nome": self.produto_nome,
             "quantidade": self.quantidade,
-            "preco_unitario": float(self.preco_unitario),
-            "total_item": float(self.total_item),
+            "preco_unitario": (
+                float(self.preco_unitario) if self.preco_unitario else 0.0
+            ),
+            "total_item": float(self.total_item) if self.total_item else 0.0,
         }
 
 
@@ -549,9 +648,13 @@ class Pagamento(db.Model):
     __tablename__ = "pagamentos"
 
     id = db.Column(db.Integer, primary_key=True)
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=False)
+    venda_id = db.Column(
+        db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False
+    )
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     forma_pagamento = db.Column(db.String(50), nullable=False)
@@ -565,15 +668,24 @@ class Pagamento(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("pagamentos", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("pagamentos", lazy=True)
+    )
+    venda = db.relationship(
+        "Venda",
+        backref=db.backref("pagamentos", lazy=True, cascade="all, delete-orphan"),
+    )
+
+    __table_args__ = (
+        db.Index("idx_pagamento_venda", "venda_id"),
+        db.Index("idx_pagamento_data", "data_pagamento"),
     )
 
     def to_dict(self):
         return {
             "id": self.id,
             "forma_pagamento": self.forma_pagamento,
-            "valor": float(self.valor),
-            "troco": float(self.troco),
+            "valor": float(self.valor) if self.valor else 0.0,
+            "troco": float(self.troco) if self.troco else 0.0,
             "status": self.status,
             "data_pagamento": (
                 self.data_pagamento.isoformat() if self.data_pagamento else None
@@ -591,7 +703,9 @@ class MovimentacaoEstoque(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
 
@@ -613,10 +727,19 @@ class MovimentacaoEstoque(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("movimentacoes_estoque", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("movimentacoes_estoque", lazy=True)
+    )
+    produto = db.relationship("Produto", backref=db.backref("movimentacoes", lazy=True))
+    venda = db.relationship(
+        "Venda", backref=db.backref("movimentacoes_estoque_venda", lazy=True)
     )
     funcionario = db.relationship(
-        "Funcionario", backref=db.backref("movimentacoes_funcionario", lazy="dynamic")
+        "Funcionario", backref=db.backref("movimentacoes", lazy=True)
+    )
+
+    __table_args__ = (
+        db.Index("idx_mov_estoque_produto", "produto_id"),
+        db.Index("idx_mov_estoque_data", "created_at"),
     )
 
     def to_dict(self):
@@ -641,7 +764,9 @@ class PedidoCompra(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     fornecedor_id = db.Column(
         db.Integer, db.ForeignKey("fornecedores.id"), nullable=False
@@ -650,7 +775,7 @@ class PedidoCompra(db.Model):
         db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
     )
 
-    numero_pedido = db.Column(db.String(50), unique=True, nullable=False)
+    numero_pedido = db.Column(db.String(50), nullable=False)
 
     data_pedido = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     data_previsao_entrega = db.Column(db.Date)
@@ -676,22 +801,20 @@ class PedidoCompra(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("pedidos_compra", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("pedidos_compra", lazy=True)
+    )
+    fornecedor = db.relationship(
+        "Fornecedor", backref=db.backref("pedidos_compra", lazy=True)
     )
     funcionario = db.relationship(
-        "Funcionario", backref=db.backref("pedidos_funcionario", lazy="dynamic")
+        "Funcionario", backref=db.backref("pedidos_compra", lazy=True)
     )
-    itens = db.relationship(
-        "PedidoCompraItem",
-        backref="pedido",
-        lazy="dynamic",
-        cascade="all, delete-orphan",
-    )
-    conta_pagar = db.relationship(
-        "ContaPagar",
-        backref="pedido_compra",
-        uselist=False,
-        cascade="all, delete-orphan",
+
+    __table_args__ = (
+        db.Index("idx_pedido_numero", "numero_pedido"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "numero_pedido", name="uq_pedido_estab_numero"
+        ),
     )
 
     def to_dict(self):
@@ -701,8 +824,7 @@ class PedidoCompra(db.Model):
             "fornecedor": self.fornecedor.to_dict() if self.fornecedor else None,
             "status": self.status,
             "data_pedido": self.data_pedido.isoformat() if self.data_pedido else None,
-            "total": float(self.total),
-            "itens": [item.to_dict() for item in self.itens],
+            "total": float(self.total) if self.total else 0.0,
         }
 
 
@@ -716,7 +838,9 @@ class PedidoCompraItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     pedido_id = db.Column(
-        db.Integer, db.ForeignKey("pedidos_compra.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("pedidos_compra.id", ondelete="CASCADE"),
+        nullable=False,
     )
     produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
 
@@ -732,6 +856,14 @@ class PedidoCompraItem(db.Model):
 
     status = db.Column(db.String(20), default="pendente")
 
+    pedido = db.relationship(
+        "PedidoCompra",
+        backref=db.backref("itens", lazy=True, cascade="all, delete-orphan"),
+    )
+    produto = db.relationship("Produto", backref=db.backref("itens_compra", lazy=True))
+
+    __table_args__ = (db.Index("idx_pedido_item_pedido", "pedido_id"),)
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -739,8 +871,10 @@ class PedidoCompraItem(db.Model):
             "produto_nome": self.produto_nome,
             "quantidade_solicitada": self.quantidade_solicitada,
             "quantidade_recebida": self.quantidade_recebida,
-            "preco_unitario": float(self.preco_unitario),
-            "total_item": float(self.total_item),
+            "preco_unitario": (
+                float(self.preco_unitario) if self.preco_unitario else 0.0
+            ),
+            "total_item": float(self.total_item) if self.total_item else 0.0,
             "status": self.status,
         }
 
@@ -755,7 +889,9 @@ class ContaPagar(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     fornecedor_id = db.Column(
         db.Integer, db.ForeignKey("fornecedores.id"), nullable=False
@@ -784,7 +920,18 @@ class ContaPagar(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("contas_pagar", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("contas_pagar", lazy=True)
+    )
+    fornecedor = db.relationship(
+        "Fornecedor", backref=db.backref("contas_pagar", lazy=True)
+    )
+    pedido_compra = db.relationship(
+        "PedidoCompra", backref=db.backref("conta_pagar", uselist=False)
+    )
+
+    __table_args__ = (
+        db.Index("idx_conta_pagar_vencimento", "data_vencimento"),
+        db.Index("idx_conta_pagar_status", "status"),
     )
 
     def to_dict(self):
@@ -792,8 +939,10 @@ class ContaPagar(db.Model):
             "id": self.id,
             "fornecedor_id": self.fornecedor_id,
             "numero_documento": self.numero_documento,
-            "valor_original": float(self.valor_original),
-            "valor_atual": float(self.valor_atual),
+            "valor_original": (
+                float(self.valor_original) if self.valor_original else 0.0
+            ),
+            "valor_atual": float(self.valor_atual) if self.valor_atual else 0.0,
             "data_vencimento": (
                 self.data_vencimento.isoformat() if self.data_vencimento else None
             ),
@@ -814,7 +963,9 @@ class ContaReceber(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
     venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
@@ -841,7 +992,16 @@ class ContaReceber(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("contas_receber", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("contas_receber", lazy=True)
+    )
+    cliente = db.relationship(
+        "Cliente", backref=db.backref("contas_receber", lazy=True)
+    )
+    venda = db.relationship("Venda", backref=db.backref("contas_receber", lazy=True))
+
+    __table_args__ = (
+        db.Index("idx_conta_receber_vencimento", "data_vencimento"),
+        db.Index("idx_conta_receber_cliente", "cliente_id"),
     )
 
     def to_dict(self):
@@ -849,8 +1009,10 @@ class ContaReceber(db.Model):
             "id": self.id,
             "cliente_id": self.cliente_id,
             "numero_documento": self.numero_documento,
-            "valor_original": float(self.valor_original),
-            "valor_atual": float(self.valor_atual),
+            "valor_original": (
+                float(self.valor_original) if self.valor_original else 0.0
+            ),
+            "valor_atual": float(self.valor_atual) if self.valor_atual else 0.0,
             "data_vencimento": (
                 self.data_vencimento.isoformat() if self.data_vencimento else None
             ),
@@ -871,7 +1033,9 @@ class Despesa(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
 
@@ -892,7 +1056,15 @@ class Despesa(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("despesas", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("despesas", lazy=True)
+    )
+    fornecedor = db.relationship(
+        "Fornecedor", backref=db.backref("despesas", lazy=True)
+    )
+
+    __table_args__ = (
+        db.Index("idx_despesa_data", "data_despesa"),
+        db.Index("idx_despesa_categoria", "categoria"),
     )
 
     def to_dict(self):
@@ -900,7 +1072,7 @@ class Despesa(db.Model):
             "id": self.id,
             "descricao": self.descricao,
             "categoria": self.categoria,
-            "valor": float(self.valor),
+            "valor": float(self.valor) if self.valor else 0.0,
             "data_despesa": (
                 self.data_despesa.isoformat() if self.data_despesa else None
             ),
@@ -918,11 +1090,9 @@ class LoginHistory(db.Model):
     __tablename__ = "login_history"
 
     id = db.Column(db.Integer, primary_key=True)
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=True
-    )
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
     username = db.Column(db.String(100), nullable=False)
-    estabelecimento_id = db.Column(db.Integer, nullable=False)
+    estabelecimento_id = db.Column(db.Integer, nullable=True)
 
     ip_address = db.Column(db.String(45), nullable=False)
     dispositivo = db.Column(db.String(200))
@@ -934,7 +1104,12 @@ class LoginHistory(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     funcionario = db.relationship(
-        "Funcionario", backref=db.backref("logins", lazy="dynamic")
+        "Funcionario", backref=db.backref("logins", lazy=True)
+    )
+
+    __table_args__ = (
+        db.Index("idx_login_history_user", "username"),
+        db.Index("idx_login_history_data", "created_at"),
     )
 
     def to_dict(self):
@@ -950,232 +1125,7 @@ class LoginHistory(db.Model):
 
 
 # ============================================
-# 18. DASHBOARD MÉTRICAS
-# ============================================
-
-
-class DashboardMetrica(db.Model):
-    __tablename__ = "dashboard_metricas"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-    data_referencia = db.Column(db.Date, nullable=False)
-
-    total_vendas_dia = db.Column(db.Numeric(10, 2), default=0)
-    quantidade_vendas_dia = db.Column(db.Integer, default=0)
-    ticket_medio_dia = db.Column(db.Numeric(10, 2), default=0)
-    clientes_atendidos_dia = db.Column(db.Integer, default=0)
-
-    total_vendas_mes = db.Column(db.Numeric(12, 2), default=0)
-    total_despesas_mes = db.Column(db.Numeric(12, 2), default=0)
-    lucro_bruto_mes = db.Column(db.Numeric(12, 2), default=0)
-
-    crescimento_vs_ontem = db.Column(db.Numeric(5, 2), default=0)
-    crescimento_mensal = db.Column(db.Numeric(5, 2), default=0)
-    tendencia_vendas = db.Column(db.String(20))
-
-    top_produtos_json = db.Column(db.Text)
-    produtos_abc_json = db.Column(db.Text)
-
-    segmentacao_clientes_json = db.Column(db.Text)
-    top_clientes_json = db.Column(db.Text)
-
-    alertas_json = db.Column(db.Text)
-    insights_json = db.Column(db.Text)
-
-    data_calculo = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("metricas", lazy="dynamic")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "estabelecimento_id": self.estabelecimento_id,
-            "data_referencia": (
-                self.data_referencia.isoformat() if self.data_referencia else None
-            ),
-            "total_vendas_dia": float(self.total_vendas_dia),
-            "quantidade_vendas_dia": self.quantidade_vendas_dia,
-            "ticket_medio_dia": float(self.ticket_medio_dia),
-            "total_vendas_mes": float(self.total_vendas_mes),
-            "lucro_bruto_mes": float(self.lucro_bruto_mes),
-            "crescimento_vs_ontem": float(self.crescimento_vs_ontem),
-            "data_calculo": (
-                self.data_calculo.isoformat() if self.data_calculo else None
-            ),
-        }
-
-
-# ============================================
-# 19. RELATÓRIO AGENDADO
-# ============================================
-
-
-class RelatorioAgendado(db.Model):
-    __tablename__ = "relatorios_agendados"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-
-    nome = db.Column(db.String(100), nullable=False)
-    tipo = db.Column(db.String(50), nullable=False)
-    formato = db.Column(db.String(10), nullable=False)
-    frequencia = db.Column(db.String(20), nullable=False)
-
-    horario_envio = db.Column(db.Time, nullable=False)
-
-    destinatarios_email = db.Column(db.JSON)
-    enviar_para_proprietario = db.Column(db.Boolean, default=True)
-
-    parametros = db.Column(db.JSON)
-
-    ativo = db.Column(db.Boolean, default=True)
-    ultima_execucao = db.Column(db.DateTime)
-    proxima_execucao = db.Column(db.DateTime)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("relatorios", lazy="dynamic")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "nome": self.nome,
-            "tipo": self.tipo,
-            "formato": self.formato,
-            "frequencia": self.frequencia,
-            "horario_envio": (
-                self.horario_envio.strftime("%H:%M") if self.horario_envio else None
-            ),
-            "ativo": self.ativo,
-            "ultima_execucao": (
-                self.ultima_execucao.isoformat() if self.ultima_execucao else None
-            ),
-            "proxima_execucao": (
-                self.proxima_execucao.isoformat() if self.proxima_execucao else None
-            ),
-        }
-
-
-# ============================================
-# 20. ANÁLISE PREDITIVA
-# ============================================
-
-
-class AnalisePreditiva(db.Model):
-    __tablename__ = "analises_preditivas"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-
-    tipo = db.Column(db.String(50), nullable=False)
-    modelo = db.Column(db.String(50), nullable=False)
-
-    parametros = db.Column(db.JSON)
-    metricas = db.Column(db.JSON)
-
-    dados_treinamento_inicio = db.Column(db.Date)
-    dados_treinamento_fim = db.Column(db.Date)
-    tamanho_treinamento = db.Column(db.Integer)
-
-    status = db.Column(db.String(20), default="treinado")
-    ultimo_treinamento = db.Column(db.DateTime)
-    proximo_treinamento = db.Column(db.DateTime)
-
-    precisao = db.Column(db.Numeric(5, 2), default=0)
-    recall = db.Column(db.Numeric(5, 2), default=0)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("analises", lazy="dynamic")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "tipo": self.tipo,
-            "modelo": self.modelo,
-            "status": self.status,
-            "precisao": float(self.precisao),
-            "ultimo_treinamento": (
-                self.ultimo_treinamento.isoformat() if self.ultimo_treinamento else None
-            ),
-            "proximo_treinamento": (
-                self.proximo_treinamento.isoformat()
-                if self.proximo_treinamento
-                else None
-            ),
-        }
-
-
-# ============================================
-# 21. SERVIÇO (opcional, para estabelecimentos que oferecem serviços)
-# ============================================
-
-
-class Servico(db.Model):
-    __tablename__ = "servicos"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-
-    codigo = db.Column(db.String(50), unique=True)
-    nome = db.Column(db.String(100), nullable=False)
-    descricao = db.Column(db.Text)
-
-    valor = db.Column(db.Numeric(10, 2), nullable=False)
-    duracao = db.Column(db.Integer)  # minutos
-
-    categoria = db.Column(db.String(50))
-    ativo = db.Column(db.Boolean, default=True)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("servicos", lazy="dynamic")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "codigo": self.codigo,
-            "nome": self.nome,
-            "descricao": self.descricao,
-            "valor": float(self.valor),
-            "duracao": self.duracao,
-            "categoria": self.categoria,
-            "ativo": self.ativo,
-        }
-
-
-# ============================================
-# 22. CAIXA (controle de abertura/fechamento de caixa)
+# 18. CAIXA
 # ============================================
 
 
@@ -1184,7 +1134,9 @@ class Caixa(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
     funcionario_id = db.Column(
         db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
@@ -1208,16 +1160,15 @@ class Caixa(db.Model):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("caixas", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("caixas", lazy=True)
     )
     funcionario = db.relationship(
-        "Funcionario", backref=db.backref("caixas_funcionario", lazy="dynamic")
+        "Funcionario", backref=db.backref("caixas", lazy=True)
     )
-    movimentacoes = db.relationship(
-        "MovimentacaoCaixa",
-        backref="caixa",
-        lazy="dynamic",
-        cascade="all, delete-orphan",
+
+    __table_args__ = (
+        db.Index("idx_caixa_status", "status"),
+        db.Index("idx_caixa_data", "data_abertura"),
     )
 
     def to_dict(self):
@@ -1225,8 +1176,8 @@ class Caixa(db.Model):
             "id": self.id,
             "numero_caixa": self.numero_caixa,
             "funcionario": self.funcionario.to_dict() if self.funcionario else None,
-            "saldo_inicial": float(self.saldo_inicial),
-            "saldo_atual": float(self.saldo_atual),
+            "saldo_inicial": float(self.saldo_inicial) if self.saldo_inicial else 0.0,
+            "saldo_atual": float(self.saldo_atual) if self.saldo_atual else 0.0,
             "data_abertura": (
                 self.data_abertura.isoformat() if self.data_abertura else None
             ),
@@ -1238,7 +1189,7 @@ class Caixa(db.Model):
 
 
 # ============================================
-# 23. MOVIMENTAÇÃO DE CAIXA
+# 19. MOVIMENTAÇÃO DE CAIXA
 # ============================================
 
 
@@ -1246,12 +1197,16 @@ class MovimentacaoCaixa(db.Model):
     __tablename__ = "movimentacoes_caixa"
 
     id = db.Column(db.Integer, primary_key=True)
-    caixa_id = db.Column(db.Integer, db.ForeignKey("caixas.id"), nullable=False)
+    caixa_id = db.Column(
+        db.Integer, db.ForeignKey("caixas.id", ondelete="CASCADE"), nullable=False
+    )
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
-    tipo = db.Column(db.String(20), nullable=False)  # entrada, saida
+    tipo = db.Column(db.String(20), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     forma_pagamento = db.Column(db.String(50))
 
@@ -1262,10 +1217,19 @@ class MovimentacaoCaixa(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("movimentacoes_caixa", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("movimentacoes_caixa", lazy=True)
+    )
+    caixa = db.relationship(
+        "Caixa",
+        backref=db.backref("movimentacoes", lazy=True, cascade="all, delete-orphan"),
     )
     venda = db.relationship(
-        "Venda", backref=db.backref("movimentacoes_caixa_venda", lazy="dynamic")
+        "Venda", backref=db.backref("movimentacoes_caixa", lazy=True)
+    )
+
+    __table_args__ = (
+        db.Index("idx_mov_caixa_caixa", "caixa_id"),
+        db.Index("idx_mov_caixa_tipo", "tipo"),
     )
 
     def to_dict(self):
@@ -1273,7 +1237,7 @@ class MovimentacaoCaixa(db.Model):
             "id": self.id,
             "caixa_id": self.caixa_id,
             "tipo": self.tipo,
-            "valor": float(self.valor),
+            "valor": float(self.valor) if self.valor else 0.0,
             "forma_pagamento": self.forma_pagamento,
             "descricao": self.descricao,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -1281,32 +1245,113 @@ class MovimentacaoCaixa(db.Model):
 
 
 # ============================================
-# 24. TRANSPORTADORA (para controle de entregas)
+# 20. DASHBOARD MÉTRICAS
 # ============================================
 
 
-class Transportadora(db.Model, EnderecoMixin):
-    __tablename__ = "transportadoras"
+class DashboardMetrica(db.Model):
+    __tablename__ = "dashboard_metricas"
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    data_referencia = db.Column(db.Date, nullable=False)
+
+    total_vendas_dia = db.Column(db.Numeric(10, 2), default=0)
+    quantidade_vendas_dia = db.Column(db.Integer, default=0)
+    ticket_medio_dia = db.Column(db.Numeric(10, 2), default=0)
+    clientes_atendidos_dia = db.Column(db.Integer, default=0)
+
+    total_vendas_mes = db.Column(db.Numeric(12, 2), default=0)
+    total_despesas_mes = db.Column(db.Numeric(12, 2), default=0)
+    lucro_bruto_mes = db.Column(db.Numeric(12, 2), default=0)
+
+    crescimento_vs_ontem = db.Column(db.Numeric(5, 2), default=0)
+    crescimento_mensal = db.Column(db.Numeric(5, 2), default=0)
+    tendencia_vendas = db.Column(db.String(20))
+
+    # Armazenando JSON como Text para compatibilidade com SQLite
+    top_produtos_json = db.Column(db.Text)
+    produtos_abc_json = db.Column(db.Text)
+    segmentacao_clientes_json = db.Column(db.Text)
+    top_clientes_json = db.Column(db.Text)
+    alertas_json = db.Column(db.Text)
+    insights_json = db.Column(db.Text)
+
+    data_calculo = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    nome_fantasia = db.Column(db.String(150), nullable=False)
-    razao_social = db.Column(db.String(150), nullable=False)
-    cnpj = db.Column(db.String(18), nullable=False)
+    estabelecimento = db.relationship(
+        "Estabelecimento", backref=db.backref("metricas", lazy=True)
+    )
 
-    telefone = db.Column(db.String(15), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
+    __table_args__ = (db.Index("idx_metrica_data", "data_referencia"),)
 
-    contato = db.Column(db.String(100))
-    telefone_contato = db.Column(db.String(15))
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
+            "data_referencia": (
+                self.data_referencia.isoformat() if self.data_referencia else None
+            ),
+            "total_vendas_dia": (
+                float(self.total_vendas_dia) if self.total_vendas_dia else 0.0
+            ),
+            "quantidade_vendas_dia": self.quantidade_vendas_dia,
+            "ticket_medio_dia": (
+                float(self.ticket_medio_dia) if self.ticket_medio_dia else 0.0
+            ),
+            "total_vendas_mes": (
+                float(self.total_vendas_mes) if self.total_vendas_mes else 0.0
+            ),
+            "lucro_bruto_mes": (
+                float(self.lucro_bruto_mes) if self.lucro_bruto_mes else 0.0
+            ),
+            "crescimento_vs_ontem": (
+                float(self.crescimento_vs_ontem) if self.crescimento_vs_ontem else 0.0
+            ),
+            "data_calculo": (
+                self.data_calculo.isoformat() if self.data_calculo else None
+            ),
+        }
 
-    taxa_frete = db.Column(db.Numeric(10, 2), default=0)
-    prazo_entrega = db.Column(db.Integer, default=5)  # dias
+
+# ============================================
+# 21. RELATÓRIO AGENDADO
+# ============================================
+
+
+class RelatorioAgendado(db.Model):
+    __tablename__ = "relatorios_agendados"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    nome = db.Column(db.String(100), nullable=False)
+    tipo = db.Column(db.String(50), nullable=False)
+    formato = db.Column(db.String(10), nullable=False)
+    frequencia = db.Column(db.String(20), nullable=False)
+
+    horario_envio = db.Column(db.Time, nullable=False)
+
+    destinatarios_email_json = db.Column(db.Text, default="[]")
+    enviar_para_proprietario = db.Column(db.Boolean, default=True)
+
+    parametros_json = db.Column(db.Text, default="{}")
 
     ativo = db.Column(db.Boolean, default=True)
+    ultima_execucao = db.Column(db.DateTime)
+    proxima_execucao = db.Column(db.DateTime)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
@@ -1314,317 +1359,110 @@ class Transportadora(db.Model, EnderecoMixin):
     )
 
     estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("transportadoras", lazy="dynamic")
+        "Estabelecimento", backref=db.backref("relatorios", lazy=True)
     )
+
+    @property
+    def destinatarios_email(self):
+        try:
+            return json.loads(self.destinatarios_email_json)
+        except:
+            return []
+
+    @destinatarios_email.setter
+    def destinatarios_email(self, value):
+        self.destinatarios_email_json = json.dumps(value)
+
+    @property
+    def parametros(self):
+        try:
+            return json.loads(self.parametros_json)
+        except:
+            return {}
+
+    @parametros.setter
+    def parametros(self, value):
+        self.parametros_json = json.dumps(value)
 
     def to_dict(self):
         return {
             "id": self.id,
-            "nome_fantasia": self.nome_fantasia,
-            "cnpj": self.cnpj,
-            "telefone": self.telefone,
-            "email": self.email,
-            "endereco_completo": self.endereco_completo(),
-            "taxa_frete": float(self.taxa_frete),
-            "prazo_entrega": self.prazo_entrega,
+            "nome": self.nome,
+            "tipo": self.tipo,
+            "formato": self.formato,
+            "frequencia": self.frequencia,
+            "horario_envio": (
+                self.horario_envio.strftime("%H:%M") if self.horario_envio else None
+            ),
             "ativo": self.ativo,
-        }
-
-
-# ============================================
-# 25. ORDEM DE SERVIÇO
-# ============================================
-
-
-class OrdemServico(db.Model):
-    __tablename__ = "ordens_servico"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), nullable=False)
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
-    )
-
-    numero_os = db.Column(db.String(50), unique=True, nullable=False)
-
-    equipamento = db.Column(db.String(200), nullable=False)
-    problema = db.Column(db.Text, nullable=False)
-    diagnostico = db.Column(db.Text)
-    solucao = db.Column(db.Text)
-
-    valor_servico = db.Column(db.Numeric(10, 2), default=0)
-    valor_pecas = db.Column(db.Numeric(10, 2), default=0)
-    valor_total = db.Column(db.Numeric(10, 2), default=0)
-
-    data_abertura = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    data_previsao = db.Column(db.Date)
-    data_conclusao = db.Column(db.DateTime)
-
-    status = db.Column(db.String(20), default="aberta")
-
-    garantia = db.Column(db.Integer)  # dias de garantia
-    observacoes = db.Column(db.Text)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("ordens_servico", lazy="dynamic")
-    )
-    cliente = db.relationship(
-        "Cliente", backref=db.backref("ordens_cliente", lazy="dynamic")
-    )
-    funcionario = db.relationship(
-        "Funcionario", backref=db.backref("ordens_funcionario", lazy="dynamic")
-    )
-    itens = db.relationship(
-        "OrdemServicoItem",
-        backref="ordem_servico",
-        lazy="dynamic",
-        cascade="all, delete-orphan",
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "numero_os": self.numero_os,
-            "cliente": self.cliente.to_dict() if self.cliente else None,
-            "equipamento": self.equipamento,
-            "problema": self.problema,
-            "status": self.status,
-            "valor_total": float(self.valor_total),
-            "data_abertura": (
-                self.data_abertura.isoformat() if self.data_abertura else None
+            "ultima_execucao": (
+                self.ultima_execucao.isoformat() if self.ultima_execucao else None
             ),
-            "data_conclusao": (
-                self.data_conclusao.isoformat() if self.data_conclusao else None
+            "proxima_execucao": (
+                self.proxima_execucao.isoformat() if self.proxima_execucao else None
             ),
         }
 
 
 # ============================================
-# 26. ITEM DE ORDEM DE SERVIÇO
+# ALIAS PARA COMPATIBILIDADE
 # ============================================
-
-
-class OrdemServicoItem(db.Model):
-    __tablename__ = "ordem_servico_itens"
-
-    id = db.Column(db.Integer, primary_key=True)
-    ordem_servico_id = db.Column(
-        db.Integer, db.ForeignKey("ordens_servico.id"), nullable=False
-    )
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"))
-
-    tipo = db.Column(db.String(20), nullable=False)  # produto, servico
-    descricao = db.Column(db.String(200), nullable=False)
-
-    quantidade = db.Column(db.Integer, default=1)
-    valor_unitario = db.Column(db.Numeric(10, 2), nullable=False)
-    valor_total = db.Column(db.Numeric(10, 2), nullable=False)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    produto = db.relationship("Produto", backref=db.backref("itens_os", lazy="dynamic"))
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "tipo": self.tipo,
-            "descricao": self.descricao,
-            "quantidade": self.quantidade,
-            "valor_unitario": float(self.valor_unitario),
-            "valor_total": float(self.valor_total),
-        }
-
-
-# ============================================
-# 27. BLOCO DE NOTAS
-# ============================================
-
-
-class BlocoNota(db.Model):
-    __tablename__ = "bloco_notas"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
-    )
-
-    titulo = db.Column(db.String(200), nullable=False)
-    conteudo = db.Column(db.Text, nullable=False)
-
-    cor = db.Column(db.String(10), default="#ffffff")
-    fixado = db.Column(db.Boolean, default=False)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("bloco_notas", lazy="dynamic")
-    )
-    funcionario = db.relationship(
-        "Funcionario", backref=db.backref("bloco_notas_funcionario", lazy="dynamic")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "titulo": self.titulo,
-            "conteudo": self.conteudo,
-            "cor": self.cor,
-            "fixado": self.fixado,
-            "funcionario": self.funcionario.to_dict() if self.funcionario else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-
-# ============================================
-# 28. HISTÓRICO DE ALTERAÇÕES
-# ============================================
-
-
-class HistoricoAlteracao(db.Model):
-    __tablename__ = "historico_alteracoes"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
-    )
-
-    tabela = db.Column(db.String(50), nullable=False)
-    registro_id = db.Column(db.Integer, nullable=False)
-
-    acao = db.Column(db.String(20), nullable=False)  # CREATE, UPDATE, DELETE
-    dados_anteriores = db.Column(db.JSON)
-    dados_novos = db.Column(db.JSON)
-
-    ip_address = db.Column(db.String(45))
-    user_agent = db.Column(db.Text)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("historico_alteracoes", lazy="dynamic")
-    )
-    funcionario = db.relationship(
-        "Funcionario",
-        backref=db.backref("historico_alteracoes_funcionario", lazy="dynamic"),
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "tabela": self.tabela,
-            "registro_id": self.registro_id,
-            "acao": self.acao,
-            "funcionario": self.funcionario.to_dict() if self.funcionario else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-
-# ============================================
-# 29. PARÂMETRO DO SISTEMA
-# ============================================
-
-
-class ParametroSistema(db.Model):
-    __tablename__ = "parametros_sistema"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-
-    chave = db.Column(db.String(100), nullable=False)
-    valor = db.Column(db.Text)
-    tipo = db.Column(db.String(20), default="string")  # string, number, boolean, json
-
-    descricao = db.Column(db.Text)
-    grupo = db.Column(db.String(50))
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("parametros", lazy="dynamic")
-    )
-
-    __table_args__ = (
-        db.UniqueConstraint(
-            "estabelecimento_id", "chave", name="uq_parametro_estab_chave"
-        ),
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "chave": self.chave,
-            "valor": self.valor,
-            "tipo": self.tipo,
-            "descricao": self.descricao,
-            "grupo": self.grupo,
-        }
-
-
-# ============================================
-# 30. BACKUP (controle de backups)
-# ============================================
-
-
-class Backup(db.Model):
-    __tablename__ = "backups"
-
-    id = db.Column(db.Integer, primary_key=True)
-    estabelecimento_id = db.Column(
-        db.Integer, db.ForeignKey("estabelecimentos.id"), nullable=False
-    )
-    funcionario_id = db.Column(
-        db.Integer, db.ForeignKey("funcionarios.id"), nullable=True
-    )
-
-    nome_arquivo = db.Column(db.String(200), nullable=False)
-    tamanho = db.Column(db.BigInteger)  # bytes
-    tipo = db.Column(db.String(20), default="automatico")  # automatico, manual
-
-    caminho = db.Column(db.String(500))
-    hash_arquivo = db.Column(db.String(64))  # SHA256
-
-    status = db.Column(db.String(20), default="sucesso")  # sucesso, falha, pendente
-    observacoes = db.Column(db.Text)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    estabelecimento = db.relationship(
-        "Estabelecimento", backref=db.backref("backups", lazy="dynamic")
-    )
-    funcionario = db.relationship(
-        "Funcionario", backref=db.backref("backups_funcionario", lazy="dynamic")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "nome_arquivo": self.nome_arquivo,
-            "tamanho": self.tamanho,
-            "tipo": self.tipo,
-            "status": self.status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
 
 ItemVenda = VendaItem
+
+print("✅ Models.py carregado com todas as classes necessárias!")
+
+
+# ============================================
+# FUNÇÕES DE SUPORTE PARA FLASK-LOGIN
+# ============================================
+
+from flask_login import LoginManager
+
+login_manager = LoginManager()
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    """
+    Função necessária para o Flask-Login carregar o usuário da sessão.
+    """
+    # O user_id pode ser string ou inteiro, converta para inteiro
+    try:
+        return Funcionario.query.get(int(user_id))
+    except (ValueError, TypeError):
+        return None
+
+
+@login_manager.request_loader
+def load_user_from_request(request):
+    """
+    Carrega usuário a partir do token na requisição (para API).
+    """
+    # Primeiro tenta carregar do token da API
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        try:
+            # Formato: Bearer <token> ou Token <token>
+            auth_type, token = auth_header.split(None, 1)
+            if auth_type.lower() == "bearer" or auth_type.lower() == "token":
+                # Implementar lógica de validação de token JWT aqui
+                # Por enquanto, vamos usar uma lógica simples
+                from app.models import Funcionario
+
+                user = Funcionario.query.filter_by(username=token).first()
+                if user and user.ativo:
+                    return user
+        except (ValueError, AttributeError):
+            pass
+
+    # Se não encontrou no header, tenta na query string
+    token = request.args.get("token")
+    if token:
+        from app.models import Funcionario
+
+        user = Funcionario.query.filter_by(username=token).first()
+        if user and user.ativo:
+            return user
+
+    return None
