@@ -1,43 +1,63 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
-# Caminho absoluto
 basedir = Path(__file__).parent.absolute()
 
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "sua-chave-secreta-2025-mercadinho")
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 
-    # Banco de dados - SQLite na pasta instance
-    db_path = basedir / "instance" / "mercadinho.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)  # Cria pasta
+    # Banco de dados
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    SQLITE_DB = os.environ.get("SQLITE_DB")
 
-    SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
+    if DATABASE_URL:
+        if DATABASE_URL.startswith("postgres://"):
+            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    elif SQLITE_DB:
+        SQLALCHEMY_DATABASE_URI = SQLITE_DB
+    else:
+        db_path = basedir / "instance" / "mercadinho.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # JWT
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "sua-chave-jwt-mercadinho-2025")
-
     # CORS
-    CORS_HEADERS = "Content-Type"
-    # CORS - PERMITE REQUISIÇÕES DO FRONTEND
-    CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "*"]
+    cors_origins_str = os.environ.get("CORS_ORIGINS", "")
+    CORS_ORIGINS = (
+        [origin.strip() for origin in cors_origins_str.split(",")]
+        if cors_origins_str
+        else []
+    )
 
-    # Upload folder
-    UPLOAD_FOLDER = basedir / "instance" / "uploads"
+    # Email
+    MAIL_SERVER = os.environ.get("MAIL_SERVER")
+    MAIL_PORT = int(os.environ.get("MAIL_PORT", 587))
+    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
 
-    # Tamanho máximo de upload (16MB)
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
-
-    # ==================== CONFIGURAÇÕES DE EMAIL ====================
-    # Para desenvolvimento, use SMTP do Gmail ou Mailtrap
-    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
-    MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True') == 'True'
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME', 'seu-email@gmail.com')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', 'sua-senha-app')
-    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@mercadinhosys.com')
+    # JWT
+    JWT_ACCESS_TOKEN_EXPIRES = 3600
 
 
-# Objeto config que o Flask espera
-config = {"development": Config, "production": Config, "default": Config}
+class DevelopmentConfig(Config):
+    DEBUG = True
+    if not Config.CORS_ORIGINS:
+        Config.CORS_ORIGINS = ["http://localhost:3000", "http://localhost:5173"]
+
+
+class ProductionConfig(Config):
+    DEBUG = False
+    # Em produção, use apenas as origens definidas no .env
+
+
+config = {
+    "development": DevelopmentConfig,
+    "production": ProductionConfig,
+    "default": DevelopmentConfig,
+}

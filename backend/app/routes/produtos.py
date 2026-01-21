@@ -1,536 +1,530 @@
-from flask import Blueprint, request, jsonify
-from app import db
-from app.models import Produto, Fornecedor
-from datetime import datetime, date
-from sqlalchemy import or_, and_, func
+# app/produtos.py
+# MÓDULO COMPLETO DE PRODUTOS - ERP INDUSTRIAL BRASILEIRO
+# CRUD completo com controle de estoque, validade, precificação
 
-produtos_bp = Blueprint("produtos", __name__, url_prefix="/api/produtos")
+from flask import Blueprint, request, jsonify, current_app
+from flask_login import login_required, current_user
+from datetime import datetime, date, timedelta
+from decimal import Decimal
+import re
+from app.models import (
+    db,
+    Produto,
+    Estabelecimento,
+    Fornecedor,
+    CategoriaProduto,
+    MovimentacaoEstoque,
+    VendaItem,
+    PedidoCompraItem,
+)
+from app.utils import calcular_margem_lucro, formatar_codigo_barras
 
+produtos_bp = Blueprint("produtos", __name__)
 
-# ==================== ROTAS PARA PDV ====================
-
-
-@produtos_bp.route("/search", methods=["GET"])
-def search_products():
-    """Buscar produtos por nome, marca, categoria ou código de barras - PARA PDV"""
-    query = request.args.get("q", "").strip()
-    limit = min(request.args.get("limit", 20, type=int), 100)
-
-    # Construir query base
-    produtos_query = Produto.query.filter_by(ativo=True)
-
-    # Se houver termo de busca, aplicar filtros
-    if query:
-        produtos_query = produtos_query.filter(
-            db.or_(
-                Produto.nome.ilike(f"%{query}%"),
-                Produto.marca.ilike(f"%{query}%"),
-                Produto.categoria.ilike(f"%{query}%"),
-                Produto.codigo_barras.ilike(f"%{query}%"),
-            )
-        )
-
-    # Ordenar e limitar
-    produtos = produtos_query.order_by(Produto.nome).limit(limit).all()
-
-    resultado = []
-    for p in produtos:
-        resultado.append(
-            {
-                "id": p.id,
-                "nome": p.nome,
-                "codigo_barras": p.codigo_barras,
-                "preco_venda": float(p.preco_venda),
-                "preco_custo": float(p.preco_custo) if p.preco_custo else 0,
-                "quantidade_estoque": p.quantidade,
-                "unidade_medida": p.unidade_medida,
-                "categoria": p.categoria,
-                "marca": p.marca,
-                "margem_lucro": float(p.margem_lucro) if p.margem_lucro else 0,
-                "ativo": p.ativo,
-            }
-        )
-
-    return jsonify(resultado)
+# ============================================
+# VALIDAÇÕES ESPECÍFICAS DE PRODUTO
+# ============================================
 
 
-@produtos_bp.route("/barcode/<codigo>", methods=["GET"])
-def get_by_barcode(codigo):
-    """Buscar produto específico por código de barras - PARA PDV"""
-    produto = Produto.query.filter_by(codigo_barras=codigo, ativo=True).first()
+def validar_dados_produto(data, produto_id=None):
+    """Valida todos os dados do produto antes de salvar"""
+    erros = []
 
-    if not produto:
-        return jsonify({"error": "Produto não encontrado"}), 404
+    # Campos obrigatórios
+    campos_obrigatorios = ["nome", "categoria", "preco_custo", "preco_venda"]
+    for campo in campos_obrigatorios:
+        if not data.get(campo):
+            erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
 
-    return jsonify(
-        {
-            "id": produto.id,
-            "nome": produto.nome,
-            "codigo_barras": produto.codigo_barras,
-            "preco_venda": float(produto.preco_venda),
-            "preco_custo": float(produto.preco_custo) if produto.preco_custo else 0,
-            "quantidade_estoque": produto.quantidade,
-            "unidade_medida": produto.unidade_medida,
-            "categoria": produto.categoria,
-            "marca": produto.marca,
-            "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0,
-            "ativo": produto.ativo,
-        }
-    )
+    # Validação de código de barras único
+    if data.get("codigo_barras"):
+        codigo_barras = data["codigo_barras"].strip()
+        produto_existente = Produto.query.filter_by(
+            codigo_barras=codigo_barras,
+            estabelecimento_id=current_user.estabelecimento_id,
+        ).first()
 
+        if produto_existente and produto_existente.id != produto_id:
+            erros.append("Código de barras já cadastrado para outro produto")
 
-@produtos_bp.route("/quick-add", methods=["POST"])
-def quick_add():
-    """Cadastro rápido de produto direto do PDV"""
-    print("=== INÍCIO quick-add ===")
+    # Validação de código interno único
+    if data.get("codigo_interno"):
+        codigo_interno = data["codigo_interno"].strip()
+        produto_existente = Produto.query.filter_by(
+            codigo_interno=codigo_interno,
+            estabelecimento_id=current_user.estabelecimento_id,
+        ).first()
 
-    try:
-        data = request.get_json()
-        if data is None:
-            return jsonify({"error": "Dados JSON inválidos ou vazios"}), 400
+        if produto_existente and produto_existente.id != produto_id:
+            erros.append("Código interno já cadastrado para outro produto")
 
-        print(f"Dados recebidos: {data}")
-
-        # Validações
-        nome = data.get("nome")
-        if not nome:
-            return jsonify({"error": "Campo 'nome' é obrigatório"}), 400
-
-        preco_venda = data.get("preco_venda")
-        if preco_venda is None:
-            return jsonify({"error": "Campo 'preco_venda' é obrigatório"}), 400
-
+    # Validação de preços
+    if data.get("preco_custo"):
         try:
-            preco_venda_float = float(preco_venda)
-        except (ValueError, TypeError):
-            return jsonify({"error": "Campo 'preco_venda' deve ser um número"}), 400
+            preco_custo = Decimal(str(data["preco_custo"]))
+            if preco_custo < 0:
+                erros.append("Preço de custo não pode ser negativo")
+        except:
+            erros.append("Preço de custo inválido")
 
-        if preco_venda_float <= 0:
-            return jsonify({"error": "Preço de venda deve ser maior que zero"}), 400
+    if data.get("preco_venda"):
+        try:
+            preco_venda = Decimal(str(data["preco_venda"]))
+            if preco_venda < 0:
+                erros.append("Preço de venda não pode ser negativo")
+        except:
+            erros.append("Preço de venda inválido")
 
-        # Verificar código de barras único
-        codigo_barras = data.get("codigo_barras")
-        if codigo_barras:
-            existe = Produto.query.filter_by(codigo_barras=codigo_barras).first()
-            if existe:
-                return (
-                    jsonify(
-                        {
-                            "error": "Código de barras já existe",
-                            "product": {
-                                "id": existe.id,
-                                "name": existe.nome,
-                                "barcode": existe.codigo_barras,
-                                "price": float(existe.preco_venda),
-                            },
-                        }
-                    ),
-                    409,
-                )
+    # Validação se preço de venda é maior que custo
+    if data.get("preco_custo") and data.get("preco_venda"):
+        try:
+            preco_custo = Decimal(str(data["preco_custo"]))
+            preco_venda = Decimal(str(data["preco_venda"]))
+            if preco_venda <= preco_custo:
+                erros.append("Preço de venda deve ser maior que o preço de custo")
+        except:
+            pass
 
-        # Criar produto
-        novo_produto = Produto(
-            estabelecimento_id=1,
-            nome=nome,
-            preco_venda=preco_venda_float,
-            preco_custo=float(data.get("preco_custo", 0)),
-            quantidade=float(data.get("quantidade", 0)),
-            codigo_barras=codigo_barras or "",
-            descricao=data.get("descricao", ""),
-            margem_lucro=float(data.get("margem_lucro", 30.0)),
-            quantidade_minima=float(data.get("quantidade_minima", 10)),
-            marca=data.get("marca", "Sem Marca"),
-            fabricante=data.get("fabricante", ""),
-            tipo=data.get("tipo", "unidade"),
-            unidade_medida=data.get("unidade_medida", "un"),
-            fornecedor_id=data.get("fornecedor_id"),
-            categoria=data.get("categoria", "Geral"),
-            ativo=True,
-        )
+    # Validação de quantidade mínima
+    if data.get("quantidade_minima"):
+        try:
+            qtd_minima = int(data["quantidade_minima"])
+            if qtd_minima < 0:
+                erros.append("Quantidade mínima não pode ser negativa")
+        except:
+            erros.append("Quantidade mínima inválida")
 
-        db.session.add(novo_produto)
-        db.session.commit()
+    # Validação de data de validade
+    if data.get("data_validade"):
+        try:
+            data_validade = datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
+            if data_validade < date.today():
+                erros.append("Data de validade não pode ser passada")
+        except ValueError:
+            erros.append("Formato de data inválido. Use YYYY-MM-DD")
 
-        print(f"✅ Produto salvo! ID: {novo_produto.id}")
+    # Validação de NCM (8 dígitos)
+    if data.get("ncm"):
+        ncm = re.sub(r"\D", "", data["ncm"])
+        if len(ncm) != 8:
+            erros.append("NCM deve conter 8 dígitos")
 
-        return (
-            jsonify(
-                {
-                    "id": novo_produto.id,
-                    "name": novo_produto.nome,
-                    "barcode": novo_produto.codigo_barras,
-                    "price": float(novo_produto.preco_venda),
-                    "stock": novo_produto.quantidade,
-                    "isBulk": novo_produto.tipo == "granel",
-                    "unit": novo_produto.unidade_medida,
-                    "fornecedor_id": novo_produto.fornecedor_id,
-                    "fornecedor_nome": (
-                        novo_produto.fornecedor.nome if novo_produto.fornecedor else None
-                    ),
-                    "success": True,
-                }
-            ),
-            201,
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"ERRO: {str(e)}")
-        return jsonify({"error": f"Erro interno: {str(e)}"}), 500
+    return erros
 
 
-# ==================== CRUD COMPLETO PARA ESTOQUE ====================
+def calcular_classificacao_abc(produto):
+    """Calcula classificação ABC do produto"""
+    valor_total_vendido = float(produto.preco_venda * (produto.quantidade_vendida or 0))
+
+    # Esses valores deveriam ser calculados em relação ao total do estabelecimento
+    # Para simplificar, usamos valores fixos
+    if valor_total_vendido > 10000:
+        return "A"
+    elif valor_total_vendido > 5000:
+        return "B"
+    else:
+        return "C"
 
 
-@produtos_bp.route("/estoque", methods=["GET"])
-def listar_estoque():
-    """
-    Listar todos os produtos com paginação e filtros avançados
+def verificar_estoque_baixo(produto):
+    """Verifica se o produto está com estoque baixo"""
+    if produto.quantidade_minima and produto.quantidade <= produto.quantidade_minima:
+        return True
+    return False
 
-    Parâmetros de consulta (query parameters):
-    - pagina: Número da página (padrão: 1)
-    - por_pagina: Itens por página (padrão: 50, máximo: 100)
-    - busca: Texto para busca (nome, código de barras, marca, descrição)
-    - categoria: Filtrar por categoria específica
-    - fornecedor_id: Filtrar por ID do fornecedor
-    - ativos: 'true' para apenas ativos, 'false' para incluir inativos (padrão: 'true')
-    - preco_min: Preço mínimo de venda
-    - preco_max: Preço máximo de venda
-    - estoque_status: 'baixo', 'esgotado', 'normal'
-    - tipo: Tipo de produto (unidade, granel, etc.)
-    - ordenar_por: Campo para ordenação (nome, preco_venda, quantidade, created_at, etc.)
-    - direcao: Direção da ordenação ('asc' ou 'desc', padrão: 'asc')
-    """
+
+def verificar_validade_proxima(produto):
+    """Verifica se o produto está próximo da validade"""
+    if produto.controlar_validade and produto.data_validade:
+        dias_para_validade = (produto.data_validade - date.today()).days
+        if 0 <= dias_para_validade <= 30:  # 30 dias para expirar
+            return True
+    return False
+
+
+# ============================================
+# ROTAS DE PRODUTOS
+# ============================================
+
+
+@produtos_bp.route("/", methods=["GET"])
+@login_required
+def listar_produtos():
+    """Lista todos os produtos com filtros e paginação"""
     try:
-        # ==================== PARÂMETROS DE PAGINAÇÃO ====================
         pagina = request.args.get("pagina", 1, type=int)
-        por_pagina = min(
-            request.args.get("por_pagina", 50, type=int), 100
-        )  # Máximo 100
+        por_pagina = request.args.get("por_pagina", 50, type=int)
+        ativo = request.args.get("ativo", None, type=str)
+        categoria = request.args.get("categoria", None, type=str)
+        estoque_baixo = request.args.get("estoque_baixo", None, type=str)
+        validade_proxima = request.args.get("validade_proxima", None, type=str)
+        busca = request.args.get("busca", "", type=str).strip()
 
-        # ==================== PARÂMETROS DE FILTRO ====================
-        busca = request.args.get("busca", "").strip()
-        categoria = request.args.get("categoria", "").strip()
-        fornecedor_id = request.args.get("fornecedor_id", type=int)
-        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
-        preco_min = request.args.get("preco_min", type=float)
-        preco_max = request.args.get("preco_max", type=float)
-        estoque_status = request.args.get("estoque_status", "").strip()
-        tipo_produto = request.args.get("tipo", "").strip()
+        # Query base
+        query = Produto.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id
+        )
 
-        # ==================== PARÂMETROS DE ORDENAÇÃO ====================
-        ordenar_por = request.args.get("ordenar_por", "nome")
-        direcao = request.args.get("direcao", "asc").lower()
+        # Filtros
+        if ativo is not None:
+            query = query.filter_by(ativo=ativo.lower() == "true")
 
-        # Mapeamento seguro de campos para ordenação
-        campos_ordenacao = {
-            "id": Produto.id,
-            "nome": Produto.nome,
-            "codigo_barras": Produto.codigo_barras,
-            "preco_custo": Produto.preco_custo,
-            "preco_venda": Produto.preco_venda,
-            "quantidade": Produto.quantidade,
-            "quantidade_minima": Produto.quantidade_minima,
-            "categoria": Produto.categoria,
-            "marca": Produto.marca,
-            "tipo": Produto.tipo,
-            "created_at": Produto.created_at,
-            "updated_at": Produto.updated_at,
-            "ativo": Produto.ativo,
-        }
+        if categoria:
+            query = query.filter_by(categoria=categoria)
 
-        # Campo padrão se o campo solicitado não existir
-        campo_ordenacao = campos_ordenacao.get(ordenar_por, Produto.nome)
+        if estoque_baixo and estoque_baixo.lower() == "true":
+            query = query.filter(Produto.quantidade <= Produto.quantidade_minima)
 
-        # ==================== CONSTRUÇÃO DA QUERY ====================
-        query = Produto.query
+        if validade_proxima and validade_proxima.lower() == "true":
+            hoje = date.today()
+            query = query.filter(
+                Produto.controlar_validade == True,
+                Produto.data_validade != None,
+                Produto.data_validade.between(hoje, hoje + timedelta(days=30)),
+            )
 
-        # Filtro de busca por texto
         if busca:
+            busca_termo = f"%{busca}%"
             query = query.filter(
                 db.or_(
-                    Produto.nome.ilike(f"%{busca}%"),
-                    Produto.codigo_barras.ilike(f"%{busca}%"),
-                    Produto.marca.ilike(f"%{busca}%"),
-                    Produto.descricao.ilike(f"%{busca}%"),
+                    Produto.nome.ilike(busca_termo),
+                    Produto.codigo_barras.ilike(busca_termo),
+                    Produto.codigo_interno.ilike(busca_termo),
+                    Produto.descricao.ilike(busca_termo),
+                    Produto.marca.ilike(busca_termo),
                 )
             )
 
-        # Filtro por categoria (case-insensitive)
-        if categoria:
-            query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
+        # Ordenação padrão: por nome
+        query = query.order_by(Produto.nome.asc())
 
-        # Filtro por fornecedor
-        if fornecedor_id:
-            query = query.filter(Produto.fornecedor_id == fornecedor_id)
-
-        # Filtro por status ativo/inativo
-        if apenas_ativos:
-            query = query.filter(Produto.ativo == True)
-
-        # Filtro por faixa de preço
-        if preco_min is not None:
-            query = query.filter(Produto.preco_venda >= preco_min)
-        if preco_max is not None:
-            query = query.filter(Produto.preco_venda <= preco_max)
-
-        # Filtro por status de estoque
-        if estoque_status:
-            if estoque_status == "baixo":
-                query = query.filter(
-                    Produto.quantidade < Produto.quantidade_minima,
-                    Produto.quantidade > 0,
-                )
-            elif estoque_status == "esgotado":
-                query = query.filter(Produto.quantidade <= 0)
-            elif estoque_status == "normal":
-                query = query.filter(Produto.quantidade >= Produto.quantidade_minima)
-
-        # Filtro por tipo de produto (case-insensitive)
-        if tipo_produto:
-            query = query.filter(Produto.tipo.ilike(f"%{tipo_produto}%"))
-
-        # ==================== APLICAÇÃO DA ORDENAÇÃO ====================
-        if direcao == "desc":
-            query = query.order_by(campo_ordenacao.desc())
-        else:
-            query = query.order_by(campo_ordenacao.asc())
-
-        # ==================== PAGINAÇÃO ====================
+        # Paginação
         paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
-        produtos = paginacao.items
 
-        # ==================== FORMATANDO RESULTADOS ====================
-        resultado = []
-        for p in produtos:
-            # Determinar status do estoque
-            estoque_status_local = "normal"
-            if p.quantidade <= 0:
-                estoque_status_local = "esgotado"
-            elif p.quantidade < p.quantidade_minima:
-                estoque_status_local = "baixo"
+        produtos = []
+        alertas = []
 
-            produto_dict = {
-                "id": p.id,
-                "nome": p.nome,
-                "codigo_barras": p.codigo_barras,
-                "descricao": p.descricao,
-                "fornecedor_id": p.fornecedor_id,
-                "fornecedor_nome": p.fornecedor.nome if p.fornecedor else None,
-                "preco_custo": float(p.preco_custo) if p.preco_custo else 0.0,
-                "preco_venda": float(p.preco_venda) if p.preco_venda else 0.0,
-                "margem_lucro": float(p.margem_lucro) if p.margem_lucro else 0.0,
-                "quantidade": p.quantidade if p.quantidade is not None else 0,
-                "quantidade_minima": p.quantidade_minima if p.quantidade_minima is not None else 0,
-                "estoque_status": estoque_status_local,
-                "categoria": p.categoria,
-                "marca": p.marca,
-                "fabricante": p.fabricante if hasattr(p, 'fabricante') else None,
-                "tipo": p.tipo if hasattr(p, 'tipo') else "unidade",
-                "unidade_medida": p.unidade_medida,
-                "ativo": p.ativo,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
-                "updated_at": p.updated_at.isoformat() if p.updated_at else None,
-            }
+        for produto in paginacao.items:
+            produto_dict = produto.to_dict()
 
-            resultado.append(produto_dict)
+            # Adicionar informações calculadas
+            produto_dict["margem_lucro"] = calcular_margem_lucro(
+                float(produto.preco_custo), float(produto.preco_venda)
+            )
+            produto_dict["valor_total_estoque"] = float(
+                produto.quantidade * produto.preco_custo
+            )
+            produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
 
-        # ==================== ESTATÍSTICAS ====================
-        # Para estatísticas, precisamos contar com os mesmos filtros
+            # Verificar alertas
+            if verificar_estoque_baixo(produto):
+                produto_dict["alerta_estoque"] = True
+                alertas.append(
+                    {
+                        "produto_id": produto.id,
+                        "tipo": "estoque_baixo",
+                        "mensagem": f"Estoque baixo: {produto.quantidade} unidades (mínimo: {produto.quantidade_minima})",
+                    }
+                )
+            else:
+                produto_dict["alerta_estoque"] = False
+
+            if verificar_validade_proxima(produto):
+                produto_dict["alerta_validade"] = True
+                dias = (produto.data_validade - date.today()).days
+                alertas.append(
+                    {
+                        "produto_id": produto.id,
+                        "tipo": "validade_proxima",
+                        "mensagem": f"Validade próxima: {produto.data_validade} ({dias} dias)",
+                    }
+                )
+            else:
+                produto_dict["alerta_validade"] = False
+
+            produtos.append(produto_dict)
+
+        # Estatísticas
         total_produtos = paginacao.total
-        produtos_baixo_estoque = 0
-        produtos_esgotados = 0
+        produtos_ativos = (
+            query.filter_by(ativo=True).count() if ativo is None else paginacao.total
+        )
+        produtos_inativos = total_produtos - produtos_ativos
 
-        # Podemos calcular estatísticas com uma query separada ou reutilizando
-        # Vamos fazer uma query para contar os status
-        if query.count() > 0:
-            produtos_baixo_estoque = query.filter(
-                Produto.quantidade < Produto.quantidade_minima, Produto.quantidade > 0
-            ).count()
+        # Valor total em estoque
+        valor_total_estoque = (
+            db.session.query(db.func.sum(Produto.quantidade * Produto.preco_custo))
+            .filter_by(estabelecimento_id=current_user.estabelecimento_id, ativo=True)
+            .scalar()
+            or 0
+        )
 
-            produtos_esgotados = query.filter(Produto.quantidade <= 0).count()
+        # Produtos com estoque baixo
+        produtos_estoque_baixo = Produto.query.filter(
+            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.ativo == True,
+            Produto.quantidade <= Produto.quantidade_minima,
+        ).count()
 
-        # ==================== RESPOSTA ====================
         return jsonify(
             {
-                "produtos": resultado,
-                "paginacao": {
-                    "pagina_atual": paginacao.page,
-                    "total_paginas": paginacao.pages,
-                    "total_itens": paginacao.total,
-                    "itens_por_pagina": paginacao.per_page,
-                    "tem_proxima": paginacao.has_next,
-                    "tem_anterior": paginacao.has_prev,
-                    "primeira_pagina": 1,
-                    "ultima_pagina": paginacao.pages,
-                },
+                "success": True,
+                "produtos": produtos,
+                "total": total_produtos,
+                "pagina": pagina,
+                "por_pagina": por_pagina,
+                "total_paginas": paginacao.pages,
                 "estatisticas": {
-                    "total_produtos": total_produtos,
-                    "produtos_baixo_estoque": produtos_baixo_estoque,
-                    "produtos_esgotados": produtos_esgotados,
-                    "produtos_normal": total_produtos
-                    - (produtos_baixo_estoque + produtos_esgotados),
+                    "total": total_produtos,
+                    "ativos": produtos_ativos,
+                    "inativos": produtos_inativos,
+                    "valor_total_estoque": float(valor_total_estoque),
+                    "produtos_estoque_baixo": produtos_estoque_baixo,
+                    "produtos_validade_proxima": len(
+                        [p for p in produtos if p.get("alerta_validade")]
+                    ),
                 },
-                "filtros_aplicados": {
-                    "busca": busca if busca else None,
-                    "categoria": categoria if categoria else None,
-                    "fornecedor_id": fornecedor_id if fornecedor_id else None,
-                    "apenas_ativos": apenas_ativos,
-                    "preco_min": preco_min,
-                    "preco_max": preco_max,
-                    "estoque_status": estoque_status if estoque_status else None,
-                    "tipo": tipo_produto if tipo_produto else None,
-                    "ordenar_por": ordenar_por,
-                    "direcao": direcao,
-                },
+                "alertas": alertas[:10],  # Limitar a 10 alertas
             }
         )
 
     except Exception as e:
-        print(f"Erro ao listar estoque: {str(e)}")
-        return jsonify({"error": f"Erro ao listar produtos: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao listar produtos: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao listar produtos"}),
+            500,
+        )
 
 
-@produtos_bp.route("/estoque/<int:id>", methods=["GET"])
-def detalhes_produto(id):
-    """Obter detalhes completos de um produto"""
+@produtos_bp.route("/<int:id>", methods=["GET"])
+@login_required
+def obter_produto(id):
+    """Obtém detalhes completos de um produto específico"""
     try:
-        produto = Produto.query.get(id)
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
 
-        if not produto:
-            return jsonify({"error": "Produto não encontrado"}), 404
+        # Dados básicos
+        dados_produto = produto.to_dict()
 
-        estoque_status = "normal"
-        if produto.quantidade <= 0:
-            estoque_status = "esgotado"
-        elif produto.quantidade < produto.quantidade_minima:
-            estoque_status = "baixo"
+        # Adicionar informações calculadas
+        dados_produto["margem_lucro"] = calcular_margem_lucro(
+            float(produto.preco_custo), float(produto.preco_venda)
+        )
+        dados_produto["valor_total_estoque"] = float(
+            produto.quantidade * produto.preco_custo
+        )
+        dados_produto["classificacao_abc"] = calcular_classificacao_abc(produto)
+        dados_produto["estoque_baixo"] = verificar_estoque_baixo(produto)
+        dados_produto["validade_proxima"] = verificar_validade_proxima(produto)
+
+        # Histórico de movimentações (últimas 20)
+        movimentacoes = (
+            MovimentacaoEstoque.query.filter_by(
+                produto_id=id, estabelecimento_id=current_user.estabelecimento_id
+            )
+            .order_by(MovimentacaoEstoque.created_at.desc())
+            .limit(20)
+            .all()
+        )
+
+        movimentacoes_lista = []
+        for mov in movimentacoes:
+            movimentacoes_lista.append(
+                {
+                    "id": mov.id,
+                    "tipo": mov.tipo,
+                    "quantidade": mov.quantidade,
+                    "quantidade_atual": mov.quantidade_atual,
+                    "motivo": mov.motivo,
+                    "created_at": (
+                        mov.created_at.isoformat() if mov.created_at else None
+                    ),
+                    "funcionario": mov.funcionario.nome if mov.funcionario else None,
+                }
+            )
+
+        # Histórico de vendas (últimas 10)
+        vendas = (
+            VendaItem.query.filter_by(produto_id=id)
+            .order_by(VendaItem.created_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        vendas_lista = []
+        for venda_item in vendas:
+            vendas_lista.append(
+                {
+                    "id": venda_item.id,
+                    "venda_id": venda_item.venda_id,
+                    "quantidade": venda_item.quantidade,
+                    "preco_unitario": float(venda_item.preco_unitario),
+                    "total_item": float(venda_item.total_item),
+                    "data_venda": (
+                        venda_item.created_at.isoformat()
+                        if venda_item.created_at
+                        else None
+                    ),
+                    "venda_codigo": (
+                        venda_item.venda.codigo if venda_item.venda else None
+                    ),
+                }
+            )
+
+        # Pedidos de compra pendentes
+        pedidos_pendentes = PedidoCompraItem.query.filter_by(
+            produto_id=id, status="pendente"
+        ).all()
+
+        pedidos_lista = []
+        for pedido_item in pedidos_pendentes:
+            pedidos_lista.append(
+                {
+                    "id": pedido_item.id,
+                    "pedido_id": pedido_item.pedido_id,
+                    "quantidade_solicitada": pedido_item.quantidade_solicitada,
+                    "quantidade_recebida": pedido_item.quantidade_recebida,
+                    "preco_unitario": float(pedido_item.preco_unitario),
+                    "total_item": float(pedido_item.total_item),
+                    "pedido_numero": (
+                        pedido_item.pedido.numero_pedido if pedido_item.pedido else None
+                    ),
+                }
+            )
+
+        # Estatísticas de vendas
+        total_vendido = produto.quantidade_vendida or 0
+        valor_total_vendido = float(
+            produto.preco_venda * (produto.quantidade_vendida or 0)
+        )
+        ticket_medio_produto = (
+            valor_total_vendido / total_vendido if total_vendido > 0 else 0
+        )
 
         return jsonify(
             {
-                "id": produto.id,
-                "nome": produto.nome,
-                "codigo_barras": produto.codigo_barras,
-                "descricao": produto.descricao,
-                "fornecedor_id": produto.fornecedor_id,
-                    "fornecedor_nome": produto.fornecedor.nome if produto.fornecedor else None,
-                "fabricante": produto.fabricante,
-                "preco_custo": float(produto.preco_custo),
-                "preco_venda": float(produto.preco_venda),
-                "margem_lucro": float(produto.margem_lucro),
-                "quantidade": produto.quantidade,
-                "quantidade_minima": produto.quantidade_minima,
-                "estoque_status": estoque_status,
-                "categoria": produto.categoria,
-                "marca": produto.marca,
-                "fabricante": produto.fabricante,
-                "tipo": produto.tipo,
-                "unidade_medida": produto.unidade_medida,
-                "ativo": produto.ativo,
-                "created_at": (
-                    produto.created_at.isoformat() if produto.created_at else None
-                ),
-                "updated_at": (
-                    produto.updated_at.isoformat() if produto.updated_at else None
-                ),
+                "success": True,
+                "produto": dados_produto,
+                "movimentacoes": movimentacoes_lista,
+                "historico_vendas": vendas_lista,
+                "pedidos_pendentes": pedidos_lista,
+                "estatisticas": {
+                    "total_vendido": total_vendido,
+                    "valor_total_vendido": valor_total_vendido,
+                    "ticket_medio": ticket_medio_produto,
+                    "ultima_venda": (
+                        produto.ultima_venda.isoformat()
+                        if produto.ultima_venda
+                        else None
+                    ),
+                    "dias_ultima_venda": (
+                        (datetime.utcnow().date() - produto.ultima_venda.date()).days
+                        if produto.ultima_venda
+                        else None
+                    ),
+                },
             }
         )
 
     except Exception as e:
-        print(f"Erro ao obter detalhes do produto {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao obter produto: {str(e)}"}), 404
+        current_app.logger.error(f"Erro ao obter produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao obter produto"}),
+            500,
+        )
 
 
-@produtos_bp.route("/estoque", methods=["POST"])
+@produtos_bp.route("/", methods=["POST"])
+@login_required
 def criar_produto():
-    """Criar um novo produto (cadastro completo)"""
+    """Cria um novo produto"""
     try:
         data = request.get_json()
 
-        if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
+        # Validação dos dados
+        erros = validar_dados_produto(data)
+        if erros:
+            return (
+                jsonify(
+                    {"success": False, "message": "Erros de validação", "errors": erros}
+                ),
+                400,
+            )
 
-        # Validações
-        if not data.get("nome"):
-            return jsonify({"error": "Nome do produto é obrigatório"}), 400
+        # Calcular margem de lucro
+        preco_custo = Decimal(str(data["preco_custo"]))
+        preco_venda = Decimal(str(data["preco_venda"]))
 
-        try:
-            preco_venda = float(data.get("preco_venda", 0))
-            if preco_venda <= 0:
-                return jsonify({"error": "Preço de venda deve ser maior que zero"}), 400
-        except:
-            return jsonify({"error": "Preço de venda inválido"}), 400
-
-        # Verificar código de barras único
-        codigo_barras = data.get("codigo_barras")
-        if codigo_barras:
-            existente = Produto.query.filter_by(codigo_barras=codigo_barras).first()
-            if existente:
-                return (
-                    jsonify(
-                        {
-                            "error": "Código de barras já cadastrado",
-                            "produto_existente": {
-                                "id": existente.id,
-                                "nome": existente.nome,
-                            },
-                        }
-                    ),
-                    409,
-                )
-
-        # Converter datas de string para objetos date
-        data_fabricacao = None
-        if data.get("data_fabricacao"):
-            try:
-                data_fabricacao = datetime.strptime(data["data_fabricacao"], "%Y-%m-%d").date()
-            except ValueError:
-                pass
-
-        data_validade = None
-        if data.get("data_validade"):
-            try:
-                data_validade = datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
-            except ValueError:
-                pass
-
-        # Criar produto
-        novo_produto = Produto(
-            estabelecimento_id=1,  # ID do estabelecimento padrão
-            nome=data["nome"],
-            codigo_barras=codigo_barras or "",
-            descricao=data.get("descricao", ""),
-            fornecedor_id=data.get("fornecedor_id"),
-            fabricante=data.get("fabricante", ""),
-            preco_custo=float(data.get("preco_custo", 0)),
-            preco_venda=preco_venda,
-            margem_lucro=float(data.get("margem_lucro", 30.0)),
-            quantidade=float(data.get("quantidade", 0)),
-            quantidade_minima=float(data.get("quantidade_minima", 10)),
-            categoria=data.get("categoria", "Geral"),
-            marca=data.get("marca", "Sem Marca"),
-            tipo=data.get("tipo", "unidade"),
-            unidade_medida=data.get("unidade_medida", "un"),
-            ativo=data.get("ativo", True),
-            lote=data.get("lote"),
-            data_fabricacao=data_fabricacao,
-            data_validade=data_validade,
+        margem = (
+            ((preco_venda - preco_custo) / preco_custo * 100) if preco_custo > 0 else 0
         )
 
-        db.session.add(novo_produto)
+        # Criar produto
+        produto = Produto(
+            estabelecimento_id=current_user.estabelecimento_id,
+            fornecedor_id=data.get("fornecedor_id"),
+            codigo_barras=data.get("codigo_barras", "").strip(),
+            codigo_interno=data.get("codigo_interno", "").strip(),
+            nome=data["nome"].strip(),
+            descricao=data.get("descricao", "").strip(),
+            marca=data.get("marca", "").strip(),
+            categoria=data["categoria"].strip(),
+            subcategoria=data.get("subcategoria", "").strip(),
+            unidade_medida=data.get("unidade_medida", "UN"),
+            quantidade=int(data.get("quantidade", 0)),
+            quantidade_minima=int(data.get("quantidade_minima", 10)),
+            preco_custo=preco_custo,
+            preco_venda=preco_venda,
+            margem_lucro=margem,
+            ncm=data.get("ncm", "").strip(),
+            origem=int(data.get("origem", 0)),
+            controlar_validade=data.get("controlar_validade", False),
+            data_validade=(
+                datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
+                if data.get("data_validade")
+                else None
+            ),
+            lote=data.get("lote", "").strip(),
+            imagem_url=data.get("imagem_url", "").strip(),
+            ativo=data.get("ativo", True),
+            total_vendido=0.0,
+            quantidade_vendida=0,
+            ultima_venda=None,
+        )
+
+        db.session.add(produto)
+
+        # Criar movimentação inicial de estoque
+        if produto.quantidade > 0:
+            movimentacao = MovimentacaoEstoque(
+                estabelecimento_id=current_user.estabelecimento_id,
+                produto_id=produto.id,
+                funcionario_id=current_user.id,
+                tipo="entrada",
+                quantidade=produto.quantidade,
+                quantidade_anterior=0,
+                quantidade_atual=produto.quantidade,
+                custo_unitario=produto.preco_custo,
+                valor_total=produto.quantidade * produto.preco_custo,
+                motivo="Cadastro inicial do produto",
+                observacoes=f"Produto cadastrado por {current_user.nome}",
+            )
+            db.session.add(movimentacao)
+
         db.session.commit()
+
+        current_app.logger.info(
+            f"Produto criado: {produto.id} - {produto.nome} por {current_user.username}"
+        )
 
         return (
             jsonify(
                 {
                     "success": True,
                     "message": "Produto criado com sucesso",
-                    "produto": {
-                        "id": novo_produto.id,
-                        "nome": novo_produto.nome,
-                        "codigo_barras": novo_produto.codigo_barras,
-                        "fornecedor_id": novo_produto.fornecedor_id,
-                    },
+                    "produto": produto.to_dict(),
                 }
             ),
             201,
@@ -538,396 +532,692 @@ def criar_produto():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao criar produto: {str(e)}")
-        return jsonify({"error": f"Erro ao criar produto: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao criar produto: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao criar produto"}),
+            500,
+        )
 
 
-@produtos_bp.route("/estoque/<int:id>", methods=["PUT"])
+@produtos_bp.route("/<int:id>", methods=["PUT"])
+@login_required
 def atualizar_produto(id):
-    """Atualizar informações de um produto"""
+    """Atualiza um produto existente"""
     try:
-        produto = Produto.query.get(id)
-
-        if not produto:
-            return jsonify({"error": "Produto não encontrado"}), 404
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
 
         data = request.get_json()
 
-        if not data:
-            return jsonify({"error": "Nenhum dado fornecido"}), 400
+        # Validação dos dados (passando ID para verificação de unicidade)
+        erros = validar_dados_produto(data, produto.id)
+        if erros:
+            return (
+                jsonify(
+                    {"success": False, "message": "Erros de validação", "errors": erros}
+                ),
+                400,
+            )
 
-        # Validações
-        if "preco_venda" in data:
-            try:
-                preco_venda = float(data["preco_venda"])
-                if preco_venda <= 0:
-                    return (
-                        jsonify({"error": "Preço de venda deve ser maior que zero"}),
-                        400,
-                    )
-            except:
-                return jsonify({"error": "Preço de venda inválido"}), 400
-
-        # Verificar código de barras único
-        if "codigo_barras" in data and data["codigo_barras"] != produto.codigo_barras:
-            existente = Produto.query.filter_by(
-                codigo_barras=data["codigo_barras"]
-            ).first()
-            if existente and existente.id != id:
-                return (
-                    jsonify(
-                        {
-                            "error": "Código de barras já cadastrado em outro produto",
-                            "produto_existente": {
-                                "id": existente.id,
-                                "nome": existente.nome,
-                            },
-                        }
-                    ),
-                    409,
-                )
+        # Guardar valores antigos para auditoria
+        quantidade_anterior = produto.quantidade
 
         # Atualizar campos
-        campos_permitidos = [
-            "nome",
-            "codigo_barras",
-            "descricao",
+        campos_atualizaveis = [
             "fornecedor_id",
+            "codigo_barras",
+            "codigo_interno",
+            "nome",
+            "descricao",
+            "marca",
+            "categoria",
+            "subcategoria",
+            "unidade_medida",
+            "quantidade_minima",
             "preco_custo",
             "preco_venda",
-            "margem_lucro",
-            "quantidade",
-            "quantidade_minima",
-            "categoria",
-            "marca",
-            "fabricante",
-            "tipo",
-            "unidade_medida",
-            "ativo",
+            "ncm",
+            "origem",
+            "controlar_validade",
+            "data_validade",
             "lote",
+            "imagem_url",
+            "ativo",
         ]
 
-        for campo in campos_permitidos:
+        for campo in campos_atualizaveis:
             if campo in data:
-                setattr(produto, campo, data[campo])
+                if campo == "preco_custo":
+                    produto.preco_custo = Decimal(str(data[campo]))
+                elif campo == "preco_venda":
+                    produto.preco_venda = Decimal(str(data[campo]))
+                elif campo == "data_validade" and data[campo]:
+                    produto.data_validade = datetime.strptime(
+                        data[campo], "%Y-%m-%d"
+                    ).date()
+                elif campo in ["quantidade_minima", "origem"]:
+                    setattr(produto, campo, int(data[campo]))
+                elif campo == "controlar_validade":
+                    setattr(produto, campo, bool(data[campo]))
+                else:
+                    setattr(produto, campo, data[campo])
 
-        # Converter datas de string para objetos date
-        if "data_fabricacao" in data and data["data_fabricacao"]:
-            try:
-                produto.data_fabricacao = datetime.strptime(data["data_fabricacao"], "%Y-%m-%d").date()
-            except ValueError:
-                produto.data_fabricacao = None
-        elif "data_fabricacao" in data:
-            produto.data_fabricacao = None
+        # Recalcular margem de lucro
+        if "preco_custo" in data or "preco_venda" in data:
+            if produto.preco_custo > 0:
+                produto.margem_lucro = (
+                    (produto.preco_venda - produto.preco_custo)
+                    / produto.preco_custo
+                    * 100
+                )
+            else:
+                produto.margem_lucro = 0
 
-        if "data_validade" in data and data["data_validade"]:
-            try:
-                produto.data_validade = datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
-            except ValueError:
-                produto.data_validade = None
-        elif "data_validade" in data:
-            produto.data_validade = None
+        produto.updated_at = datetime.utcnow()
+
+        # Se quantidade foi alterada, criar movimentação
+        if "quantidade" in data:
+            nova_quantidade = int(data["quantidade"])
+            diferenca = nova_quantidade - quantidade_anterior
+
+            if diferenca != 0:
+                produto.quantidade = nova_quantidade
+
+                movimentacao = MovimentacaoEstoque(
+                    estabelecimento_id=current_user.estabelecimento_id,
+                    produto_id=produto.id,
+                    funcionario_id=current_user.id,
+                    tipo="entrada" if diferenca > 0 else "saida",
+                    quantidade=abs(diferenca),
+                    quantidade_anterior=quantidade_anterior,
+                    quantidade_atual=nova_quantidade,
+                    custo_unitario=produto.preco_custo,
+                    valor_total=abs(diferenca) * produto.preco_custo,
+                    motivo="Ajuste manual de estoque",
+                    observacoes=f"Produto atualizado por {current_user.nome}. Diferença: {diferenca}",
+                )
+                db.session.add(movimentacao)
 
         db.session.commit()
+
+        current_app.logger.info(
+            f"Produto atualizado: {produto.id} por {current_user.username}"
+        )
 
         return jsonify(
             {
                 "success": True,
                 "message": "Produto atualizado com sucesso",
-                "produto": {
-                    "id": produto.id,
-                    "nome": produto.nome,
-                    "quantidade": produto.quantidade,
-                    "preco_venda": float(produto.preco_venda),
-                    "ativo": produto.ativo,
-                },
+                "produto": produto.to_dict(),
             }
         )
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao atualizar produto {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao atualizar produto: {str(e)}"}), 500
-
-
-@produtos_bp.route("/estoque/<int:id>", methods=["DELETE"])
-def excluir_produto(id):
-    """Excluir (desativar) um produto"""
-    try:
-        produto = Produto.query.get(id)
-
-        if not produto:
-            return jsonify({"error": "Produto não encontrado"}), 404
-
-        # Exclusão lógica
-        produto.ativo = False
-        produto.quantidade = 0
-
-        db.session.commit()
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Produto desativado com sucesso",
-                "produto": {"id": produto.id, "nome": produto.nome, "ativo": False},
-            }
+        current_app.logger.error(f"Erro ao atualizar produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao atualizar produto"}),
+            500,
         )
 
-    except Exception as e:
-        db.session.rollback()
-        print(f"Erro ao excluir produto {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao excluir produto: {str(e)}"}), 500
 
-
-@produtos_bp.route("/estoque/<int:id>/estoque", methods=["PUT"])
+@produtos_bp.route("/<int:id>/estoque", methods=["POST"])
+@login_required
 def ajustar_estoque(id):
-    """Ajustar estoque de um produto"""
+    """Ajusta o estoque de um produto com movimentação registrada"""
     try:
-        produto = Produto.query.get(id)
-
-        if not produto:
-            return jsonify({"error": "Produto não encontrado"}), 404
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
 
         data = request.get_json()
 
-        if not data or "quantidade" not in data or "operacao" not in data:
+        tipo = data.get("tipo")  # 'entrada' ou 'saida'
+        quantidade = data.get("quantidade", 0)
+        motivo = data.get("motivo", "")
+        observacoes = data.get("observacoes", "")
+
+        if tipo not in ["entrada", "saida"]:
             return (
                 jsonify(
-                    {"error": "Dados inválidos. Forneça 'quantidade' e 'operacao'"}
+                    {
+                        "success": False,
+                        "message": 'Tipo inválido. Use "entrada" ou "saida"',
+                    }
                 ),
                 400,
             )
 
-        quantidade = float(data["quantidade"])
-        operacao = data["operacao"]
-        motivo = data.get("motivo", "")
+        if not quantidade or quantidade <= 0:
+            return jsonify({"success": False, "message": "Quantidade inválida"}), 400
 
-        if quantidade <= 0:
-            return jsonify({"error": "Quantidade deve ser maior que zero"}), 400
+        if not motivo:
+            return jsonify({"success": False, "message": "Motivo é obrigatório"}), 400
 
-        if operacao == "entrada":
+        quantidade_anterior = produto.quantidade
+
+        if tipo == "entrada":
             produto.quantidade += quantidade
-            movimento = "Entrada"
-        elif operacao == "saida":
+        else:  # saida
             if produto.quantidade < quantidade:
                 return (
                     jsonify(
                         {
-                            "error": "Estoque insuficiente",
-                            "estoque_atual": produto.quantidade,
-                            "quantidade_solicitada": quantidade,
+                            "success": False,
+                            "message": f"Estoque insuficiente. Disponível: {produto.quantidade}",
                         }
                     ),
                     400,
                 )
             produto.quantidade -= quantidade
-            movimento = "Saída"
-        else:
-            return (
-                jsonify({"error": "Operação inválida. Use 'entrada' ou 'saida'"}),
-                400,
-            )
 
+        # Criar movimentação
+        movimentacao = MovimentacaoEstoque(
+            estabelecimento_id=current_user.estabelecimento_id,
+            produto_id=produto.id,
+            funcionario_id=current_user.id,
+            tipo=tipo,
+            quantidade=quantidade,
+            quantidade_anterior=quantidade_anterior,
+            quantidade_atual=produto.quantidade,
+            custo_unitario=produto.preco_custo,
+            valor_total=quantidade * produto.preco_custo,
+            motivo=motivo,
+            observacoes=observacoes,
+        )
+
+        db.session.add(movimentacao)
         db.session.commit()
+
+        current_app.logger.info(
+            f"Estoque ajustado: produto {produto.id}, tipo {tipo}, quantidade {quantidade} por {current_user.username}"
+        )
 
         return jsonify(
             {
                 "success": True,
-                "message": f"Estoque ajustado: {movimento} de {quantidade} unidades",
-                "motivo": motivo,
+                "message": f"Estoque ajustado com sucesso",
                 "produto": {
                     "id": produto.id,
                     "nome": produto.nome,
-                    "quantidade_anterior": produto.quantidade
-                    - (quantidade if operacao == "entrada" else -quantidade),
+                    "quantidade_anterior": quantidade_anterior,
                     "quantidade_atual": produto.quantidade,
+                    "diferenca": quantidade if tipo == "entrada" else -quantidade,
                 },
             }
         )
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao ajustar estoque do produto {id}: {str(e)}")
-        return jsonify({"error": f"Erro ao ajustar estoque: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao ajustar estoque do produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao ajustar estoque"}),
+            500,
+        )
 
 
-@produtos_bp.route("/categorias", methods=["GET"])
-def listar_categorias():
-    """Listar todas as categorias de produtos"""
+@produtos_bp.route("/<int:id>/preco", methods=["POST"])
+@login_required
+def atualizar_preco(id):
+    """Atualiza preços do produto com histórico"""
     try:
-        # Adicionar filtro por ativos apenas
-        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=current_user.estabelecimento_id
+        ).first_or_404()
 
-        query = Produto.query
+        data = request.get_json()
 
-        if apenas_ativos:
-            query = query.filter_by(ativo=True)
+        novo_preco_custo = data.get("preco_custo")
+        novo_preco_venda = data.get("preco_venda")
 
-        produtos = query.all()
-        categorias = set()
+        if not novo_preco_custo and not novo_preco_venda:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Informe pelo menos um preço para atualizar",
+                    }
+                ),
+                400,
+            )
 
-        for p in produtos:
-            if p.categoria:
-                categorias.add(p.categoria)
+        # Guardar valores antigos
+        preco_custo_anterior = produto.preco_custo
+        preco_venda_anterior = produto.preco_venda
+
+        # Atualizar preços
+        if novo_preco_custo:
+            produto.preco_custo = Decimal(str(novo_preco_custo))
+
+        if novo_preco_venda:
+            produto.preco_venda = Decimal(str(novo_preco_venda))
+
+        # Recalcular margem
+        if produto.preco_custo > 0:
+            produto.margem_lucro = (
+                (produto.preco_venda - produto.preco_custo) / produto.preco_custo * 100
+            )
+
+        produto.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        current_app.logger.info(
+            f"Preços atualizados: produto {produto.id}, custo: {preco_custo_anterior}->{produto.preco_custo}, venda: {preco_venda_anterior}->{produto.preco_venda} por {current_user.username}"
+        )
 
         return jsonify(
             {
-                "categorias": sorted(list(categorias)),
-                "total_categorias": len(categorias),
+                "success": True,
+                "message": "Preços atualizados com sucesso",
+                "produto": {
+                    "id": produto.id,
+                    "nome": produto.nome,
+                    "preco_custo_anterior": float(preco_custo_anterior),
+                    "preco_custo_atual": float(produto.preco_custo),
+                    "preco_venda_anterior": float(preco_venda_anterior),
+                    "preco_venda_atual": float(produto.preco_venda),
+                    "margem_lucro": float(produto.margem_lucro),
+                },
             }
         )
 
     except Exception as e:
-        print(f"Erro ao listar categorias: {str(e)}")
-        return jsonify({"error": f"Erro ao listar categorias: {str(e)}"}), 500
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar preços do produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao atualizar preços"}),
+            500,
+        )
 
 
-@produtos_bp.route("/relatorio/estoque", methods=["GET"])
-def relatorio_estoque():
-    """Gerar relatório de estoque com paginação e filtros"""
+@produtos_bp.route("/busca", methods=["GET"])
+@login_required
+def buscar_produtos():
+    """Busca rápida de produtos para autocomplete (PDV, etc.)"""
     try:
-        # ==================== PARÂMETROS DE PAGINAÇÃO ====================
-        pagina = request.args.get("pagina", 1, type=int)
-        por_pagina = min(request.args.get("por_pagina", 100, type=int), 500)
+        termo = request.args.get("q", "", type=str).strip()
+        limite = request.args.get("limite", 20, type=int)
+        apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
+        com_estoque = request.args.get("com_estoque", None, type=str)
 
-        # ==================== PARÂMETROS DE FILTRO ====================
-        categoria = request.args.get("categoria", "").strip()
-        estoque_status = request.args.get("estoque_status", "").strip()
-        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+        if not termo or len(termo) < 1:
+            return jsonify({"success": True, "produtos": []})
 
-        # ==================== CONSTRUÇÃO DA QUERY ====================
-        query = Produto.query
+        query = Produto.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id
+        )
 
         if apenas_ativos:
             query = query.filter_by(ativo=True)
 
-        if categoria:
-            query = query.filter(Produto.categoria.ilike(f"%{categoria}%"))
+        if com_estoque == "true":
+            query = query.filter(Produto.quantidade > 0)
+        elif com_estoque == "false":
+            query = query.filter(Produto.quantidade == 0)
 
-        # Filtro por status de estoque
-        if estoque_status:
-            if estoque_status == "baixo":
-                query = query.filter(
-                    Produto.quantidade < Produto.quantidade_minima,
-                    Produto.quantidade > 0,
+        busca_termo = f"%{termo}%"
+        produtos = (
+            query.filter(
+                db.or_(
+                    Produto.nome.ilike(busca_termo),
+                    Produto.codigo_barras.ilike(busca_termo),
+                    Produto.codigo_interno.ilike(busca_termo),
+                    Produto.descricao.ilike(busca_termo),
                 )
-            elif estoque_status == "esgotado":
-                query = query.filter(Produto.quantidade <= 0)
-            elif estoque_status == "normal":
-                query = query.filter(Produto.quantidade >= Produto.quantidade_minima)
+            )
+            .limit(limite)
+            .all()
+        )
 
-        query = query.order_by(Produto.nome.asc())
-
-        # ==================== PAGINAÇÃO ====================
-        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
-        produtos = paginacao.items
-
-        resultado = []
-        for p in produtos:
-            estoque_status_local = "normal"
-            if p.quantidade <= 0:
-                estoque_status_local = "esgotado"
-            elif p.quantidade < p.quantidade_minima:
-                estoque_status_local = "baixo"
-
-            resultado.append(
+        resultados = []
+        for produto in produtos:
+            resultados.append(
                 {
-                    "id": p.id,
-                    "nome": p.nome,
-                    "codigo_barras": p.codigo_barras,
-                    "quantidade": p.quantidade,
-                    "quantidade_minima": p.quantidade_minima,
-                    "estoque_status": estoque_status_local,
-                    "preco_custo": float(p.preco_custo),
-                    "preco_venda": float(p.preco_venda),
-                    "valor_estoque": float(p.preco_custo * p.quantidade),
-                    "marca": p.marca,
-                    "categoria": p.categoria,
-                    "fornecedor_nome": (
-                        p.fornecedor.nome if p.fornecedor else None
+                    "id": produto.id,
+                    "nome": produto.nome,
+                    "codigo_barras": produto.codigo_barras,
+                    "codigo_interno": produto.codigo_interno,
+                    "quantidade": produto.quantidade,
+                    "preco_custo": float(produto.preco_custo),
+                    "preco_venda": float(produto.preco_venda),
+                    "margem_lucro": calcular_margem_lucro(
+                        float(produto.preco_custo), float(produto.preco_venda)
                     ),
+                    "ativo": produto.ativo,
+                    "estoque_baixo": verificar_estoque_baixo(produto),
+                    "validade_proxima": verificar_validade_proxima(produto),
                 }
             )
 
-        # Totais
-        total_valor_estoque = sum(p["valor_estoque"] for p in resultado)
-        produtos_baixo_estoque = sum(
-            1 for p in resultado if p["estoque_status"] == "baixo"
-        )
-        produtos_esgotados = sum(
-            1 for p in resultado if p["estoque_status"] == "esgotado"
+        return jsonify(
+            {"success": True, "produtos": resultados, "total": len(resultados)}
         )
 
-        # ==================== RESPOSTA ====================
+    except Exception as e:
+        current_app.logger.error(f"Erro na busca de produtos: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno na busca de produtos"}),
+            500,
+        )
+
+
+@produtos_bp.route("/categorias", methods=["GET"])
+@login_required
+def listar_categorias():
+    """Lista todas as categorias de produtos"""
+    try:
+        categorias = (
+            CategoriaProduto.query.filter_by(
+                estabelecimento_id=current_user.estabelecimento_id, ativo=True
+            )
+            .order_by(CategoriaProduto.nome.asc())
+            .all()
+        )
+
+        categorias_lista = []
+        for categoria in categorias:
+            # Contar produtos ativos na categoria
+            total_produtos = Produto.query.filter_by(
+                estabelecimento_id=current_user.estabelecimento_id,
+                categoria=categoria.nome,
+                ativo=True,
+            ).count()
+
+            categorias_lista.append(
+                {
+                    "id": categoria.id,
+                    "nome": categoria.nome,
+                    "descricao": categoria.descricao,
+                    "codigo": categoria.codigo,
+                    "total_produtos": total_produtos,
+                }
+            )
+
         return jsonify(
             {
-                "produtos": resultado,
-                "paginacao": {
-                    "pagina_atual": paginacao.page,
-                    "total_paginas": paginacao.pages,
-                    "total_itens": paginacao.total,
-                    "itens_por_pagina": paginacao.per_page,
-                    "tem_proxima": paginacao.has_next,
-                    "tem_anterior": paginacao.has_prev,
-                },
-                "totais": {
-                    "total_produtos": paginacao.total,
-                    "total_valor_estoque": float(total_valor_estoque),
-                    "produtos_baixo_estoque": produtos_baixo_estoque,
-                    "produtos_esgotados": produtos_esgotados,
-                    "data_geracao": datetime.now().isoformat(),
+                "success": True,
+                "categorias": categorias_lista,
+                "total": len(categorias_lista),
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar categorias: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao listar categorias"}),
+            500,
+        )
+
+
+@produtos_bp.route("/alertas", methods=["GET"])
+@login_required
+def alertas_produtos():
+    """Lista alertas de produtos (estoque baixo, validade próxima)"""
+    try:
+        alertas = []
+
+        # Produtos com estoque baixo
+        produtos_estoque_baixo = Produto.query.filter(
+            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.ativo == True,
+            Produto.quantidade_minima > 0,
+            Produto.quantidade <= Produto.quantidade_minima,
+        ).all()
+
+        for produto in produtos_estoque_baixo:
+            alertas.append(
+                {
+                    "tipo": "estoque_baixo",
+                    "nivel": "alto" if produto.quantidade == 0 else "medio",
+                    "produto_id": produto.id,
+                    "produto_nome": produto.nome,
+                    "mensagem": f"Estoque baixo: {produto.quantidade} unidades (mínimo: {produto.quantidade_minima})",
+                    "quantidade": produto.quantidade,
+                    "quantidade_minima": produto.quantidade_minima,
+                }
+            )
+
+        # Produtos com validade próxima
+        hoje = date.today()
+        produtos_validade_proxima = Produto.query.filter(
+            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.ativo == True,
+            Produto.controlar_validade == True,
+            Produto.data_validade != None,
+            Produto.data_validade.between(hoje, hoje + timedelta(days=30)),
+        ).all()
+
+        for produto in produtos_validade_proxima:
+            dias_para_validade = (produto.data_validade - hoje).days
+            nivel = "critico" if dias_para_validade <= 7 else "medio"
+
+            alertas.append(
+                {
+                    "tipo": "validade_proxima",
+                    "nivel": nivel,
+                    "produto_id": produto.id,
+                    "produto_nome": produto.nome,
+                    "mensagem": f"Validade próxima: {produto.data_validade} ({dias_para_validade} dias)",
+                    "data_validade": produto.data_validade.isoformat(),
+                    "dias_restantes": dias_para_validade,
+                }
+            )
+
+        # Produtos sem movimentação há muito tempo
+        data_limite = datetime.utcnow() - timedelta(days=180)  # 6 meses
+        produtos_sem_movimento = Produto.query.filter(
+            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.ativo == True,
+            Produto.quantidade > 0,
+            db.or_(Produto.ultima_venda == None, Produto.ultima_venda < data_limite),
+        ).all()
+
+        for produto in produtos_sem_movimento:
+            if produto.ultima_venda:
+                dias_sem_venda = (datetime.utcnow() - produto.ultima_venda).days
+                alertas.append(
+                    {
+                        "tipo": "sem_movimento",
+                        "nivel": "baixo",
+                        "produto_id": produto.id,
+                        "produto_nome": produto.nome,
+                        "mensagem": f"Sem vendas há {dias_sem_venda} dias",
+                        "dias_sem_venda": dias_sem_venda,
+                        "ultima_venda": (
+                            produto.ultima_venda.isoformat()
+                            if produto.ultima_venda
+                            else None
+                        ),
+                    }
+                )
+
+        # Ordenar por nível de criticidade
+        nivel_prioridade = {"critico": 1, "alto": 2, "medio": 3, "baixo": 4}
+        alertas.sort(key=lambda x: nivel_prioridade.get(x["nivel"], 5))
+
+        return jsonify(
+            {
+                "success": True,
+                "alertas": alertas,
+                "total": len(alertas),
+                "resumo": {
+                    "estoque_baixo": len(
+                        [a for a in alertas if a["tipo"] == "estoque_baixo"]
+                    ),
+                    "validade_proxima": len(
+                        [a for a in alertas if a["tipo"] == "validade_proxima"]
+                    ),
+                    "sem_movimento": len(
+                        [a for a in alertas if a["tipo"] == "sem_movimento"]
+                    ),
                 },
             }
         )
 
     except Exception as e:
-        print(f"Erro ao gerar relatório: {str(e)}")
-        return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao listar alertas de produtos: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao listar alertas"}),
+            500,
+        )
 
 
-@produtos_bp.route("/exportar/csv", methods=["GET"])
-def exportar_csv():
-    """Exportar produtos para CSV (simplificado)"""
+@produtos_bp.route("/exportar", methods=["GET"])
+@login_required
+def exportar_produtos():
+    """Exporta produtos em formato CSV"""
     try:
-        # Parâmetros básicos de filtro
-        apenas_ativos = request.args.get("ativos", "true").lower() == "true"
+        apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
 
-        query = Produto.query
+        # Buscar produtos
+        query = Produto.query.filter_by(
+            estabelecimento_id=current_user.estabelecimento_id
+        )
 
         if apenas_ativos:
             query = query.filter_by(ativo=True)
 
         produtos = query.order_by(Produto.nome.asc()).all()
 
-        # Cabeçalho CSV
-        csv_lines = [
-            "ID;Nome;Código de Barras;Categoria;Marca;Quantidade;Quantidade Mínima;Preço Custo;Preço Venda;Status Estoque;Fornecedor"
-        ]
+        # Gerar CSV
+        import csv
+        import io
 
-        for p in produtos:
-            estoque_status = "NORMAL"
-            if p.quantidade <= 0:
-                estoque_status = "ESGOTADO"
-            elif p.quantidade < p.quantidade_minima:
-                estoque_status = "BAIXO"
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=";")
 
-            fornecedor_nome = p.fornecedor.nome if p.fornecedor else ""
+        # Cabeçalho
+        writer.writerow(
+            [
+                "ID",
+                "Código Barras",
+                "Código Interno",
+                "Nome",
+                "Descrição",
+                "Marca",
+                "Categoria",
+                "Subcategoria",
+                "Unidade Medida",
+                "Quantidade",
+                "Quantidade Mínima",
+                "Preço Custo",
+                "Preço Venda",
+                "Margem Lucro %",
+                "NCM",
+                "Origem",
+                "Controlar Validade",
+                "Data Validade",
+                "Lote",
+                "Fornecedor",
+                "Total Vendido",
+                "Quantidade Vendida",
+                "Última Venda",
+                "Classificação ABC",
+                "Ativo",
+                "Data Cadastro",
+            ]
+        )
 
-            csv_lines.append(
-                f'{p.id};"{p.nome}";{p.codigo_barras};{p.categoria};{p.marca};'
-                f"{p.quantidade};{p.quantidade_minima};{p.preco_custo};{p.preco_venda};"
-                f'{estoque_status};"{fornecedor_nome}"'
+        # Dados
+        for produto in produtos:
+            fornecedor_nome = (
+                produto.fornecedor.nome_fantasia if produto.fornecedor else ""
+            )
+            classificacao = calcular_classificacao_abc(produto)
+            margem = calcular_margem_lucro(
+                float(produto.preco_custo), float(produto.preco_venda)
             )
 
-        return jsonify(
+            writer.writerow(
+                [
+                    produto.id,
+                    produto.codigo_barras or "",
+                    produto.codigo_interno or "",
+                    produto.nome or "",
+                    produto.descricao or "",
+                    produto.marca or "",
+                    produto.categoria or "",
+                    produto.subcategoria or "",
+                    produto.unidade_medida or "",
+                    produto.quantidade,
+                    produto.quantidade_minima,
+                    float(produto.preco_custo),
+                    float(produto.preco_venda),
+                    margem,
+                    produto.ncm or "",
+                    produto.origem,
+                    "SIM" if produto.controlar_validade else "NÃO",
+                    (
+                        produto.data_validade.strftime("%d/%m/%Y")
+                        if produto.data_validade
+                        else ""
+                    ),
+                    produto.lote or "",
+                    fornecedor_nome,
+                    produto.total_vendido or 0,
+                    produto.quantidade_vendida or 0,
+                    (
+                        produto.ultima_venda.strftime("%d/%m/%Y %H:%M")
+                        if produto.ultima_venda
+                        else ""
+                    ),
+                    classificacao,
+                    "SIM" if produto.ativo else "NÃO",
+                    (
+                        produto.created_at.strftime("%d/%m/%Y %H:%M:%S")
+                        if produto.created_at
+                        else ""
+                    ),
+                ]
+            )
+
+        output.seek(0)
+        return (
+            output.getvalue(),
+            200,
             {
-                "success": True,
-                "csv": "\n".join(csv_lines),
-                "total_produtos": len(produtos),
-                "data_exportacao": datetime.now().isoformat(),
-            }
+                "Content-Type": "text/csv; charset=utf-8",
+                "Content-Disposition": f'attachment; filename=produtos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+            },
         )
 
     except Exception as e:
-        print(f"Erro ao exportar CSV: {str(e)}")
-        return jsonify({"error": f"Erro ao exportar CSV: {str(e)}"}), 500
+        current_app.logger.error(f"Erro ao exportar produtos: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao exportar produtos"}),
+            500,
+        )
+
+
+# ============================================
+# UTILITÁRIOS DE PRODUTO
+# ============================================
+
+
+def registrar_venda_produto(produto_id, quantidade, preco_venda, venda_id):
+    """Registra uma venda para o produto (atualiza estatísticas)"""
+    try:
+        produto = Produto.query.get(produto_id)
+        if not produto:
+            return
+
+        # Atualizar quantidade vendida
+        produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
+        produto.total_vendido = (produto.total_vendido or 0) + (
+            quantidade * preco_venda
+        )
+        produto.ultima_venda = datetime.utcnow()
+
+        # Atualizar classificação ABC
+        produto.classificacao_abc = calcular_classificacao_abc(produto)
+
+        produto.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Erro ao registrar venda do produto {produto_id}: {str(e)}"
+        )

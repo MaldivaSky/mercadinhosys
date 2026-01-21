@@ -1,106 +1,215 @@
+"""
+MercadinhoSys API - Factory Flask
+Arquitetura modular com blueprints por funcionalidade
+"""
+
 from flask import Flask, jsonify, request
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from flask_caching import Cache  # NOVO IMPORT
-from flask_mail import Mail  # NOVO IMPORT PARA EMAIL
+from flask_caching import Cache
+from flask_mail import Mail
 from app.models import db
 from config import config
 import os
+import logging
+from datetime import datetime
 
 # Inicializa as extensões
 migrate = Migrate()
 jwt = JWTManager()
-cache = Cache()  # NOVA INSTÂNCIA DO CACHE
-mail = Mail()  # NOVA INSTÂNCIA DO MAIL
+cache = Cache()
+mail = Mail()
 
-# No topo, após os imports existentes:
-from app.middleware.rate_limit import limiter
-from app.swagger import init_swagger
-from app.utils.logger import app_logger
+# Logger básico
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-def create_app(config_name="default"):
-
+def create_app(config_name=None):
     """Factory function para criar a aplicação Flask"""
-    app = Flask(__name__)
 
-    # Middleware global para liberar preflight CORS (OPTIONS) antes de qualquer autenticação
-    @app.before_request
-    def handle_options_preflight():
-        if request.method == 'OPTIONS':
-            return '', 204
+    if config_name is None:
+        config_name = os.getenv("FLASK_ENV", "default")
+
+    app = Flask(__name__)
 
     # Carrega configurações
     app.config.from_object(config[config_name])
 
-    # Configuração do Cache (mantenha essas linhas SE já existirem, senão adicione)
-    if "CACHE_TYPE" not in app.config:
-        app.config["CACHE_TYPE"] = "simple"  # Para desenvolvimento
-        app.config["CACHE_DEFAULT_TIMEOUT"] = 300  # 5 minutos
-
-    # Inicializa extensões com o app
+    # Inicializa extensões
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cache.init_app(app)  # INICIALIZA O CACHE
-    mail.init_app(app)  # INICIALIZA O MAIL
+    cache.init_app(app)
+    mail.init_app(app)
 
-    # Inicializa rate limiter
-    limiter.init_app(app)
+    # CORS
+    CORS(app, origins=app.config.get("CORS_ORIGINS", ["*"]))
 
-    # Inicializa Swagger
-    init_swagger(app)
+    # Cria pastas necessárias
+    for folder in ["instance", "instance/uploads", "logs", "backups"]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
 
-    # Log de inicialização
-    app_logger.info(
-        "Aplicação inicializada",
-        config=config_name,
-        environment=os.getenv("FLASK_ENV", "development"),
-    )
+    # ==================== REGISTRO DE BLUEPRINTS ====================
 
-    # Configuração CORS robusta para API
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": "*"}},
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    )
+    # Auth - IMPORTANTE: blueprint se chama 'auth_bp' no arquivo
+    try:
+        from app.routes.auth import auth_bp
 
-    # Cria pasta de uploads se não existir
-    upload_folder = app.config.get("UPLOAD_FOLDER", "uploads")
-    if not os.path.exists(upload_folder):
-        os.makedirs(upload_folder)
+        app.register_blueprint(auth_bp, url_prefix="/api/auth")
+        logger.info("✅ Blueprint auth registrado em /api/auth")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar auth: {e}")
 
-    # ✅ IMPORTAÇÃO SEGURA - Evita imports circulares
-    from app.routes.produtos import produtos_bp
-    from app.routes.fornecedores import fornecedores_bp
-    from app.routes.funcionarios import funcionarios_bp
-    from app.routes.clientes import clientes_bp
-    from app.routes.vendas import vendas_bp
-    from app.routes.pdv import pdv_bp  # NOVO - PDV otimizado
-    from app.routes.configuracao import config_bp
-    from app.routes.dashboard import dashboard_bp
-    from app.routes.relatorios import relatorios_bp
-    from app.routes.auth import auth_bp
-    from app.routes.despesas import despesas_bp
+    # Produtos
+    try:
+        from app.routes.produtos import produtos_bp
 
-    # 🎯 CADA BLUEPRINT COM SEU PRÓPRIO NAMESPACE
-    app.register_blueprint(auth_bp, url_prefix="/api/auth")
-    app.register_blueprint(produtos_bp, url_prefix="/api/produtos")
-    app.register_blueprint(fornecedores_bp, url_prefix="/api/fornecedores")
-    app.register_blueprint(funcionarios_bp, url_prefix="/api/funcionarios")
-    app.register_blueprint(clientes_bp, url_prefix="/api/clientes")
-    app.register_blueprint(vendas_bp, url_prefix="/api/vendas")
-    app.register_blueprint(pdv_bp, url_prefix="/api/pdv")  # NOVO - Rotas PDV
-    app.register_blueprint(config_bp, url_prefix="/api/config")
-    app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
-    app.register_blueprint(despesas_bp, url_prefix="/api/despesas")
-    app.register_blueprint(relatorios_bp, url_prefix="/api/relatorios")
+        app.register_blueprint(produtos_bp, url_prefix="/api/produtos")
+        logger.info("✅ Blueprint produtos registrado em /api/produtos")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar produtos: {e}")
 
-    # 📊 Rota de saúde expandida
-    @app.route("/api/health")
+    # Fornecedores
+    try:
+        from app.routes.fornecedores import fornecedores_bp
+
+        app.register_blueprint(fornecedores_bp, url_prefix="/api/fornecedores")
+        logger.info("✅ Blueprint fornecedores registrado em /api/fornecedores")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar fornecedores: {e}")
+
+    # Funcionarios
+    try:
+        from app.routes.funcionarios import funcionarios_bp
+
+        app.register_blueprint(funcionarios_bp, url_prefix="/api/funcionarios")
+        logger.info("✅ Blueprint funcionarios registrado em /api/funcionarios")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar funcionarios: {e}")
+
+    # Clientes
+    try:
+        from app.routes.clientes import clientes_bp
+
+        app.register_blueprint(clientes_bp, url_prefix="/api/clientes")
+        logger.info("✅ Blueprint clientes registrado em /api/clientes")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar clientes: {e}")
+
+    # Vendas
+    try:
+        from app.routes.vendas import vendas_bp
+
+        app.register_blueprint(vendas_bp, url_prefix="/api/vendas")
+        logger.info("✅ Blueprint vendas registrado em /api/vendas")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar vendas: {e}")
+
+    # PDV
+    try:
+        from app.routes.pdv import pdv_bp
+
+        app.register_blueprint(pdv_bp, url_prefix="/api/pdv")
+        logger.info("✅ Blueprint pdv registrado em /api/pdv")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar pdv: {e}")
+
+    # Configuração
+    try:
+        from app.routes.configuracao import configuracao_bp
+
+        app.register_blueprint(configuracao_bp, url_prefix="/api/config")
+        logger.info("✅ Blueprint configuracao registrado em /api/config")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar configuracao: {e}")
+
+    # Dashboard
+    try:
+        from app.routes.dashboard import dashboard_bp
+
+        app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
+        logger.info("✅ Blueprint dashboard registrado em /api/dashboard")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar dashboard: {e}")
+
+    # Despesas
+    try:
+        from app.routes.despesas import despesas_bp
+
+        app.register_blueprint(despesas_bp, url_prefix="/api/despesas")
+        logger.info("✅ Blueprint despesas registrado em /api/despesas")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar despesas: {e}")
+
+    # Relatórios
+    try:
+        from app.routes.relatorios import relatorios_bp
+
+        app.register_blueprint(relatorios_bp, url_prefix="/api/relatorios")
+        logger.info("✅ Blueprint relatorios registrado em /api/relatorios")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar relatorios: {e}")
+
+    # Dashboard Científico - verifica se existe a pasta
+    dashboard_cientifico_disponivel = False
+    try:
+        dashboard_cientifico_path = os.path.join(
+            os.path.dirname(__file__), "dashboard_cientifico"
+        )
+        if os.path.exists(dashboard_cientifico_path):
+            from flask import Blueprint
+
+            # Cria blueprint dinâmico para dashboard científico
+            cientifico_bp = Blueprint(
+                "cientifico", __name__, url_prefix="/api/cientifico"
+            )
+
+            # Importa o orchestrator do dashboard científico
+            from app.dashboard_cientifico.orchestration import DashboardOrchestrator
+
+            @cientifico_bp.route("/dashboard/<int:estabelecimento_id>", methods=["GET"])
+            def get_dashboard_cientifico(estabelecimento_id):
+                try:
+                    orchestrator = DashboardOrchestrator(estabelecimento_id)
+                    return jsonify(orchestrator.get_executive_dashboard(days=30))
+                except Exception as e:
+                    return jsonify({"error": str(e)}), 500
+
+            @cientifico_bp.route(
+                "/analise/<int:estabelecimento_id>/<string:tipo>", methods=["GET"]
+            )
+            def get_analise_detalhada(estabelecimento_id, tipo):
+                try:
+                    orchestrator = DashboardOrchestrator(estabelecimento_id)
+                    return jsonify(orchestrator.get_detailed_analysis(tipo, days=90))
+                except Exception as e:
+                    return jsonify({"error": str(e)}), 500
+
+            @cientifico_bp.route("/health", methods=["GET"])
+            def health_cientifico():
+                return jsonify(
+                    {
+                        "status": "operational",
+                        "module": "dashboard_cientifico",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+            app.register_blueprint(cientifico_bp)
+            dashboard_cientifico_disponivel = True
+            logger.info("✅ Dashboard Científico registrado em /api/cientifico")
+        else:
+            logger.info("ℹ️ Pasta dashboard_cientifico não encontrada")
+    except Exception as e:
+        logger.warning(f"⚠️ Dashboard Científico não disponível: {e}")
+
+    # ==================== ROTAS GLOBAIS ====================
+
+    # Rota de saúde
+    @app.route("/api/health", methods=["GET"])
     def health_check():
         from sqlalchemy import text
 
@@ -116,142 +225,75 @@ def create_app(config_name="default"):
                 "service": "mercadinhosys-api",
                 "version": "2.0.0",
                 "database": db_status,
-                "cache": "enabled" if app.config.get("CACHE_TYPE") else "disabled",
-                "endpoints": [
-                    "/api/produtos",
-                    "/api/vendas",
-                    "/api/clientes",
-                    "/api/funcionarios",
-                    "/api/fornecedores",
-                    "/api/config",
-                    "/api/dashboard",
-                    "/api/relatorios",
-                ],
+                "timestamp": datetime.now().isoformat(),
+                "dashboard_cientifico": (
+                    "disponível"
+                    if dashboard_cientifico_disponivel
+                    else "não disponível"
+                ),
             }
         )
 
-    # 🏠 Rota inicial informativa
-    @app.route("/")
+    # Rota inicial
+    @app.route("/", methods=["GET"])
+    @app.route("/api", methods=["GET"])
     def index():
         return jsonify(
             {
-                "message": "🚀 API do Sistema Mercadinho - Amazonas",
+                "message": "🚀 MercadinhoSys API - Sistema de Gestão para Mercados",
                 "version": "2.0.0",
-                "description": "Mercadosys - Sistema de gestão para pequenos e médios mercados do Amazonas.",
-                "empresa": "MaldivaSky Tech - Soluções em Tecnologia",
+                "status": "operational",
                 "endpoints": {
+                    "auth": "/api/auth",
                     "produtos": "/api/produtos",
                     "vendas": "/api/vendas",
-                    "vendas_dia": "/api/vendas/dia",
-                    "estatisticas": "/api/vendas/estatisticas",
-                    "clientes": "/api/clientes",
-                    "funcionarios": "/api/funcionarios",
-                    "fornecedores": "/api/fornecedores",
-                    "configuracoes": "/api/config",
                     "dashboard": "/api/dashboard",
+                    "pdv": "/api/pdv",
                     "relatorios": "/api/relatorios",
-                    "health": "/api/health",
+                    "cientifico": (
+                        "/api/cientifico" if dashboard_cientifico_disponivel else None
+                    ),
                 },
-                "status": "operacional",
-                "analytics": "dashboard científico de dados ativado",
+                "health_check": "/api/health",
             }
         )
 
-    # 📝 Rota específica para documentação do PDV
-    @app.route("/api/pdv")
-    def pdv_info():
-        return jsonify(
-            {
-                "modulo": "PDV - Ponto de Venda",
-                "rotas_principais": {
-                    "criar_venda": {"method": "POST", "endpoint": "/api/vendas/"},
-                    "vendas_dia": {"method": "GET", "endpoint": "/api/vendas/dia"},
-                    "listar_vendas": {"method": "GET", "endpoint": "/api/vendas/"},
-                    "detalhes_venda": {"method": "GET", "endpoint": "/api/vendas/<id>"},
-                    "cancelar_venda": {
-                        "method": "POST",
-                        "endpoint": "/api/vendas/<id>/cancelar",
-                    },
-                    "estatisticas": {
-                        "method": "GET",
-                        "endpoint": "/api/vendas/estatisticas",
-                    },
-                },
-                "fluxo_recomendado": "POST /api/vendas/ → GET /api/vendas/dia",
-            }
-        )
-
-    # 📚 Rota de documentação da API
-    @app.route("/api/docs")
-    def api_docs():
-        return jsonify({
-            "api": "MercadinhoSys API Documentation",
-            "version": "2.0.0",
-            "base_url": "http://localhost:5000/api",
-            "authentication": {
-                "type": "JWT Bearer Token",
-                "login": "POST /api/auth/login",
-                "refresh": "POST /api/auth/refresh",
-                "header": "Authorization: Bearer {token}"
-            },
-            "endpoints": {
-                "auth": {
-                    "login": {"method": "POST", "url": "/api/auth/login", "body": {"email": "string", "senha": "string"}},
-                    "refresh": {"method": "POST", "url": "/api/auth/refresh"},
-                    "validate": {"method": "GET", "url": "/api/auth/validate"},
-                    "logout": {"method": "POST", "url": "/api/auth/logout"},
-                    "profile": {"method": "GET", "url": "/api/auth/profile"}
-                },
-                "produtos": {
-                    "listar": {"method": "GET", "url": "/api/produtos/estoque"},
-                    "buscar": {"method": "GET", "url": "/api/produtos/search?q={termo}"},
-                    "barcode": {"method": "GET", "url": "/api/produtos/barcode/{codigo}"},
-                    "criar": {"method": "POST", "url": "/api/produtos/estoque"},
-                    "atualizar": {"method": "PUT", "url": "/api/produtos/estoque/{id}"},
-                    "deletar": {"method": "DELETE", "url": "/api/produtos/estoque/{id}"}
-                },
-                "vendas": {
-                    "listar": {"method": "GET", "url": "/api/vendas/"},
-                    "criar": {"method": "POST", "url": "/api/vendas/"},
-                    "dia": {"method": "GET", "url": "/api/vendas/dia"},
-                    "estatisticas": {"method": "GET", "url": "/api/vendas/estatisticas"},
-                    "detalhes": {"method": "GET", "url": "/api/vendas/{id}"},
-                    "cancelar": {"method": "POST", "url": "/api/vendas/{id}/cancelar"}
-                },
-                "clientes": {
-                    "listar": {"method": "GET", "url": "/api/clientes/"},
-                    "criar": {"method": "POST", "url": "/api/clientes/"},
-                    "buscar": {"method": "GET", "url": "/api/clientes/buscar?q={termo}"},
-                    "compras": {"method": "GET", "url": "/api/clientes/{id}/compras"}
-                },
-                "funcionarios": {
-                    "listar": {"method": "GET", "url": "/api/funcionarios/"},
-                    "criar": {"method": "POST", "url": "/api/funcionarios/"},
-                    "login_pin": {"method": "POST", "url": "/api/funcionarios/login"}
-                },
-                "dashboard": {
-                    "resumo": {"method": "GET", "url": "/api/dashboard/resumo"},
-                    "admin": {"method": "GET", "url": "/api/dashboard/painel-admin"}
-                }
-            },
-            "exemplo_uso": {
-                "1_login": "POST /api/auth/login com {email, senha}",
-                "2_obter_token": "Salvar o access_token retornado",
-                "3_usar_api": "Incluir header: Authorization: Bearer {token}",
-                "4_venda": "POST /api/vendas/ com dados da venda"
-            }
-        })
-
-    # 🛡️ Manipuladores de erro aprimorados
+    # Manipuladores de erro
     @app.errorhandler(404)
     def not_found(error):
         return (
-            jsonify({
-                "error": "Recurso não encontrado",
-                "message": "Verifique a URL ou consulte a documentação em /api/pdv",
-                "status_code": 404,
-            }),
+            jsonify(
+                {
+                    "error": "Recurso não encontrado",
+                    "message": "Consulte /api para ver endpoints disponíveis",
+                }
+            ),
             404,
         )
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        logger.error(f"Erro interno: {error}")
+        return (
+            jsonify(
+                {
+                    "error": "Erro interno",
+                    "message": "Serviço temporariamente indisponível",
+                }
+            ),
+            500,
+        )
+
+    # Log de inicialização
+    logger.info(
+        f"""
+    {'='*60}
+    MercadinhoSys API v2.0.0 INICIALIZADA
+    Ambiente: {config_name}
+    Banco: {app.config.get('SQLALCHEMY_DATABASE_URI', 'SQLite')}
+    Dashboard Científico: {'✅ Disponível' if dashboard_cientifico_disponivel else '❌ Não disponível'}
+    {'='*60}
+    """
+    )
 
     return app

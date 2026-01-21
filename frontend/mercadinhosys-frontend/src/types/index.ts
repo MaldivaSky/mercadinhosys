@@ -297,6 +297,35 @@ export interface MovimentacaoEstoque {
 }
 
 // Tipos para dashboard
+// Tipos para produtos estrela/lentos e vendas recentes
+export interface ProdutoEstrela {
+    id: number;
+    nome: string;
+    categoria?: string;
+    classificacao?: string;
+    margem?: number;
+    market_share?: number;
+    total_vendido?: number;
+    quantidade_vendida?: number;
+}
+
+export interface ProdutoLento {
+    id: number;
+    nome: string;
+    categoria?: string;
+    quantidade?: number;
+    total_vendido?: number;
+}
+
+export interface UltimaVenda {
+    id: number;
+    codigo: string;
+    cliente?: string;
+    forma_pagamento?: string;
+    total?: number;
+    data_venda?: string;
+    itens?: VendaItem[];
+}
 export interface DashboardMetrics {
     total_vendas_hoje: number;
     total_vendas_mes: number;
@@ -313,18 +342,28 @@ export interface DashboardMetrics {
         data: string;
         total: number;
     }>;
+    ultimas_vendas?: UltimaVenda[];
 }
 
 export interface DashboardDonoMetrics extends DashboardMetrics {
-    faturamento_anual: number;
-    margem_lucro_media: number;
-    top_produtos: Array<{
+    faturamento_hoje: number;
+    faturamento_mes: number;
+    clientes_hoje: number;
+    alertas_criticos: number;
+    status_operacional: string;
+    meta_diaria: number;
+    atingimento_meta: number;
+    decisao_do_dia: Record<string, unknown>;
+    // Propriedades extras do dashboard dono
+    faturamento_anual?: number;
+    margem_lucro_media?: number;
+    top_produtos?: Array<{
         produto_id: number;
         nome: string;
         quantidade_vendida: number;
         total_vendido: number;
     }>;
-    top_clientes: Array<{
+    top_clientes?: Array<{
         cliente_id: number;
         nome: string;
         total_compras: number;
