@@ -696,9 +696,9 @@ def enviar_cupom_email():
         }
         
         estabelecimento_data = {
-            "nome": estabelecimento.nome,
+            "nome": estabelecimento.nome_fantasia,
             "cnpj": estabelecimento.cnpj,
-            "endereco": estabelecimento.endereco,
+            "endereco": estabelecimento.endereco_completo(),
             "telefone": estabelecimento.telefone,
             "email": estabelecimento.email,
         }

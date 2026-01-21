@@ -34,6 +34,17 @@ def create_app(config_name=None):
 
     app = Flask(__name__)
 
+    # Handler global para erros 500
+    @app.errorhandler(500)
+    def handle_500_error(e):
+        import traceback
+        logger.error(f"[ERRO 500] {e}\n{traceback.format_exc()}")
+        return jsonify({
+            "success": False,
+            "error": "Erro interno no servidor",
+            "message": str(e),
+        }), 500
+
     # Carrega configurações
     app.config.from_object(config[config_name])
 

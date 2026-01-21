@@ -155,6 +155,7 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
     senha_hash = db.Column(db.String(255), nullable=False)
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
+    status = db.Column(db.String(20), default="ativo")
 
     # PROPRIEDADES NECESSÁRIAS PARA FLASK-LOGIN
     @property
@@ -1100,6 +1101,7 @@ class LoginHistory(db.Model):
 
     success = db.Column(db.Boolean, default=False)
     observacoes = db.Column(db.Text)
+    token_hash = db.Column(db.Integer)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
