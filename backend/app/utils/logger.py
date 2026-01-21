@@ -80,5 +80,15 @@ class StructuredLogger:
         self.logger.debug(message, extra=kwargs)
 
 
+def setup_logger(name="mercadinhosys"):
+    """
+    Função de compatibilidade (Adapter).
+    Permite que o restante do sistema use este logger avançado
+    chamando a função antiga 'setup_logger'.
+    """
+    # Retorna o objeto logger nativo que está dentro da sua classe
+    return app_logger.logger
+
+
 # Instância global do logger
 app_logger = StructuredLogger()
