@@ -794,3 +794,23 @@ def formatar_telefone(telefone):
     elif len(nums) == 10:
         return f"({nums[:2]}) {nums[2:6]}-{nums[6:]}"
     return telefone
+
+
+def calcular_idade(data_nascimento):
+    """Calcula idade a partir da data de nascimento (string ou data)"""
+    if not data_nascimento:
+        return 0
+
+    try:
+        if isinstance(data_nascimento, str):
+            nasc = datetime.strptime(data_nascimento, "%Y-%m-%d")
+        else:
+            nasc = data_nascimento
+
+        hoje = datetime.today()
+        idade = (
+            hoje.year - nasc.year - ((hoje.month, hoje.day) < (nasc.month, nasc.day))
+        )
+        return idade
+    except Exception:
+        return 0
