@@ -81,8 +81,21 @@ def login():
             )
 
             login_history.observacoes = "Usuário não encontrado"
+
+            try:
+            # Tentar encontrar algum estabelecimento para associar
+                estabelecimento_default = Estabelecimento.query.first()
+                if estabelecimento_default:
+                    login_history.estabelecimento_id = estabelecimento_default.id
+            except Exception:
+                pass  # Ignora se não conseguir
+
             db.session.add(login_history)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()  # 🔥 IMPORTANTE: rollback em caso de erro
+                current_app.logger.error(f"Erro ao salvar histórico de login: {str(e)}")
 
             return (
                 jsonify(
