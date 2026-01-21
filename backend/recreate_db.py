@@ -11,7 +11,7 @@ from app.models import (
     Cliente,
     Venda,
     VendaItem,
-    Categoria,
+    CategoriaProduto,
     MovimentacaoEstoque,
 )
 
