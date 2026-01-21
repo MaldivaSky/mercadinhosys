@@ -219,29 +219,56 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str) -> bool:
 </body>
 </html>
         """
-        
+
         # Renderizar template
         html_content = render_template_string(
             html_template,
             venda=venda_data['venda'],
             comprovante=venda_data['comprovante']
         )
-        
+
         # Criar mensagem
         msg = Message(
             subject=f"Cupom Fiscal - {venda_data['venda']['codigo']}",
             sender=current_app.config.get('MAIL_DEFAULT_SENDER', 'noreply@mercadinhosys.com'),
             recipients=[cliente_email]
         )
-        
+
         msg.html = html_content
-        
+
         # Enviar
         mail.send(msg)
-        
+
         current_app.logger.info(f"✅ Cupom enviado para {cliente_email} - Venda {venda_data['venda']['codigo']}")
         return True
-        
+
     except Exception as e:
         current_app.logger.error(f"❌ Erro ao enviar cupom: {str(e)}")
+        return False
+
+
+def enviar_email(to, subject, template):
+    """
+    Função genérica de compatibilidade para envio de emails.
+    O sistema antigo tenta importar isso.
+    """
+    try:
+        msg = Message(
+            subject=subject,
+            sender=current_app.config.get(
+                "MAIL_DEFAULT_SENDER", "noreply@mercadinhosys.com"
+            ),
+            recipients=[to],
+        )
+        # Se o template for HTML, usa html, senão usa body
+        if "<html" in template:
+            msg.html = template
+        else:
+            msg.body = template
+
+        mail.send(msg)
+        return True
+    except Exception as e:
+        # Usamos print ou logger aqui para não quebrar se o logger não estiver pronto
+        print(f"Erro ao enviar email genérico: {e}")
         return False
