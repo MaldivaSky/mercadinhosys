@@ -54,6 +54,10 @@ def create_app(config_name=None):
     jwt.init_app(app)
     cache.init_app(app)
     mail.init_app(app)
+    
+    # Inicializa Flask-Login
+    from app.models import login_manager
+    login_manager.init_app(app)
 
     # CORS
     CORS(app, origins=app.config.get("CORS_ORIGINS", ["*"]))
