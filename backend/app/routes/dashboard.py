@@ -2,7 +2,6 @@
 Dashboard Routes - Blueprint limpo e simples
 """
 
-# AQUI ESTAVA O ERRO: Garantimos que é 'request' e não 'requestzer'
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.dashboard_cientifico import DashboardOrchestrator
@@ -22,14 +21,12 @@ def get_establishment_id():
     return funcionario.estabelecimento_id
 
 
-# --- ROTA CIENTÍFICA (ESSENCIAL PARA O FRONTEND) ---
 @dashboard_bp.route("/cientifico", methods=["GET"])
 @jwt_required()
 def dashboard_cientifico():
-    """Endpoint para o Dashboard Científico (React)"""
+    """Endpoint para o Dashboard Científico"""
     try:
         estabelecimento_id = get_establishment_id()
-        # Fallback seguro
         try:
             orchestrator = DashboardOrchestrator(estabelecimento_id)
             if hasattr(orchestrator, "get_scientific_dashboard"):
@@ -40,7 +37,6 @@ def dashboard_cientifico():
             logger.warning(f"Orquestrador indisponível: {e}")
             data = {}
 
-        # Estrutura Mínima para o Frontend não travar
         response = {
             "success": True,
             "usuario": {"nome": "Admin", "role": "admin", "acesso_avancado": True},
@@ -53,7 +49,6 @@ def dashboard_cientifico():
 
 
 def _get_mock_data():
-    """Dados falsos para evitar tela branca"""
     return {
         "hoje": {
             "total_vendas": 0,
@@ -95,20 +90,15 @@ def _get_mock_data():
     }
 
 
-# Endpoints principais existentes
 @dashboard_bp.route("/executivo", methods=["GET"])
 @jwt_required()
 def dashboard_executivo():
-    """Dashboard executivo - Resumo para gestão"""
     try:
         estabelecimento_id = get_establishment_id()
         days = request.args.get("days", default=30, type=int)
-
         orchestrator = DashboardOrchestrator(estabelecimento_id)
         dashboard_data = orchestrator.get_executive_dashboard(days)
-
         return jsonify(dashboard_data)
-
     except Exception as e:
         logger.error(f"Erro no dashboard executivo: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
