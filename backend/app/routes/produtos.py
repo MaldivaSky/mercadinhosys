@@ -4,6 +4,7 @@
 
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
+from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import re
@@ -18,6 +19,7 @@ from app.models import (
     PedidoCompraItem,
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
+from app.decorators.decorator_jwt import funcionario_required
 
 produtos_bp = Blueprint("produtos", __name__)
 
@@ -831,8 +833,8 @@ def atualizar_preco(id):
         )
 
 
-@produtos_bp.route("/busca", methods=["GET"])
-@login_required
+@produtos_bp.route("/search", methods=["GET"])
+@funcionario_required
 def buscar_produtos():
     """Busca rápida de produtos para autocomplete (PDV, etc.)"""
     try:
@@ -844,8 +846,12 @@ def buscar_produtos():
         if not termo or len(termo) < 1:
             return jsonify({"success": True, "produtos": []})
 
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+
         query = Produto.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         if apenas_ativos:
