@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 basedir = Path(__file__).parent.absolute()
+db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
 
 
 class Config:
@@ -20,13 +21,10 @@ class Config:
     elif SQLITE_DB:
         SQLALCHEMY_DATABASE_URI = SQLITE_DB
     else:
-        db_path = basedir / "instance" / "mercadinho.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
+        SQLALCHEMY_DATABASE_URI = "sqlite:///c:/temp/mercadinho_instance/mercadinho.db"
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # CORS
     cors_origins_str = os.environ.get("CORS_ORIGINS", "")
     CORS_ORIGINS = (
         [origin.strip() for origin in cors_origins_str.split(",")]
@@ -34,14 +32,12 @@ class Config:
         else []
     )
 
-    # Email
     MAIL_SERVER = os.environ.get("MAIL_SERVER")
     MAIL_PORT = int(os.environ.get("MAIL_PORT", 587))
     MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
 
-    # JWT
     JWT_ACCESS_TOKEN_EXPIRES = 3600
 
 
@@ -53,7 +49,6 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
-    # Em produção, use apenas as origens definidas no .env
 
 
 config = {

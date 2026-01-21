@@ -114,8 +114,7 @@ def listar_funcionarios():
             "salario": Funcionario.salario,
             "data_admissao": Funcionario.data_admissao,
             "nivel_acesso": Funcionario.nivel_acesso,
-            "created_at": Funcionario.created_at,
-            "updated_at": Funcionario.updated_at,
+            "created_at": Funcionario.data_cadastro,
         }
 
         campo_ordenacao = campos_ordenacao.get(ordenar_por, Funcionario.nome)
@@ -746,7 +745,7 @@ def detalhes_funcionario(id):
             "telefone": funcionario.telefone,
             "celular": funcionario.celular,
             "email": funcionario.email,
-            "endereco": funcionario.endereco,
+            "endereco": funcionario.endereco_completo(),
             "cargo": funcionario.cargo,
             "salario": float(funcionario.salario) if funcionario.salario else None,
             "data_admissao": (
@@ -763,10 +762,7 @@ def detalhes_funcionario(id):
             "nivel_acesso": funcionario.nivel_acesso,
             "ativo": funcionario.ativo,
             "created_at": (
-                funcionario.created_at.isoformat() if funcionario.created_at else None
-            ),
-            "updated_at": (
-                funcionario.updated_at.isoformat() if funcionario.updated_at else None
+                funcionario.data_cadastro.isoformat() if funcionario.data_cadastro else None
             ),
             "estatisticas": {
                 "total_vendas": total_vendas,

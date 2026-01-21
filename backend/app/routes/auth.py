@@ -27,8 +27,10 @@ def login():
     """
     try:
         data = request.get_json()
+        current_app.logger.info(f"[LOGIN] Payload recebido: {data}")
 
         if not data:
+            current_app.logger.warning("[LOGIN] Nenhum dado recebido no body da requisição.")
             return (
                 jsonify(
                     {
@@ -46,7 +48,10 @@ def login():
         dispositivo = request.headers.get("User-Agent", "Desconhecido")
         ip_address = request.remote_addr
 
+        current_app.logger.info(f"[LOGIN] identifier: {identifier} | senha: {'*' * len(senha)}")
+
         if not identifier or not senha:
+            current_app.logger.warning("[LOGIN] Username/email ou senha não enviados.")
             return (
                 jsonify(
                     {
@@ -60,11 +65,15 @@ def login():
 
         # Buscar funcionário por username OU email (sem estabelecimento_id)
         funcionario = Funcionario.query.filter(
-            db.or_(
+            db.or_( 
                 Funcionario.username == identifier,
                 db.func.lower(Funcionario.email) == identifier.lower(),
             )
         ).first()
+        if funcionario:
+            current_app.logger.info(f"[LOGIN] Funcionário encontrado: id={funcionario.id}, username={funcionario.username}, email={funcionario.email}, ativo={funcionario.ativo}, status={getattr(funcionario, 'status', 'N/A')}")
+        else:
+            current_app.logger.warning(f"[LOGIN] Nenhum funcionário encontrado para identifier: {identifier}")
 
         # Registrar tentativa de login (sucesso ou falha)
         login_history = LoginHistory(
@@ -82,21 +91,26 @@ def login():
 
             login_history.observacoes = "Usuário não encontrado"
 
-            try:
             # Tentar encontrar algum estabelecimento para associar
+            try:
                 estabelecimento_default = Estabelecimento.query.first()
                 if estabelecimento_default:
                     login_history.estabelecimento_id = estabelecimento_default.id
             except Exception:
                 pass  # Ignora se não conseguir
 
-            db.session.add(login_history)
-            try:
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()  # 🔥 IMPORTANTE: rollback em caso de erro
-                current_app.logger.error(f"Erro ao salvar histórico de login: {str(e)}")
+            # Só salva se estabelecimento_id não for None
+            if login_history.estabelecimento_id is not None:
+                db.session.add(login_history)
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()  # 🔥 IMPORTANTE: rollback em caso de erro
+                    current_app.logger.error(f"Erro ao salvar histórico de login: {str(e)}")
+            else:
+                current_app.logger.warning("Não foi possível registrar histórico de login: nenhum estabelecimento encontrado.")
 
+            current_app.logger.warning("[LOGIN] Retornando 401 - Credenciais inválidas (usuário não encontrado)")
             return (
                 jsonify(
                     {
@@ -115,7 +129,7 @@ def login():
         # Verificar senha
         if not funcionario.check_senha(senha):
             current_app.logger.warning(
-                f"Senha incorreta para: {identifier} (ID: {funcionario.id}) "
+                f"[LOGIN] Senha incorreta para: {identifier} (ID: {funcionario.id}) "
                 f"de IP: {ip_address}"
             )
 
@@ -123,6 +137,7 @@ def login():
             db.session.add(login_history)
             db.session.commit()
 
+            current_app.logger.warning("[LOGIN] Retornando 401 - Credenciais inválidas (senha incorreta)")
             return (
                 jsonify(
                     {
@@ -197,7 +212,7 @@ def login():
             "username": funcionario.username,
             "nome": funcionario.nome,
             "estabelecimento_id": funcionario.estabelecimento_id,
-            "estabelecimento_nome": estabelecimento.nome,
+            "estabelecimento_nome": estabelecimento.nome_fantasia,
             "status": funcionario.status,
             "role": funcionario.role,
             "cargo": funcionario.cargo,
@@ -232,7 +247,7 @@ def login():
 
         current_app.logger.info(
             f"Login bem-sucedido: {identifier} ({funcionario.nome}) "
-            f"Estabelecimento: {estabelecimento.nome} "
+            f"Estabelecimento: {estabelecimento.nome_fantasia} "
             f"de IP: {ip_address}"
         )
 
@@ -255,7 +270,6 @@ def login():
                             "cpf": funcionario.cpf,
                             "telefone": funcionario.telefone,
                             "foto_url": funcionario.foto_url,
-                            "comissao_percentual": funcionario.comissao_percentual,
                             "permissoes": funcionario.permissoes,
                             "data_admissao": (
                                 funcionario.data_admissao.isoformat()
@@ -263,10 +277,10 @@ def login():
                                 else None
                             ),
                             "estabelecimento_id": funcionario.estabelecimento_id,
-                            "estabelecimento_nome": estabelecimento.nome,
+                            "estabelecimento_nome": estabelecimento.nome_fantasia,
                             "created_at": (
-                                funcionario.created_at.isoformat()
-                                if funcionario.created_at
+                                funcionario.data_cadastro.isoformat()
+                                if funcionario.data_cadastro
                                 else None
                             ),
                         },
@@ -278,11 +292,11 @@ def login():
                         },
                         "estabelecimento": {
                             "id": estabelecimento.id,
-                            "nome": estabelecimento.nome,
+                            "nome": estabelecimento.nome_fantasia,
                             "cnpj": estabelecimento.cnpj,
                             "telefone": estabelecimento.telefone,
                             "email": estabelecimento.email,
-                            "endereco": estabelecimento.endereco,
+                            "endereco": estabelecimento.endereco_completo(),
                             "cidade": estabelecimento.cidade,
                             "estado": estabelecimento.estado,
                         },
@@ -587,7 +601,6 @@ def get_profile():
             "role": funcionario.role,
             "status": funcionario.status,
             "ativo": funcionario.ativo,
-            "comissao_percentual": funcionario.comissao_percentual,
             "data_admissao": (
                 funcionario.data_admissao.isoformat()
                 if funcionario.data_admissao
@@ -601,11 +614,11 @@ def get_profile():
             "permissoes": funcionario.permissoes,
             "estabelecimento": {
                 "id": estabelecimento.id if estabelecimento else None,
-                "nome": estabelecimento.nome if estabelecimento else None,
+                "nome": estabelecimento.nome_fantasia if estabelecimento else None,
                 "cnpj": estabelecimento.cnpj if estabelecimento else None,
                 "telefone": estabelecimento.telefone if estabelecimento else None,
                 "email": estabelecimento.email if estabelecimento else None,
-                "endereco": estabelecimento.endereco if estabelecimento else None,
+                "endereco": estabelecimento.endereco_completo() if estabelecimento else None,
                 "cidade": estabelecimento.cidade if estabelecimento else None,
                 "estado": estabelecimento.estado if estabelecimento else None,
             },
@@ -700,7 +713,6 @@ def update_profile():
             funcionario.set_senha(data["nova_senha"])
             updated_fields.append("senha")
 
-        funcionario.updated_at = datetime.utcnow()
         db.session.commit()
 
         return (
@@ -714,7 +726,6 @@ def update_profile():
                         "email": funcionario.email,
                         "telefone": funcionario.telefone,
                         "foto_url": funcionario.foto_url,
-                        "updated_at": funcionario.updated_at.isoformat(),
                     },
                 }
             ),
