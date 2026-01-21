@@ -1412,7 +1412,7 @@ class RelatorioAgendado(db.Model):
 
 ItemVenda = VendaItem
 
-print("✅ Models.py carregado com todas as classes necessárias!")
+print("Models.py carregado com todas as classes necessarias!")
 
 
 # ============================================

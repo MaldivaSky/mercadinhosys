@@ -756,7 +756,7 @@ def excluir_cliente(id):
         )
 
 
-@clientes_bp.route("/busca", methods=["GET"])
+@clientes_bp.route("/buscar", methods=["GET"])
 @login_required
 def buscar_clientes():
     """Busca rápida de clientes para autocomplete"""

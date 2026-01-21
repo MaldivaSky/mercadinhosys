@@ -1,7 +1,7 @@
 // src/api/apiConfig.ts
 
 export const API_CONFIG = {
-    // COLOQUE AQUI O SEU LINK DO RENDER (SEM BARRA NO FINAL)
-    BASE_URL: 'https://mercadinhosys.onrender.com/api',
+    // URL do backend local para desenvolvimento
+    BASE_URL: 'http://127.0.0.1:5000/api',
     TIMEOUT: 30000,
 } as const;
