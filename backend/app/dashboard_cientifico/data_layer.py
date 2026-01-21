@@ -34,12 +34,12 @@ class DataLayer:
             """
             SELECT 
                 COUNT(*) as total_vendas,
-                COALESCE(SUM(valor_total), 0) as total_faturado,
-                COALESCE(AVG(valor_total), 0) as ticket_medio,
+                COALESCE(SUM(total), 0) as total_faturado,
+                COALESCE(AVG(total), 0) as ticket_medio,
                 COUNT(DISTINCT DATE(data_venda)) as dias_com_venda,
-                MAX(valor_total) as maior_venda,
-                MIN(valor_total) as menor_venda
-            FROM venda 
+                MAX(total) as maior_venda,
+                MIN(total) as menor_venda
+            FROM vendas 
             WHERE estabelecimento_id = :est_id 
                 AND data_venda >= :data_inicio 
                 AND status = 'finalizada'
@@ -74,8 +74,8 @@ class DataLayer:
             db.session.query(
                 func.date(Venda.data_venda).label("data"),
                 func.count(Venda.id).label("quantidade"),
-                func.sum(Venda.valor_total).label("total"),
-                func.avg(Venda.valor_total).label("ticket_medio"),
+                func.sum(Venda.total).label("total"),
+                func.avg(Venda.total).label("ticket_medio"),
             )
             .filter(
                 Venda.estabelecimento_id == estabelecimento_id,
@@ -105,16 +105,16 @@ class DataLayer:
         # Query única com índices
         query = text(
             """
-            SELECT 
+            SELECT
                 COUNT(*) as total_produtos,
-                SUM(quantidade_estoque) as total_unidades,
-                SUM(quantidade_estoque * preco_venda) as valor_total,
-                SUM(quantidade_estoque * preco_custo) as custo_total,
-                AVG(quantidade_estoque) as estoque_medio,
-                SUM(CASE WHEN quantidade_estoque < 10 THEN 1 ELSE 0 END) as baixo_estoque,
-                SUM(CASE WHEN quantidade_estoque = 0 THEN 1 ELSE 0 END) as sem_estoque
-            FROM produto 
-            WHERE estabelecimento_id = :est_id 
+                SUM(quantidade) as total_unidades,
+                SUM(quantidade * preco_venda) as valor_total,
+                SUM(quantidade * preco_custo) as custo_total,
+                AVG(quantidade) as estoque_medio,
+                SUM(CASE WHEN quantidade < 10 THEN 1 ELSE 0 END) as baixo_estoque,
+                SUM(CASE WHEN quantidade = 0 THEN 1 ELSE 0 END) as sem_estoque
+            FROM produtos
+            WHERE estabelecimento_id = :est_id
                 AND ativo = TRUE
         """
         )
@@ -146,10 +146,10 @@ class DataLayer:
         # Usando subquery para performance
         results = (
             db.session.query(
+                Produto.id,
                 Produto.nome,
-                Produto.categoria,
                 func.sum(ItemVenda.quantidade).label("quantidade_vendida"),
-                func.sum(ItemVenda.subtotal).label("faturamento"),
+                func.sum(ItemVenda.total_item).label("faturamento"),
             )
             .join(ItemVenda, ItemVenda.produto_id == Produto.id)
             .join(Venda, Venda.id == ItemVenda.venda_id)
@@ -158,16 +158,17 @@ class DataLayer:
                 Venda.data_venda >= data_inicio,
                 Venda.status == "finalizada",
             )
-            .group_by(Produto.id, Produto.nome, Produto.categoria)
-            .order_by(func.sum(ItemVenda.subtotal).desc())
+            .group_by(Produto.id, Produto.nome)
+            .order_by(func.sum(ItemVenda.total_item).desc())
             .limit(limit)
             .all()
         )
 
         return [
             {
+                "id": r.id,
                 "nome": r.nome,
-                "categoria": r.categoria,
+                "categoria": "Geral",  # Temporário
                 "quantidade_vendida": int(r.quantidade_vendida or 0),
                 "faturamento": float(r.faturamento or 0),
             }
@@ -184,14 +185,14 @@ class DataLayer:
         # Query única para múltiplas métricas
         query = text(
             """
-            SELECT 
+            SELECT
                 COUNT(DISTINCT cliente_id) as clientes_unicos,
-                AVG(valor_total) as ticket_medio_cliente,
-                MAX(valor_total) as maior_compra,
+                AVG(total) as ticket_medio_cliente,
+                MAX(total) as maior_compra,
                 COUNT(*) / COUNT(DISTINCT cliente_id) as frequencia_media
-            FROM venda 
-            WHERE estabelecimento_id = :est_id 
-                AND data_venda >= :data_inicio 
+            FROM vendas
+            WHERE estabelecimento_id = :est_id
+                AND data_venda >= :data_inicio
                 AND status = 'finalizada'
                 AND cliente_id IS NOT NULL
         """

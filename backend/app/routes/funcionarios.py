@@ -397,7 +397,7 @@ def estatisticas_funcionarios():
             db.session.query(
                 Funcionario,
                 func.count(Venda.id).label("total_vendas"),
-                func.sum(Venda.valor_total).label("valor_total_vendas"),
+                func.sum(Venda.total).label("valor_total_vendas"),
             )
             .join(Venda, Funcionario.id == Venda.funcionario_id)
             .group_by(Funcionario.id)
@@ -538,8 +538,8 @@ def relatorio_vendas_funcionarios():
                 Funcionario.nome,
                 Funcionario.cargo,
                 func.count(Venda.id).label("total_vendas"),
-                func.sum(Venda.valor_total).label("valor_total_vendas"),
-                func.avg(Venda.valor_total).label("ticket_medio"),
+                func.sum(Venda.total).label("valor_total_vendas"),
+                func.avg(Venda.total).label("ticket_medio"),
             )
             .join(Venda, Funcionario.id == Venda.funcionario_id)
             .filter(
@@ -548,7 +548,7 @@ def relatorio_vendas_funcionarios():
                 <= data_fim + timedelta(days=1),  # Incluir todo o dia final
             )
             .group_by(Funcionario.id, Funcionario.nome, Funcionario.cargo)
-            .order_by(func.sum(Venda.valor_total).desc())
+            .order_by(func.sum(Venda.total).desc())
             .all()
         )
 
@@ -564,7 +564,7 @@ def relatorio_vendas_funcionarios():
         )
 
         valor_total_periodo = (
-            db.session.query(func.sum(Venda.valor_total))
+            db.session.query(func.sum(Venda.total))
             .filter(
                 Venda.created_at >= data_inicio,
                 Venda.created_at <= data_fim + timedelta(days=1),
@@ -676,7 +676,7 @@ def detalhes_funcionario(id):
 
         # Valor total de vendas
         valor_total_vendas = (
-            db.session.query(func.sum(Venda.valor_total))
+            db.session.query(func.sum(Venda.total))
             .filter(Venda.funcionario_id == id)
             .scalar()
             or 0.0
@@ -711,7 +711,7 @@ def detalhes_funcionario(id):
             ).count()
 
             valor_mes = (
-                db.session.query(func.sum(Venda.valor_total))
+                db.session.query(func.sum(Venda.total))
                 .filter(
                     Venda.funcionario_id == id,
                     Venda.created_at >= mes_data,

@@ -201,14 +201,46 @@ class PracticalModels:
                 f"{len(category_c)} produtos (Classe C) representam apenas 5% do valor - oportunidade para reduzir variedade"
             )
 
+        # Combinar todos os produtos classificados
+        all_products = []
+        for product in category_a + category_b + category_c:
+            all_products.append({
+                "id": product.get("id", 0),  # Adicionar ID se disponível
+                "nome": product.get("nome", ""),
+                "faturamento": product.get("valor_total", 0),
+                "percentual_acumulado": product.get("cumulative_percent", 0),
+                "classificacao": "A" if product in category_a else ("B" if product in category_b else "C"),
+                "quantidade_vendida": product.get("quantidade", 0),
+                "margem": 0  # Placeholder, pode ser calculado depois
+            })
+
+        # Calcular resumo por classe
+        resumo = {
+            "A": {
+                "quantidade": len(category_a),
+                "faturamento_total": sum(p.get("valor_total", 0) for p in category_a),
+                "percentual": (sum(p.get("valor_total", 0) for p in category_a) / total_value * 100) if total_value > 0 else 0
+            },
+            "B": {
+                "quantidade": len(category_b),
+                "faturamento_total": sum(p.get("valor_total", 0) for p in category_b),
+                "percentual": (sum(p.get("valor_total", 0) for p in category_b) / total_value * 100) if total_value > 0 else 0
+            },
+            "C": {
+                "quantidade": len(category_c),
+                "faturamento_total": sum(p.get("valor_total", 0) for p in category_c),
+                "percentual": (sum(p.get("valor_total", 0) for p in category_c) / total_value * 100) if total_value > 0 else 0
+            }
+        }
+
         return {
+            "classificacao": "ABC Analysis",
+            "produtos": all_products,
+            "resumo": resumo,
+            "pareto_80_20": resumo["A"]["percentual"] >= 75,  # Verificar se segue lei de Pareto
             "total_value": float(total_value),
             "total_products": len(products),
-            "category_a": category_a[:10],  # Top 10 da classe A
-            "category_b": category_b[:5],  # Top 5 da classe B
-            "category_c": category_c[:5],  # Top 5 da classe C
             "insights": insights,
-            "pareto_summary": f"{len(category_a)} produtos → 80% do valor",
         }
 
     @staticmethod

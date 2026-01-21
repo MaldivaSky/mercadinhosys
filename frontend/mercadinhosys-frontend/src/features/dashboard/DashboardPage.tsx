@@ -8,7 +8,7 @@ import {
   Layers, Cpu, Brain, Database, Server, TrendingUp as TrendingUpIcon,
   Eye, EyeOff, MoreVertical, Settings, DollarSign as DollarIcon,
   Wallet, TrendingDown as TrendingDownIcon, Box, ChartBar,
-  Target as TargetIcon, AlertCircle, TrendingUp as TrendingUpFill
+  Target as TargetIcon, AlertCircle, TrendingUp as TrendingUpFill, GitMerge
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -226,6 +226,7 @@ const DashboardPage: React.FC = () => {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
     'curva-abc': true,
     'analise-financeira': true,
+    'analise-temporal': true,
     'insights': true
   });
   const [selectedABC, setSelectedABC] = useState<'A' | 'B' | 'C' | 'all'>('all');
@@ -241,7 +242,7 @@ const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/dashboard/cientifico');
-      setData(response.data);
+      setData(response.data.data);
     } catch (err) {
       setError('Erro ao carregar dados científicos');
     } finally {
@@ -295,7 +296,16 @@ const DashboardPage: React.FC = () => {
     </div>
   );
 
-  const { hoje, mes, analise_produtos, analise_financeira, analise_temporal, insights_cientificos } = data.data;
+  const { hoje, mes, analise_produtos, analise_financeira, insights_cientificos = {
+    correlacoes: [],
+    previsoes: [],
+    recomendacoes_otimizacao: []
+  }, analise_temporal = {
+    tendencia_vendas: [],
+    sazonalidade: [],
+    comparacao_meses: [],
+    previsao_proxima_semana: []
+  } } = data;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
@@ -344,35 +354,35 @@ const DashboardPage: React.FC = () => {
         {[
           {
             title: 'Margem Líquida',
-            value: `${mes.margem_lucro.toFixed(1)}%`,
+            value: `${(mes?.margem_lucro || 0).toFixed(1)}%`,
             change: hoje.crescimento_vs_ontem,
             icon: TrendingUpFill,
             color: 'bg-gradient-to-r from-green-500 to-emerald-600',
-            details: `Lucro: R$ ${mes.lucro_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            details: `Lucro: R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           },
           {
             title: 'ROI Mensal',
-            value: `${mes.roi_mensal.toFixed(1)}%`,
+            value: `${(mes?.roi_mensal || 0).toFixed(1)}%`,
             change: 5.2,
             icon: TrendingUp,
             color: 'bg-gradient-to-r from-blue-500 to-cyan-600',
-            details: `Investido: R$ ${mes.investimentos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            details: `Investido: R$ ${(mes?.investimentos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           },
           {
             title: 'Ticket Médio',
-            value: `R$ ${hoje.ticket_medio.toFixed(2)}`,
+            value: `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
             change: 8.7,
             icon: DollarIcon,
             color: 'bg-gradient-to-r from-purple-500 to-pink-600',
-            details: `${hoje.clientes_atendidos} clientes atendidos`
+            details: `${hoje?.clientes_atendidos || 0} clientes atendidos`
           },
           {
             title: 'Ponto de Equilíbrio',
-            value: `${analise_financeira.indicadores.ponto_equilibrio.toFixed(1)}%`,
+            value: `${(analise_financeira.indicadores?.ponto_equilibrio || 0).toFixed(1)}%`,
             change: -2.3,
             icon: TargetIcon,
             color: 'bg-gradient-to-r from-orange-500 to-red-600',
-            details: `Margem de Segurança: ${analise_financeira.indicadores.margem_seguranca.toFixed(1)}%`
+            details: `Margem de Segurança: ${(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%`
           }
         ].map((kpi, idx) => (
           <div
@@ -415,7 +425,7 @@ const DashboardPage: React.FC = () => {
             <ChartBar className="w-8 h-8 text-blue-600" />
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
-              <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos.curva_abc.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
+              <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -449,14 +459,14 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {expandedCards['curva-abc'] && (
+        {expandedCards['curva-abc'] && analise_produtos?.curva_abc && (
           <div className="p-6 animate-fadeIn">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* GRÁFICO DE PARETO */}
               <div className="lg:col-span-2">
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analise_produtos.curva_abc.produtos.slice(0, 15)}>
+                    <BarChart data={analise_produtos?.curva_abc?.produtos?.slice(0, 15) || []}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
                       <YAxis yAxisId="left" />
@@ -467,7 +477,7 @@ const DashboardPage: React.FC = () => {
                             <p className="font-bold text-gray-900">{label}</p>
                             <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             <p className="text-sm text-gray-600">Classificação: <span className={`font-bold ${getABCColor(payload?.[1]?.payload?.classificacao)}`}>{payload?.[1]?.payload?.classificacao}</span></p>
-                            <p className="text-sm text-gray-600">Margem: {payload?.[1]?.payload?.margem.toFixed(1)}%</p>
+                            <p className="text-sm text-gray-600">Margem: {(payload?.[1]?.payload?.margem || 0).toFixed(1)}%</p>
                           </div>
                         )}
                       />
@@ -492,7 +502,7 @@ const DashboardPage: React.FC = () => {
                   </ResponsiveContainer>
                 </div>
                 <div className="flex justify-center gap-6 mt-6">
-                  {Object.entries(analise_produtos.curva_abc.resumo).map(([classe, dados]) => (
+                  {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => (
                     <div key={classe} className="text-center">
                       <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100' : classe === 'B' ? 'bg-yellow-100' : 'bg-red-100'}`}>
                         <span className={`text-2xl font-bold ${classe === 'A' ? 'text-green-600' : classe === 'B' ? 'text-yellow-600' : 'text-red-600'}`}>
@@ -500,7 +510,7 @@ const DashboardPage: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-sm text-gray-600">{dados.quantidade} produtos</p>
-                      <p className="text-lg font-bold text-gray-900">{dados.percentual.toFixed(1)}% do faturamento</p>
+                      <p className="text-lg font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% do faturamento</p>
                     </div>
                   ))}
                 </div>
@@ -522,14 +532,14 @@ const DashboardPage: React.FC = () => {
                       <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                       <div>
                         <p className="font-semibold text-gray-900">Classe B (30% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos.curva_abc.resumo.B.percentual.toFixed(1)}% do faturamento</p>
+                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-red-500"></div>
                       <div>
                         <p className="font-semibold text-gray-900">Classe C (50% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos.curva_abc.resumo.C.percentual.toFixed(1)}% do faturamento</p>
+                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
                       </div>
                     </div>
                   </div>
@@ -539,10 +549,10 @@ const DashboardPage: React.FC = () => {
                 <div className="border border-gray-200 rounded-xl p-4">
                   <h4 className="font-bold text-gray-900 mb-3">🏆 Top Produtos Classe A</h4>
                   <div className="space-y-3">
-                    {analise_produtos.curva_abc.produtos
-                      .filter(p => p.classificacao === 'A')
-                      .slice(0, 5)
-                      .map((produto, idx) => (
+                    {analise_produtos?.curva_abc?.produtos
+                      ?.filter(p => p.classificacao === 'A')
+                      ?.slice(0, 5)
+                      ?.map((produto, idx) => (
                         <div
                           key={produto.id}
                           className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
@@ -564,6 +574,180 @@ const DashboardPage: React.FC = () => {
                           </div>
                         </div>
                       ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SEÇÃO: ANÁLISE TEMPORAL - TENDÊNCIA DE VENDAS */}
+      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+        <div
+          className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+          onClick={() => toggleCard('analise-temporal')}
+        >
+          <div className="flex items-center gap-3">
+            <TrendingUpIcon className="w-8 h-8 text-purple-600" />
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Análise Temporal de Vendas</h2>
+              <p className="text-gray-600">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
+            </div>
+          </div>
+          <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-temporal'] ? 'rotate-180' : ''}`} />
+        </div>
+
+        {expandedCards['analise-temporal'] && (
+          <div className="p-6 animate-fadeIn">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
+              <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-200">
+                <h3 className="font-bold text-gray-900 mb-6 text-lg flex items-center gap-2">
+                  <LineChartIcon className="w-5 h-5 text-purple-600" />
+                  Evolução das Vendas (30 dias)
+                </h3>
+                <div className="h-[300px]">
+                  {analise_temporal?.tendencia_vendas?.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={analise_temporal.tendencia_vendas}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                        <XAxis
+                          dataKey="data"
+                          tick={{ fontSize: 12 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          content={({ payload, label }) => (
+                            <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
+                              <p className="font-bold text-gray-900">{label}</p>
+                              {payload?.map((entry, index) => (
+                                <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                  {entry.name}: R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="vendas"
+                          stroke="#8b5cf6"
+                          strokeWidth={3}
+                          dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                          name="Vendas Diárias"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="previsao"
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          name="Previsão"
+                          connectNulls={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <LineChartIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500">Dados de tendência não disponíveis</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+                  <div className="bg-purple-50 p-3 rounded-lg">
+                    <p className="text-sm text-purple-600 font-medium">Tendência</p>
+                    <p className={`text-lg font-bold ${analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-600' : 'text-red-600'}`}>
+                      {analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? '📈 Crescendo' : '📉 Caindo'}
+                    </p>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <p className="text-sm text-blue-600 font-medium">Média 7 dias</p>
+                    <p className="text-lg font-bold text-blue-700">
+                      R$ {(analise_temporal.tendencia_vendas?.slice(-7).reduce((acc, curr) => acc + (curr.vendas || 0), 0) / Math.max(1, Math.min(7, analise_temporal.tendencia_vendas?.length || 0)))?.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) || '0'}
+                    </p>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <p className="text-sm text-green-600 font-medium">Previsão Amanhã</p>
+                    <p className="text-lg font-bold text-green-700">
+                      R$ {(analise_temporal.previsao_proxima_semana[0]?.previsao || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* MÉTRICAS DE SAZONALIDADE E PREVISÕES */}
+              <div className="space-y-6">
+                {/* SAZONALIDADE */}
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-200">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-indigo-600" />
+                    Padrões Sazonais
+                  </h3>
+                  <div className="space-y-3">
+                    {(analise_temporal.sazonalidade || []).map((padrao, idx) => (
+                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium text-gray-900">{padrao.periodo}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${padrao.variacao > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {padrao.variacao > 0 ? '+' : ''}{padrao.variacao.toFixed(1)}%
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{padrao.descricao}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* PREVISÃO PRÓXIMA SEMANA */}
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <TargetIcon className="w-5 h-5 text-green-600" />
+                    Previsão Próxima Semana
+                  </h3>
+                  <div className="space-y-3">
+                    {(analise_temporal.previsao_proxima_semana || []).map((prev, idx) => (
+                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-900">{prev.dia}</span>
+                          <div className="text-right">
+                            <p className="font-bold text-green-700">R$ {prev.previsao.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-gray-500">±{prev.intervalo_confianca?.toFixed(1) || '5.0'}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* COMPARAÇÃO MENSAL */}
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-200">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <BarChart className="w-5 h-5 text-orange-600" />
+                    Comparação Mensal
+                  </h3>
+                  <div className="space-y-3">
+                    {(analise_temporal.comparacao_meses || []).map((comp, idx) => (
+                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium text-gray-900">{comp.mes}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {comp.crescimento > 0 ? '+' : ''}{comp.crescimento.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Vendas: R$ {comp.vendas.toLocaleString('pt-BR')}</span>
+                          <span className="text-gray-600">Meta: R$ {comp.meta.toLocaleString('pt-BR')}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -631,13 +815,13 @@ const DashboardPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 mt-6">
                   <div className="bg-green-50 p-4 rounded-lg">
                     <p className="text-sm text-green-800 font-medium">Lucro Bruto</p>
-                    <p className="text-2xl font-bold text-green-700">R$ {mes.lucro_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-sm text-green-600">Margem: {mes.margem_lucro.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold text-green-700">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-sm text-green-600">Margem: {(mes?.margem_lucro || 0).toFixed(1)}%</p>
                   </div>
                   <div className="bg-red-50 p-4 rounded-lg">
                     <p className="text-sm text-red-800 font-medium">Despesas Totais</p>
-                    <p className="text-2xl font-bold text-red-700">R$ {mes.total_despesas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-sm text-red-600">{((mes.total_despesas / mes.total_vendas) * 100).toFixed(1)}% das vendas</p>
+                    <p className="text-2xl font-bold text-red-700">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-sm text-red-600">{(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% das vendas</p>
                   </div>
                 </div>
               </div>
@@ -673,19 +857,19 @@ const DashboardPage: React.FC = () => {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700">Ponto de Equilíbrio</span>
-                      <span className="font-bold text-blue-600">{analise_financeira.indicadores.ponto_equilibrio.toFixed(1)}%</span>
+                      <span className="font-bold text-blue-600">{(analise_financeira.indicadores?.ponto_equilibrio || 0).toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700">Margem de Segurança</span>
-                      <span className="font-bold text-green-600">{analise_financeira.indicadores.margem_seguranca.toFixed(1)}%</span>
+                      <span className="font-bold text-green-600">{(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700">Alavancagem Operacional</span>
-                      <span className="font-bold text-purple-600">{analise_financeira.indicadores.alavancagem_operacional.toFixed(2)}x</span>
+                      <span className="font-bold text-purple-600">{(analise_financeira.indicadores?.alavancagem_operacional || 0).toFixed(2)}x</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-700">EBITDA</span>
-                      <span className="font-bold text-green-700">R$ {analise_financeira.indicadores.ebitda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span className="font-bold text-green-700">R$ {(analise_financeira.indicadores?.ebitda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
@@ -721,7 +905,7 @@ const DashboardPage: React.FC = () => {
                   Correlações Estatísticas
                 </h3>
                 <div className="space-y-4">
-                  {insights_cientificos.correlações.map((corr, idx) => (
+                  {(insights_cientificos.correlações || []).map((corr, idx) => (
                     <div key={idx} className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-colors">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-300 font-medium">{corr.variavel1} × {corr.variavel2}</span>
@@ -747,7 +931,7 @@ const DashboardPage: React.FC = () => {
                 <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-xl p-6">
                   <h3 className="text-xl font-bold text-white mb-6">🔮 Previsões (Próximos 30 dias)</h3>
                   <div className="space-y-4">
-                    {insights_cientificos.previsoes.map((prev, idx) => (
+                    {(insights_cientificos.previsoes || []).map((prev, idx) => (
                       <div key={idx} className="bg-black/30 p-4 rounded-lg">
                         <div className="flex justify-between items-center mb-3">
                           <span className="text-gray-300 font-medium">{prev.variavel}</span>
@@ -778,7 +962,7 @@ const DashboardPage: React.FC = () => {
                 <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-xl p-6">
                   <h3 className="text-xl font-bold text-white mb-6">🚀 Recomendações de Otimização</h3>
                   <div className="space-y-4">
-                    {insights_cientificos.recomendacoes_otimizacao.map((rec, idx) => (
+                    {(insights_cientificos.recomendacoes_otimizacao || []).map((rec, idx) => (
                       <div key={idx} className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-colors cursor-pointer">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-gray-300 font-medium">{rec.area}</span>
@@ -792,7 +976,7 @@ const DashboardPage: React.FC = () => {
                         <p className="text-gray-300 mb-3">{rec.acao}</p>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-400">Impacto Esperado:</span>
-                          <span className="text-green-400 font-bold">+{rec.impacto_esperado.toFixed(1)}%</span>
+                          <span className="text-green-400 font-bold">+{(typeof rec.impacto_esperado === 'number' ? rec.impacto_esperado.toFixed(1) : '0.0')}%</span>
                         </div>
                       </div>
                     ))}
@@ -828,28 +1012,26 @@ const DashboardPage: React.FC = () => {
                     </div>
                     <div>
                       <p className="font-bold text-gray-900">{produto.nome}</p>
-                      <p className="text-sm text-gray-600">ROI: <span className={`font-bold ${calculateROIColor(produto.roi)}`}>{produto.roi.toFixed(1)}%</span></p>
+                      <p className="text-sm text-gray-600">Faturamento: <span className="font-bold text-green-600">R$ {produto.faturamento.toFixed(2)}</span></p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-yellow-600">{produto.margem.toFixed(1)}%</p>
-                    <p className="text-sm text-gray-600">Margem</p>
+                    <p className="text-2xl font-bold text-yellow-600">{produto.quantidade_vendida}</p>
+                    <p className="text-sm text-gray-600">Vendas</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-sm text-gray-600">Market Share</p>
-                    <p className="text-lg font-bold text-gray-900">{produto.market_share.toFixed(1)}%</p>
+                    <p className="text-sm text-gray-600">Faturamento</p>
+                    <p className="text-lg font-bold text-gray-900">R$ {produto.faturamento.toFixed(2)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Elasticidade</p>
-                    <p className={`text-lg font-bold ${produto.elasticidade > 1 ? 'text-green-600' : 'text-red-600'}`}>
-                      {produto.elasticidade.toFixed(2)}
-                    </p>
+                    <p className="text-sm text-gray-600">Quantidade</p>
+                    <p className="text-lg font-bold text-blue-600">{produto.quantidade_vendida}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Lucro Total</p>
-                    <p className="text-lg font-bold text-green-600">R$ {produto.lucro_total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-sm text-gray-600">Ticket Médio</p>
+                    <p className="text-lg font-bold text-purple-600">R$ {(produto.faturamento / produto.quantidade_vendida).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
@@ -867,50 +1049,36 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="space-y-4">
-            {analise_produtos.produtos_lentos.map((produto, idx) => (
-              <div
-                key={produto.id}
-                className="bg-white/80 backdrop-blur-sm rounded-xl p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer border border-red-100"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
-                      <Package className="w-5 h-5 text-white" />
+            {analise_produtos.produtos_lentos.length > 0 ? (
+              analise_produtos.produtos_lentos.map((produto, idx) => (
+                <div
+                  key={produto.id}
+                  className="bg-white/80 backdrop-blur-sm rounded-xl p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer border border-red-100"
+                >
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
+                        <Package className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">{produto.nome}</p>
+                        <p className="text-sm text-gray-600">Produto com baixo desempenho</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-900">{produto.nome}</p>
-                      <p className="text-sm text-gray-600">{produto.quantidade} unidades paradas</p>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-red-600">Revisar</p>
+                      <p className="text-sm text-gray-600">estratégia</p>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-red-600">{produto.dias_estoque} dias</p>
-                    <p className="text-sm text-gray-600">em estoque</p>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Giro do Estoque</span>
-                      <span className="font-bold text-red-600">{produto.giro_estoque.toFixed(1)}x/ano</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="h-2 rounded-full bg-gradient-to-r from-red-500 to-pink-500"
-                        style={{ width: `${Math.min(produto.giro_estoque * 10, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Custo Parado</span>
-                    <span className="font-bold text-red-700">R$ {produto.custo_parado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Perda Mensal Estimada</span>
-                    <span className="font-bold text-red-800">R$ {produto.perda_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
+              ))
+            ) : (
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 text-center border border-red-100">
+                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 font-medium">Nenhum produto lento identificado</p>
+                <p className="text-gray-500 text-sm">Todos os produtos estão com bom desempenho!</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -921,86 +1089,50 @@ const DashboardPage: React.FC = () => {
           <Target className="w-8 h-8 text-purple-600" />
           📊 Previsão de Demanda Inteligente
         </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-purple-200">
-                <th className="text-left py-3 px-4 text-sm font-bold text-gray-700">Produto</th>
-                <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">Estoque Atual</th>
-                <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">Demanda/Dia</th>
-                <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">Dias Restantes</th>
-                <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">Classificação ABC</th>
-                <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">Giro Estoque</th>
-                <th className="text-center py-3 px-4 text-sm font-bold text-gray-700">Ação Recomendada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analise_produtos.previsao_demanda.map((produto, idx) => {
-                const diasRestantes = produto.demanda_diaria_prevista > 0
-                  ? produto.estoque_atual / produto.demanda_diaria_prevista
-                  : 999;
-                const isCritico = diasRestantes < 3;
-                const isAtencao = diasRestantes < 7;
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {analise_produtos.previsao_demanda.map((previsao, idx) => (
+            <div key={idx} className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-purple-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">{previsao.variavel}</h3>
+                <div className="flex items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${previsao.confianca > 80 ? 'bg-green-100 text-green-800' : previsao.confianca > 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                    {previsao.confianca.toFixed(0)}% confiança
+                  </span>
+                </div>
+              </div>
 
-                return (
-                  <tr key={idx} className={`border-b border-purple-100 hover:bg-white/50 ${isCritico ? 'bg-red-50' : isAtencao ? 'bg-yellow-50' : ''}`}>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${getABCColor(produto.classificação_abc as any)}`}></div>
-                        <span className="font-medium text-gray-900">{produto.nome || produto.produto_nome}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center font-semibold text-gray-800">{produto.estoque_atual}</td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="inline-flex items-center gap-2">
-                        <span className="font-bold text-blue-600">{produto.demanda_diaria_prevista.toFixed(1)}</span>
-                        <TrendingUp className="w-4 h-4 text-green-500" />
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`font-bold ${isCritico ? 'text-red-600' : isAtencao ? 'text-yellow-600' : 'text-green-600'}`}>
-                        {diasRestantes < 999 ? Math.floor(diasRestantes) : '∞'} dias
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getABCColor(produto.classificação_abc as any)}`} style={{
-                        backgroundColor: `${getABCColor(produto.classificação_abc as any)}20`,
-                        color: getABCColor(produto.classificação_abc as any)
-                      }}>
-                        Classe {produto.classificação_abc}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${(produto.giro_estoque || 0) > 10 ? 'bg-green-500' : (produto.giro_estoque || 0) > 5 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                            style={{ width: `${Math.min((produto.giro_estoque || 0) * 10, 100)}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-700">{(produto.giro_estoque || 0).toFixed(1)}x</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {isCritico ? (
-                        <span className="px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-bold animate-pulse">
-                          🚨 URGENTE - COMPRAR AGORA
-                        </span>
-                      ) : isAtencao ? (
-                        <span className="px-3 py-2 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-bold">
-                          ⚠️ Programar Compra
-                        </span>
-                      ) : (
-                        <span className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-bold">
-                          ✓ Estoque OK
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Valor Atual</span>
+                  <span className="font-bold text-gray-900">R$ {previsao.valor_atual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Previsão 30 dias</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-purple-600">R$ {previsao.previsao_30d.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <TrendingUp className={`w-4 h-4 ${previsao.previsao_30d > previsao.valor_atual ? 'text-green-500' : 'text-red-500'}`} />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Intervalo de Confiança</span>
+                  <span className="text-sm text-gray-700">
+                    R$ {previsao.intervalo_confianca[0].toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} - R$ {previsao.intervalo_confianca[1].toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+
+                <div className="pt-4 border-t border-purple-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Crescimento Projetado</span>
+                    <span className={`font-bold ${previsao.previsao_30d > previsao.valor_atual ? 'text-green-600' : 'text-red-600'}`}>
+                      {(((previsao.previsao_30d - previsao.valor_atual) / previsao.valor_atual) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
