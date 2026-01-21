@@ -3,8 +3,8 @@ MercadinhoSys API - Aplicação Flaskssional
 Arquitetura modular com blueprints por funcionalidade
 """
 from .orchestration import DashboardOrchestrator
-from flask import Flask, jsonify, requestzer
-from flask_migrate import Migratehe, cache_response
+from flask import Flask, jsonify, request, current_app
+from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_caching import Cache
