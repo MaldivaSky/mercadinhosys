@@ -225,7 +225,7 @@ class Cliente(db.Model, EnderecoMixin):
     estabelecimento = db.relationship(
         "Estabelecimento", backref=db.backref("clientes", lazy="dynamic")
     )
-    vendas = db.relationship("Venda", backref="cliente", lazy="dynamic")
+    
 
     def to_dict(self):
         return {
@@ -469,7 +469,7 @@ class Venda(db.Model):
         "Estabelecimento", backref=db.backref("vendas", lazy="dynamic")
     )
     cliente = db.relationship(
-        "Cliente", backref=db.backref("vendas_cliente", lazy="dynamic")
+        "Cliente", backref=db.backref("vendas", lazy="dynamic")
     )
     funcionario = db.relationship(
         "Funcionario", backref=db.backref("vendas_funcionario", lazy="dynamic")
