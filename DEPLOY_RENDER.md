@@ -35,9 +35,9 @@ git push origin main
 Render auto-gerará `SECRET_KEY` e `JWT_SECRET_KEY`, mas você precisa configurar:
 
 **Backend Service:**
-- `DATABASE_URL`: Use suas credenciais Neon PostgreSQL
+- `DATABASE_URL`: Use suas credenciais Neon PostgreSQL (veja console.neon.tech)
   ```
-  postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+  postgresql://[user]:[password]@[host]/neondb?sslmode=require
   ```
 - `CORS_ORIGINS`: URL do frontend (ex: `https://mercadinhosys-frontend.onrender.com`)
 
@@ -60,11 +60,13 @@ Render auto-gerará `SECRET_KEY` e `JWT_SECRET_KEY`, mas você precisa configura
 2. **Environment Variables**
    ```
    FLASK_ENV=production
-   DATABASE_URL=postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+   DATABASE_URL=postgresql://[user]:[password]@[host]/neondb?sslmode=require
    SECRET_KEY=[Generate Value]
    JWT_SECRET_KEY=[Generate Value]
    CORS_ORIGINS=https://mercadinhosys-frontend.onrender.com
    ```
+   
+   **⚠️ DATABASE_URL:** Obtenha suas credenciais em https://console.neon.tech
 
 3. **Health Check**
    - Path: `/api/auth/health`
@@ -79,7 +81,7 @@ Render auto-gerará `SECRET_KEY` e `JWT_SECRET_KEY`, mas você precisa configura
 
 2. **Environment Variables**
    ```
-   VITE_API_URL=https://mercadinhosys-backend.onrender.com
+   VITE_API_URL=https://mercadinhosys-backend.onrender.com/api
    ```
 
 3. **Rewrite Rules** (para SPA)
@@ -88,21 +90,20 @@ Render auto-gerará `SECRET_KEY` e `JWT_SECRET_KEY`, mas você precisa configura
 
 ---
 
-## 🗄️ Usando Neon PostgreSQL (Já Configurado)
+## 🗄️ Usando Neon PostgreSQL
 
-Suas credenciais Neon já estão prontas:
+**⚠️ IMPORTANTE: Suas credenciais reais estão protegidas em `backend/.env` (não vai para GitHub)**
 
-```
-Host: ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech
-Database: neondb
-User: neondb_owner
-Password: npg_jl8aMb4KGZBR
-SSL: Required
-```
+### Como Obter Suas Credenciais
 
-**URL Completa:**
+1. Acesse: https://console.neon.tech
+2. Selecione seu projeto
+3. Vá em "Connection Details"
+4. Copie a "Connection string"
+
+**Formato:**
 ```
-postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+postgresql://[user]:[password]@[host]/neondb?sslmode=require
 ```
 
 ### Seed Automático
@@ -175,10 +176,9 @@ Acesse: `https://mercadinhosys-frontend.onrender.com`
 
 **Solução:**
 1. Verifique `DATABASE_URL` tem `?sslmode=require` no final
-2. Teste conexão direta com Neon:
-   ```bash
-   psql "postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
-   ```
+2. Teste conexão direta com Neon (use suas credenciais do console.neon.tech)
+3. Verifique se Neon não está em sleep (plano free dorme após 5min)
+4. Acesse Neon Console e acorde o database
 
 ### Frontend não carrega dados
 

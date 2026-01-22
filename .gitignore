@@ -1,0 +1,74 @@
+# ==================== SECURITY - NEVER COMMIT ====================
+# Environment files with credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Database credentials
+database.ini
+db_config.json
+
+# API keys and secrets
+secrets.json
+credentials.json
+*.secret
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ==================== Database ====================
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# ==================== Logs ====================
+*.log
+logs/
+
+# ==================== IDE ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==================== OS ====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==================== Node ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==================== Build ====================
+dist/
+.dist/
+build/
+
+# ==================== Backups ====================
+backups/
+*.backup
+*.bak
+
+# ==================== Temporary ====================
+tmp/
+temp/
+*.tmp

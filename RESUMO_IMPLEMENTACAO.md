@@ -170,10 +170,11 @@ git push origin main
 ### Passo 3: Configurar DATABASE_URL
 
 1. Vá em: **mercadinhosys-backend** → **Environment**
-2. Adicione:
+2. Adicione suas credenciais Neon PostgreSQL:
    ```
-   DATABASE_URL=postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+   DATABASE_URL=postgresql://[user]:[password]@[host]/neondb?sslmode=require
    ```
+   (Obtenha em: https://console.neon.tech)
 3. Salve (redeploy automático)
 
 ### Passo 4: Atualizar URLs
