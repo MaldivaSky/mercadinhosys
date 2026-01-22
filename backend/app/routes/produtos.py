@@ -917,14 +917,186 @@ def buscar_produtos():
         )
 
 
+# ==================== ROTA DE ESTOQUE (COMPATÍVEL COM JWT) ====================
+
+@produtos_bp.route("/estoque", methods=["GET"])
+@funcionario_required
+def listar_produtos_estoque():
+    """Lista todos os produtos com filtros e paginação - Compatível com JWT"""
+    try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = request.args.get("por_pagina", 50, type=int)
+        ativos = request.args.get("ativos", None, type=str)
+        categoria = request.args.get("categoria", None, type=str)
+        estoque_status = request.args.get("estoque_status", None, type=str)
+        tipo = request.args.get("tipo", None, type=str)
+        fornecedor_id = request.args.get("fornecedor_id", None, type=int)
+        busca = request.args.get("busca", "", type=str).strip()
+        ordenar_por = request.args.get("ordenar_por", "nome", type=str)
+        direcao = request.args.get("direcao", "asc", type=str)
+
+        # Query base
+        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
+
+        # Filtros
+        if ativos is not None:
+            query = query.filter_by(ativo=ativos.lower() == "true")
+
+        if categoria:
+            # Buscar categoria pelo nome
+            cat = CategoriaProduto.query.filter_by(
+                estabelecimento_id=estabelecimento_id,
+                nome=categoria
+            ).first()
+            if cat:
+                query = query.filter_by(categoria_id=cat.id)
+
+        if tipo:
+            query = query.filter(Produto.descricao.ilike(f"%{tipo}%"))
+
+        if fornecedor_id:
+            query = query.filter_by(fornecedor_id=fornecedor_id)
+
+        if estoque_status:
+            if estoque_status == "esgotado":
+                query = query.filter(Produto.quantidade == 0)
+            elif estoque_status == "baixo":
+                query = query.filter(
+                    Produto.quantidade > 0,
+                    Produto.quantidade <= Produto.quantidade_minima
+                )
+            elif estoque_status == "normal":
+                query = query.filter(Produto.quantidade > Produto.quantidade_minima)
+
+        if busca:
+            busca_termo = f"%{busca}%"
+            query = query.filter(
+                db.or_(
+                    Produto.nome.ilike(busca_termo),
+                    Produto.codigo_barras.ilike(busca_termo),
+                    Produto.codigo_interno.ilike(busca_termo),
+                    Produto.descricao.ilike(busca_termo),
+                    Produto.marca.ilike(busca_termo),
+                )
+            )
+
+        # Ordenação
+        if ordenar_por == "nome":
+            query = query.order_by(Produto.nome.asc() if direcao == "asc" else Produto.nome.desc())
+        elif ordenar_por == "preco_venda":
+            query = query.order_by(Produto.preco_venda.asc() if direcao == "asc" else Produto.preco_venda.desc())
+        elif ordenar_por == "quantidade":
+            query = query.order_by(Produto.quantidade.asc() if direcao == "asc" else Produto.quantidade.desc())
+        elif ordenar_por == "margem_lucro":
+            query = query.order_by(Produto.margem_lucro.asc() if direcao == "asc" else Produto.margem_lucro.desc())
+
+        # Paginação
+        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
+
+        # Estatísticas
+        total_query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
+        total_produtos = total_query.count()
+        produtos_esgotados = total_query.filter(Produto.quantidade == 0).count()
+        produtos_baixo_estoque = total_query.filter(
+            Produto.quantidade > 0,
+            Produto.quantidade <= Produto.quantidade_minima
+        ).count()
+        produtos_normal = total_produtos - produtos_esgotados - produtos_baixo_estoque
+
+        # Formatar produtos
+        produtos_lista = []
+        for produto in paginacao.items:
+            categoria_nome = "Sem categoria"
+            if produto.categoria:
+                categoria_nome = produto.categoria.nome
+            
+            fornecedor_nome = None
+            if produto.fornecedor:
+                fornecedor_nome = produto.fornecedor.razao_social or produto.fornecedor.nome_fantasia
+
+            # Determinar status do estoque
+            if produto.quantidade == 0:
+                estoque_status_produto = "esgotado"
+            elif produto.quantidade <= produto.quantidade_minima:
+                estoque_status_produto = "baixo"
+            else:
+                estoque_status_produto = "normal"
+
+            produtos_lista.append({
+                "id": produto.id,
+                "nome": produto.nome,
+                "codigo_barras": produto.codigo_barras,
+                "codigo_interno": produto.codigo_interno,
+                "descricao": produto.descricao,
+                "categoria": categoria_nome,
+                "marca": produto.marca or "",
+                "fabricante": "",
+                "tipo": "",
+                "unidade_medida": produto.unidade_medida or "UN",
+                "preco_custo": float(produto.preco_custo),
+                "preco_venda": float(produto.preco_venda),
+                "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0.0,
+                "quantidade": produto.quantidade,
+                "quantidade_estoque": produto.quantidade,
+                "quantidade_minima": produto.quantidade_minima,
+                "estoque_minimo": produto.quantidade_minima,
+                "estoque_status": estoque_status_produto,
+                "fornecedor_id": produto.fornecedor_id,
+                "fornecedor_nome": fornecedor_nome,
+                "ativo": produto.ativo,
+                "lote": produto.lote if hasattr(produto, 'lote') else None,
+                "data_fabricacao": None,
+                "data_validade": produto.data_validade.isoformat() if hasattr(produto, 'data_validade') and produto.data_validade else None,
+                "created_at": produto.created_at.isoformat() if produto.created_at else None,
+                "updated_at": produto.updated_at.isoformat() if produto.updated_at else None,
+            })
+
+        return jsonify({
+            "produtos": produtos_lista,
+            "paginacao": {
+                "pagina_atual": paginacao.page,
+                "total_paginas": paginacao.pages,
+                "total_itens": paginacao.total,
+                "itens_por_pagina": por_pagina,
+                "tem_proxima": paginacao.has_next,
+                "tem_anterior": paginacao.has_prev,
+                "primeira_pagina": 1,
+                "ultima_pagina": paginacao.pages,
+            },
+            "estatisticas": {
+                "total_produtos": total_produtos,
+                "produtos_baixo_estoque": produtos_baixo_estoque,
+                "produtos_esgotados": produtos_esgotados,
+                "produtos_normal": produtos_normal,
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro ao listar produtos: {str(e)}")
+        import traceback
+        error_trace = traceback.format_exc()
+        current_app.logger.error(f"Traceback completo:\n{error_trace}")
+        print(f"❌ ERRO NA ROTA /estoque: {str(e)}")
+        print(error_trace)
+        return jsonify({"error": f"Erro ao listar produtos: {str(e)}"}), 500
+
+
 @produtos_bp.route("/categorias", methods=["GET"])
-@login_required
+@funcionario_required
 def listar_categorias():
     """Lista todas as categorias de produtos"""
     try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         categorias = (
             CategoriaProduto.query.filter_by(
-                estabelecimento_id=current_user.estabelecimento_id, ativo=True
+                estabelecimento_id=estabelecimento_id, ativo=True
             )
             .order_by(CategoriaProduto.nome.asc())
             .all()
@@ -934,8 +1106,8 @@ def listar_categorias():
         for categoria in categorias:
             # Contar produtos ativos na categoria
             total_produtos = Produto.query.filter_by(
-                estabelecimento_id=current_user.estabelecimento_id,
-                categoria=categoria.nome,
+                estabelecimento_id=estabelecimento_id,
+                categoria_id=categoria.id,
                 ativo=True,
             ).count()
 
@@ -952,8 +1124,9 @@ def listar_categorias():
         return jsonify(
             {
                 "success": True,
-                "categorias": categorias_lista,
-                "total": len(categorias_lista),
+                "categorias": [c["nome"] for c in categorias_lista],  # Retornar apenas nomes para compatibilidade
+                "categorias_detalhadas": categorias_lista,  # Detalhes completos
+                "total_categorias": len(categorias_lista),
             }
         )
 
@@ -1236,3 +1409,85 @@ def registrar_venda_produto(produto_id, quantidade, preco_venda, venda_id):
         current_app.logger.error(
             f"Erro ao registrar venda do produto {produto_id}: {str(e)}"
         )
+
+
+# ============================================
+# EXPORTAÇÃO CSV
+# ============================================
+
+@produtos_bp.route("/exportar/csv", methods=["GET"])
+@funcionario_required
+def exportar_csv():
+    """Exporta produtos para CSV"""
+    try:
+        import csv
+        from io import StringIO
+        
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        ativos = request.args.get("ativos", None, type=str)
+        
+        # Query base
+        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
+        
+        if ativos is not None:
+            query = query.filter_by(ativo=ativos.lower() == "true")
+        
+        produtos = query.order_by(Produto.nome.asc()).all()
+        
+        # Criar CSV em memória
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Cabeçalho
+        writer.writerow([
+            'ID', 'Nome', 'Código Barras', 'Código Interno', 'Categoria',
+            'Marca', 'Unidade', 'Quantidade', 'Quantidade Mínima',
+            'Preço Custo', 'Preço Venda', 'Margem Lucro %',
+            'Fornecedor', 'Ativo', 'Data Cadastro'
+        ])
+        
+        # Dados
+        for produto in produtos:
+            categoria_nome = produto.categoria.nome if produto.categoria else "Sem categoria"
+            fornecedor_nome = ""
+            if produto.fornecedor:
+                fornecedor_nome = produto.fornecedor.razao_social or produto.fornecedor.nome_fantasia
+            
+            writer.writerow([
+                produto.id,
+                produto.nome,
+                produto.codigo_barras or "",
+                produto.codigo_interno or "",
+                categoria_nome,
+                produto.marca or "",
+                produto.unidade_medida or "UN",
+                produto.quantidade,
+                produto.quantidade_minima,
+                float(produto.preco_custo),
+                float(produto.preco_venda),
+                float(produto.margem_lucro) if produto.margem_lucro else 0.0,
+                fornecedor_nome,
+                "Sim" if produto.ativo else "Não",
+                produto.created_at.strftime("%d/%m/%Y %H:%M") if produto.created_at else ""
+            ])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        return jsonify({
+            "success": True,
+            "csv": csv_content,
+            "total_produtos": len(produtos)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro ao exportar CSV: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+        return jsonify({
+            "success": False,
+            "message": f"❌ ERRO NA EXPORTAÇÃO CSV: {str(e)}"
+        }), 500

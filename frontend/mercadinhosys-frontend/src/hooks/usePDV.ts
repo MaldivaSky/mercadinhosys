@@ -144,6 +144,11 @@ export const usePDV = () => {
     const validarDescontoPermitido = useCallback((valorDesconto: number): boolean => {
         if (!configuracoes) return false;
 
+        // ✅ ADMIN sempre pode dar desconto sem autorização
+        if (configuracoes.funcionario.role === 'ADMIN') {
+            return true;
+        }
+
         const percentualDesconto = (valorDesconto / subtotal) * 100;
         const limiteDesconto = configuracoes.funcionario.limite_desconto || 0;
 
