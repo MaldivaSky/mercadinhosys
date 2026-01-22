@@ -6,6 +6,13 @@ O frontend no Vercel não consegue fazer login porque não está conectando ao b
 ## Causa
 A variável de ambiente `VITE_API_URL` não está configurada no Vercel.
 
+## ✅ URL Correta do Backend
+
+```
+Backend: https://mercadinhosys.onrender.com
+API: https://mercadinhosys.onrender.com/api
+```
+
 ## Solução Rápida
 
 ### Passo 1: Configurar Variável de Ambiente no Vercel
@@ -17,7 +24,7 @@ A variável de ambiente `VITE_API_URL` não está configurada no Vercel.
 5. Configure:
    ```
    Name: VITE_API_URL
-   Value: https://mercadinhosys-backend.onrender.com/api
+   Value: https://mercadinhosys.onrender.com/api
    Environment: Production ✅ (marque também Preview se quiser)
    ```
 6. Clique em **Save**
@@ -31,10 +38,12 @@ Após salvar a variável, você precisa fazer um novo deploy:
 2. Clique nos 3 pontinhos do último deploy
 3. Clique em **Redeploy**
 
-**Opção B: Via Git**
-1. Faça um commit qualquer (pode ser só um espaço em branco)
-2. Push para o repositório
-3. Vercel vai fazer deploy automaticamente
+**Opção B: Via Git (Recomendado)**
+```bash
+git add .
+git commit -m "fix: configurar URL correta do backend"
+git push
+```
 
 ### Passo 3: Testar
 
@@ -50,23 +59,23 @@ Para verificar se está funcionando, abra o Console do navegador (F12) e veja se
 
 ```
 🔧 API Config: {
-  BASE_URL: "https://mercadinhosys-backend.onrender.com/api",
+  BASE_URL: "https://mercadinhosys.onrender.com/api",
   ENVIRONMENT: "production"
 }
 ```
 
 ## URLs Importantes
 
-- **Frontend (Vercel):** https://seu-projeto.vercel.app
-- **Backend (Render):** https://mercadinhosys-backend.onrender.com
-- **API Health Check:** https://mercadinhosys-backend.onrender.com/api/auth/health
+- **Backend (Render):** https://mercadinhosys.onrender.com
+- **API Health Check:** https://mercadinhosys.onrender.com/api/auth/health
 
 ## Teste Rápido do Backend
 
 Antes de testar o login, verifique se o backend está online:
 
-```bash
-curl https://mercadinhosys-backend.onrender.com/api/auth/health
+**Abra no navegador:**
+```
+https://mercadinhosys.onrender.com/api/auth/health
 ```
 
 Deve retornar:
@@ -74,7 +83,8 @@ Deve retornar:
 {
   "status": "healthy",
   "database": "connected",
-  "environment": "production"
+  "environment": "production",
+  "version": "2.0.0"
 }
 ```
 
@@ -95,7 +105,7 @@ Deve retornar:
 **Causa:** Backend no Render.com pode estar dormindo (free tier)
 
 **Solução:** 
-1. Acesse diretamente: https://mercadinhosys-backend.onrender.com/api/auth/health
+1. Acesse diretamente: https://mercadinhosys.onrender.com/api/auth/health
 2. Aguarde 30-60 segundos para o backend acordar
 3. Tente fazer login novamente
 
@@ -103,14 +113,17 @@ Deve retornar:
 
 **Causa:** Backend não está aceitando requisições do domínio do Vercel
 
-**Solução:** Verificar variável `CORS_ORIGINS` no Render.com deve incluir seu domínio Vercel
+**Solução:** Adicionar domínio do Vercel na variável `CORS_ORIGINS` no Render.com:
+```
+https://seu-projeto.vercel.app
+```
 
 ### Erro: "Invalid Credentials"
 
 **Causa:** Banco de dados pode estar vazio ou senha incorreta
 
 **Solução:** 
-1. Verifique se o seed foi executado: `python backend/seed_neon_rapido.py`
+1. Verifique se o seed foi executado
 2. Use as credenciais corretas: admin/admin123
 
 ## Observações

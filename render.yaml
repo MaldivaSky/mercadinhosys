@@ -19,7 +19,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://mercadinhosys-frontend.onrender.com
+        value: https://mercadinhosys-frontend.vercel.app,https://mercadinhosys.vercel.app
       - key: PYTHON_VERSION
         value: 3.11.0
     healthCheckPath: /api/auth/health
@@ -36,7 +36,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://mercadinhosys-backend.onrender.com/api
+        value: https://mercadinhosys.onrender.com/api
     routes:
       - type: rewrite
         source: /*
