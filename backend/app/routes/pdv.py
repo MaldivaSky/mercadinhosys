@@ -402,8 +402,8 @@ def finalizar_venda():
                     )
                 
                 # Calcular valores
-                preco_unitario = to_float(produto.preco_venda)
-                preco_custo = to_float(produto.preco_custo)
+                preco_unitario = decimal_to_float(produto.preco_venda)
+                preco_custo = decimal_to_float(produto.preco_custo)
                 total_item = (preco_unitario * quantidade) - desconto_item
                 
                 # Calcular margem

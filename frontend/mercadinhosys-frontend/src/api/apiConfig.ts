@@ -12,7 +12,7 @@ const getBaseUrl = (): string => {
     
     // 2. Desenvolvimento local
     if (isDevelopment) {
-        return 'http://127.0.0.1:5000/api';
+        return 'http://localhost:5000/api';
     }
     
     // 3. Produção (mesma origem)
