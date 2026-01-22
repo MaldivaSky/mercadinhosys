@@ -6,11 +6,11 @@
         }
     ],
     "env": {
-        "VITE_API_URL": "https://mercadinhosys-backend.onrender.com/api"
+        "VITE_API_URL": "https://mercadinhosys.onrender.com/api"
     },
     "build": {
         "env": {
-            "VITE_API_URL": "https://mercadinhosys-backend.onrender.com/api"
+            "VITE_API_URL": "https://mercadinhosys.onrender.com/api"
         }
     }
 }
