@@ -24,28 +24,52 @@ def get_establishment_id():
 @dashboard_bp.route("/cientifico", methods=["GET"])
 @jwt_required()
 def dashboard_cientifico():
-    """Endpoint para o Dashboard Científico"""
+    """Endpoint para o Dashboard Científico com tratamento adequado de erros"""
     try:
         estabelecimento_id = get_establishment_id()
+        data_warning = False
+        error_details = None
+        
         try:
             orchestrator = DashboardOrchestrator(estabelecimento_id)
             if hasattr(orchestrator, "get_scientific_dashboard"):
                 data = orchestrator.get_scientific_dashboard()
             else:
                 data = orchestrator.get_executive_dashboard(30)
+                
+            # Validar se os dados são reais
+            if not data or "hoje" not in data or data.get("hoje", {}).get("total_vendas") is None:
+                data_warning = True
+                error_details = "Dados incompletos retornados pelo orquestrador"
+                logger.warning(f"Dashboard retornou dados incompletos: {data}")
+                
         except Exception as e:
-            logger.warning(f"Orquestrador indisponível: {e}")
-            data = {}
+            # Erro crítico no orquestrador - retornar dados mock com aviso
+            data_warning = True
+            error_details = f"Erro no cálculo: {str(e)}"
+            logger.error(f"Erro crítico no DashboardOrchestrator: {e}", exc_info=True)
+            data = _get_mock_data()
 
         response = {
             "success": True,
+            "data_warning": data_warning,  # Flag para o frontend
+            "error_details": error_details if data_warning else None,
             "usuario": {"nome": "Admin", "role": "admin", "acesso_avancado": True},
-            "data": data if data and "hoje" in data else _get_mock_data(),
+            "data": data,
         }
-        return jsonify(response)
+        
+        # Se houver warning, retornar 206 Partial Content
+        status_code = 206 if data_warning else 200
+        return jsonify(response), status_code
+        
     except Exception as e:
-        logger.error(f"Erro Crítico Dashboard: {e}")
-        return jsonify({"success": False, "data": _get_mock_data()}), 200
+        logger.error(f"Erro Crítico Dashboard: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "data_warning": True,
+            "error_details": "Erro crítico no servidor",
+            "data": _get_mock_data()
+        }), 500
 
 
 def _get_mock_data():
