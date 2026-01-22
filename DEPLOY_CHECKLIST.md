@@ -44,10 +44,11 @@
 
 3. **Configurar DATABASE_URL**
    - Vá em: **mercadinhosys-backend** → **Environment**
-   - Adicione:
+   - Adicione suas credenciais Neon:
      ```
-     DATABASE_URL=postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+     DATABASE_URL=postgresql://[user]:[password]@[host]/neondb?sslmode=require
      ```
+     (Obtenha em: https://console.neon.tech)
    - Salve e aguarde redeploy automático
 
 4. **Atualizar CORS no Backend**
@@ -133,10 +134,7 @@ render logs -s mercadinhosys-frontend -f
 1. Verificar logs: `render logs -s mercadinhosys-backend`
 2. Confirmar `DATABASE_URL` está configurada
 3. Verificar se `gunicorn` está em `requirements.txt`
-4. Testar conexão Neon diretamente:
-   ```bash
-   psql "postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
-   ```
+4. Testar conexão Neon diretamente (use suas credenciais do console.neon.tech)
 
 ### ❌ CORS Error
 
