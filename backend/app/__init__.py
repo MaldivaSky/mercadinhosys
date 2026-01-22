@@ -59,8 +59,13 @@ def create_app(config_name=None):
     from app.models import login_manager
     login_manager.init_app(app)
 
-    # CORS
-    CORS(app, origins=app.config.get("CORS_ORIGINS", ["*"]))
+    # CORS - Allow all origins in development
+    CORS(app, 
+         resources={r"/api/*": {"origins": "*"}},
+         supports_credentials=True,
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    )
 
     # Cria pastas necessárias
     for folder in ["instance", "instance/uploads", "logs", "backups"]:
@@ -87,14 +92,13 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar produtos: {e}")
 
-    # Fornecedores
+    # Fornecedores FIX
     try:
-        from app.routes.fornecedores import fornecedores_bp
-
-        app.register_blueprint(fornecedores_bp, url_prefix="/api/fornecedores")
-        logger.info("✅ Blueprint fornecedores registrado em /api/fornecedores")
+        from app.routes.fornecedores_fix import fornecedores_fix_bp
+        app.register_blueprint(fornecedores_fix_bp, url_prefix="/api/fornecedores")
+        logger.info("✅ Blueprint fornecedores_fix registrado em /api/fornecedores")
     except Exception as e:
-        logger.error(f"❌ Erro ao registrar fornecedores: {e}")
+        logger.error(f"❌ Erro ao registrar fornecedores_fix: {e}")
 
     # Funcionarios
     try:
