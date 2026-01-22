@@ -239,27 +239,39 @@ export interface Fornecedor {
     id: number;
     estabelecimento_id: number;
     nome: string;
+    nome_fantasia?: string;
+    razao_social?: string;
     cnpj?: string;
     telefone?: string;
     email?: string;
     endereco?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
     cidade?: string;
     estado?: string;
+    cep?: string;
+    pais?: string;
     contato_comercial?: string;
     contato_nome?: string;
-    celular_comercial?: string;
-    cep?: string;
     contato_principal?: string;
+    contato_telefone?: string;
+    celular_comercial?: string;
     observacoes?: string;
     total_produtos?: number;
+    produtos_ativos?: number;
+    total_compras?: number;
+    valor_total_comprado?: number;
+    classificacao?: string;
     ativo: boolean;
     prazo_entrega?: number;
     forma_pagamento?: string;
-    avaliacao: number;
+    avaliacao?: number;
     tempo_medio_entrega?: number;
-    taxa_atendimento: number;
-    created_at: string;
-    updated_at: string;
+    taxa_atendimento?: number;
+    created_at?: string;
+    updated_at?: string;
 }
 
 // Tipos para despesas (atualizado conforme models.py)
