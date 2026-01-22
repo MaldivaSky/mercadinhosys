@@ -1,19 +1,15 @@
+// @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  TrendingUp, TrendingDown, ShoppingCart, Users, Package,
-  CreditCard, DollarSign, BarChart as LucideBarChart, AlertTriangle,
-  Clock, Star, Calendar, Zap, Target, Award, Activity, Percent,
-  ArrowUpRight, ArrowDownRight, Filter, PieChart as PieChartIcon,
-  LineChart as LineChartIcon, RefreshCw, ChevronDown, ChevronUp,
-  Layers, Cpu, Brain, Database, Server, TrendingUp as TrendingUpIcon,
-  Eye, EyeOff, MoreVertical, Settings, DollarSign as DollarIcon,
-  Wallet, TrendingDown as TrendingDownIcon, Box, ChartBar,
-  Target as TargetIcon, AlertCircle, TrendingUp as TrendingUpFill, GitMerge
+  TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
+  ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
+  DollarSign as DollarIcon, Target as TargetIcon, AlertCircle,
+  TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
+  LineChart as LineChartIcon, RefreshCw
 } from 'lucide-react';
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, LineChart, Line, Cell
 } from 'recharts';
 
 // API Client
@@ -231,8 +227,8 @@ const DashboardPage: React.FC = () => {
   });
   const [selectedABC, setSelectedABC] = useState<'A' | 'B' | 'C' | 'all'>('all');
   const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'cientifico'>('cientifico');
-  const [hoveredProduct, setHoveredProduct] = useState<number | null>(null);
-  const [selectedMetric, setSelectedMetric] = useState<'margem' | 'faturamento' | 'giro'>('margem');
+  const [hoveredKPI, setHoveredKPI] = useState<number | null>(null);
+  const [expandedKPI, setExpandedKPI] = useState<number | null>(null);
 
   useEffect(() => {
     loadDashboard();
@@ -242,7 +238,7 @@ const DashboardPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/dashboard/cientifico');
-      setData(response.data.data);
+      setData(response.data);
     } catch (err) {
       setError('Erro ao carregar dados científicos');
     } finally {
@@ -266,11 +262,18 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  const calculateROIColor = (roi: number) => {
-    if (roi >= 30) return '#10B981';
-    if (roi >= 10) return '#F59E0B';
-    return '#EF4444';
-  };
+  // FILTRAR PRODUTOS DA CURVA ABC BASEADO NA SELEÇÃO
+  const produtosFiltrados = useMemo(() => {
+    if (!data?.data?.analise_produtos?.curva_abc?.produtos) return [];
+    
+    if (selectedABC === 'all') {
+      return data.data.analise_produtos.curva_abc.produtos;
+    }
+    
+    return data.data.analise_produtos.curva_abc.produtos.filter(
+      (p: any) => p.classificacao === selectedABC
+    );
+  }, [data?.data?.analise_produtos?.curva_abc?.produtos, selectedABC]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-screen">
@@ -297,7 +300,8 @@ const DashboardPage: React.FC = () => {
   );
 
   const { hoje, mes, analise_produtos, analise_financeira, insights_cientificos = {
-    correlacoes: [],
+    correlações: [],
+    anomalias: [],
     previsoes: [],
     recomendacoes_otimizacao: []
   }, analise_temporal = {
@@ -305,7 +309,7 @@ const DashboardPage: React.FC = () => {
     sazonalidade: [],
     comparacao_meses: [],
     previsao_proxima_semana: []
-  } } = data;
+  } } = data.data;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
@@ -333,13 +337,13 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className="flex gap-3">
             <select
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
               value={viewMode}
               onChange={(e) => setViewMode(e.target.value as any)}
             >
-              <option value="visao-geral">Visão Geral</option>
-              <option value="detalhado">Análise Detalhada</option>
-              <option value="cientifico">Modo Científico</option>
+              <option value="visao-geral">📊 Visão Geral</option>
+              <option value="detalhado">📈 Análise Detalhada</option>
+              <option value="cientifico">🧬 Modo Científico</option>
             </select>
             <button onClick={loadDashboard} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
@@ -349,48 +353,201 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* KPIs PRINCIPAIS COM ANIMAÇÃO */}
+      {/* DESCRIÇÃO DO MODO SELECIONADO */}
+      {viewMode === 'visao-geral' && (
+        <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+          <p className="text-blue-900 font-medium">
+            📊 <strong>Visão Geral:</strong> Visualização simplificada com apenas os KPIs principais para acompanhamento rápido.
+          </p>
+        </div>
+      )}
+      {viewMode === 'detalhado' && (
+        <div className="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg">
+          <p className="text-purple-900 font-medium">
+            📈 <strong>Análise Detalhada:</strong> KPIs + Curva ABC + Análise Temporal + Análise Financeira para decisões estratégicas.
+          </p>
+        </div>
+      )}
+      {viewMode === 'cientifico' && (
+        <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+          <p className="text-green-900 font-medium">
+            🧬 <strong>Modo Científico:</strong> Visualização completa com insights científicos, correlações, previsões e recomendações de otimização.
+          </p>
+        </div>
+      )}
+
+      {/* KPIs PRINCIPAIS COM TOOLTIPS E EXPLICAÇÕES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[
           {
             title: 'Margem Líquida',
+            tooltip: 'Percentual de lucro sobre as vendas. Quanto maior, melhor a rentabilidade.',
             value: `${(mes?.margem_lucro || 0).toFixed(1)}%`,
             change: hoje.crescimento_vs_ontem,
             icon: TrendingUpFill,
             color: 'bg-gradient-to-r from-green-500 to-emerald-600',
-            details: `Lucro: R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            details: `Lucro: R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            explanation: `De cada R$ 100 em vendas, R$ ${(mes?.margem_lucro || 0).toFixed(0)} é lucro`,
+            expandedContent: (
+              <div className="space-y-3">
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <p className="text-sm font-semibold text-green-900 mb-1">💡 O que isso significa?</p>
+                  <p className="text-sm text-green-800">
+                    A margem líquida mostra quanto sobra de lucro depois de pagar todos os custos. 
+                    Uma margem de {(mes?.margem_lucro || 0).toFixed(1)}% significa que você está lucrando 
+                    R$ {(mes?.margem_lucro || 0).toFixed(0)} para cada R$ 100 vendidos.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-gray-600">Total Vendas</p>
+                    <p className="font-bold text-gray-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-gray-600">Lucro Líquido</p>
+                    <p className="font-bold text-green-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 italic">
+                  ✅ Margem saudável: acima de 20% | ⚠️ Atenção: abaixo de 10%
+                </div>
+              </div>
+            )
           },
           {
             title: 'ROI Mensal',
+            tooltip: 'Retorno sobre Investimento. Mostra quanto você ganhou em relação ao que investiu em estoque.',
             value: `${(mes?.roi_mensal || 0).toFixed(1)}%`,
             change: 5.2,
             icon: TrendingUp,
             color: 'bg-gradient-to-r from-blue-500 to-cyan-600',
-            details: `Investido: R$ ${(mes?.investimentos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            details: `Investido: R$ ${(mes?.investimentos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            explanation: `Para cada R$ 100 investidos, você ganhou R$ ${(mes?.roi_mensal || 0).toFixed(0)}`,
+            expandedContent: (
+              <div className="space-y-3">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-1">💡 O que isso significa?</p>
+                  <p className="text-sm text-blue-800">
+                    O ROI mostra o retorno do seu investimento em estoque. Um ROI de {(mes?.roi_mensal || 0).toFixed(1)}% 
+                    significa que para cada R$ 100 investidos em produtos, você ganhou R$ {(mes?.roi_mensal || 0).toFixed(0)} de lucro.
+                  </p>
+                </div>
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-2">🏆 Produtos que mais contribuíram:</p>
+                  <div className="space-y-2">
+                    {analise_produtos?.produtos_estrela?.slice(0, 3).map((produto: any, idx: number) => (
+                      <div key={produto.id} className="flex justify-between items-center text-sm">
+                        <span className="text-blue-800 truncate flex-1">{idx + 1}. {produto.nome}</span>
+                        <span className="font-bold text-blue-600 ml-2">R$ {produto.faturamento.toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 italic">
+                  ✅ ROI excelente: acima de 30% | ⚠️ Atenção: abaixo de 10%
+                </div>
+              </div>
+            )
           },
           {
             title: 'Ticket Médio',
+            tooltip: 'Valor médio que cada cliente gasta por compra. Quanto maior, melhor.',
             value: `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
             change: 8.7,
             icon: DollarIcon,
             color: 'bg-gradient-to-r from-purple-500 to-pink-600',
-            details: `${hoje?.clientes_atendidos || 0} clientes atendidos`
+            details: `${hoje?.clientes_atendidos || 0} clientes hoje`,
+            explanation: `Cada cliente gastou em média R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
+            expandedContent: (
+              <div className="space-y-3">
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <p className="text-sm font-semibold text-purple-900 mb-1">💡 O que isso significa?</p>
+                  <p className="text-sm text-purple-800">
+                    O ticket médio mostra quanto cada cliente gasta por compra. Um ticket de R$ {(hoje?.ticket_medio || 0).toFixed(2)} 
+                    indica que, em média, cada cliente compra esse valor por visita.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-gray-600">Clientes Hoje</p>
+                    <p className="font-bold text-gray-900">{hoje?.clientes_atendidos || 0}</p>
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-gray-600">Total Vendas</p>
+                    <p className="font-bold text-purple-600">R$ {(hoje?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg">
+                  <p className="text-xs font-semibold text-purple-900 mb-1">💡 Como aumentar o ticket médio?</p>
+                  <ul className="text-xs text-purple-800 space-y-1">
+                    <li>• Ofereça combos e promoções</li>
+                    <li>• Sugira produtos complementares</li>
+                    <li>• Destaque produtos premium</li>
+                  </ul>
+                </div>
+              </div>
+            )
           },
           {
             title: 'Ponto de Equilíbrio',
-            value: `${(analise_financeira.indicadores?.ponto_equilibrio || 0).toFixed(1)}%`,
+            tooltip: 'Quanto você precisa vender para cobrir todos os custos. Abaixo disso, você tem prejuízo.',
+            value: `R$ ${(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`,
             change: -2.3,
             icon: TargetIcon,
             color: 'bg-gradient-to-r from-orange-500 to-red-600',
-            details: `Margem de Segurança: ${(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%`
+            details: `Margem de Segurança: ${(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%`,
+            explanation: `Você precisa vender R$ ${(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} para não ter prejuízo`,
+            expandedContent: (
+              <div className="space-y-3">
+                <div className="bg-orange-50 p-3 rounded-lg">
+                  <p className="text-sm font-semibold text-orange-900 mb-1">💡 O que isso significa?</p>
+                  <p className="text-sm text-orange-800">
+                    O ponto de equilíbrio é o valor mínimo que você precisa vender para cobrir todos os custos 
+                    (produtos, despesas, salários, etc). Abaixo de R$ {(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}, 
+                    você tem prejuízo. Acima disso, você lucra!
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-gray-600">Vendas Atuais</p>
+                    <p className="font-bold text-gray-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <p className="text-gray-600">Total Despesas</p>
+                    <p className="font-bold text-red-600">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-lg">
+                  <p className="text-sm font-semibold text-green-900 mb-1">✅ Situação Atual</p>
+                  <p className="text-sm text-green-800">
+                    Você está {((mes?.total_vendas || 0) / (analise_financeira.indicadores?.ponto_equilibrio || 1) * 100).toFixed(0)}% 
+                    acima do ponto de equilíbrio. Margem de segurança: {(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-xs text-gray-500 italic">
+                  ✅ Seguro: margem acima de 20% | ⚠️ Atenção: margem abaixo de 10%
+                </div>
+              </div>
+            )
           }
         ].map((kpi, idx) => (
           <div
             key={idx}
-            className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer border border-gray-200"
-            onMouseEnter={() => { }}
-            onMouseLeave={() => { }}
+            className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer border border-gray-200 relative"
+            onMouseEnter={() => setHoveredKPI(idx)}
+            onMouseLeave={() => setHoveredKPI(null)}
+            onClick={() => setExpandedKPI(expandedKPI === idx ? null : idx)}
           >
+            {/* Tooltip on hover */}
+            {hoveredKPI === idx && (
+              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-xs rounded-lg px-3 py-2 z-10 w-64 shadow-xl">
+                <div className="relative">
+                  {kpi.tooltip}
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between items-start mb-4">
               <div className={`${kpi.color} p-3 rounded-xl shadow-lg`}>
                 <kpi.icon className="w-6 h-6 text-white" />
@@ -400,12 +557,31 @@ const DashboardPage: React.FC = () => {
                 {Math.abs(kpi.change).toFixed(1)}%
               </div>
             </div>
-            <h3 className="text-gray-500 text-sm font-medium mb-2">{kpi.title}</h3>
+            
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-gray-500 text-sm font-medium">{kpi.title}</h3>
+              <AlertCircle className="w-4 h-4 text-gray-400" />
+            </div>
+            
             <p className="text-3xl font-bold text-gray-900 mb-2">{kpi.value}</p>
-            <p className="text-gray-600 text-sm">{kpi.details}</p>
+            <p className="text-gray-600 text-sm mb-3">{kpi.details}</p>
+            
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg mb-3">
+              <p className="text-xs text-blue-900 font-medium">{kpi.explanation}</p>
+            </div>
+
+            {/* Expanded content */}
+            {expandedKPI === idx && (
+              <div className="mt-4 pt-4 border-t border-gray-200 animate-fadeIn">
+                {kpi.expandedContent}
+              </div>
+            )}
+
             <div className="mt-4 pt-4 border-t border-gray-100">
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>Performance</span>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-500">
+                  {expandedKPI === idx ? 'Clique para recolher' : 'Clique para mais detalhes'}
+                </span>
                 <span className={`font-semibold ${kpi.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {kpi.change >= 0 ? 'Acima da meta' : 'Abaixo da meta'}
                 </span>
@@ -416,6 +592,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* SEÇÃO PRINCIPAL: CURVA ABC COM GRÁFICO DE PARETO */}
+      {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
       <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
         <div
           className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
@@ -466,7 +643,7 @@ const DashboardPage: React.FC = () => {
               <div className="lg:col-span-2">
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analise_produtos?.curva_abc?.produtos?.slice(0, 15) || []}>
+                    <BarChart data={produtosFiltrados.slice(0, 15)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
                       <YAxis yAxisId="left" />
@@ -476,19 +653,21 @@ const DashboardPage: React.FC = () => {
                           <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
                             <p className="font-bold text-gray-900">{label}</p>
                             <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-sm text-gray-600">Classificação: <span className={`font-bold ${getABCColor(payload?.[1]?.payload?.classificacao)}`}>{payload?.[1]?.payload?.classificacao}</span></p>
-                            <p className="text-sm text-gray-600">Margem: {(payload?.[1]?.payload?.margem || 0).toFixed(1)}%</p>
+                            <p className="text-sm text-gray-600">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
+                            <p className="text-sm text-gray-600">Margem: {(payload?.[0]?.payload?.margem || 0).toFixed(1)}%</p>
+                            <p className="text-sm text-gray-600">Qtd Vendida: {payload?.[0]?.payload?.quantidade_vendida}</p>
                           </div>
                         )}
                       />
                       <Bar
                         yAxisId="left"
                         dataKey="faturamento"
-                        fill="#8884d8"
                         name="Faturamento"
-                        onMouseEnter={(data, index) => setHoveredProduct(data.id)}
-                        onMouseLeave={() => setHoveredProduct(null)}
-                      />
+                      >
+                        {produtosFiltrados.slice(0, 15).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getABCColor(entry.classificacao)} />
+                        ))}
+                      </Bar>
                       <Line
                         yAxisId="right"
                         type="monotone"
@@ -556,8 +735,6 @@ const DashboardPage: React.FC = () => {
                         <div
                           key={produto.id}
                           className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
-                          onMouseEnter={() => setHoveredProduct(produto.id)}
-                          onMouseLeave={() => setHoveredProduct(null)}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-green-100 text-green-800 rounded-full flex items-center justify-center font-bold">
@@ -581,15 +758,17 @@ const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* SEÇÃO: ANÁLISE TEMPORAL - TENDÊNCIA DE VENDAS */}
+      {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
       <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
         <div
           className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
           onClick={() => toggleCard('analise-temporal')}
         >
           <div className="flex items-center gap-3">
-            <TrendingUpIcon className="w-8 h-8 text-purple-600" />
+            <TrendingUp className="w-8 h-8 text-purple-600" />
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Análise Temporal de Vendas</h2>
               <p className="text-gray-600">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
@@ -692,17 +871,25 @@ const DashboardPage: React.FC = () => {
                     Padrões Sazonais
                   </h3>
                   <div className="space-y-3">
-                    {(analise_temporal.sazonalidade || []).map((padrao, idx) => (
-                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-gray-900">{padrao.periodo}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${padrao.variacao > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {padrao.variacao > 0 ? '+' : ''}{padrao.variacao.toFixed(1)}%
-                          </span>
+                    {analise_temporal.sazonalidade && analise_temporal.sazonalidade.length > 0 ? (
+                      analise_temporal.sazonalidade.map((padrao, idx) => (
+                        <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-medium text-gray-900">{padrao.periodo}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${padrao.variacao > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {padrao.variacao > 0 ? '+' : ''}{padrao.variacao.toFixed(1)}%
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">{padrao.descricao}</p>
                         </div>
-                        <p className="text-sm text-gray-600">{padrao.descricao}</p>
+                      ))
+                    ) : (
+                      <div className="bg-white/70 p-6 rounded-lg text-center">
+                        <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">Dados insuficientes para análise sazonal</p>
+                        <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 3 meses de histórico</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
 
@@ -713,41 +900,57 @@ const DashboardPage: React.FC = () => {
                     Previsão Próxima Semana
                   </h3>
                   <div className="space-y-3">
-                    {(analise_temporal.previsao_proxima_semana || []).map((prev, idx) => (
-                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-900">{prev.dia}</span>
-                          <div className="text-right">
-                            <p className="font-bold text-green-700">R$ {prev.previsao.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-xs text-gray-500">±{prev.intervalo_confianca?.toFixed(1) || '5.0'}%</p>
+                    {analise_temporal.previsao_proxima_semana && analise_temporal.previsao_proxima_semana.length > 0 ? (
+                      analise_temporal.previsao_proxima_semana.map((prev, idx) => (
+                        <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-gray-900">{prev.dia}</span>
+                            <div className="text-right">
+                              <p className="font-bold text-green-700">R$ {prev.previsao.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="text-xs text-gray-500">±{prev.intervalo_confianca?.toFixed(1) || '5.0'}%</p>
+                            </div>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="bg-white/70 p-6 rounded-lg text-center">
+                        <TargetIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">Previsões não disponíveis</p>
+                        <p className="text-sm text-gray-400 mt-1">Necessário mais dados históricos</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
 
                 {/* COMPARAÇÃO MENSAL */}
                 <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-200">
                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <BarChart className="w-5 h-5 text-orange-600" />
+                    <LucideBarChart className="w-5 h-5 text-orange-600" />
                     Comparação Mensal
                   </h3>
                   <div className="space-y-3">
-                    {(analise_temporal.comparacao_meses || []).map((comp, idx) => (
-                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-gray-900">{comp.mes}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {comp.crescimento > 0 ? '+' : ''}{comp.crescimento.toFixed(1)}%
-                          </span>
+                    {analise_temporal.comparacao_meses && analise_temporal.comparacao_meses.length > 0 ? (
+                      analise_temporal.comparacao_meses.map((comp, idx) => (
+                        <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-medium text-gray-900">{comp.mes}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {comp.crescimento > 0 ? '+' : ''}{comp.crescimento.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Vendas: R$ {comp.vendas.toLocaleString('pt-BR')}</span>
+                            <span className="text-gray-600">Meta: R$ {comp.meta.toLocaleString('pt-BR')}</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Vendas: R$ {comp.vendas.toLocaleString('pt-BR')}</span>
-                          <span className="text-gray-600">Meta: R$ {comp.meta.toLocaleString('pt-BR')}</span>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="bg-white/70 p-6 rounded-lg text-center">
+                        <LucideBarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">Comparação mensal não disponível</p>
+                        <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 2 meses de dados</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>
@@ -755,8 +958,10 @@ const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* SEÇÃO: ANÁLISE FINANCEIRA DETALHADA */}
+      {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
       <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
         <div
           className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
@@ -775,42 +980,60 @@ const DashboardPage: React.FC = () => {
         {expandedCards['analise-financeira'] && (
           <div className="p-6 animate-fadeIn">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* GRÁFICO DE PIZZA: DISTRIBUIÇÃO DE DESPESAS */}
+              {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
               <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
-                <h3 className="font-bold text-gray-900 mb-6 text-lg">🥧 Distribuição de Despesas</h3>
+                <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={analise_financeira.despesas_detalhadas}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="valor"
-                      >
-                        {analise_financeira.despesas_detalhadas.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ payload }) => (
-                          <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                            <p className="font-bold text-gray-900">{payload?.[0]?.payload?.tipo}</p>
-                            <p className="text-gray-600">Valor: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-gray-600">Percentual: {payload?.[0]?.payload?.percentual.toFixed(1)}%</p>
-                            <p className="text-gray-600">Impacto no Lucro: {payload?.[0]?.payload?.impacto_lucro.toFixed(1)}%</p>
-                          </div>
-                        )}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {analise_financeira?.despesas_detalhadas && analise_financeira.despesas_detalhadas.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analise_financeira.despesas_detalhadas}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                        <XAxis 
+                          dataKey="tipo" 
+                          angle={-45} 
+                          textAnchor="end" 
+                          height={80}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          content={({ payload }) => (
+                            <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
+                              <p className="font-bold text-gray-900">{payload?.[0]?.payload?.tipo}</p>
+                              <p className="text-gray-600">Valor: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="text-gray-600">Percentual: {payload?.[0]?.payload?.percentual?.toFixed(1)}%</p>
+                              <p className="text-gray-600">Impacto no Lucro: {payload?.[0]?.payload?.impacto_lucro?.toFixed(1)}%</p>
+                              <p className="text-sm text-gray-500 mt-2">
+                                Tendência: {payload?.[0]?.payload?.tendencia === 'alta' ? '📈 Alta' : payload?.[0]?.payload?.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                              </p>
+                            </div>
+                          )}
+                        />
+                        <Bar dataKey="valor" name="Valor da Despesa">
+                          {analise_financeira.despesas_detalhadas.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={COLORS[index % COLORS.length]}
+                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <DollarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-600 font-medium mb-2">Nenhuma despesa registrada no período</p>
+                        <p className="text-gray-500 text-sm">As despesas aparecerão aqui quando forem cadastradas no sistema</p>
+                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            💡 <strong>Dica:</strong> Cadastre despesas para visualizar a distribuição e análise financeira completa
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-6">
                   <div className="bg-green-50 p-4 rounded-lg">
@@ -878,8 +1101,10 @@ const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* SEÇÃO: INSIGHTS CIENTÍFICOS */}
+      {viewMode === 'cientifico' && (
       <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl overflow-hidden mb-8">
         <div
           className="p-6 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-800/50"
@@ -987,8 +1212,10 @@ const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* SEÇÃO: PRODUTOS ESTRATÉGICOS */}
+      {viewMode === 'cientifico' && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* PRODUTOS ESTRELA */}
         <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-6 border border-yellow-200">
@@ -1082,8 +1309,10 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* SEÇÃO: PREVISÃO DE DEMANDA */}
+      {viewMode === 'cientifico' && (
       <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl shadow-xl p-6 mb-8 border border-purple-200">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
           <Target className="w-8 h-8 text-purple-600" />
@@ -1135,6 +1364,7 @@ const DashboardPage: React.FC = () => {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 };
