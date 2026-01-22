@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, Users, TrendingUp, AlertCircle } from 'lucide-react';
+import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle } from 'lucide-react';
 import { Fornecedor } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { Toaster, toast } from 'react-hot-toast';
@@ -68,12 +68,12 @@ const SuppliersPage: React.FC = () => {
         const com_produtos = suppliers.filter(s => (s.total_produtos || 0) > 0).length;
         const sem_produtos = total - com_produtos;
 
-        // Top fornecedor por valor de compras
+        // Top fornecedor por total de produtos
         const topFornecedor = suppliers.reduce((max, s) => 
-            (s.valor_total_comprado || 0) > (max.valor_total_comprado || 0) ? s : max
+            (s.total_produtos || 0) > (max.total_produtos || 0) ? s : max
         , suppliers[0] || null);
 
-        const valorTotalCompras = suppliers.reduce((sum, s) => sum + (s.valor_total_comprado || 0), 0);
+        const totalProdutos = suppliers.reduce((sum, s) => sum + (s.total_produtos || 0), 0);
 
         return {
             total,
@@ -83,15 +83,16 @@ const SuppliersPage: React.FC = () => {
             com_produtos,
             sem_produtos,
             topFornecedor,
-            valorTotalCompras,
+            totalProdutos,
         };
     }, [suppliers]);
 
-    const estadoMaisComum = useMemo(() => {
-        const estados = Object.entries(stats.por_estado);
-        if (estados.length === 0) return '-';
-        return estados.reduce((a, b) => a[1] > b[1] ? a : b)[0];
-    }, [stats]);
+    // Remover variável não utilizada
+    // const estadoMaisComum = useMemo(() => {
+    //     const estados = Object.entries(stats.por_estado);
+    //     if (estados.length === 0) return '-';
+    //     return estados.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+    // }, [stats]);
 
     const loadSuppliers = useCallback(async () => {
         try {
