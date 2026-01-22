@@ -6,6 +6,7 @@ Separado de vendas.py para melhor performance e manutenibilidade
 """
 
 from datetime import datetime
+from decimal import Decimal
 from flask import Blueprint, request, jsonify, current_app
 from app import db
 from app.models import (
@@ -17,7 +18,7 @@ from app.models import (
     MovimentacaoEstoque,
 )
 from app.decorators.decorator_jwt import funcionario_required
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, get_jwt
 from sqlalchemy import func
 import random
 import string
@@ -25,6 +26,17 @@ import string
 pdv_bp = Blueprint("pdv", __name__)
 
 # ==================== FUNÇÕES AUXILIARES ====================
+
+def to_float(value):
+    """Converte Decimal ou qualquer valor numérico para float de forma segura"""
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        return float(value)
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
 
 def gerar_codigo_venda():
     """Gera código único para venda no formato V-YYYYMMDD-XXXX"""
@@ -159,6 +171,10 @@ def validar_produto():
             }), 400
         
         # Retornar informações do produto
+        categoria_nome = "Sem categoria"
+        if produto.categoria:
+            categoria_nome = produto.categoria.nome
+            
         return jsonify({
             "valido": True,
             "produto": {
@@ -168,9 +184,9 @@ def validar_produto():
                 "preco_venda": float(produto.preco_venda),
                 "preco_custo": float(produto.preco_custo) if produto.preco_custo else 0,
                 "quantidade_estoque": produto.quantidade,
-                "categoria": produto.categoria,
-                "marca": produto.marca,
-                "unidade_medida": produto.unidade_medida,
+                "categoria": categoria_nome,
+                "marca": produto.marca or "",
+                "unidade_medida": produto.unidade_medida or "UN",
                 "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0,
                 "ativo": produto.ativo,
             }
@@ -265,6 +281,7 @@ def finalizar_venda():
             return jsonify({"error": "Funcionário não encontrado"}), 404
         
         data = request.get_json()
+        current_app.logger.info(f"📦 Dados recebidos para finalizar venda: {data}")
         
         # ===== VALIDAÇÕES =====
         if not data:
@@ -281,17 +298,24 @@ def finalizar_venda():
             total = float(data.get("total", 0))
             valor_recebido = float(data.get("valor_recebido", total))
             troco = float(data.get("troco", 0))
-        except ValueError:
-            return jsonify({"error": "Valores numéricos inválidos"}), 400
+        except (ValueError, TypeError) as ve:
+            current_app.logger.error(f"❌ Erro ao converter valores: {str(ve)}")
+            return jsonify({"error": f"Valores numéricos inválidos: {str(ve)}"}), 400
         
         forma_pagamento = data.get("paymentMethod", "dinheiro")
         cliente_id = data.get("cliente_id")
         observacoes = data.get("observacoes", "")
         
+        current_app.logger.info(
+            f"💰 Finalizando venda | Total: R$ {total:.2f} | "
+            f"Itens: {len(items)} | Funcionário: {funcionario.nome}"
+        )
+        
         # ===== INÍCIO DA TRANSAÇÃO =====
         try:
             # 1. GERAR CÓDIGO DA VENDA
             codigo_venda = gerar_codigo_venda()
+            current_app.logger.info(f"✅ Código gerado: {codigo_venda}")
             
             # 2. CRIAR VENDA
             nova_venda = Venda(
@@ -312,15 +336,22 @@ def finalizar_venda():
             
             db.session.add(nova_venda)
             db.session.flush()  # Obter ID da venda
+            current_app.logger.info(f"✅ Venda criada com ID: {nova_venda.id}")
             
             # 3. PROCESSAR ITENS
             itens_processados = []
             produtos_atualizados = []
             
-            for item_data in items:
+            current_app.logger.info(f"📦 Processando {len(items)} itens...")
+            
+            for idx, item_data in enumerate(items):
                 produto_id = item_data.get("id")
                 quantidade = int(item_data.get("quantity", 1))
                 desconto_item = float(item_data.get("discount", 0))
+                
+                current_app.logger.info(
+                    f"  Item {idx+1}: Produto ID={produto_id}, Qtd={quantidade}, Desc={desconto_item}"
+                )
                 
                 # Buscar produto com lock (evita race condition)
                 produto = db.session.query(Produto).with_for_update().get(produto_id)
@@ -331,41 +362,48 @@ def finalizar_venda():
                 if not produto.ativo:
                     raise ValueError(f"Produto '{produto.nome}' está inativo")
                 
-                if produto.quantidade < quantidade:
+                # Converter quantidade do produto para int para comparação
+                estoque_disponivel = int(produto.quantidade) if produto.quantidade else 0
+                
+                if estoque_disponivel < quantidade:
                     raise ValueError(
                         f"Estoque insuficiente para '{produto.nome}'. "
-                        f"Disponível: {produto.quantidade}, Solicitado: {quantidade}"
+                        f"Disponível: {estoque_disponivel}, Solicitado: {quantidade}"
                     )
                 
                 # Calcular valores
-                preco_unitario = float(produto.preco_venda)
+                preco_unitario = to_float(produto.preco_venda)
+                preco_custo = to_float(produto.preco_custo)
                 total_item = (preco_unitario * quantidade) - desconto_item
+                
+                # Calcular margem
+                margem_item = 0.0
+                if preco_unitario > 0:
+                    margem_item = round(
+                        ((preco_unitario - preco_custo) / preco_unitario * 100),
+                        2
+                    )
                 
                 # Criar item da venda
                 venda_item = VendaItem(
                     venda_id=nova_venda.id,
                     produto_id=produto.id,
                     produto_nome=produto.nome,
-                    descricao=produto.descricao,
                     produto_codigo=produto.codigo_barras,
                     produto_unidade=produto.unidade_medida,
                     quantidade=quantidade,
                     preco_unitario=preco_unitario,
                     desconto=desconto_item,
                     total_item=total_item,
-                    custo_unitario=produto.preco_custo,
-                    margem_item=round(
-                        ((preco_unitario - (produto.preco_custo or 0)) / preco_unitario * 100)
-                        if preco_unitario > 0 else 0,
-                        2
-                    )
+                    custo_unitario=preco_custo,
+                    margem_item=margem_item
                 )
                 
                 db.session.add(venda_item)
                 
                 # Atualizar estoque
-                estoque_anterior = produto.quantidade
-                produto.quantidade -= quantidade
+                estoque_anterior = int(produto.quantidade) if produto.quantidade else 0
+                produto.quantidade = estoque_anterior - quantidade
                 produto.updated_at = datetime.now()
                 
                 # Registrar movimentação
@@ -394,7 +432,9 @@ def finalizar_venda():
                 produtos_atualizados.append(produto.nome)
             
             # 4. COMMIT DA TRANSAÇÃO
+            current_app.logger.info(f"💾 Commitando transação...")
             db.session.commit()
+            current_app.logger.info(f"✅ Transação commitada com sucesso!")
             
             # 5. LOG DE SUCESSO
             current_app.logger.info(

@@ -4,11 +4,13 @@
 
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
+from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 import re
-from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber
+from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber, Funcionario
 from app.utils import validar_cpf, validar_email, formatar_telefone, calcular_idade
+from app.decorators.decorator_jwt import funcionario_required
 
 clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
 
@@ -757,7 +759,7 @@ def excluir_cliente(id):
 
 
 @clientes_bp.route("/buscar", methods=["GET"])
-@login_required
+@funcionario_required
 def buscar_clientes():
     """Busca rápida de clientes para autocomplete"""
     try:
@@ -769,8 +771,12 @@ def buscar_clientes():
         if not termo or len(termo) < 2:
             return jsonify({"success": True, "clientes": []})
 
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+
         query = Cliente.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         if apenas_ativos:
@@ -801,11 +807,14 @@ def buscar_clientes():
                 {
                     "id": cliente.id,
                     "nome": cliente.nome,
-                    "cpf": cliente.cpf,
-                    "celular": cliente.celular,
-                    "email": cliente.email,
+                    "cpf_cnpj": cliente.cpf or "",  # Alias para compatibilidade frontend
+                    "cpf": cliente.cpf or "",
+                    "telefone": cliente.celular or "",  # Alias para compatibilidade frontend
+                    "celular": cliente.celular or "",
+                    "email": cliente.email or "",
                     "ativo": cliente.ativo,
-                    "total_compras": cliente.total_compras,
+                    "total_compras": float(cliente.valor_total_gasto or 0),  # Valor total gasto
+                    "frequencia_compras": cliente.total_compras or 0,  # Quantidade de compras
                     "valor_total_gasto": float(cliente.valor_total_gasto or 0),
                     "classificacao": calcular_classificacao_cliente(cliente),
                     "limite_disponivel": calcular_limite_disponivel(cliente),
