@@ -1,0 +1,43 @@
+services:
+  # Backend API
+  - type: web
+    name: mercadinhosys-backend
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: bash build.sh
+    startCommand: bash start.sh
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false  # Configurar manualmente com Neon PostgreSQL
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://mercadinhosys-frontend.onrender.com
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    healthCheckPath: /api/auth/health
+
+  # Frontend
+  - type: web
+    name: mercadinhosys-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: frontend/mercadinhosys-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://mercadinhosys-backend.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

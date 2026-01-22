@@ -13,8 +13,43 @@ import traceback
 import pytz
 import hashlib
 import secrets
+import os
 
 auth_bp = Blueprint("auth", __name__)
+
+
+# ==================== HEALTH CHECK ====================
+
+
+@auth_bp.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint para monitoramento"""
+    try:
+        # Testar conexão com banco de dados
+        db.session.execute(db.text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        current_app.logger.error(f"Database health check failed: {str(e)}")
+        db_status = "disconnected"
+    
+    # Detectar ambiente
+    is_production = os.environ.get("RENDER") or os.environ.get("RAILWAY") or os.environ.get("HEROKU")
+    environment = "production" if is_production else "development"
+    
+    # Status geral
+    status = "healthy" if db_status == "connected" else "unhealthy"
+    
+    response = {
+        "status": status,
+        "database": db_status,
+        "environment": environment,
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "2.0.0"
+    }
+    
+    status_code = 200 if status == "healthy" else 503
+    
+    return jsonify(response), status_code
 
 
 # ==================== ROTAS DE AUTENTICAÇÃO COM AUDITORIA ====================
