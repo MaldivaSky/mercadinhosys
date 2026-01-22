@@ -1,8 +1,9 @@
 // src/features/auth/authService.ts
 import axios from 'axios';
 import { LoginApiResponse } from '../../types';
+import { API_CONFIG } from '../../api/apiConfig';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = API_CONFIG.BASE_URL;
 
 class AuthService {
     async login(identifier: string, password: string): Promise<LoginApiResponse> {
