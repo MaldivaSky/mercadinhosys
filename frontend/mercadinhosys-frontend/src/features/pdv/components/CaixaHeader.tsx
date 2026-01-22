@@ -27,8 +27,14 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
             try {
                 const data = await pdvService.getEstatisticasRapidas();
                 setStats(data);
-            } catch (error) {
-                console.error('Erro ao carregar estatísticas:', error);
+            } catch (error: any) {
+                console.error('❌ Erro ao carregar estatísticas:', error);
+                
+                // Não mostrar erro se for problema de rede (servidor offline)
+                // Apenas logar no console para não poluir a UI
+                if (error.code !== 'ERR_NETWORK') {
+                    console.warn('Estatísticas indisponíveis:', error.message);
+                }
             }
         };
 

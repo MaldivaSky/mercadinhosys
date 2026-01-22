@@ -878,6 +878,11 @@ def buscar_produtos():
 
         resultados = []
         for produto in produtos:
+            # Obter nome da categoria de forma segura
+            categoria_nome = "Sem categoria"
+            if produto.categoria:
+                categoria_nome = produto.categoria.nome
+            
             resultados.append(
                 {
                     "id": produto.id,
@@ -885,6 +890,7 @@ def buscar_produtos():
                     "codigo_barras": produto.codigo_barras,
                     "codigo_interno": produto.codigo_interno,
                     "quantidade": produto.quantidade,
+                    "quantidade_estoque": produto.quantidade,  # Alias para compatibilidade frontend
                     "preco_custo": float(produto.preco_custo),
                     "preco_venda": float(produto.preco_venda),
                     "margem_lucro": calcular_margem_lucro(
@@ -893,6 +899,9 @@ def buscar_produtos():
                     "ativo": produto.ativo,
                     "estoque_baixo": verificar_estoque_baixo(produto),
                     "validade_proxima": verificar_validade_proxima(produto),
+                    "categoria": categoria_nome,
+                    "marca": produto.marca or "",
+                    "unidade_medida": produto.unidade_medida or "UN",
                 }
             )
 

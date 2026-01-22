@@ -112,10 +112,18 @@ export const pdvService = {
      * Busca produtos por nome, marca, categoria
      */
     buscarProduto: async (query: string): Promise<Produto[]> => {
-        const response = await apiClient.get<Produto[]>('/produtos/search', {
+        const response = await apiClient.get<any>('/produtos/search', {
             params: { q: query },
         });
-        return response.data || [];
+        console.log('🔍 Resposta da API de busca:', response.data);
+        
+        // A API retorna { success: true, produtos: [...], total: X }
+        if (response.data.success && Array.isArray(response.data.produtos)) {
+            return response.data.produtos;
+        }
+        
+        // Fallback para compatibilidade
+        return Array.isArray(response.data) ? response.data : [];
     },
 
     /**
@@ -218,10 +226,18 @@ export const pdvService = {
      * Busca clientes para vincular à venda
      */
     buscarClientes: async (query: string): Promise<Cliente[]> => {
-        const response = await apiClient.get<Cliente[]>('/clientes/buscar', {
+        const response = await apiClient.get<any>('/clientes/buscar', {
             params: { q: query },
         });
-        return response.data || [];
+        console.log('👥 Resposta da API de clientes:', response.data);
+        
+        // A API retorna { success: true, clientes: [...], total: X }
+        if (response.data.success && Array.isArray(response.data.clientes)) {
+            return response.data.clientes;
+        }
+        
+        // Fallback para compatibilidade
+        return Array.isArray(response.data) ? response.data : [];
     },
 
     // ==================== IMPRESSÃO ====================

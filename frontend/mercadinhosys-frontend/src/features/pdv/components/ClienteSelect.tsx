@@ -16,12 +16,30 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
 
     useEffect(() => {
         const buscarClientes = async () => {
+            if (!query.trim() || query.trim().length < 2) {
+                setResultados([]);
+                return;
+            }
+            
             setLoading(true);
             try {
                 const clientes = await pdvService.buscarClientes(query);
-                setResultados(clientes.slice(0, 10));
-            } catch (error) {
-                console.error('Erro ao buscar clientes:', error);
+                console.log('👥 Clientes encontrados:', clientes.length, clientes);
+                
+                if (Array.isArray(clientes)) {
+                    setResultados(clientes.slice(0, 10));
+                } else {
+                    console.error('❌ Resposta inválida da API de clientes:', clientes);
+                    setResultados([]);
+                }
+            } catch (error: any) {
+                console.error('❌ Erro ao buscar clientes:', error);
+                
+                // Não mostrar erro se for problema de rede (servidor offline)
+                if (error.code !== 'ERR_NETWORK') {
+                    console.warn('Busca de clientes indisponível:', error.message);
+                }
+                
                 setResultados([]);
             } finally {
                 setLoading(false);
