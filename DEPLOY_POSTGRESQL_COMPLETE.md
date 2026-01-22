@@ -154,25 +154,26 @@ exec gunicorn run:app --bind 0.0.0.0:$PORT --workers 2
 
 ## 🗄️ Credenciais Neon PostgreSQL
 
-**Fornecidas pelo usuário:**
+**⚠️ IMPORTANTE: Suas credenciais reais estão em `backend/.env` (protegido pelo .gitignore)**
+
+**Para produção no Render.com:**
+
+Configure no Render Dashboard → Backend → Environment:
 
 ```
-Host: ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech
-Database: neondb
-User: neondb_owner
-Password: npg_jl8aMb4KGZBR
-SSL: Required
+DATABASE_URL=postgresql://SEU_USER:SUA_SENHA@SEU_HOST.neon.tech/neondb?sslmode=require
 ```
 
-**URL Completa:**
+**Formato da URL:**
 ```
-postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+postgresql://[user]:[password]@[host]/[database]?sslmode=require
 ```
 
-**Configuração no Render:**
-- Variável: `DATABASE_URL`
-- Valor: URL completa acima
-- Scope: Backend service
+**Onde encontrar suas credenciais:**
+1. Acesse: https://console.neon.tech
+2. Selecione seu projeto
+3. Vá em "Connection Details"
+4. Copie a "Connection string"
 
 ---
 
@@ -197,10 +198,11 @@ git push origin main
 ### Passo 3: Configurar DATABASE_URL
 
 1. Vá em: **mercadinhosys-backend** → **Environment**
-2. Adicione:
+2. Adicione suas credenciais Neon PostgreSQL:
    ```
-   DATABASE_URL=postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+   DATABASE_URL=postgresql://[user]:[password]@[host]/neondb?sslmode=require
    ```
+   (Obtenha em: https://console.neon.tech)
 3. Salve (redeploy automático)
 
 ### Passo 4: Atualizar URLs
