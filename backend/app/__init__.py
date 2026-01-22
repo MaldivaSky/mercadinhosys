@@ -59,12 +59,19 @@ def create_app(config_name=None):
     from app.models import login_manager
     login_manager.init_app(app)
 
-    # CORS - Allow all origins in development
+    # CORS - Configuração permissiva para produção
+    cors_origins = app.config.get('CORS_ORIGINS', [])
+    if not cors_origins:
+        # Se não tiver CORS_ORIGINS configurado, aceita tudo
+        cors_origins = "*"
+    
     CORS(app, 
-         resources={r"/api/*": {"origins": "*"}},
+         resources={r"/api/*": {"origins": cors_origins}},
          supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+         allow_headers=["Content-Type", "Authorization", "Accept"],
+         expose_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+         max_age=3600
     )
 
     # Cria pastas necessárias
