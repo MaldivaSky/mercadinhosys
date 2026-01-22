@@ -5,9 +5,17 @@ from app.models import db, Fornecedor, Produto
 
 fornecedores_fix_bp = Blueprint("fornecedores_fix", __name__)
 
-@fornecedores_fix_bp.route("", methods=["GET"])
-@jwt_required()
+@fornecedores_fix_bp.route("", methods=["GET", "OPTIONS"])
+@fornecedores_fix_bp.route("/", methods=["GET", "OPTIONS"])
 def listar():
+    # Responder OPTIONS sem autenticação
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
+    # Aplicar autenticação apenas para GET
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+        
     try:
         jwt_data = get_jwt()
         est_id = jwt_data.get("estabelecimento_id", 1)
