@@ -6,7 +6,7 @@ Separado de vendas.py para melhor performance e manutenibilidade
 """
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from flask import Blueprint, request, jsonify, current_app
 from app import db
 from app.models import (
@@ -27,16 +27,31 @@ pdv_bp = Blueprint("pdv", __name__)
 
 # ==================== FUNÇÕES AUXILIARES ====================
 
-def to_float(value):
-    """Converte Decimal ou qualquer valor numérico para float de forma segura"""
+def to_decimal(value):
+    """Converte qualquer valor numérico para Decimal de forma segura (2 casas decimais)"""
     if value is None:
-        return 0.0
+        return Decimal('0.00')
+    if isinstance(value, Decimal):
+        return value.quantize(Decimal('0.01'))
+    try:
+        return Decimal(str(value)).quantize(Decimal('0.01'))
+    except (ValueError, TypeError, InvalidOperation):
+        return Decimal('0.00')
+
+
+def decimal_to_float(value):
+    """Converte Decimal para float APENAS para serialização JSON"""
     if isinstance(value, Decimal):
         return float(value)
-    try:
+    return value
+
+
+def decimal_to_float(value):
+    """Converte Decimal para float APENAS para serialização JSON"""
+    if isinstance(value, Decimal):
         return float(value)
-    except (ValueError, TypeError):
-        return 0.0
+    return value
+
 
 def gerar_codigo_venda():
     """Gera código único para venda no formato V-YYYYMMDD-XXXX"""
@@ -69,22 +84,28 @@ def validar_estoque_disponivel(produto_id, quantidade_solicitada):
 
 
 def calcular_totais_venda(itens, desconto_geral=0, desconto_percentual=False):
-    """Calcula subtotal, desconto e total da venda"""
-    subtotal = sum(item['total_item'] for item in itens)
+    """Calcula subtotal, desconto e total da venda usando Decimal para precisão"""
+    # Converter tudo para Decimal
+    subtotal = Decimal('0.00')
+    for item in itens:
+        subtotal += to_decimal(item['total_item'])
+    
+    desconto_geral_dec = to_decimal(desconto_geral)
     
     # Calcular desconto
     if desconto_percentual:
-        desconto_valor = subtotal * (desconto_geral / 100)
+        desconto_valor = subtotal * (desconto_geral_dec / Decimal('100'))
     else:
-        desconto_valor = desconto_geral
+        desconto_valor = desconto_geral_dec
     
-    desconto_valor = min(desconto_valor, subtotal)  # Desconto não pode ser maior que subtotal
+    # Desconto não pode ser maior que subtotal
+    desconto_valor = min(desconto_valor, subtotal)
     total = subtotal - desconto_valor
     
     return {
-        'subtotal': round(subtotal, 2),
-        'desconto': round(desconto_valor, 2),
-        'total': round(total, 2)
+        'subtotal': subtotal.quantize(Decimal('0.01')),
+        'desconto': desconto_valor.quantize(Decimal('0.01')),
+        'total': total.quantize(Decimal('0.01'))
     }
 
 
@@ -291,23 +312,31 @@ def finalizar_venda():
         if not items or len(items) == 0:
             return jsonify({"error": "Nenhum produto na venda"}), 400
         
+        # VALIDAÇÃO CRÍTICA: Cliente obrigatório (replicar regra do frontend no backend)
+        cliente_id = data.get("cliente_id")
+        # TODO: Buscar configuração do estabelecimento para verificar se exige cliente
+        # Por enquanto, vamos permitir venda sem cliente, mas logar um warning
+        if not cliente_id:
+            current_app.logger.warning(
+                f"⚠️ Venda sem cliente - Funcionário: {funcionario.nome} (ID: {funcionario.id})"
+            )
+        
         # Validar valores numéricos
         try:
-            subtotal = float(data.get("subtotal", 0))
-            desconto_geral = float(data.get("desconto", 0))
-            total = float(data.get("total", 0))
-            valor_recebido = float(data.get("valor_recebido", total))
-            troco = float(data.get("troco", 0))
-        except (ValueError, TypeError) as ve:
+            subtotal = to_decimal(data.get("subtotal", 0))
+            desconto_geral = to_decimal(data.get("desconto", 0))
+            total = to_decimal(data.get("total", 0))
+            valor_recebido = to_decimal(data.get("valor_recebido", total))
+            troco = to_decimal(data.get("troco", 0))
+        except (ValueError, TypeError, InvalidOperation) as ve:
             current_app.logger.error(f"❌ Erro ao converter valores: {str(ve)}")
             return jsonify({"error": f"Valores numéricos inválidos: {str(ve)}"}), 400
         
         forma_pagamento = data.get("paymentMethod", "dinheiro")
-        cliente_id = data.get("cliente_id")
         observacoes = data.get("observacoes", "")
         
         current_app.logger.info(
-            f"💰 Finalizando venda | Total: R$ {total:.2f} | "
+            f"💰 Finalizando venda | Total: R$ {decimal_to_float(total):.2f} | "
             f"Itens: {len(items)} | Funcionário: {funcionario.nome}"
         )
         
