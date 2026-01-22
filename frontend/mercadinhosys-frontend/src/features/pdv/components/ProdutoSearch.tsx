@@ -52,11 +52,29 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                     // Buscar por nome, marca, categoria
                     const produtos = await pdvService.buscarProduto(query);
                     console.log('📦 Produtos encontrados:', produtos.length, produtos);
-                    setResultados(produtos.slice(0, 20));
+                    
+                    if (Array.isArray(produtos)) {
+                        setResultados(produtos.slice(0, 20));
+                    } else {
+                        console.error('❌ Resposta inválida da API:', produtos);
+                        setErro('Erro ao processar resposta da API');
+                        setResultados([]);
+                    }
                 }
             } catch (error: any) {
-                console.error('Erro ao buscar produtos:', error);
-                setErro(error.response?.data?.error || 'Erro ao buscar produtos');
+                console.error('❌ Erro ao buscar produtos:', error);
+                
+                // Mensagens de erro mais específicas
+                if (error.code === 'ERR_NETWORK') {
+                    setErro('⚠️ Servidor offline. Verifique se o backend está rodando.');
+                } else if (error.response?.status === 401) {
+                    setErro('🔒 Sessão expirada. Faça login novamente.');
+                } else if (error.response?.status === 404) {
+                    setErro('❌ Endpoint não encontrado. Verifique a configuração da API.');
+                } else {
+                    setErro(error.response?.data?.error || error.message || 'Erro ao buscar produtos');
+                }
+                
                 setResultados([]);
             } finally {
                 setLoading(false);
