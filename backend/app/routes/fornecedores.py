@@ -3,7 +3,8 @@
 # CRUD completo com todas as operações necessárias
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_login import login_required, current_user
+from flask_jwt_extended import get_jwt
+from app.decorators.decorator_jwt import funcionario_required
 from datetime import datetime
 from decimal import Decimal
 import re
@@ -24,7 +25,7 @@ fornecedores_bp = Blueprint("fornecedores", __name__)
 # ============================================
 
 
-def validar_dados_fornecedor(data, fornecedor_id=None):
+def validar_dados_fornecedor(data, fornecedor_id=None, estabelecimento_id=None):
     """Valida todos os dados do fornecedor antes de salvar"""
     erros = []
 
@@ -35,7 +36,7 @@ def validar_dados_fornecedor(data, fornecedor_id=None):
             erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
 
     # Validação de CNPJ
-    if data.get("cnpj"):
+    if data.get("cnpj") and estabelecimento_id:
         cnpj = re.sub(r"\D", "", data["cnpj"])
         if len(cnpj) != 14:
             erros.append("CNPJ deve conter 14 dígitos")
@@ -44,7 +45,7 @@ def validar_dados_fornecedor(data, fornecedor_id=None):
 
         # Verifica se CNPJ já existe (exceto para o próprio fornecedor em atualização)
         fornecedor_existente = Fornecedor.query.filter_by(
-            cnpj=cnpj, estabelecimento_id=current_user.estabelecimento_id
+            cnpj=cnpj, estabelecimento_id=estabelecimento_id
         ).first()
 
         if fornecedor_existente and fornecedor_existente.id != fornecedor_id:
@@ -144,11 +145,15 @@ def calcular_classificacao_fornecedor(fornecedor):
 # ============================================
 
 
-@fornecedores_bp.route("/api/fornecedores", methods=["GET"])
-@login_required
+@fornecedores_bp.route("", methods=["GET"])
+@funcionario_required
 def listar_fornecedores():
     """Lista todos os fornecedores com filtros e paginação"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
         ativo = request.args.get("ativo", None, type=str)
@@ -157,7 +162,7 @@ def listar_fornecedores():
 
         # Query base
         query = Fornecedor.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         # Filtros
@@ -205,7 +210,7 @@ def listar_fornecedores():
             produtos_ativos = Produto.query.filter_by(
                 fornecedor_id=fornecedor.id,
                 ativo=True,
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=estabelecimento_id,
             ).count()
             fornecedor_dict["produtos_ativos"] = produtos_ativos
 
@@ -232,13 +237,17 @@ def listar_fornecedores():
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/<int:id>", methods=["GET"])
-@login_required
+@fornecedores_bp.route("/<int:id>", methods=["GET"])
+@funcionario_required
 def obter_fornecedor(id):
     """Obtém detalhes completos de um fornecedor específico"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         fornecedor = Fornecedor.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Dados básicos
@@ -246,18 +255,18 @@ def obter_fornecedor(id):
 
         # Estatísticas
         pedidos = PedidoCompra.query.filter_by(
-            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+            fornecedor_id=id, estabelecimento_id=estabelecimento_id
         ).all()
 
         contas_pagar = ContaPagar.query.filter_by(
             fornecedor_id=id,
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
             status="aberto",
         ).all()
 
         produtos = Produto.query.filter_by(
             fornecedor_id=id,
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
             ativo=True,
         ).all()
 
@@ -325,15 +334,20 @@ def obter_fornecedor(id):
         )
 
 
-@fornecedores_bp.route("/api/fornecedores", methods=["POST"])
-@login_required
+@fornecedores_bp.route("", methods=["POST"])
+@funcionario_required
 def criar_fornecedor():
     """Cria um novo fornecedor"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         data = request.get_json()
 
         # Validação dos dados
-        erros = validar_dados_fornecedor(data)
+        erros = validar_dados_fornecedor(data, estabelecimento_id=estabelecimento_id)
         if erros:
             return (
                 jsonify(
@@ -348,7 +362,7 @@ def criar_fornecedor():
 
         # Criar fornecedor
         fornecedor = Fornecedor(
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
             nome_fantasia=data["nome_fantasia"].strip(),
             razao_social=data["razao_social"].strip(),
             cnpj=cnpj_formatado,
@@ -379,7 +393,7 @@ def criar_fornecedor():
 
         # Log de auditoria
         current_app.logger.info(
-            f"Fornecedor criado: {fornecedor.id} - {fornecedor.nome_fantasia} por {current_user.username}"
+            f"Fornecedor criado: {fornecedor.id} - {fornecedor.nome_fantasia} por {username}"
         )
 
         return (
@@ -402,19 +416,24 @@ def criar_fornecedor():
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/<int:id>", methods=["PUT"])
-@login_required
+@fornecedores_bp.route("/<int:id>", methods=["PUT"])
+@funcionario_required
 def atualizar_fornecedor(id):
     """Atualiza um fornecedor existente"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         fornecedor = Fornecedor.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
 
         # Validação dos dados (passando ID para verificação de CNPJ único)
-        erros = validar_dados_fornecedor(data, fornecedor.id)
+        erros = validar_dados_fornecedor(data, fornecedor.id, estabelecimento_id)
         if erros:
             return (
                 jsonify(
@@ -472,7 +491,7 @@ def atualizar_fornecedor(id):
 
         # Log de auditoria
         current_app.logger.info(
-            f"Fornecedor atualizado: {fornecedor.id} por {current_user.username}"
+            f"Fornecedor atualizado: {fornecedor.id} por {username}"
         )
 
         return jsonify(
@@ -494,13 +513,18 @@ def atualizar_fornecedor(id):
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/<int:id>/status", methods=["PATCH"])
-@login_required
+@fornecedores_bp.route("/<int:id>/status", methods=["PATCH"])
+@funcionario_required
 def atualizar_status_fornecedor(id):
     """Ativa/desativa um fornecedor"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         fornecedor = Fornecedor.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
@@ -517,7 +541,7 @@ def atualizar_status_fornecedor(id):
             produtos_ativos = Produto.query.filter_by(
                 fornecedor_id=id,
                 ativo=True,
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=estabelecimento_id,
             ).count()
 
             if produtos_ativos > 0:
@@ -538,7 +562,7 @@ def atualizar_status_fornecedor(id):
 
         acao = "ativado" if novo_status else "desativado"
         current_app.logger.info(
-            f"Fornecedor {acao}: {fornecedor.id} por {current_user.username}"
+            f"Fornecedor {acao}: {fornecedor.id} por {username}"
         )
 
         return jsonify(
@@ -565,29 +589,34 @@ def atualizar_status_fornecedor(id):
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/<int:id>", methods=["DELETE"])
-@login_required
+@fornecedores_bp.route("/<int:id>", methods=["DELETE"])
+@funcionario_required
 def excluir_fornecedor(id):
     """Exclui um fornecedor (apenas se não houver vínculos)"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         fornecedor = Fornecedor.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Verificar vínculos
         # 1. Produtos vinculados
         produtos_count = Produto.query.filter_by(
-            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+            fornecedor_id=id, estabelecimento_id=estabelecimento_id
         ).count()
 
         # 2. Pedidos de compra
         pedidos_count = PedidoCompra.query.filter_by(
-            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+            fornecedor_id=id, estabelecimento_id=estabelecimento_id
         ).count()
 
         # 3. Contas a pagar
         contas_count = ContaPagar.query.filter_by(
-            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+            fornecedor_id=id, estabelecimento_id=estabelecimento_id
         ).count()
 
         if produtos_count > 0 or pedidos_count > 0 or contas_count > 0:
@@ -611,7 +640,7 @@ def excluir_fornecedor(id):
         db.session.commit()
 
         current_app.logger.info(
-            f"Fornecedor excluído: {id} por {current_user.username}"
+            f"Fornecedor excluído: {id} por {username}"
         )
 
         return jsonify({"success": True, "message": "Fornecedor excluído com sucesso"})
@@ -627,11 +656,15 @@ def excluir_fornecedor(id):
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/busca", methods=["GET"])
-@login_required
+@fornecedores_bp.route("/busca", methods=["GET"])
+@funcionario_required
 def buscar_fornecedores():
     """Busca rápida de fornecedores para autocomplete"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         termo = request.args.get("q", "", type=str).strip()
         limite = request.args.get("limite", 20, type=int)
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
@@ -640,7 +673,7 @@ def buscar_fornecedores():
             return jsonify({"success": True, "fornecedores": []})
 
         query = Fornecedor.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         if apenas_ativos:
@@ -689,12 +722,14 @@ def buscar_fornecedores():
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/estatisticas", methods=["GET"])
-@login_required
+@fornecedores_bp.route("/estatisticas", methods=["GET"])
+@funcionario_required
 def estatisticas_fornecedores():
     """Retorna estatísticas gerais sobre fornecedores"""
     try:
-        estabelecimento_id = current_user.estabelecimento_id
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
 
         # Total de fornecedores
         total_fornecedores = Fornecedor.query.filter_by(
@@ -801,23 +836,27 @@ def estatisticas_fornecedores():
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/<int:id>/pedidos", methods=["GET"])
-@login_required
+@fornecedores_bp.route("/<int:id>/pedidos", methods=["GET"])
+@funcionario_required
 def listar_pedidos_fornecedor(id):
     """Lista todos os pedidos de um fornecedor"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 20, type=int)
         status = request.args.get("status", None, type=str)
 
         # Verificar se fornecedor existe
         fornecedor = Fornecedor.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Query de pedidos
         query = PedidoCompra.query.filter_by(
-            fornecedor_id=id, estabelecimento_id=current_user.estabelecimento_id
+            fornecedor_id=id, estabelecimento_id=estabelecimento_id
         )
 
         if status:
@@ -870,17 +909,21 @@ def listar_pedidos_fornecedor(id):
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/exportar", methods=["GET"])
-@login_required
+@fornecedores_bp.route("/exportar", methods=["GET"])
+@funcionario_required
 def exportar_fornecedores():
     """Exporta fornecedores em formato CSV ou Excel"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         formato = request.args.get("formato", "csv", type=str).lower()
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
 
         # Buscar fornecedores
         query = Fornecedor.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         if apenas_ativos:
@@ -1050,11 +1093,15 @@ def exportar_fornecedores():
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/importar", methods=["POST"])
-@login_required
+@fornecedores_bp.route("/importar", methods=["POST"])
+@funcionario_required
 def importar_fornecedores():
     """Importa fornecedores a partir de arquivo CSV"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         if "file" not in request.files:
             return jsonify({"success": False, "message": "Nenhum arquivo enviado"}), 400
 
@@ -1116,7 +1163,7 @@ def importar_fornecedores():
                 cnpj_formatado = formatar_cnpj(linha["cnpj"])
                 fornecedor_existente = Fornecedor.query.filter_by(
                     cnpj=cnpj_formatado,
-                    estabelecimento_id=current_user.estabelecimento_id,
+                    estabelecimento_id=estabelecimento_id,
                 ).first()
 
                 if fornecedor_existente:
@@ -1130,7 +1177,7 @@ def importar_fornecedores():
                 else:
                     # Criar novo fornecedor
                     fornecedor = Fornecedor(
-                        estabelecimento_id=current_user.estabelecimento_id,
+                        estabelecimento_id=estabelecimento_id,
                         nome_fantasia=linha["nome_fantasia"].strip(),
                         razao_social=linha["razao_social"].strip(),
                         cnpj=cnpj_formatado,
@@ -1189,11 +1236,15 @@ def importar_fornecedores():
         )
 
 
-@fornecedores_bp.route("/api/fornecedores/relatorio/analitico", methods=["GET"])
-@login_required
+@fornecedores_bp.route("/relatorio/analitico", methods=["GET"])
+@funcionario_required
 def relatorio_analitico_fornecedores():
     """Gera relatório analítico detalhado dos fornecedores"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         # Parâmetros de filtro
         data_inicio = request.args.get("data_inicio", None)
         data_fim = request.args.get("data_fim", None)
@@ -1201,7 +1252,7 @@ def relatorio_analitico_fornecedores():
 
         # Query base de fornecedores
         query = Fornecedor.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id, ativo=True
+            estabelecimento_id=estabelecimento_id, ativo=True
         )
 
         if classificacao:
@@ -1214,7 +1265,7 @@ def relatorio_analitico_fornecedores():
             # Pedidos do fornecedor no período
             pedidos_query = PedidoCompra.query.filter_by(
                 fornecedor_id=fornecedor.id,
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=estabelecimento_id,
             )
 
             if data_inicio:
@@ -1250,7 +1301,7 @@ def relatorio_analitico_fornecedores():
             # Produtos fornecidos
             produtos = Produto.query.filter_by(
                 fornecedor_id=fornecedor.id,
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=estabelecimento_id,
                 ativo=True,
             ).all()
 
