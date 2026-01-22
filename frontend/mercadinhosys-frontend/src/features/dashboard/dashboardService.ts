@@ -527,7 +527,7 @@ export const formatarDataHora = (dataString: string): string => {
 };
 
 // ==================== FUNÇÕES DE ANÁLISE ====================
-export const calcularTendenciaTexto = (inclinacao: number, confianca: string): string => {
+export const calcularTendenciaTexto = (inclinacao: number, _confianca: string): string => {
     if (Math.abs(inclinacao) < 0.1) return 'Estável';
     if (inclinacao > 0) return 'Em Crescimento';
     return 'Em Queda';
