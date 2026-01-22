@@ -51,6 +51,7 @@ Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
 - **[ANALISE_SISTEMA_MERCADINHOSYS.md](ANALISE_SISTEMA_MERCADINHOSYS.md)** - Análise do sistema
 - **[CORRECOES_CRITICAS_ARQUITETURA.md](CORRECOES_CRITICAS_ARQUITETURA.md)** - Correções arquiteturais
 - **[DASHBOARD_*.md](DASHBOARD_RESUMO_FINAL.md)** - Documentação do Dashboard
+- **[EMAIL_NOTA_FISCAL.md](EMAIL_NOTA_FISCAL.md)** - Sistema de envio de cupom por email
 
 ---
 
@@ -88,6 +89,7 @@ Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
 * Múltiplos métodos de pagamento
 * Autorização de gerente para descontos
 * Busca rápida de produtos e clientes
+* **📧 Envio de cupom fiscal por email**
 
 ### 📊 Dashboard Científico
 * **3 Modos de Visualização:**

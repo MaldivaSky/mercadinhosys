@@ -293,6 +293,7 @@ def finalizar_venda():
     - Atualiza estoque
     - Registra movimentações
     - Retorna comprovante
+    - Envia email (opcional)
     """
     try:
         current_user_id = get_jwt_identity()
@@ -465,25 +466,17 @@ def finalizar_venda():
             db.session.commit()
             current_app.logger.info(f"✅ Transação commitada com sucesso!")
             
-            # 5. LOG DE SUCESSO
-            current_app.logger.info(
-                f"✅ Venda {codigo_venda} finalizada | "
-                f"Total: R$ {total:.2f} | "
-                f"Itens: {len(itens_processados)} | "
-                f"Funcionário: {funcionario.nome}"
-            )
-            
-            # 6. PREPARAR RESPOSTA
-            return jsonify({
+            # 5. PREPARAR RESPOSTA
+            resposta_venda = {
                 "success": True,
                 "message": "Venda finalizada com sucesso!",
                 "venda": {
                     "id": nova_venda.id,
                     "codigo": codigo_venda,
-                    "total": total,
-                    "subtotal": subtotal,
-                    "desconto": desconto_geral,
-                    "troco": troco,
+                    "total": decimal_to_float(total),
+                    "subtotal": decimal_to_float(subtotal),
+                    "desconto": decimal_to_float(desconto_geral),
+                    "troco": decimal_to_float(troco),
                     "forma_pagamento": forma_pagamento,
                     "data": nova_venda.data_venda.isoformat(),
                     "quantidade_itens": len(itens_processados),
@@ -496,15 +489,54 @@ def finalizar_venda():
                     "funcionario": funcionario.nome,
                     "cliente": nova_venda.cliente.nome if nova_venda.cliente else "Consumidor Final",
                     "itens": itens_processados,
-                    "subtotal": subtotal,
-                    "desconto": desconto_geral,
-                    "total": total,
+                    "subtotal": decimal_to_float(subtotal),
+                    "desconto": decimal_to_float(desconto_geral),
+                    "total": decimal_to_float(total),
                     "forma_pagamento": forma_pagamento.replace("_", " ").title(),
-                    "valor_recebido": valor_recebido,
-                    "troco": troco,
+                    "valor_recebido": decimal_to_float(valor_recebido),
+                    "troco": decimal_to_float(troco),
                     "rodape": "Obrigado pela preferência!",
                 }
-            }), 201
+            }
+            
+            # 6. ENVIAR EMAIL (se solicitado e cliente tiver email)
+            enviar_email = data.get("enviar_email", False)
+            if enviar_email and nova_venda.cliente and nova_venda.cliente.email:
+                try:
+                    from app.utils.email_service import enviar_cupom_fiscal
+                    
+                    email_enviado = enviar_cupom_fiscal(
+                        venda_data=resposta_venda,
+                        cliente_email=nova_venda.cliente.email
+                    )
+                    
+                    if email_enviado:
+                        resposta_venda["email_enviado"] = True
+                        resposta_venda["email_destinatario"] = nova_venda.cliente.email
+                        current_app.logger.info(
+                            f"📧 Email enviado para {nova_venda.cliente.email} - Venda {codigo_venda}"
+                        )
+                    else:
+                        resposta_venda["email_enviado"] = False
+                        resposta_venda["email_erro"] = "Falha ao enviar email"
+                        current_app.logger.warning(
+                            f"⚠️ Falha ao enviar email para {nova_venda.cliente.email}"
+                        )
+                        
+                except Exception as email_error:
+                    current_app.logger.error(f"❌ Erro ao enviar email: {str(email_error)}")
+                    resposta_venda["email_enviado"] = False
+                    resposta_venda["email_erro"] = str(email_error)
+            
+            # 7. LOG DE SUCESSO
+            current_app.logger.info(
+                f"✅ Venda {codigo_venda} finalizada | "
+                f"Total: R$ {decimal_to_float(total):.2f} | "
+                f"Itens: {len(itens_processados)} | "
+                f"Funcionário: {funcionario.nome}"
+            )
+            
+            return jsonify(resposta_venda), 201
             
         except ValueError as ve:
             db.session.rollback()
