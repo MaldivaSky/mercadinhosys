@@ -408,13 +408,62 @@ const PDVPage: React.FC = () => {
 
                                 {/* Indicador de permissões */}
                                 {configuracoes && (
-                                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                        <div className="flex items-center space-x-2 text-xs text-blue-700 dark:text-blue-300">
-                                            <Tag className="w-4 h-4" />
-                                            <span>
-                                                Limite de desconto: {configuracoes.funcionario.limite_desconto}%
-                                            </span>
+                                    <div className={`mt-4 p-3 rounded-lg ${
+                                        configuracoes.funcionario.role === 'ADMIN' 
+                                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                                            : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                                    }`}>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center space-x-2">
+                                                <Tag className="w-4 h-4" />
+                                                <span className={
+                                                    configuracoes.funcionario.role === 'ADMIN'
+                                                        ? 'text-green-700 dark:text-green-300 font-semibold'
+                                                        : 'text-blue-700 dark:text-blue-300'
+                                                }>
+                                                    {configuracoes.funcionario.role === 'ADMIN' 
+                                                        ? '👑 Admin - Desconto Ilimitado'
+                                                        : `Limite de desconto: ${configuracoes.funcionario.limite_desconto}%`
+                                                    }
+                                                </span>
+                                            </div>
+                                            {configuracoes.funcionario.role === 'ADMIN' && (
+                                                <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-xs font-bold">
+                                                    ✓ Sem Limite
+                                                </span>
+                                            )}
                                         </div>
+                                        {configuracoes.funcionario.role !== 'ADMIN' && descontoGeralCalculado > 0 && (
+                                            <div className="mt-2">
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className="text-gray-600 dark:text-gray-400">
+                                                        Desconto usado: {((descontoGeralCalculado / subtotal) * 100).toFixed(1)}%
+                                                    </span>
+                                                    <span className={`font-semibold ${
+                                                        ((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
+                                                            ? 'text-red-600 dark:text-red-400'
+                                                            : 'text-green-600 dark:text-green-400'
+                                                    }`}>
+                                                        {((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
+                                                            ? '⚠️ Requer autorização'
+                                                            : '✓ Dentro do limite'
+                                                        }
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                    <div
+                                                        className={`h-2 rounded-full transition-all ${
+                                                            ((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
+                                                                ? 'bg-red-500'
+                                                                : 'bg-green-500'
+                                                        }`}
+                                                        style={{
+                                                            width: `${Math.min(100, ((descontoGeralCalculado / subtotal) * 100 / configuracoes.funcionario.limite_desconto) * 100)}%`
+                                                        }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
