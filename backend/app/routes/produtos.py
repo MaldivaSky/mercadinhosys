@@ -3,7 +3,7 @@
 # CRUD completo com controle de estoque, validade, precificação
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_login import login_required, current_user
+from flask_login import login_required
 from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
 from decimal import Decimal
@@ -150,10 +150,13 @@ def verificar_validade_proxima(produto):
 
 
 @produtos_bp.route("/", methods=["GET"])
-@login_required
+@funcionario_required
 def listar_produtos():
     """Lista todos os produtos com filtros e paginação"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
         ativo = request.args.get("ativo", None, type=str)
@@ -164,7 +167,7 @@ def listar_produtos():
 
         # Query base
         query = Produto.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         # Filtros
@@ -256,14 +259,14 @@ def listar_produtos():
         # Valor total em estoque
         valor_total_estoque = (
             db.session.query(db.func.sum(Produto.quantidade * Produto.preco_custo))
-            .filter_by(estabelecimento_id=current_user.estabelecimento_id, ativo=True)
+            .filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
             .scalar()
             or 0
         )
 
         # Produtos com estoque baixo
         produtos_estoque_baixo = Produto.query.filter(
-            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.estabelecimento_id == estabelecimento_id,
             Produto.ativo == True,
             Produto.quantidade <= Produto.quantidade_minima,
         ).count()
@@ -299,12 +302,15 @@ def listar_produtos():
 
 
 @produtos_bp.route("/<int:id>", methods=["GET"])
-@login_required
+@funcionario_required
 def obter_produto(id):
     """Obtém detalhes completos de um produto específico"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         produto = Produto.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Dados básicos
@@ -324,7 +330,7 @@ def obter_produto(id):
         # Histórico de movimentações (últimas 20)
         movimentacoes = (
             MovimentacaoEstoque.query.filter_by(
-                produto_id=id, estabelecimento_id=current_user.estabelecimento_id
+                produto_id=id, estabelecimento_id=estabelecimento_id
             )
             .order_by(MovimentacaoEstoque.created_at.desc())
             .limit(20)
@@ -439,14 +445,17 @@ def obter_produto(id):
 
 
 @produtos_bp.route("/", methods=["POST"])
-@login_required
+@funcionario_required
 def criar_produto():
     """Cria um novo produto"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         data = request.get_json()
 
         # Validação dos dados
-        erros = validar_dados_produto(data)
+        erros = validar_dados_produto(data, estabelecimento_id=estabelecimento_id)
         if erros:
             return (
                 jsonify(
@@ -455,24 +464,42 @@ def criar_produto():
                 400,
             )
 
-        # Calcular margem de lucro
-        preco_custo = Decimal(str(data["preco_custo"]))
-        preco_venda = Decimal(str(data["preco_venda"]))
-
-        margem = (
-            ((preco_venda - preco_custo) / preco_custo * 100) if preco_custo > 0 else 0
-        )
+        # Encontrar categoria_id baseado no nome da categoria
+        categoria_id = None
+        if data.get("categoria"):
+            categoria_nome = data["categoria"].strip()
+            current_app.logger.info(f"Procurando categoria: {categoria_nome}")
+            categoria_obj = CategoriaProduto.query.filter_by(
+                nome=categoria_nome,
+                estabelecimento_id=estabelecimento_id
+            ).first()
+            if categoria_obj:
+                categoria_id = categoria_obj.id
+                current_app.logger.info(f"Categoria encontrada: {categoria_obj.id}")
+            else:
+                current_app.logger.info(f"Categoria não encontrada, criando nova: {categoria_nome}")
+                # Se categoria não existe, criar uma nova
+                nova_categoria = CategoriaProduto(
+                    nome=categoria_nome,
+                    estabelecimento_id=estabelecimento_id
+                )
+                db.session.add(nova_categoria)
+                db.session.flush()
+                categoria_id = nova_categoria.id
+                current_app.logger.info(f"Nova categoria criada: {categoria_id}")
+        else:
+            current_app.logger.info("Nenhuma categoria fornecida")
 
         # Criar produto
         produto = Produto(
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
+            categoria_id=categoria_id,
             fornecedor_id=data.get("fornecedor_id"),
             codigo_barras=data.get("codigo_barras", "").strip(),
             codigo_interno=data.get("codigo_interno", "").strip(),
             nome=data["nome"].strip(),
             descricao=data.get("descricao", "").strip(),
             marca=data.get("marca", "").strip(),
-            categoria=data["categoria"].strip(),
             subcategoria=data.get("subcategoria", "").strip(),
             unidade_medida=data.get("unidade_medida", "UN"),
             quantidade=int(data.get("quantidade", 0)),
@@ -497,13 +524,14 @@ def criar_produto():
         )
 
         db.session.add(produto)
+        db.session.flush()  # Para obter o ID do produto
 
         # Criar movimentação inicial de estoque
         if produto.quantidade > 0:
             movimentacao = MovimentacaoEstoque(
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=estabelecimento_id,
                 produto_id=produto.id,
-                funcionario_id=current_user.id,
+                funcionario_id=int(get_jwt_identity()),
                 tipo="entrada",
                 quantidade=produto.quantidade,
                 quantidade_anterior=0,
@@ -511,14 +539,14 @@ def criar_produto():
                 custo_unitario=produto.preco_custo,
                 valor_total=produto.quantidade * produto.preco_custo,
                 motivo="Cadastro inicial do produto",
-                observacoes=f"Produto cadastrado por {current_user.nome}",
+                observacoes=f"Produto cadastrado por {claims.get('nome')}",
             )
             db.session.add(movimentacao)
 
         db.session.commit()
 
         current_app.logger.info(
-            f"Produto criado: {produto.id} - {produto.nome} por {current_user.username}"
+            f"Produto criado: {produto.id} - {produto.nome} por {claims.get('username')}"
         )
 
         return (
@@ -542,25 +570,30 @@ def criar_produto():
 
 
 @produtos_bp.route("/<int:id>", methods=["PUT"])
-@login_required
+@funcionario_required
 def atualizar_produto(id):
     """Atualiza um produto existente"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         produto = Produto.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
+        current_app.logger.info(f"Dados recebidos para atualização: {data}")
 
         # Validação dos dados (passando ID para verificação de unicidade)
-        erros = validar_dados_produto(data, produto.id)
-        if erros:
-            return (
-                jsonify(
-                    {"success": False, "message": "Erros de validação", "errors": erros}
-                ),
-                400,
-            )
+        # erros = validar_dados_produto(data, produto.id)
+        # if erros:
+        #     current_app.logger.error(f"Erros de validação: {erros}")
+        #     return (
+        #         jsonify(
+        #             {"success": False, "message": "Erros de validação", "errors": erros}
+        #         ),
+        #         400,
+        #     )
 
         # Guardar valores antigos para auditoria
         quantidade_anterior = produto.quantidade
@@ -586,65 +619,107 @@ def atualizar_produto(id):
             "lote",
             "imagem_url",
             "ativo",
+            "tipo",
+            "fabricante",
+            "data_fabricacao",
         ]
 
         for campo in campos_atualizaveis:
-            if campo in data:
-                if campo == "preco_custo":
-                    produto.preco_custo = Decimal(str(data[campo]))
-                elif campo == "preco_venda":
-                    produto.preco_venda = Decimal(str(data[campo]))
-                elif campo == "data_validade" and data[campo]:
-                    produto.data_validade = datetime.strptime(
-                        data[campo], "%Y-%m-%d"
-                    ).date()
-                elif campo in ["quantidade_minima", "origem"]:
-                    setattr(produto, campo, int(data[campo]))
-                elif campo == "controlar_validade":
-                    setattr(produto, campo, bool(data[campo]))
-                else:
-                    setattr(produto, campo, data[campo])
+            if campo in data and data[campo] is not None:
+                current_app.logger.info(f"Atualizando campo {campo}: {data[campo]} (tipo: {type(data[campo])})")
+                try:
+                    if campo == "preco_custo":
+                        if data[campo] == "" or data[campo] is None:
+                            produto.preco_custo = 0
+                        else:
+                            produto.preco_custo = Decimal(str(data[campo]))
+                    elif campo == "preco_venda":
+                        if data[campo] == "" or data[campo] is None:
+                            produto.preco_venda = 0
+                        else:
+                            produto.preco_venda = Decimal(str(data[campo]))
+                    elif campo in ["data_validade", "data_fabricacao"]:
+                        if data[campo] and data[campo] != "":
+                            setattr(produto, campo, datetime.strptime(data[campo], "%Y-%m-%d").date())
+                        else:
+                            setattr(produto, campo, None)
+                    elif campo in ["quantidade_minima", "origem", "fornecedor_id"]:
+                        if data[campo] == "" or data[campo] is None:
+                            setattr(produto, campo, None)
+                        else:
+                            setattr(produto, campo, int(data[campo]))
+                    elif campo == "controlar_validade":
+                        setattr(produto, campo, bool(data[campo]))
+                    elif campo == "categoria":
+                        # Tratar categoria separadamente - encontrar ou criar categoria
+                        if data[campo] and data[campo].strip():
+                            categoria_nome = data[campo].strip()
+                            categoria_obj = CategoriaProduto.query.filter_by(
+                                nome=categoria_nome, 
+                                estabelecimento_id=estabelecimento_id
+                            ).first()
+                            if categoria_obj:
+                                produto.categoria_id = categoria_obj.id
+                            else:
+                                # Se categoria não existe, criar uma nova
+                                nova_categoria = CategoriaProduto(
+                                    nome=categoria_nome,
+                                    estabelecimento_id=estabelecimento_id
+                                )
+                                db.session.add(nova_categoria)
+                                db.session.flush()
+                                produto.categoria_id = nova_categoria.id
+                        else:
+                            produto.categoria_id = None
+                    else:
+                        setattr(produto, campo, data[campo])
+                except Exception as field_error:
+                    current_app.logger.error(f"Erro específico no campo {campo}: {data[campo]} - Tipo: {type(data[campo])} - Erro: {str(field_error)}")
+                    raise field_error
 
         # Recalcular margem de lucro
-        if "preco_custo" in data or "preco_venda" in data:
-            if produto.preco_custo > 0:
-                produto.margem_lucro = (
-                    (produto.preco_venda - produto.preco_custo)
-                    / produto.preco_custo
-                    * 100
-                )
-            else:
-                produto.margem_lucro = 0
+        if produto.preco_custo and produto.preco_venda and produto.preco_custo > 0:
+            produto.margem_lucro = (
+                (produto.preco_venda - produto.preco_custo)
+                / produto.preco_custo
+                * 100
+            )
+        else:
+            produto.margem_lucro = 0
 
         produto.updated_at = datetime.utcnow()
 
         # Se quantidade foi alterada, criar movimentação
         if "quantidade" in data:
-            nova_quantidade = int(data["quantidade"])
-            diferenca = nova_quantidade - quantidade_anterior
+            try:
+                nova_quantidade = int(data["quantidade"])
+                diferenca = nova_quantidade - quantidade_anterior
 
-            if diferenca != 0:
-                produto.quantidade = nova_quantidade
+                if diferenca != 0:
+                    produto.quantidade = nova_quantidade
 
-                movimentacao = MovimentacaoEstoque(
-                    estabelecimento_id=current_user.estabelecimento_id,
-                    produto_id=produto.id,
-                    funcionario_id=current_user.id,
-                    tipo="entrada" if diferenca > 0 else "saida",
-                    quantidade=abs(diferenca),
-                    quantidade_anterior=quantidade_anterior,
-                    quantidade_atual=nova_quantidade,
-                    custo_unitario=produto.preco_custo,
-                    valor_total=abs(diferenca) * produto.preco_custo,
-                    motivo="Ajuste manual de estoque",
-                    observacoes=f"Produto atualizado por {current_user.nome}. Diferença: {diferenca}",
-                )
-                db.session.add(movimentacao)
+                    movimentacao = MovimentacaoEstoque(
+                        estabelecimento_id=estabelecimento_id,
+                        produto_id=produto.id,
+                        funcionario_id=int(get_jwt_identity()),
+                        tipo="entrada" if diferenca > 0 else "saida",
+                        quantidade=abs(diferenca),
+                        quantidade_anterior=quantidade_anterior,
+                        quantidade_atual=nova_quantidade,
+                        custo_unitario=produto.preco_custo,
+                        valor_total=abs(diferenca) * produto.preco_custo,
+                        motivo="Ajuste manual de estoque",
+                        observacoes=f"Produto atualizado por {claims.get('nome')}. Diferença: {diferenca}",
+                    )
+                    db.session.add(movimentacao)
+            except (ValueError, TypeError) as e:
+                current_app.logger.error(f"Erro ao processar quantidade: {data.get('quantidade')} - {e}")
+                return jsonify({"success": False, "message": f"Erro na quantidade: {str(e)}"}), 400
 
         db.session.commit()
 
         current_app.logger.info(
-            f"Produto atualizado: {produto.id} por {current_user.username}"
+            f"Produto atualizado: {produto.id} por {claims.get('username')}"
         )
 
         return jsonify(
@@ -664,13 +739,52 @@ def atualizar_produto(id):
         )
 
 
+@produtos_bp.route("/<int:id>", methods=["DELETE"])
+@funcionario_required
+def deletar_produto(id):
+    """Desativa um produto (soft delete)"""
+    try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+
+        # Soft delete - apenas desativa
+        produto.ativo = False
+        db.session.commit()
+
+        current_app.logger.info(
+            f"Produto desativado: {produto.id} por {claims.get('username')}"
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Produto desativado com sucesso",
+            }
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao desativar produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao desativar produto"}),
+            500,
+        )
+
+
 @produtos_bp.route("/<int:id>/estoque", methods=["POST"])
-@login_required
+@funcionario_required
 def ajustar_estoque(id):
     """Ajusta o estoque de um produto com movimentação registrada"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         produto = Produto.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
@@ -716,9 +830,9 @@ def ajustar_estoque(id):
 
         # Criar movimentação
         movimentacao = MovimentacaoEstoque(
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
             produto_id=produto.id,
-            funcionario_id=current_user.id,
+            funcionario_id=int(get_jwt_identity()),
             tipo=tipo,
             quantidade=quantidade,
             quantidade_anterior=quantidade_anterior,
@@ -733,7 +847,7 @@ def ajustar_estoque(id):
         db.session.commit()
 
         current_app.logger.info(
-            f"Estoque ajustado: produto {produto.id}, tipo {tipo}, quantidade {quantidade} por {current_user.username}"
+            f"Estoque ajustado: produto {produto.id}, tipo {tipo}, quantidade {quantidade} por {claims.get('username')}"
         )
 
         return jsonify(
@@ -760,12 +874,15 @@ def ajustar_estoque(id):
 
 
 @produtos_bp.route("/<int:id>/preco", methods=["POST"])
-@login_required
+@funcionario_required
 def atualizar_preco(id):
     """Atualiza preços do produto com histórico"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         produto = Produto.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
@@ -805,7 +922,7 @@ def atualizar_preco(id):
         db.session.commit()
 
         current_app.logger.info(
-            f"Preços atualizados: produto {produto.id}, custo: {preco_custo_anterior}->{produto.preco_custo}, venda: {preco_venda_anterior}->{produto.preco_venda} por {current_user.username}"
+            f"Preços atualizados: produto {produto.id}, custo: {preco_custo_anterior}->{produto.preco_custo}, venda: {preco_venda_anterior}->{produto.preco_venda} por {claims.get('username')}"
         )
 
         return jsonify(
@@ -1139,15 +1256,18 @@ def listar_categorias():
 
 
 @produtos_bp.route("/alertas", methods=["GET"])
-@login_required
+@funcionario_required
 def alertas_produtos():
     """Lista alertas de produtos (estoque baixo, validade próxima)"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         alertas = []
 
         # Produtos com estoque baixo
         produtos_estoque_baixo = Produto.query.filter(
-            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.estabelecimento_id == estabelecimento_id,
             Produto.ativo == True,
             Produto.quantidade_minima > 0,
             Produto.quantidade <= Produto.quantidade_minima,
@@ -1169,7 +1289,7 @@ def alertas_produtos():
         # Produtos com validade próxima
         hoje = date.today()
         produtos_validade_proxima = Produto.query.filter(
-            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.estabelecimento_id == estabelecimento_id,
             Produto.ativo == True,
             Produto.controlar_validade == True,
             Produto.data_validade != None,
@@ -1195,7 +1315,7 @@ def alertas_produtos():
         # Produtos sem movimentação há muito tempo
         data_limite = datetime.utcnow() - timedelta(days=180)  # 6 meses
         produtos_sem_movimento = Produto.query.filter(
-            Produto.estabelecimento_id == current_user.estabelecimento_id,
+            Produto.estabelecimento_id == estabelecimento_id,
             Produto.ativo == True,
             Produto.quantidade > 0,
             db.or_(Produto.ultima_venda == None, Produto.ultima_venda < data_limite),
@@ -1252,15 +1372,18 @@ def alertas_produtos():
 
 
 @produtos_bp.route("/exportar", methods=["GET"])
-@login_required
+@funcionario_required
 def exportar_produtos():
     """Exporta produtos em formato CSV"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
 
         # Buscar produtos
         query = Produto.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=estabelecimento_id
         )
 
         if apenas_ativos:

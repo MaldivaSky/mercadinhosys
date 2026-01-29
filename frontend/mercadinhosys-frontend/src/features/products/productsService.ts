@@ -45,22 +45,22 @@ export const productsService = {
     },
 
     getById: async (id: number): Promise<Produto> => {
-        const response = await apiClient.get<Produto>(`/produtos/estoque/${id}`);
+        const response = await apiClient.get<Produto>(`/produtos/${id}`);
         return response.data;
     },
 
     create: async (data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
-        const response = await apiClient.post<any>('/produtos/estoque', data);
+        const response = await apiClient.post<any>('/produtos', data);
         return response.data;
     },
 
     update: async (id: number, data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
-        const response = await apiClient.put<any>(`/produtos/estoque/${id}`, data);
+        const response = await apiClient.put<any>(`/produtos/${id}`, data);
         return response.data;
     },
 
     delete: async (id: number): Promise<{ success: boolean; message: string }> => {
-        const response = await apiClient.delete<any>(`/produtos/estoque/${id}`);
+        const response = await apiClient.delete<any>(`/produtos/${id}`);
         return response.data;
     },
 
@@ -70,9 +70,9 @@ export const productsService = {
         operacao: 'entrada' | 'saida',
         motivo?: string
     ): Promise<{ success: boolean; message: string; produto: any }> => {
-        const response = await apiClient.put<any>(`/produtos/estoque/${id}/estoque`, {
+        const response = await apiClient.post<any>(`/produtos/${id}/estoque`, {
+            tipo: operacao,
             quantidade,
-            operacao,
             motivo,
         });
         return response.data;
