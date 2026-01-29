@@ -15,6 +15,9 @@ dashboard_bp = Blueprint("dashboard", __name__)
 def get_establishment_id():
     """Obtém ID do estabelecimento do usuário logado"""
     user_id = get_jwt_identity()
+    # Converter para int se for string
+    if isinstance(user_id, str):
+        user_id = int(user_id)
     funcionario = Funcionario.query.get(user_id)
     if not funcionario:
         raise ValueError("Usuário não encontrado")
