@@ -862,14 +862,14 @@ def buscar_produtos():
         elif com_estoque == "false":
             query = query.filter(Produto.quantidade == 0)
 
-        busca_termo = f"%{termo}%"
+        busca_termo = f"%{termo.lower()}%"
         produtos = (
             query.filter(
                 db.or_(
-                    Produto.nome.ilike(busca_termo),
+                    db.func.lower(Produto.nome).like(busca_termo),
                     Produto.codigo_barras.ilike(busca_termo),
                     Produto.codigo_interno.ilike(busca_termo),
-                    Produto.descricao.ilike(busca_termo),
+                    db.func.lower(Produto.descricao).like(busca_termo),
                 )
             )
             .limit(limite)
