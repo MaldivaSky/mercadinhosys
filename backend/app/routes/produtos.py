@@ -28,7 +28,7 @@ produtos_bp = Blueprint("produtos", __name__)
 # ============================================
 
 
-def validar_dados_produto(data, produto_id=None):
+def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
     """Valida todos os dados do produto antes de salvar"""
     erros = []
 
@@ -38,23 +38,23 @@ def validar_dados_produto(data, produto_id=None):
         if not data.get(campo):
             erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
 
-    # Validação de código de barras único
-    if data.get("codigo_barras"):
+    # Validação de código de barras único (apenas se estabelecimento_id for fornecido)
+    if estabelecimento_id and data.get("codigo_barras"):
         codigo_barras = data["codigo_barras"].strip()
         produto_existente = Produto.query.filter_by(
             codigo_barras=codigo_barras,
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
         ).first()
 
         if produto_existente and produto_existente.id != produto_id:
             erros.append("Código de barras já cadastrado para outro produto")
 
-    # Validação de código interno único
-    if data.get("codigo_interno"):
+    # Validação de código interno único (apenas se estabelecimento_id for fornecido)
+    if estabelecimento_id and data.get("codigo_interno"):
         codigo_interno = data["codigo_interno"].strip()
         produto_existente = Produto.query.filter_by(
             codigo_interno=codigo_interno,
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
         ).first()
 
         if produto_existente and produto_existente.id != produto_id:
@@ -1490,4 +1490,234 @@ def exportar_csv():
         return jsonify({
             "success": False,
             "message": f"❌ ERRO NA EXPORTAÇÃO CSV: {str(e)}"
+        }), 500
+
+
+# ==================== ROTAS CRUD ESTOQ
+
+
+# ==================== ROTAS CRUD ESTOQUE COM JWT (POST, PUT, DELETE) ====================
+
+@produtos_bp.route("/estoque", methods=["POST", "OPTIONS"])
+@funcionario_required
+def criar_produto_estoque():
+    """Cria um novo produto - Compatível com JWT"""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
+    try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        data = request.get_json()
+
+        # Validação dos dados
+        erros = validar_dados_produto(data, estabelecimento_id=estabelecimento_id)
+        if erros:
+            return jsonify({"success": False, "message": "Erros de validação", "errors": erros}), 400
+
+        # Calcular margem de lucro
+        preco_custo = Decimal(str(data["preco_custo"]))
+        preco_venda = Decimal(str(data["preco_venda"]))
+        margem = ((preco_venda - preco_custo) / preco_custo * 100) if preco_custo > 0 else 0
+
+        # Buscar ou criar categoria
+        categoria_nome = data["categoria"].strip()
+        categoria = CategoriaProduto.query.filter_by(
+            estabelecimento_id=estabelecimento_id,
+            nome=categoria_nome
+        ).first()
+        
+        if not categoria:
+            # Criar nova categoria
+            categoria = CategoriaProduto(
+                estabelecimento_id=estabelecimento_id,
+                nome=categoria_nome,
+                ativo=True
+            )
+            db.session.add(categoria)
+            db.session.flush()  # Para obter o ID
+
+        # Criar produto
+        produto = Produto(
+            estabelecimento_id=estabelecimento_id,
+            categoria_id=categoria.id,
+            fornecedor_id=data.get("fornecedor_id"),
+            codigo_barras=data.get("codigo_barras", "").strip(),
+            codigo_interno=data.get("codigo_interno", "").strip(),
+            nome=data["nome"].strip(),
+            descricao=data.get("descricao", "").strip(),
+            marca=data.get("marca", "").strip(),
+            unidade_medida=data.get("unidade_medida", "UN"),
+            quantidade=int(data.get("quantidade", 0)),
+            quantidade_minima=int(data.get("quantidade_minima", 10)),
+            preco_custo=preco_custo,
+            preco_venda=preco_venda,
+            margem_lucro=margem,
+            ativo=data.get("ativo", True),
+        )
+
+        db.session.add(produto)
+        db.session.commit()
+
+        current_app.logger.info(f"Produto criado: {produto.id} - {produto.nome}")
+
+        return jsonify({
+            "success": True,
+            "message": "Produto criado com sucesso",
+            "produto": produto.to_dict(),
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao criar produto: {str(e)}")
+        return jsonify({"success": False, "message": "Erro interno ao criar produto"}), 500
+
+
+@produtos_bp.route("/estoque/<int:id>", methods=["GET", "OPTIONS"])
+@funcionario_required
+def obter_produto_estoque(id):
+    """Obtém um produto específico - Compatível com JWT"""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
+    try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+
+        dados_produto = produto.to_dict()
+        dados_produto["margem_lucro"] = calcular_margem_lucro(
+            float(produto.preco_custo), float(produto.preco_venda)
+        )
+
+        return jsonify({
+            "success": True,
+            "produto": dados_produto,
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter produto {id}: {str(e)}")
+        return jsonify({"success": False, "message": "Erro interno ao obter produto"}), 500
+
+
+@produtos_bp.route("/estoque/<int:id>", methods=["PUT", "OPTIONS"])
+@funcionario_required
+def atualizar_produto_estoque(id):
+    """Atualiza um produto existente - Compatível com JWT"""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
+    try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+
+        data = request.get_json()
+
+        # Validação dos dados
+        erros = validar_dados_produto(data, produto.id, estabelecimento_id=estabelecimento_id)
+        if erros:
+            return jsonify({"success": False, "message": "Erros de validação", "errors": erros}), 400
+
+        # Atualizar campos básicos
+        if "nome" in data:
+            produto.nome = data["nome"].strip()
+        if "descricao" in data:
+            produto.descricao = data["descricao"].strip()
+        if "marca" in data:
+            produto.marca = data["marca"].strip()
+        if "categoria" in data:
+            # Buscar ou criar categoria
+            categoria_nome = data["categoria"].strip()
+            categoria = CategoriaProduto.query.filter_by(
+                estabelecimento_id=estabelecimento_id,
+                nome=categoria_nome
+            ).first()
+            
+            if not categoria:
+                categoria = CategoriaProduto(
+                    estabelecimento_id=estabelecimento_id,
+                    nome=categoria_nome,
+                    ativo=True
+                )
+                db.session.add(categoria)
+                db.session.flush()
+            
+            produto.categoria_id = categoria.id
+        if "fornecedor_id" in data:
+            produto.fornecedor_id = data["fornecedor_id"]
+        if "quantidade_minima" in data:
+            produto.quantidade_minima = int(data["quantidade_minima"])
+        if "ativo" in data:
+            produto.ativo = data["ativo"]
+
+        # Atualizar preços e recalcular margem
+        if "preco_custo" in data:
+            produto.preco_custo = Decimal(str(data["preco_custo"]))
+        if "preco_venda" in data:
+            produto.preco_venda = Decimal(str(data["preco_venda"]))
+
+        if "preco_custo" in data or "preco_venda" in data:
+            if produto.preco_custo > 0:
+                produto.margem_lucro = ((produto.preco_venda - produto.preco_custo) / produto.preco_custo * 100)
+            else:
+                produto.margem_lucro = 0
+
+        produto.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        current_app.logger.info(f"Produto atualizado: {produto.id}")
+
+        return jsonify({
+            "success": True,
+            "message": "Produto atualizado com sucesso",
+            "produto": produto.to_dict(),
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar produto {id}: {str(e)}")
+        return jsonify({"success": False, "message": "Erro interno ao atualizar produto"}), 500
+
+
+@produtos_bp.route("/estoque/<int:id>", methods=["DELETE", "OPTIONS"])
+@funcionario_required
+def deletar_produto_estoque(id):
+    """Desativa um produto (soft delete) - Compatível com JWT"""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
+    try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+        
+        # Soft delete - apenas desativa
+        produto.ativo = False
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": "Produto desativado com sucesso"
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "message": f"Erro ao desativar produto: {str(e)}"
         }), 500
