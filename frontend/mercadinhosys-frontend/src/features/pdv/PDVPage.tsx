@@ -144,10 +144,27 @@ const PDVPage: React.FC = () => {
                 }, 2000);
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('❌ ERRO AO FINALIZAR:', error);
+            let errorMessage = 'Erro ao finalizar venda';
+            interface ErrorWithResponse {
+                response?: {
+                    data?: {
+                        error?: string;
+                    };
+                };
+                message?: string;
+            }
+            const err = error as ErrorWithResponse;
+            if (typeof error === 'object' && error !== null) {
+                if ('response' in err && typeof err.response?.data?.error === 'string') {
+                    errorMessage = err.response!.data!.error!;
+                } else if ('message' in err && typeof err.message === 'string') {
+                    errorMessage = err.message;
+                }
+            }
             toast.error(
-                error.response?.data?.error || error.message || 'Erro ao finalizar venda',
+                errorMessage,
                 {
                     icon: '❌',
                     duration: 6000,
@@ -191,9 +208,23 @@ const PDVPage: React.FC = () => {
                 setUltimaVendaId(null);
             }, 2000);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('❌ ERRO AO ENVIAR EMAIL:', error);
-            toast.error(error.response?.data?.error || '❌ Erro ao enviar email', {
+            let errorMessage = '❌ Erro ao enviar email';
+            interface ErrorWithResponse {
+                response?: {
+                    data?: {
+                        error?: string;
+                    };
+                };
+            }
+            if (typeof error === 'object' && error !== null) {
+                const err = error as ErrorWithResponse;
+                if ('response' in err && typeof err.response?.data?.error === 'string') {
+                    errorMessage = err.response!.data!.error!;
+                }
+            }
+            toast.error(errorMessage, {
                 duration: 6000,
             });
             
