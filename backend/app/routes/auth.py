@@ -52,6 +52,12 @@ def health_check():
     return jsonify(response), status_code
 
 
+@auth_bp.route("/ping", methods=["GET"])
+def ping():
+    """Rota simples de ping para monitoramento básico"""
+    return jsonify({"status": "ok", "message": "Servidor ativo!"}), 200
+
+
 # ==================== ROTAS DE AUTENTICAÇÃO COM AUDITORIA ====================
 
 
