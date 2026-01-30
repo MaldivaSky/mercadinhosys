@@ -207,8 +207,31 @@ def agrupar_vendas_por_pagamento_avancado(vendas):
             "ticket_medio": 0,
         }
     )
-    
-    # ... (rest of the file content not fully read but I can overwrite and append or just append)
-    # Since I cannot append with Write tool, I should read the whole file first or just write the new function to a new file and import it? No, that's messy.
-    # I'll use SearchReplace to append to the end of the file.
-    pass
+
+@relatorios_bp.route("/backup/exportar", methods=["GET"])
+@funcionario_required
+def exportar_backup_local():
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        data_payload = {
+            "timestamp": ts,
+            "produtos": [p.to_dict() for p in Produto.query.all()],
+            "clientes": [c.to_dict() for c in Cliente.query.all()],
+            "vendas": [v.to_dict() for v in Venda.query.all()],
+            "itens_venda": [vi.to_dict() for vi in VendaItem.query.all()],
+            "estabelecimentos": [e.to_dict() for e in Estabelecimento.query.all()],
+            "funcionarios": [f.to_dict() for f in Funcionario.query.all()],
+            "movimentacoes_estoque": [m.to_dict() for m in MovimentacaoEstoque.query.all()],
+            "configuracoes": [cfg.to_dict() for cfg in Configuracao.query.all()],
+        }
+        import json, zipfile, io
+        json_bytes = json.dumps(data_payload, ensure_ascii=False).encode("utf-8")
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"backup_{ts}.json", json_bytes)
+        mem_zip.seek(0)
+        filename = f"mercadinhosys_backup_{ts}.zip"
+        return send_file(mem_zip, mimetype="application/zip", as_attachment=True, download_name=filename)
+    except Exception as e:
+        current_app.logger.error(f"Erro ao exportar backup: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Falha ao exportar backup"}), 500

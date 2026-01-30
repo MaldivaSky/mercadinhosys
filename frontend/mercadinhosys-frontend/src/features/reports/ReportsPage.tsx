@@ -9,6 +9,7 @@ import {
     Users,
     Package,
     Wallet,
+    Archive,
     Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -19,6 +20,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
 import { salesService } from '../sales/salesService';
 import { productsService } from '../products/productsService';
+import { apiClient } from '../../api/apiClient';
 
 // Interfaces
 interface DateRange {
@@ -94,6 +96,27 @@ const ReportsPage: React.FC = () => {
     });
 
     const [loadingReport, setLoadingReport] = useState<string | null>(null);
+    const [loadingBackup, setLoadingBackup] = useState(false);
+
+    const handleBackupExport = async () => {
+        setLoadingBackup(true);
+        try {
+            const res = await apiClient.get('/relatorios/backup/exportar', { responseType: 'blob' });
+            const blob = new Blob([res.data], { type: 'application/zip' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_local_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.zip`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('Backup baixado com sucesso!');
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao exportar backup');
+        } finally {
+            setLoadingBackup(false);
+        }
+    };
 
     // ==================== UTILITÁRIOS DE EXPORTAÇÃO ====================
 
@@ -421,6 +444,21 @@ const ReportsPage: React.FC = () => {
                     loading={loadingReport === 'equipe'}
                     onExport={handleEquipeReport}
                 />
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 rounded-lg bg-slate-500">
+                        <Archive className="w-6 h-6 text-white" />
+                    </div>
+                    {loadingBackup && <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />}
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Backup Local</h3>
+                <p className="text-sm text-gray-500 mb-6">Exporta dados essenciais (Produtos, Clientes, Vendas) em um arquivo ZIP para segurança e uso offline.</p>
+                <button onClick={handleBackupExport} disabled={loadingBackup} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors">
+                    <Download className="w-4 h-4" />
+                    <span>Baixar Backup</span>
+                </button>
             </div>
 
             {/* Dica Pro */}
