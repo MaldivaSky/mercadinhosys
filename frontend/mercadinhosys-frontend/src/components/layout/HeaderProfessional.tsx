@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     User, LogOut, Settings, Moon, Sun, ChevronDown, 
@@ -6,10 +6,12 @@ import {
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import logo from '../../../logoprincipal.png';
+import { authService } from '../../features/auth/authService';
 
 const HeaderProfessional = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [profileModalOpen, setProfileModalOpen] = useState(false);
     const navigate = useNavigate();
     const { config, updateConfig } = useConfig();
 
@@ -54,12 +56,14 @@ const HeaderProfessional = () => {
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user_data');
+        setUserMenuOpen(false);
+        setMobileMenuOpen(false);
+        authService.logout();
         navigate('/login');
     };
 
     return (
+        <>
         <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm">
             <div className="container mx-auto px-4">
                 <div className="flex h-16 items-center justify-between">
@@ -152,7 +156,7 @@ const HeaderProfessional = () => {
                                         <button
                                             onClick={() => {
                                                 setUserMenuOpen(false);
-                                                navigate('/profile');
+                                                setProfileModalOpen(true);
                                             }}
                                             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                         >
@@ -236,7 +240,7 @@ const HeaderProfessional = () => {
                             <button
                                 onClick={() => {
                                     setMobileMenuOpen(false);
-                                    navigate('/profile');
+                                    setProfileModalOpen(true);
                                 }}
                                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                             >
@@ -256,6 +260,59 @@ const HeaderProfessional = () => {
                 )}
             </div>
         </header>
+        {/* Modal de Perfil */}
+        {profileModalOpen && (  
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meu Perfil</h3>
+                        <button
+                            onClick={() => setProfileModalOpen(false)}
+                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            aria-label="Fechar"
+                        >
+                            <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                        </button>
+                    </div>
+                    <div className="px-5 py-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                            {user.foto_url ? (
+                                <img src={user.foto_url} alt={user.nome} className="w-12 h-12 rounded-full object-cover" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
+                                    {userInitial}
+                                </div>
+                            )}
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Nome</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user.nome || '-'}</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Username</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{user.username || user.usuario || '-'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{user.email || '-'}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Nível de Permissão</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{user.role || user.cargo || '-'}</p>
+                        </div>
+                    </div>
+                    <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                        <button
+                            onClick={() => setProfileModalOpen(false)}
+                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 
