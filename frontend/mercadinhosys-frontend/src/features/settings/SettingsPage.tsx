@@ -6,7 +6,7 @@ import {
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
 import { useConfig } from '../../contexts/ConfigContext';
-import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
+import { buscarCep, formatCep } from '../../utils/cepUtils';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 const SectionTitle = ({ title, icon: Icon }: { title: string, icon: any }) => (
@@ -350,7 +350,7 @@ const SettingsPage: React.FC = () => {
                             <SectionTitle title="Endereço" icon={Building} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
-                                    <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e: any) => setEstab({...estab, cep: e.target.value})} />
+                                    <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e: any) => setEstab({...estab, cep: formatCep(e.target.value)})} />
                                     {loadingCep && (
                                         <p className="text-xs text-blue-500 mt-1">Buscando endereço...</p>
                                     )}

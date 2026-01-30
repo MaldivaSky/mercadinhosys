@@ -20,7 +20,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { employeesService, Funcionario, EstatisticasFuncionarios } from "./employeesService";
-import { buscarCep, formatCep, formatCpf, formatPhone } from "../../utils/cepUtils";
+import { buscarCep, formatCep } from "../../utils/cepUtils";
 
 ChartJS.register(
     BarElement,
@@ -214,36 +214,17 @@ export default function EmployeesPage() {
     }
 
     const handleCepBlur = async () => {
-        const cep = formData.cep.replace(/\D/g, '');
-
-        if (cep.length !== 8) return;
-
         setLoadingCep(true);
-        try {
-            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-            const data = await response.json();
-
-            if (data.erro) {
-                
-                return;
-            }
-
-            if (data && data.logradouro) {
-                setFormData(prev => ({
-                    ...prev,
-                    endereco: data.logradouro,
-                    cidade: data.localidade,
-                    estado: data.uf
-                }));
-                
-            } else {
-                
-            }
-        } catch (error) {
-            console.error('Erro ao buscar CEP:', error);
-            
-        } finally {
-            setLoadingCep(false);
+        const dados = await buscarCep(formData.cep);
+        setLoadingCep(false);
+        if (dados) {
+            setFormData(prev => ({
+                ...prev,
+                logradouro: dados.logradouro,
+                bairro: dados.bairro || prev.bairro,
+                cidade: dados.localidade,
+                estado: dados.uf
+            }));
         }
     };
 
