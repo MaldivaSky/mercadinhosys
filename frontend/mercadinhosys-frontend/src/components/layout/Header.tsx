@@ -1,6 +1,5 @@
 import React from 'react';
 import { AppBar, Toolbar, Typography, Avatar, IconButton, Menu, MenuItem, Box } from '@mui/material';
-// @ts-expect-error
 import { Logout, Brightness4, Brightness7, Menu as MenuIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../../logoprincipal.png';
