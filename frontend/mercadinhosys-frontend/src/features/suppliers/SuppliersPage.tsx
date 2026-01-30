@@ -6,6 +6,7 @@ import { Toaster, toast } from 'react-hot-toast';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { buscarCep, formatCep, formatPhone } from '../../utils/cepUtils';
 
 // Tipos atualizados - todas as propriedades do Fornecedor estão disponíveis
 
@@ -132,52 +133,17 @@ const SuppliersPage: React.FC = () => {
         loadSuppliers();
     }, [loadSuppliers]);
 
-    // Função para buscar CEP
-    // Funções de formatação
-    const formatCep = (value: string) => {
-        const numbers = value.replace(/\D/g, '').slice(0, 8);
-        if (numbers.length <= 5) return numbers;
-        return `${numbers.slice(0, 5)}-${numbers.slice(5)}`;
-    };
-
-    const formatPhone = (value: string) => {
-        const numbers = value.replace(/\D/g, '').slice(0, 11);
-        if (numbers.length <= 2) return numbers;
-        if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
-        return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7)}`;
-    };
-
     const handleCepBlur = async () => {
-        const cep = formData.cep.replace(/\D/g, '');
-        
-        if (cep.length !== 8) return;
-
         setLoadingCep(true);
-        try {
-            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-            const data = await response.json();
-            
-            if (data.erro) {
-                toast.error('CEP não encontrado');
-                return;
-            }
-
-            if (data && data.logradouro) {
-                setFormData(prev => ({
-                    ...prev,
-                    endereco: data.logradouro,
-                    cidade: data.localidade,
-                    estado: data.uf
-                }));
-                toast.success('Endereço preenchido automaticamente!');
-            } else {
-                toast.error('CEP não encontrado');
-            }
-        } catch (error) {
-            console.error('Erro ao buscar CEP:', error);
-            toast.error('Erro ao buscar CEP. Verifique sua conexão.');
-        } finally {
-            setLoadingCep(false);
+        const dados = await buscarCep(formData.cep);
+        setLoadingCep(false);
+        if (dados) {
+            setFormData(prev => ({
+                ...prev,
+                endereco: dados.logradouro,
+                cidade: dados.localidade,
+                estado: dados.uf
+            }));
         }
     };
 
