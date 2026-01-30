@@ -81,7 +81,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
     }
     if (name === 'limite_credito') {
       const numValue = parseFloat(value);
-      value = isNaN(numValue) ? undefined : numValue;
+      value = isNaN(numValue) ? '' : numValue.toString();
     }
 
     setForm({ ...form, [name]: value });
@@ -92,7 +92,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
     }
 
     // Validação em tempo real para CPF
-    if (name === 'cpf' && value.length === 14) {
+    if (name === 'cpf' && typeof value === 'string' && value.length === 14) {
       if (!validateCPF(value)) {
         setErrors({ ...errors, cpf: 'CPF inválido' });
       } else {
@@ -106,7 +106,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
     }
 
     // Validação de email
-    if (name === 'email' && value) {
+    if (name === 'email' && value && typeof value === 'string') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
         setErrors({ ...errors, email: 'Email inválido' });
@@ -152,7 +152,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
       const dataToSave = { ...form };
       if (initialData?.id) {
         // Na edição, garantir campos obrigatórios
-        const requiredFields = ['nome', 'cpf', 'celular'];
+        const requiredFields = ['nome', 'cpf', 'celular'] as const;
         for (const field of requiredFields) {
           if (!dataToSave[field] && initialData[field]) {
             dataToSave[field] = initialData[field];

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Cliente } from '../../../types';
-import { IconButton, Tooltip, Skeleton, TableRow, TableCell } from '@mui/material';
+import { IconButton, Tooltip, Skeleton } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 
 interface CustomerTableProps {
