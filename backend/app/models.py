@@ -182,8 +182,8 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
     rg = db.Column(db.String(20))
     data_nascimento = db.Column(db.Date, nullable=False)
 
-    telefone = db.Column(db.String(15), nullable=False)
-    celular = db.Column(db.String(15))
+    celular = db.Column(db.String(15), nullable=False)
+    telefone = db.Column(db.String(15))
     email = db.Column(db.String(100), nullable=False)
 
     cargo = db.Column(db.String(50), nullable=False)
