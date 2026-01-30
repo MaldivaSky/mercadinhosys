@@ -6,6 +6,7 @@ import {
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
 import { useConfig } from '../../contexts/ConfigContext';
+import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 const SectionTitle = ({ title, icon: Icon }: { title: string, icon: any }) => (
@@ -48,6 +49,7 @@ const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState('geral');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [loadingCep, setLoadingCep] = useState(false);
     const { config: globalConfig, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
     
     const [config, setConfig] = useState<Configuracao>({
@@ -174,6 +176,24 @@ const SettingsPage: React.FC = () => {
         setConfig({...config, tema_escuro: tema});
         // Aplicar imediatamente
         await updateGlobalConfig({ tema_escuro: tema });
+    };
+
+    const handleCepBlur = async () => {
+        if (!estab.cep) return;
+        
+        setLoadingCep(true);
+        const dados = await buscarCep(estab.cep);
+        setLoadingCep(false);
+        
+        if (dados) {
+            setEstab(prev => ({
+                ...prev,
+                logradouro: dados.logradouro,
+                bairro: dados.bairro,
+                cidade: dados.localidade,
+                estado: dados.uf
+            }));
+        }
     };
 
     const tabs = [
@@ -330,7 +350,10 @@ const SettingsPage: React.FC = () => {
                             <SectionTitle title="Endereço" icon={Building} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
-                                    <InputField label="CEP" value={estab.cep} onChange={(e: any) => setEstab({...estab, cep: e.target.value})} />
+                                    <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e: any) => setEstab({...estab, cep: e.target.value})} />
+                                    {loadingCep && (
+                                        <p className="text-xs text-blue-500 mt-1">Buscando endereço...</p>
+                                    )}
                                 </div>
                                 <div className="md:col-span-2">
                                     <InputField label="Logradouro" value={estab.logradouro} onChange={(e: any) => setEstab({...estab, logradouro: e.target.value})} />

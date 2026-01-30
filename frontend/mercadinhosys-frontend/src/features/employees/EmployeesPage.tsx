@@ -20,6 +20,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { employeesService, Funcionario, EstatisticasFuncionarios } from "./employeesService";
+import { buscarCep, formatCep, formatCpf, formatPhone } from "../../utils/cepUtils";
 
 ChartJS.register(
     BarElement,
@@ -121,6 +122,7 @@ export default function EmployeesPage() {
     // Analytics
     const [mostrarAnalises, setMostrarAnalises] = useState(true);
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
+    const [loadingCep, setLoadingCep] = useState(false);
 
     // Toast notifications
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -210,6 +212,40 @@ export default function EmployeesPage() {
             console.error("❌ Erro ao carregar estatísticas:", err);
         }
     }
+
+    const handleCepBlur = async () => {
+        const cep = formData.cep.replace(/\D/g, '');
+
+        if (cep.length !== 8) return;
+
+        setLoadingCep(true);
+        try {
+            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await response.json();
+
+            if (data.erro) {
+                
+                return;
+            }
+
+            if (data && data.logradouro) {
+                setFormData(prev => ({
+                    ...prev,
+                    endereco: data.logradouro,
+                    cidade: data.localidade,
+                    estado: data.uf
+                }));
+                
+            } else {
+                
+            }
+        } catch (error) {
+            console.error('Erro ao buscar CEP:', error);
+            
+        } finally {
+            setLoadingCep(false);
+        }
+    };
 
     function handleFiltroChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         setFiltros((prev) => ({
@@ -1181,26 +1217,27 @@ export default function EmployeesPage() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Telefone *
+                                        Telefone 
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.telefone}
                                         onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
-                                        required
+                                        
                                     />
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Celular
+                                        Celular *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.celular}
                                         onChange={(e) => setFormData({ ...formData, celular: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        required
                                     />
                                 </div>
 
@@ -1230,10 +1267,16 @@ export default function EmployeesPage() {
                                     <input
                                         type="text"
                                         value={formData.cep}
-                                        onChange={(e) => setFormData({ ...formData, cep: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        onChange={(e) => setFormData({ ...formData, cep: formatCep(e.target.value) })}
+                                        onBlur={handleCepBlur}
+                                        placeholder="00000-000"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
                                         maxLength={9}
+                                        disabled={loadingCep}
                                     />
+                                    {loadingCep && (
+                                        <p className="text-xs text-blue-500 mt-1">Buscando endereço...</p>
+                                    )}
                                 </div>
 
                                 <div className="col-span-1 md:col-span-2">
