@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
     Settings, Building, ShoppingCart, Package, Shield, Save, 
-    Upload, Bell, Printer, DollarSign 
+    Upload, Bell, Printer, DollarSign, Keyboard, X
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
@@ -50,6 +50,7 @@ const SettingsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const { config: globalConfig, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
     
     const [config, setConfig] = useState<Configuracao>({
@@ -369,6 +370,17 @@ const SettingsPage: React.FC = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Ponto de Venda (PDV)" icon={ShoppingCart} />
                             
+                            <div className="flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShortcutsOpen(true)}
+                                    className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"
+                                >
+                                    <Keyboard className="w-4 h-4" />
+                                    Atalhos do PDV
+                                </button>
+                            </div>
+
                             <div className="space-y-4">
                                 <SwitchField 
                                     label="Impressão Automática" 
@@ -511,6 +523,68 @@ const SettingsPage: React.FC = () => {
 
                 </div>
             </div>
+
+            {shortcutsOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => setShortcutsOpen(false)} />
+                    <div className="relative w-full max-w-2xl mx-4 bg-white dark:bg-gray-800 rounded-xl shadow-xl">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-2">
+                                <ShoppingCart className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Atalhos do PDV</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShortcutsOpen(false)}
+                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                aria-label="Fechar"
+                            >
+                                <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                            </button>
+                        </div>
+                        <div className="px-6 py-5 space-y-4">
+                            <p className="text-sm text-gray-600 dark:text-gray-300">
+                                Use os atalhos abaixo para agilizar o atendimento no caixa.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">F1</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Buscar produto</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">F2</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Selecionar cliente</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">F4</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Alternar forma de pagamento</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">F9</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Finalizar venda</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">F10</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Finalizar venda</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">ESC</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">Cancelar/fechar</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShortcutsOpen(false)}
+                                className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                            >
+                                Entendi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
