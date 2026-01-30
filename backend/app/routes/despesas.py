@@ -258,13 +258,16 @@ def listar_despesas():
         resposta["filtros_disponiveis"] = {
             "categorias": [c[0] for c in categorias if c[0]],
             "tipos": ["fixa", "variavel"],
-            "formas_pagamento": db.session.query(Despesa.forma_pagamento)
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.forma_pagamento.isnot(None),
-            )
-            .distinct()
-            .scalar_all(),
+            "formas_pagamento": [
+                fp[0] for fp in db.session.query(Despesa.forma_pagamento)
+                .filter(
+                    Despesa.estabelecimento_id == estabelecimento_id,
+                    Despesa.forma_pagamento.isnot(None),
+                )
+                .distinct()
+                .all()
+                if fp[0]
+            ],
         }
 
         return jsonify(resposta), 200
@@ -418,6 +421,9 @@ def obter_estatisticas_despesas():
 
         evolucao_mensal.reverse()  # Do mais antigo para o mais recente
 
+        # Calcular média por despesa
+        media_valor = float(soma_total / total_despesas) if total_despesas > 0 else 0.0
+
         return (
             jsonify(
                 {
@@ -425,17 +431,13 @@ def obter_estatisticas_despesas():
                     "estatisticas": {
                         "total_despesas": total_despesas,
                         "soma_total": float(soma_total),
+                        "media_valor": media_valor,
                         "despesas_mes_atual": float(despesas_mes_atual),
                         "despesas_mes_anterior": float(despesas_mes_anterior),
                         "variacao_percentual": round(variacao_percentual, 2),
                         "despesas_recorrentes": float(despesas_recorrentes),
                         "despesas_nao_recorrentes": float(
                             soma_total - despesas_recorrentes
-                        ),
-                        "media_mensal": (
-                            float(soma_total / max(1, (total_despesas / 30)))
-                            if total_despesas > 0
-                            else 0.0
                         ),
                         "despesas_por_categoria": [
                             {

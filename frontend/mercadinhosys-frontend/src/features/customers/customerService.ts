@@ -10,9 +10,7 @@ export const customerService = {
     return [];
   },
   async create(cliente: Partial<Cliente>): Promise<Cliente> {
-    // Garante que o estabelecimento_id seja enviado (ajuste para produção conforme login)
-    const payload = { ...cliente, estabelecimento_id: 1 };
-    const res = await apiClient.post('/clientes', payload);
+    const res = await apiClient.post('/clientes', cliente);
     // Ajuste para buscar cliente na resposta correta
     if (res.data && res.data.cliente) {
       return res.data.cliente;

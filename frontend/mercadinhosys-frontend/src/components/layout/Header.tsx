@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppBar, Toolbar, Typography, Avatar, IconButton, Menu, MenuItem, Box } from '@mui/material';
-import { Logout, Brightness4, Brightness7 } from '@mui/icons-material';
+// @ts-expect-error
+import { Logout, Brightness4, Brightness7, Menu as MenuIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../../logoprincipal.png';
 
@@ -24,6 +25,9 @@ const Header: React.FC = () => {
   const handleClose = () => {
     setAnchorEl(null);
   };
+  const [anchorNav, setAnchorNav] = React.useState<null | HTMLElement>(null);
+  const openNav = (e: React.MouseEvent<HTMLElement>) => setAnchorNav(e.currentTarget);
+  const closeNav = () => setAnchorNav(null);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -75,6 +79,9 @@ const Header: React.FC = () => {
           <img src={logo} alt="Logo MercadinhoSys" style={{ height: 40, marginRight: 12, borderRadius: 6, width:'auto' }} />
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <IconButton sx={{ display: { xs: 'inline-flex', md: 'none' } }} color="inherit" onClick={openNav}>
+            <MenuIcon />
+          </IconButton>
           <Typography variant="body1" sx={{ fontWeight: 500, mr: 1 }}>
             {user.nome || 'Usuário'}
           </Typography>
@@ -94,6 +101,24 @@ const Header: React.FC = () => {
             <MenuItem onClick={handleLogout}>
               <Logout fontSize="small" sx={{ mr: 1 }} /> Sair
             </MenuItem>
+          </Menu>
+          <Menu
+            anchorEl={anchorNav}
+            open={Boolean(anchorNav)}
+            onClose={closeNav}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+          >
+            <MenuItem onClick={() => { closeNav(); navigate('/dashboard'); }}>Dashboard</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/pdv'); }}>PDV</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/products'); }}>Produtos</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/suppliers'); }}>Fornecedores</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/customers'); }}>Clientes</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/sales'); }}>Vendas</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/expenses'); }}>Despesas</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/employees'); }}>Funcionários</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/reports'); }}>Relatórios</MenuItem>
+            <MenuItem onClick={() => { closeNav(); navigate('/settings'); }}>Configurações</MenuItem>
           </Menu>
         </Box>
       </Toolbar>

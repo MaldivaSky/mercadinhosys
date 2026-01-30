@@ -8,8 +8,9 @@ from app.models import (
     Funcionario,
     MovimentacaoEstoque,
     Cliente,
+    Fornecedor,
 )
-from sqlalchemy import or_, and_, func, extract, cast, String, Date
+from sqlalchemy import or_, and_, func, extract, cast, String, Date, distinct
 import random
 import string
 from collections import defaultdict
@@ -21,7 +22,7 @@ vendas_bp = Blueprint("vendas", __name__)
 FILTROS_PERMITIDOS_VENDAS = {
     "codigo": lambda value: Venda.codigo.ilike(f"%{value}%"),
     "cliente_nome": lambda value: Cliente.nome.ilike(f"%{value}%"),
-    "cliente_cpf_cnpj": lambda value: Cliente.cpf_cnpj.ilike(f"%{value}%"),
+    "cliente_cpf": lambda value: Cliente.cpf.ilike(f"%{value}%"),
     "funcionario_nome": lambda value: Funcionario.nome.ilike(f"%{value}%"),
     "forma_pagamento": lambda value: Venda.forma_pagamento.ilike(f"%{value}%"),
     "status": lambda value: Venda.status == value,
@@ -222,7 +223,7 @@ def listar_vendas():
                     Venda.codigo.ilike(f"%{search}%"),
                     Venda.observacoes.ilike(f"%{search}%"),
                     Cliente.nome.ilike(f"%{search}%"),
-                    Cliente.cpf_cnpj.ilike(f"%{search}%"),
+                    Cliente.cpf.ilike(f"%{search}%"),
                     Funcionario.nome.ilike(f"%{search}%"),
                 )
             )
@@ -279,7 +280,7 @@ def listar_vendas():
                             "id": v.cliente_id,
                             "nome": v.cliente.nome if v.cliente else "Consumidor Final",
                             "telefone": v.cliente.telefone if v.cliente else None,
-                            "cpf_cnpj": v.cliente.cpf_cnpj if v.cliente else None,
+                            "cpf": v.cliente.cpf if v.cliente else None,
                         }
                         if v.cliente_id
                         else {"nome": "Consumidor Final"}
@@ -469,6 +470,42 @@ def estatisticas_vendas():
             .all()
         )
 
+        # Produtos mais vendidos (top 10)
+        produtos_mais_vendidos = (
+            db.session.query(
+                Produto.nome,
+                Produto.fornecedor_id,
+                Fornecedor.nome_fantasia.label("fornecedor_nome"),
+                func.sum(VendaItem.quantidade).label("quantidade"),
+                func.sum(VendaItem.total_item).label("total"),
+            )
+            .join(VendaItem, VendaItem.produto_id == Produto.id)
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .outerjoin(Fornecedor, Fornecedor.id == Produto.fornecedor_id)
+            .filter(Venda.status == "finalizada")
+            .group_by(Produto.id, Produto.nome, Produto.fornecedor_id, Fornecedor.nome_fantasia)
+            .order_by(func.sum(VendaItem.quantidade).desc())
+            .limit(10)
+            .all()
+        )
+
+        # Vendas por fornecedor (top 10) - baseado nos produtos vendidos
+        vendas_por_fornecedor = (
+            db.session.query(
+                Fornecedor.nome_fantasia,
+                func.count(distinct(Venda.id)).label("quantidade_vendas"),
+                func.sum(VendaItem.total_item).label("total"),
+            )
+            .join(Produto, Produto.fornecedor_id == Fornecedor.id)
+            .join(VendaItem, VendaItem.produto_id == Produto.id)
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(Venda.status == "finalizada")
+            .group_by(Fornecedor.id, Fornecedor.nome_fantasia)
+            .order_by(func.sum(VendaItem.total_item).desc())
+            .limit(10)
+            .all()
+        )
+
         return (
             jsonify(
                 {
@@ -527,6 +564,23 @@ def estatisticas_vendas():
                             "total": float(vph.total) if vph.total else 0,
                         }
                         for vph in vendas_por_hora
+                    ],
+                    "produtos_mais_vendidos": [
+                        {
+                            "nome": pmv.nome,
+                            "fornecedor": pmv.fornecedor_nome or "Sem Fornecedor",
+                            "quantidade": pmv.quantidade,
+                            "total": float(pmv.total) if pmv.total else 0,
+                        }
+                        for pmv in produtos_mais_vendidos
+                    ],
+                    "vendas_por_fornecedor": [
+                        {
+                            "fornecedor": vpf.nome_fantasia,
+                            "quantidade_vendas": vpf.quantidade_vendas,
+                            "total": float(vpf.total) if vpf.total else 0,
+                        }
+                        for vpf in vendas_por_fornecedor
                     ],
                 }
             ),
@@ -1027,8 +1081,8 @@ def obter_venda(venda_id):
                             "telefone": (
                                 venda.cliente.telefone if venda.cliente else None
                             ),
-                            "cpf_cnpj": (
-                                venda.cliente.cpf_cnpj if venda.cliente else None
+                            "cpf": (
+                                venda.cliente.cpf if venda.cliente else None
                             ),
                         },
                         "funcionario": {
