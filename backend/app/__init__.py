@@ -309,6 +309,15 @@ def create_app(config_name=None):
             500,
         )
 
+    # ==================== ROTA PARA SERVIR UPLOADS ====================
+    from flask import send_from_directory
+    
+    @app.route("/uploads/<path:filename>")
+    def serve_uploads(filename):
+        """Serve arquivos da pasta uploads (logos, etc)"""
+        upload_folder = app.config.get("UPLOAD_FOLDER", "uploads")
+        return send_from_directory(upload_folder, filename)
+
     # Log de inicialização
     logger.info(
         f"""

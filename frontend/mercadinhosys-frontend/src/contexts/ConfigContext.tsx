@@ -31,26 +31,27 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
             const g = parseInt(hex.substring(2, 4), 16);
             const b = parseInt(hex.substring(4, 6), 16);
             
-            // Cor mais escura (hover)
-            root.style.setProperty('--color-primary-dark', `rgb(${Math.max(0, r - 30)}, ${Math.max(0, g - 30)}, ${Math.max(0, b - 30)})`);
+            // Cor mais escura (hover) - 20% mais escura
+            const darkerR = Math.max(0, Math.floor(r * 0.8));
+            const darkerG = Math.max(0, Math.floor(g * 0.8));
+            const darkerB = Math.max(0, Math.floor(b * 0.8));
+            root.style.setProperty('--color-primary-dark', `rgb(${darkerR}, ${darkerG}, ${darkerB})`);
             
-            // Cor mais clara (backgrounds)
+            // Cor mais clara (backgrounds) - 10% de opacidade
             root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
             
-            // Aplicar em elementos específicos
-            const buttons = document.querySelectorAll('.btn-primary, button[class*="bg-blue"], button[class*="bg-primary"]');
-            buttons.forEach((btn) => {
-                (btn as HTMLElement).style.backgroundColor = config.cor_principal;
-            });
+            console.log('✅ Cor aplicada:', config.cor_principal);
         }
 
         // Aplicar tema escuro
         if (config.tema_escuro) {
             document.documentElement.classList.add('dark');
             localStorage.setItem('theme', 'dark');
+            console.log('✅ Tema escuro ativado');
         } else {
             document.documentElement.classList.remove('dark');
             localStorage.setItem('theme', 'light');
+            console.log('✅ Tema claro ativado');
         }
     };
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     User, LogOut, Settings, Moon, Sun, ChevronDown, 
@@ -21,37 +21,43 @@ const HeaderProfessional = () => {
         }
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_data');
-        window.dispatchEvent(new Event('auth-change'));
-        navigate('/login');
-    };
+    const userInitial = useMemo(() => {
+        return user.nome ? user.nome.charAt(0).toUpperCase() : 'U';
+    }, [user.nome]);
 
-    const toggleTheme = async () => {
-        if (config) {
-            await updateConfig({ tema_escuro: !config.tema_escuro });
+    // Calcular logo URL dinamicamente baseado no config
+    const logoUrl = useMemo(() => {
+        if (!config?.logo_url) {
+            return logo;
         }
-    };
-
-    const userInitial = user.nome ? user.nome[0].toUpperCase() : '?';
-    
-    // Usar logo do config ou fallback
-    const getLogoUrl = () => {
-        if (!config?.logo_url) return logo;
         
         // Se for base64 (preview), usar direto
-        if (config.logo_url.startsWith('data:')) return config.logo_url;
+        if (config.logo_url.startsWith('data:')) {
+            return config.logo_url;
+        }
         
         // Se for URL do servidor
-        if (config.logo_url.startsWith('http')) return config.logo_url;
+        if (config.logo_url.startsWith('http')) {
+            return config.logo_url;
+        }
         
         // Se for caminho relativo
         return `http://localhost:5000${config.logo_url}`;
+    }, [config?.logo_url]);
+
+    const toggleTheme = async () => {
+        try {
+            await updateConfig({ tema_escuro: !config?.tema_escuro });
+        } catch (error) {
+            console.error('Erro ao alternar tema:', error);
+        }
     };
-    
-    const logoUrl = getLogoUrl();
+
+    const handleLogout = () => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_data');
+        navigate('/login');
+    };
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm">
