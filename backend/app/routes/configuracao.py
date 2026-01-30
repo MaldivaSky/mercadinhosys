@@ -101,10 +101,14 @@ def obter_configuracoes():
             db.session.add(config)
             db.session.commit()
 
-        return jsonify({"success": True, "config": config.to_dict()}), 200
+        config_dict = config.to_dict()
+        return jsonify({"success": True, "config": config_dict}), 200
 
     except Exception as e:
         current_app.logger.error(f"Erro ao obter configurações: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        db.session.rollback()
         return (
             jsonify(
                 {
