@@ -97,20 +97,22 @@ export interface Cliente {
     id: number;
     estabelecimento_id: number;
     nome: string;
-    cpf_cnpj?: string;
-    telefone?: string;
+    cpf?: string;
+    celular?: string;
     email?: string;
-    endereco?: string;
-    data_cadastro: string;
-    total_compras: number;
+    endereco_completo?: string;
+    limite_credito?: number;
+    saldo_devedor?: number;
+    total_compras?: number;
+    ativo?: boolean;
+    data_cadastro?: string;
+    // Campos adicionais que podem vir da API detalhada
+    telefone?: string;
+    rg?: string;
+    data_nascimento?: string;
     ultima_compra?: string;
-    frequencia_compras: number;
-    valor_medio_compra: number;
-    dias_ultima_compra: number;
-    segmento_rfm: 'champion' | 'loyal' | 'potential' | 'new' | 'at_risk' | 'lost';
+    valor_total_gasto?: number;
     observacoes?: string;
-    created_at: string;
-    updated_at: string;
 }
 
 // Tipos para produtos (atualizado conforme models.py e produtos.py backend)

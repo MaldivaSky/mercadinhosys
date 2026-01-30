@@ -91,13 +91,33 @@ class Configuracao(db.Model):
 
     logo_url = db.Column(db.String(500))
     cor_principal = db.Column(db.String(7), default="#2563eb")
+    tema_escuro = db.Column(db.Boolean, default=False)
 
+    # Vendas / PDV
     emitir_nfe = db.Column(db.Boolean, default=False)
     emitir_nfce = db.Column(db.Boolean, default=True)
-
+    impressao_automatica = db.Column(db.Boolean, default=False)
+    tipo_impressora = db.Column(db.String(20), default="termica_80mm") # termica_80mm, termica_58mm, a4
+    exibir_preco_tela = db.Column(db.Boolean, default=True)
+    permitir_venda_sem_estoque = db.Column(db.Boolean, default=False)
+    desconto_maximo_percentual = db.Column(db.Numeric(5, 2), default=10.00)
     desconto_maximo_funcionario = db.Column(db.Numeric(5, 2), default=10.00)
+    arredondamento_valores = db.Column(db.Boolean, default=True)
+    formas_pagamento = db.Column(db.Text, default='["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX"]')
+
+    # Estoque
     controlar_validade = db.Column(db.Boolean, default=True)
     alerta_estoque_minimo = db.Column(db.Boolean, default=True)
+    dias_alerta_validade = db.Column(db.Integer, default=30)
+    estoque_minimo_padrao = db.Column(db.Integer, default=10)
+
+    # Segurança / Sistema
+    tempo_sessao_minutos = db.Column(db.Integer, default=30)
+    tentativas_senha_bloqueio = db.Column(db.Integer, default=3)
+    
+    # Notificações
+    alertas_email = db.Column(db.Boolean, default=False)
+    alertas_whatsapp = db.Column(db.Boolean, default=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
@@ -110,16 +130,35 @@ class Configuracao(db.Model):
     )
 
     def to_dict(self):
+        try:
+            formas_pagamento_list = json.loads(self.formas_pagamento) if self.formas_pagamento else []
+        except:
+            formas_pagamento_list = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX"]
+
         return {
             "id": self.id,
             "estabelecimento_id": self.estabelecimento_id,
             "logo_url": self.logo_url,
+            "cor_principal": self.cor_principal,
+            "tema_escuro": self.tema_escuro,
+            "emitir_nfe": self.emitir_nfe,
             "emitir_nfce": self.emitir_nfce,
-            "desconto_maximo_funcionario": (
-                float(self.desconto_maximo_funcionario)
-                if self.desconto_maximo_funcionario
-                else 0.0
-            ),
+            "impressao_automatica": self.impressao_automatica,
+            "tipo_impressora": self.tipo_impressora,
+            "exibir_preco_tela": self.exibir_preco_tela,
+            "permitir_venda_sem_estoque": self.permitir_venda_sem_estoque,
+            "desconto_maximo_percentual": float(self.desconto_maximo_percentual) if self.desconto_maximo_percentual else 0.0,
+            "desconto_maximo_funcionario": float(self.desconto_maximo_funcionario) if self.desconto_maximo_funcionario else 0.0,
+            "arredondamento_valores": self.arredondamento_valores,
+            "formas_pagamento": formas_pagamento_list,
+            "controlar_validade": self.controlar_validade,
+            "alerta_estoque_minimo": self.alerta_estoque_minimo,
+            "dias_alerta_validade": self.dias_alerta_validade,
+            "estoque_minimo_padrao": self.estoque_minimo_padrao,
+            "tempo_sessao_minutos": self.tempo_sessao_minutos,
+            "tentativas_senha_bloqueio": self.tentativas_senha_bloqueio,
+            "alertas_email": self.alertas_email,
+            "alertas_whatsapp": self.alertas_whatsapp
         }
 
 
@@ -238,12 +277,30 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
             "id": self.id,
             "nome": self.nome,
             "cpf": self.cpf,
-            "cargo": self.cargo,
+            "rg": self.rg,
+            "data_nascimento": self.data_nascimento.isoformat() if self.data_nascimento else None,
             "telefone": self.telefone,
+            "celular": self.celular,
+            "email": self.email,
+            "cep": self.cep,
+            "logradouro": self.logradouro,
+            "numero": self.numero,
+            "complemento": self.complemento,
+            "bairro": self.bairro,
+            "cidade": self.cidade,
+            "estado": self.estado,
+            "pais": self.pais,
+            "cargo": self.cargo,
+            "data_admissao": self.data_admissao.isoformat() if self.data_admissao else None,
+            "salario_base": float(self.salario_base) if self.salario_base else 0.0,
             "username": self.username,
             "role": self.role,
             "ativo": self.ativo,
             "permissoes": self.permissoes,
+            # Campos de compatibilidade para frontend
+            "usuario": self.username,
+            "nivel_acesso": self.role,
+            "salario": float(self.salario_base) if self.salario_base else 0.0,
         }
 
 
@@ -1069,17 +1126,28 @@ class Despesa(db.Model):
     )
 
     def to_dict(self):
-        return {
+        result = {
             "id": self.id,
             "descricao": self.descricao,
             "categoria": self.categoria,
+            "tipo": self.tipo,
             "valor": float(self.valor) if self.valor else 0.0,
             "data_despesa": (
                 self.data_despesa.isoformat() if self.data_despesa else None
             ),
             "forma_pagamento": self.forma_pagamento,
             "recorrente": self.recorrente,
+            "observacoes": self.observacoes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+        
+        if self.fornecedor:
+            result["fornecedor"] = {
+                "id": self.fornecedor.id,
+                "nome": self.fornecedor.nome_fantasia
+            }
+        
+        return result
 
 
 # ============================================

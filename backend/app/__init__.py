@@ -146,8 +146,8 @@ def create_app(config_name=None):
     try:
         from app.routes.configuracao import configuracao_bp
 
-        app.register_blueprint(configuracao_bp, url_prefix="/api/config")
-        logger.info("✅ Blueprint configuracao registrado em /api/config")
+        app.register_blueprint(configuracao_bp)
+        logger.info("✅ Blueprint configuracao registrado com prefixo próprio (/api/configuracao)")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar configuracao: {e}")
 

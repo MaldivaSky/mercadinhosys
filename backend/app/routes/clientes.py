@@ -3,7 +3,7 @@
 # CRUD completo com todas as operações necessárias para clientes CPF
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_login import login_required, current_user
+# from flask_login import login_required, current_user  # Removido - usando JWT
 from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -19,7 +19,7 @@ clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
 # ============================================
 
 
-def validar_dados_cliente(data, cliente_id=None):
+def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
     """Valida todos os dados do cliente antes de salvar"""
     erros = []
 
@@ -39,7 +39,7 @@ def validar_dados_cliente(data, cliente_id=None):
 
         # Verifica se CPF já existe (exceto para o próprio cliente em atualização)
         cliente_existente = Cliente.query.filter_by(
-            cpf=cpf, estabelecimento_id=current_user.estabelecimento_id
+            cpf=cpf, estabelecimento_id=estabelecimento_id
         ).first()
 
         if cliente_existente and cliente_existente.id != cliente_id:
@@ -52,8 +52,8 @@ def validar_dados_cliente(data, cliente_id=None):
     # Validação de telefone celular
     if data.get("celular"):
         celular = re.sub(r"\D", "", data["celular"])
-        if len(celular) != 11:
-            erros.append("Celular deve conter 11 dígitos (com DDD)")
+        if len(celular) not in [11, 13]:  # Aceitar 11 dígitos (BR) ou 13 (+55)
+            erros.append("Celular deve conter 11 dígitos (com DDD) ou 13 dígitos (com +55)")
 
     # Validação de telefone fixo
     if data.get("telefone"):
@@ -164,10 +164,14 @@ def calcular_limite_disponivel(cliente):
 
 
 @clientes_bp.route("/", methods=["GET"])
-@login_required
+@funcionario_required
 def listar_clientes():
     """Lista todos os clientes com filtros e paginação"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
         ativo = request.args.get("ativo", None, type=str)
@@ -178,7 +182,7 @@ def listar_clientes():
 
         # Query base
         query = Cliente.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=jwt_data.get("estabelecimento_id")
         )
 
         # Filtros
@@ -289,12 +293,16 @@ def listar_clientes():
 
 
 @clientes_bp.route("/<int:id>", methods=["GET"])
-@login_required
+@funcionario_required
 def obter_cliente(id):
     """Obtém detalhes completos de um cliente específico"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).first_or_404()
 
         # Dados básicos
@@ -302,19 +310,19 @@ def obter_cliente(id):
 
         # Estatísticas detalhadas
         vendas = Venda.query.filter_by(
-            cliente_id=id, estabelecimento_id=current_user.estabelecimento_id
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).all()
 
         contas_receber = ContaReceber.query.filter_by(
             cliente_id=id,
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=jwt_data.get("estabelecimento_id"),
             status="aberto",
         ).all()
 
         # Últimas vendas
         ultimas_vendas = (
             Venda.query.filter_by(
-                cliente_id=id, estabelecimento_id=current_user.estabelecimento_id
+                cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
             )
             .order_by(Venda.data_venda.desc())
             .limit(10)
@@ -332,7 +340,7 @@ def obter_cliente(id):
             .join(Venda, Venda.id == VendaItem.venda_id)
             .filter(
                 Venda.cliente_id == id,
-                Venda.estabelecimento_id == current_user.estabelecimento_id,
+                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
             )
             .group_by(VendaItem.produto_nome, VendaItem.produto_codigo)
             .order_by(db.func.sum(VendaItem.quantidade).desc())
@@ -360,7 +368,7 @@ def obter_cliente(id):
         # Última compra
         ultima_compra = (
             Venda.query.filter_by(
-                cliente_id=id, estabelecimento_id=current_user.estabelecimento_id
+                cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
             )
             .order_by(Venda.data_venda.desc())
             .first()
@@ -461,14 +469,19 @@ def obter_cliente(id):
 
 
 @clientes_bp.route("/", methods=["POST"])
-@login_required
+@funcionario_required
 def criar_cliente():
     """Cria um novo cliente"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         data = request.get_json()
 
         # Validação dos dados
-        erros = validar_dados_cliente(data)
+        erros = validar_dados_cliente(data, estabelecimento_id=estabelecimento_id)
         if erros:
             return (
                 jsonify(
@@ -483,7 +496,7 @@ def criar_cliente():
 
         # Criar cliente
         cliente = Cliente(
-            estabelecimento_id=current_user.estabelecimento_id,
+            estabelecimento_id=jwt_data.get("estabelecimento_id"),
             nome=data["nome"].strip(),
             cpf=cpf_formatado,
             rg=data.get("rg", "").strip(),
@@ -520,7 +533,7 @@ def criar_cliente():
 
         # Log de auditoria
         current_app.logger.info(
-            f"Cliente criado: {cliente.id} - {cliente.nome} por {current_user.username}"
+            f"Cliente criado: {cliente.id} - {cliente.nome} por {jwt_data.get("sub")}"
         )
 
         return (
@@ -544,18 +557,23 @@ def criar_cliente():
 
 
 @clientes_bp.route("/<int:id>", methods=["PUT"])
-@login_required
+@funcionario_required
 def atualizar_cliente(id):
     """Atualiza um cliente existente"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).first_or_404()
 
         data = request.get_json()
 
         # Validação dos dados (passando ID para verificação de CPF único)
-        erros = validar_dados_cliente(data, cliente.id)
+        erros = validar_dados_cliente(data, cliente.id, estabelecimento_id)
         if erros:
             return (
                 jsonify(
@@ -587,7 +605,14 @@ def atualizar_cliente(id):
         for campo in campos_basicos:
             if campo in data:
                 if campo == "limite_credito":
-                    cliente.limite_credito = Decimal(str(data[campo]))
+                    try:
+                        valor_limite = data[campo]
+                        if valor_limite is None or valor_limite == "":
+                            cliente.limite_credito = Decimal("0")
+                        else:
+                            cliente.limite_credito = Decimal(str(valor_limite))
+                    except (ValueError, TypeError):
+                        cliente.limite_credito = Decimal("0")
                 elif campo == "data_nascimento" and data[campo]:
                     cliente.data_nascimento = datetime.strptime(
                         data[campo], "%Y-%m-%d"
@@ -617,7 +642,7 @@ def atualizar_cliente(id):
 
         # Log de auditoria
         current_app.logger.info(
-            f"Cliente atualizado: {cliente.id} por {current_user.username}"
+            f"Cliente atualizado: {cliente.id} por {jwt_data.get("sub")}"
         )
 
         return jsonify(
@@ -638,12 +663,17 @@ def atualizar_cliente(id):
 
 
 @clientes_bp.route("/<int:id>/status", methods=["PATCH"])
-@login_required
+@funcionario_required
 def atualizar_status_cliente(id):
     """Ativa/desativa um cliente"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).first_or_404()
 
         data = request.get_json()
@@ -655,23 +685,17 @@ def atualizar_status_cliente(id):
                 400,
             )
 
-        # Verificar se há contas em aberto
+        # Verificar se há contas em aberto (apenas informativo)
         if not novo_status:  # Se estiver desativando
             contas_abertas = ContaReceber.query.filter_by(
                 cliente_id=id,
                 status="aberto",
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=jwt_data.get("estabelecimento_id"),
             ).count()
 
             if contas_abertas > 0:
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "message": f"Não é possível desativar o cliente. Existem {contas_abertas} contas em aberto.",
-                        }
-                    ),
-                    400,
+                current_app.logger.warning(
+                    f"Desativando cliente {id} com {contas_abertas} contas em aberto."
                 )
 
         cliente.ativo = novo_status
@@ -681,7 +705,7 @@ def atualizar_status_cliente(id):
 
         acao = "ativado" if novo_status else "desativado"
         current_app.logger.info(
-            f"Cliente {acao}: {cliente.id} por {current_user.username}"
+            f"Cliente {acao}: {cliente.id} por {jwt_data.get("sub")}"
         )
 
         return jsonify(
@@ -707,23 +731,28 @@ def atualizar_status_cliente(id):
 
 
 @clientes_bp.route("/<int:id>", methods=["DELETE"])
-@login_required
+@funcionario_required
 def excluir_cliente(id):
     """Exclui um cliente (apenas se não houver vínculos)"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        username = jwt_data.get("sub")
+        
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).first_or_404()
 
         # Verificar vínculos
         # 1. Vendas vinculadas
         vendas_count = Venda.query.filter_by(
-            cliente_id=id, estabelecimento_id=current_user.estabelecimento_id
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).count()
 
         # 2. Contas a receber
         contas_count = ContaReceber.query.filter_by(
-            cliente_id=id, estabelecimento_id=current_user.estabelecimento_id
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).count()
 
         if vendas_count > 0 or contas_count > 0:
@@ -745,7 +774,7 @@ def excluir_cliente(id):
         db.session.delete(cliente)
         db.session.commit()
 
-        current_app.logger.info(f"Cliente excluído: {id} por {current_user.username}")
+        current_app.logger.info(f"Cliente excluído: {id} por {jwt_data.get("sub")}")
 
         return jsonify({"success": True, "message": "Cliente excluído com sucesso"})
 
@@ -763,6 +792,10 @@ def excluir_cliente(id):
 def buscar_clientes():
     """Busca rápida de clientes para autocomplete"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         termo = request.args.get("q", "", type=str).strip()
         limite = request.args.get("limite", 20, type=int)
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
@@ -834,11 +867,15 @@ def buscar_clientes():
 
 
 @clientes_bp.route("/estatisticas", methods=["GET"])
-@login_required
+@funcionario_required
 def estatisticas_clientes():
     """Retorna estatísticas gerais sobre clientes"""
     try:
-        estabelecimento_id = current_user.estabelecimento_id
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
+        # Total de clientes
 
         # Total de clientes
         total_clientes = Cliente.query.filter_by(
@@ -992,10 +1029,14 @@ def estatisticas_clientes():
 
 
 @clientes_bp.route("/<int:id>/compras", methods=["GET"])
-@login_required
+@funcionario_required
 def listar_compras_cliente(id):
     """Lista todas as compras de um cliente"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 20, type=int)
         status = request.args.get("status", None, type=str)
@@ -1004,12 +1045,12 @@ def listar_compras_cliente(id):
 
         # Verificar se cliente existe
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=current_user.estabelecimento_id
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         ).first_or_404()
 
         # Query de vendas
         query = Venda.query.filter_by(
-            cliente_id=id, estabelecimento_id=current_user.estabelecimento_id
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
         )
 
         if status:
@@ -1055,7 +1096,7 @@ def listar_compras_cliente(id):
             db.session.query(db.func.sum(Venda.total))
             .filter(
                 Venda.cliente_id == id,
-                Venda.estabelecimento_id == current_user.estabelecimento_id,
+                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
             )
             .scalar()
             or 0
@@ -1087,16 +1128,20 @@ def listar_compras_cliente(id):
 
 
 @clientes_bp.route("/exportar", methods=["GET"])
-@login_required
+@funcionario_required
 def exportar_clientes():
     """Exporta clientes em formato CSV ou Excel"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         formato = request.args.get("formato", "csv", type=str).lower()
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
 
         # Buscar clientes
         query = Cliente.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id
+            estabelecimento_id=jwt_data.get("estabelecimento_id")
         )
 
         if apenas_ativos:
@@ -1322,10 +1367,14 @@ def exportar_clientes():
 
 
 @clientes_bp.route("/curva_compras", methods=["GET"])
-@login_required
+@funcionario_required
 def curva_compras():
     """Retorna a curva de compras agregada por mês (últimos 12 meses)"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         hoje = datetime.utcnow()
         meses = []
 
@@ -1343,7 +1392,7 @@ def curva_compras():
                 db.func.sum(Venda.total).label("total"),
             )
             .filter(
-                Venda.estabelecimento_id == current_user.estabelecimento_id,
+                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
                 Venda.data_venda >= meses[-1],
                 Venda.status == "finalizada",
             )
@@ -1399,10 +1448,14 @@ def curva_compras():
 
 
 @clientes_bp.route("/relatorio/analitico", methods=["GET"])
-@login_required
+@funcionario_required
 def relatorio_analitico_clientes():
     """Gera relatório analítico detalhado dos clientes"""
     try:
+        # Get estabelecimento_id from JWT
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        
         # Parâmetros de filtro
         data_inicio = request.args.get("data_inicio", None)
         data_fim = request.args.get("data_fim", None)
@@ -1410,7 +1463,7 @@ def relatorio_analitico_clientes():
 
         # Query base de clientes
         query = Cliente.query.filter_by(
-            estabelecimento_id=current_user.estabelecimento_id, ativo=True
+            estabelecimento_id=jwt_data.get("estabelecimento_id"), ativo=True
         )
 
         if classificacao:
@@ -1432,7 +1485,7 @@ def relatorio_analitico_clientes():
             # Vendas do cliente no período
             vendas_query = Venda.query.filter_by(
                 cliente_id=cliente.id,
-                estabelecimento_id=current_user.estabelecimento_id,
+                estabelecimento_id=jwt_data.get("estabelecimento_id"),
                 status="finalizada",
             )
 

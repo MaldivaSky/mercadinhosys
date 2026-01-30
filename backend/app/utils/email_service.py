@@ -247,6 +247,31 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str) -> bool:
         return False
 
 
+def enviar_email_com_anexo(to, subject, body, attachment_name, attachment_data, attachment_type):
+    """
+    Envia email com anexo (PDF, Excel, etc)
+    """
+    try:
+        msg = Message(
+            subject=subject,
+            sender=current_app.config.get('MAIL_DEFAULT_SENDER', 'noreply@mercadinhosys.com'),
+            recipients=[to],
+            body=body
+        )
+        
+        msg.attach(
+            attachment_name,
+            attachment_type,
+            attachment_data
+        )
+        
+        mail.send(msg)
+        return True
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro ao enviar email com anexo: {str(e)}")
+        return False
+
+
 def enviar_email(to, subject, template):
     """
     Função genérica de compatibilidade para envio de emails.
