@@ -22,7 +22,7 @@ const App: React.FC = () => {
           <Toaster
           position="top-right"
           toastOptions={{
-            duration: 4000,
+            duration: 2500,
             style: {
               background: '#363636',
               color: '#fff',
@@ -30,13 +30,13 @@ const App: React.FC = () => {
               fontWeight: '500',
             },
             success: {
-              duration: 5000,
+              duration: 2500,
               style: {
                 background: '#10b981',
               },
             },
             error: {
-              duration: 6000,
+              duration: 3500,
               style: {
                 background: '#ef4444',
               },

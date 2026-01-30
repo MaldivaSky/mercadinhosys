@@ -143,8 +143,6 @@ const SettingsPage: React.FC = () => {
                     // Atualizar preview local
                     setConfig({ ...config, logo_url: base64 });
                     
-                    // Atualizar globalmente para aparecer no header
-                    const tempConfig = { ...globalConfig, logo_url: base64 };
                     await updateGlobalConfig({ logo_url: base64 });
                 };
                 reader.readAsDataURL(file);

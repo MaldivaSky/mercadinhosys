@@ -68,6 +68,73 @@ class AuthService {
         }
     }
 
+    async updateProfile(payload: { nome?: string; email?: string; telefone?: string; foto_url?: string }): Promise<{ success: boolean; data?: { nome?: string; email?: string; telefone?: string; foto_url?: string }; message?: string }> {
+        const token = this.getToken();
+        if (!token) {
+            throw new Error('Usuário não autenticado');
+        }
+        try {
+            const response = await axios.put(
+                `${API_URL}/auth/profile`,
+                payload,
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    timeout: 10000
+                }
+            );
+            const data = response.data as { success: boolean; data?: { nome?: string; email?: string; telefone?: string; foto_url?: string }; message?: string; error?: string };
+            if (!data || typeof data !== 'object') {
+                throw new Error('Resposta inválida do servidor');
+            }
+            if (!data.success) {
+                throw new Error(data.error || 'Falha ao atualizar perfil');
+            }
+            return { success: true, data: data.data, message: data.message || 'Perfil atualizado' };
+        } catch (error: unknown) {
+            const err = error as { message?: string; response?: { status?: number; data?: unknown } };
+            const respData = err.response?.data as { error?: string; message?: string } | undefined;
+            const serverMessage = respData?.error || respData?.message;
+            throw new Error(serverMessage || err.message || 'Erro ao atualizar perfil');
+        }
+    }
+
+    async changePassword(senhaAtual: string, novaSenha: string): Promise<{ success: boolean; message?: string }> {
+        const token = this.getToken();
+        if (!token) {
+            throw new Error('Usuário não autenticado');
+        }
+        try {
+            const response = await axios.put(
+                `${API_URL}/auth/profile`,
+                { senha_atual: senhaAtual, nova_senha: novaSenha },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    timeout: 10000
+                }
+            );
+            const data = response.data;
+            if (!data || typeof data !== 'object') {
+                throw new Error('Resposta inválida do servidor');
+            }
+            if (!data.success) {
+                throw new Error(data.error || 'Falha ao alterar senha');
+            }
+            this.logout();
+            return { success: true, message: data.message || 'Senha alterada com sucesso' };
+        } catch (error: unknown) {
+            const err = error as { message?: string; response?: { status?: number; data?: unknown } };
+            const respData = err.response?.data as { error?: string; message?: string } | undefined;
+            const serverMessage = respData?.error || respData?.message;
+            throw new Error(serverMessage || err.message || 'Erro ao alterar senha');
+        }
+    }
+
     logout(): void {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');

@@ -86,12 +86,12 @@ const PDVPage: React.FC = () => {
     const handleProdutoSelecionado = (produto: Produto) => {
         if (!produto.quantidade_estoque || produto.quantidade_estoque <= 0) {
             toast.error(`📦 ${produto.nome} está sem estoque!`, {
-                duration: 5000,
+                duration: 2500,
             });
             return;
         }
         adicionarProduto(produto);
-        toast.success(`✅ ${produto.nome} adicionado ao carrinho`);
+        toast.success(`✅ ${produto.nome} adicionado ao carrinho`, { duration: 2000 });
     };
 
     const handleAplicarDesconto = () => {
@@ -128,7 +128,7 @@ const PDVPage: React.FC = () => {
 
             toast.success(
                 `🎉 Venda ${venda.codigo} finalizada com sucesso! Total: ${formatCurrency(venda.total)}`,
-                { duration: 6000 }
+                { duration: 3000 }
             );
 
             setDescontoAprovado(false);
@@ -167,7 +167,7 @@ const PDVPage: React.FC = () => {
                 errorMessage,
                 {
                     icon: '❌',
-                    duration: 6000,
+                    duration: 3500,
                 }
             );
         }
@@ -225,7 +225,7 @@ const PDVPage: React.FC = () => {
                 }
             }
             toast.error(errorMessage, {
-                duration: 6000,
+                duration: 3500,
             });
             
             // Limpar mesmo com erro no email
@@ -259,6 +259,59 @@ const PDVPage: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            switch (e.key) {
+                case 'F1':
+                    e.preventDefault();
+                    document.getElementById('produto-search-input')?.focus();
+                    break;
+                case 'F10':
+                    e.preventDefault();
+                    {
+                        if (carrinho.length > 0) {
+                            handleFinalizarVenda();
+                        }
+                    }
+                    break;
+                case 'F9':
+                    e.preventDefault();
+                    {
+                        if (carrinho.length > 0) {
+                            handleFinalizarVenda();
+                        }
+                    }
+                    break;
+                case 'Escape':
+                    {
+                        if (carrinho.length > 0) {
+                            handleLimparCarrinho();
+                        }
+                    }
+                    break;
+                case 'F2':
+                    e.preventDefault();
+                    {
+                        const btn = document.getElementById('cliente-select-open') as HTMLButtonElement | null;
+                        btn?.click();
+                        setTimeout(() => {
+                            document.getElementById('cliente-search-input')?.focus();
+                        }, 50);
+                    }
+                    break;
+                case 'F4':
+                    e.preventDefault();
+                    {
+                        setFormaPagamentoAberta((prev) => !prev);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [carrinho, handleFinalizarVenda, handleLimparCarrinho]);
     const renderIconPagamento = (tipo: string) => {
         switch (tipo) {
             case 'dinheiro':
@@ -510,7 +563,7 @@ const PDVPage: React.FC = () => {
                                     onClick={() => setFormaPagamentoAberta(!formaPagamentoAberta)}
                                     className="text-sm text-blue-500 hover:text-blue-600 font-medium"
                                 >
-                                    {formaPagamentoAberta ? 'Fechar' : 'Alterar'}
+                                    {formaPagamentoAberta ? 'Fechar' : 'Alterar'} <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">F4</span>
                                 </button>
                             </div>
 
@@ -651,6 +704,7 @@ const PDVPage: React.FC = () => {
                                         <>
                                             <Check className="w-6 h-6" />
                                             <span>FINALIZAR VENDA</span>
+                                            <span className="ml-2 text-xs px-2 py-0.5 bg-white/20 rounded">F10/F9</span>
                                         </>
                                     )}
                                 </button>
@@ -667,6 +721,7 @@ const PDVPage: React.FC = () => {
                                     >
                                         <X className="w-5 h-5" />
                                         <span>Cancelar</span>
+                                        <span className="ml-2 text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded">ESC</span>
                                     </button>
 
                                     <button

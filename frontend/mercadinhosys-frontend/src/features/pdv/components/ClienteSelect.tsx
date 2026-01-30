@@ -90,6 +90,7 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
             ) : (
                 <button
                     onClick={() => setMostrarBusca(true)}
+                    id="cliente-select-open"
                     className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
                 >
                     <div className="flex flex-col items-center justify-center">
@@ -104,6 +105,7 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                     <div className="p-3 border-b border-gray-200 dark:border-gray-700">
                         <div className="relative">
                             <input
+                                id="cliente-search-input"
                                 type="text"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
