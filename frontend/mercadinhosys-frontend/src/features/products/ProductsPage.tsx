@@ -26,6 +26,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { apiClient } from '../../api/apiClient';
 import { Toaster, toast } from 'react-hot-toast';
 import ProductModal from './ProductModal';
+import { useConfig } from '../../contexts/ConfigContext';
 
 interface ProductFormData {
     nome: string;
@@ -54,6 +55,7 @@ const ProductsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [categorias, setCategorias] = useState<string[]>([]);
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+    const { config } = useConfig();
 
     // Paginação
     const [page, setPage] = useState(1);
@@ -79,6 +81,7 @@ const ProductsPage: React.FC = () => {
     });
     const [buscaLocal, setBuscaLocal] = useState(''); // Busca local sem debounce
     const [showFilters, setShowFilters] = useState(false);
+    const [showExpiring, setShowExpiring] = useState<boolean>(true);
 
     // Modais
     const [showProductModal, setShowProductModal] = useState(false);
@@ -311,6 +314,31 @@ const ProductsPage: React.FC = () => {
         loadCategorias();
         loadFornecedores();
     }, [loadProdutos, loadCategorias, loadFornecedores]);
+
+    const diasAlertaValidade: number = useMemo(() => {
+        return config?.dias_alerta_validade ?? 30;
+    }, [config]);
+
+    const calcularDiasRestantes = useCallback((dateStr?: string): number | null => {
+        if (!dateStr) return null;
+        const hoje = new Date();
+        const validade = new Date(dateStr);
+        const diffMs = validade.getTime() - hoje.getTime();
+        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        return diffDias;
+    }, []);
+
+    const produtosProximosValidade = useMemo(() => {
+        if (!config?.controlar_validade) return [];
+        const items = produtos
+            .map((p) => ({
+                produto: p,
+                diasRestantes: calcularDiasRestantes(p.data_validade),
+            }))
+            .filter((i) => i.diasRestantes !== null && (i.diasRestantes as number) <= diasAlertaValidade)
+            .sort((a, b) => (a.diasRestantes as number) - (b.diasRestantes as number));
+        return items.slice(0, 10);
+    }, [produtos, diasAlertaValidade, calcularDiasRestantes, config]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -617,6 +645,68 @@ const ProductsPage: React.FC = () => {
             {/* Filtros e Busca */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                 <div className="flex flex-col gap-4">
+                    {/* Validades Próximas */}
+                    {config?.controlar_validade && (
+                        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                        Produtos próximos à validade
+                                    </h3>
+                                    <span className="ml-2 inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                        {produtosProximosValidade.length}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowExpiring(!showExpiring)}
+                                    className="text-xs px-2 py-1 border rounded-md border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                    {showExpiring ? 'Esconder' : 'Mostrar'}
+                                </button>
+                            </div>
+                            {showExpiring && produtosProximosValidade.length > 0 && (
+                                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    {produtosProximosValidade.map(({ produto, diasRestantes }) => (
+                                        <div
+                                            key={produto.id}
+                                            className="flex items-center justify-between p-3 rounded-md border border-gray-200 dark:border-gray-700"
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                    {produto.nome}
+                                                </p>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                    Validade: {produto.data_validade || 'N/A'}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span
+                                                    className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${
+                                                        diasRestantes !== null && diasRestantes <= 0
+                                                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                                    }`}
+                                                >
+                                                    {diasRestantes !== null ? `${diasRestantes}d` : '—'}
+                                                </span>
+                                                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    Qtd: {produto.quantidade}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {showExpiring && produtosProximosValidade.length === 0 && (
+                                <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                    Nenhum produto dentro do limite de {diasAlertaValidade} dias.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Linha 1: Busca e ações */}
                     <div className="flex flex-col md:flex-row gap-3">
                         <div className="flex-1 relative">
