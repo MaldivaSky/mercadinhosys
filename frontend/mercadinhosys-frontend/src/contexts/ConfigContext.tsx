@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { settingsService, Configuracao } from '../features/settings/settingsService';
+import settingsService, { Configuracao } from '../features/settings/settingsService';
 import { toast } from 'react-hot-toast';
 
 interface ConfigContextType {
@@ -36,26 +36,91 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
             
             // Cor mais clara (backgrounds)
             root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
+            
+            // Aplicar em elementos específicos
+            const buttons = document.querySelectorAll('.btn-primary, button[class*="bg-blue"], button[class*="bg-primary"]');
+            buttons.forEach((btn) => {
+                (btn as HTMLElement).style.backgroundColor = config.cor_principal;
+            });
         }
 
         // Aplicar tema escuro
         if (config.tema_escuro) {
             document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
         } else {
             document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
         }
     };
 
     const loadConfig = async () => {
         try {
             setLoading(true);
-            const response = await settingsService.getConfiguracoes();
-            if (response.success && response.config) {
-                setConfig(response.config);
+            
+            // Verificar se tem token antes de tentar carregar
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.log('Sem token, usando configurações padrão');
+                setConfig({
+                    id: 0,
+                    estabelecimento_id: 1,
+                    cor_principal: '#2563eb',
+                    tema_escuro: false,
+                    logo_url: undefined,
+                    emitir_nfe: false,
+                    emitir_nfce: true,
+                    impressao_automatica: false,
+                    tipo_impressora: 'termica_80mm',
+                    exibir_preco_tela: true,
+                    permitir_venda_sem_estoque: false,
+                    desconto_maximo_percentual: 10,
+                    desconto_maximo_funcionario: 10,
+                    arredondamento_valores: true,
+                    formas_pagamento: ['Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'PIX'],
+                    controlar_validade: true,
+                    alerta_estoque_minimo: true,
+                    dias_alerta_validade: 30,
+                    estoque_minimo_padrao: 10,
+                    tempo_sessao_minutos: 30,
+                    tentativas_senha_bloqueio: 3,
+                    alertas_email: false,
+                    alertas_whatsapp: false
+                });
+                setLoading(false);
+                return;
             }
+
+            const response = await settingsService.getConfig();
+            setConfig(response);
         } catch (error) {
             console.error('Erro ao carregar configurações:', error);
-            toast.error('Erro ao carregar configurações do sistema');
+            // Usar configurações padrão em caso de erro
+            setConfig({
+                id: 0,
+                estabelecimento_id: 1,
+                cor_principal: '#2563eb',
+                tema_escuro: false,
+                logo_url: undefined,
+                emitir_nfe: false,
+                emitir_nfce: true,
+                impressao_automatica: false,
+                tipo_impressora: 'termica_80mm',
+                exibir_preco_tela: true,
+                permitir_venda_sem_estoque: false,
+                desconto_maximo_percentual: 10,
+                desconto_maximo_funcionario: 10,
+                arredondamento_valores: true,
+                formas_pagamento: ['Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'PIX'],
+                controlar_validade: true,
+                alerta_estoque_minimo: true,
+                dias_alerta_validade: 30,
+                estoque_minimo_padrao: 10,
+                tempo_sessao_minutos: 30,
+                tentativas_senha_bloqueio: 3,
+                alertas_email: false,
+                alertas_whatsapp: false
+            });
         } finally {
             setLoading(false);
         }
@@ -63,11 +128,14 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
     const updateConfig = async (newConfig: Partial<Configuracao>) => {
         try {
-            const response = await settingsService.updateConfiguracoes(newConfig);
-            if (response.success && response.config) {
-                setConfig(response.config);
-                toast.success('Configurações atualizadas com sucesso!');
-            }
+            const response = await settingsService.updateConfig(newConfig);
+            setConfig(response);
+            toast.success('Configurações atualizadas com sucesso!');
+            
+            // Forçar aplicação do tema imediatamente
+            setTimeout(() => {
+                applyTheme();
+            }, 100);
         } catch (error) {
             console.error('Erro ao atualizar configurações:', error);
             toast.error('Erro ao atualizar configurações');
