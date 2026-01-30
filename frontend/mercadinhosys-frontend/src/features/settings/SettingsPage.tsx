@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
+import { useConfig } from '../../contexts/ConfigContext';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 const SectionTitle = ({ title, icon: Icon }: { title: string, icon: any }) => (
@@ -47,6 +48,7 @@ const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState('geral');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const { config: globalConfig, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
     
     const [config, setConfig] = useState<Configuracao>({
         id: 0, estabelecimento_id: 0, cor_principal: '#2563eb', tema_escuro: false,
@@ -62,9 +64,23 @@ const SettingsPage: React.FC = () => {
         cep: '', logradouro: '', numero: '', bairro: '', cidade: '', estado: ''
     });
 
+    // Cores predefinidas
+    const coresPredefinidas = [
+        { nome: 'Azul', valor: '#2563eb' },
+        { nome: 'Verde', valor: '#10b981' },
+        { nome: 'Roxo', valor: '#8b5cf6' },
+        { nome: 'Vermelho', valor: '#ef4444' },
+    ];
+
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        if (globalConfig) {
+            setConfig(globalConfig);
+        }
+    }, [globalConfig]);
 
     const loadData = async () => {
         try {
@@ -87,9 +103,10 @@ const SettingsPage: React.FC = () => {
         try {
             setSaving(true);
             await Promise.all([
-                settingsService.updateConfig(config),
+                updateGlobalConfig(config),
                 settingsService.updateEstabelecimento(estab)
             ]);
+            await refreshConfig();
             toast.success("Configurações salvas com sucesso!");
         } catch (error) {
             console.error("Erro ao salvar:", error);
@@ -102,13 +119,40 @@ const SettingsPage: React.FC = () => {
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             try {
-                const url = await settingsService.uploadLogo(e.target.files[0]);
+                const file = e.target.files[0];
+                
+                // Preview imediato
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setConfig({ ...config, logo_url: reader.result as string });
+                };
+                reader.readAsDataURL(file);
+                
+                // Upload para o servidor
+                const url = await settingsService.uploadLogo(file);
                 setConfig({ ...config, logo_url: url });
+                
+                // Atualizar globalmente
+                await updateGlobalConfig({ logo_url: url });
+                await refreshConfig();
+                
                 toast.success("Logo atualizada com sucesso!");
             } catch (error) {
                 toast.error("Erro ao fazer upload da logo.");
             }
         }
+    };
+
+    const handleCorChange = async (cor: string) => {
+        setConfig({...config, cor_principal: cor});
+        // Aplicar imediatamente
+        await updateGlobalConfig({ cor_principal: cor });
+    };
+
+    const handleTemaChange = async (tema: boolean) => {
+        setConfig({...config, tema_escuro: tema});
+        // Aplicar imediatamente
+        await updateGlobalConfig({ tema_escuro: tema });
     };
 
     const tabs = [
@@ -175,9 +219,13 @@ const SettingsPage: React.FC = () => {
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="col-span-2 flex items-center gap-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
-                                    <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden border border-gray-300 relative group">
+                                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-300 dark:border-gray-600 relative group">
                                         {config.logo_url ? (
-                                            <img src={`http://localhost:5000${config.logo_url}`} alt="Logo" className="w-full h-full object-contain" />
+                                            <img 
+                                                src={config.logo_url.startsWith('data:') ? config.logo_url : `http://localhost:5000${config.logo_url}`} 
+                                                alt="Logo" 
+                                                className="w-full h-full object-contain" 
+                                            />
                                         ) : (
                                             <Building className="w-8 h-8 text-gray-400" />
                                         )}
@@ -190,27 +238,56 @@ const SettingsPage: React.FC = () => {
                                     </div>
                                     <div>
                                         <h4 className="font-medium text-gray-800 dark:text-white">Logo do Estabelecimento</h4>
-                                        <p className="text-sm text-gray-500">Recomendado: 200x200px (PNG ou JPG)</p>
-                                        <label className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm cursor-pointer transition-colors">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Recomendado: 200x200px (PNG ou JPG)</p>
+                                        <label className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded text-sm cursor-pointer transition-colors">
                                             <Upload className="w-4 h-4" /> Upload
                                             <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
                                         </label>
                                     </div>
                                 </div>
 
-                                <InputField 
-                                    label="Cor Principal (Hex)" 
-                                    type="color"
-                                    value={config.cor_principal} 
-                                    onChange={(e: any) => setConfig({...config, cor_principal: e.target.value})} 
-                                />
+                                {/* Seletor de Cor Principal */}
+                                <div className="col-span-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                        Cor Principal do Sistema
+                                    </label>
+                                    <div className="grid grid-cols-4 gap-3">
+                                        {coresPredefinidas.map((cor) => (
+                                            <button
+                                                key={cor.valor}
+                                                type="button"
+                                                onClick={() => handleCorChange(cor.valor)}
+                                                className={`relative p-4 rounded-lg border-2 transition-all hover:scale-105 ${
+                                                    config.cor_principal === cor.valor 
+                                                    ? 'border-gray-900 dark:border-white shadow-lg' 
+                                                    : 'border-gray-200 dark:border-gray-700'
+                                                }`}
+                                                style={{ backgroundColor: cor.valor }}
+                                            >
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    {config.cor_principal === cor.valor && (
+                                                        <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
+                                                            <div className="w-3 h-3 bg-gray-900 rounded-full"></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="sr-only">{cor.nome}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                        Cor selecionada: <span className="font-semibold">{coresPredefinidas.find(c => c.valor === config.cor_principal)?.nome || 'Personalizada'}</span>
+                                    </p>
+                                </div>
 
-                                <SwitchField 
-                                    label="Modo Escuro" 
-                                    description="Ativar tema escuro por padrão"
-                                    checked={config.tema_escuro}
-                                    onChange={(val: boolean) => setConfig({...config, tema_escuro: val})}
-                                />
+                                <div className="col-span-2">
+                                    <SwitchField 
+                                        label="Modo Escuro" 
+                                        description="Ativar tema escuro por padrão"
+                                        checked={config.tema_escuro}
+                                        onChange={handleTemaChange}
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}
