@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle } from 'lucide-react';
+import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { Fornecedor } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { Toaster, toast } from 'react-hot-toast';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 // Tipos atualizados - todas as propriedades do Fornecedor estão disponíveis
 
@@ -33,6 +36,7 @@ const SuppliersPage: React.FC = () => {
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
     const [filterProdutos, setFilterProdutos] = useState<'all' | 'com' | 'sem'>('all');
     const [exportando, setExportando] = useState(false);
+    const [showExportMenu, setShowExportMenu] = useState(false);
     const [showProdutosModal, setShowProdutosModal] = useState(false);
     const [produtosFornecedor, setProdutosFornecedor] = useState<any[]>([]);
     const [fornecedorSelecionado, setFornecedorSelecionado] = useState<Fornecedor | null>(null);
@@ -115,7 +119,7 @@ const SuppliersPage: React.FC = () => {
             }));
             
             setSuppliers(fornecedoresFormatados);
-            toast.success(`${fornecedoresFormatados.length} fornecedores carregados!`);
+           
         } catch (error) {
             console.error('Erro ao carregar fornecedores:', error);
             toast.error('Erro ao carregar fornecedores. Verifique sua conexão.');
@@ -381,9 +385,100 @@ const SuppliersPage: React.FC = () => {
             link.click();
 
             toast.success('✅ Arquivo CSV exportado com sucesso!');
+            setShowExportMenu(false);
         } catch (error) {
             console.error('Erro ao exportar CSV:', error);
             toast.error('❌ Erro ao exportar arquivo');
+        } finally {
+            setExportando(false);
+        }
+    }, [filteredSuppliers]);
+
+    const exportarExcel = useCallback(() => {
+        setExportando(true);
+        try {
+            const wsData = [
+                ['Nome', 'CNPJ', 'Telefone', 'Email', 'Cidade', 'Estado', 'Status', 'Produtos'],
+                ...filteredSuppliers.map(s => [
+                    s.nome,
+                    s.cnpj || '',
+                    s.telefone || '',
+                    s.email || '',
+                    s.cidade || '',
+                    s.estado || '',
+                    s.ativo ? 'Ativo' : 'Inativo',
+                    s.total_produtos || 0
+                ])
+            ];
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Fornecedores");
+            XLSX.writeFile(wb, `fornecedores_${new Date().toISOString().split('T')[0]}.xlsx`);
+            
+            toast.success('✅ Excel exportado com sucesso!');
+            setShowExportMenu(false);
+        } catch (error) {
+            console.error('Erro ao exportar Excel:', error);
+            toast.error('❌ Erro ao exportar Excel');
+        } finally {
+            setExportando(false);
+        }
+    }, [filteredSuppliers]);
+
+    const exportarPDF = useCallback(() => {
+        setExportando(true);
+        try {
+            const doc = new jsPDF();
+
+            // Cabeçalho
+            doc.setFillColor(37, 99, 235); // Blue 600
+            doc.rect(0, 0, 210, 40, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text("Relatório de Fornecedores", 105, 20, { align: "center" });
+            
+            doc.setFontSize(10);
+            doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 105, 30, { align: "center" });
+
+            // Tabela
+            const headers = [['Nome', 'CNPJ', 'Telefone', 'Cidade', 'Status', 'Prods']];
+            const data = filteredSuppliers.map(s => [
+                s.nome,
+                s.cnpj || '',
+                s.telefone || '',
+                s.cidade || '',
+                s.ativo ? "Ativo" : "Inativo",
+                (s.total_produtos || 0).toString()
+            ]);
+
+            autoTable(doc, {
+                head: headers,
+                body: data,
+                startY: 50,
+                theme: 'grid',
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
+                alternateRowStyles: { fillColor: [245, 245, 245] }
+            });
+
+            // Rodapé
+            const pageCount = doc.getNumberOfPages();
+            doc.setFontSize(8);
+            doc.setTextColor(100, 100, 100);
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.text(`Página ${i} de ${pageCount} - MercadinhoSys`, 105, 290, { align: "center" });
+            }
+
+            doc.save(`fornecedores-${new Date().toISOString().split('T')[0]}.pdf`);
+            
+            toast.success('✅ PDF exportado com sucesso!');
+            setShowExportMenu(false);
+        } catch (error) {
+            console.error('Erro ao exportar PDF:', error);
+            toast.error('❌ Erro ao exportar PDF');
         } finally {
             setExportando(false);
         }
@@ -414,24 +509,53 @@ const SuppliersPage: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={exportarCSV}
-                        disabled={exportando || suppliers.length === 0}
-                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {exportando ? (
-                            <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                <span>Exportando...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Package className="w-5 h-5" />
-                                <span>Exportar CSV</span>
-                            </>
+                <div className="flex gap-3 relative">
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowExportMenu(!showExportMenu)}
+                            disabled={exportando || suppliers.length === 0}
+                            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {exportando ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                    <span>Exportando...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Package className="w-5 h-5" />
+                                    <span>Exportar</span>
+                                    <ChevronDown className="w-4 h-4 ml-1" />
+                                </>
+                            )}
+                        </button>
+
+                        {showExportMenu && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700">
+                                <button
+                                    onClick={exportarCSV}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-t-lg"
+                                >
+                                    <FileText className="w-4 h-4 text-green-500" />
+                                    CSV
+                                </button>
+                                <button
+                                    onClick={exportarExcel}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                >
+                                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                                    Excel
+                                </button>
+                                <button
+                                    onClick={exportarPDF}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg"
+                                >
+                                    <FileText className="w-4 h-4 text-red-500" />
+                                    PDF
+                                </button>
+                            </div>
                         )}
-                    </button>
+                    </div>
                     <button
                         onClick={() => {
                             resetForm();

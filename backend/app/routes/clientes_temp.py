@@ -1,0 +1,1607 @@
+# app/clientes.py
+# MÓDULO COMPLETO DE CLIENTES - ERP INDUSTRIAL BRASILEIRO
+# CRUD completo com todas as operações necessárias para clientes CPF
+
+from flask import Blueprint, request, jsonify, current_app
+from flask_login import login_required, current_user
+from flask_jwt_extended import get_jwt_identity, get_jwt
+from datetime import datetime, timedelta, date
+from decimal import Decimal
+import re
+from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber, Funcionario
+from app.utils import validar_cpf, validar_email, formatar_telefone, calcular_idade
+from app.decorators.decorator_jwt import funcionario_required
+
+clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
+
+# ============================================
+# VALIDAÇÕES ESPECÍFICAS DE CLIENTE (CPF)
+# ============================================
+
+
+def validar_dados_cliente(data, cliente_id=None):
+    """Valida todos os dados do cliente antes de salvar"""
+    erros = []
+
+    # Validação de campos obrigatórios
+    campos_obrigatorios = ["nome", "cpf", "celular"]
+    for campo in campos_obrigatorios:
+        if not data.get(campo):
+            erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
+
+    # Validação de CPF
+    if data.get("cpf"):
+        cpf = re.sub(r"\D", "", data["cpf"])
+        if len(cpf) != 11:
+            erros.append("CPF deve conter 11 dígitos")
+        elif not validar_cpf(cpf):
+            erros.append("CPF inválido")
+
+        # Verifica se CPF já existe (exceto para o próprio cliente em atualização)
+        cliente_existente = Cliente.query.filter_by(
+            cpf=cpf, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first()
+
+        if cliente_existente and cliente_existente.id != cliente_id:
+            erros.append("CPF já cadastrado para outro cliente")
+
+    # Validação de email
+    if data.get("email") and not validar_email(data["email"]):
+        erros.append("Email inválido")
+
+    # Validação de telefone celular
+    if data.get("celular"):
+        celular = re.sub(r"\D", "", data["celular"])
+        if len(celular) != 11:
+            erros.append("Celular deve conter 11 dígitos (com DDD)")
+
+    # Validação de telefone fixo
+    if data.get("telefone"):
+        telefone = re.sub(r"\D", "", data["telefone"])
+        if len(telefone) not in [10, 11]:
+            erros.append("Telefone inválido")
+
+    # Validação de data de nascimento
+    if data.get("data_nascimento"):
+        try:
+            data_nasc = datetime.strptime(data["data_nascimento"], "%Y-%m-%d").date()
+            if data_nasc > date.today():
+                erros.append("Data de nascimento não pode ser futura")
+            elif calcular_idade(data_nasc) < 18:
+                erros.append("Cliente deve ter pelo menos 18 anos")
+        except ValueError:
+            erros.append("Formato de data inválido. Use YYYY-MM-DD")
+
+    # Validação de limite de crédito
+    if data.get("limite_credito"):
+        try:
+            limite = Decimal(str(data["limite_credito"]))
+            if limite < 0:
+                erros.append("Limite de crédito não pode ser negativo")
+        except:
+            erros.append("Limite de crédito inválido")
+
+    # Validação de endereço
+    campos_endereco = ["cep", "logradouro", "numero", "bairro", "cidade", "estado"]
+    for campo in campos_endereco:
+        if campo in data and not data.get(campo):
+            erros.append(
+                f'O campo {campo.replace("_", " ").title()} é obrigatório quando informado'
+            )
+
+    # Validação de estado
+    if data.get("estado"):
+        estados_brasil = [
+            "AC",
+            "AL",
+            "AP",
+            "AM",
+            "BA",
+            "CE",
+            "DF",
+            "ES",
+            "GO",
+            "MA",
+            "MT",
+            "MS",
+            "MG",
+            "PA",
+            "PB",
+            "PR",
+            "PE",
+            "PI",
+            "RJ",
+            "RN",
+            "RS",
+            "RO",
+            "RR",
+            "SC",
+            "SP",
+            "SE",
+            "TO",
+        ]
+        if data["estado"].upper() not in estados_brasil:
+            erros.append("Estado inválido. Use a sigla de 2 letras (ex: SP)")
+
+    return erros
+
+
+def formatar_cpf(cpf):
+    """Formata CPF para o padrão 000.000.000-00"""
+    cpf = re.sub(r"\D", "", cpf)
+    if len(cpf) == 11:
+        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+    return cpf
+
+
+def calcular_classificacao_cliente(cliente):
+    """Calcula classificação do cliente baseado em histórico de compras"""
+    total_compras = cliente.total_compras or 0
+    valor_total_gasto = float(cliente.valor_total_gasto or 0)
+
+    if valor_total_gasto > 10000:
+        return "PREMIUM"
+    elif valor_total_gasto > 5000:
+        return "A"
+    elif valor_total_gasto > 1000:
+        return "B"
+    elif total_compras > 0:
+        return "C"
+    else:
+        return "NOVO"
+
+
+def calcular_limite_disponivel(cliente):
+    """Calcula limite de crédito disponível"""
+    limite = float(cliente.limite_credito or 0)
+    saldo_devedor = float(cliente.saldo_devedor or 0)
+    return max(0, limite - saldo_devedor)
+
+
+# ============================================
+# ROTAS DE CLIENTES
+# ============================================
+
+
+@clientes_bp.route("/", methods=["GET"])
+@funcionario_required
+def listar_clientes():
+    """Lista todos os clientes com filtros e paginação"""
+    try:
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = request.args.get("por_pagina", 50, type=int)
+        ativo = request.args.get("ativo", None, type=str)
+        classificacao = request.args.get("classificacao", None, type=str)
+        busca = request.args.get("busca", "", type=str).strip()
+        ordenar_por = request.args.get("ordenar_por", "nome")
+        direcao = request.args.get("direcao", "asc")
+
+        # Query base
+        query = Cliente.query.filter_by(
+            estabelecimento_id=jwt_data.get("estabelecimento_id")
+        )
+
+        # Filtros
+        if ativo is not None:
+            query = query.filter_by(ativo=ativo.lower() == "true")
+
+        if classificacao:
+            # Classificação baseada em valor total gasto
+            if classificacao == "PREMIUM":
+                query = query.filter(Cliente.valor_total_gasto > 10000)
+            elif classificacao == "A":
+                query = query.filter(Cliente.valor_total_gasto.between(5000, 10000))
+            elif classificacao == "B":
+                query = query.filter(Cliente.valor_total_gasto.between(1000, 5000))
+            elif classificacao == "C":
+                query = query.filter(Cliente.valor_total_gasto > 0)
+            elif classificacao == "NOVO":
+                query = query.filter(Cliente.total_compras == 0)
+
+        if busca:
+            busca_termo = f"%{busca}%"
+            query = query.filter(
+                db.or_(
+                    Cliente.nome.ilike(busca_termo),
+                    Cliente.cpf.ilike(busca_termo),
+                    Cliente.email.ilike(busca_termo),
+                    Cliente.celular.ilike(busca_termo),
+                    Cliente.telefone.ilike(busca_termo),
+                )
+            )
+
+        # Ordenação
+        campos_ordenacao = {
+            "id": Cliente.id,
+            "nome": Cliente.nome,
+            "cpf": Cliente.cpf,
+            "valor_total_gasto": Cliente.valor_total_gasto,
+            "total_compras": Cliente.total_compras,
+            "data_cadastro": Cliente.data_cadastro,
+            "ultima_compra": Cliente.ultima_compra,
+        }
+
+        campo_ordenacao = campos_ordenacao.get(ordenar_por, Cliente.nome)
+        if direcao == "desc":
+            query = query.order_by(campo_ordenacao.desc())
+        else:
+            query = query.order_by(campo_ordenacao.asc())
+
+        # Paginação
+        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
+
+        clientes = []
+        for cliente in paginacao.items:
+            cliente_dict = cliente.to_dict()
+            cliente_dict["classificacao"] = calcular_classificacao_cliente(cliente)
+            cliente_dict["limite_disponivel"] = calcular_limite_disponivel(cliente)
+            cliente_dict["idade"] = (
+                calcular_idade(cliente.data_nascimento)
+                if cliente.data_nascimento
+                else None
+            )
+
+            # Dias desde última compra
+            if cliente.ultima_compra:
+                dias_desde_ultima_compra = (
+                    datetime.utcnow() - cliente.ultima_compra
+                ).days
+                cliente_dict["dias_sem_comprar"] = dias_desde_ultima_compra
+            else:
+                cliente_dict["dias_sem_comprar"] = None
+
+            clientes.append(cliente_dict)
+
+        # Estatísticas
+        total_clientes = paginacao.total
+        clientes_ativos = (
+            query.filter_by(ativo=True).count() if ativo is None else paginacao.total
+        )
+        clientes_inativos = total_clientes - clientes_ativos
+
+        return jsonify(
+            {
+                "success": True,
+                "clientes": clientes,
+                "total": total_clientes,
+                "pagina": pagina,
+                "por_pagina": por_pagina,
+                "total_paginas": paginacao.pages,
+                "estatisticas": {
+                    "total": total_clientes,
+                    "ativos": clientes_ativos,
+                    "inativos": clientes_inativos,
+                    "percentual_ativos": (
+                        (clientes_ativos / total_clientes * 100)
+                        if total_clientes > 0
+                        else 0
+                    ),
+                },
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar clientes: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao listar clientes"}),
+            500,
+        )
+
+
+@clientes_bp.route("/<int:id>", methods=["GET"])
+@funcionario_required
+def obter_cliente(id):
+    """Obtém detalhes completos de um cliente específico"""
+    try:
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first_or_404()
+
+        # Dados básicos
+        dados_cliente = cliente.to_dict()
+
+        # Estatísticas detalhadas
+        vendas = Venda.query.filter_by(
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).all()
+
+        contas_receber = ContaReceber.query.filter_by(
+            cliente_id=id,
+            estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            status="aberto",
+        ).all()
+
+        # Últimas vendas
+        ultimas_vendas = (
+            Venda.query.filter_by(
+                cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            )
+            .order_by(Venda.data_venda.desc())
+            .limit(10)
+            .all()
+        )
+
+        # Produtos preferidos
+        produtos_preferidos = (
+            db.session.query(
+                VendaItem.produto_nome,
+                VendaItem.produto_codigo,
+                db.func.sum(VendaItem.quantidade).label("quantidade_total"),
+                db.func.sum(VendaItem.total_item).label("valor_total"),
+            )
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(
+                Venda.cliente_id == id,
+                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
+            )
+            .group_by(VendaItem.produto_nome, VendaItem.produto_codigo)
+            .order_by(db.func.sum(VendaItem.quantidade).desc())
+            .limit(5)
+            .all()
+        )
+
+        # Métricas
+        total_vendas = len(vendas)
+        vendas_ultimo_mes = len(
+            [
+                v
+                for v in vendas
+                if v.data_venda and (datetime.utcnow() - v.data_venda).days <= 30
+            ]
+        )
+        valor_medio_compra = (
+            float(cliente.valor_total_gasto / cliente.total_compras)
+            if cliente.total_compras > 0
+            else 0
+        )
+        total_contas_abertas = len(contas_receber)
+        valor_total_devendo = sum(float(c.valor_atual) for c in contas_receber)
+
+        # Última compra
+        ultima_compra = (
+            Venda.query.filter_by(
+                cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            )
+            .order_by(Venda.data_venda.desc())
+            .first()
+        )
+
+        # Ticket médio por período
+        hoje = datetime.utcnow()
+        periodos = {
+            "ultimo_mes": (hoje - timedelta(days=30), hoje),
+            "ultimos_3_meses": (hoje - timedelta(days=90), hoje),
+            "ultimo_ano": (hoje - timedelta(days=365), hoje),
+        }
+
+        ticket_medio_periodo = {}
+        for periodo, (inicio, fim) in periodos.items():
+            vendas_periodo = [v for v in vendas if inicio <= v.data_venda <= fim]
+            if vendas_periodo:
+                ticket_medio_periodo[periodo] = sum(
+                    float(v.total) for v in vendas_periodo
+                ) / len(vendas_periodo)
+            else:
+                ticket_medio_periodo[periodo] = 0
+
+        # Lista de vendas formatada
+        vendas_lista = []
+        for venda in ultimas_vendas:
+            vendas_lista.append(
+                {
+                    "id": venda.id,
+                    "codigo": venda.codigo,
+                    "data_venda": (
+                        venda.data_venda.isoformat() if venda.data_venda else None
+                    ),
+                    "total": float(venda.total),
+                    "forma_pagamento": venda.forma_pagamento,
+                    "status": venda.status,
+                    "quantidade_itens": venda.quantidade_itens,
+                }
+            )
+
+        # Lista de produtos preferidos
+        produtos_preferidos_lista = []
+        for produto_nome, produto_codigo, quantidade, valor in produtos_preferidos:
+            produtos_preferidos_lista.append(
+                {
+                    "nome": produto_nome,
+                    "codigo": produto_codigo,
+                    "quantidade_total": int(quantidade),
+                    "valor_total": float(valor),
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "cliente": dados_cliente,
+                "metricas": {
+                    "total_compras": total_vendas,
+                    "vendas_ultimo_mes": vendas_ultimo_mes,
+                    "valor_total_gasto": float(cliente.valor_total_gasto or 0),
+                    "valor_medio_compra": valor_medio_compra,
+                    "ticket_medio_periodo": ticket_medio_periodo,
+                    "total_contas_abertas": total_contas_abertas,
+                    "valor_total_devendo": valor_total_devendo,
+                    "classificacao": calcular_classificacao_cliente(cliente),
+                    "limite_disponivel": calcular_limite_disponivel(cliente),
+                    "limite_utilizado_percent": (
+                        (
+                            float(cliente.saldo_devedor or 0)
+                            / float(cliente.limite_credito or 1)
+                            * 100
+                        )
+                        if cliente.limite_credito > 0
+                        else 0
+                    ),
+                    "idade": (
+                        calcular_idade(cliente.data_nascimento)
+                        if cliente.data_nascimento
+                        else None
+                    ),
+                },
+                "ultimas_compras": vendas_lista,
+                "produtos_preferidos": produtos_preferidos_lista,
+                "endereco_completo": (
+                    cliente.endereco_completo()
+                    if hasattr(cliente, "endereco_completo")
+                    else None
+                ),
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter cliente {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao obter cliente"}),
+            500,
+        )
+
+
+@clientes_bp.route("/", methods=["POST"])
+@funcionario_required
+def criar_cliente():
+    """Cria um novo cliente"""
+    try:
+        data = request.get_json()
+
+        # Validação dos dados
+        erros = validar_dados_cliente(data)
+        if erros:
+            return (
+                jsonify(
+                    {"success": False, "message": "Erros de validação", "errors": erros}
+                ),
+                400,
+            )
+
+        # Formatar dados
+        cpf_formatado = formatar_cpf(data["cpf"])
+        celular_formatado = formatar_telefone(data["celular"])
+
+        # Criar cliente
+        cliente = Cliente(
+            estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            nome=data["nome"].strip(),
+            cpf=cpf_formatado,
+            rg=data.get("rg", "").strip(),
+            data_nascimento=(
+                datetime.strptime(data["data_nascimento"], "%Y-%m-%d").date()
+                if data.get("data_nascimento")
+                else None
+            ),
+            telefone=formatar_telefone(data.get("telefone", "")),
+            celular=celular_formatado,
+            email=data.get("email", "").strip().lower(),
+            limite_credito=Decimal(str(data.get("limite_credito", 0))),
+            saldo_devedor=Decimal("0"),
+            # Endereço
+            cep=data.get("cep", "").strip(),
+            logradouro=data.get("logradouro", "").strip(),
+            numero=data.get("numero", "").strip(),
+            complemento=data.get("complemento", "").strip(),
+            bairro=data.get("bairro", "").strip(),
+            cidade=data.get("cidade", "").strip(),
+            estado=(
+                data.get("estado", "").strip().upper() if data.get("estado") else None
+            ),
+            pais=data.get("pais", "Brasil").strip(),
+            ativo=data.get("ativo", True),
+            observacoes=data.get("observacoes", "").strip(),
+            total_compras=0,
+            valor_total_gasto=Decimal("0"),
+            ultima_compra=None,
+        )
+
+        db.session.add(cliente)
+        db.session.commit()
+
+        # Log de auditoria
+        current_app.logger.info(
+            f"Cliente criado: {cliente.id} - {cliente.nome} por {current_user.username}"
+        )
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Cliente criado com sucesso",
+                    "cliente": cliente.to_dict(),
+                }
+            ),
+            201,
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao criar cliente: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao criar cliente"}),
+            500,
+        )
+
+
+@clientes_bp.route("/<int:id>", methods=["PUT"])
+@funcionario_required
+def atualizar_cliente(id):
+    """Atualiza um cliente existente"""
+    try:
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first_or_404()
+
+        data = request.get_json()
+
+        # Validação dos dados (passando ID para verificação de CPF único)
+        erros = validar_dados_cliente(data, cliente.id)
+        if erros:
+            return (
+                jsonify(
+                    {"success": False, "message": "Erros de validação", "errors": erros}
+                ),
+                400,
+            )
+
+        # Formatar dados
+        if "cpf" in data:
+            cliente.cpf = formatar_cpf(data["cpf"])
+
+        if "celular" in data:
+            cliente.celular = formatar_telefone(data["celular"])
+
+        if "telefone" in data:
+            cliente.telefone = formatar_telefone(data["telefone"])
+
+        # Atualizar campos básicos
+        campos_basicos = [
+            "nome",
+            "rg",
+            "email",
+            "limite_credito",
+            "observacoes",
+            "ativo",
+        ]
+
+        for campo in campos_basicos:
+            if campo in data:
+                if campo == "limite_credito":
+                    cliente.limite_credito = Decimal(str(data[campo]))
+                elif campo == "data_nascimento" and data[campo]:
+                    cliente.data_nascimento = datetime.strptime(
+                        data[campo], "%Y-%m-%d"
+                    ).date()
+                else:
+                    setattr(cliente, campo, data[campo])
+
+        # Atualizar endereço
+        campos_endereco = [
+            "cep",
+            "logradouro",
+            "numero",
+            "complemento",
+            "bairro",
+            "cidade",
+            "estado",
+            "pais",
+        ]
+
+        for campo in campos_endereco:
+            if campo in data:
+                setattr(cliente, campo, data[campo])
+
+        cliente.data_atualizacao = datetime.utcnow()
+
+        db.session.commit()
+
+        # Log de auditoria
+        current_app.logger.info(
+            f"Cliente atualizado: {cliente.id} por {current_user.username}"
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Cliente atualizado com sucesso",
+                "cliente": cliente.to_dict(),
+            }
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar cliente {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao atualizar cliente"}),
+            500,
+        )
+
+
+@clientes_bp.route("/<int:id>/status", methods=["PATCH"])
+@funcionario_required
+def atualizar_status_cliente(id):
+    """Ativa/desativa um cliente"""
+    try:
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first_or_404()
+
+        data = request.get_json()
+        novo_status = data.get("ativo")
+
+        if novo_status is None:
+            return (
+                jsonify({"success": False, "message": 'Campo "ativo" é obrigatório'}),
+                400,
+            )
+
+        # Verificar se há contas em aberto
+        if not novo_status:  # Se estiver desativando
+            contas_abertas = ContaReceber.query.filter_by(
+                cliente_id=id,
+                status="aberto",
+                estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            ).count()
+
+            if contas_abertas > 0:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": f"Não é possível desativar o cliente. Existem {contas_abertas} contas em aberto.",
+                        }
+                    ),
+                    400,
+                )
+
+        cliente.ativo = novo_status
+        cliente.data_atualizacao = datetime.utcnow()
+
+        db.session.commit()
+
+        acao = "ativado" if novo_status else "desativado"
+        current_app.logger.info(
+            f"Cliente {acao}: {cliente.id} por {current_user.username}"
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Cliente {acao} com sucesso",
+                "ativo": cliente.ativo,
+            }
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar status do cliente {id}: {str(e)}")
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "Erro interno ao atualizar status do cliente",
+                }
+            ),
+            500,
+        )
+
+
+@clientes_bp.route("/<int:id>", methods=["DELETE"])
+@funcionario_required
+def excluir_cliente(id):
+    """Exclui um cliente (apenas se não houver vínculos)"""
+    try:
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first_or_404()
+
+        # Verificar vínculos
+        # 1. Vendas vinculadas
+        vendas_count = Venda.query.filter_by(
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).count()
+
+        # 2. Contas a receber
+        contas_count = ContaReceber.query.filter_by(
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).count()
+
+        if vendas_count > 0 or contas_count > 0:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Não é possível excluir o cliente. Existem vínculos ativos.",
+                        "vinculos": {
+                            "vendas": vendas_count,
+                            "contas_a_receber": contas_count,
+                        },
+                    }
+                ),
+                400,
+            )
+
+        # Excluir cliente
+        db.session.delete(cliente)
+        db.session.commit()
+
+        current_app.logger.info(f"Cliente excluído: {id} por {current_user.username}")
+
+        return jsonify({"success": True, "message": "Cliente excluído com sucesso"})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao excluir cliente {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao excluir cliente"}),
+            500,
+        )
+
+
+@clientes_bp.route("/buscar", methods=["GET"])
+@funcionario_required
+def buscar_clientes():
+    """Busca rápida de clientes para autocomplete"""
+    try:
+        termo = request.args.get("q", "", type=str).strip()
+        limite = request.args.get("limite", 20, type=int)
+        apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
+        com_compras = request.args.get("com_compras", None, type=str)
+
+        if not termo or len(termo) < 2:
+            return jsonify({"success": True, "clientes": []})
+
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+
+        query = Cliente.query.filter_by(
+            estabelecimento_id=estabelecimento_id
+        )
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        if com_compras == "true":
+            query = query.filter(Cliente.total_compras > 0)
+        elif com_compras == "false":
+            query = query.filter(Cliente.total_compras == 0)
+
+        busca_termo = f"%{termo}%"
+        clientes = (
+            query.filter(
+                db.or_(
+                    Cliente.nome.ilike(busca_termo),
+                    Cliente.cpf.ilike(busca_termo),
+                    Cliente.email.ilike(busca_termo),
+                    Cliente.celular.ilike(busca_termo),
+                )
+            )
+            .limit(limite)
+            .all()
+        )
+
+        resultados = []
+        for cliente in clientes:
+            resultados.append(
+                {
+                    "id": cliente.id,
+                    "nome": cliente.nome,
+                    "cpf_cnpj": cliente.cpf or "",  # Alias para compatibilidade frontend
+                    "cpf": cliente.cpf or "",
+                    "telefone": cliente.celular or "",  # Alias para compatibilidade frontend
+                    "celular": cliente.celular or "",
+                    "email": cliente.email or "",
+                    "ativo": cliente.ativo,
+                    "total_compras": float(cliente.valor_total_gasto or 0),  # Valor total gasto
+                    "frequencia_compras": cliente.total_compras or 0,  # Quantidade de compras
+                    "valor_total_gasto": float(cliente.valor_total_gasto or 0),
+                    "classificacao": calcular_classificacao_cliente(cliente),
+                    "limite_disponivel": calcular_limite_disponivel(cliente),
+                }
+            )
+
+        return jsonify(
+            {"success": True, "clientes": resultados, "total": len(resultados)}
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro na busca de clientes: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno na busca de clientes"}),
+            500,
+        )
+
+
+@clientes_bp.route("/estatisticas", methods=["GET"])
+@funcionario_required
+def estatisticas_clientes():
+    """Retorna estatísticas gerais sobre clientes"""
+    try:
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+
+        # Total de clientes
+        total_clientes = Cliente.query.filter_by(
+            estabelecimento_id=estabelecimento_id
+        ).count()
+
+        # Clientes ativos
+        clientes_ativos = Cliente.query.filter_by(
+            estabelecimento_id=estabelecimento_id, ativo=True
+        ).count()
+
+        # Clientes inativos
+        clientes_inativos = total_clientes - clientes_ativos
+
+        # Clientes por classificação
+        classificacoes = {
+            "PREMIUM": Cliente.query.filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.valor_total_gasto > 10000,
+            ).count(),
+            "A": Cliente.query.filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.valor_total_gasto.between(5000, 10000),
+            ).count(),
+            "B": Cliente.query.filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.valor_total_gasto.between(1000, 5000),
+            ).count(),
+            "C": Cliente.query.filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.valor_total_gasto > 0,
+                Cliente.valor_total_gasto < 1000,
+            ).count(),
+            "NOVO": Cliente.query.filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.total_compras == 0,
+            ).count(),
+        }
+
+        # Clientes por estado
+        clientes_por_estado = (
+            db.session.query(Cliente.estado, db.func.count(Cliente.id).label("total"))
+            .filter_by(estabelecimento_id=estabelecimento_id)
+            .group_by(Cliente.estado)
+            .all()
+        )
+
+        # Top 5 clientes por valor gasto
+        top_clientes = (
+            Cliente.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
+            .order_by(Cliente.valor_total_gasto.desc())
+            .limit(5)
+            .all()
+        )
+
+        top_clientes_list = []
+        for c in top_clientes:
+            top_clientes_list.append(
+                {
+                    "id": c.id,
+                    "nome": c.nome,
+                    "valor_total_gasto": float(c.valor_total_gasto or 0),
+                    "total_compras": c.total_compras or 0,
+                    "classificacao": calcular_classificacao_cliente(c),
+                }
+            )
+
+        # Últimos clientes cadastrados
+        ultimos_cadastrados = (
+            Cliente.query.filter_by(estabelecimento_id=estabelecimento_id)
+            .order_by(Cliente.data_cadastro.desc())
+            .limit(5)
+            .all()
+        )
+
+        ultimos_cadastrados_list = []
+        for c in ultimos_cadastrados:
+            ultimos_cadastrados_list.append(
+                {
+                    "id": c.id,
+                    "nome": c.nome,
+                    "data_cadastro": (
+                        c.data_cadastro.isoformat() if c.data_cadastro else None
+                    ),
+                    "total_compras": c.total_compras or 0,
+                    "classificacao": calcular_classificacao_cliente(c),
+                }
+            )
+
+        # Estatísticas de limite de crédito
+        total_limite_credito = (
+            db.session.query(db.func.sum(Cliente.limite_credito))
+            .filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
+            .scalar()
+            or 0
+        )
+
+        total_saldo_devedor = (
+            db.session.query(db.func.sum(Cliente.saldo_devedor))
+            .filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
+            .scalar()
+            or 0
+        )
+
+        limite_disponivel_total = float(total_limite_credito) - float(
+            total_saldo_devedor
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "estatisticas": {
+                    "total": total_clientes,
+                    "ativos": clientes_ativos,
+                    "inativos": clientes_inativos,
+                    "percentual_ativos": (
+                        (clientes_ativos / total_clientes * 100)
+                        if total_clientes > 0
+                        else 0
+                    ),
+                    "classificacoes": classificacoes,
+                    "por_estado": {e[0]: e[1] for e in clientes_por_estado},
+                    "limite_credito": {
+                        "total_limite": float(total_limite_credito),
+                        "total_saldo_devedor": float(total_saldo_devedor),
+                        "limite_disponivel": limite_disponivel_total,
+                        "percentual_utilizado": (
+                            (
+                                float(total_saldo_devedor)
+                                / float(total_limite_credito)
+                                * 100
+                            )
+                            if float(total_limite_credito) > 0
+                            else 0
+                        ),
+                    },
+                },
+                "top_clientes": top_clientes_list,
+                "ultimos_cadastrados": ultimos_cadastrados_list,
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter estatísticas de clientes: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao obter estatísticas"}
+            ),
+            500,
+        )
+
+
+@clientes_bp.route("/<int:id>/compras", methods=["GET"])
+@funcionario_required
+def listar_compras_cliente(id):
+    """Lista todas as compras de um cliente"""
+    try:
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = request.args.get("por_pagina", 20, type=int)
+        status = request.args.get("status", None, type=str)
+        data_inicio = request.args.get("data_inicio", None, type=str)
+        data_fim = request.args.get("data_fim", None, type=str)
+
+        # Verificar se cliente existe
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first_or_404()
+
+        # Query de vendas
+        query = Venda.query.filter_by(
+            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        )
+
+        if status:
+            query = query.filter_by(status=status)
+
+        if data_inicio:
+            data_inicio_dt = datetime.strptime(data_inicio, "%Y-%m-%d")
+            query = query.filter(Venda.data_venda >= data_inicio_dt)
+
+        if data_fim:
+            data_fim_dt = datetime.strptime(data_fim, "%Y-%m-%d")
+            query = query.filter(Venda.data_venda <= data_fim_dt)
+
+        query = query.order_by(Venda.data_venda.desc())
+
+        # Paginação
+        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
+
+        compras = []
+        for venda in paginacao.items:
+            compras.append(
+                {
+                    "id": venda.id,
+                    "codigo": venda.codigo,
+                    "data_venda": (
+                        venda.data_venda.isoformat() if venda.data_venda else None
+                    ),
+                    "status": venda.status,
+                    "subtotal": float(venda.subtotal),
+                    "desconto": float(venda.desconto),
+                    "total": float(venda.total),
+                    "forma_pagamento": venda.forma_pagamento,
+                    "quantidade_itens": venda.quantidade_itens,
+                    "funcionario": (
+                        venda.funcionario.nome if venda.funcionario else None
+                    ),
+                }
+            )
+
+        # Estatísticas do período
+        total_compras = paginacao.total
+        total_gasto = (
+            db.session.query(db.func.sum(Venda.total))
+            .filter(
+                Venda.cliente_id == id,
+                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
+            )
+            .scalar()
+            or 0
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "compras": compras,
+                "cliente": cliente.nome,
+                "total": total_compras,
+                "pagina": pagina,
+                "total_paginas": paginacao.pages,
+                "estatisticas": {
+                    "total_gasto_periodo": float(total_gasto),
+                    "media_compra": (
+                        float(total_gasto / total_compras) if total_compras > 0 else 0
+                    ),
+                },
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar compras do cliente {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao listar compras"}),
+            500,
+        )
+
+
+@clientes_bp.route("/exportar", methods=["GET"])
+@funcionario_required
+def exportar_clientes():
+    """Exporta clientes em formato CSV ou Excel"""
+    try:
+        formato = request.args.get("formato", "csv", type=str).lower()
+        apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
+
+        # Buscar clientes
+        query = Cliente.query.filter_by(
+            estabelecimento_id=jwt_data.get("estabelecimento_id")
+        )
+
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        clientes = query.order_by(Cliente.nome.asc()).all()
+
+        if formato == "csv":
+            # Gerar CSV
+            import csv
+            import io
+
+            output = io.StringIO()
+            writer = csv.writer(output, delimiter=";")
+
+            # Cabeçalho
+            writer.writerow(
+                [
+                    "ID",
+                    "Nome",
+                    "CPF",
+                    "RG",
+                    "Data Nascimento",
+                    "Idade",
+                    "Telefone",
+                    "Celular",
+                    "Email",
+                    "CEP",
+                    "Logradouro",
+                    "Número",
+                    "Complemento",
+                    "Bairro",
+                    "Cidade",
+                    "Estado",
+                    "País",
+                    "Limite Crédito",
+                    "Saldo Devedor",
+                    "Limite Disponível",
+                    "Total Compras",
+                    "Valor Total Gasto",
+                    "Ticket Médio",
+                    "Última Compra",
+                    "Classificação",
+                    "Ativo",
+                    "Observações",
+                    "Data Cadastro",
+                    "Data Atualização",
+                ]
+            )
+
+            # Dados
+            for c in clientes:
+                idade = calcular_idade(c.data_nascimento) if c.data_nascimento else ""
+                classificacao = calcular_classificacao_cliente(c)
+                limite_disponivel = calcular_limite_disponivel(c)
+                ticket_medio = (
+                    float(c.valor_total_gasto / c.total_compras)
+                    if c.total_compras > 0
+                    else 0
+                )
+
+                writer.writerow(
+                    [
+                        c.id,
+                        c.nome or "",
+                        c.cpf or "",
+                        c.rg or "",
+                        (
+                            c.data_nascimento.strftime("%d/%m/%Y")
+                            if c.data_nascimento
+                            else ""
+                        ),
+                        idade,
+                        c.telefone or "",
+                        c.celular or "",
+                        c.email or "",
+                        c.cep or "",
+                        c.logradouro or "",
+                        c.numero or "",
+                        c.complemento or "",
+                        c.bairro or "",
+                        c.cidade or "",
+                        c.estado or "",
+                        c.pais or "",
+                        float(c.limite_credito or 0),
+                        float(c.saldo_devedor or 0),
+                        limite_disponivel,
+                        c.total_compras or 0,
+                        float(c.valor_total_gasto or 0),
+                        ticket_medio,
+                        (
+                            c.ultima_compra.strftime("%d/%m/%Y %H:%M")
+                            if c.ultima_compra
+                            else ""
+                        ),
+                        classificacao,
+                        "SIM" if c.ativo else "NÃO",
+                        c.observacoes or "",
+                        (
+                            c.data_cadastro.strftime("%d/%m/%Y %H:%M:%S")
+                            if c.data_cadastro
+                            else ""
+                        ),
+                        (
+                            c.data_atualizacao.strftime("%d/%m/%Y %H:%M:%S")
+                            if c.data_atualizacao
+                            else ""
+                        ),
+                    ]
+                )
+
+            output.seek(0)
+            return (
+                output.getvalue(),
+                200,
+                {
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Disposition": "attachment; filename=clientes.csv",
+                },
+            )
+
+        elif formato == "excel":
+            # Gerar Excel
+            import pandas as pd
+
+            dados = []
+            for c in clientes:
+                idade = calcular_idade(c.data_nascimento) if c.data_nascimento else ""
+                classificacao = calcular_classificacao_cliente(c)
+                limite_disponivel = calcular_limite_disponivel(c)
+                ticket_medio = (
+                    float(c.valor_total_gasto / c.total_compras)
+                    if c.total_compras > 0
+                    else 0
+                )
+
+                dados.append(
+                    {
+                        "ID": c.id,
+                        "Nome": c.nome or "",
+                        "CPF": c.cpf or "",
+                        "RG": c.rg or "",
+                        "Data Nascimento": (
+                            c.data_nascimento.strftime("%d/%m/%Y")
+                            if c.data_nascimento
+                            else ""
+                        ),
+                        "Idade": idade,
+                        "Telefone": c.telefone or "",
+                        "Celular": c.celular or "",
+                        "Email": c.email or "",
+                        "CEP": c.cep or "",
+                        "Logradouro": c.logradouro or "",
+                        "Número": c.numero or "",
+                        "Complemento": c.complemento or "",
+                        "Bairro": c.bairro or "",
+                        "Cidade": c.cidade or "",
+                        "Estado": c.estado or "",
+                        "País": c.pais or "",
+                        "Limite Crédito": float(c.limite_credito or 0),
+                        "Saldo Devedor": float(c.saldo_devedor or 0),
+                        "Limite Disponível": limite_disponivel,
+                        "Total Compras": c.total_compras or 0,
+                        "Valor Total Gasto": float(c.valor_total_gasto or 0),
+                        "Ticket Médio": ticket_medio,
+                        "Última Compra": (
+                            c.ultima_compra.strftime("%d/%m/%Y %H:%M")
+                            if c.ultima_compra
+                            else ""
+                        ),
+                        "Classificação": classificacao,
+                        "Ativo": "SIM" if c.ativo else "NÃO",
+                        "Observações": c.observacoes or "",
+                        "Data Cadastro": (
+                            c.data_cadastro.strftime("%d/%m/%Y %H:%M:%S")
+                            if c.data_cadastro
+                            else ""
+                        ),
+                        "Data Atualização": (
+                            c.data_atualizacao.strftime("%d/%m/%Y %H:%M:%S")
+                            if c.data_atualizacao
+                            else ""
+                        ),
+                    }
+                )
+
+            df = pd.DataFrame(dados)
+
+            # Salvar em buffer
+            from io import BytesIO
+
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                df.to_excel(writer, sheet_name="Clientes", index=False)
+
+            output.seek(0)
+            return (
+                output.getvalue(),
+                200,
+                {
+                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "Content-Disposition": "attachment; filename=clientes.xlsx",
+                },
+            )
+
+        else:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": 'Formato não suportado. Use "csv" ou "excel"',
+                    }
+                ),
+                400,
+            )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao exportar clientes: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao exportar clientes"}),
+            500,
+        )
+
+
+@clientes_bp.route("/curva_compras", methods=["GET"])
+@funcionario_required
+def curva_compras():
+    """Retorna a curva de compras agregada por mês (últimos 12 meses)"""
+    try:
+        hoje = datetime.utcnow()
+        meses = []
+
+        # Gerar lista dos últimos 12 meses
+        for i in range(11, -1, -1):
+            mes = (hoje.replace(day=1) - timedelta(days=30 * i)).replace(day=1)
+            meses.append(mes)
+
+        # Buscar vendas agrupadas por ano/mês
+        results = (
+            db.session.query(
+                db.func.extract("year", Venda.data_venda).label("ano"),
+                db.func.extract("month", Venda.data_venda).label("mes"),
+                db.func.count(Venda.id).label("quantidade"),
+                db.func.sum(Venda.total).label("total"),
+            )
+            .filter(
+                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
+                Venda.data_venda >= meses[-1],
+                Venda.status == "finalizada",
+            )
+            .group_by("ano", "mes")
+            .order_by("ano", "mes")
+            .all()
+        )
+
+        # Montar lista de pontos
+        curva = []
+        for r in results:
+            curva.append(
+                {
+                    "periodo": f"{int(r.ano):04d}-{int(r.mes):02d}",
+                    "quantidade": int(r.quantidade or 0),
+                    "total": float(r.total or 0),
+                    "ticket_medio": (
+                        float(r.total / r.quantidade) if r.quantidade > 0 else 0
+                    ),
+                }
+            )
+
+        # Preencher meses sem vendas
+        meses_formatados = [m.strftime("%Y-%m") for m in meses]
+        for mes in meses_formatados:
+            if not any(p["periodo"] == mes for p in curva):
+                curva.append(
+                    {"periodo": mes, "quantidade": 0, "total": 0, "ticket_medio": 0}
+                )
+
+        # Ordenar por período
+        curva.sort(key=lambda x: x["periodo"])
+
+        return jsonify(
+            {
+                "success": True,
+                "curva_compras": curva,
+                "periodo_inicio": meses[0].strftime("%Y-%m-%d"),
+                "periodo_fim": hoje.strftime("%Y-%m-%d"),
+                "total_periodo": sum(p["quantidade"] for p in curva),
+                "valor_total_periodo": sum(p["total"] for p in curva),
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar curva de compras: {str(e)}")
+        return (
+            jsonify(
+                {"success": False, "message": "Erro interno ao gerar curva de compras"}
+            ),
+            500,
+        )
+
+
+@clientes_bp.route("/relatorio/analitico", methods=["GET"])
+@funcionario_required
+def relatorio_analitico_clientes():
+    """Gera relatório analítico detalhado dos clientes"""
+    try:
+        # Parâmetros de filtro
+        data_inicio = request.args.get("data_inicio", None)
+        data_fim = request.args.get("data_fim", None)
+        classificacao = request.args.get("classificacao", None, type=str)
+
+        # Query base de clientes
+        query = Cliente.query.filter_by(
+            estabelecimento_id=jwt_data.get("estabelecimento_id"), ativo=True
+        )
+
+        if classificacao:
+            if classificacao == "PREMIUM":
+                query = query.filter(Cliente.valor_total_gasto > 10000)
+            elif classificacao == "A":
+                query = query.filter(Cliente.valor_total_gasto.between(5000, 10000))
+            elif classificacao == "B":
+                query = query.filter(Cliente.valor_total_gasto.between(1000, 5000))
+            elif classificacao == "C":
+                query = query.filter(Cliente.valor_total_gasto > 0)
+            elif classificacao == "NOVO":
+                query = query.filter(Cliente.total_compras == 0)
+
+        clientes = query.all()
+
+        relatorio = []
+        for cliente in clientes:
+            # Vendas do cliente no período
+            vendas_query = Venda.query.filter_by(
+                cliente_id=cliente.id,
+                estabelecimento_id=jwt_data.get("estabelecimento_id"),
+                status="finalizada",
+            )
+
+            if data_inicio:
+                vendas_query = vendas_query.filter(
+                    Venda.data_venda >= datetime.strptime(data_inicio, "%Y-%m-%d")
+                )
+
+            if data_fim:
+                vendas_query = vendas_query.filter(
+                    Venda.data_venda <= datetime.strptime(data_fim, "%Y-%m-%d")
+                )
+
+            vendas = vendas_query.all()
+
+            # Cálculos
+            total_vendas = len(vendas)
+            valor_total = sum(float(v.total) for v in vendas)
+
+            # Frequência de compras (dias entre compras)
+            frequencias = []
+            datas_vendas = sorted([v.data_venda for v in vendas])
+            for i in range(1, len(datas_vendas)):
+                dias = (datas_vendas[i] - datas_vendas[i - 1]).days
+                frequencias.append(dias)
+
+            frequencia_media = sum(frequencias) / len(frequencias) if frequencias else 0
+
+            # Ticket médio
+            ticket_medio = valor_total / total_vendas if total_vendas > 0 else 0
+
+            # Valor do cliente (Customer Lifetime Value - CLV)
+            # CLV = valor médio da compra × frequência de compras × tempo de vida do cliente
+            tempo_vida_meses = 0
+            if cliente.data_cadastro:
+                tempo_vida_dias = (datetime.utcnow() - cliente.data_cadastro).days
+                tempo_vida_meses = tempo_vida_dias / 30.44  # Média de dias por mês
+
+            clv = (
+                ticket_medio * (30 / max(frequencia_media, 1)) * tempo_vida_meses
+                if total_vendas > 0
+                else 0
+            )
+
+            # Adicionar ao relatório
+            relatorio.append(
+                {
+                    "cliente": {
+                        "id": cliente.id,
+                        "nome": cliente.nome,
+                        "cpf": cliente.cpf,
+                        "classificacao": calcular_classificacao_cliente(cliente),
+                        "data_cadastro": (
+                            cliente.data_cadastro.isoformat()
+                            if cliente.data_cadastro
+                            else None
+                        ),
+                    },
+                    "metricas": {
+                        "total_vendas": total_vendas,
+                        "valor_total_gasto": valor_total,
+                        "ticket_medio": ticket_medio,
+                        "frequencia_media_dias": frequencia_media,
+                        "customer_lifetime_value": clv,
+                        "limite_credito": float(cliente.limite_credito or 0),
+                        "saldo_devedor": float(cliente.saldo_devedor or 0),
+                        "limite_disponivel": calcular_limite_disponivel(cliente),
+                        "idade": (
+                            calcular_idade(cliente.data_nascimento)
+                            if cliente.data_nascimento
+                            else None
+                        ),
+                    },
+                    "comportamento": {
+                        "ultima_compra": (
+                            cliente.ultima_compra.isoformat()
+                            if cliente.ultima_compra
+                            else None
+                        ),
+                        "dias_sem_comprar": (
+                            (datetime.utcnow() - cliente.ultima_compra).days
+                            if cliente.ultima_compra
+                            else None
+                        ),
+                        "ticket_medio_crescimento": 0,  # Pode ser calculado comparando períodos
+                        "frequencia_crescimento": 0,  # Pode ser calculado comparando períodos
+                    },
+                }
+            )
+
+        return jsonify(
+            {
+                "success": True,
+                "relatorio": relatorio,
+                "total_clientes": len(relatorio),
+                "filtros": {
+                    "data_inicio": data_inicio,
+                    "data_fim": data_fim,
+                    "classificacao": classificacao,
+                },
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar relatório analítico: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao gerar relatório"}),
+            500,
+        )
+
+
+# ============================================
+# UTILITÁRIOS DE CLIENTE
+# ============================================
+
+
+def sincronizar_metricas_cliente(cliente_id, valor_venda):
+    """Sincroniza métricas de um cliente após uma venda"""
+    try:
+        cliente = Cliente.query.get(cliente_id)
+        if not cliente:
+            return
+
+        # Atualizar total de compras
+        cliente.total_compras = (cliente.total_compras or 0) + 1
+
+        # Atualizar valor total gasto
+        cliente.valor_total_gasto = (cliente.valor_total_gasto or 0) + Decimal(
+            str(valor_venda)
+        )
+
+        # Atualizar data da última compra
+        cliente.ultima_compra = datetime.utcnow()
+
+        # Atualizar saldo devedor se a venda foi a crédito
+        # Esta lógica deve ser implementada com base na forma de pagamento da venda
+
+        cliente.data_atualizacao = datetime.utcnow()
+
+        db.session.commit()
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Erro ao sincronizar métricas do cliente {cliente_id}: {str(e)}"
+        )
+
+
+def atualizar_saldo_devedor(cliente_id, valor, tipo="adicionar"):
+    """Atualiza saldo devedor do cliente"""
+    try:
+        cliente = Cliente.query.get(cliente_id)
+        if not cliente:
+            return
+
+        if tipo == "adicionar":
+            cliente.saldo_devedor = (cliente.saldo_devedor or 0) + Decimal(str(valor))
+        elif tipo == "subtrair":
+            cliente.saldo_devedor = max(
+                0, (cliente.saldo_devedor or 0) - Decimal(str(valor))
+            )
+        elif tipo == "definir":
+            cliente.saldo_devedor = Decimal(str(valor))
+
+        cliente.data_atualizacao = datetime.utcnow()
+        db.session.commit()
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Erro ao atualizar saldo devedor do cliente {cliente_id}: {str(e)}"
+        )

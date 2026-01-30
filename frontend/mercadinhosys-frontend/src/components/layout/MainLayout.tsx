@@ -3,6 +3,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import FootPage from './FootPage';
 
 const MainLayout: React.FC = () => {
     return (
@@ -14,6 +15,7 @@ const MainLayout: React.FC = () => {
                     {/* O Outlet renderiza as páginas aninhadas */}
                     <Outlet />
                 </main>
+                <FootPage />
             </div>
         </div>
     );
