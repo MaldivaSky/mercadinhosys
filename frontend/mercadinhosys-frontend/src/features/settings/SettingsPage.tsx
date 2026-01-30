@@ -118,27 +118,48 @@ const SettingsPage: React.FC = () => {
 
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            
+            // Validar tamanho (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error("Imagem muito grande! Tamanho máximo: 5MB");
+                return;
+            }
+            
+            // Validar tipo
+            if (!file.type.startsWith('image/')) {
+                toast.error("Arquivo inválido! Envie apenas imagens.");
+                return;
+            }
+            
             try {
-                const file = e.target.files[0];
-                
-                // Preview imediato
+                // Preview imediato com base64
                 const reader = new FileReader();
-                reader.onloadend = () => {
-                    setConfig({ ...config, logo_url: reader.result as string });
+                reader.onloadend = async () => {
+                    const base64 = reader.result as string;
+                    
+                    // Atualizar preview local
+                    setConfig({ ...config, logo_url: base64 });
+                    
+                    // Atualizar globalmente para aparecer no header
+                    const tempConfig = { ...globalConfig, logo_url: base64 };
+                    await updateGlobalConfig({ logo_url: base64 });
                 };
                 reader.readAsDataURL(file);
                 
-                // Upload para o servidor
+                // Upload para o servidor em background
+                toast.loading("Fazendo upload da logo...", { id: 'upload-logo' });
                 const url = await settingsService.uploadLogo(file);
-                setConfig({ ...config, logo_url: url });
                 
-                // Atualizar globalmente
+                // Atualizar com URL do servidor
+                setConfig({ ...config, logo_url: url });
                 await updateGlobalConfig({ logo_url: url });
                 await refreshConfig();
                 
-                toast.success("Logo atualizada com sucesso!");
+                toast.success("Logo atualizada com sucesso!", { id: 'upload-logo' });
             } catch (error) {
-                toast.error("Erro ao fazer upload da logo.");
+                console.error("Erro ao fazer upload:", error);
+                toast.error("Erro ao fazer upload da logo.", { id: 'upload-logo' });
             }
         }
     };
