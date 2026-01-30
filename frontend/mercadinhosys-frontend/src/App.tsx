@@ -4,6 +4,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 import DebugRoutes from './components/DebugRoutes';
 import { ThemeProvider } from './theme/ThemeProvider';
+import { ConfigProvider } from './contexts/ConfigContext';
 import { Toaster } from 'react-hot-toast';
 
 const App: React.FC = () => {
@@ -14,10 +15,11 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider defaultMode="dark">
-      <Router>
-        <DebugRoutes />
-        <AppRoutes />
-        <Toaster
+      <ConfigProvider>
+        <Router>
+          <DebugRoutes />
+          <AppRoutes />
+          <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
@@ -42,6 +44,7 @@ const App: React.FC = () => {
           }}
         />
       </Router>
+      </ConfigProvider>
     </ThemeProvider>
   );
 };
