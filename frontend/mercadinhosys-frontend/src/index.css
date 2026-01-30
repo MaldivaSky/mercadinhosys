@@ -9,26 +9,40 @@
   --color-primary-light: rgba(37, 99, 235, 0.1);
 }
 
-/* Aplicar cor primária em todos os elementos azuis */
-.bg-blue-600, .bg-blue-500, .bg-blue-700 {
-  background-color: var(--color-primary) !important;
-}
+/* ========================================
+   APLICAR COR PRIMÁRIA EM TODOS OS ELEMENTOS AZUIS
+   ======================================== */
 
-.hover\:bg-blue-700:hover, .hover\:bg-blue-600:hover {
-  background-color: var(--color-primary-dark) !important;
-}
+/* Backgrounds azuis */
+.bg-blue-50 { background-color: var(--color-primary-light) !important; }
+.bg-blue-100 { background-color: var(--color-primary-light) !important; }
+.bg-blue-500 { background-color: var(--color-primary) !important; }
+.bg-blue-600 { background-color: var(--color-primary) !important; }
+.bg-blue-700 { background-color: var(--color-primary-dark) !important; }
 
-.text-blue-600, .text-blue-500 {
-  color: var(--color-primary) !important;
-}
+/* Hover backgrounds */
+.hover\:bg-blue-50:hover { background-color: var(--color-primary-light) !important; }
+.hover\:bg-blue-600:hover { background-color: var(--color-primary-dark) !important; }
+.hover\:bg-blue-700:hover { background-color: var(--color-primary-dark) !important; }
 
-.border-blue-600, .border-blue-500 {
-  border-color: var(--color-primary) !important;
-}
+/* Textos azuis */
+.text-blue-400 { color: var(--color-primary) !important; }
+.text-blue-500 { color: var(--color-primary) !important; }
+.text-blue-600 { color: var(--color-primary) !important; }
 
-.ring-blue-500 {
-  --tw-ring-color: var(--color-primary) !important;
-}
+/* Bordas azuis */
+.border-blue-500 { border-color: var(--color-primary) !important; }
+.border-blue-600 { border-color: var(--color-primary) !important; }
+
+/* Ring (focus) */
+.ring-blue-500 { --tw-ring-color: var(--color-primary) !important; }
+.focus\:ring-blue-500:focus { --tw-ring-color: var(--color-primary) !important; }
+.focus\:border-blue-500:focus { border-color: var(--color-primary) !important; }
+
+/* Classes customizadas */
+.bg-primary { background-color: var(--color-primary) !important; }
+.text-primary { color: var(--color-primary) !important; }
+.border-primary { border-color: var(--color-primary) !important; }
 
 @layer base {
 
@@ -55,24 +69,12 @@
   }
 
   .btn-primary {
-    background-color: var(--color-primary);
+    background-color: var(--color-primary) !important;
     @apply hover:opacity-90 text-white font-semibold py-2 px-4 rounded-lg transition-all;
   }
 
   .btn-primary:hover {
-    background-color: var(--color-primary-dark);
-  }
-
-  .bg-primary {
-    background-color: var(--color-primary) !important;
-  }
-
-  .text-primary {
-    color: var(--color-primary) !important;
-  }
-
-  .border-primary {
-    border-color: var(--color-primary) !important;
+    background-color: var(--color-primary-dark) !important;
   }
 
   .btn-secondary {
@@ -88,10 +90,20 @@
   }
 
   .input-primary:focus {
-    ring-color: var(--color-primary);
+    --tw-ring-color: var(--color-primary) !important;
   }
 
   .dark .input-primary {
     @apply border-gray-600 bg-gray-800 text-gray-100;
   }
+}
+
+/* Animação de fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
 }

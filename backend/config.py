@@ -59,6 +59,10 @@ class Config:
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", os.environ.get("MAIL_USERNAME"))
 
+    # ==================== UPLOADS ====================
+    UPLOAD_FOLDER = os.path.join(basedir, "uploads")
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB max
+
     # ==================== JWT ====================
     JWT_ACCESS_TOKEN_EXPIRES = 3600
     JWT_REFRESH_TOKEN_EXPIRES = 604800  # 7 dias
