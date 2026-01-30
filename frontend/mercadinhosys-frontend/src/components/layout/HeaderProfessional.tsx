@@ -36,7 +36,22 @@ const HeaderProfessional = () => {
     };
 
     const userInitial = user.nome ? user.nome[0].toUpperCase() : '?';
-    const logoUrl = config?.logo_url || logo;
+    
+    // Usar logo do config ou fallback
+    const getLogoUrl = () => {
+        if (!config?.logo_url) return logo;
+        
+        // Se for base64 (preview), usar direto
+        if (config.logo_url.startsWith('data:')) return config.logo_url;
+        
+        // Se for URL do servidor
+        if (config.logo_url.startsWith('http')) return config.logo_url;
+        
+        // Se for caminho relativo
+        return `http://localhost:5000${config.logo_url}`;
+    };
+    
+    const logoUrl = getLogoUrl();
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm">
