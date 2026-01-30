@@ -812,7 +812,7 @@ export default function SalesPage() {
                                                     padding: 10,
                                                     displayColors: false,
                                                     callbacks: {
-                                                        label: (context) => `Total: ${formatCurrency(context.parsed.x)}`,
+                                                        label: (context) => `Total: ${formatCurrency(context.parsed.x || 0)}`,
                                                         afterLabel: (context) => {
                                                             const item = analisesData.vendas_por_cliente[context.dataIndex];
                                                             return item.quantidade ? `${item.quantidade} compras` : '';
@@ -900,7 +900,7 @@ export default function SalesPage() {
                                                     padding: 10,
                                                     displayColors: false,
                                                     callbacks: {
-                                                        label: (context) => `Total: ${formatCurrency(context.parsed.x)}`,
+                                                        label: (context) => `Total: ${formatCurrency(context.parsed.x || 0)}`,
                                                         afterLabel: (context) => {
                                                             const item = analisesData.vendas_por_fornecedor[context.dataIndex];
                                                             return `${item.quantidade_vendas} vendas`;

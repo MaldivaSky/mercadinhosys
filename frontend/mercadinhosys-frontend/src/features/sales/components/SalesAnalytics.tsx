@@ -1,4 +1,3 @@
-import React from "react";
 import { Line, Bar, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -122,7 +121,7 @@ export default function SalesAnalytics({
                                 legend: { display: false },
                                 tooltip: {
                                     callbacks: {
-                                        label: (context) => formatCurrency(context.parsed.y),
+                                        label: (context) => formatCurrency(context.parsed.y || 0),
                                     },
                                 },
                             },
