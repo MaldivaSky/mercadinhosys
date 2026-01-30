@@ -75,7 +75,7 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                                     {cliente.nome}
                                 </h4>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    CPF: {cliente.cpf_cnpj} • Total: R$ {cliente.total_compras.toFixed(2)}
+                                    CPF: {cliente.cpf || 'N/A'} • Total: R$ {(cliente.total_compras || 0).toFixed(2)}
                                 </p>
                             </div>
                         </div>
@@ -136,15 +136,15 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                                                 {cliente.nome}
                                             </h4>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                {cliente.cpf_cnpj} • {cliente.telefone}
+                                                {cliente.cpf || 'N/A'} • {cliente.telefone || cliente.celular || 'N/A'}
                                             </p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-sm font-medium text-gray-800 dark:text-white">
-                                                R$ {cliente.total_compras.toFixed(2)}
+                                                R$ {(cliente.total_compras || 0).toFixed(2)}
                                             </p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {cliente.frequencia_compras} compras
+                                                {cliente.valor_total_gasto ? `${cliente.valor_total_gasto} compras` : 'Sem compras'}
                                             </p>
                                         </div>
                                     </div>

@@ -19,7 +19,6 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
 import { salesService } from '../sales/salesService';
 import { productsService } from '../products/productsService';
-import { employeesService } from '../employees/employeesService';
 
 // Interfaces
 interface DateRange {
@@ -208,7 +207,7 @@ const ReportsPage: React.FC = () => {
                 'Preço Custo': p.preco_custo,
                 'Estoque': p.estoque_status,
                 'Estoque Mínimo': p.estoque_minimo,
-                'Status': p.estoque_atual <= (p.estoque_minimo || 0) ? 'CRÍTICO' : 'OK'
+                'Status': (p.quantidade || 0) <= (p.estoque_minimo || 0) ? 'CRÍTICO' : 'OK'
             }));
 
             const filename = `Relatorio_Estoque_${format(new Date(), 'yyyy-MM-dd')}`;
@@ -223,11 +222,11 @@ const ReportsPage: React.FC = () => {
                     startY: 50,
                     head: [['Nome', 'Categoria', 'Preço', 'Estoque', 'Status']],
                     body: dataToExport.map(item => [
-                        item.Nome, 
-                        item.Categoria, 
+                        item.Nome || '', 
+                        item.Categoria || '', 
                         item['Preço Venda'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                        item.Estoque,
-                        item.Status
+                        item.Estoque || '',
+                        item.Status || ''
                     ]),
                     theme: 'striped',
                     headStyles: { fillColor: [16, 185, 129] }, // Green
