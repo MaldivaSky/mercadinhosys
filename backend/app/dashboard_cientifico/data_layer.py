@@ -148,6 +148,7 @@ class DataLayer:
             db.session.query(
                 Produto.id,
                 Produto.nome,
+                Produto.preco_custo,
                 func.sum(ItemVenda.quantidade).label("quantidade_vendida"),
                 func.sum(ItemVenda.total_item).label("faturamento"),
             )
@@ -158,7 +159,7 @@ class DataLayer:
                 Venda.data_venda >= data_inicio,
                 Venda.status == "finalizada",
             )
-            .group_by(Produto.id, Produto.nome)
+            .group_by(Produto.id, Produto.nome, Produto.preco_custo)
             .order_by(func.sum(ItemVenda.total_item).desc())
             .limit(limit)
             .all()
@@ -171,6 +172,7 @@ class DataLayer:
                 "categoria": "Geral",  # Temporário
                 "quantidade_vendida": int(r.quantidade_vendida or 0),
                 "faturamento": float(r.faturamento or 0),
+                "preco_custo": float(r.preco_custo or 0),
             }
             for r in results
         ]

@@ -203,33 +203,67 @@ class PracticalModels:
 
         # Combinar todos os produtos classificados
         all_products = []
+        lucro_a = 0
+        lucro_b = 0
+        lucro_c = 0
+        
         for product in category_a + category_b + category_c:
+            faturamento = product.get("valor_total", 0)
+            quantidade = product.get("quantidade", 0)
+            preco_custo = product.get("preco_custo", 0)
+            
+            custo_total = quantidade * preco_custo
+            lucro = faturamento - custo_total
+            margem = (lucro / faturamento * 100) if faturamento > 0 else 0
+            
+            # Acumular lucro por categoria
+            if product in category_a:
+                lucro_a += lucro
+            elif product in category_b:
+                lucro_b += lucro
+            elif product in category_c:
+                lucro_c += lucro
+            
             all_products.append({
                 "id": product.get("id", 0),  # Adicionar ID se disponível
                 "nome": product.get("nome", ""),
-                "faturamento": product.get("valor_total", 0),
+                "faturamento": faturamento,
                 "percentual_acumulado": product.get("cumulative_percent", 0),
                 "classificacao": "A" if product in category_a else ("B" if product in category_b else "C"),
-                "quantidade_vendida": product.get("quantidade", 0),
-                "margem": 0  # Placeholder, pode ser calculado depois
+                "quantidade_vendida": quantidade,
+                "margem": margem
             })
 
-        # Calcular resumo por classe
+        # Calcular totais de faturamento
+        faturamento_a = sum(p.get("valor_total", 0) for p in category_a)
+        faturamento_b = sum(p.get("valor_total", 0) for p in category_b)
+        faturamento_c = sum(p.get("valor_total", 0) for p in category_c)
+
+        # Calcular resumo por classe com margem média
         resumo = {
             "A": {
                 "quantidade": len(category_a),
-                "faturamento_total": sum(p.get("valor_total", 0) for p in category_a),
-                "percentual": (sum(p.get("valor_total", 0) for p in category_a) / total_value * 100) if total_value > 0 else 0
+                "faturamento_total": faturamento_a,
+                "percentual": (faturamento_a / total_value * 100) if total_value > 0 else 0,
+                "margem_media": (lucro_a / faturamento_a * 100) if faturamento_a > 0 else 0
             },
             "B": {
                 "quantidade": len(category_b),
-                "faturamento_total": sum(p.get("valor_total", 0) for p in category_b),
-                "percentual": (sum(p.get("valor_total", 0) for p in category_b) / total_value * 100) if total_value > 0 else 0
+                "faturamento_total": faturamento_b,
+                "percentual": (faturamento_b / total_value * 100) if total_value > 0 else 0,
+                "margem_media": (lucro_b / faturamento_b * 100) if faturamento_b > 0 else 0
             },
             "C": {
                 "quantidade": len(category_c),
-                "faturamento_total": sum(p.get("valor_total", 0) for p in category_c),
-                "percentual": (sum(p.get("valor_total", 0) for p in category_c) / total_value * 100) if total_value > 0 else 0
+                "faturamento_total": faturamento_c,
+                "percentual": (faturamento_c / total_value * 100) if total_value > 0 else 0,
+                "margem_media": (lucro_c / faturamento_c * 100) if faturamento_c > 0 else 0
+            },
+            "TODOS": {
+                "quantidade": len(products),
+                "faturamento_total": total_value,
+                "percentual": 100.0,
+                "margem_media": ((lucro_a + lucro_b + lucro_c) / total_value * 100) if total_value > 0 else 0
             }
         }
 
