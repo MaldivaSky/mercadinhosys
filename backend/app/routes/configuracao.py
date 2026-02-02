@@ -7,55 +7,83 @@ from datetime import datetime
 import json
 import os
 from werkzeug.utils import secure_filename
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 configuracao_bp = Blueprint("configuracao", __name__, url_prefix="/api/configuracao")
 
 def ensure_configuracoes_schema():
     try:
-        result = db.session.execute(text("PRAGMA table_info(configuracoes)")).fetchall()
-        cols = {row[1] for row in result}
+        inspector = inspect(db.engine)
+        # Verifica se a tabela existe antes de tentar obter colunas
+        if not inspector.has_table("configuracoes"):
+            return
+
+        columns = {col['name'] for col in inspector.get_columns('configuracoes')}
+        
+        # Detect database type
+        is_sqlite = db.engine.name == 'sqlite'
+        
         ddl = []
-        if "tema_escuro" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN tema_escuro INTEGER DEFAULT 0"))
-        if "cor_principal" not in cols:
+        
+        # Helper to define column type based on DB
+        def get_bool_type():
+            return "INTEGER DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT FALSE"
+            
+        def get_bool_true():
+            return "INTEGER DEFAULT 1" if is_sqlite else "BOOLEAN DEFAULT TRUE"
+
+        if "tema_escuro" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN tema_escuro {get_bool_type()}"))
+        if "cor_principal" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN cor_principal VARCHAR(7) DEFAULT '#2563eb'"))
-        if "emitir_nfe" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN emitir_nfe INTEGER DEFAULT 0"))
-        if "impressao_automatica" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN impressao_automatica INTEGER DEFAULT 0"))
-        if "tipo_impressora" not in cols:
+        if "emitir_nfe" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN emitir_nfe {get_bool_type()}"))
+        if "emitir_nfce" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN emitir_nfce {get_bool_true()}"))
+        if "impressao_automatica" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN impressao_automatica {get_bool_type()}"))
+        if "tipo_impressora" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN tipo_impressora VARCHAR(20) DEFAULT 'termica_80mm'"))
-        if "exibir_preco_tela" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN exibir_preco_tela INTEGER DEFAULT 1"))
-        if "permitir_venda_sem_estoque" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN permitir_venda_sem_estoque INTEGER DEFAULT 0"))
-        if "desconto_maximo_percentual" not in cols:
+        if "exibir_preco_tela" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN exibir_preco_tela {get_bool_true()}"))
+        if "permitir_venda_sem_estoque" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN permitir_venda_sem_estoque {get_bool_type()}"))
+        if "desconto_maximo_percentual" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN desconto_maximo_percentual NUMERIC(5,2) DEFAULT 10.00"))
-        if "arredondamento_valores" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN arredondamento_valores INTEGER DEFAULT 1"))
-        if "formas_pagamento" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN formas_pagamento TEXT DEFAULT '[\"Dinheiro\", \"Cartão de Crédito\", \"Cartão de Débito\", \"PIX\"]'"))
-        if "dias_alerta_validade" not in cols:
+        if "desconto_maximo_funcionario" not in columns:
+             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN desconto_maximo_funcionario NUMERIC(5,2) DEFAULT 10.00"))
+        if "arredondamento_valores" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN arredondamento_valores {get_bool_true()}"))
+        if "formas_pagamento" not in columns:
+            val = "'[\"Dinheiro\", \"Cartão de Crédito\", \"Cartão de Débito\", \"PIX\"]'"
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN formas_pagamento TEXT DEFAULT {val}"))
+        if "controlar_validade" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN controlar_validade {get_bool_true()}"))
+        if "alerta_estoque_minimo" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN alerta_estoque_minimo {get_bool_true()}"))
+        if "dias_alerta_validade" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN dias_alerta_validade INTEGER DEFAULT 30"))
-        if "estoque_minimo_padrao" not in cols:
+        if "estoque_minimo_padrao" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN estoque_minimo_padrao INTEGER DEFAULT 10"))
-        if "tempo_sessao_minutos" not in cols:
+        if "tempo_sessao_minutos" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN tempo_sessao_minutos INTEGER DEFAULT 30"))
-        if "tentativas_senha_bloqueio" not in cols:
+        if "tentativas_senha_bloqueio" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN tentativas_senha_bloqueio INTEGER DEFAULT 3"))
-        if "alertas_email" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN alertas_email INTEGER DEFAULT 0"))
-        if "alertas_whatsapp" not in cols:
-            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN alertas_whatsapp INTEGER DEFAULT 0"))
+        if "alertas_email" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN alertas_email {get_bool_type()}"))
+        if "alertas_whatsapp" not in columns:
+            ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN alertas_whatsapp {get_bool_type()}"))
+            
         for stmt in ddl:
             try:
                 db.session.execute(stmt)
-            except Exception:
+            except Exception as e:
+                current_app.logger.error(f"Erro ao executar DDL: {e}")
                 pass
         if ddl:
             db.session.commit()
-    except Exception:
+    except Exception as e:
+        current_app.logger.error(f"Erro ao verificar schema: {e}")
         pass
 
 @configuracao_bp.route("/", methods=["GET"])
