@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line, Cell
+  Tooltip, ResponsiveContainer, LineChart, Line, Cell, LabelList
 } from 'recharts';
 
 // API Client
@@ -65,9 +65,10 @@ interface CurvaABC {
     margem: number;
   }>;
   resumo: {
-    A: { quantidade: number; faturamento_total: number; percentual: number };
-    B: { quantidade: number; faturamento_total: number; percentual: number };
-    C: { quantidade: number; faturamento_total: number; percentual: number };
+    A: { quantidade: number; faturamento_total: number; percentual: number; margem_media?: number };
+    B: { quantidade: number; faturamento_total: number; percentual: number; margem_media?: number };
+    C: { quantidade: number; faturamento_total: number; percentual: number; margem_media?: number };
+    TODOS?: { quantidade: number; faturamento_total: number; percentual: number; margem_media?: number };
   };
   pareto_80_20: boolean;
 }
@@ -667,6 +668,12 @@ const DashboardPage: React.FC = () => {
                         {produtosFiltrados.slice(0, 15).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={getABCColor(entry.classificacao)} />
                         ))}
+                        <LabelList 
+                          dataKey="margem" 
+                          position="top" 
+                          formatter={(val: number) => `${val.toFixed(1)}%`}
+                          style={{ fill: '#4B5563', fontSize: '11px', fontWeight: 'bold' }}
+                        />
                       </Bar>
                       <Line
                         yAxisId="right"
@@ -680,18 +687,34 @@ const DashboardPage: React.FC = () => {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex justify-center gap-6 mt-6">
-                  {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => (
-                    <div key={classe} className="text-center">
-                      <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100' : classe === 'B' ? 'bg-yellow-100' : 'bg-red-100'}`}>
-                        <span className={`text-2xl font-bold ${classe === 'A' ? 'text-green-600' : classe === 'B' ? 'text-yellow-600' : 'text-red-600'}`}>
-                          {classe}
-                        </span>
+                <div className="flex justify-center gap-6 mt-6 flex-wrap">
+                  {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => {
+                    const getColors = (cls: string) => {
+                      switch(cls) {
+                        case 'A': return { bg: 'bg-green-100', text: 'text-green-600' };
+                        case 'B': return { bg: 'bg-yellow-100', text: 'text-yellow-600' };
+                        case 'C': return { bg: 'bg-red-100', text: 'text-red-600' };
+                        default: return { bg: 'bg-blue-100', text: 'text-blue-600' };
+                      }
+                    };
+                    const colors = getColors(classe);
+                    return (
+                      <div key={classe} className="text-center p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${colors.bg}`}>
+                          <span className={`text-xl font-bold ${colors.text}`}>
+                            {classe === 'TODOS' ? 'ALL' : classe}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{dados.quantidade} itens</p>
+                        <p className="text-sm font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% Fat.</p>
+                        {dados.margem_media !== undefined && (
+                          <p className="text-xs font-semibold text-gray-500 mt-1">
+                            Margem: <span className={colors.text}>{dados.margem_media.toFixed(1)}%</span>
+                          </p>
+                        )}
                       </div>
-                      <p className="text-sm text-gray-600">{dados.quantidade} produtos</p>
-                      <p className="text-lg font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% do faturamento</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

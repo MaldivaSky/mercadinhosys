@@ -146,6 +146,7 @@ class DashboardOrchestrator:
                     "nome": p["nome"],
                     "valor_total": p["faturamento"],
                     "quantidade": p["quantidade_vendida"],
+                    "preco_custo": p.get("preco_custo", 0),
                 }
                 for p in top_products
             ])
