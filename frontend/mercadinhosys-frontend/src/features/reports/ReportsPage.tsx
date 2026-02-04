@@ -10,7 +10,9 @@ import {
     Package,
     Wallet,
     Archive,
-    Loader2
+    Loader2,
+    X,
+    Search
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -34,7 +36,7 @@ interface ReportCardProps {
     icon: React.ElementType;
     color: string;
     loading: boolean;
-    onExport: (type: 'pdf' | 'excel' | 'csv') => void;
+    onOpen: () => void;
 }
 
 const ReportCard: React.FC<ReportCardProps> = ({ 
@@ -43,49 +45,19 @@ const ReportCard: React.FC<ReportCardProps> = ({
     icon: Icon, 
     color, 
     loading, 
-    onExport 
+    onOpen
 }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 group">
+    <button onClick={onOpen} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 group text-left">
         <div className="flex items-start justify-between mb-4">
             <div className={`p-3 rounded-lg ${color} group-hover:scale-110 transition-transform duration-200`}>
                 <Icon className="w-6 h-6 text-white" />
             </div>
             {loading && <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />}
         </div>
-        
         <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
-        <p className="text-sm text-gray-500 mb-6 min-h-[40px]">{description}</p>
-        
-        <div className="grid grid-cols-3 gap-2">
-            <button
-                onClick={() => onExport('pdf')}
-                disabled={loading}
-                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-red-50 text-gray-600 hover:text-red-600 transition-colors border border-gray-100 hover:border-red-200"
-                title="Exportar PDF"
-            >
-                <FileText className="w-5 h-5 mb-1" />
-                <span className="text-xs font-medium">PDF</span>
-            </button>
-            <button
-                onClick={() => onExport('excel')}
-                disabled={loading}
-                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-green-50 text-gray-600 hover:text-green-600 transition-colors border border-gray-100 hover:border-green-200"
-                title="Exportar Excel"
-            >
-                <FileSpreadsheet className="w-5 h-5 mb-1" />
-                <span className="text-xs font-medium">Excel</span>
-            </button>
-            <button
-                onClick={() => onExport('csv')}
-                disabled={loading}
-                className="flex flex-col items-center justify-center p-2 rounded-lg hover:bg-blue-50 text-gray-600 hover:text-blue-600 transition-colors border border-gray-100 hover:border-blue-200"
-                title="Exportar CSV"
-            >
-                <Download className="w-5 h-5 mb-1" />
-                <span className="text-xs font-medium">CSV</span>
-            </button>
-        </div>
-    </div>
+        <p className="text-sm text-gray-500 mb-2 min-h-[40px]">{description}</p>
+        <span className="text-xs text-indigo-600 font-medium">Ver detalhes</span>
+    </button>
 );
 
 const ReportsPage: React.FC = () => {
@@ -97,6 +69,41 @@ const ReportsPage: React.FC = () => {
 
     const [loadingReport, setLoadingReport] = useState<string | null>(null);
     const [loadingBackup, setLoadingBackup] = useState(false);
+    const [modalType, setModalType] = useState<'vendas' | 'produtos' | 'financeiro' | 'equipe' | null>(null);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [vendasData, setVendasData] = useState<Array<{Data: string; 'Quantidade Vendas': number; 'Total (R$)': number}>>([]);
+    const [produtosData, setProdutosData] = useState<Array<{ 'Código': string | number; 'Nome': string; 'Categoria': string; 'Preço Venda': number; 'Preço Custo': number; 'Estoque': any; 'Estoque Mínimo': number; 'Status': string }>>([]);
+    const [financeiroData, setFinanceiroData] = useState<Array<{ 'Forma de Pagamento': string; 'Qtd. Transações': number; 'Total (R$)': number; 'Percentual (%)': string }>>([]);
+    const [equipeData, setEquipeData] = useState<Array<{ 'Funcionário': string; 'Vendas Realizadas': number; 'Total Vendido (R$)': number; 'Ticket Médio (R$)': string }>>([]);
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const filterRow = (row: any) => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return true;
+        return Object.values(row).some((v) => String(v ?? '').toLowerCase().includes(q));
+    };
+    
+    const openModal = async (type: 'vendas' | 'produtos' | 'financeiro' | 'equipe') => {
+        setModalType(type);
+        setModalOpen(true);
+        try {
+            if (type === 'vendas' && vendasData.length === 0) {
+                await fetchVendasData();
+            } else if (type === 'produtos' && produtosData.length === 0) {
+                await fetchProdutosData();
+            } else if (type === 'financeiro' && financeiroData.length === 0) {
+                await fetchFinanceiroData();
+            } else if (type === 'equipe' && equipeData.length === 0) {
+                await fetchEquipeData();
+            }
+        } catch (e) {
+            // erros já são tratados dentro dos fetchers
+        }
+    };
+    
+    const closeModal = () => {
+        setModalOpen(false);
+        setModalType(null);
+    };
 
     const handleBackupExport = async () => {
         setLoadingBackup(true);
@@ -162,24 +169,34 @@ const ReportsPage: React.FC = () => {
 
     // ==================== GERADORES DE RELATÓRIOS ====================
 
-    const handleVendasReport = async (type: 'pdf' | 'excel' | 'csv') => {
+    const fetchVendasData = async () => {
         setLoadingReport('vendas');
         try {
-            // Buscar dados brutos (simulando fetch de todos, na prática deveria ter endpoint específico)
-            // Aqui vamos usar a rota de analytics que já traz agregados interessantes, 
-            // mas idealmente buscaríamos uma lista de vendas filtrada
-            
-            // Para este exemplo, vamos buscar estatísticas que já temos acesso fácil
             const analytics = await salesService.getAnalytics({
                 data_inicio: dateRange.startDate,
                 data_fim: dateRange.endDate
             });
-
-            const dataToExport = analytics.vendasPorDia.map(d => ({
+            const data = analytics.vendasPorDia.map(d => ({
                 Data: format(new Date(d.data), 'dd/MM/yyyy'),
                 'Quantidade Vendas': d.quantidade,
                 'Total (R$)': d.total
             }));
+            setVendasData(data);
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao carregar vendas');
+        } finally {
+            setLoadingReport(null);
+        }
+    };
+    
+    const handleVendasReport = async (type: 'pdf' | 'excel' | 'csv') => {
+        setLoadingReport('vendas');
+        try {
+            if (vendasData.length === 0) {
+                await fetchVendasData();
+            }
+            const dataToExport = vendasData;
 
             const filename = `Relatorio_Vendas_${dateRange.startDate}_${dateRange.endDate}`;
 
@@ -215,14 +232,12 @@ const ReportsPage: React.FC = () => {
         }
     };
 
-    const handleProdutosReport = async (type: 'pdf' | 'excel' | 'csv') => {
+    const fetchProdutosData = async () => {
         setLoadingReport('produtos');
         try {
-            // Buscar produtos (estoque)
-            const response = await productsService.getAllEstoque(1, 1000); // Tentar pegar o máximo
+            const response = await productsService.getAllEstoque(1, 1000);
             const produtos = response.produtos;
-
-            const dataToExport = produtos.map(p => ({
+            const data = produtos.map(p => ({
                 'Código': p.codigo_barras || p.id,
                 'Nome': p.nome,
                 'Categoria': p.categoria || 'N/A',
@@ -232,6 +247,22 @@ const ReportsPage: React.FC = () => {
                 'Estoque Mínimo': p.estoque_minimo,
                 'Status': (p.quantidade || 0) <= (p.estoque_minimo || 0) ? 'CRÍTICO' : 'OK'
             }));
+            setProdutosData(data);
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao carregar produtos');
+        } finally {
+            setLoadingReport(null);
+        }
+    };
+    
+    const handleProdutosReport = async (type: 'pdf' | 'excel' | 'csv') => {
+        setLoadingReport('produtos');
+        try {
+            if (produtosData.length === 0) {
+                await fetchProdutosData();
+            }
+            const dataToExport = produtosData;
 
             const filename = `Relatorio_Estoque_${format(new Date(), 'yyyy-MM-dd')}`;
 
@@ -274,20 +305,35 @@ const ReportsPage: React.FC = () => {
         }
     };
 
-    const handleFinanceiroReport = async (type: 'pdf' | 'excel' | 'csv') => {
+    const fetchFinanceiroData = async () => {
         setLoadingReport('financeiro');
         try {
             const analytics = await salesService.getAnalytics({
                 data_inicio: dateRange.startDate,
                 data_fim: dateRange.endDate
             });
-
-            const dataToExport = analytics.formasPagamento.map(f => ({
+            const data = analytics.formasPagamento.map(f => ({
                 'Forma de Pagamento': f.forma.toUpperCase(),
                 'Qtd. Transações': f.quantidade,
                 'Total (R$)': f.total,
                 'Percentual (%)': f.percentual.toFixed(2)
             }));
+            setFinanceiroData(data);
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao carregar financeiro');
+        } finally {
+            setLoadingReport(null);
+        }
+    };
+    
+    const handleFinanceiroReport = async (type: 'pdf' | 'excel' | 'csv') => {
+        setLoadingReport('financeiro');
+        try {
+            if (financeiroData.length === 0) {
+                await fetchFinanceiroData();
+            }
+            const dataToExport = financeiroData;
 
             const filename = `Relatorio_Financeiro_${dateRange.startDate}`;
 
@@ -321,21 +367,35 @@ const ReportsPage: React.FC = () => {
         }
     };
 
-    const handleEquipeReport = async (type: 'pdf' | 'excel' | 'csv') => {
+    const fetchEquipeData = async () => {
         setLoadingReport('equipe');
         try {
-            // Usando analytics de vendas por funcionário
             const analytics = await salesService.getAnalytics({
                 data_inicio: dateRange.startDate,
                 data_fim: dateRange.endDate
             });
-
-            const dataToExport = analytics.topFuncionarios.map(f => ({
+            const data = analytics.topFuncionarios.map(f => ({
                 'Funcionário': f.funcionario,
                 'Vendas Realizadas': f.quantidade,
                 'Total Vendido (R$)': f.total,
                 'Ticket Médio (R$)': (f.total / f.quantidade).toFixed(2)
             }));
+            setEquipeData(data);
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao carregar equipe');
+        } finally {
+            setLoadingReport(null);
+        }
+    };
+    
+    const handleEquipeReport = async (type: 'pdf' | 'excel' | 'csv') => {
+        setLoadingReport('equipe');
+        try {
+            if (equipeData.length === 0) {
+                await fetchEquipeData();
+            }
+            const dataToExport = equipeData;
 
             const filename = `Performance_Equipe_${dateRange.startDate}`;
 
@@ -408,14 +468,14 @@ const ReportsPage: React.FC = () => {
             </div>
 
             {/* Grid de Relatórios */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
                 <ReportCard 
                     title="Vendas Detalhadas" 
                     description="Análise cronológica de vendas, totais diários e volume de transações."
                     icon={TrendingUp}
                     color="bg-blue-500"
                     loading={loadingReport === 'vendas'}
-                    onExport={handleVendasReport}
+                    onOpen={() => openModal('vendas')}
                 />
 
                 <ReportCard 
@@ -424,7 +484,7 @@ const ReportsPage: React.FC = () => {
                     icon={Package}
                     color="bg-emerald-500"
                     loading={loadingReport === 'produtos'}
-                    onExport={handleProdutosReport}
+                    onOpen={() => openModal('produtos')}
                 />
 
                 <ReportCard 
@@ -433,7 +493,7 @@ const ReportsPage: React.FC = () => {
                     icon={Wallet}
                     color="bg-amber-500"
                     loading={loadingReport === 'financeiro'}
-                    onExport={handleFinanceiroReport}
+                    onOpen={() => openModal('financeiro')}
                 />
 
                 <ReportCard 
@@ -442,9 +502,155 @@ const ReportsPage: React.FC = () => {
                     icon={Users}
                     color="bg-pink-500"
                     loading={loadingReport === 'equipe'}
-                    onExport={handleEquipeReport}
+                    onOpen={() => openModal('equipe')}
                 />
             </div>
+            
+            {modalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-800">
+                                {modalType === 'vendas' && 'Vendas Detalhadas'}
+                                {modalType === 'produtos' && 'Estoque & Produtos'}
+                                {modalType === 'financeiro' && 'Fluxo Financeiro'}
+                                {modalType === 'equipe' && 'Performance da Equipe'}
+                            </h2>
+                            <button onClick={closeModal} className="text-gray-500 hover:text-gray-700">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="px-6 py-4">
+                            <div className="flex flex-wrap items-center gap-2 mb-4">
+                                <button
+                                    onClick={() => (modalType === 'vendas' ? handleVendasReport('pdf') : modalType === 'produtos' ? handleProdutosReport('pdf') : modalType === 'financeiro' ? handleFinanceiroReport('pdf') : handleEquipeReport('pdf'))}
+                                    disabled={loadingReport !== null}
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-gray-700 hover:text-red-700 transition-colors border border-gray-100 hover:border-red-200"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Exportar PDF</span>
+                                </button>
+                                <button
+                                    onClick={() => (modalType === 'vendas' ? handleVendasReport('excel') : modalType === 'produtos' ? handleProdutosReport('excel') : modalType === 'financeiro' ? handleFinanceiroReport('excel') : handleEquipeReport('excel'))}
+                                    disabled={loadingReport !== null}
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-green-50 text-gray-700 hover:text-green-700 transition-colors border border-gray-100 hover:border-green-200"
+                                >
+                                    <FileSpreadsheet className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Exportar Excel</span>
+                                </button>
+                                <button
+                                    onClick={() => (modalType === 'vendas' ? handleVendasReport('csv') : modalType === 'produtos' ? handleProdutosReport('csv') : modalType === 'financeiro' ? handleFinanceiroReport('csv') : handleEquipeReport('csv'))}
+                                    disabled={loadingReport !== null}
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors border border-gray-100 hover:border-blue-200"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Exportar CSV</span>
+                                </button>
+                                <div className="ml-auto flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg">
+                                    <Search className="w-4 h-4 text-gray-500" />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Buscar..."
+                                        className="bg-transparent text-sm focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <div className="rounded-lg border border-gray-100 max-h-[65vh] overflow-auto">
+                                {modalType === 'vendas' && (
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Data</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Qtd. Vendas</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Total (R$)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {vendasData.filter(filterRow).map((item, idx) => (
+                                                <tr key={idx} className="border-t">
+                                                    <td className="px-4 py-2">{item.Data}</td>
+                                                    <td className="px-4 py-2">{item['Quantidade Vendas']}</td>
+                                                    <td className="px-4 py-2">{item['Total (R$)'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                {modalType === 'produtos' && (
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Nome</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Categoria</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Preço</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Estoque</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {produtosData.filter(filterRow).map((item, idx) => (
+                                                <tr key={idx} className="border-t">
+                                                    <td className="px-4 py-2">{item['Nome']}</td>
+                                                    <td className="px-4 py-2">{item['Categoria']}</td>
+                                                    <td className="px-4 py-2">{item['Preço Venda'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                    <td className="px-4 py-2">{String(item['Estoque'] ?? '')}</td>
+                                                    <td className={`px-4 py-2 ${item['Status'] === 'CRÍTICO' ? 'text-red-600 font-semibold' : 'text-emerald-600'}`}>{item['Status']}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                {modalType === 'financeiro' && (
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Forma Pagamento</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Transações</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Total</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">%</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {financeiroData.filter(filterRow).map((item, idx) => (
+                                                <tr key={idx} className="border-t">
+                                                    <td className="px-4 py-2">{item['Forma de Pagamento']}</td>
+                                                    <td className="px-4 py-2">{item['Qtd. Transações']}</td>
+                                                    <td className="px-4 py-2">{item['Total (R$)'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                    <td className="px-4 py-2">{item['Percentual (%)']}%</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                {modalType === 'equipe' && (
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Nome</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Vendas</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Total</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Ticket Médio</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {equipeData.filter(filterRow).map((item, idx) => (
+                                                <tr key={idx} className="border-t">
+                                                    <td className="px-4 py-2">{item['Funcionário']}</td>
+                                                    <td className="px-4 py-2">{item['Vendas Realizadas']}</td>
+                                                    <td className="px-4 py-2">{item['Total Vendido (R$)'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                    <td className="px-4 py-2">{parseFloat(item['Ticket Médio (R$)']).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between mb-4">
