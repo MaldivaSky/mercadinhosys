@@ -51,7 +51,7 @@ const FootPage: React.FC = () => {
                             <span>Atalhos do PDV</span>
                         </button>
                         <span className="hidden sm:inline text-gray-400">•</span>
-                        <span className="text-gray-500 dark:text-gray-400">v1.0</span>
+                        <span className="text-gray-500 dark:text-gray-400">v2.0</span>
                     </div>
                 </div>
             </footer>

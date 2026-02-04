@@ -500,6 +500,7 @@ def criar_produto():
             nome=data["nome"].strip(),
             descricao=data.get("descricao", "").strip(),
             marca=data.get("marca", "").strip(),
+            fabricante=data.get("fabricante", "").strip(),
             subcategoria=data.get("subcategoria", "").strip(),
             unidade_medida=data.get("unidade_medida", "UN"),
             quantidade=int(data.get("quantidade", 0)),

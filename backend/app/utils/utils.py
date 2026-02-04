@@ -1,6 +1,9 @@
 # app/utils.py
 import numpy as np
-from scipy import stats
+try:
+    from scipy import stats
+except ImportError:
+    stats = None
 import math
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -52,7 +55,21 @@ def calcular_tendencia(series: List[float]) -> Dict[str, Any]:
             }
 
         # Regressão linear
-        slope, intercept, r_value, p_value, std_err = stats.linregress(x_clean, y_clean)
+        if stats:
+            slope, intercept, r_value, p_value, std_err = stats.linregress(x_clean, y_clean)
+        else:
+            # Fallback usando numpy se scipy não estiver disponível
+            A = np.vstack([x_clean, np.ones(len(x_clean))]).T
+            slope, intercept = np.linalg.lstsq(A, y_clean, rcond=None)[0]
+            
+            # Calcular R² manualmente
+            y_pred = slope * x_clean + intercept
+            ss_tot = np.sum((y_clean - np.mean(y_clean)) ** 2)
+            ss_res = np.sum((y_clean - y_pred) ** 2)
+            r_value = np.sqrt(1 - ss_res / ss_tot) if ss_tot > 0 else 0
+            
+            p_value = 0.05 # Valor dummy
+            std_err = 0 # Valor dummy
 
         # Determinar direção
         if slope > 0.1:
