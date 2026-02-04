@@ -15,24 +15,22 @@ class Config:
     
     DATABASE_URL = os.environ.get("DATABASE_URL")
     SQLITE_DB = os.environ.get("SQLITE_DB")
+    DB_PRIMARY = os.environ.get("DB_PRIMARY", "sqlite").lower()
     
     # Detectar ambiente
     IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("RAILWAY") or os.environ.get("HEROKU")
     
-    if DATABASE_URL:
-        # Nuvem: PostgreSQL (Neon, Render, etc)
+    if DB_PRIMARY == "postgres" and DATABASE_URL:
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
-        print(f"🌐 [CLOUD] Using PostgreSQL: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
+        print(f"🌐 [PRIMARY: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
     elif SQLITE_DB:
-        # Local: SQLite customizado
         SQLALCHEMY_DATABASE_URI = SQLITE_DB
-        print(f"💾 [LOCAL] Using SQLite: {SQLITE_DB}")
+        print(f"💾 [PRIMARY: SQLITE] {SQLITE_DB}")
     else:
-        # Fallback: SQLite padrão
         SQLALCHEMY_DATABASE_URI = "sqlite:///c:/temp/mercadinho_instance/mercadinho.db"
-        print(f"💾 [LOCAL] Using SQLite (default): {SQLALCHEMY_DATABASE_URI}")
+        print(f"💾 [PRIMARY: SQLITE] {SQLALCHEMY_DATABASE_URI}")
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -40,7 +38,7 @@ class Config:
         "pool_recycle": 300,    # Recicla conexões a cada 5 minutos
         "pool_size": 10,        # Pool de 10 conexões
         "max_overflow": 20,     # Até 20 conexões extras
-    } if DATABASE_URL else {}
+    } if DB_PRIMARY == "postgres" and DATABASE_URL else {}
 
     # ==================== CORS ====================
     cors_origins_str = os.environ.get("CORS_ORIGINS", "")
