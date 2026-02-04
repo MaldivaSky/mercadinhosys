@@ -7,6 +7,7 @@ import {
 import { useConfig } from '../../contexts/ConfigContext';
 import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
+import { API_CONFIG } from '../../api/apiConfig';
 
 const HeaderProfessional = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -57,6 +58,10 @@ const HeaderProfessional = () => {
 
     // Calcular logo URL dinamicamente baseado no config
     const logoUrl = useMemo(() => {
+        // Preferir base64 quando disponível (evita mixed content)
+        if (config?.logo_base64) {
+            return config.logo_base64;
+        }
         if (!config?.logo_url) {
             return logo;
         }
@@ -71,9 +76,10 @@ const HeaderProfessional = () => {
             return config.logo_url;
         }
         
-        // Se for caminho relativo
-        return `http://localhost:5000${config.logo_url}`;
-    }, [config?.logo_url]);
+        // Se for caminho relativo, anexar à origem do backend (sem /api)
+        const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api$/, '');
+        return `${apiOrigin}${config.logo_url}`;
+    }, [config?.logo_url, config?.logo_base64]);
 
     const toggleTheme = async () => {
         try {

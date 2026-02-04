@@ -42,9 +42,19 @@ with app.app_context():
         
         print("⚠️  Este seed cria apenas dados essenciais (rápido)")
         print()
-        resposta = input("Deseja continuar? (s/N): ").lower()
-        
-        if resposta != 's':
+        proceed = False
+        auto = os.environ.get('SEED_CONFIRM', '').lower()
+        if auto in ('s', 'y', 'yes', 'true', '1'):
+            proceed = True
+        elif not sys.stdin.isatty():
+            proceed = True
+        else:
+            try:
+                resposta = input("Deseja continuar? (s/N): ").lower()
+                proceed = (resposta == 's')
+            except Exception:
+                proceed = False
+        if not proceed:
             print("❌ Cancelado")
             sys.exit(0)
         
@@ -477,12 +487,13 @@ with app.app_context():
         db.session.commit()
         print(f"✅ {vendas_criadas} vendas criadas!")
         
-        # 9. REPLICAÇÃO OPCIONAL PARA NEON (se DATABASE_URL estiver configurada)
-        if os.environ.get('DATABASE_URL'):
+        # 9. REPLICAÇÃO OPCIONAL PARA NEON (somente se DATABASE_URL apontar para Postgres)
+        db_url_env = os.environ.get('DATABASE_URL', '')
+        if db_url_env and db_url_env.startswith(('postgresql://', 'postgres://')):
             print()
             print("🔄 Replicando dados para Neon (PostgreSQL)...")
             try:
-                neon_engine = create_engine(os.environ['DATABASE_URL'])
+                neon_engine = create_engine(db_url_env.replace("postgres://", "postgresql://", 1))
                 # Testar conexão
                 with neon_engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
@@ -527,6 +538,9 @@ with app.app_context():
                 print("✅ Replicação para Neon concluída!")
             except Exception as e:
                 print(f"⚠️  Replicação para Neon falhou: {str(e)[:120]}")
+        else:
+            print()
+            print("ℹ️ DATABASE_URL não é Postgres. Pulando replicação para Neon.")
         
         # RESUMO
         print()

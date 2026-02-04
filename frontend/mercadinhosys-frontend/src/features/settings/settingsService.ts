@@ -22,6 +22,7 @@ export interface Configuracao {
     id: number;
     estabelecimento_id: number;
     logo_url?: string;
+    logo_base64?: string;
     cor_principal: string;
     tema_escuro: boolean;
     
@@ -82,5 +83,6 @@ const settingsService = {
         return response.data.logo_url;
     }
 };
+
 
 export default settingsService;
