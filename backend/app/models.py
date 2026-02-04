@@ -507,6 +507,7 @@ class Produto(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text)
     marca = db.Column(db.String(50))
+    fabricante = db.Column(db.String(100))  # Adicionado campo fabricante
 
     unidade_medida = db.Column(db.String(20), default="UN")
 
@@ -564,12 +565,24 @@ class Produto(db.Model):
             "codigo_barras": self.codigo_barras,
             "codigo_interno": self.codigo_interno,
             "nome": self.nome,
-            "categoria": self.categoria.to_dict() if self.categoria else None,
+            "descricao": self.descricao,
+            "marca": self.marca,
+            "fabricante": self.fabricante,
+            "unidade_medida": self.unidade_medida,
+            "categoria": self.categoria.nome if self.categoria else None,
             "quantidade": self.quantidade,
+            "quantidade_minima": self.quantidade_minima,
             "preco_custo": float(self.preco_custo) if self.preco_custo else 0.0,
             "preco_venda": float(self.preco_venda) if self.preco_venda else 0.0,
+            "margem_lucro": float(self.margem_lucro) if self.margem_lucro else 0.0,
             "ativo": self.ativo,
             "fornecedor": self.fornecedor.to_dict() if self.fornecedor else None,
+            "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
+            "fornecedor_id": self.fornecedor_id,
+            "data_validade": self.data_validade.isoformat() if self.data_validade else None,
+            "lote": self.lote,
+            "imagem_url": self.imagem_url,
+            "controlar_validade": self.controlar_validade,
         }
 
 

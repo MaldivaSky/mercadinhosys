@@ -4,20 +4,20 @@ import { ApiResponse, Produto, ProdutosResponse, ProdutoFiltros } from '../../ty
 export const productsService = {
     // ==================== ROTAS PDV ====================
     search: async (query: string, limit = 20): Promise<Produto[]> => {
-        const response = await apiClient.get<Produto[]>('/produtos/search', {
+        const response = await apiClient.get<{ success: boolean; produtos: Produto[] }>('/produtos/search', {
             params: { q: query, limit },
         });
-        return response.data;
+        return response.data.produtos;
     },
 
     getByBarcode: async (codigo: string): Promise<Produto> => {
-        const response = await apiClient.get<Produto>(`/produtos/barcode/${codigo}`);
-        return response.data;
+        const response = await apiClient.get<{ success: boolean; produto: Produto }>(`/produtos/barcode/${codigo}`);
+        return response.data.produto;
     },
 
     quickAdd: async (data: Partial<Produto>): Promise<Produto> => {
-        const response = await apiClient.post<Produto>('/produtos/quick-add', data);
-        return response.data;
+        const response = await apiClient.post<{ success: boolean; produto: Produto }>('/produtos/quick-add', data);
+        return response.data.produto;
     },
 
     // ==================== CRUD COMPLETO ESTOQUE ====================
@@ -45,8 +45,8 @@ export const productsService = {
     },
 
     getById: async (id: number): Promise<Produto> => {
-        const response = await apiClient.get<Produto>(`/produtos/${id}`);
-        return response.data;
+        const response = await apiClient.get<{ success: boolean; produto: Produto }>(`/produtos/${id}`);
+        return response.data.produto;
     },
 
     create: async (data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {

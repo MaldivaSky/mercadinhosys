@@ -1225,6 +1225,18 @@ const ProductsPage: React.FC = () => {
                                             {selectedProduct.fabricante || 'N/A'}
                                         </p>
                                     </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Lote</p>
+                                        <p className="text-base text-gray-900 dark:text-white">
+                                            {selectedProduct.lote || 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Data de Validade</p>
+                                        <p className="text-base text-gray-900 dark:text-white">
+                                            {selectedProduct.data_validade ? new Date(selectedProduct.data_validade).toLocaleDateString('pt-BR') : 'N/A'}
+                                        </p>
+                                    </div>
                                 </div>
 
                                 {/* Informações de Estoque */}
