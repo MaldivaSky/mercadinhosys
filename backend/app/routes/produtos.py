@@ -1138,7 +1138,7 @@ def listar_produtos_estoque():
                 fornecedor_nome = produto.fornecedor.razao_social or produto.fornecedor.nome_fantasia
 
             # Determinar status do estoque
-            if produto.quantidade == 0:
+            if produto.quantidade <= 0:
                 estoque_status_produto = "esgotado"
             elif produto.quantidade <= produto.quantidade_minima:
                 estoque_status_produto = "baixo"
@@ -1230,7 +1230,7 @@ def listar_produtos_estoque():
                 quantidade = r.get("quantidade", 0) if hasattr(r, "get") else r[9]
                 quantidade_minima = r.get("quantidade_minima", 0) if hasattr(r, "get") else r[10]
                 ativo = r.get("ativo", True) if hasattr(r, "get") else r[11]
-                estoque_status_produto = "esgotado" if quantidade == 0 else ("baixo" if quantidade <= quantidade_minima else "normal")
+                estoque_status_produto = "esgotado" if quantidade <= 0 else ("baixo" if quantidade <= quantidade_minima else "normal")
                 produtos_lista.append({
                     "id": rid,
                     "nome": nome,

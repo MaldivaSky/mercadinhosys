@@ -63,7 +63,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} gridColumn={{ xs: 'span 12', sm: 'span 6' }}>
               <Typography sx={labelStyle}>Limite Crédito:</Typography> 
-              <Typography sx={{...valueStyle, color: '#2e7d32'}}>R$ {cliente.limite_credito?.toLocaleString('pt-BR', {minimumFractionDigits: 2}) ?? '-'}</Typography>
+              <Typography sx={{...valueStyle, color: '#2e7d32'}}>R$ {cliente.limite_credito ? cliente.limite_credito.toLocaleString('pt-BR', {minimumFractionDigits: 2}) ?? '-' : '-'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} gridColumn={{ xs: 'span 12', sm: 'span 6' }}>
               <Typography sx={labelStyle}>Saldo Devedor:</Typography> 
@@ -78,7 +78,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} gridColumn={{ xs: 'span 12', sm: 'span 6' }}>
               <Typography sx={labelStyle}>Valor Total Gasto:</Typography> 
               <Typography sx={{...valueStyle, color: '#2e7d32', fontWeight: 500}}>
-                R$ {cliente.valor_total_gasto?.toLocaleString('pt-BR', {minimumFractionDigits: 2}) ?? '0,00'}
+                R$ {cliente.valor_total_gasto ? cliente.valor_total_gasto.toLocaleString('pt-BR', {minimumFractionDigits: 2}) ?? '0,00' : '0,00'}
               </Typography>
             </Box>
           </Grid>

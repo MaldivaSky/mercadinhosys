@@ -11,26 +11,25 @@ class Config:
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 
     # ==================== DATABASE CONFIGURATION ====================
-    # Sistema inteligente: detecta automaticamente local vs nuvem
+    # Seleção robusta do banco: usa Postgres quando disponível; caso contrário, SQLite cross-platform
     
     DATABASE_URL = os.environ.get("DATABASE_URL")
     SQLITE_DB = os.environ.get("SQLITE_DB")
-    DB_PRIMARY = os.environ.get("DB_PRIMARY", "sqlite").lower()
+    USING_POSTGRES = False
     
-    # Detectar ambiente
-    IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("RAILWAY") or os.environ.get("HEROKU")
-    
-    if DB_PRIMARY == "postgres" and DATABASE_URL:
+    if DATABASE_URL:
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
-        print(f"🌐 [PRIMARY: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
+        USING_POSTGRES = True
+        print(f"🌐 [DB: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
     elif SQLITE_DB:
         SQLALCHEMY_DATABASE_URI = SQLITE_DB
-        print(f"💾 [PRIMARY: SQLITE] {SQLITE_DB}")
+        print(f"💾 [DB: SQLITE] {SQLITE_DB}")
     else:
-        SQLALCHEMY_DATABASE_URI = "sqlite:///c:/temp/mercadinho_instance/mercadinho.db"
-        print(f"💾 [PRIMARY: SQLITE] {SQLALCHEMY_DATABASE_URI}")
+        # Fallback seguro para SQLite (sem caminho específico de Windows)
+        SQLALCHEMY_DATABASE_URI = "sqlite:///mercadinho.db"
+        print(f"💾 [DB: SQLITE] {SQLALCHEMY_DATABASE_URI}")
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -38,7 +37,7 @@ class Config:
         "pool_recycle": 300,    # Recicla conexões a cada 5 minutos
         "pool_size": 10,        # Pool de 10 conexões
         "max_overflow": 20,     # Até 20 conexões extras
-    } if DB_PRIMARY == "postgres" and DATABASE_URL else {}
+    } if USING_POSTGRES else {}
 
     # ==================== CORS ====================
     cors_origins_str = os.environ.get("CORS_ORIGINS", "")
