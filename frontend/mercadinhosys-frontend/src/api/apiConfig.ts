@@ -3,33 +3,52 @@
 // Detectar ambiente automaticamente
 const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost';
 
-// URL do backend baseada no ambiente
+// Normaliza URL: remove barras extras e garante protocolo consistente
+const normalizeUrl = (url: string): string => {
+    if (!url) return url;
+    let out = url.trim();
+    // troca postgres:// etc não aplicável aqui; apenas http/https
+    // remove barra duplicada antes de /api
+    out = out.replace(/\/+$/g, '');
+    // garante sufixo /api
+    if (!/\/api$/.test(out)) {
+        out = `${out}/api`;
+    }
+    // se página é https e url começa com http, troca para https para evitar mixed content
+    if (window.location.protocol === 'https:' && out.startsWith('http://')) {
+        out = out.replace(/^http:\/\//, 'https://');
+    }
+    return out;
+};
+
+// Tenta obter URL em tempo de execução via variável global (permitindo override sem rebuild)
+const getRuntimeApiUrl = (): string | undefined => {
+    const w: any = window as any;
+    const candidate = w.__API_URL__ || w.API_URL;
+    return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined;
+};
+
+// URL do backend baseada no ambiente com fallback robusto
 const getBaseUrl = (): string => {
-    // 1. Variável de ambiente (Render, Vercel, etc)
-    if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
-    }
-    
-    // 2. Desenvolvimento local
-    if (isDevelopment) {
-        return 'http://localhost:5000/api';
-    }
-    
-    // 3. Produção (mesma origem)
-    return `${window.location.origin}/api`;
+    const runtimeUrl = getRuntimeApiUrl();
+    if (runtimeUrl) return normalizeUrl(runtimeUrl);
+    if (import.meta.env.VITE_API_URL) return normalizeUrl(import.meta.env.VITE_API_URL as string);
+    if (isDevelopment) return normalizeUrl('http://localhost:5000');
+    return normalizeUrl(window.location.origin);
 };
 
 export const API_CONFIG = {
     BASE_URL: getBaseUrl(),
-    TIMEOUT: 30000,
+    TIMEOUT: 20000,
     IS_DEVELOPMENT: isDevelopment,
 } as const;
 
-// Log para debug (apenas em desenvolvimento)
-if (isDevelopment) {
+// Log para debug
+{
     console.log('🔧 API Config:', {
         BASE_URL: API_CONFIG.BASE_URL,
         ENVIRONMENT: isDevelopment ? 'development' : 'production',
         VITE_API_URL: import.meta.env.VITE_API_URL,
+        RUNTIME_API_URL: (window as any).__API_URL__ || (window as any).API_URL,
     });
 }
