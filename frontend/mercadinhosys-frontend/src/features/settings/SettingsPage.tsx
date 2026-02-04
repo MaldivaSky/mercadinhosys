@@ -143,18 +143,14 @@ const SettingsPage: React.FC = () => {
                     
                     // Atualizar preview local
                     setConfig({ ...config, logo_url: base64 });
-                    
-                    await updateGlobalConfig({ logo_url: base64 });
                 };
                 reader.readAsDataURL(file);
                 
                 // Upload para o servidor em background
                 toast.loading("Fazendo upload da logo...", { id: 'upload-logo' });
-                const url = await settingsService.uploadLogo(file);
+                await settingsService.uploadLogo(file);
                 
-                // Atualizar com URL do servidor
-                setConfig({ ...config, logo_url: url });
-                await updateGlobalConfig({ logo_url: url });
+                // Atualizar dados
                 await refreshConfig();
                 
                 toast.success("Logo atualizada com sucesso!", { id: 'upload-logo' });

@@ -90,6 +90,7 @@ class Configuracao(db.Model):
     )
 
     logo_url = db.Column(db.String(500))
+    logo_base64 = db.Column(db.Text)  # Para persistência em deploy serverless/online
     cor_principal = db.Column(db.String(7), default="#2563eb")
     tema_escuro = db.Column(db.Boolean, default=False)
 
@@ -138,7 +139,7 @@ class Configuracao(db.Model):
         return {
             "id": self.id,
             "estabelecimento_id": self.estabelecimento_id,
-            "logo_url": self.logo_url,
+            "logo_url": self.logo_base64 if self.logo_base64 else self.logo_url,
             "cor_principal": self.cor_principal,
             "tema_escuro": self.tema_escuro,
             "emitir_nfe": self.emitir_nfe,
