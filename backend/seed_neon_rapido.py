@@ -22,7 +22,7 @@ if 'SQLITE_DB' in os.environ:
 from app import create_app, db
 from app.models import (
     Estabelecimento, Funcionario, Cliente, Fornecedor,
-    CategoriaProduto, Produto
+    CategoriaProduto, Produto, Despesa
 )
 from werkzeug.security import generate_password_hash
 
@@ -47,7 +47,7 @@ with app.app_context():
         print("🗑️  Limpando banco...")
         
         # Limpar dados (ordem reversa para FK)
-        for model in [Produto, CategoriaProduto, Fornecedor, Cliente, Funcionario, Estabelecimento]:
+        for model in [Produto, CategoriaProduto, Fornecedor, Cliente, Funcionario, Estabelecimento, Despesa]:
             db.session.query(model).delete()
         
         db.session.commit()

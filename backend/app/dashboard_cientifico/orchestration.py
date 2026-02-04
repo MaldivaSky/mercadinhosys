@@ -137,6 +137,7 @@ class DashboardOrchestrator:
             inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
             customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
             top_products = DataLayer.get_top_products(self.establishment_id, days, 50)
+            expense_details = DataLayer.get_expense_details(self.establishment_id, days)
 
             # 2. Análises científicas
             sales_trend = PracticalModels.detect_sales_trend(sales_timeseries)
@@ -208,7 +209,7 @@ class DashboardOrchestrator:
                     "previsao_demanda": predictions,
                 },
                 "analise_financeira": {
-                    "despesas_detalhadas": [],
+                    "despesas_detalhadas": expense_details,
                     "margens": {"bruta": 35.0, "operacional": 25.0, "liquida": 15.0},
                     "indicadores": {"ponto_equilibrio": 10000, "margem_seguranca": 20.0, "alavancagem_operacional": 2.5, "ebitda": 5000},
                 },

@@ -210,3 +210,42 @@ class DataLayer:
             "maior_compra": float(result.maior_compra or 0),
             "frequencia_media": float(result.frequencia_media or 0),
         }
+
+    @staticmethod
+    def get_expense_details(estabelecimento_id: int, days: int = 30) -> List[Dict[str, Any]]:
+        """
+        Detalhes de despesas agrupadas por categoria
+        """
+        from app.models import Despesa  # Importação local para evitar ciclo
+        
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query agrupada por categoria
+        results = (
+            db.session.query(
+                Despesa.categoria,
+                func.sum(Despesa.valor).label("total_categoria"),
+                func.count(Despesa.id).label("qtd_despesas")
+            )
+            .filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                Despesa.data_despesa >= data_inicio
+            )
+            .group_by(Despesa.categoria)
+            .order_by(func.sum(Despesa.valor).desc())
+            .all()
+        )
+        
+        # Calcular total geral para percentuais
+        total_geral = sum([float(r.total_categoria or 0) for r in results]) or 1.0
+        
+        return [
+            {
+                "tipo": r.categoria or "Outros",
+                "valor": float(r.total_categoria or 0),
+                "percentual": (float(r.total_categoria or 0) / total_geral) * 100,
+                "impacto_lucro": 0.0, # Calculado no orquestrador se necessário
+                "tendencia": "estavel" # Placeholder
+            }
+            for r in results
+        ]

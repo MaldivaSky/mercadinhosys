@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line, Cell, LabelList
+  Tooltip, ResponsiveContainer, LineChart, Line, Cell, LabelList,
+  PieChart, Pie, Legend
 } from 'recharts';
 
 // API Client
@@ -214,7 +215,10 @@ interface DashboardData {
   };
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+const getDistinctColor = (index: number) => {
+  const hue = (index * 137.508) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+};
 
 const DashboardPage: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -1009,39 +1013,58 @@ const DashboardPage: React.FC = () => {
                 <div className="h-[300px]">
                   {analise_financeira?.despesas_detalhadas && analise_financeira.despesas_detalhadas.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analise_financeira.despesas_detalhadas}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                        <XAxis 
-                          dataKey="tipo" 
-                          angle={-45} 
-                          textAnchor="end" 
-                          height={80}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip
-                          content={({ payload }) => (
-                            <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                              <p className="font-bold text-gray-900">{payload?.[0]?.payload?.tipo}</p>
-                              <p className="text-gray-600">Valor: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <p className="text-gray-600">Percentual: {payload?.[0]?.payload?.percentual?.toFixed(1)}%</p>
-                              <p className="text-gray-600">Impacto no Lucro: {payload?.[0]?.payload?.impacto_lucro?.toFixed(1)}%</p>
-                              <p className="text-sm text-gray-500 mt-2">
-                                Tendência: {payload?.[0]?.payload?.tendencia === 'alta' ? '📈 Alta' : payload?.[0]?.payload?.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
-                              </p>
-                            </div>
-                          )}
-                        />
-                        <Bar dataKey="valor" name="Valor da Despesa">
+                      <PieChart>
+                        <Pie
+                          data={analise_financeira.despesas_detalhadas}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            return percent > 0.05 ? (
+                              <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight="bold">
+                                {`${(percent * 100).toFixed(0)}%`}
+                              </text>
+                            ) : null;
+                          }}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="valor"
+                          nameKey="tipo"
+                        >
                           {analise_financeira.despesas_detalhadas.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS[index % COLORS.length]}
-                              className="cursor-pointer hover:opacity-80 transition-opacity"
-                            />
+                            <Cell key={`cell-${index}`} fill={getDistinctColor(index)} />
                           ))}
-                        </Bar>
-                      </BarChart>
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200 z-50">
+                                  <p className="font-bold text-gray-900">{data.tipo}</p>
+                                  <p className="text-gray-600">Valor: R$ {data.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <p className="text-gray-600">Percentual: {data.percentual.toFixed(1)}%</p>
+                                  <p className="text-gray-600">Impacto no Lucro: {data.impacto_lucro.toFixed(1)}%</p>
+                                  <p className="text-sm text-gray-500 mt-2">
+                                    Tendência: {data.tendencia === 'alta' ? '📈 Alta' : data.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                                  </p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Legend 
+                          layout="vertical" 
+                          verticalAlign="middle" 
+                          align="right"
+                          wrapperStyle={{ fontSize: '12px' }}
+                        />
+                      </PieChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex items-center justify-center h-full">
