@@ -6,6 +6,7 @@ from app.models import Configuracao, Estabelecimento
 from datetime import datetime
 import json
 import os
+import base64
 from werkzeug.utils import secure_filename
 from sqlalchemy import text, inspect
 
@@ -73,6 +74,8 @@ def ensure_configuracoes_schema():
             ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN alertas_email {get_bool_type()}"))
         if "alertas_whatsapp" not in columns:
             ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN alertas_whatsapp {get_bool_type()}"))
+        if "logo_base64" not in columns:
+            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN logo_base64 TEXT"))
             
         for stmt in ddl:
             try:
@@ -266,6 +269,15 @@ def upload_logo():
         if not os.path.exists(logos_folder):
             os.makedirs(logos_folder)
 
+        # Gerar base64 para persistência em banco (fix para versão online)
+        file_content = file.read()
+        file.seek(0)  # Resetar ponteiro para salvar em disco depois
+        
+        ext = filename.rsplit('.', 1)[1].lower()
+        mime_type = "image/svg+xml" if ext == "svg" else f"image/{ext}"
+        base64_str = base64.b64encode(file_content).decode('utf-8')
+        logo_base64 = f"data:{mime_type};base64,{base64_str}"
+
         # Salvar arquivo
         filename = f"logo_{estabelecimento_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{filename.rsplit('.', 1)[1].lower()}"
         filepath = os.path.join(logos_folder, filename)
@@ -283,6 +295,7 @@ def upload_logo():
             config = Configuracao(estabelecimento_id=estabelecimento_id)
 
         config.logo_url = logo_url
+        config.logo_base64 = logo_base64
         db.session.add(config)
         db.session.commit()
 
