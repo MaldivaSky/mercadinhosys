@@ -7,6 +7,7 @@ import settingsService, { Configuracao, Estabelecimento } from './settingsServic
 import { toast } from 'react-hot-toast';
 import { useConfig } from '../../contexts/ConfigContext';
 import { buscarCep, formatCep } from '../../utils/cepUtils';
+import { API_CONFIG } from '../../api/apiConfig';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 const SectionTitle = ({ title, icon: Icon }: { title: string, icon: any }) => (
@@ -256,9 +257,15 @@ const SettingsPage: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="col-span-2 flex items-center gap-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
                                     <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-300 dark:border-gray-600 relative group">
-                                        {config.logo_url ? (
+                                        {config.logo_base64 || config.logo_url ? (
                                             <img 
-                                                src={config.logo_url.startsWith('data:') ? config.logo_url : `http://localhost:5000${config.logo_url}`} 
+                                                src={
+                                                    config.logo_base64
+                                                        ? config.logo_base64
+                                                        : (config.logo_url?.startsWith('data:') === true
+                                                            ? (config.logo_url as string)
+                                                            : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}${config.logo_url || ''}`)
+                                                } 
                                                 alt="Logo" 
                                                 className="w-full h-full object-contain" 
                                             />

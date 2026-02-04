@@ -14,6 +14,7 @@ from config import config
 import os
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
 
 # Inicializa as extensões
 migrate = Migrate()
@@ -32,6 +33,7 @@ def create_app(config_name=None):
     if config_name is None:
         config_name = os.getenv("FLASK_ENV", "default")
 
+    load_dotenv()
     app = Flask(__name__)
 
     # Handler global para erros 500
