@@ -706,17 +706,26 @@ def estatisticas_rapidas():
     try:
         current_user_id = get_jwt_identity()
         funcionario = Funcionario.query.get(current_user_id)
+        if not funcionario:
+            try:
+                claims = get_jwt()
+                est_id_claim = claims.get("estabelecimento_id")
+            except Exception:
+                est_id_claim = None
+            if est_id_claim is None:
+                return jsonify({"error": "Usuário não encontrado"}), 404
         
         hoje = datetime.now().date()
         inicio_dia = datetime.combine(hoje, datetime.min.time())
         
         # Query otimizada
+        est_id = funcionario.estabelecimento_id if funcionario else int(est_id_claim)
         stats = db.session.query(
             func.count(Venda.id).label("total_vendas"),
             func.sum(Venda.total).label("faturamento"),
             func.avg(Venda.total).label("ticket_medio"),
         ).filter(
-            Venda.estabelecimento_id == funcionario.estabelecimento_id,
+            Venda.estabelecimento_id == est_id,
             Venda.data_venda >= inicio_dia,
             Venda.status == "finalizada"
         ).first()
@@ -727,7 +736,7 @@ def estatisticas_rapidas():
                 "total_vendas": stats.total_vendas or 0,
                 "faturamento": round(float(stats.faturamento or 0), 2),
                 "ticket_medio": round(float(stats.ticket_medio or 0), 2),
-                "funcionario": funcionario.nome,
+                "funcionario": (funcionario.nome if funcionario else "Usuário"),
                 "hora_atual": datetime.now().strftime("%H:%M"),
             }
         }), 200

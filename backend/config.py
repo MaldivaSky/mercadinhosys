@@ -13,7 +13,13 @@ class Config:
     # ==================== DATABASE CONFIGURATION ====================
     # Seleção robusta do banco: usa Postgres quando disponível; caso contrário, SQLite cross-platform
     
-    DATABASE_URL = os.environ.get("DATABASE_URL")
+    DATABASE_URL = (
+        os.environ.get("NEON_DATABASE_URL")
+        or os.environ.get("DATABASE_URL_TARGET")
+        or os.environ.get("DB_PRIMARY")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+    )
     SQLITE_DB = os.environ.get("SQLITE_DB")
     USING_POSTGRES = False
     
@@ -21,8 +27,11 @@ class Config:
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
-        USING_POSTGRES = True
-        print(f"🌐 [DB: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
+        USING_POSTGRES = DATABASE_URL.startswith("postgresql://")
+        if USING_POSTGRES:
+            print(f"🌐 [DB: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
+        else:
+            print(f"💾 [DB: SQLITE] {DATABASE_URL}")
     elif SQLITE_DB:
         SQLALCHEMY_DATABASE_URI = SQLITE_DB
         print(f"💾 [DB: SQLITE] {SQLITE_DB}")

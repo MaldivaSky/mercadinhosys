@@ -7,18 +7,24 @@ import sys
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 # Carregar .env
 load_dotenv()
 
-# Verificar DATABASE_URL (fallback para SQLite local se ausente)
-if not os.environ.get('DATABASE_URL'):
-    fallback_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mercadinhosys_dev.sqlite'))
-    db_url = f"sqlite:///{fallback_path.replace('\\', '/')}"
-    os.environ['DATABASE_URL'] = db_url
-    print(f"⚠️ DATABASE_URL não encontrada, usando SQLite local: {db_url}")
+# Definição de origem local SEMPRE SQLite para popular dados
+fallback_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mercadinhosys_seed.sqlite'))
+local_db_url = f"sqlite:///{fallback_path.replace('\\', '/')}"
+os.environ['DATABASE_URL'] = local_db_url
+print(f"💾 [LOCAL SEED] Usando SQLite: {local_db_url}")
+
+# Destino Neon: usar NEON_DATABASE_URL se existir; caso contrário, usar DATABASE_URL original do ambiente
+target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL_ORIG') or os.environ.get('NEON_DB_URL') or os.environ.get('DB_PRIMARY') or os.environ.get('DATABASE_URL_TARGET') or os.environ.get('DATABASE_URL')
+if target_url:
+    if target_url.startswith("postgres://"):
+        target_url = target_url.replace("postgres://", "postgresql://", 1)
 
 from app import create_app, db
 from app.models import (
@@ -31,6 +37,25 @@ print("=" * 60)
 print("🌱 SEED NEON RÁPIDO")
 print("=" * 60)
 print()
+
+# Validação inicial do DESTINO Neon (se fornecido)
+if target_url and target_url.startswith('postgresql://'):
+    try:
+        engine_test = create_engine(target_url)
+        with engine_test.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        parsed = urlparse(target_url)
+        print(f"✅ Conexão com Neon verificada (host: {parsed.hostname})")
+    except Exception as e:
+        parsed = urlparse(target_url)
+        host_info = parsed.hostname or "desconhecido"
+        print(f"❌ Falha ao conectar no Neon ({host_info}).")
+        print("   Verifique a URL de conexão do Neon (Dashboard > Connection string).")
+        print("   Exemplo: postgresql://USUARIO:SENHA@SEU_HOST.neon.tech/SEU_DB?sslmode=require&channel_binding=require")
+        print("   Dica: não use placeholders como 'host.neon.tech'; use o host real do seu projeto.")
+        print(f"   Erro: {str(e)[:200]}")
+        # Não aborta o seed local; apenas marcar que a replicação será pulada
+        target_url = ""
 
 app = create_app()
 
@@ -487,13 +512,12 @@ with app.app_context():
         db.session.commit()
         print(f"✅ {vendas_criadas} vendas criadas!")
         
-        # 9. REPLICAÇÃO OPCIONAL PARA NEON (somente se DATABASE_URL apontar para Postgres)
-        db_url_env = os.environ.get('DATABASE_URL', '')
-        if db_url_env and db_url_env.startswith(('postgresql://', 'postgres://')):
+        # 9. REPLICAÇÃO OPCIONAL PARA NEON (usa target_url)
+        if target_url and target_url.startswith('postgresql://'):
             print()
             print("🔄 Replicando dados para Neon (PostgreSQL)...")
             try:
-                neon_engine = create_engine(db_url_env.replace("postgres://", "postgresql://", 1))
+                neon_engine = create_engine(target_url)
                 # Testar conexão
                 with neon_engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
@@ -503,9 +527,34 @@ with app.app_context():
                 # Garantir que o schema existe
                 db.metadata.create_all(neon_engine)
                 
-                # Limpar dados em ordem segura
-                from app.models import Venda, VendaItem, Pagamento, MovimentacaoEstoque
-                for model in [VendaItem, Pagamento, MovimentacaoEstoque, Venda, Produto, CategoriaProduto, Fornecedor, Cliente, Funcionario, Estabelecimento, Despesa]:
+                # Ajustes de schema mínimos para compatibilidade com o modelo atual
+                try:
+                    exists = neon_session.execute(text("""
+                        SELECT 1 
+                        FROM information_schema.columns 
+                        WHERE table_name='produtos' AND column_name='fabricante'
+                    """)).fetchone()
+                    if not exists:
+                        neon_session.execute(text("""
+                            ALTER TABLE produtos
+                            ADD COLUMN fabricante VARCHAR(100)
+                        """))
+                        neon_session.commit()
+                        print("  ✅ Schema ajustado: adicionada coluna produtos.fabricante")
+                except Exception as e:
+                    print(f"  ⚠️  Ajuste de schema (produtos.fabricante) não aplicado: {str(e)[:120]}")
+                
+                # Limpar dados em ordem segura (respeitando FKs)
+                from app.models import (
+                    Estabelecimento, Configuracao, Funcionario, LoginHistory, Cliente, Fornecedor,
+                    CategoriaProduto, Produto, Caixa, Venda, VendaItem, Pagamento,
+                    MovimentacaoEstoque, MovimentacaoCaixa, Despesa, DashboardMetrica
+                )
+                for model in [
+                    VendaItem, Pagamento, MovimentacaoEstoque, MovimentacaoCaixa, Venda, Caixa,
+                    Produto, CategoriaProduto, Fornecedor, Cliente, LoginHistory, Funcionario,
+                    Configuracao, Despesa, DashboardMetrica, Estabelecimento
+                ]:
                     neon_session.query(model).delete()
                 neon_session.commit()
                 
@@ -524,23 +573,28 @@ with app.app_context():
                 
                 # Ordem de cópia respeitando FKs
                 _bulk_copy(Estabelecimento)
+                _bulk_copy(Configuracao)
                 _bulk_copy(Funcionario)
+                _bulk_copy(LoginHistory)
                 _bulk_copy(Cliente)
                 _bulk_copy(Fornecedor)
                 _bulk_copy(CategoriaProduto)
                 _bulk_copy(Produto)
+                _bulk_copy(Caixa)
                 _bulk_copy(Venda)
                 _bulk_copy(VendaItem)
                 _bulk_copy(Pagamento)
                 _bulk_copy(MovimentacaoEstoque)
+                _bulk_copy(MovimentacaoCaixa)
                 _bulk_copy(Despesa)
+                _bulk_copy(DashboardMetrica)
                 
                 print("✅ Replicação para Neon concluída!")
             except Exception as e:
                 print(f"⚠️  Replicação para Neon falhou: {str(e)[:120]}")
         else:
             print()
-            print("ℹ️ DATABASE_URL não é Postgres. Pulando replicação para Neon.")
+            print("ℹ️ Neon não configurado ou indisponível. Pulando replicação.")
         
         # RESUMO
         print()
