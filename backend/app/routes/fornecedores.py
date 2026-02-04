@@ -229,12 +229,75 @@ def listar_fornecedores():
 
     except Exception as e:
         current_app.logger.error(f"Erro ao listar fornecedores: {str(e)}")
-        return (
-            jsonify(
-                {"success": False, "message": "Erro interno ao listar fornecedores"}
-            ),
-            500,
-        )
+        try:
+            jwt_data = get_jwt()
+            estabelecimento_id = jwt_data.get("estabelecimento_id")
+            pagina = request.args.get("pagina", 1, type=int)
+            por_pagina = request.args.get("por_pagina", 50, type=int)
+            offset = (pagina - 1) * por_pagina
+            from sqlalchemy import text
+            sql = text(
+                "SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, cidade, estado, ativo, classificacao "
+                "FROM fornecedores "
+                "WHERE estabelecimento_id = :estabelecimento_id "
+                "ORDER BY nome_fantasia ASC "
+                "LIMIT :limit OFFSET :offset"
+            )
+            rows = db.session.execute(sql, {"estabelecimento_id": estabelecimento_id, "limit": por_pagina, "offset": offset}).fetchall()
+            fornecedores = []
+            for r in rows:
+                try:
+                    d = {
+                        "id": r["id"],
+                        "nome_fantasia": r["nome_fantasia"],
+                        "razao_social": r["razao_social"],
+                        "cnpj": r["cnpj"],
+                        "telefone": r["telefone"],
+                        "email": r["email"],
+                        "cidade": r.get("cidade"),
+                        "estado": r.get("estado"),
+                        "ativo": bool(r.get("ativo", True)),
+                        "classificacao": r.get("classificacao") or "REGULAR",
+                        "produtos_ativos": None,
+                    }
+                except Exception:
+                    d = {
+                        "id": r[0],
+                        "nome_fantasia": r[1],
+                        "razao_social": r[2],
+                        "cnpj": r[3],
+                        "telefone": r[4],
+                        "email": r[5],
+                        "cidade": r[6] if len(r) > 6 else None,
+                        "estado": r[7] if len(r) > 7 else None,
+                        "ativo": bool(r[8]) if len(r) > 8 else True,
+                        "classificacao": r[9] if len(r) > 9 else "REGULAR",
+                        "produtos_ativos": None,
+                    }
+                fornecedores.append(d)
+            total_sql = text(
+                "SELECT COUNT(*) FROM fornecedores WHERE estabelecimento_id = :estabelecimento_id"
+            )
+            total = db.session.execute(total_sql, {"estabelecimento_id": estabelecimento_id}).scalar() or 0
+            total_paginas = (total + por_pagina - 1) // por_pagina
+            return jsonify(
+                {
+                    "success": True,
+                    "fornecedores": fornecedores,
+                    "total": total,
+                    "pagina": pagina,
+                    "por_pagina": por_pagina,
+                    "total_paginas": total_paginas,
+                }
+            )
+        except Exception as e2:
+            current_app.logger.error(f"Fallback fornecedores falhou: {str(e2)}")
+            return (
+                jsonify(
+                    {"success": False, "message": "Erro interno ao listar fornecedores"}
+                ),
+                500,
+            )
 
 
 @fornecedores_bp.route("/<int:id>", methods=["GET"])

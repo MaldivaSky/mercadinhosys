@@ -7,17 +7,18 @@ import sys
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 # Carregar .env
 load_dotenv()
 
-# Verificar DATABASE_URL
+# Verificar DATABASE_URL (fallback para SQLite local se ausente)
 if not os.environ.get('DATABASE_URL'):
-    print("❌ ERRO: DATABASE_URL não configurada no .env")
-    sys.exit(1)
-
-if 'SQLITE_DB' in os.environ:
-    del os.environ['SQLITE_DB']
+    fallback_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mercadinhosys_dev.sqlite'))
+    db_url = f"sqlite:///{fallback_path.replace('\\', '/')}"
+    os.environ['DATABASE_URL'] = db_url
+    print(f"⚠️ DATABASE_URL não encontrada, usando SQLite local: {db_url}")
 
 from app import create_app, db
 from app.models import (
@@ -35,6 +36,10 @@ app = create_app()
 
 with app.app_context():
     try:
+        print("🔧 Garantindo schema do banco...")
+        db.create_all()
+        print("✅ Tabelas criadas (se necessário)")
+        
         print("⚠️  Este seed cria apenas dados essenciais (rápido)")
         print()
         resposta = input("Deseja continuar? (s/N): ").lower()
@@ -148,9 +153,12 @@ with app.app_context():
         print("🛒 Criando clientes...")
         
         clientes_data = [
-            {"nome": "Maria Santos", "cpf": "333.444.555-66", "email": "maria@email.com", "telefone": "(84) 93456-7890", "celular": "(84) 93456-7890"},
-            {"nome": "Pedro Oliveira", "cpf": "444.555.666-77", "email": "pedro@email.com", "telefone": "(84) 94567-8901", "celular": "(84) 94567-8901"},
-            {"nome": "Ana Costa", "cpf": "555.666.777-88", "email": "ana@email.com", "telefone": "(84) 95678-9012", "celular": "(84) 95678-9012"},
+            {"nome": "Maria Santos", "cpf": "333.444.555-66", "email": "maria@email.com", "telefone": "(84) 93456-7890", "celular": "(84) 93456-7890",
+             "cep": "59000-001", "logradouro": "Rua das Flores", "numero": "10", "bairro": "Centro", "cidade": "Natal", "estado": "RN"},
+            {"nome": "Pedro Oliveira", "cpf": "444.555.666-77", "email": "pedro@email.com", "telefone": "(84) 94567-8901", "celular": "(84) 94567-8901",
+             "cep": "59000-002", "logradouro": "Av. Brasil", "numero": "200", "bairro": "Tirol", "cidade": "Natal", "estado": "RN"},
+            {"nome": "Ana Costa", "cpf": "555.666.777-88", "email": "ana@email.com", "telefone": "(84) 95678-9012", "celular": "(84) 95678-9012",
+             "cep": "59000-003", "logradouro": "Rua Projetada", "numero": "300", "bairro": "Lagoa Nova", "cidade": "Natal", "estado": "RN"},
         ]
         
         for c_data in clientes_data:
@@ -161,6 +169,12 @@ with app.app_context():
                 email=c_data["email"],
                 telefone=c_data["telefone"],
                 celular=c_data["celular"],
+                cep=c_data["cep"],
+                logradouro=c_data["logradouro"],
+                numero=c_data["numero"],
+                bairro=c_data["bairro"],
+                cidade=c_data["cidade"],
+                estado=c_data["estado"],
                 ativo=True
             )
             db.session.add(cliente)
@@ -173,8 +187,10 @@ with app.app_context():
         print("🚚 Criando fornecedores...")
         
         fornecedores_data = [
-            {"nome": "Distribuidora ABC", "cnpj": "11.222.333/0001-44", "telefone": "(84) 3111-2222"},
-            {"nome": "Atacado XYZ", "cnpj": "22.333.444/0001-55", "telefone": "(84) 3222-3333"},
+            {"nome": "Distribuidora ABC", "cnpj": "11.222.333/0001-44", "telefone": "(84) 3111-2222",
+             "cep": "59010-000", "logradouro": "Rua dos Comerciantes", "numero": "50", "bairro": "Alecrim", "cidade": "Natal", "estado": "RN"},
+            {"nome": "Atacado XYZ", "cnpj": "22.333.444/0001-55", "telefone": "(84) 3222-3333",
+             "cep": "59020-000", "logradouro": "Av. Sete", "numero": "120", "bairro": "Cidade Alta", "cidade": "Natal", "estado": "RN"},
         ]
         
         fornecedores = []
@@ -186,6 +202,12 @@ with app.app_context():
                 cnpj=f_data["cnpj"],
                 telefone=f_data["telefone"],
                 email=f"{f_data['nome'].lower().replace(' ', '')}@email.com",
+                cep=f_data["cep"],
+                logradouro=f_data["logradouro"],
+                numero=f_data["numero"],
+                bairro=f_data["bairro"],
+                cidade=f_data["cidade"],
+                estado=f_data["estado"],
                 ativo=True
             )
             db.session.add(fornecedor)
@@ -252,7 +274,39 @@ with app.app_context():
         db.session.commit()
         print("✅ Produtos salvos!")
         
-        # 7. VENDAS (em lotes pequenos para evitar timeout)
+        # 7. DESPESAS
+        print()
+        print("💸 Criando despesas...")
+        hoje = date.today()
+        primeiro_dia_mes = hoje.replace(day=1)
+        despesas_data = [
+            {"descricao": "Salários Funcionários", "categoria": "salarios", "tipo": "fixa", "valor": Decimal("6000.00"), "recorrente": True, "forma_pagamento": "transferencia"},
+            {"descricao": "Aluguel do Estabelecimento", "categoria": "aluguel", "tipo": "fixa", "valor": Decimal("3500.00"), "recorrente": True, "forma_pagamento": "transferencia"},
+            {"descricao": "Conta de Energia", "categoria": "energia", "tipo": "variavel", "valor": Decimal("1200.00"), "recorrente": True, "forma_pagamento": "boleto"},
+            {"descricao": "Conta de Água", "categoria": "agua", "tipo": "variavel", "valor": Decimal("450.00"), "recorrente": True, "forma_pagamento": "boleto"},
+            {"descricao": "Marketing Digital", "categoria": "marketing", "tipo": "variavel", "valor": Decimal("800.00"), "recorrente": True, "forma_pagamento": "cartao_credito"},
+            {"descricao": "Manutenção de Equipamentos", "categoria": "manutencao", "tipo": "variavel", "valor": Decimal("650.00"), "recorrente": False, "forma_pagamento": "pix"},
+            {"descricao": "Serviços de Limpeza", "categoria": "limpeza", "tipo": "variavel", "valor": Decimal("500.00"), "recorrente": True, "forma_pagamento": "dinheiro"},
+        ]
+        for idx, d in enumerate(despesas_data):
+            data_despesa = primeiro_dia_mes + timedelta(days=min(idx * 3, 27))
+            despesa = Despesa(
+                estabelecimento_id=est.id,
+                descricao=d["descricao"],
+                categoria=d["categoria"],
+                tipo=d["tipo"],
+                valor=d["valor"],
+                data_despesa=data_despesa,
+                forma_pagamento=d["forma_pagamento"],
+                recorrente=d["recorrente"],
+                observacoes="Seed automático"
+            )
+            db.session.add(despesa)
+            print(f"  ✅ {despesa.descricao} - R$ {despesa.valor}")
+        db.session.commit()
+        print("✅ Despesas salvas!")
+        
+        # 8. VENDAS (em lotes pequenos para evitar timeout)
         print()
         print("🧾 Criando vendas...")
         
@@ -264,8 +318,26 @@ with app.app_context():
         clientes_salvos = Cliente.query.filter_by(estabelecimento_id=est.id).all()
         funcionarios_salvos = Funcionario.query.filter_by(estabelecimento_id=est.id).all()
         
+        def gerar_codigo_venda_unico(estabelecimento_id: int, dt: datetime) -> str:
+            base = f"V{dt.strftime('%Y%m%d')}"
+            contador = (
+                db.session.query(Venda.id)
+                .filter(Venda.estabelecimento_id == estabelecimento_id)
+                .filter(Venda.codigo.like(f"{base}%"))
+                .count()
+            )
+            codigo = f"{base}{contador+1:03d}"
+            while (
+                db.session.query(Venda.id)
+                .filter_by(estabelecimento_id=estabelecimento_id, codigo=codigo)
+                .first()
+                is not None
+            ):
+                codigo = f"{base}-{random.randint(100000, 999999)}"
+            return codigo
+        
         vendas_criadas = 0
-        max_vendas = 20  # Apenas 20 vendas para ser rápido
+        max_vendas = 60  # Mais vendas para enriquecer os dados
         
         for i in range(max_vendas):
             try:
@@ -274,91 +346,120 @@ with app.app_context():
                 data_venda = datetime.now() - timedelta(days=dias_atras)
                 
                 # Criar venda
+                forma = random.choices(
+                    ["dinheiro", "pix", "cartao_debito", "cartao_credito"],
+                    weights=[35, 25, 20, 20],
+                    k=1
+                )[0]
                 venda = Venda(
                     estabelecimento_id=est.id,
                     cliente_id=random.choice(clientes_salvos).id if random.random() > 0.3 else None,
                     funcionario_id=random.choice(funcionarios_salvos).id,
-                    codigo=f"V{data_venda.strftime('%Y%m%d')}{i+1:03d}",
+                    codigo=gerar_codigo_venda_unico(est.id, data_venda),
                     subtotal=Decimal("0.00"),
                     desconto=Decimal("0.00"),
                     total=Decimal("0.00"),
-                    forma_pagamento=random.choice(["dinheiro", "pix", "cartao_debito", "cartao_credito"]),
+                    forma_pagamento=forma,
                     valor_recebido=Decimal("0.00"),
                     troco=Decimal("0.00"),
-                    status="finalizada",
+                    status="finalizada" if random.random() > 0.05 else "cancelada",
                     quantidade_itens=0,
                     data_venda=data_venda
                 )
                 db.session.add(venda)
                 db.session.flush()
                 
-                # Criar itens (2-4 produtos por venda)
-                num_itens = random.randint(2, 4)
-                produtos_venda = random.sample(produtos_salvos, min(num_itens, len(produtos_salvos)))
-                
-                subtotal = Decimal("0.00")
-                
-                for produto in produtos_venda:
-                    quantidade = random.randint(1, 3)
-                    preco_unitario = produto.preco_venda
-                    total_item = preco_unitario * Decimal(str(quantidade))
+                if venda.status == "finalizada":
+                    # Criar itens (2-5 produtos por venda)
+                    num_itens = random.randint(2, 5)
+                    produtos_venda = random.sample(produtos_salvos, min(num_itens, len(produtos_salvos)))
                     
-                    item = VendaItem(
+                    subtotal = Decimal("0.00")
+                    
+                    for produto in produtos_venda:
+                        quantidade = random.randint(1, 4)
+                        preco_unitario = produto.preco_venda
+                        total_item = preco_unitario * Decimal(str(quantidade))
+                        
+                        # Margem percentual por item
+                        if float(preco_unitario) > 0:
+                            margem_pct = ((float(preco_unitario) - float(produto.preco_custo)) / float(preco_unitario)) * 100
+                        else:
+                            margem_pct = 0.0
+                        
+                        item = VendaItem(
+                            venda_id=venda.id,
+                            produto_id=produto.id,
+                            produto_nome=produto.nome,
+                            produto_codigo=produto.codigo_barras,
+                            produto_unidade=produto.unidade_medida,
+                            quantidade=quantidade,
+                            preco_unitario=preco_unitario,
+                            desconto=Decimal("0.00"),
+                            total_item=total_item,
+                            custo_unitario=produto.preco_custo,
+                            margem_item=Decimal(str(round(margem_pct, 2)))
+                        )
+                        db.session.add(item)
+                        
+                        subtotal += total_item
+                        
+                        # Atualizar estoque
+                        quantidade_anterior = produto.quantidade
+                        produto.quantidade -= quantidade
+                        produto.quantidade_vendida += quantidade
+                        produto.total_vendido += float(total_item)
+                        
+                        # Movimentação de estoque
+                        mov = MovimentacaoEstoque(
+                            estabelecimento_id=est.id,
+                            produto_id=produto.id,
+                            tipo="saida",
+                            quantidade=quantidade,
+                            quantidade_anterior=quantidade_anterior,
+                            quantidade_atual=produto.quantidade,
+                            motivo="venda",
+                            funcionario_id=venda.funcionario_id,
+                            venda_id=venda.id,
+                            created_at=data_venda,
+                            observacoes=f"Venda {venda.codigo}"
+                        )
+                        db.session.add(mov)
+                    
+                    # Desconto aleatório (0%, 5% ou 10%)
+                    desconto_pct = random.choice([0, 0, 5, 10])
+                    desconto_valor = (subtotal * Decimal(str(desconto_pct))) / Decimal("100")
+                    
+                    # Atualizar totais da venda
+                    venda.subtotal = subtotal
+                    venda.desconto = desconto_valor
+                    venda.total = max(Decimal("0.00"), subtotal - desconto_valor)
+                    venda.quantidade_itens = num_itens
+                    
+                    # Valor recebido e troco
+                    if venda.forma_pagamento == "dinheiro":
+                        # pequeno troco
+                        venda.valor_recebido = venda.total + Decimal(str(random.choice([0, 0, 2, 5])))
+                        venda.troco = max(Decimal("0.00"), venda.valor_recebido - venda.total)
+                    else:
+                        venda.valor_recebido = venda.total
+                        venda.troco = Decimal("0.00")
+                    
+                    # Criar pagamento
+                    pagamento = Pagamento(
                         venda_id=venda.id,
-                        produto_id=produto.id,
-                        produto_nome=produto.nome,
-                        produto_codigo=produto.codigo_barras,
-                        produto_unidade=produto.unidade_medida,
-                        quantidade=quantidade,
-                        preco_unitario=preco_unitario,
-                        desconto=Decimal("0.00"),
-                        total_item=total_item,
-                        custo_unitario=produto.preco_custo,
-                        margem_item=Decimal("0.00")
-                    )
-                    db.session.add(item)
-                    
-                    subtotal += total_item
-                    
-                    # Atualizar estoque
-                    quantidade_anterior = produto.quantidade
-                    produto.quantidade -= quantidade
-                    produto.quantidade_vendida += quantidade
-                    produto.total_vendido += float(total_item)
-                    
-                    # Movimentação de estoque
-                    mov = MovimentacaoEstoque(
                         estabelecimento_id=est.id,
-                        produto_id=produto.id,
-                        tipo="saida",
-                        quantidade=quantidade,
-                        quantidade_anterior=quantidade_anterior,
-                        quantidade_atual=produto.quantidade,
-                        motivo="venda",
-                        funcionario_id=venda.funcionario_id,
-                        venda_id=venda.id,
-                        created_at=data_venda,
-                        observacoes=f"Venda {venda.codigo}"
+                        forma_pagamento=venda.forma_pagamento,
+                        valor=venda.total,
+                        troco=venda.troco,
+                        status="aprovado",
+                        data_pagamento=data_venda
                     )
-                    db.session.add(mov)
-                
-                # Atualizar totais da venda
-                venda.subtotal = subtotal
-                venda.total = subtotal
-                venda.valor_recebido = subtotal
-                venda.quantidade_itens = num_itens
-                
-                # Criar pagamento
-                pagamento = Pagamento(
-                    venda_id=venda.id,
-                    estabelecimento_id=est.id,
-                    forma_pagamento=venda.forma_pagamento,
-                    valor=subtotal,
-                    troco=Decimal("0.00"),
-                    status="aprovado",
-                    data_pagamento=data_venda
-                )
-                db.session.add(pagamento)
+                    db.session.add(pagamento)
+                else:
+                    # Venda cancelada
+                    venda.data_cancelamento = data_venda
+                    venda.motivo_cancelamento = random.choice(["cliente desistiu", "erro de cobrança", "produto indisponível"])
                 
                 # Commit a cada 5 vendas para evitar timeout
                 if (i + 1) % 5 == 0:
@@ -375,6 +476,57 @@ with app.app_context():
         # Commit final
         db.session.commit()
         print(f"✅ {vendas_criadas} vendas criadas!")
+        
+        # 9. REPLICAÇÃO OPCIONAL PARA NEON (se DATABASE_URL estiver configurada)
+        if os.environ.get('DATABASE_URL'):
+            print()
+            print("🔄 Replicando dados para Neon (PostgreSQL)...")
+            try:
+                neon_engine = create_engine(os.environ['DATABASE_URL'])
+                # Testar conexão
+                with neon_engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                NeonSession = sessionmaker(bind=neon_engine)
+                neon_session = NeonSession()
+                
+                # Garantir que o schema existe
+                db.metadata.create_all(neon_engine)
+                
+                # Limpar dados em ordem segura
+                from app.models import Venda, VendaItem, Pagamento, MovimentacaoEstoque
+                for model in [VendaItem, Pagamento, MovimentacaoEstoque, Venda, Produto, CategoriaProduto, Fornecedor, Cliente, Funcionario, Estabelecimento, Despesa]:
+                    neon_session.query(model).delete()
+                neon_session.commit()
+                
+                def _clone(instance):
+                    data = {}
+                    for col in instance.__table__.columns:
+                        data[col.name] = getattr(instance, col.name)
+                    return instance.__class__(**data)
+                
+                def _bulk_copy(model):
+                    rows = db.session.query(model).all()
+                    for r in rows:
+                        neon_session.add(_clone(r))
+                    neon_session.commit()
+                    print(f"  ✅ {model.__tablename__}: {len(rows)} registros replicados")
+                
+                # Ordem de cópia respeitando FKs
+                _bulk_copy(Estabelecimento)
+                _bulk_copy(Funcionario)
+                _bulk_copy(Cliente)
+                _bulk_copy(Fornecedor)
+                _bulk_copy(CategoriaProduto)
+                _bulk_copy(Produto)
+                _bulk_copy(Venda)
+                _bulk_copy(VendaItem)
+                _bulk_copy(Pagamento)
+                _bulk_copy(MovimentacaoEstoque)
+                _bulk_copy(Despesa)
+                
+                print("✅ Replicação para Neon concluída!")
+            except Exception as e:
+                print(f"⚠️  Replicação para Neon falhou: {str(e)[:120]}")
         
         # RESUMO
         print()

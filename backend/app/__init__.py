@@ -178,6 +178,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar relatorios: {e}")
 
+    # Sync (replicação local -> Neon)
+    try:
+        from app.routes.sync import sync_bp
+        app.register_blueprint(sync_bp)
+        logger.info("✅ Blueprint sync registrado (/api/sync/replicar)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar sync: {e}")
+
     # Dashboard Científico - verifica se existe a pasta
     dashboard_cientifico_disponivel = False
     try:

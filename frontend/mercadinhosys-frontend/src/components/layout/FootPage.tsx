@@ -36,11 +36,7 @@ const FootPage: React.FC = () => {
                             <Mail className="w-4 h-4" />
                             <span>Email</span>
                         </a>
-                        <span className="hidden sm:inline text-gray-400">•</span>
-                        <a href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline">Configurações</a>
-                        <span className="hidden sm:inline text-gray-400">•</span>
-                        <a href="/reports" className="text-blue-600 dark:text-blue-400 hover:underline">Relatórios</a>
-                        <span className="hidden sm:inline text-gray-400">•</span>
+                       
                         <button
                             type="button"
                             onClick={() => setShortcutsOpen(true)}

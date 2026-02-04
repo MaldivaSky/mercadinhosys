@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
+from sqlalchemy import text
 
 produtos_bp = Blueprint("produtos", __name__)
 
@@ -1195,12 +1196,90 @@ def listar_produtos_estoque():
 
     except Exception as e:
         current_app.logger.error(f"❌ Erro ao listar produtos: {str(e)}")
-        import traceback
-        error_trace = traceback.format_exc()
-        current_app.logger.error(f"Traceback completo:\n{error_trace}")
-        print(f"❌ ERRO NA ROTA /estoque: {str(e)}")
-        print(error_trace)
-        return jsonify({"error": f"Erro ao listar produtos: {str(e)}"}), 500
+        try:
+            claims = get_jwt()
+            estabelecimento_id = claims.get("estabelecimento_id")
+            pagina = request.args.get("pagina", 1, type=int)
+            por_pagina = request.args.get("por_pagina", 50, type=int)
+            ordenar_por = request.args.get("ordenar_por", "nome", type=str)
+            direcao = request.args.get("direcao", "asc", type=str)
+            order_clause = "nome" if ordenar_por not in {"preco_venda", "quantidade"} else ordenar_por
+            order_dir = "ASC" if direcao == "asc" else "DESC"
+            sql = text(
+                f"SELECT id, nome, codigo_barras, codigo_interno, descricao, marca, unidade_medida, "
+                f"preco_custo, preco_venda, quantidade, quantidade_minima, ativo "
+                f"FROM produtos "
+                f"WHERE estabelecimento_id = :estabelecimento_id "
+                f"ORDER BY {order_clause} {order_dir} "
+                f"LIMIT :limit OFFSET :offset"
+            )
+            offset = (pagina - 1) * por_pagina
+            rows = db.session.execute(sql, {"estabelecimento_id": estabelecimento_id, "limit": por_pagina, "offset": offset}).fetchall()
+            produtos_lista = []
+            for r in rows:
+                # r can be RowMapping or tuple; support both
+                rid = r["id"] if isinstance(r, dict) or hasattr(r, "keys") else r[0]
+                nome = r["nome"] if isinstance(r, dict) or hasattr(r, "keys") else r[1]
+                codigo_barras = r.get("codigo_barras", None) if hasattr(r, "get") else r[2]
+                codigo_interno = r.get("codigo_interno", None) if hasattr(r, "get") else r[3]
+                descricao = r.get("descricao", None) if hasattr(r, "get") else r[4]
+                marca = r.get("marca", None) if hasattr(r, "get") else r[5]
+                unidade_medida = r.get("unidade_medida", "UN") if hasattr(r, "get") else r[6]
+                preco_custo = r.get("preco_custo", 0) if hasattr(r, "get") else r[7]
+                preco_venda = r.get("preco_venda", 0) if hasattr(r, "get") else r[8]
+                quantidade = r.get("quantidade", 0) if hasattr(r, "get") else r[9]
+                quantidade_minima = r.get("quantidade_minima", 0) if hasattr(r, "get") else r[10]
+                ativo = r.get("ativo", True) if hasattr(r, "get") else r[11]
+                estoque_status_produto = "esgotado" if quantidade == 0 else ("baixo" if quantidade <= quantidade_minima else "normal")
+                produtos_lista.append({
+                    "id": rid,
+                    "nome": nome,
+                    "codigo_barras": codigo_barras,
+                    "codigo_interno": codigo_interno,
+                    "descricao": descricao,
+                    "categoria": None,
+                    "marca": marca or "",
+                    "fabricante": "",
+                    "tipo": "",
+                    "unidade_medida": unidade_medida or "UN",
+                    "preco_custo": float(preco_custo or 0),
+                    "preco_venda": float(preco_venda or 0),
+                    "margem_lucro": 0.0,
+                    "quantidade": quantidade,
+                    "quantidade_estoque": quantidade,
+                    "quantidade_minima": quantidade_minima,
+                    "estoque_minimo": quantidade_minima,
+                    "estoque_status": estoque_status_produto,
+                    "fornecedor_id": None,
+                    "fornecedor_nome": None,
+                    "ativo": bool(ativo),
+                    "lote": None,
+                    "data_fabricacao": None,
+                    "data_validade": None,
+                    "created_at": None,
+                    "updated_at": None,
+                })
+            total_sql = text(
+                "SELECT COUNT(*) FROM produtos WHERE estabelecimento_id = :estabelecimento_id"
+            )
+            total = db.session.execute(total_sql, {"estabelecimento_id": estabelecimento_id}).scalar() or 0
+            total_paginas = (total + por_pagina - 1) // por_pagina
+            return jsonify({
+                "produtos": produtos_lista,
+                "paginacao": {
+                    "pagina_atual": pagina,
+                    "total_paginas": total_paginas,
+                    "total_itens": total,
+                    "itens_por_pagina": por_pagina,
+                    "tem_proxima": pagina < total_paginas,
+                    "tem_anterior": pagina > 1,
+                    "primeira_pagina": 1,
+                    "ultima_pagina": total_paginas,
+                },
+            })
+        except Exception as e2:
+            current_app.logger.error(f"Fallback estoque falhou: {str(e2)}")
+            return jsonify({"error": f"Erro ao listar produtos: {str(e)}"}), 500
 
 
 @produtos_bp.route("/categorias", methods=["GET"])
@@ -1250,10 +1329,36 @@ def listar_categorias():
 
     except Exception as e:
         current_app.logger.error(f"Erro ao listar categorias: {str(e)}")
-        return (
-            jsonify({"success": False, "message": "Erro interno ao listar categorias"}),
-            500,
-        )
+        try:
+            claims = get_jwt()
+            estabelecimento_id = claims.get("estabelecimento_id")
+            sql = text(
+                "SELECT DISTINCT categoria AS nome "
+                "FROM produtos "
+                "WHERE estabelecimento_id = :estabelecimento_id AND (ativo = TRUE OR ativo IS NULL)"
+            )
+            result = db.session.execute(sql, {"estabelecimento_id": estabelecimento_id}).fetchall()
+            categorias_nomes = []
+            for row in result:
+                try:
+                    categorias_nomes.append(row["nome"])
+                except Exception:
+                    categorias_nomes.append(row[0])
+            categorias_nomes = [n for n in categorias_nomes if n]
+            return jsonify(
+                {
+                    "success": True,
+                    "categorias": categorias_nomes,
+                    "categorias_detalhadas": [{"id": None, "nome": n, "descricao": None, "codigo": None, "total_produtos": None} for n in categorias_nomes],
+                    "total_categorias": len(categorias_nomes),
+                }
+            )
+        except Exception as e2:
+            current_app.logger.error(f"Fallback categorias falhou: {str(e2)}")
+            return (
+                jsonify({"success": False, "message": "Erro interno ao listar categorias"}),
+                500,
+            )
 
 
 @produtos_bp.route("/alertas", methods=["GET"])
