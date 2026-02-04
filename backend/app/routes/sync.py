@@ -108,12 +108,33 @@ def replicar_para_neon():
 @sync_bp.route("/api/sync/health", methods=["GET"])
 def sync_health():
     try:
-        db_url = os.environ.get("DATABASE_URL")
-        if not db_url:
-            return jsonify({"success": True, "neon": "desabilitado"})
-        engine = create_engine(db_url)
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
-        return jsonify({"success": True, "neon": "online"}), 200
+        db_url = os.environ.get("DATABASE_URL") or ""
+        local_counts = {}
+        for model in [Estabelecimento, Funcionario, Cliente, Fornecedor, CategoriaProduto, Produto, Venda, VendaItem, Pagamento, MovimentacaoEstoque, Despesa]:
+            try:
+                local_counts[model.__tablename__] = db.session.query(model).count()
+            except Exception:
+                local_counts[model.__tablename__] = None
+        neon_status = "desabilitado"
+        remote_counts = None
+        if db_url.startswith(("postgresql://", "postgres://")):
+            try:
+                engine = create_engine(db_url.replace("postgres://", "postgresql://", 1))
+                with engine.connect() as conn:
+                    conn.execute("SELECT 1")
+                neon_status = "online"
+                remote_counts = {}
+                with engine.connect() as conn:
+                    for model in [Estabelecimento, Funcionario, Cliente, Fornecedor, CategoriaProduto, Produto, Venda, VendaItem, Pagamento, MovimentacaoEstoque, Despesa]:
+                        try:
+                            table = model.__tablename__
+                            result = conn.execute(f'SELECT COUNT(*) AS c FROM "{table}"')
+                            count = result.scalar()
+                            remote_counts[table] = int(count) if count is not None else 0
+                        except Exception:
+                            remote_counts[model.__tablename__] = None
+            except Exception as e:
+                neon_status = f"offline: {str(e)[:80]}"
+        return jsonify({"success": True, "neon": neon_status, "local_counts": local_counts, "remote_counts": remote_counts}), 200
     except Exception as e:
-        return jsonify({"success": True, "neon": f"offline: {str(e)[:80]}"}), 200
+        return jsonify({"success": False, "error": str(e)[:120]}), 500

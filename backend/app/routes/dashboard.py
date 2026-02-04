@@ -19,9 +19,23 @@ def get_establishment_id():
     if isinstance(user_id, str):
         user_id = int(user_id)
     funcionario = Funcionario.query.get(user_id)
-    if not funcionario:
-        raise ValueError("Usuário não encontrado")
-    return funcionario.estabelecimento_id
+    if funcionario:
+        return funcionario.estabelecimento_id
+    claims = getattr(request, "jwt", None)
+    try:
+        from flask_jwt_extended import get_jwt
+        claims = get_jwt()
+    except Exception:
+        pass
+    est_id = None
+    if isinstance(claims, dict):
+        est_id = claims.get("estabelecimento_id")
+    if est_id is not None:
+        try:
+            return int(est_id)
+        except Exception:
+            return est_id
+    raise ValueError("Usuário não encontrado")
 
 
 @dashboard_bp.route("/cientifico", methods=["GET"])

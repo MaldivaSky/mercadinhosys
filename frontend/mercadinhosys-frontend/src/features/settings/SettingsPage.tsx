@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { 
     Settings, Building, ShoppingCart, Package, Shield, Save, 
-    Upload, Bell, Printer, DollarSign, Keyboard, X
+    Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
 import { useConfig } from '../../contexts/ConfigContext';
 import { buscarCep, formatCep } from '../../utils/cepUtils';
 import { API_CONFIG } from '../../api/apiConfig';
+import { apiClient } from '../../api/apiClient';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 const SectionTitle = ({ title, icon: Icon }: { title: string, icon: any }) => (
@@ -521,6 +522,9 @@ const SettingsPage: React.FC = () => {
                                     onChange={(val: boolean) => setConfig({...config, alertas_whatsapp: val})}
                                 />
                             </div>
+
+                            <SectionTitle title="Banco & Replicação" icon={DatabaseIcon} />
+                            <SyncPanel />
                         </div>
                     )}
 
@@ -593,3 +597,109 @@ const SettingsPage: React.FC = () => {
 };
 
 export default SettingsPage;
+ 
+const SyncPanel: React.FC = () => {
+    const [loading, setLoading] = useState(false);
+    const [replicating, setReplicating] = useState(false);
+    const [neonStatus, setNeonStatus] = useState<string>('desconhecido');
+    const [localCounts, setLocalCounts] = useState<Record<string, number | null> | null>(null);
+    const [remoteCounts, setRemoteCounts] = useState<Record<string, number | null> | null>(null);
+    const models = [
+        'estabelecimentos',
+        'funcionarios',
+        'clientes',
+        'fornecedores',
+        'categoria_produto',
+        'produtos',
+        'vendas',
+        'venda_itens',
+        'pagamentos',
+        'movimentacoes_estoque',
+        'despesas',
+    ];
+    const fetchHealth = async () => {
+        try {
+            setLoading(true);
+            const resp = await apiClient.get('/sync/health');
+            setNeonStatus(resp.data?.neon ?? 'desconhecido');
+            setLocalCounts(resp.data?.local_counts ?? null);
+            setRemoteCounts(resp.data?.remote_counts ?? null);
+        } catch (e: any) {
+            setNeonStatus('erro');
+        } finally {
+            setLoading(false);
+        }
+    };
+    const replicar = async () => {
+        try {
+            setReplicating(true);
+            await apiClient.post('/sync/replicar');
+            await fetchHealth();
+            toast.success('Replicação concluída');
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Erro ao replicar');
+        } finally {
+            setReplicating(false);
+        }
+    };
+    useEffect(() => {
+        fetchHealth();
+    }, []);
+    return (
+        <div className="space-y-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <DatabaseIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Status do Neon</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={fetchHealth}
+                        disabled={loading}
+                        className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded"
+                    >
+                        {loading ? 'Verificando...' : 'Verificar Status'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={replicar}
+                        disabled={replicating || (neonStatus !== 'online' && !String(neonStatus).startsWith('offline'))}
+                        className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
+                    >
+                        {replicating ? 'Replicando...' : 'Replicar agora'}
+                    </button>
+                </div>
+            </div>
+            <div className="text-sm text-gray-700 dark:text-gray-300">
+                <div className="mb-2">
+                    Status: <span className="font-semibold">{neonStatus}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <div className="font-semibold mb-1">Local</div>
+                        <div className="space-y-1">
+                            {models.map((m) => (
+                                <div key={m} className="flex justify-between">
+                                    <span className="text-xs">{m}</span>
+                                    <span className="text-xs">{localCounts?.[m] ?? '-'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="font-semibold mb-1">Neon</div>
+                        <div className="space-y-1">
+                            {models.map((m) => (
+                                <div key={m} className="flex justify-between">
+                                    <span className="text-xs">{m}</span>
+                                    <span className="text-xs">{remoteCounts?.[m] ?? '-'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
