@@ -87,6 +87,16 @@ const ProductsPage: React.FC = () => {
     const [showProductModal, setShowProductModal] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [showStockModal, setShowStockModal] = useState(false);
+    const [stockMotivoError, setStockMotivoError] = useState(false);
+    const [stockNotes, setStockNotes] = useState('');
+    const motivosPadrao = useMemo(() => ([
+        'ajuste de estoque',
+        'antecipação de pedido junto ao fornecedor',
+        'produto com promoção',
+        'comprado com o vendedor pronta entrega',
+    ]), []);
+    const [showAlertsModal, setShowAlertsModal] = useState(false);
+    const [alerts, setAlerts] = useState<any[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
     const [editMode, setEditMode] = useState(false);
 
@@ -313,6 +323,13 @@ const ProductsPage: React.FC = () => {
         loadProdutos();
         loadCategorias();
         loadFornecedores();
+        (async () => {
+            try {
+                const alertas = await productsService.getAlertas();
+                setAlerts(alertas || []);
+                if (alertas && alertas.length > 0) setShowAlertsModal(true);
+            } catch (e) {}
+        })();
     }, [loadProdutos, loadCategorias, loadFornecedores]);
 
     const diasAlertaValidade: number = useMemo(() => {
@@ -378,11 +395,17 @@ const ProductsPage: React.FC = () => {
         if (!selectedProduct) return;
 
         try {
+            if (!stockAdjust.motivo || stockAdjust.motivo.trim().length === 0) {
+                setStockMotivoError(true);
+                toast.error('Informe o motivo do ajuste de estoque');
+                return;
+            }
             await productsService.ajustarEstoque(
                 selectedProduct.id,
                 stockAdjust.quantidade,
                 stockAdjust.operacao,
-                stockAdjust.motivo
+                stockAdjust.motivo,
+                stockNotes
             );
             toast.success('Estoque ajustado com sucesso!');
             setShowStockModal(false);
@@ -468,6 +491,8 @@ const ProductsPage: React.FC = () => {
     const openStockModal = useCallback((produto: Produto) => {
         setSelectedProduct(produto);
         setStockAdjust({ quantidade: 0, operacao: 'entrada', motivo: '' });
+        setStockNotes('');
+        setStockMotivoError(false);
         setShowStockModal(true);
     }, []);
 
@@ -1064,7 +1089,11 @@ const ProductsPage: React.FC = () => {
                                                 </button>
                                                 <button
                                                     onClick={() => openStockModal(produto)}
-                                                    className="p-2 text-purple-500 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900 rounded-lg transition-colors"
+                                                    className={`p-2 text-purple-500 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900 rounded-lg transition-colors ${
+                                                        (produto.estoque_status === 'esgotado' || produto.estoque_status === 'baixo')
+                                                            ? 'animate-pulse ring-2 ring-offset-2 ring-purple-400'
+                                                            : ''
+                                                    }`}
                                                     title="Ajustar estoque"
                                                 >
                                                     <Archive className="w-5 h-5" />
@@ -1407,17 +1436,37 @@ const ProductsPage: React.FC = () => {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Motivo (Opcional)
+                                        Motivo
+                                    </label>
+                                    <select
+                                        value={stockAdjust.motivo}
+                                        onChange={(e) => {
+                                            setStockAdjust({ ...stockAdjust, motivo: e.target.value });
+                                            setStockMotivoError(false);
+                                        }}
+                                        className={`w-full px-4 py-2.5 border ${stockMotivoError ? 'border-red-500' : 'border-gray-300'} dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500`}
+                                    >
+                                        <option value="">Selecione um motivo</option>
+                                        {motivosPadrao.map(m => (
+                                            <option key={m} value={m}>{m}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Notas (Markdown opcional)
                                     </label>
                                     <textarea
-                                        value={stockAdjust.motivo}
-                                        onChange={(e) =>
-                                            setStockAdjust({ ...stockAdjust, motivo: e.target.value })
-                                        }
-                                        rows={3}
+                                        value={stockNotes}
+                                        onChange={(e) => setStockNotes(e.target.value)}
+                                        rows={4}
                                         className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Descreva o motivo do ajuste..."
+                                        placeholder="Detalhes adicionais. Ex.: **Promoção** - lote X, - itens, etc."
                                     />
+                                    <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Preview</p>
+                                        <pre className="text-sm whitespace-pre-wrap text-gray-800 dark:text-gray-100">{stockNotes}</pre>
+                                    </div>
                                 </div>
 
                                 {/* Preview do novo estoque */}
@@ -1449,6 +1498,49 @@ const ProductsPage: React.FC = () => {
                             >
                                 <FileText className="w-5 h-5" />
                                 Confirmar Ajuste
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showAlertsModal && alerts && alerts.length > 0 && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full">
+                        <div className="bg-gradient-to-r from-red-500 to-yellow-500 px-6 py-4 flex justify-between items-center rounded-t-xl">
+                            <h2 className="text-2xl font-bold text-white">Alertas de Produtos</h2>
+                            <button
+                                onClick={() => setShowAlertsModal(false)}
+                                className="text-white hover:text-gray-200"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-red-50 dark:bg-red-900 rounded-lg p-4">
+                                    <p className="font-semibold text-red-700 dark:text-red-200 mb-2">Esgotados</p>
+                                    <ul className="space-y-1">
+                                        {alerts.filter(a => a.tipo === 'estoque_baixo' && a.nivel === 'alto').map((a, idx) => (
+                                            <li key={idx} className="text-sm text-red-800 dark:text-red-100">• {a.produto_nome} ({a.mensagem})</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className="bg-yellow-50 dark:bg-yellow-900 rounded-lg p-4">
+                                    <p className="font-semibold text-yellow-700 dark:text-yellow-200 mb-2">Validade Próxima</p>
+                                    <ul className="space-y-1">
+                                        {alerts.filter(a => a.tipo === 'validade_proxima').map((a, idx) => (
+                                            <li key={idx} className="text-sm text-yellow-800 dark:text-yellow-100">• {a.produto_nome} ({a.mensagem})</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
+                            <button
+                                onClick={() => setShowAlertsModal(false)}
+                                className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Fechar
                             </button>
                         </div>
                     </div>

@@ -68,16 +68,23 @@ export const productsService = {
         id: number,
         quantidade: number,
         operacao: 'entrada' | 'saida',
-        motivo?: string
+        motivo?: string,
+        observacoes?: string
     ): Promise<{ success: boolean; message: string; produto: any }> => {
-        const response = await apiClient.post<any>(`/produtos/${id}/estoque`, {
+        const payload: any = {
             tipo: operacao,
             quantidade,
             motivo,
-        });
+        };
+        if (observacoes !== undefined) payload.observacoes = observacoes;
+        const response = await apiClient.post<any>(`/produtos/${id}/estoque`, payload);
         return response.data;
     },
 
+    getAlertas: async (): Promise<Array<any>> => {
+        const response = await apiClient.get<any>('/produtos/alertas');
+        return response.data.alertas || [];
+    },
     // ==================== CATEGORIAS E RELATÓRIOS ====================
     getCategorias: async (ativos = true): Promise<{ categorias: string[]; total_categorias: number }> => {
         const response = await apiClient.get<any>('/produtos/categorias', {
