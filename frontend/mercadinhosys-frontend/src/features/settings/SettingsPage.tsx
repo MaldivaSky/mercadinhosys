@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { 
     Settings, Building, ShoppingCart, Package, Shield, Save, 
-    Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon
+    Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon,
+    Clock, MapPin, Camera
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
@@ -53,6 +54,7 @@ const SettingsPage: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
+    const [loadingGeolocation, setLoadingGeolocation] = useState(false);
     const { config: globalConfig, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
     
     const [config, setConfig] = useState<Configuracao>({
@@ -163,6 +165,48 @@ const SettingsPage: React.FC = () => {
         }
     };
 
+    const handleGetCurrentLocation = async () => {
+        if (!navigator.geolocation) {
+            toast.error('Geolocalização não suportada neste navegador');
+            return;
+        }
+
+        try {
+            setLoadingGeolocation(true);
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setConfig({
+                        ...config,
+                        latitude_estabelecimento: parseFloat(latitude.toFixed(6)),
+                        longitude_estabelecimento: parseFloat(longitude.toFixed(6))
+                    });
+                    toast.success(`Localização capturada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+                    setLoadingGeolocation(false);
+                },
+                (error) => {
+                    console.error('Erro ao obter localização:', error);
+                    if (error.code === error.PERMISSION_DENIED) {
+                        toast.error('Permissão de localização negada. Verifique as configurações do navegador.');
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        toast.error('Localização indisponível. Tente novamente.');
+                    } else {
+                        toast.error('Erro ao obter localização: ' + error.message);
+                    }
+                    setLoadingGeolocation(false);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        } catch (error) {
+            toast.error('Erro ao acessar geolocalização');
+            setLoadingGeolocation(false);
+        }
+    };
+
     const handleCorChange = async (cor: string) => {
         setConfig({...config, cor_principal: cor});
         // Aplicar imediatamente
@@ -198,6 +242,7 @@ const SettingsPage: React.FC = () => {
         { id: 'estabelecimento', label: 'Estabelecimento', icon: Building },
         { id: 'vendas', label: 'Vendas & PDV', icon: ShoppingCart },
         { id: 'estoque', label: 'Estoque', icon: Package },
+        { id: 'ponto', label: 'Ponto & RH', icon: Clock },
         { id: 'sistema', label: 'Sistema & Segurança', icon: Shield },
     ];
 
@@ -483,6 +528,155 @@ const SettingsPage: React.FC = () => {
                                     value={config.estoque_minimo_padrao} 
                                     onChange={(e: any) => setConfig({...config, estoque_minimo_padrao: parseInt(e.target.value)})} 
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ABA PONTO & RH */}
+                    {activeTab === 'ponto' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
+                            <SectionTitle title="Configurações de Ponto e Frequência" icon={Clock} />
+                            
+                            <div className="space-y-4">
+                                <SwitchField 
+                                    label="Exigir Foto no Ponto" 
+                                    description="Obrigatório tirar foto no registro de entrada/saída"
+                                    checked={config.exigir_foto_ponto}
+                                    onChange={(val: boolean) => setConfig({...config, exigir_foto_ponto: val})}
+                                />
+                                
+                                <SwitchField 
+                                    label="Exigir Localização no Ponto" 
+                                    description="Validar localização do funcionário via GPS"
+                                    checked={config.exigir_localizacao_ponto}
+                                    onChange={(val: boolean) => setConfig({...config, exigir_localizacao_ponto: val})}
+                                />
+                                
+                                <InputField 
+                                    label="Tolerância de Atraso (minutos)" 
+                                    type="number"
+                                    value={config.tolerancia_atraso_minutos || 5} 
+                                    onChange={(e: any) => setConfig({...config, tolerancia_atraso_minutos: parseInt(e.target.value)})} 
+                                />
+                            </div>
+
+                            {config.exigir_localizacao_ponto && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-4 flex items-center gap-2">
+                                        <MapPin className="w-4 h-4" />
+                                        Localização do Estabelecimento
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <InputField 
+                                            label="Latitude" 
+                                            type="number"
+                                            step="0.000001"
+                                            value={config.latitude_estabelecimento || ''} 
+                                            onChange={(e: any) => setConfig({...config, latitude_estabelecimento: parseFloat(e.target.value)})} 
+                                            placeholder="-23.550"
+                                        />
+                                        <InputField 
+                                            label="Longitude" 
+                                            type="number"
+                                            step="0.000001"
+                                            value={config.longitude_estabelecimento || ''} 
+                                            onChange={(e: any) => setConfig({...config, longitude_estabelecimento: parseFloat(e.target.value)})} 
+                                            placeholder="-46.633"
+                                        />
+                                        <InputField 
+                                            label="Raio de Validação (metros)" 
+                                            type="number"
+                                            value={config.raio_validacao_metros || 100} 
+                                            onChange={(e: any) => setConfig({...config, raio_validacao_metros: parseInt(e.target.value)})} 
+                                            placeholder="100"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleGetCurrentLocation}
+                                        disabled={loadingGeolocation}
+                                        className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {loadingGeolocation ? (
+                                            <>
+                                                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                                                Obtendo localização...
+                                            </>
+                                        ) : (
+                                            <>
+                                                📍 Usar Localização Atual
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
+                            <SectionTitle title="Horários de Trabalho" icon={Clock} />
+                            
+                            <div className="space-y-6">
+                                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-gray-100">Horário de Entrada</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Início do expediente</p>
+                                        </div>
+                                        <input 
+                                            type="time" 
+                                            value={config.hora_entrada_ponto || '08:00'}
+                                            onChange={(e) => setConfig({...config, hora_entrada_ponto: e.target.value})}
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-gray-100">Saída para Almoço</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Horário de pausa</p>
+                                        </div>
+                                        <input 
+                                            type="time" 
+                                            value={config.hora_saida_almoco_ponto || '12:00'}
+                                            onChange={(e) => setConfig({...config, hora_saida_almoco_ponto: e.target.value})}
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-gray-100">Retorno do Almoço</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Volta da pausa</p>
+                                        </div>
+                                        <input 
+                                            type="time" 
+                                            value={config.hora_retorno_almoco_ponto || '13:00'}
+                                            onChange={(e) => setConfig({...config, hora_retorno_almoco_ponto: e.target.value})}
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-gray-100">Horário de Saída</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Fim do expediente</p>
+                                        </div>
+                                        <input 
+                                            type="time" 
+                                            value={config.hora_saida_ponto || '18:00'}
+                                            onChange={(e) => setConfig({...config, hora_saida_ponto: e.target.value})}
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+                                <p className="font-semibold mb-2">💡 Dica</p>
+                                <p>Estes horários serão validados automaticamente para todos os funcionários. Atrasos além da tolerância configurada serão registrados.</p>
                             </div>
                         </div>
                     )}

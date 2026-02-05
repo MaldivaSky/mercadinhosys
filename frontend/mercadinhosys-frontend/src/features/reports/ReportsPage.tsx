@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     BarChart3, 
     FileSpreadsheet, 
@@ -63,6 +64,7 @@ const ReportCard: React.FC<ReportCardProps> = ({
 );
 
 const ReportsPage: React.FC = () => {
+    const navigate = useNavigate();
     // Estado para datas (padrão: últimos 30 dias)
     const [dateRange, setDateRange] = useState<DateRange>({
         startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
@@ -86,6 +88,12 @@ const ReportsPage: React.FC = () => {
     };
     
     const openModal = async (type: 'vendas' | 'produtos' | 'financeiro' | 'equipe' | 'ponto') => {
+        // Se for ponto, navega para a página específica de relatórios de ponto
+        if (type === 'ponto') {
+            navigate('/ponto-relatorios');
+            return;
+        }
+        
         setModalType(type);
         setModalOpen(true);
         try {
