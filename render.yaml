@@ -12,8 +12,10 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: DATABASE_URL
+      - key: NEON_DATABASE_URL
         sync: false  # Configurar manualmente com Neon PostgreSQL
+      - key: DATABASE_URL
+        sync: false  # Fallback se NEON_DATABASE_URL não estiver configurado
       - key: SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
