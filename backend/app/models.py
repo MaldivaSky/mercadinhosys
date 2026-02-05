@@ -1563,7 +1563,7 @@ class RegistroPonto(db.Model):
         return {
             'id': self.id,
             'funcionario_id': self.funcionario_id,
-            'funcionario_nome': self.funcionario.nome if self.funcionario else None,
+            'funcionario_nome': self.funcionario.nome if self.funcionario else 'Desconhecido',
             'estabelecimento_id': self.estabelecimento_id,
             'data': self.data.isoformat() if self.data else None,
             'hora': self.hora.strftime('%H:%M:%S') if self.hora else None,

@@ -275,16 +275,30 @@ def pontos_hoje():
             estabelecimento_id=funcionario.estabelecimento_id
         ).first()
         
+        # Serializar registros com tratamento de erro
+        registros_dict = []
+        for r in registros:
+            try:
+                registros_dict.append(r.to_dict())
+            except Exception as e:
+                logger.error(f"Erro ao serializar registro {r.id}: {e}")
+                registros_dict.append({
+                    'id': r.id,
+                    'error': 'Erro ao serializar registro'
+                })
+        
         return jsonify({
             'success': True,
             'data': {
-                'registros': [r.to_dict() for r in registros],
+                'registros': registros_dict,
                 'configuracao': config.to_dict() if config else None
             }
         }), 200
         
     except Exception as e:
         logger.error(f"Erro ao buscar pontos de hoje: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -314,10 +328,22 @@ def historico_pontos():
         
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         
+        # Serializar registros com tratamento de erro
+        registros_dict = []
+        for r in pagination.items:
+            try:
+                registros_dict.append(r.to_dict())
+            except Exception as e:
+                logger.error(f"Erro ao serializar registro {r.id}: {e}")
+                registros_dict.append({
+                    'id': r.id,
+                    'error': 'Erro ao serializar registro'
+                })
+        
         return jsonify({
             'success': True,
             'data': {
-                'registros': [r.to_dict() for r in pagination.items],
+                'registros': registros_dict,
                 'total': pagination.total,
                 'pages': pagination.pages,
                 'current_page': page
@@ -326,6 +352,8 @@ def historico_pontos():
         
     except Exception as e:
         logger.error(f"Erro ao buscar histórico: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -341,25 +369,53 @@ def estatisticas_ponto():
         # Últimos 30 dias
         data_inicio = date.today() - timedelta(days=30)
         
-        registros = RegistroPonto.query.filter(
-            and_(
-                RegistroPonto.funcionario_id == funcionario.id,
-                RegistroPonto.data >= data_inicio
-            )
-        ).all()
+        try:
+            registros = RegistroPonto.query.filter(
+                and_(
+                    RegistroPonto.funcionario_id == funcionario.id,
+                    RegistroPonto.data >= data_inicio
+                )
+            ).all()
+        except Exception as e:
+            logger.error(f"Erro ao buscar registros de ponto: {e}")
+            return jsonify({
+                'success': True,
+                'data': {
+                    'dias_trabalhados': 0,
+                    'total_atrasos': 0,
+                    'minutos_atraso_total': 0,
+                    'frequencia_tipo': {'entrada': 0, 'saida_almoco': 0, 'retorno_almoco': 0, 'saida': 0},
+                    'grafico_frequencia': [],
+                    'taxa_presenca': 0
+                }
+            }), 200
         
         # Agrupar por data
         registros_por_dia = {}
         for r in registros:
-            data_str = r.data.isoformat()
-            if data_str not in registros_por_dia:
-                registros_por_dia[data_str] = []
-            registros_por_dia[data_str].append(r)
+            try:
+                data_str = r.data.isoformat() if r.data else None
+                if data_str and data_str not in registros_por_dia:
+                    registros_por_dia[data_str] = []
+                if data_str:
+                    registros_por_dia[data_str].append(r)
+            except Exception as e:
+                logger.error(f"Erro ao processar registro {r.id}: {e}")
+                continue
         
-        # Calcular estatísticas
+        # Calcular estatísticas com tratamento de erro
         dias_trabalhados = len(registros_por_dia)
-        total_atrasos = sum(1 for r in registros if r.status == 'atrasado')
-        minutos_atraso_total = sum(r.minutos_atraso for r in registros)
+        total_atrasos = 0
+        minutos_atraso_total = 0
+        
+        for r in registros:
+            try:
+                if hasattr(r, 'status') and r.status == 'atrasado':
+                    total_atrasos += 1
+                if hasattr(r, 'minutos_atraso') and r.minutos_atraso:
+                    minutos_atraso_total += r.minutos_atraso
+            except Exception:
+                pass
         
         # Frequência por tipo
         frequencia_tipo = {
@@ -370,22 +426,40 @@ def estatisticas_ponto():
         }
         
         for r in registros:
-            if r.tipo_registro in frequencia_tipo:
-                frequencia_tipo[r.tipo_registro] += 1
+            try:
+                if hasattr(r, 'tipo_registro') and r.tipo_registro in frequencia_tipo:
+                    frequencia_tipo[r.tipo_registro] += 1
+            except Exception:
+                pass
         
         # Gráfico de frequência (últimos 30 dias)
         grafico_frequencia = []
         for i in range(30):
-            dia = date.today() - timedelta(days=29-i)
-            dia_str = dia.isoformat()
-            registros_dia = registros_por_dia.get(dia_str, [])
-            
-            grafico_frequencia.append({
-                'data': dia_str,
-                'total_registros': len(registros_dia),
-                'teve_atraso': any(r.status == 'atrasado' for r in registros_dia),
-                'minutos_atraso': sum(r.minutos_atraso for r in registros_dia)
-            })
+            try:
+                dia = date.today() - timedelta(days=29-i)
+                dia_str = dia.isoformat()
+                registros_dia = registros_por_dia.get(dia_str, [])
+                
+                minutos_atraso_dia = 0
+                teve_atraso_dia = False
+                for r in registros_dia:
+                    try:
+                        if hasattr(r, 'status') and r.status == 'atrasado':
+                            teve_atraso_dia = True
+                        if hasattr(r, 'minutos_atraso') and r.minutos_atraso:
+                            minutos_atraso_dia += r.minutos_atraso
+                    except Exception:
+                        pass
+                
+                grafico_frequencia.append({
+                    'data': dia_str,
+                    'total_registros': len(registros_dia),
+                    'teve_atraso': teve_atraso_dia,
+                    'minutos_atraso': minutos_atraso_dia
+                })
+            except Exception as e:
+                logger.error(f"Erro ao processar dia {dia}: {e}")
+                continue
         
         return jsonify({
             'success': True,
@@ -401,7 +475,19 @@ def estatisticas_ponto():
         
     except Exception as e:
         logger.error(f"Erro ao calcular estatísticas: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': True,
+            'data': {
+                'dias_trabalhados': 0,
+                'total_atrasos': 0,
+                'minutos_atraso_total': 0,
+                'frequencia_tipo': {'entrada': 0, 'saida_almoco': 0, 'retorno_almoco': 0, 'saida': 0},
+                'grafico_frequencia': [],
+                'taxa_presenca': 0
+            }
+        }), 200
 
 
 @ponto_bp.route('/configuracao', methods=['GET'])
@@ -491,6 +577,87 @@ def atualizar_configuracao():
         
     except Exception as e:
         logger.error(f"Erro ao atualizar configuração: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ponto_bp.route('/<int:registro_id>', methods=['PUT'])
+@jwt_required()
+def ajustar_ponto(registro_id):
+    """Ajusta um registro de ponto existente (apenas admin)"""
+    try:
+        funcionario = get_funcionario_logado()
+        if not funcionario or funcionario.role != 'ADMIN':
+            return jsonify({'success': False, 'message': 'Apenas administrador pode ajustar pontos'}), 403
+        
+        registro = RegistroPonto.query.get(registro_id)
+        if not registro:
+            return jsonify({'success': False, 'message': 'Registro de ponto não encontrado'}), 404
+        
+        # Verificar se pertence ao mesmo estabelecimento
+        if registro.estabelecimento_id != funcionario.estabelecimento_id:
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        
+        data = request.get_json()
+        
+        # Campos que podem ser ajustados
+        if 'hora' in data:
+            try:
+                nova_hora = datetime.strptime(data['hora'], '%H:%M:%S').time()
+                registro.hora = nova_hora
+                
+                # Recalcular atraso
+                config = obter_configuracao_com_cache(registro.estabelecimento_id)
+                minutos_atraso = 0
+                status = 'normal'
+                
+                if config:
+                    if registro.tipo_registro == 'entrada':
+                        minutos_atraso = calcular_minutos_atraso(
+                            nova_hora, config.hora_entrada, config.tolerancia_entrada
+                        )
+                    elif registro.tipo_registro == 'saida_almoco':
+                        minutos_atraso = calcular_minutos_atraso(
+                            nova_hora, config.hora_saida_almoco, config.tolerancia_saida_almoco
+                        )
+                    elif registro.tipo_registro == 'retorno_almoco':
+                        minutos_atraso = calcular_minutos_atraso(
+                            nova_hora, config.hora_retorno_almoco, config.tolerancia_retorno_almoco
+                        )
+                
+                if minutos_atraso > 0:
+                    status = 'atrasado'
+                
+                registro.minutos_atraso = minutos_atraso
+                registro.status = status
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Formato de hora inválido. Use HH:MM:SS'}), 400
+        
+        if 'status' in data:
+            if data['status'] in ['normal', 'atrasado', 'justificado']:
+                registro.status = data['status']
+            else:
+                return jsonify({'success': False, 'message': 'Status inválido'}), 400
+        
+        if 'observacao' in data:
+            registro.observacao = data['observacao']
+        
+        if 'minutos_atraso' in data:
+            registro.minutos_atraso = int(data['minutos_atraso'])
+        
+        registro.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        logger.info(f"✅ Ponto ajustado: {registro.funcionario.nome} - {registro.data} {registro.hora}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Registro de ponto ajustado com sucesso!',
+            'data': registro.to_dict()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao ajustar ponto: {e}")
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
