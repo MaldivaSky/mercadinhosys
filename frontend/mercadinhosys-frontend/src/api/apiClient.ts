@@ -25,6 +25,26 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
+        // Log detalhado do erro para debug
+        if (error.response) {
+            console.error('❌ API Error:', {
+                url: error.config?.url,
+                method: error.config?.method,
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data,
+                headers: error.response.headers,
+            });
+        } else if (error.request) {
+            console.error('❌ Network Error:', {
+                url: error.config?.url,
+                message: 'Sem resposta do servidor',
+                baseURL: API_CONFIG.BASE_URL,
+            });
+        } else {
+            console.error('❌ Request Error:', error.message);
+        }
+
         if (error.response?.status === 401) {
             // Token expirado - tentar refresh
             const refreshToken = localStorage.getItem('refresh_token');
@@ -40,6 +60,7 @@ apiClient.interceptors.response.use(
                     error.config.headers.Authorization = `Bearer ${response.data.access_token}`;
                     return apiClient(error.config);
                 } catch (refreshError) {
+                    console.error('❌ Refresh token falhou, redirecionando para login');
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
                     window.location.href = '/login';

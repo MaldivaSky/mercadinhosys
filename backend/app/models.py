@@ -1494,6 +1494,149 @@ class RelatorioAgendado(db.Model):
 
 ItemVenda = VendaItem
 
+
+# ============================================
+# SISTEMA DE CONTROLE DE PONTO
+# ============================================
+
+class RegistroPonto(db.Model):
+    """Modelo para registro de ponto dos funcionários"""
+    __tablename__ = "registros_ponto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("funcionarios.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    
+    # Dados do registro
+    data = db.Column(db.Date, nullable=False, default=date.today)
+    hora = db.Column(db.Time, nullable=False)
+    tipo_registro = db.Column(
+        db.String(20), 
+        nullable=False
+    )  # 'entrada', 'saida_almoco', 'retorno_almoco', 'saida'
+    
+    # Geolocalização
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    localizacao_endereco = db.Column(db.String(500))
+    
+    # Foto
+    foto_url = db.Column(db.String(500))
+    
+    # Metadados
+    dispositivo = db.Column(db.String(200))  # Informações do dispositivo/navegador
+    ip_address = db.Column(db.String(50))
+    observacao = db.Column(db.Text)
+    
+    # Status
+    status = db.Column(db.String(20), default='normal')  # 'normal', 'atrasado', 'justificado'
+    minutos_atraso = db.Column(db.Integer, default=0)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    funcionario = db.relationship(
+        "Funcionario",
+        backref=db.backref("registros_ponto", lazy=True, cascade="all, delete-orphan")
+    )
+    estabelecimento = db.relationship(
+        "Estabelecimento",
+        backref=db.backref("registros_ponto", lazy=True)
+    )
+    
+    __table_args__ = (
+        db.Index("idx_ponto_funcionario_data", "funcionario_id", "data"),
+        db.Index("idx_ponto_estabelecimento", "estabelecimento_id"),
+        db.Index("idx_ponto_data", "data"),
+    )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'funcionario_id': self.funcionario_id,
+            'funcionario_nome': self.funcionario.nome if self.funcionario else None,
+            'estabelecimento_id': self.estabelecimento_id,
+            'data': self.data.isoformat() if self.data else None,
+            'hora': self.hora.strftime('%H:%M:%S') if self.hora else None,
+            'tipo_registro': self.tipo_registro,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'localizacao_endereco': self.localizacao_endereco,
+            'foto_url': self.foto_url,
+            'dispositivo': self.dispositivo,
+            'ip_address': self.ip_address,
+            'observacao': self.observacao,
+            'status': self.status,
+            'minutos_atraso': self.minutos_atraso,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class ConfiguracaoHorario(db.Model):
+    """Configuração de horários de trabalho por estabelecimento"""
+    __tablename__ = "configuracoes_horario"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True
+    )
+    
+    # Horários padrão
+    hora_entrada = db.Column(db.Time, nullable=False, default=datetime.strptime('08:00', '%H:%M').time())
+    hora_saida_almoco = db.Column(db.Time, nullable=False, default=datetime.strptime('12:00', '%H:%M').time())
+    hora_retorno_almoco = db.Column(db.Time, nullable=False, default=datetime.strptime('13:00', '%H:%M').time())
+    hora_saida = db.Column(db.Time, nullable=False, default=datetime.strptime('18:00', '%H:%M').time())
+    
+    # Tolerâncias (em minutos)
+    tolerancia_entrada = db.Column(db.Integer, default=10)
+    tolerancia_saida_almoco = db.Column(db.Integer, default=5)
+    tolerancia_retorno_almoco = db.Column(db.Integer, default=10)
+    tolerancia_saida = db.Column(db.Integer, default=5)
+    
+    # Configurações
+    exigir_foto = db.Column(db.Boolean, default=True)
+    exigir_localizacao = db.Column(db.Boolean, default=True)
+    raio_permitido_metros = db.Column(db.Integer, default=100)  # Raio em metros do estabelecimento
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamento
+    estabelecimento = db.relationship(
+        "Estabelecimento",
+        backref=db.backref("configuracao_horario", uselist=False, cascade="all, delete-orphan")
+    )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'estabelecimento_id': self.estabelecimento_id,
+            'hora_entrada': self.hora_entrada.strftime('%H:%M') if self.hora_entrada else None,
+            'hora_saida_almoco': self.hora_saida_almoco.strftime('%H:%M') if self.hora_saida_almoco else None,
+            'hora_retorno_almoco': self.hora_retorno_almoco.strftime('%H:%M') if self.hora_retorno_almoco else None,
+            'hora_saida': self.hora_saida.strftime('%H:%M') if self.hora_saida else None,
+            'tolerancia_entrada': self.tolerancia_entrada,
+            'tolerancia_saida_almoco': self.tolerancia_saida_almoco,
+            'tolerancia_retorno_almoco': self.tolerancia_retorno_almoco,
+            'tolerancia_saida': self.tolerancia_saida,
+            'exigir_foto': self.exigir_foto,
+            'exigir_localizacao': self.exigir_localizacao,
+            'raio_permitido_metros': self.raio_permitido_metros
+        }
+
+
 print("Models.py carregado com todas as classes necessarias!")
 
 
