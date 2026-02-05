@@ -19,7 +19,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://mercadinhosys-frontend.vercel.app,https://mercadinhosys.vercel.app
+        value: https://mercadinhosys-frontend.vercel.app,https://mercadinhosys.vercel.app,https://*.vercel.app
       - key: PYTHON_VERSION
         value: 3.11.0
     healthCheckPath: /api/auth/health

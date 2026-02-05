@@ -12,7 +12,8 @@ import {
     Archive,
     Loader2,
     X,
-    Search
+    Search,
+    Clock
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +23,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
 import { salesService } from '../sales/salesService';
 import { productsService } from '../products/productsService';
+import { pontoService } from '../ponto/pontoService';
 import { apiClient } from '../../api/apiClient';
 
 // Interfaces
@@ -69,12 +71,13 @@ const ReportsPage: React.FC = () => {
 
     const [loadingReport, setLoadingReport] = useState<string | null>(null);
     const [loadingBackup, setLoadingBackup] = useState(false);
-    const [modalType, setModalType] = useState<'vendas' | 'produtos' | 'financeiro' | 'equipe' | null>(null);
+    const [modalType, setModalType] = useState<'vendas' | 'produtos' | 'financeiro' | 'equipe' | 'ponto' | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [vendasData, setVendasData] = useState<Array<{Data: string; 'Quantidade Vendas': number; 'Total (R$)': number}>>([]);
     const [produtosData, setProdutosData] = useState<Array<{ 'Código': string | number; 'Nome': string; 'Categoria': string; 'Preço Venda': number; 'Preço Custo': number; 'Estoque': any; 'Estoque Mínimo': number; 'Status': string }>>([]);
     const [financeiroData, setFinanceiroData] = useState<Array<{ 'Forma de Pagamento': string; 'Qtd. Transações': number; 'Total (R$)': number; 'Percentual (%)': string }>>([]);
     const [equipeData, setEquipeData] = useState<Array<{ 'Funcionário': string; 'Vendas Realizadas': number; 'Total Vendido (R$)': number; 'Ticket Médio (R$)': string }>>([]);
+    const [pontoData, setPontoData] = useState<Array<{ 'Funcionário': string; 'Dias Trabalhados': number; 'Taxa Presença (%)': string; 'Total Atrasos': number; 'Minutos Atraso': number }>>([]);
     const [searchQuery, setSearchQuery] = useState<string>('');
     const filterRow = (row: any) => {
         const q = searchQuery.trim().toLowerCase();
@@ -82,7 +85,7 @@ const ReportsPage: React.FC = () => {
         return Object.values(row).some((v) => String(v ?? '').toLowerCase().includes(q));
     };
     
-    const openModal = async (type: 'vendas' | 'produtos' | 'financeiro' | 'equipe') => {
+    const openModal = async (type: 'vendas' | 'produtos' | 'financeiro' | 'equipe' | 'ponto') => {
         setModalType(type);
         setModalOpen(true);
         try {
@@ -94,6 +97,8 @@ const ReportsPage: React.FC = () => {
                 await fetchFinanceiroData();
             } else if (type === 'equipe' && equipeData.length === 0) {
                 await fetchEquipeData();
+            } else if (type === 'ponto' && pontoData.length === 0) {
+                await fetchPontoData();
             }
         } catch (e) {
             // erros já são tratados dentro dos fetchers
@@ -429,6 +434,99 @@ const ReportsPage: React.FC = () => {
         }
     };
 
+    const fetchPontoData = async () => {
+        setLoadingReport('ponto');
+        try {
+            const response = await pontoService.obterRelatorioFuncionarios({
+                data_inicio: dateRange.startDate,
+                data_fim: dateRange.endDate
+            });
+            
+            if (response.success && response.data) {
+                const data = response.data.map((f: any) => ({
+                    'Funcionário': f.funcionario_nome,
+                    'Dias Trabalhados': f.dias_trabalhados,
+                    'Taxa Presença (%)': f.taxa_presenca.toFixed(1),
+                    'Total Atrasos': f.total_atrasos,
+                    'Minutos Atraso': f.minutos_atraso_total
+                }));
+                setPontoData(data);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao carregar relatório de ponto');
+        } finally {
+            setLoadingReport(null);
+        }
+    };
+    
+    const handlePontoReport = async (type: 'pdf' | 'excel' | 'csv') => {
+        setLoadingReport('ponto');
+        try {
+            if (pontoData.length === 0) {
+                await fetchPontoData();
+            }
+            const dataToExport = pontoData;
+
+            const filename = `Relatorio_Ponto_${dateRange.startDate}_${dateRange.endDate}`;
+
+            if (type === 'csv') exportToCSV(dataToExport, filename);
+            else if (type === 'excel') exportToExcel(dataToExport, filename, 'Controle de Ponto');
+            else {
+                const doc = new jsPDF();
+                generatePDFHeader(doc, "Relatório de Controle de Ponto", `${format(new Date(dateRange.startDate), 'dd/MM/yyyy')} a ${format(new Date(dateRange.endDate), 'dd/MM/yyyy')}`);
+                
+                autoTable(doc, {
+                    startY: 50,
+                    head: [['Funcionário', 'Dias Trab.', 'Presença %', 'Atrasos', 'Min. Atraso']],
+                    body: dataToExport.map(item => [
+                        item.Funcionário, 
+                        item['Dias Trabalhados'], 
+                        item['Taxa Presença (%)'] + '%',
+                        item['Total Atrasos'],
+                        item['Minutos Atraso']
+                    ]),
+                    theme: 'grid',
+                    headStyles: { fillColor: [99, 102, 241] }, // Indigo
+                    didParseCell: function(data) {
+                        if (data.section === 'body' && data.column.index === 3) {
+                            const atrasos = parseInt(data.cell.raw as string);
+                            if (atrasos > 5) {
+                                data.cell.styles.textColor = [220, 38, 38]; // Red
+                                data.cell.styles.fontStyle = 'bold';
+                            } else if (atrasos > 2) {
+                                data.cell.styles.textColor = [245, 158, 11]; // Amber
+                            }
+                        }
+                    }
+                });
+
+                // Adicionar sumário
+                const totalAtrasos = dataToExport.reduce((acc, curr) => acc + curr['Total Atrasos'], 0);
+                const mediaPresenca = dataToExport.reduce((acc, curr) => acc + parseFloat(curr['Taxa Presença (%)']), 0) / dataToExport.length;
+                const finalY = (doc as any).lastAutoTable.finalY || 50;
+                
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont("helvetica", "bold");
+                doc.text('Resumo do Período:', 14, finalY + 12);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.text(`• Total de Atrasos: ${totalAtrasos}`, 14, finalY + 20);
+                doc.text(`• Taxa Média de Presença: ${mediaPresenca.toFixed(1)}%`, 14, finalY + 27);
+                doc.text(`• Funcionários Monitorados: ${dataToExport.length}`, 14, finalY + 34);
+
+                doc.save(`${filename}.pdf`);
+            }
+            toast.success('Relatório de ponto gerado com sucesso!');
+        } catch (error) {
+            console.error(error);
+            toast.error('Erro ao gerar relatório de ponto');
+        } finally {
+            setLoadingReport(null);
+        }
+    };
+
     return (
         <div className="space-y-8 max-w-7xl mx-auto pb-10">
             {/* Header com Filtros */}
@@ -504,6 +602,15 @@ const ReportsPage: React.FC = () => {
                     loading={loadingReport === 'equipe'}
                     onOpen={() => openModal('equipe')}
                 />
+
+                <ReportCard 
+                    title="Controle de Ponto" 
+                    description="Frequência, atrasos, taxa de presença e horas trabalhadas por funcionário."
+                    icon={Clock}
+                    color="bg-indigo-600"
+                    loading={loadingReport === 'ponto'}
+                    onOpen={() => openModal('ponto')}
+                />
             </div>
             
             {modalOpen && (
@@ -515,6 +622,7 @@ const ReportsPage: React.FC = () => {
                                 {modalType === 'produtos' && 'Estoque & Produtos'}
                                 {modalType === 'financeiro' && 'Fluxo Financeiro'}
                                 {modalType === 'equipe' && 'Performance da Equipe'}
+                                {modalType === 'ponto' && 'Controle de Ponto'}
                             </h2>
                             <button onClick={closeModal} className="text-gray-500 hover:text-gray-700">
                                 <X className="w-6 h-6" />
@@ -523,7 +631,13 @@ const ReportsPage: React.FC = () => {
                         <div className="px-6 py-4">
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                                 <button
-                                    onClick={() => (modalType === 'vendas' ? handleVendasReport('pdf') : modalType === 'produtos' ? handleProdutosReport('pdf') : modalType === 'financeiro' ? handleFinanceiroReport('pdf') : handleEquipeReport('pdf'))}
+                                    onClick={() => (
+                                        modalType === 'vendas' ? handleVendasReport('pdf') : 
+                                        modalType === 'produtos' ? handleProdutosReport('pdf') : 
+                                        modalType === 'financeiro' ? handleFinanceiroReport('pdf') : 
+                                        modalType === 'ponto' ? handlePontoReport('pdf') :
+                                        handleEquipeReport('pdf')
+                                    )}
                                     disabled={loadingReport !== null}
                                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-gray-700 hover:text-red-700 transition-colors border border-gray-100 hover:border-red-200"
                                 >
@@ -531,7 +645,13 @@ const ReportsPage: React.FC = () => {
                                     <span className="text-xs font-medium">Exportar PDF</span>
                                 </button>
                                 <button
-                                    onClick={() => (modalType === 'vendas' ? handleVendasReport('excel') : modalType === 'produtos' ? handleProdutosReport('excel') : modalType === 'financeiro' ? handleFinanceiroReport('excel') : handleEquipeReport('excel'))}
+                                    onClick={() => (
+                                        modalType === 'vendas' ? handleVendasReport('excel') : 
+                                        modalType === 'produtos' ? handleProdutosReport('excel') : 
+                                        modalType === 'financeiro' ? handleFinanceiroReport('excel') : 
+                                        modalType === 'ponto' ? handlePontoReport('excel') :
+                                        handleEquipeReport('excel')
+                                    )}
                                     disabled={loadingReport !== null}
                                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-green-50 text-gray-700 hover:text-green-700 transition-colors border border-gray-100 hover:border-green-200"
                                 >
@@ -539,7 +659,13 @@ const ReportsPage: React.FC = () => {
                                     <span className="text-xs font-medium">Exportar Excel</span>
                                 </button>
                                 <button
-                                    onClick={() => (modalType === 'vendas' ? handleVendasReport('csv') : modalType === 'produtos' ? handleProdutosReport('csv') : modalType === 'financeiro' ? handleFinanceiroReport('csv') : handleEquipeReport('csv'))}
+                                    onClick={() => (
+                                        modalType === 'vendas' ? handleVendasReport('csv') : 
+                                        modalType === 'produtos' ? handleProdutosReport('csv') : 
+                                        modalType === 'financeiro' ? handleFinanceiroReport('csv') : 
+                                        modalType === 'ponto' ? handlePontoReport('csv') :
+                                        handleEquipeReport('csv')
+                                    )}
                                     disabled={loadingReport !== null}
                                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-blue-50 text-gray-700 hover:text-blue-700 transition-colors border border-gray-100 hover:border-blue-200"
                                 >
@@ -641,6 +767,46 @@ const ReportsPage: React.FC = () => {
                                                     <td className="px-4 py-2">{item['Vendas Realizadas']}</td>
                                                     <td className="px-4 py-2">{item['Total Vendido (R$)'].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                                     <td className="px-4 py-2">{parseFloat(item['Ticket Médio (R$)']).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                {modalType === 'ponto' && (
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Funcionário</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Dias Trabalhados</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Presença %</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Atrasos</th>
+                                                <th className="px-4 py-2 text-left font-medium text-gray-700">Min. Atraso</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {pontoData.filter(filterRow).map((item, idx) => (
+                                                <tr key={idx} className="border-t">
+                                                    <td className="px-4 py-2 font-medium">{item['Funcionário']}</td>
+                                                    <td className="px-4 py-2">{item['Dias Trabalhados']}</td>
+                                                    <td className="px-4 py-2">
+                                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                                            parseFloat(item['Taxa Presença (%)']) >= 95 ? 'bg-green-100 text-green-800' :
+                                                            parseFloat(item['Taxa Presença (%)']) >= 85 ? 'bg-yellow-100 text-yellow-800' :
+                                                            'bg-red-100 text-red-800'
+                                                        }`}>
+                                                            {item['Taxa Presença (%)']}%
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        <span className={`font-semibold ${
+                                                            item['Total Atrasos'] > 5 ? 'text-red-600' :
+                                                            item['Total Atrasos'] > 2 ? 'text-amber-600' :
+                                                            'text-green-600'
+                                                        }`}>
+                                                            {item['Total Atrasos']}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-2 text-gray-600">{item['Minutos Atraso']} min</td>
                                                 </tr>
                                             ))}
                                         </tbody>
