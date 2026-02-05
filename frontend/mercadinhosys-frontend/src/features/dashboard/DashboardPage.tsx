@@ -13,6 +13,9 @@ import {
   PieChart, Pie, Legend
 } from 'recharts';
 
+import { CorrelationDetailsModal } from './CorrelationDetailsModal';
+import { RecommendationDetailsModal } from './RecommendationDetailsModal';
+
 // API Client
 import { apiClient } from '../../api/apiClient';
 
@@ -110,6 +113,8 @@ interface InsightsCientificos {
     correlacao: number;
     significancia: number;
     insight: string;
+    explicacao?: string;
+    acoes?: string[];
   }>;
   anomalias: Array<{
     tipo: string;
@@ -234,6 +239,15 @@ const DashboardPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'cientifico'>('cientifico');
   const [hoveredKPI, setHoveredKPI] = useState<number | null>(null);
   const [expandedKPI, setExpandedKPI] = useState<number | null>(null);
+  const [expenseChartMode, setExpenseChartMode] = useState<'barras' | 'pizza'>('barras');
+  const [selectedExpenseIndex, setSelectedExpenseIndex] = useState<number | null>(null);
+
+  // Estados para Modal de Correlação
+  const [selectedCorrelation, setSelectedCorrelation] = useState<any>(null);
+  const [isCorrelationModalOpen, setIsCorrelationModalOpen] = useState(false);
+  // Estados para Modal de Recomendação
+  const [selectedRecommendation, setSelectedRecommendation] = useState<any>(null);
+  const [isRecommendationModalOpen, setIsRecommendationModalOpen] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -1010,62 +1024,142 @@ const DashboardPage: React.FC = () => {
               {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
               <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
                 <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
-                <div className="h-[300px]">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm text-gray-600">
+                    Ordenado por valor (desc). Clique em uma barra para destacar.
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      onClick={() => setExpenseChartMode('barras')}
+                    >
+                      Barras
+                    </button>
+                    <button
+                      className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      onClick={() => setExpenseChartMode('pizza')}
+                    >
+                      Pizza
+                    </button>
+                  </div>
+                </div>
+                <div className="h-[320px]">
                   {analise_financeira?.despesas_detalhadas && analise_financeira.despesas_detalhadas.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={analise_financeira.despesas_detalhadas}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                            const RADIAN = Math.PI / 180;
-                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                            return percent > 0.05 ? (
-                              <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight="bold">
-                                {`${(percent * 100).toFixed(0)}%`}
-                              </text>
-                            ) : null;
-                          }}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="valor"
-                          nameKey="tipo"
+                    expenseChartMode === 'barras' ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={[...analise_financeira.despesas_detalhadas].sort((a, b) => b.valor - a.valor)}
+                          layout="vertical"
+                          margin={{ left: 80, right: 20, top: 10, bottom: 10 }}
                         >
-                          {analise_financeira.despesas_detalhadas.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={getDistinctColor(index)} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200 z-50">
-                                  <p className="font-bold text-gray-900">{data.tipo}</p>
-                                  <p className="text-gray-600">Valor: R$ {data.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                  <p className="text-gray-600">Percentual: {data.percentual.toFixed(1)}%</p>
-                                  <p className="text-gray-600">Impacto no Lucro: {data.impacto_lucro.toFixed(1)}%</p>
-                                  <p className="text-sm text-gray-500 mt-2">
-                                    Tendência: {data.tendencia === 'alta' ? '📈 Alta' : data.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <Legend 
-                          layout="vertical" 
-                          verticalAlign="middle" 
-                          align="right"
-                          wrapperStyle={{ fontSize: '12px' }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                          <XAxis
+                            type="number"
+                            tickFormatter={(v) => `R$ ${Number(v).toLocaleString('pt-BR')}`}
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="tipo"
+                            width={80}
+                          />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const d = payload[0].payload;
+                                return (
+                                  <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
+                                    <p className="font-bold text-gray-900">{d.tipo}</p>
+                                    <p className="text-gray-600">Valor: R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-gray-600">Percentual: {d.percentual.toFixed(1)}%</p>
+                                    <p className="text-gray-600">Impacto no Lucro: {d.impacto_lucro.toFixed(1)}%</p>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                      Tendência: {d.tendencia === 'alta' ? '📈 Alta' : d.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar
+                            dataKey="valor"
+                            name="Valor"
+                            onClick={(data, index) => setSelectedExpenseIndex(selectedExpenseIndex === index ? null : index)}
+                          >
+                            {[...analise_financeira.despesas_detalhadas]
+                              .sort((a, b) => b.valor - a.valor)
+                              .map((entry, index) => (
+                                <Cell
+                                  key={`cell-bar-${index}`}
+                                  fill={getDistinctColor(index)}
+                                  opacity={selectedExpenseIndex === null || selectedExpenseIndex === index ? 1 : 0.35}
+                                />
+                              ))}
+                            <LabelList
+                              dataKey="percentual"
+                              formatter={(v: number) => `${v.toFixed(1)}%`}
+                              position="right"
+                              style={{ fill: '#374151', fontSize: 11, fontWeight: 600 }}
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={analise_financeira.despesas_detalhadas}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                              const RADIAN = Math.PI / 180;
+                              const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                              const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                              const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                              return percent > 0.05 ? (
+                                <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight="bold">
+                                  {`${(percent * 100).toFixed(0)}%`}
+                                </text>
+                              ) : null;
+                            }}
+                            outerRadius={100}
+                            fill="#8884d8"
+                            dataKey="valor"
+                            nameKey="tipo"
+                          >
+                            {analise_financeira.despesas_detalhadas.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={getDistinctColor(index)} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200 z-50">
+                                    <p className="font-bold text-gray-900">{data.tipo}</p>
+                                    <p className="text-gray-600">Valor: R$ {data.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                    <p className="text-gray-600">Percentual: {data.percentual.toFixed(1)}%</p>
+                                    <p className="text-gray-600">Impacto no Lucro: {data.impacto_lucro.toFixed(1)}%</p>
+                                    <p className="text-sm text-gray-500 mt-2">
+                                      Tendência: {data.tendencia === 'alta' ? '📈 Alta' : data.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Legend 
+                            layout="vertical" 
+                            verticalAlign="middle" 
+                            align="right"
+                            wrapperStyle={{ fontSize: '12px' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
@@ -1081,6 +1175,19 @@ const DashboardPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+                {selectedExpenseIndex !== null && analise_financeira?.despesas_detalhadas?.length > 0 && (
+                  <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <p className="text-sm text-indigo-900 font-semibold mb-1">Detalhe destacado</p>
+                    {(() => {
+                      const d = [...analise_financeira.despesas_detalhadas].sort((a, b) => b.valor - a.valor)[selectedExpenseIndex!];
+                      return (
+                        <div className="text-sm text-indigo-800">
+                          <span className="font-bold">{d.tipo}</span>: R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • {d.percentual.toFixed(1)}% • Impacto no lucro: {d.impacto_lucro.toFixed(1)}% • Tendência: {d.tendencia === 'alta' ? '📈 Alta' : d.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4 mt-6">
                   <div className="bg-green-50 p-4 rounded-lg">
                     <p className="text-sm text-green-800 font-medium">Lucro Bruto</p>
@@ -1177,9 +1284,16 @@ const DashboardPage: React.FC = () => {
                 </h3>
                 <div className="space-y-4">
                   {(insights_cientificos.correlações || []).map((corr, idx) => (
-                    <div key={idx} className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-colors">
+                    <div 
+                      key={idx} 
+                      className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-all cursor-pointer group border border-transparent hover:border-gray-700"
+                      onClick={() => {
+                        setSelectedCorrelation(corr);
+                        setIsCorrelationModalOpen(true);
+                      }}
+                    >
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-gray-300 font-medium">{corr.variavel1} × {corr.variavel2}</span>
+                        <span className="text-gray-300 font-medium group-hover:text-white transition-colors">{corr.variavel1} × {corr.variavel2}</span>
                         <span className={`px-3 py-1 rounded-full text-sm font-bold ${Math.abs(corr.correlacao) > 0.7 ? 'bg-red-500/20 text-red-300' :
                             Math.abs(corr.correlacao) > 0.4 ? 'bg-yellow-500/20 text-yellow-300' :
                               'bg-green-500/20 text-green-300'
@@ -1187,10 +1301,13 @@ const DashboardPage: React.FC = () => {
                           r = {corr.correlacao.toFixed(2)}
                         </span>
                       </div>
-                      <p className="text-gray-400 text-sm mb-2">{corr.insight}</p>
+                      <p className="text-gray-400 text-sm mb-2 group-hover:text-gray-300">{corr.insight}</p>
                       <div className="flex justify-between text-xs text-gray-500">
                         <span>Significância: p = {corr.significancia.toFixed(3)}</span>
                         <span>{Math.abs(corr.correlacao) > 0.7 ? '🔴 Forte' : Math.abs(corr.correlacao) > 0.4 ? '🟡 Moderada' : '🟢 Fraca'}</span>
+                      </div>
+                      <div className="mt-2 text-center text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+                        Clique para ver análise detalhada
                       </div>
                     </div>
                   ))}
@@ -1234,7 +1351,14 @@ const DashboardPage: React.FC = () => {
                   <h3 className="text-xl font-bold text-white mb-6">🚀 Recomendações de Otimização</h3>
                   <div className="space-y-4">
                     {(insights_cientificos.recomendacoes_otimizacao || []).map((rec, idx) => (
-                      <div key={idx} className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-colors cursor-pointer">
+                      <div
+                        key={idx}
+                        className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-all cursor-pointer group border border-transparent hover:border-purple-700/40"
+                        onClick={() => {
+                          setSelectedRecommendation(rec);
+                          setIsRecommendationModalOpen(true);
+                        }}
+                      >
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-gray-300 font-medium">{rec.area}</span>
                           <span className={`px-3 py-1 rounded-full text-xs font-bold ${rec.complexidade === 'baixa' ? 'bg-green-500/30 text-green-300' :
@@ -1245,9 +1369,23 @@ const DashboardPage: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-gray-300 mb-3">{rec.acao}</p>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Impacto Esperado:</span>
-                          <span className="text-green-400 font-bold">+{(typeof rec.impacto_esperado === 'number' ? rec.impacto_esperado.toFixed(1) : '0.0')}%</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-400 text-sm">Impacto:</span>
+                          <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div
+                              className="h-2 bg-green-400 rounded-full transition-all"
+                              style={{ width: `${Math.min(100, Math.max(0, rec.impacto_esperado))}%` }}
+                            />
+                          </div>
+                          <span className="text-green-300 text-sm font-bold">+{(typeof rec.impacto_esperado === 'number' ? rec.impacto_esperado.toFixed(1) : '0.0')}%</span>
+                        </div>
+                        {Array.isArray(rec.acoes_detalhadas) && rec.acoes_detalhadas.length > 0 && (
+                          <div className="mt-3 text-xs text-gray-400">
+                            <span className="font-semibold text-gray-300">Passos:</span> {rec.acoes_detalhadas[0]}
+                          </div>
+                        )}
+                        <div className="mt-2 text-center text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+                          Clique para ver gráficos e plano de ação detalhado
                         </div>
                       </div>
                     ))}
@@ -1411,6 +1549,19 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
       )}
+
+      {/* MODAL DE CORRELAÇÃO */}
+      <CorrelationDetailsModal 
+        isOpen={isCorrelationModalOpen} 
+        onClose={() => setIsCorrelationModalOpen(false)} 
+        correlation={selectedCorrelation} 
+      />
+       {/* MODAL DE RECOMENDAÇÃO */}
+       <RecommendationDetailsModal
+         isOpen={isRecommendationModalOpen}
+         onClose={() => setIsRecommendationModalOpen(false)}
+         recommendation={selectedRecommendation}
+       />
     </div>
   );
 };
