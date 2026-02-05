@@ -11,9 +11,16 @@ import base64
 import os
 from werkzeug.utils import secure_filename
 import logging
+from functools import lru_cache
+import math
 
 logger = logging.getLogger(__name__)
 ponto_bp = Blueprint('ponto', __name__)
+
+# Cache de configurações
+_config_cache = {}
+_config_cache_time = {}
+CACHE_TIMEOUT = 3600  # 1 hora
 
 
 def get_funcionario_logado():
@@ -44,7 +51,13 @@ def calcular_minutos_atraso(hora_registro, hora_esperada, tolerancia):
 def salvar_foto_base64(foto_base64, funcionario_id):
     """Salva foto em base64 e retorna o caminho"""
     try:
-        if not foto_base64 or not foto_base64.startswith('data:image'):
+        if not foto_base64:
+            logger.warning("Foto vazia recebida")
+            return None
+        
+        # Verificar se é base64 com data URL
+        if not foto_base64.startswith('data:image'):
+            logger.error(f"Foto não é data URL válida. Começa com: {foto_base64[:50]}")
             return None
         
         # Extrair dados da imagem
@@ -70,6 +83,47 @@ def salvar_foto_base64(foto_base64, funcionario_id):
         return None
 
 
+def calcular_distancia_haversine(lat1, lon1, lat2, lon2):
+    """Calcula distância entre dois pontos usando Haversine (em metros)"""
+    try:
+        R = 6371000  # Raio da Terra em metros
+        
+        dLat = math.radians(lat2 - lat1)
+        dLon = math.radians(lon2 - lon1)
+        
+        a = math.sin(dLat / 2) * math.sin(dLat / 2) + \
+            math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * \
+            math.sin(dLon / 2) * math.sin(dLon / 2)
+        
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        
+        return R * c  # Distância em metros
+    except Exception as e:
+        logger.error(f"Erro ao calcular distância: {e}")
+        return None
+
+
+def obter_configuracao_com_cache(estabelecimento_id):
+    """Obtém configuração com cache"""
+    cache_key = f"config_{estabelecimento_id}"
+    now = datetime.now().timestamp()
+    
+    if cache_key in _config_cache:
+        if now - _config_cache_time.get(cache_key, 0) < CACHE_TIMEOUT:
+            return _config_cache[cache_key]
+    
+    # Buscar do banco de dados
+    config = ConfiguracaoHorario.query.filter_by(
+        estabelecimento_id=estabelecimento_id
+    ).first()
+    
+    # Armazenar em cache
+    _config_cache[cache_key] = config
+    _config_cache_time[cache_key] = now
+    
+    return config
+
+
 @ponto_bp.route('/registrar', methods=['POST'])
 @jwt_required()
 def registrar_ponto():
@@ -81,6 +135,18 @@ def registrar_ponto():
         
         data = request.get_json()
         tipo_registro = data.get('tipo_registro')
+        
+        # DEBUG: Log completo do que foi recebido
+        logger.info(f"🔍 RECEBIDO NA API PONTO:")
+        logger.info(f"   Funcionário: {funcionario.id} - {funcionario.nome}")
+        logger.info(f"   Tipo: {tipo_registro}")
+        logger.info(f"   Tem foto: {bool(data.get('foto'))}")
+        if data.get('foto'):
+            foto_str = data.get('foto')
+            logger.info(f"   Tamanho foto: {len(foto_str)} caracteres")
+            logger.info(f"   Começa com: {foto_str[:80]}")
+        logger.info(f"   Latitude: {data.get('latitude')}")
+        logger.info(f"   Longitude: {data.get('longitude')}")
         
         if tipo_registro not in ['entrada', 'saida_almoco', 'retorno_almoco', 'saida']:
             return jsonify({'success': False, 'message': 'Tipo de registro inválido'}), 400
@@ -100,9 +166,27 @@ def registrar_ponto():
             }), 400
         
         # Obter configuração de horário
-        config = ConfiguracaoHorario.query.filter_by(
-            estabelecimento_id=funcionario.estabelecimento_id
-        ).first()
+        config = obter_configuracao_com_cache(funcionario.estabelecimento_id)
+        
+        # Validar se foto é obrigatória
+        if config and config.exigir_foto and not data.get('foto'):
+            return jsonify({
+                'success': False,
+                'message': 'Foto é obrigatória para este estabelecimento'
+            }), 400
+        
+        # Validar se localização é obrigatória
+        if config and config.exigir_localizacao:
+            if not data.get('latitude') or not data.get('longitude'):
+                return jsonify({
+                    'success': False,
+                    'message': 'Localização é obrigatória para este estabelecimento'
+                }), 400
+            
+            # Validar raio permitido
+            # Usar coordenadas do estabelecimento (se disponíveis)
+            # Por enquanto, apenas registrar a localização
+            # TODO: Adicionar coordenadas ao estabelecimento para validar raio
         
         # Hora atual
         hora_atual = datetime.now().time()
@@ -134,7 +218,9 @@ def registrar_ponto():
         # Salvar foto se fornecida
         foto_url = None
         if data.get('foto'):
+            logger.info(f"📸 Salvando foto para funcionário {funcionario.id}")
             foto_url = salvar_foto_base64(data.get('foto'), funcionario.id)
+            logger.info(f"📸 Foto salva: {foto_url}")
         
         # Criar registro
         registro = RegistroPonto(
@@ -594,4 +680,73 @@ def relatorio_detalhado_funcionario(funcionario_id):
         
     except Exception as e:
         logger.error(f"Erro ao gerar relatório detalhado: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ponto_bp.route('/teste/limpar-hoje', methods=['DELETE'])
+@jwt_required()
+def limpar_registros_teste():
+    """
+    Endpoint de TESTE APENAS - Limpa todos os registros de ponto de hoje
+    Permite testar novamente o fluxo de registro de ponto
+    
+    ⚠️ CUIDADO: Esta rota deve ser removida ou protegida em produção!
+    """
+    try:
+        funcionario = get_funcionario_logado()
+        if not funcionario:
+            return jsonify({'success': False, 'message': 'Funcionário não encontrado'}), 404
+        
+        hoje = date.today()
+        
+        # Buscar registros de hoje
+        registros = RegistroPonto.query.filter_by(
+            funcionario_id=funcionario.id,
+            data=hoje
+        ).all()
+        
+        if not registros:
+            return jsonify({
+                'success': True,
+                'message': 'Nenhum registro para limpar hoje',
+                'data': {
+                    'funcionario_id': funcionario.id,
+                    'data': hoje.isoformat(),
+                    'registros_removidos': 0
+                }
+            }), 200
+        
+        # Deletar arquivos de foto associados
+        for registro in registros:
+            if registro.foto_url:
+                try:
+                    filepath = registro.foto_url.replace('/uploads/', 'uploads/')
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                        logger.info(f"Foto removida: {filepath}")
+                except Exception as e:
+                    logger.error(f"Erro ao remover foto {registro.foto_url}: {e}")
+        
+        # Deletar registros
+        for registro in registros:
+            db.session.delete(registro)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(registros)} registro(s) de ponto removido(s) com sucesso!',
+            'data': {
+                'funcionario_id': funcionario.id,
+                'funcionario_nome': funcionario.nome,
+                'data': hoje.isoformat(),
+                'registros_removidos': len(registros),
+                'tipos_removidos': [r.tipo_registro for r in registros],
+                'fotos_removidas': sum(1 for r in registros if r.foto_url)
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao limpar registros de teste: {e}")
+        db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
