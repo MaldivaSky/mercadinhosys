@@ -415,6 +415,19 @@ export interface Configuracao {
     dashboard_analytics_avancado: boolean;
     alertas_email: boolean;
     alertas_whatsapp: boolean;
+    // Propriedades de localização do estabelecimento
+    latitude_estabelecimento?: number;
+    longitude_estabelecimento?: number;
+    raio_validacao_metros?: number;
+    // Propriedades de horários de ponto
+    hora_entrada_ponto?: string;
+    hora_saida_almoco_ponto?: string;
+    hora_retorno_almoco_ponto?: string;
+    hora_saida_ponto?: string;
+    // Propriedades de validação de ponto
+    exigir_foto_ponto?: boolean;
+    exigir_localizacao_ponto?: boolean;
+    tolerancia_atraso_minutos?: number;
     created_at: string;
     updated_at: string;
 }

@@ -94,7 +94,7 @@ const ReportsPage: React.FC = () => {
             return;
         }
         
-        setModalType(type);
+        setModalType(type as 'vendas' | 'produtos' | 'financeiro' | 'equipe');
         setModalOpen(true);
         try {
             if (type === 'vendas' && vendasData.length === 0) {
@@ -105,8 +105,6 @@ const ReportsPage: React.FC = () => {
                 await fetchFinanceiroData();
             } else if (type === 'equipe' && equipeData.length === 0) {
                 await fetchEquipeData();
-            } else if (type === 'ponto' && pontoData.length === 0) {
-                await fetchPontoData();
             }
         } catch (e) {
             // erros já são tratados dentro dos fetchers
