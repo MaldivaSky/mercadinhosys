@@ -14,8 +14,8 @@ const normalizeUrl = (url: string): string => {
     if (!/\/api$/.test(out)) {
         out = `${out}/api`;
     }
-    // se página é https e url começa com http, troca para https para evitar mixed content
-    if (window.location.protocol === 'https:' && out.startsWith('http://')) {
+    const isLocalHost = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(window.location.host);
+    if (window.location.protocol === 'https:' && out.startsWith('http://') && !isLocalHost) {
         out = out.replace(/^http:\/\//, 'https://');
     }
     return out;
@@ -30,10 +30,11 @@ const getRuntimeApiUrl = (): string | undefined => {
 
 // URL do backend baseada no ambiente com fallback robusto
 const getBaseUrl = (): string => {
+    // Em desenvolvimento com Vite proxy, usar caminho relativo para evitar CORS
+    if (isDevelopment) return '/api';
     const runtimeUrl = getRuntimeApiUrl();
     if (runtimeUrl) return normalizeUrl(runtimeUrl);
     if (import.meta.env.VITE_API_URL) return normalizeUrl(import.meta.env.VITE_API_URL as string);
-    if (isDevelopment) return normalizeUrl('http://localhost:5000');
     return normalizeUrl(window.location.origin);
 };
 

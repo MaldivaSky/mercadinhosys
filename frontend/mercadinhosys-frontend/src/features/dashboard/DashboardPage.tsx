@@ -409,26 +409,74 @@ const DashboardPage: React.FC = () => {
             explanation: `De cada R$ 100 em vendas, R$ ${(mes?.margem_lucro || 0).toFixed(0)} é lucro`,
             expandedContent: (
               <div className="space-y-3">
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-green-900 mb-1">💡 O que isso significa?</p>
+                <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                  <p className="text-sm font-bold text-green-900 mb-2">💡 O que é Margem Líquida?</p>
+                  <p className="text-sm text-green-800 mb-3">
+                    É o percentual de lucro que sobra depois de pagar TODOS os custos do seu mercadinho 
+                    (produtos, funcionários, aluguel, luz, água, etc). 
+                  </p>
+                  <p className="text-sm text-green-800 font-semibold">
+                    📊 Sua margem de {(mes?.margem_lucro || 0).toFixed(1)}% significa:
+                  </p>
                   <p className="text-sm text-green-800">
-                    A margem líquida mostra quanto sobra de lucro depois de pagar todos os custos. 
-                    Uma margem de {(mes?.margem_lucro || 0).toFixed(1)}% significa que você está lucrando 
-                    R$ {(mes?.margem_lucro || 0).toFixed(0)} para cada R$ 100 vendidos.
+                    A cada R$ 100 que você vende, R$ {(mes?.margem_lucro || 0).toFixed(0)} fica de lucro no seu bolso.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Total Vendas</p>
-                    <p className="font-bold text-gray-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Lucro Líquido</p>
-                    <p className="font-bold text-green-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                
+                <div className="bg-white border-2 border-green-200 p-4 rounded-lg">
+                  <p className="text-sm font-bold text-gray-900 mb-3">📈 Detalhamento Financeiro:</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <p className="text-xs text-blue-600 font-medium mb-1">Total Vendido</p>
+                      <p className="text-lg font-bold text-blue-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                      <p className="text-xs text-blue-700 mt-1">Tudo que entrou</p>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <p className="text-xs text-green-600 font-medium mb-1">Lucro Líquido</p>
+                      <p className="text-lg font-bold text-green-900">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                      <p className="text-xs text-green-700 mt-1">O que sobrou</p>
+                    </div>
                   </div>
                 </div>
-                <div className="text-xs text-gray-500 italic">
-                  ✅ Margem saudável: acima de 20% | ⚠️ Atenção: abaixo de 10%
+
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-300">
+                  <p className="text-sm font-bold text-orange-900 mb-2">🎯 Como está sua margem?</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(mes?.margem_lucro || 0) >= 20 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">✅ Excelente: acima de 20% - Seu negócio está muito saudável!</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(mes?.margem_lucro || 0) >= 10 && (mes?.margem_lucro || 0) < 20 ? 'bg-yellow-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">⚠️ Razoável: entre 10% e 20% - Dá para melhorar</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(mes?.margem_lucro || 0) < 10 ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">🚨 Atenção: abaixo de 10% - Precisa melhorar urgente!</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-sm font-bold text-blue-900 mb-2">💪 Como aumentar sua margem:</p>
+                  <ul className="space-y-2 text-sm text-blue-800">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">1.</span>
+                      <span>Negocie melhores preços com fornecedores (compre mais barato)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">2.</span>
+                      <span>Reduza desperdícios e produtos vencidos</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">3.</span>
+                      <span>Foque em vender mais produtos da Classe A (os que dão mais lucro)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-600 font-bold">4.</span>
+                      <span>Controle bem as despesas (luz, água, salários)</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             )
@@ -444,26 +492,92 @@ const DashboardPage: React.FC = () => {
             explanation: `Para cada R$ 100 investidos, você ganhou R$ ${(mes?.roi_mensal || 0).toFixed(0)}`,
             expandedContent: (
               <div className="space-y-3">
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-blue-900 mb-1">💡 O que isso significa?</p>
+                <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                  <p className="text-sm font-bold text-blue-900 mb-2">💡 O que é ROI (Retorno sobre Investimento)?</p>
+                  <p className="text-sm text-blue-800 mb-3">
+                    ROI mostra quanto dinheiro você GANHOU em relação ao que você INVESTIU comprando produtos para vender.
+                    É como saber se o dinheiro que você gastou comprando mercadorias valeu a pena.
+                  </p>
+                  <p className="text-sm text-blue-800 font-semibold">
+                    📊 Seu ROI de {(mes?.roi_mensal || 0).toFixed(1)}% significa:
+                  </p>
                   <p className="text-sm text-blue-800">
-                    O ROI mostra o retorno do seu investimento em estoque. Um ROI de {(mes?.roi_mensal || 0).toFixed(1)}% 
-                    significa que para cada R$ 100 investidos em produtos, você ganhou R$ {(mes?.roi_mensal || 0).toFixed(0)} de lucro.
+                    Para cada R$ 100 que você gastou comprando produtos, você ganhou R$ {(mes?.roi_mensal || 0).toFixed(0)} de lucro.
                   </p>
                 </div>
-                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-blue-900 mb-2">🏆 Produtos que mais contribuíram:</p>
+
+                <div className="bg-white border-2 border-blue-200 p-4 rounded-lg">
+                  <p className="text-sm font-bold text-gray-900 mb-3">💰 Exemplo Prático:</p>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    <div className="flex justify-between items-center p-2 bg-red-50 rounded">
+                      <span>Você investiu (comprou produtos):</span>
+                      <span className="font-bold text-red-700">- R$ {(mes?.investimentos || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-green-50 rounded">
+                      <span>Você ganhou de lucro:</span>
+                      <span className="font-bold text-green-700">+ R$ {((mes?.investimentos || 0) * (mes?.roi_mensal || 0) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-blue-100 rounded border-2 border-blue-400">
+                      <span className="font-bold">Retorno (ROI):</span>
+                      <span className="font-bold text-blue-900">{(mes?.roi_mensal || 0).toFixed(1)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-300">
+                  <p className="text-sm font-bold text-purple-900 mb-2">🏆 Produtos que mais deram retorno:</p>
+                  <p className="text-xs text-purple-700 mb-3">Estes são os produtos que mais trouxeram lucro para você:</p>
                   <div className="space-y-2">
                     {analise_produtos?.produtos_estrela?.slice(0, 3).map((produto: any, idx: number) => (
-                      <div key={produto.id} className="flex justify-between items-center text-sm">
-                        <span className="text-blue-800 truncate flex-1">{idx + 1}. {produto.nome}</span>
-                        <span className="font-bold text-blue-600 ml-2">R$ {produto.faturamento.toFixed(0)}</span>
+                      <div key={produto.id} className="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                          <span className="text-sm text-gray-800 font-medium">{produto.nome}</span>
+                        </div>
+                        <span className="font-bold text-purple-700">R$ {produto.faturamento?.toFixed(0) || '0'}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="text-xs text-gray-500 italic">
-                  ✅ ROI excelente: acima de 30% | ⚠️ Atenção: abaixo de 10%
+
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-300">
+                  <p className="text-sm font-bold text-orange-900 mb-2">🎯 Seu ROI está bom?</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(mes?.roi_mensal || 0) >= 30 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">✅ Excelente: acima de 30% - Investimento muito bom!</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(mes?.roi_mensal || 0) >= 15 && (mes?.roi_mensal || 0) < 30 ? 'bg-yellow-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">⚠️ Razoável: entre 15% e 30% - Está ok, mas pode melhorar</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(mes?.roi_mensal || 0) < 15 ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">🚨 Baixo: abaixo de 15% - Precisa revisar os produtos!</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <p className="text-sm font-bold text-green-900 mb-2">💪 Como melhorar seu ROI:</p>
+                  <ul className="space-y-2 text-sm text-green-800">
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-600 font-bold">1.</span>
+                      <span>Compre mais dos produtos que vendem rápido (Classe A)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-600 font-bold">2.</span>
+                      <span>Evite comprar muito de produtos que ficam parados (Classe C)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-600 font-bold">3.</span>
+                      <span>Negocie descontos maiores com fornecedores</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-600 font-bold">4.</span>
+                      <span>Faça promoções para girar o estoque mais rápido</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             )
@@ -479,30 +593,113 @@ const DashboardPage: React.FC = () => {
             explanation: `Cada cliente gastou em média R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
             expandedContent: (
               <div className="space-y-3">
-                <div className="bg-purple-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-purple-900 mb-1">💡 O que isso significa?</p>
+                <div className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
+                  <p className="text-sm font-bold text-purple-900 mb-2">💡 O que é Ticket Médio?</p>
+                  <p className="text-sm text-purple-800 mb-3">
+                    É o valor MÉDIO que cada cliente gasta quando vem ao seu mercadinho. 
+                    Quanto maior o ticket médio, mais cada cliente compra por visita!
+                  </p>
+                  <p className="text-sm text-purple-800 font-semibold">
+                    📊 Seu ticket médio de R$ {(hoje?.ticket_medio || 0).toFixed(2)} significa:
+                  </p>
                   <p className="text-sm text-purple-800">
-                    O ticket médio mostra quanto cada cliente gasta por compra. Um ticket de R$ {(hoje?.ticket_medio || 0).toFixed(2)} 
-                    indica que, em média, cada cliente compra esse valor por visita.
+                    Em média, cada cliente que entra no seu mercado gasta R$ {(hoje?.ticket_medio || 0).toFixed(2)}.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Clientes Hoje</p>
-                    <p className="font-bold text-gray-900">{hoje?.clientes_atendidos || 0}</p>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Total Vendas</p>
-                    <p className="font-bold text-purple-600">R$ {(hoje?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+
+                <div className="bg-white border-2 border-purple-200 p-4 rounded-lg">
+                  <p className="text-sm font-bold text-gray-900 mb-3">📊 Como calculamos:</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                      <span className="text-sm text-gray-700">Total vendido hoje:</span>
+                      <span className="font-bold text-blue-900">R$ {(hoje?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 bg-green-50 rounded">
+                      <span className="text-sm text-gray-700">Clientes atendidos:</span>
+                      <span className="font-bold text-green-900">{hoje?.clientes_atendidos || 0} pessoas</span>
+                    </div>
+                    <div className="border-t-2 border-gray-300 my-2"></div>
+                    <div className="flex justify-between items-center p-2 bg-purple-100 rounded border-2 border-purple-400">
+                      <span className="font-bold text-gray-900">Ticket Médio:</span>
+                      <span className="font-bold text-purple-900">R$ {(hoje?.ticket_medio || 0).toFixed(2)}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 text-center mt-2">
+                      (Total vendido ÷ Número de clientes = Ticket Médio)
+                    </p>
                   </div>
                 </div>
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg">
-                  <p className="text-xs font-semibold text-purple-900 mb-1">💡 Como aumentar o ticket médio?</p>
-                  <ul className="text-xs text-purple-800 space-y-1">
-                    <li>• Ofereça combos e promoções</li>
-                    <li>• Sugira produtos complementares</li>
-                    <li>• Destaque produtos premium</li>
+
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-300">
+                  <p className="text-sm font-bold text-orange-900 mb-2">🎯 Seu ticket médio está bom?</p>
+                  <p className="text-xs text-orange-700 mb-3">Depende do tipo de mercadinho, mas veja uma referência:</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(hoje?.ticket_medio || 0) >= 50 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">✅ Muito bom: acima de R$ 50 por cliente</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(hoje?.ticket_medio || 0) >= 30 && (hoje?.ticket_medio || 0) < 50 ? 'bg-yellow-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">⚠️ Razoável: entre R$ 30 e R$ 50</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(hoje?.ticket_medio || 0) < 30 ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">🚨 Baixo: abaixo de R$ 30 - Precisa melhorar!</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-lg border border-pink-300">
+                  <p className="text-sm font-bold text-pink-900 mb-2">💪 Como aumentar o ticket médio:</p>
+                  <p className="text-xs text-pink-700 mb-3">Faça seus clientes comprarem mais em cada visita:</p>
+                  <ul className="space-y-2 text-sm text-pink-800">
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-600 font-bold">1.</span>
+                      <div>
+                        <p className="font-semibold">Crie combos e promoções</p>
+                        <p className="text-xs text-pink-700">Ex: "Leve 3, pague 2" ou "Combo café + pão com desconto"</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-600 font-bold">2.</span>
+                      <div>
+                        <p className="font-semibold">Sugira produtos complementares</p>
+                        <p className="text-xs text-pink-700">Ex: Cliente comprou macarrão? Ofereça molho de tomate</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-600 font-bold">3.</span>
+                      <div>
+                        <p className="font-semibold">Destaque produtos no caixa</p>
+                        <p className="text-xs text-pink-700">Balas, chocolates, pilhas - coisas que o cliente compra por impulso</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-600 font-bold">4.</span>
+                      <div>
+                        <p className="font-semibold">Organize bem as prateleiras</p>
+                        <p className="text-xs text-pink-700">Produtos mais caros na altura dos olhos, produtos relacionados juntos</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-600 font-bold">5.</span>
+                      <div>
+                        <p className="font-semibold">Ofereça produtos de qualidade</p>
+                        <p className="text-xs text-pink-700">Tenha opções premium para quem quer gastar mais</p>
+                      </div>
+                    </li>
                   </ul>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-sm font-bold text-blue-900 mb-2">💡 Exemplo Real:</p>
+                  <p className="text-sm text-blue-800">
+                    Se você aumentar o ticket médio de R$ {(hoje?.ticket_medio || 0).toFixed(2)} para 
+                    R$ {((hoje?.ticket_medio || 0) * 1.2).toFixed(2)} (20% a mais), com {hoje?.clientes_atendidos || 0} clientes por dia, 
+                    você faturaria <span className="font-bold text-blue-900">R$ {(((hoje?.ticket_medio || 0) * 1.2 * (hoje?.clientes_atendidos || 0)) - (hoje?.total_vendas || 0)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} A MAIS por dia!</span>
+                  </p>
+                  <p className="text-xs text-blue-700 mt-2">
+                    Isso dá <span className="font-bold">R$ {(((hoje?.ticket_medio || 0) * 1.2 * (hoje?.clientes_atendidos || 0)) - (hoje?.total_vendas || 0) * 30).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} a mais por mês!</span>
+                  </p>
                 </div>
               </div>
             )
@@ -518,33 +715,112 @@ const DashboardPage: React.FC = () => {
             explanation: `Você precisa vender R$ ${(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} para não ter prejuízo`,
             expandedContent: (
               <div className="space-y-3">
-                <div className="bg-orange-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-orange-900 mb-1">💡 O que isso significa?</p>
-                  <p className="text-sm text-orange-800">
-                    O ponto de equilíbrio é o valor mínimo que você precisa vender para cobrir todos os custos 
-                    (produtos, despesas, salários, etc). Abaixo de R$ {(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}, 
-                    você tem prejuízo. Acima disso, você lucra!
+                <div className="bg-orange-50 p-4 rounded-lg border-l-4 border-orange-500">
+                  <p className="text-sm font-bold text-orange-900 mb-2">💡 O que é Ponto de Equilíbrio?</p>
+                  <p className="text-sm text-orange-800 mb-3">
+                    É o valor MÍNIMO que você precisa vender para NÃO TER PREJUÍZO. 
+                    É quando o dinheiro que entra é igual ao dinheiro que sai.
                   </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Vendas Atuais</p>
-                    <p className="font-bold text-gray-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Total Despesas</p>
-                    <p className="font-bold text-red-600">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                  <p className="text-sm text-orange-800 font-semibold mb-2">
+                    📊 Seu ponto de equilíbrio é R$ {(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                  </p>
+                  <div className="space-y-2 text-sm text-orange-800">
+                    <p>✅ Se vender MAIS que isso: <span className="font-bold text-green-700">VOCÊ LUCRA!</span></p>
+                    <p>❌ Se vender MENOS que isso: <span className="font-bold text-red-700">VOCÊ TEM PREJUÍZO!</span></p>
                   </div>
                 </div>
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-green-900 mb-1">✅ Situação Atual</p>
+
+                <div className="bg-white border-2 border-orange-200 p-4 rounded-lg">
+                  <p className="text-sm font-bold text-gray-900 mb-3">📊 Situação Atual do Seu Mercadinho:</p>
+                  <div className="space-y-3">
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <p className="text-xs text-blue-600 font-medium mb-1">Quanto você vendeu este mês:</p>
+                      <p className="text-xl font-bold text-blue-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg">
+                      <p className="text-xs text-red-600 font-medium mb-1">Quanto você gastou (despesas):</p>
+                      <p className="text-xl font-bold text-red-900">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                    </div>
+                    <div className="p-3 bg-orange-50 rounded-lg border-2 border-orange-400">
+                      <p className="text-xs text-orange-600 font-medium mb-1">Ponto de Equilíbrio (mínimo para não ter prejuízo):</p>
+                      <p className="text-xl font-bold text-orange-900">R$ {(analise_financeira.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg border-2 border-green-400">
+                      <p className="text-xs text-green-600 font-medium mb-1">Quanto você está acima do ponto de equilíbrio:</p>
+                      <p className="text-xl font-bold text-green-900">
+                        {((mes?.total_vendas || 0) / (analise_financeira.indicadores?.ponto_equilibrio || 1) * 100).toFixed(0)}%
+                      </p>
+                      <p className="text-xs text-green-700 mt-1">
+                        Você vendeu R$ {((mes?.total_vendas || 0) - (analise_financeira.indicadores?.ponto_equilibrio || 0)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} a mais que o mínimo!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-300">
+                  <p className="text-sm font-bold text-green-900 mb-2">✅ Margem de Segurança: {(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%</p>
+                  <p className="text-sm text-green-800 mb-3">
+                    A margem de segurança mostra o quanto você pode "perder" de vendas antes de começar a ter prejuízo.
+                  </p>
+                  <p className="text-sm text-green-800 font-semibold">
+                    📊 O que significa {(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%?
+                  </p>
                   <p className="text-sm text-green-800">
-                    Você está {((mes?.total_vendas || 0) / (analise_financeira.indicadores?.ponto_equilibrio || 1) * 100).toFixed(0)}% 
-                    acima do ponto de equilíbrio. Margem de segurança: {(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}%
+                    Suas vendas podem cair até {(analise_financeira.indicadores?.margem_seguranca || 0).toFixed(1)}% 
+                    (R$ {((mes?.total_vendas || 0) * (analise_financeira.indicadores?.margem_seguranca || 0) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}) 
+                    que você ainda não terá prejuízo!
                   </p>
                 </div>
-                <div className="text-xs text-gray-500 italic">
-                  ✅ Seguro: margem acima de 20% | ⚠️ Atenção: margem abaixo de 10%
+
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-300">
+                  <p className="text-sm font-bold text-orange-900 mb-2">🎯 Sua margem de segurança está boa?</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(analise_financeira.indicadores?.margem_seguranca || 0) >= 30 ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">✅ Excelente: acima de 30% - Muito seguro!</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(analise_financeira.indicadores?.margem_seguranca || 0) >= 15 && (analise_financeira.indicadores?.margem_seguranca || 0) < 30 ? 'bg-yellow-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">⚠️ Razoável: entre 15% e 30% - Está ok</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${(analise_financeira.indicadores?.margem_seguranca || 0) < 15 ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                      <span className="text-sm text-gray-700">🚨 Baixa: abaixo de 15% - Cuidado! Pouca margem de erro</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-sm font-bold text-blue-900 mb-2">💪 Como melhorar seu ponto de equilíbrio:</p>
+                  <p className="text-xs text-blue-700 mb-3">Você pode baixar o ponto de equilíbrio (precisar vender menos) de 2 formas:</p>
+                  <div className="space-y-3">
+                    <div className="bg-white p-3 rounded-lg border-l-4 border-blue-500">
+                      <p className="text-sm font-bold text-blue-900 mb-1">1️⃣ REDUZIR DESPESAS FIXAS</p>
+                      <ul className="text-sm text-blue-800 space-y-1 ml-4">
+                        <li>• Negocie aluguel mais barato</li>
+                        <li>• Economize energia (troque lâmpadas, desligue equipamentos)</li>
+                        <li>• Reduza desperdícios</li>
+                        <li>• Renegocie contratos (internet, telefone)</li>
+                      </ul>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg border-l-4 border-green-500">
+                      <p className="text-sm font-bold text-green-900 mb-1">2️⃣ AUMENTAR A MARGEM DE LUCRO</p>
+                      <ul className="text-sm text-green-800 space-y-1 ml-4">
+                        <li>• Negocie melhores preços com fornecedores</li>
+                        <li>• Venda mais produtos de margem alta</li>
+                        <li>• Reduza produtos que dão pouco lucro</li>
+                        <li>• Ajuste preços quando necessário</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                  <p className="text-sm font-bold text-purple-900 mb-2">💡 Exemplo Prático:</p>
+                  <p className="text-sm text-purple-800">
+                    Se você conseguir reduzir suas despesas em R$ 500 por mês, seu ponto de equilíbrio vai baixar! 
+                    Isso significa que você vai precisar vender MENOS para não ter prejuízo, e vai lucrar MAIS!
+                  </p>
                 </div>
               </div>
             )
@@ -668,15 +944,50 @@ const DashboardPage: React.FC = () => {
                       <YAxis yAxisId="left" />
                       <YAxis yAxisId="right" orientation="right" />
                       <Tooltip
-                        content={({ payload, label }) => (
-                          <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                            <p className="font-bold text-gray-900">{label}</p>
-                            <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-sm text-gray-600">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
-                            <p className="text-sm text-gray-600">Margem: {(payload?.[0]?.payload?.margem || 0).toFixed(1)}%</p>
-                            <p className="text-sm text-gray-600">Qtd Vendida: {payload?.[0]?.payload?.quantidade_vendida}</p>
-                          </div>
-                        )}
+                        content={({ payload, label }) => {
+                          if (payload && payload.length > 0) {
+                            const produto = payload[0].payload;
+                            return (
+                              <div className="bg-white p-4 shadow-2xl rounded-lg border-2 border-gray-300 max-w-sm">
+                                <p className="font-bold text-gray-900 text-base mb-3">{label}</p>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Faturamento:</span>
+                                    <span className="font-bold text-green-700 text-lg">
+                                      R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Classificação:</span>
+                                    <span className={`font-bold text-lg px-3 py-1 rounded-full`} 
+                                          style={{ 
+                                            backgroundColor: getABCColor(produto?.classificacao) + '20',
+                                            color: getABCColor(produto?.classificacao)
+                                          }}>
+                                      Classe {produto?.classificacao}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Margem de lucro:</span>
+                                    <span className="font-bold text-blue-700">{(produto?.margem || 0).toFixed(1)}%</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Quantidade vendida:</span>
+                                    <span className="font-bold text-purple-700">{produto?.quantidade_vendida} un.</span>
+                                  </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <p className="text-xs font-semibold text-gray-700 mb-1">
+                                    💡 {produto?.classificacao === 'A' ? 'Produto CAMPEÃO! Nunca deixe faltar.' :
+                                        produto?.classificacao === 'B' ? 'Produto intermediário. Mantenha estoque moderado.' :
+                                        'Produto lento. Considere reduzir estoque.'}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
                       />
                       <Bar
                         yAxisId="left"
@@ -738,36 +1049,115 @@ const DashboardPage: React.FC = () => {
 
               {/* LEGENDA E DETALHES */}
               <div className="space-y-6">
+                {/* EXPLICAÇÃO DA CURVA ABC */}
+                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-300">
+                  <h3 className="font-bold text-gray-900 mb-3 text-lg">� O que é a Curva ABC?</h3>
+                  <p className="text-sm text-gray-700 mb-4">
+                    A Curva ABC (também chamada de Regra 80/20 ou Princípio de Pareto) divide seus produtos em 3 grupos 
+                    de acordo com quanto dinheiro eles trazem para você:
+                  </p>
+                  <div className="space-y-4">
+                    <div className="bg-white p-4 rounded-lg border-l-4 border-green-500">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                          <span className="text-white font-bold">A</span>
+                        </div>
+                        <p className="font-bold text-green-900 text-base">Classe A - Seus CAMPEÕES 🏆</p>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        São apenas 20% dos seus produtos, mas trazem {analise_produtos.curva_abc.resumo.A.percentual.toFixed(0)}% do seu faturamento!
+                      </p>
+                      <p className="text-sm text-green-800 font-semibold">
+                        💡 O que fazer: NUNCA deixe faltar! Compre sempre, negocie bons preços, destaque na loja.
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-lg border-l-4 border-yellow-500">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center">
+                          <span className="text-white font-bold">B</span>
+                        </div>
+                        <p className="font-bold text-yellow-900 text-base">Classe B - Os INTERMEDIÁRIOS ⚖️</p>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        São 30% dos produtos e trazem {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(0) || 0}% do faturamento.
+                      </p>
+                      <p className="text-sm text-yellow-800 font-semibold">
+                        💡 O que fazer: Mantenha estoque moderado. Fique de olho para não virar Classe C.
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-lg border-l-4 border-red-500">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
+                          <span className="text-white font-bold">C</span>
+                        </div>
+                        <p className="font-bold text-red-900 text-base">Classe C - Os LENTOS 🐌</p>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        São 50% dos produtos (metade do seu estoque!), mas trazem apenas {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(0) || 0}% do faturamento.
+                      </p>
+                      <p className="text-sm text-red-800 font-semibold">
+                        💡 O que fazer: Compre menos! Faça promoções para girar. Considere tirar alguns da loja.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
                   <h3 className="font-bold text-gray-900 mb-4">📊 Interpretação da Curva ABC</h3>
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-green-500"></div>
                       <div>
-                        <p className="font-semibold text-gray-900">Classe A (20% dos produtos)</p>
+                        <p className="font-semibold text-gray-900">Classe A ({analise_produtos.curva_abc.resumo.A.quantidade} produtos)</p>
                         <p className="text-sm text-gray-600">Responsáveis por {analise_produtos.curva_abc.resumo.A.percentual.toFixed(1)}% do faturamento</p>
+                        {analise_produtos.curva_abc.resumo.A.margem_media !== undefined && (
+                          <p className="text-xs text-green-700 font-semibold">Margem média: {analise_produtos.curva_abc.resumo.A.margem_media.toFixed(1)}%</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                       <div>
-                        <p className="font-semibold text-gray-900">Classe B (30% dos produtos)</p>
+                        <p className="font-semibold text-gray-900">Classe B ({analise_produtos?.curva_abc?.resumo?.B?.quantidade || 0} produtos)</p>
                         <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                        {analise_produtos?.curva_abc?.resumo?.B?.margem_media !== undefined && (
+                          <p className="text-xs text-yellow-700 font-semibold">Margem média: {analise_produtos.curva_abc.resumo.B.margem_media.toFixed(1)}%</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-red-500"></div>
                       <div>
-                        <p className="font-semibold text-gray-900">Classe C (50% dos produtos)</p>
+                        <p className="font-semibold text-gray-900">Classe C ({analise_produtos?.curva_abc?.resumo?.C?.quantidade || 0} produtos)</p>
                         <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                        {analise_produtos?.curva_abc?.resumo?.C?.margem_media !== undefined && (
+                          <p className="text-xs text-red-700 font-semibold">Margem média: {analise_produtos.curva_abc.resumo.C.margem_media.toFixed(1)}%</p>
+                        )}
                       </div>
                     </div>
                   </div>
+                  
+                  {analise_produtos?.curva_abc?.pareto_80_20 && (
+                    <div className="mt-4 p-3 bg-green-100 rounded-lg border border-green-300">
+                      <p className="text-sm text-green-900 font-semibold">
+                        ✅ Lei de Pareto Confirmada! 
+                      </p>
+                      <p className="text-xs text-green-800 mt-1">
+                        Seus produtos seguem a regra 80/20: poucos produtos (Classe A) geram a maior parte do faturamento.
+                        Isso é NORMAL e esperado!
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* TOP 5 PRODUTOS DA CLASSE A */}
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <h4 className="font-bold text-gray-900 mb-3">🏆 Top Produtos Classe A</h4>
+                <div className="border-2 border-green-300 rounded-xl p-4 bg-gradient-to-br from-green-50 to-emerald-50">
+                  <h4 className="font-bold text-gray-900 mb-3 text-lg">🏆 Top 5 Produtos Classe A</h4>
+                  <p className="text-sm text-gray-700 mb-4">
+                    Estes são seus produtos MAIS IMPORTANTES! Cuide bem deles:
+                  </p>
                   <div className="space-y-3">
                     {analise_produtos?.curva_abc?.produtos
                       ?.filter(p => p.classificacao === 'A')
@@ -775,23 +1165,31 @@ const DashboardPage: React.FC = () => {
                       ?.map((produto, idx) => (
                         <div
                           key={produto.id}
-                          className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                          className="flex items-center justify-between p-4 hover:bg-white rounded-lg cursor-pointer transition-all shadow-sm border border-green-200"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-green-100 text-green-800 rounded-full flex items-center justify-center font-bold">
+                            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-md">
                               {idx + 1}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{produto.nome}</p>
-                              <p className="text-xs text-gray-500">Margem: {produto.margem.toFixed(1)}%</p>
+                              <p className="font-bold text-gray-900">{produto.nome}</p>
+                              <div className="flex gap-3 mt-1">
+                                <span className="text-xs text-gray-600">Margem: <span className="font-semibold text-green-700">{produto.margem.toFixed(1)}%</span></span>
+                                <span className="text-xs text-gray-600">Vendidos: <span className="font-semibold">{produto.quantidade_vendida}</span></span>
+                              </div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-green-600">R$ {produto.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-xs text-gray-500">{produto.quantidade_vendida} unidades</p>
+                            <p className="font-bold text-green-700 text-lg">R$ {produto.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-gray-600">Faturamento</p>
                           </div>
                         </div>
                       ))}
+                  </div>
+                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-300">
+                    <p className="text-sm text-yellow-900 font-semibold">
+                      ⚠️ ATENÇÃO: Se qualquer um destes produtos faltar, você perde MUITO dinheiro!
+                    </p>
                   </div>
                 </div>
               </div>
@@ -820,6 +1218,29 @@ const DashboardPage: React.FC = () => {
 
         {expandedCards['analise-temporal'] && (
           <div className="p-6 animate-fadeIn">
+            {/* BANNER EXPLICATIVO */}
+            <div className="mb-6 bg-gradient-to-r from-purple-50 to-pink-50 p-5 rounded-xl border-2 border-purple-300">
+              <h3 className="font-bold text-purple-900 mb-3 text-lg">📚 O que é Análise Temporal?</h3>
+              <p className="text-sm text-purple-800 mb-3">
+                A Análise Temporal mostra como suas vendas se comportam ao longo do TEMPO. 
+                Isso ajuda você a entender padrões, prever o futuro e tomar decisões melhores!
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="bg-white p-3 rounded-lg border-l-4 border-purple-500">
+                  <p className="font-bold text-purple-900 text-sm mb-1">📈 Tendência</p>
+                  <p className="text-xs text-gray-700">Suas vendas estão subindo ou caindo? Veja a direção do seu negócio.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border-l-4 border-indigo-500">
+                  <p className="font-bold text-indigo-900 text-sm mb-1">📅 Sazonalidade</p>
+                  <p className="text-xs text-gray-700">Descubra em quais dias/meses você vende mais ou menos.</p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border-l-4 border-green-500">
+                  <p className="font-bold text-green-900 text-sm mb-1">🔮 Previsões</p>
+                  <p className="text-xs text-gray-700">Veja quanto você deve vender nos próximos dias para se preparar!</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
               <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-200">
@@ -841,16 +1262,39 @@ const DashboardPage: React.FC = () => {
                         />
                         <YAxis tick={{ fontSize: 12 }} />
                         <Tooltip
-                          content={({ payload, label }) => (
-                            <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                              <p className="font-bold text-gray-900">{label}</p>
-                              {payload?.map((entry, index) => (
-                                <p key={index} className="text-sm" style={{ color: entry.color }}>
-                                  {entry.name}: R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                              ))}
-                            </div>
-                          )}
+                          content={({ payload, label }) => {
+                            if (payload && payload.length > 0) {
+                              return (
+                                <div className="bg-white p-4 shadow-2xl rounded-lg border-2 border-purple-300 max-w-xs">
+                                  <p className="font-bold text-purple-900 text-base mb-3">📅 {label}</p>
+                                  <div className="space-y-2">
+                                    {payload?.map((entry, index) => (
+                                      <div key={index} className="flex justify-between items-center">
+                                        <span className="text-sm font-medium" style={{ color: entry.color }}>
+                                          {entry.name}:
+                                        </span>
+                                        <span className="font-bold text-lg" style={{ color: entry.color }}>
+                                          R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {payload.length > 1 && payload[0].value && payload[1].value && (
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                      <p className="text-xs text-gray-600">
+                                        {payload[1].value > payload[0].value ? 
+                                          '📈 Previsão acima do realizado' : 
+                                          payload[1].value < payload[0].value ?
+                                          '📉 Previsão abaixo do realizado' :
+                                          '➡️ Previsão igual ao realizado'}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
                         />
                         <Line
                           type="monotone"
@@ -882,22 +1326,38 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-                  <div className="bg-purple-50 p-3 rounded-lg">
-                    <p className="text-sm text-purple-600 font-medium">Tendência</p>
-                    <p className={`text-lg font-bold ${analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-600' : 'text-red-600'}`}>
-                      {analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? '📈 Crescendo' : '📉 Caindo'}
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border-2 border-purple-300 shadow-sm">
+                    <p className="text-xs text-purple-600 font-bold mb-2">📊 TENDÊNCIA</p>
+                    <p className={`text-2xl font-bold mb-1 ${analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-600' : 'text-red-600'}`}>
+                      {analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? '📈' : '📉'}
+                    </p>
+                    <p className={`text-sm font-semibold ${analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-700' : 'text-red-700'}`}>
+                      {analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? 'Crescendo' : 'Caindo'}
+                    </p>
+                    <p className="text-xs text-purple-700 mt-2">
+                      {analise_temporal.tendencia_vendas?.length > 1 && (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal.tendencia_vendas[analise_temporal.tendencia_vendas.length - 2]?.vendas || 0) ? 
+                        '✅ Suas vendas estão subindo!' : 
+                        '⚠️ Suas vendas estão caindo'}
                     </p>
                   </div>
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium">Média 7 dias</p>
-                    <p className="text-lg font-bold text-blue-700">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border-2 border-blue-300 shadow-sm">
+                    <p className="text-xs text-blue-600 font-bold mb-2">📅 MÉDIA 7 DIAS</p>
+                    <p className="text-2xl font-bold text-blue-900 mb-1">
                       R$ {(analise_temporal.tendencia_vendas?.slice(-7).reduce((acc, curr) => acc + (curr.vendas || 0), 0) / Math.max(1, Math.min(7, analise_temporal.tendencia_vendas?.length || 0)))?.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) || '0'}
                     </p>
+                    <p className="text-sm font-semibold text-blue-700">Por dia</p>
+                    <p className="text-xs text-blue-700 mt-2">
+                      Média dos últimos 7 dias
+                    </p>
                   </div>
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <p className="text-sm text-green-600 font-medium">Previsão Amanhã</p>
-                    <p className="text-lg font-bold text-green-700">
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border-2 border-green-300 shadow-sm">
+                    <p className="text-xs text-green-600 font-bold mb-2">🔮 PREVISÃO AMANHÃ</p>
+                    <p className="text-2xl font-bold text-green-900 mb-1">
                       R$ {(analise_temporal.previsao_proxima_semana[0]?.previsao || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                    </p>
+                    <p className="text-sm font-semibold text-green-700">Esperado</p>
+                    <p className="text-xs text-green-700 mt-2">
+                      Prepare-se para este valor!
                     </p>
                   </div>
                 </div>
@@ -1020,26 +1480,61 @@ const DashboardPage: React.FC = () => {
 
         {expandedCards['analise-financeira'] && (
           <div className="p-6 animate-fadeIn">
+            {/* BANNER EXPLICATIVO */}
+            <div className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 p-5 rounded-xl border-2 border-green-300">
+              <h3 className="font-bold text-green-900 mb-3 text-lg">📚 O que é Análise Financeira?</h3>
+              <p className="text-sm text-green-800 mb-3">
+                A Análise Financeira mostra para onde está indo o seu dinheiro e quanto você está lucrando de verdade.
+                É como um "raio-X" da saúde financeira do seu mercadinho!
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-white p-3 rounded-lg border-l-4 border-red-500">
+                  <p className="font-bold text-red-900 text-sm mb-1">💸 Despesas</p>
+                  <p className="text-xs text-gray-700">
+                    Veja quanto você gasta com cada tipo de despesa (aluguel, luz, salários, etc). 
+                    Descubra onde pode economizar!
+                  </p>
+                </div>
+                <div className="bg-white p-3 rounded-lg border-l-4 border-green-500">
+                  <p className="font-bold text-green-900 text-sm mb-1">💰 Margens</p>
+                  <p className="text-xs text-gray-700">
+                    Entenda quanto você lucra de verdade depois de pagar tudo. 
+                    Quanto maior a margem, melhor!
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
               <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
+                <div className="mb-4 bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                  <p className="text-sm font-bold text-blue-900 mb-2">💡 Como ler este gráfico:</p>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Cada barra mostra um tipo de despesa</li>
+                    <li>• Quanto MAIOR a barra, mais você gasta com aquilo</li>
+                    <li>• O número (%) mostra quanto aquela despesa representa do total</li>
+                    <li>• Clique em uma barra para destacá-la e ver mais detalhes</li>
+                  </ul>
+                </div>
+                
                 <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm text-gray-600">
-                    Ordenado por valor (desc). Clique em uma barra para destacar.
+                    Ordenado por valor (maior para menor)
                   </div>
                   <div className="flex gap-2">
                     <button
-                      className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      className={`px-3 py-1 rounded-lg ${expenseChartMode === 'barras' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'} hover:bg-blue-500 hover:text-white transition-colors`}
                       onClick={() => setExpenseChartMode('barras')}
                     >
-                      Barras
+                      📊 Barras
                     </button>
                     <button
-                      className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      className={`px-3 py-1 rounded-lg ${expenseChartMode === 'pizza' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'} hover:bg-blue-500 hover:text-white transition-colors`}
                       onClick={() => setExpenseChartMode('pizza')}
                     >
-                      Pizza
+                      🥧 Pizza
                     </button>
                   </div>
                 </div>
@@ -1067,14 +1562,32 @@ const DashboardPage: React.FC = () => {
                               if (active && payload && payload.length) {
                                 const d = payload[0].payload;
                                 return (
-                                  <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                                    <p className="font-bold text-gray-900">{d.tipo}</p>
-                                    <p className="text-gray-600">Valor: R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    <p className="text-gray-600">Percentual: {d.percentual.toFixed(1)}%</p>
-                                    <p className="text-gray-600">Impacto no Lucro: {d.impacto_lucro.toFixed(1)}%</p>
-                                    <p className="text-sm text-gray-500 mt-2">
-                                      Tendência: {d.tendencia === 'alta' ? '📈 Alta' : d.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
-                                    </p>
+                                  <div className="bg-white p-4 shadow-2xl rounded-lg border-2 border-gray-300 max-w-xs">
+                                    <p className="font-bold text-gray-900 text-base mb-2">{d.tipo}</p>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">Valor gasto:</span>
+                                        <span className="font-bold text-red-700">R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">% do total:</span>
+                                        <span className="font-bold text-blue-700">{d.percentual.toFixed(1)}%</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">Impacto no lucro:</span>
+                                        <span className="font-bold text-orange-700">{d.impacto_lucro.toFixed(1)}%</span>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                      <p className="text-sm font-semibold text-gray-700 mb-1">
+                                        Tendência: {d.tendencia === 'alta' ? '📈 Aumentando' : d.tendencia === 'baixa' ? '📉 Diminuindo' : '➡️ Estável'}
+                                      </p>
+                                      <p className="text-xs text-gray-600">
+                                        {d.tendencia === 'alta' ? '⚠️ Esta despesa está crescendo. Fique atento!' : 
+                                         d.tendencia === 'baixa' ? '✅ Ótimo! Esta despesa está diminuindo.' : 
+                                         '✓ Esta despesa está controlada.'}
+                                      </p>
+                                    </div>
                                   </div>
                                 );
                               }
@@ -1137,14 +1650,32 @@ const DashboardPage: React.FC = () => {
                               if (active && payload && payload.length) {
                                 const data = payload[0].payload;
                                 return (
-                                  <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200 z-50">
-                                    <p className="font-bold text-gray-900">{data.tipo}</p>
-                                    <p className="text-gray-600">Valor: R$ {data.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                    <p className="text-gray-600">Percentual: {data.percentual.toFixed(1)}%</p>
-                                    <p className="text-gray-600">Impacto no Lucro: {data.impacto_lucro.toFixed(1)}%</p>
-                                    <p className="text-sm text-gray-500 mt-2">
-                                      Tendência: {data.tendencia === 'alta' ? '📈 Alta' : data.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
-                                    </p>
+                                  <div className="bg-white p-4 shadow-2xl rounded-lg border-2 border-gray-300 z-50 max-w-xs">
+                                    <p className="font-bold text-gray-900 text-base mb-2">{data.tipo}</p>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">Valor gasto:</span>
+                                        <span className="font-bold text-red-700">R$ {data.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">% do total:</span>
+                                        <span className="font-bold text-blue-700">{data.percentual.toFixed(1)}%</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">Impacto no lucro:</span>
+                                        <span className="font-bold text-orange-700">{data.impacto_lucro.toFixed(1)}%</span>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                      <p className="text-sm font-semibold text-gray-700 mb-1">
+                                        Tendência: {data.tendencia === 'alta' ? '📈 Aumentando' : data.tendencia === 'baixa' ? '📉 Diminuindo' : '➡️ Estável'}
+                                      </p>
+                                      <p className="text-xs text-gray-600">
+                                        {data.tendencia === 'alta' ? '⚠️ Esta despesa está crescendo. Fique atento!' : 
+                                         data.tendencia === 'baixa' ? '✅ Ótimo! Esta despesa está diminuindo.' : 
+                                         '✓ Esta despesa está controlada.'}
+                                      </p>
+                                    </div>
                                   </div>
                                 );
                               }

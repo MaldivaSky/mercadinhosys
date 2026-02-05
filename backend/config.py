@@ -7,8 +7,8 @@ db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
 
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY")
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-fallback-secret-key-12345"
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or "dev-fallback-jwt-key-67890"
 
     # ==================== DATABASE CONFIGURATION ====================
     # Seleção robusta do banco: usa Postgres quando disponível; caso contrário, SQLite cross-platform
@@ -36,7 +36,6 @@ class Config:
         SQLALCHEMY_DATABASE_URI = SQLITE_DB
         print(f"💾 [DB: SQLITE] {SQLITE_DB}")
     else:
-        # Fallback seguro para SQLite (sem caminho específico de Windows)
         SQLALCHEMY_DATABASE_URI = "sqlite:///mercadinho.db"
         print(f"💾 [DB: SQLITE] {SQLALCHEMY_DATABASE_URI}")
 
