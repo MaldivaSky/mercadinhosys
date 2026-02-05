@@ -4,6 +4,7 @@ Cria apenas dados essenciais para testar o sistema
 """
 import os
 import sys
+import random
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from dotenv import load_dotenv
@@ -28,8 +29,9 @@ if target_url:
 
 from app import create_app, db
 from app.models import (
-    Estabelecimento, Funcionario, Cliente, Fornecedor,
-    CategoriaProduto, Produto, Despesa
+    Estabelecimento, Configuracao, Funcionario, LoginHistory, Cliente, Fornecedor,
+    CategoriaProduto, Produto, Despesa, RegistroPonto, ConfiguracaoHorario,
+    Caixa, Venda, VendaItem, Pagamento, MovimentacaoEstoque, MovimentacaoCaixa, DashboardMetrica
 )
 from werkzeug.security import generate_password_hash
 
@@ -341,7 +343,120 @@ with app.app_context():
         db.session.commit()
         print("✅ Despesas salvas!")
         
-        # 8. VENDAS (em lotes pequenos para evitar timeout)
+        # 8. HISTÓRICO DE PONTO (sem fotos, realista)
+        print()
+        print("⏰ Criando histórico de ponto...")
+        
+        # Dados de configuração de horário padrão - criar ou atualizar
+        config = db.session.query(ConfiguracaoHorario).filter_by(estabelecimento_id=est.id).first()
+        if not config:
+            config = ConfiguracaoHorario(
+                estabelecimento_id=est.id,
+                hora_entrada=datetime.strptime('08:00', '%H:%M').time(),
+                hora_saida_almoco=datetime.strptime('12:00', '%H:%M').time(),
+                hora_retorno_almoco=datetime.strptime('13:00', '%H:%M').time(),
+                hora_saida=datetime.strptime('18:00', '%H:%M').time(),
+                tolerancia_entrada=10,
+                tolerancia_saida_almoco=5,
+                tolerancia_retorno_almoco=10,
+                tolerancia_saida=5,
+                exigir_foto=True,
+                exigir_localizacao=False,
+                raio_permitido_metros=100
+            )
+            db.session.add(config)
+            db.session.flush()
+        
+        # Criar registros de ponto para os últimos 30 dias
+        # Apenas para funcionários (admin e joao)
+        pontos_criados = 0
+        funcionarios_para_ponto = [admin, joao]
+        
+        hoje = date.today()
+        for dias_atras in range(30, 0, -1):
+            data_registro = hoje - timedelta(days=dias_atras)
+            
+            # Pular fins de semana
+            if data_registro.weekday() >= 5:  # 5=sábado, 6=domingo
+                continue
+            
+            for funcionario in funcionarios_para_ponto:
+                # Entrada (entre 07:50 e 08:15)
+                hora_entrada = datetime.strptime('08:00', '%H:%M').time()
+                minutos_variacao = random.randint(-10, 15)
+                hora_entrada = (datetime.combine(data_registro, hora_entrada) + timedelta(minutes=minutos_variacao)).time()
+                
+                entrada = RegistroPonto(
+                    funcionario_id=funcionario.id,
+                    estabelecimento_id=est.id,
+                    data=data_registro,
+                    hora=hora_entrada,
+                    tipo_registro='entrada',
+                    status='normal' if minutos_variacao <= 10 else 'atrasado',
+                    minutos_atraso=max(0, minutos_variacao - 10),
+                    observacao='Entrada matinal'
+                )
+                db.session.add(entrada)
+                pontos_criados += 1
+                
+                # Saída almoço (entre 11:55 e 12:10)
+                hora_saida_alm = datetime.strptime('12:00', '%H:%M').time()
+                minutos_var_alm = random.randint(-5, 10)
+                hora_saida_alm = (datetime.combine(data_registro, hora_saida_alm) + timedelta(minutes=minutos_var_alm)).time()
+                
+                saida_almoco = RegistroPonto(
+                    funcionario_id=funcionario.id,
+                    estabelecimento_id=est.id,
+                    data=data_registro,
+                    hora=hora_saida_alm,
+                    tipo_registro='saida_almoco',
+                    status='normal',
+                    minutos_atraso=0,
+                    observacao='Saída para almoço'
+                )
+                db.session.add(saida_almoco)
+                pontos_criados += 1
+                
+                # Retorno almoço (entre 12:55 e 13:15)
+                hora_retorno_alm = datetime.strptime('13:00', '%H:%M').time()
+                minutos_var_ret = random.randint(-5, 15)
+                hora_retorno_alm = (datetime.combine(data_registro, hora_retorno_alm) + timedelta(minutes=minutos_var_ret)).time()
+                
+                retorno_almoco = RegistroPonto(
+                    funcionario_id=funcionario.id,
+                    estabelecimento_id=est.id,
+                    data=data_registro,
+                    hora=hora_retorno_alm,
+                    tipo_registro='retorno_almoco',
+                    status='normal' if minutos_var_ret <= 10 else 'atrasado',
+                    minutos_atraso=max(0, minutos_var_ret - 10),
+                    observacao='Retorno do almoço'
+                )
+                db.session.add(retorno_almoco)
+                pontos_criados += 1
+                
+                # Saída (entre 17:50 e 18:15) - sem atraso (pode sair mais tarde)
+                hora_saida_fim = datetime.strptime('18:00', '%H:%M').time()
+                minutos_var_fim = random.randint(-10, 30)
+                hora_saida_fim = (datetime.combine(data_registro, hora_saida_fim) + timedelta(minutes=minutos_var_fim)).time()
+                
+                saida = RegistroPonto(
+                    funcionario_id=funcionario.id,
+                    estabelecimento_id=est.id,
+                    data=data_registro,
+                    hora=hora_saida_fim,
+                    tipo_registro='saida',
+                    status='normal',
+                    minutos_atraso=0,
+                    observacao='Saída final'
+                )
+                db.session.add(saida)
+                pontos_criados += 1
+        
+        db.session.commit()
+        print(f"✅ {pontos_criados} registros de ponto criados!")
+        
+        # 9. VENDAS (em lotes pequenos para evitar timeout)
         print()
         print("🧾 Criando vendas...")
         
@@ -512,7 +627,7 @@ with app.app_context():
         db.session.commit()
         print(f"✅ {vendas_criadas} vendas criadas!")
         
-        # 9. REPLICAÇÃO OPCIONAL PARA NEON (usa target_url)
+        # 10. REPLICAÇÃO PARA NEON (usa target_url)
         if target_url and target_url.startswith('postgresql://'):
             print()
             print("🔄 Replicando dados para Neon (PostgreSQL)...")
@@ -527,51 +642,37 @@ with app.app_context():
                 # Garantir que o schema existe
                 db.metadata.create_all(neon_engine)
                 
-                # Ajustes de schema mínimos para compatibilidade com o modelo atual
-                try:
-                    exists = neon_session.execute(text("""
-                        SELECT 1 
-                        FROM information_schema.columns 
-                        WHERE table_name='produtos' AND column_name='fabricante'
-                    """)).fetchone()
-                    if not exists:
-                        neon_session.execute(text("""
-                            ALTER TABLE produtos
-                            ADD COLUMN fabricante VARCHAR(100)
-                        """))
-                        neon_session.commit()
-                        print("  ✅ Schema ajustado: adicionada coluna produtos.fabricante")
-                except Exception as e:
-                    print(f"  ⚠️  Ajuste de schema (produtos.fabricante) não aplicado: {str(e)[:120]}")
-                
                 # Limpar dados em ordem segura (respeitando FKs)
-                from app.models import (
-                    Estabelecimento, Configuracao, Funcionario, LoginHistory, Cliente, Fornecedor,
-                    CategoriaProduto, Produto, Caixa, Venda, VendaItem, Pagamento,
-                    MovimentacaoEstoque, MovimentacaoCaixa, Despesa, DashboardMetrica
-                )
                 for model in [
                     VendaItem, Pagamento, MovimentacaoEstoque, MovimentacaoCaixa, Venda, Caixa,
+                    RegistroPonto, ConfiguracaoHorario,  # 🔥 ADICIONADO
                     Produto, CategoriaProduto, Fornecedor, Cliente, LoginHistory, Funcionario,
                     Configuracao, Despesa, DashboardMetrica, Estabelecimento
                 ]:
-                    neon_session.query(model).delete()
+                    try:
+                        neon_session.query(model).delete()
+                    except Exception as e:
+                        print(f"  ⚠️  Erro ao limpar {model.__tablename__}: {str(e)[:80]}")
                 neon_session.commit()
+                print("  ✅ Banco Neon limpo")
                 
                 def _clone(instance):
+                    """Clona uma instância de modelo para a sessão do Neon"""
                     data = {}
                     for col in instance.__table__.columns:
                         data[col.name] = getattr(instance, col.name)
                     return instance.__class__(**data)
                 
                 def _bulk_copy(model):
+                    """Copia todos os registros de um modelo para o Neon"""
                     rows = db.session.query(model).all()
                     for r in rows:
                         neon_session.add(_clone(r))
                     neon_session.commit()
-                    print(f"  ✅ {model.__tablename__}: {len(rows)} registros replicados")
+                    print(f"  ✅ {model.__tablename__}: {len(rows)} registros copiados")
                 
                 # Ordem de cópia respeitando FKs
+                print("\n  📋 Copiando dados...")
                 _bulk_copy(Estabelecimento)
                 _bulk_copy(Configuracao)
                 _bulk_copy(Funcionario)
@@ -580,6 +681,8 @@ with app.app_context():
                 _bulk_copy(Fornecedor)
                 _bulk_copy(CategoriaProduto)
                 _bulk_copy(Produto)
+                _bulk_copy(ConfiguracaoHorario)  # 🔥 ANTES de RegistroPonto
+                _bulk_copy(RegistroPonto)        # 🔥 ADICIONADO
                 _bulk_copy(Caixa)
                 _bulk_copy(Venda)
                 _bulk_copy(VendaItem)
@@ -589,12 +692,17 @@ with app.app_context():
                 _bulk_copy(Despesa)
                 _bulk_copy(DashboardMetrica)
                 
-                print("✅ Replicação para Neon concluída!")
+                neon_session.close()
+                print("\n✅ REPLICAÇÃO PARA NEON CONCLUÍDA COM SUCESSO!")
+                
             except Exception as e:
-                print(f"⚠️  Replicação para Neon falhou: {str(e)[:120]}")
+                print(f"❌ ERRO NA REPLICAÇÃO: {str(e)}")
+                import traceback
+                traceback.print_exc()
         else:
             print()
-            print("ℹ️ Neon não configurado ou indisponível. Pulando replicação.")
+            print("ℹ️ Neon não configurado. Configure NEON_DATABASE_URL para replicar.")
+
         
         # RESUMO
         print()
