@@ -271,9 +271,13 @@ def pontos_hoje():
         ).order_by(RegistroPonto.hora).all()
         
         # Obter configuração
-        config = ConfiguracaoHorario.query.filter_by(
-            estabelecimento_id=funcionario.estabelecimento_id
-        ).first()
+        config = None
+        try:
+            config = ConfiguracaoHorario.query.filter_by(
+                estabelecimento_id=funcionario.estabelecimento_id
+            ).first()
+        except Exception as e:
+            logger.error(f"Erro ao buscar configuração: {e}")
         
         # Serializar registros com tratamento de erro
         registros_dict = []
@@ -284,14 +288,30 @@ def pontos_hoje():
                 logger.error(f"Erro ao serializar registro {r.id}: {e}")
                 registros_dict.append({
                     'id': r.id,
-                    'error': 'Erro ao serializar registro'
+                    'funcionario_id': r.funcionario_id,
+                    'data': r.data.isoformat() if r.data else None,
+                    'hora': r.hora.strftime('%H:%M:%S') if r.hora else None,
+                    'tipo_registro': r.tipo_registro
                 })
+        
+        # Tentar serializar configuração
+        config_dict = None
+        if config:
+            try:
+                config_dict = config.to_dict()
+            except Exception as e:
+                logger.error(f"Erro ao serializar configuração: {e}")
+                config_dict = {
+                    'id': config.id,
+                    'estabelecimento_id': config.estabelecimento_id,
+                    'error': 'Erro ao serializar configuração'
+                }
         
         return jsonify({
             'success': True,
             'data': {
                 'registros': registros_dict,
-                'configuracao': config.to_dict() if config else None
+                'configuracao': config_dict
             }
         }), 200
         
@@ -299,7 +319,11 @@ def pontos_hoje():
         logger.error(f"Erro ao buscar pontos de hoje: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({
+            'success': False, 
+            'message': str(e),
+            'error_type': type(e).__name__
+        }), 500
 
 
 @ponto_bp.route('/historico', methods=['GET'])
