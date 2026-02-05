@@ -120,9 +120,8 @@ export function LoginPage() {
   const testBackendConnection = async () => {
     try {
       setDebugInfo('Testando conexão...');
-      const response = await fetch('http://localhost:5000/api/auth/health', {
-        method: 'GET',
-      });
+      const { API_CONFIG } = await import('../../api/apiConfig');
+      const response = await fetch(`${API_CONFIG.BASE_URL}/auth/health`, { method: 'GET' });
       setDebugInfo(`✅ Backend respondeu: ${response.status} ${response.statusText}`);
     } catch {
       setDebugInfo('❌ Backend offline. Execute: cd backend && npm start');

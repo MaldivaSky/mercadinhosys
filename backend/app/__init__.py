@@ -57,6 +57,8 @@ def create_app(config_name=None):
     cache.init_app(app)
     mail.init_app(app)
     
+    logger.info(f"DB URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
+    
     # Inicializa Flask-Login
     from app.models import login_manager
     login_manager.init_app(app)
@@ -66,13 +68,14 @@ def create_app(config_name=None):
     if not cors_origins:
         cors_origins = "*"
     
-    CORS(app, 
-         origins=cors_origins,
-         supports_credentials=True,
-         allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Origin"],
-         expose_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-         max_age=3600
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": cors_origins}},
+        supports_credentials=False,
+        allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Origin"],
+        expose_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        max_age=3600,
     )
 
     # Cria pastas necessárias
