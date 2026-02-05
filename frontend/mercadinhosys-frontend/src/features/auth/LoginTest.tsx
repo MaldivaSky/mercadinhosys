@@ -26,7 +26,8 @@ export function LoginTest() {
         setMessage('🔄 Testando conexão com backend...');
         
         try {
-            const response = await fetch('http://localhost:5000/api/health');
+            const { API_CONFIG } = await import('../../api/apiConfig');
+            const response = await fetch(`${API_CONFIG.BASE_URL}/auth/health`);
             const data = await response.json();
             setMessage(`✅ Backend conectado: ${data.message || data.status || 'OK'}`);
         } catch (error: any) {

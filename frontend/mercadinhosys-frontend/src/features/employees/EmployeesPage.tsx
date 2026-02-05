@@ -20,7 +20,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { employeesService, Funcionario, EstatisticasFuncionarios } from "./employeesService";
-import { buscarCep, formatCep } from "../../utils/cepUtils";
+import { buscarCep, formatCep, formatCpf, formatPhone } from "../../utils/cepUtils";
 
 ChartJS.register(
     BarElement,
@@ -124,18 +124,18 @@ export default function EmployeesPage() {
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
 
-    // Toast notifications
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    // Toast notifications (renomeado para evitar conflito com react-hot-toast)
+    const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
-        if (toast) {
-            const timer = setTimeout(() => setToast(null), 3000);
+        if (toastNotification) {
+            const timer = setTimeout(() => setToastNotification(null), 3000);
             return () => clearTimeout(timer);
         }
-    }, [toast]);
+    }, [toastNotification]);
 
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type });
+        setToastNotification({ message, type });
     };
 
     useEffect(() => {
@@ -525,18 +525,18 @@ export default function EmployeesPage() {
     return (
         <div className="p-6 max-w-7xl mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen">
             {/* Toast Notification */}
-            {toast && (
+            {toastNotification && (
                 <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in ${
-                    toast.type === 'success' 
+                    toastNotification.type === 'success' 
                         ? 'bg-green-500 text-white' 
                         : 'bg-red-500 text-white'
                 }`}>
-                    {toast.type === 'success' ? (
+                    {toastNotification.type === 'success' ? (
                         <CheckCircle className="w-5 h-5" />
                     ) : (
                         <AlertCircle className="w-5 h-5" />
                     )}
-                    <span>{toast.message}</span>
+                    <span>{toastNotification.message}</span>
                 </div>
             )}
             
@@ -1166,8 +1166,10 @@ export default function EmployeesPage() {
                                     <input
                                         type="text"
                                         value={formData.cpf}
-                                        onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, cpf: formatCpf(e.target.value) })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        placeholder="000.000.000-00"
+                                        maxLength={14}
                                         required
                                     />
                                 </div>
@@ -1203,9 +1205,10 @@ export default function EmployeesPage() {
                                     <input
                                         type="text"
                                         value={formData.telefone}
-                                        onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, telefone: formatPhone(e.target.value) })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
-                                        
+                                        placeholder="(00) 00000-0000"
+                                        maxLength={15}
                                     />
                                 </div>
 
@@ -1216,8 +1219,10 @@ export default function EmployeesPage() {
                                     <input
                                         type="text"
                                         value={formData.celular}
-                                        onChange={(e) => setFormData({ ...formData, celular: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, celular: formatPhone(e.target.value) })}
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        placeholder="(00) 00000-0000"
+                                        maxLength={15}
                                         required
                                     />
                                 </div>
