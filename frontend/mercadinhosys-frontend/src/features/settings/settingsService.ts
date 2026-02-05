@@ -49,6 +49,22 @@ export interface Configuracao {
     tentativas_senha_bloqueio: number;
     alertas_email: boolean;
     alertas_whatsapp: boolean;
+    
+    // Localização do estabelecimento
+    latitude_estabelecimento?: number;
+    longitude_estabelecimento?: number;
+    raio_validacao_metros?: number;
+    
+    // Horários de ponto
+    hora_entrada_ponto?: string;
+    hora_saida_almoco_ponto?: string;
+    hora_retorno_almoco_ponto?: string;
+    hora_saida_ponto?: string;
+    
+    // Validação de ponto
+    exigir_foto_ponto?: boolean;
+    exigir_localizacao_ponto?: boolean;
+    tolerancia_atraso_minutos?: number;
 }
 
 const settingsService = {

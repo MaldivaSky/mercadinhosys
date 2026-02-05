@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { 
     Settings, Building, ShoppingCart, Package, Shield, Save, 
     Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon,
-    Clock, MapPin, Camera
+    Clock, MapPin
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
