@@ -1210,6 +1210,147 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
     return despesas
 
 
+def seed_ponto(
+    fake: Faker,
+    estabelecimento_id: int,
+    funcionarios: List[Funcionario],
+    dias_passados: int = 30
+):
+    """Cria histórico realista de registros de ponto"""
+    print("⏰ Criando histórico de ponto...")
+    
+    from app.models import RegistroPonto, ConfiguracaoHorario
+    
+    # Criar configuração de horários se não existir
+    config = ConfiguracaoHorario.query.filter_by(
+        estabelecimento_id=estabelecimento_id
+    ).first()
+    
+    if not config:
+        config = ConfiguracaoHorario(
+            estabelecimento_id=estabelecimento_id,
+            hora_entrada=datetime.strptime('08:00', '%H:%M').time(),
+            hora_saida_almoco=datetime.strptime('12:00', '%H:%M').time(),
+            hora_retorno_almoco=datetime.strptime('13:00', '%H:%M').time(),
+            hora_saida=datetime.strptime('18:00', '%H:%M').time(),
+            tolerancia_entrada=10,
+            tolerancia_saida_almoco=5,
+            tolerancia_retorno_almoco=10,
+            tolerancia_saida=5,
+            exigir_foto=True,
+            exigir_localizacao=False,
+            raio_permitido_metros=100
+        )
+        db.session.add(config)
+        db.session.flush()
+    
+    # Criar registros apenas para funcionários (não para clientes)
+    funcionarios_filtrados = [f for f in funcionarios if f.role in ['ADMIN', 'FUNCIONARIO']]
+    
+    if not funcionarios_filtrados:
+        print("   ⚠️  Nenhum funcionário para criar ponto")
+        return 0
+    
+    pontos_criados = 0
+    hoje = date.today()
+    
+    for dias_atras in range(dias_passados, 0, -1):
+        data_registro = hoje - timedelta(days=dias_atras)
+        
+        # Pular fins de semana
+        if data_registro.weekday() >= 5:  # 5=sábado, 6=domingo
+            continue
+        
+        for funcionario in funcionarios_filtrados:
+            # Entrada (entre 07:50 e 08:15)
+            hora_entrada = datetime.strptime('08:00', '%H:%M').time()
+            minutos_variacao = random.randint(-10, 15)
+            hora_entrada = (
+                datetime.combine(data_registro, hora_entrada) + 
+                timedelta(minutes=minutos_variacao)
+            ).time()
+            
+            entrada = RegistroPonto(
+                funcionario_id=funcionario.id,
+                estabelecimento_id=estabelecimento_id,
+                data=data_registro,
+                hora=hora_entrada,
+                tipo_registro='entrada',
+                status='normal' if minutos_variacao <= 10 else 'atrasado',
+                minutos_atraso=max(0, minutos_variacao - 10),
+                observacao='Entrada matinal'
+            )
+            db.session.add(entrada)
+            pontos_criados += 1
+            
+            # Saída almoço (entre 11:55 e 12:10)
+            hora_saida_alm = datetime.strptime('12:00', '%H:%M').time()
+            minutos_var_alm = random.randint(-5, 10)
+            hora_saida_alm = (
+                datetime.combine(data_registro, hora_saida_alm) + 
+                timedelta(minutes=minutos_var_alm)
+            ).time()
+            
+            saida_almoco = RegistroPonto(
+                funcionario_id=funcionario.id,
+                estabelecimento_id=estabelecimento_id,
+                data=data_registro,
+                hora=hora_saida_alm,
+                tipo_registro='saida_almoco',
+                status='normal',
+                minutos_atraso=0,
+                observacao='Saída para almoço'
+            )
+            db.session.add(saida_almoco)
+            pontos_criados += 1
+            
+            # Retorno almoço (entre 12:55 e 13:15)
+            hora_retorno_alm = datetime.strptime('13:00', '%H:%M').time()
+            minutos_var_ret = random.randint(-5, 15)
+            hora_retorno_alm = (
+                datetime.combine(data_registro, hora_retorno_alm) + 
+                timedelta(minutes=minutos_var_ret)
+            ).time()
+            
+            retorno_almoco = RegistroPonto(
+                funcionario_id=funcionario.id,
+                estabelecimento_id=estabelecimento_id,
+                data=data_registro,
+                hora=hora_retorno_alm,
+                tipo_registro='retorno_almoco',
+                status='normal' if minutos_var_ret <= 10 else 'atrasado',
+                minutos_atraso=max(0, minutos_var_ret - 10),
+                observacao='Retorno do almoço'
+            )
+            db.session.add(retorno_almoco)
+            pontos_criados += 1
+            
+            # Saída final (entre 17:50 e 18:30)
+            hora_saida_fim = datetime.strptime('18:00', '%H:%M').time()
+            minutos_var_fim = random.randint(-10, 30)
+            hora_saida_fim = (
+                datetime.combine(data_registro, hora_saida_fim) + 
+                timedelta(minutes=minutos_var_fim)
+            ).time()
+            
+            saida = RegistroPonto(
+                funcionario_id=funcionario.id,
+                estabelecimento_id=estabelecimento_id,
+                data=data_registro,
+                hora=hora_saida_fim,
+                tipo_registro='saida',
+                status='normal',
+                minutos_atraso=0,
+                observacao='Saída final'
+            )
+            db.session.add(saida)
+            pontos_criados += 1
+    
+    db.session.commit()
+    print(f"✅ {pontos_criados} registros de ponto criados")
+    return pontos_criados
+
+
 def seed_caixas(fake: Faker, estabelecimento_id: int, funcionarios: List[Funcionario]):
     """Cria caixas e movimentações."""
     print("💰 Criando caixas...")
@@ -1561,10 +1702,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             # 10. Criar despesas
             seed_despesas(fake, est.id, fornecedores)
 
-            # 11. Criar caixas
+            # 11. Criar histórico de ponto
+            seed_ponto(fake, est.id, funcionarios, dias_passados=30)
+
+            # 12. Criar caixas
             seed_caixas(fake, est.id, funcionarios)
 
-            # 12. Criar dashboard métricas
+            # 13. Criar dashboard métricas
             seed_dashboard_metricas(est.id)
 
             # 13. Criar relatórios agendados
