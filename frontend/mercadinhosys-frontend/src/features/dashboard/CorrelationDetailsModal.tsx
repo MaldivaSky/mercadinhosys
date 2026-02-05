@@ -1,11 +1,10 @@
 import React, { useMemo } from 'react';
 import { 
-  X, Info, TrendingUp, TrendingDown, Minus, 
-  Lightbulb, CheckCircle, BarChart2 
+  X, Lightbulb, CheckCircle, BarChart2 
 } from 'lucide-react';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, ZAxis
+  Tooltip, ResponsiveContainer
 } from 'recharts';
 
 interface CorrelationItem {

@@ -243,8 +243,8 @@ const ReportsPage: React.FC = () => {
                 'Categoria': p.categoria || 'N/A',
                 'Preço Venda': p.preco_venda,
                 'Preço Custo': p.preco_custo,
-                'Estoque': p.estoque_status,
-                'Estoque Mínimo': p.estoque_minimo,
+                'Estoque': p.estoque_status ?? 'N/A',
+                'Estoque Mínimo': (p.estoque_minimo ?? 0),
                 'Status': (p.quantidade || 0) <= (p.estoque_minimo || 0) ? 'CRÍTICO' : 'OK'
             }));
             setProdutosData(data);
