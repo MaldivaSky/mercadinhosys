@@ -65,8 +65,18 @@ def create_app(config_name=None):
 
     # CORS - Configuração COMPLETA para produção
     cors_origins = app.config.get('CORS_ORIGINS', [])
+    
+    # Se não houver CORS configurado, permitir todos em desenvolvimento
     if not cors_origins:
-        cors_origins = "*"
+        if config_name == 'development':
+            cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+        else:
+            # Em produção sem CORS configurado, logar aviso mas permitir
+            logger.warning("⚠️ CORS_ORIGINS não configurado! Configure no Render Dashboard.")
+            cors_origins = "*"
+    
+    # Log de CORS para debug
+    logger.info(f"🌐 CORS configurado para: {cors_origins}")
     
     CORS(
         app,
@@ -190,6 +200,14 @@ def create_app(config_name=None):
         logger.info("✅ Blueprint sync registrado (/api/sync/replicar)")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar sync: {e}")
+
+    # Ponto (controle de ponto)
+    try:
+        from app.routes.ponto import ponto_bp
+        app.register_blueprint(ponto_bp, url_prefix="/api/ponto")
+        logger.info("✅ Blueprint ponto registrado em /api/ponto")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar ponto: {e}")
 
     # Dashboard Científico - verifica se existe a pasta
     dashboard_cientifico_disponivel = False
