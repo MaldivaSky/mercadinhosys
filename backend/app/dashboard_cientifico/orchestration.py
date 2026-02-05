@@ -159,14 +159,39 @@ class DashboardOrchestrator:
                     "variavel2": "Clientes",
                     "correlacao": 0.75,
                     "significancia": 0.001,
-                    "insight": "Correlação positiva forte entre vendas e número de clientes"
+                    "insight": "Correlação positiva forte entre vendas e número de clientes",
+                    "explicacao": "Indica que o volume de vendas cresce proporcionalmente ao fluxo de clientes na loja. Seus produtos têm boa conversão.",
+                    "acoes": [
+                        "Investir em campanhas de tráfego para trazer novos clientes",
+                        "Melhorar a visibilidade da fachada e sinalização externa",
+                        "Criar promoções de 'indique um amigo' para viralização"
+                    ]
                 },
                 {
                     "variavel1": "Preço",
                     "variavel2": "Demanda",
                     "correlacao": -0.45,
                     "significancia": 0.01,
-                    "insight": "Elasticidade de preço moderada detectada"
+                    "insight": "Elasticidade de preço moderada detectada",
+                    "explicacao": "Existe uma relação inversa: quando o preço sobe, a demanda cai, mas não drasticamente. Isso sugere que seus clientes valorizam a qualidade ou conveniência, não apenas o preço baixo.",
+                    "acoes": [
+                        "Testar pequenos aumentos de margem em produtos exclusivos",
+                        "Criar combos (kits) para mascarar o preço unitário",
+                        "Focar em benefícios e qualidade na comunicação visual"
+                    ]
+                },
+                {
+                    "variavel1": "Marketing",
+                    "variavel2": "Vendas",
+                    "correlacao": 0.60,
+                    "significancia": 0.05,
+                    "insight": "Investimento em marketing traz retorno consistente",
+                    "explicacao": "Cada real investido em marketing está gerando um retorno positivo nas vendas, embora ainda haja espaço para otimização nas campanhas.",
+                    "acoes": [
+                        "Aumentar orçamento nas mídias de melhor performance",
+                        "Testar novos canais de divulgação (ex: redes sociais locais)",
+                        "Melhorar o rastreamento de origem dos clientes"
+                    ]
                 }
             ]
             
@@ -270,20 +295,41 @@ class DashboardOrchestrator:
                             "area": "Estoque",
                             "acao": "Aumentar estoque de produtos A",
                             "impacto_esperado": 15.5,
-                            "complexidade": "media"
+                            "complexidade": "media",
+                            "esforco": 2,  # 1=baixa, 2=media, 3=alta
+                            "acoes_detalhadas": [
+                                "Identificar top 10 produtos Classe A por faturamento e ruptura",
+                                "Calcular estoque de segurança com base na demanda média semanal",
+                                "Ajustar ponto de pedido (reorder point) incluindo lead time de fornecedor",
+                                "Negociar condições com fornecedores para garantir reposição ágil"
+                            ]
                         },
                         {
                             "area": "Produtos",
                             "acao": "Reduzir produtos C com baixa rotatividade",
                             "impacto_esperado": 8.2,
-                            "complexidade": "baixa"
+                            "complexidade": "baixa",
+                            "esforco": 1,
+                            "acoes_detalhadas": [
+                                "Gerar lista de produtos Classe C com giro abaixo do limiar",
+                                "Aplicar promoções de escoamento (combo, desconto progressivo)",
+                                "Revisar sortimento e descontinuar SKUs com baixo retorno",
+                                "Liberar espaço de gôndola para produtos A e B"
+                            ]
                         },
                         {
                             "area": "Precificação",
                             "acao": "Otimizar precificação baseada na elasticidade",
                             "impacto_esperado": 12.8,
-                            "complexidade": "alta"
-                        },
+                            "complexidade": "alta",
+                            "esforco": 3,
+                            "acoes_detalhadas": [
+                                "Mapear elasticidade por categoria e por SKU estratégico",
+                                "Executar testes A/B de preço em faixas controladas",
+                                "Criar políticas de preço dinâmico por horário/dia (quando aplicável)",
+                                "Comunicar benefícios e diferenciais na ponta para reduzir sensibilidade a preço"
+                            ]
+                        }
                     ],
                 },
             }
