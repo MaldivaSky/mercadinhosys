@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy import or_, and_
 
 from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, get_jwt
 
 from app import db
 from app.decorators.decorator_jwt import funcionario_required
@@ -43,11 +43,13 @@ def listar_despesas():
     """
     current_user_id = get_jwt_identity()
     funcionario = Funcionario.query.get(current_user_id)
-
-    if not funcionario:
-        return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
-
-    estabelecimento_id = funcionario.estabelecimento_id
+    if funcionario and funcionario.estabelecimento_id:
+        estabelecimento_id = funcionario.estabelecimento_id
+    else:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
 
     # Query base
     query = Despesa.query.filter(Despesa.estabelecimento_id == estabelecimento_id)
@@ -292,11 +294,13 @@ def obter_estatisticas_despesas():
     """Obtém estatísticas de despesas para o dashboard"""
     current_user_id = get_jwt_identity()
     funcionario = Funcionario.query.get(current_user_id)
-
-    if not funcionario:
-        return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
-
-    estabelecimento_id = funcionario.estabelecimento_id
+    if funcionario and funcionario.estabelecimento_id:
+        estabelecimento_id = funcionario.estabelecimento_id
+    else:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
 
     try:
         from sqlalchemy import func, extract
