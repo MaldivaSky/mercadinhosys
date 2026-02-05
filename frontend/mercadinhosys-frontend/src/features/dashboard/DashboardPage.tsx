@@ -5,7 +5,7 @@ import {
   ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
   DollarSign as DollarIcon, Target as TargetIcon, AlertCircle,
   TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
-  LineChart as LineChartIcon, RefreshCw
+  LineChart as LineChartIcon, RefreshCw, Clock, Users, CheckCircle
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -236,7 +236,7 @@ const DashboardPage: React.FC = () => {
     'insights': true
   });
   const [selectedABC, setSelectedABC] = useState<'A' | 'B' | 'C' | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'cientifico'>('cientifico');
+  const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'cientifico' | 'ponto'>('cientifico');
   const [hoveredKPI, setHoveredKPI] = useState<number | null>(null);
   const [expandedKPI, setExpandedKPI] = useState<number | null>(null);
   const [expenseChartMode, setExpenseChartMode] = useState<'barras' | 'pizza'>('barras');
@@ -285,15 +285,61 @@ const DashboardPage: React.FC = () => {
   const produtosFiltrados = useMemo(() => {
     if (!data?.data?.analise_produtos?.curva_abc?.produtos) return [];
     
+    const todosProdutos = data.data.analise_produtos.curva_abc.produtos;
+    const resumo = data.data?.analise_produtos?.curva_abc?.resumo;
+    
     if (selectedABC === 'all') {
-      return data.data.analise_produtos.curva_abc.produtos;
+      // Retorna um resumo agregado por classe
+      const totalGeral = (resumo?.A?.faturamento_total || 0) + 
+                         (resumo?.B?.faturamento_total || 0) + 
+                         (resumo?.C?.faturamento_total || 0);
+      
+      let percentualAcumulado = 0;
+      const dadosAgregados = [];
+      
+      // Classe A
+      const faturamentoA = resumo?.A?.faturamento_total || 0;
+      percentualAcumulado += (faturamentoA / totalGeral) * 100;
+      dadosAgregados.push({
+        nome: 'Classe A',
+        classificacao: 'A',
+        faturamento: faturamentoA,
+        quantidade_vendida: resumo?.A?.quantidade || 0,
+        margem: resumo?.A?.margem_media || 0,
+        percentual_acumulado: percentualAcumulado
+      });
+      
+      // Classe B
+      const faturamentoB = resumo?.B?.faturamento_total || 0;
+      percentualAcumulado += (faturamentoB / totalGeral) * 100;
+      dadosAgregados.push({
+        nome: 'Classe B',
+        classificacao: 'B',
+        faturamento: faturamentoB,
+        quantidade_vendida: resumo?.B?.quantidade || 0,
+        margem: resumo?.B?.margem_media || 0,
+        percentual_acumulado: percentualAcumulado
+      });
+      
+      // Classe C
+      const faturamentoC = resumo?.C?.faturamento_total || 0;
+      percentualAcumulado += (faturamentoC / totalGeral) * 100;
+      dadosAgregados.push({
+        nome: 'Classe C',
+        classificacao: 'C',
+        faturamento: faturamentoC,
+        quantidade_vendida: resumo?.C?.quantidade || 0,
+        margem: resumo?.C?.margem_media || 0,
+        percentual_acumulado: 100
+      });
+      
+      return dadosAgregados;
     }
     
-    return data.data.analise_produtos.curva_abc.produtos.filter(
-      (p: any) => p.classificacao === selectedABC
-    );
-  }, [data?.data?.analise_produtos?.curva_abc?.produtos, selectedABC]);
-
+    // Filtra por classificação específica e ordena por faturamento
+    const filtrados = todosProdutos.filter((p: any) => p.classificacao === selectedABC);
+    return filtrados.sort((a: any, b: any) => (b.faturamento || 0) - (a.faturamento || 0));
+  }, [data?.data?.analise_produtos?.curva_abc?.produtos, data?.data?.analise_produtos?.curva_abc?.resumo, selectedABC]);
   if (loading) return (
     <div className="flex items-center justify-center h-screen">
       <div className="text-center">
@@ -331,72 +377,81 @@ const DashboardPage: React.FC = () => {
   } } = data.data;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
-      {/* HEADER CIENTÍFICO */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <Brain className="w-10 h-10 text-blue-600" />
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Dashboard de Ciência de Dados</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-3 sm:p-4 md:p-6">
+      {/* HEADER CIENTÍFICO - RESPONSIVO */}
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+          <div className="w-full sm:flex-1">
+            <div className="flex items-start gap-2 sm:items-center sm:gap-3 mb-2">
+              <Brain className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600 flex-shrink-0" />
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Dashboard de Ciência de Dados</h1>
             </div>
-            <p className="text-gray-600">
+            <p className="text-xs sm:text-sm text-gray-600 mb-3">
               Análises estatísticas, modelos preditivos e otimização baseada em dados
             </p>
-            <div className="flex items-center gap-4 mt-3">
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                <Cpu className="w-4 h-4 inline mr-1" />
-                Modelos Ativos: 12
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium whitespace-nowrap">
+                <Cpu className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
+                Modelos: 12
               </span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                <Database className="w-4 h-4 inline mr-1" />
+              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium whitespace-nowrap">
+                <Database className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
                 {new Date().toLocaleDateString('pt-BR')}
               </span>
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row w-full sm:w-auto">
             <select
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+              className="px-3 sm:px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium text-sm"
               value={viewMode}
               onChange={(e) => setViewMode(e.target.value as any)}
             >
               <option value="visao-geral">📊 Visão Geral</option>
-              <option value="detalhado">📈 Análise Detalhada</option>
-              <option value="cientifico">🧬 Modo Científico</option>
+              <option value="detalhado">📈 Detalhada</option>
+              <option value="cientifico">🧬 Científico</option>
+              <option value="ponto">👥 Ponto/RH</option>
             </select>
-            <button onClick={loadDashboard} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <button onClick={loadDashboard} className="px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm sm:text-base whitespace-nowrap">
               <RefreshCw className="w-4 h-4" />
-              Atualizar Modelos
+              <span className="hidden sm:inline">Atualizar</span>
+              <span className="sm:hidden">Atualizar</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* DESCRIÇÃO DO MODO SELECIONADO */}
+      {/* DESCRIÇÃO DO MODO - RESPONSIVO */}
       {viewMode === 'visao-geral' && (
-        <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg text-sm sm:text-base">
           <p className="text-blue-900 font-medium">
-            📊 <strong>Visão Geral:</strong> Visualização simplificada com apenas os KPIs principais para acompanhamento rápido.
+            📊 <strong>Visão Geral:</strong> KPIs principais para acompanhamento rápido.
           </p>
         </div>
       )}
       {viewMode === 'detalhado' && (
-        <div className="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg">
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg text-sm sm:text-base">
           <p className="text-purple-900 font-medium">
-            📈 <strong>Análise Detalhada:</strong> KPIs + Curva ABC + Análise Temporal + Análise Financeira para decisões estratégicas.
+            📈 <strong>Análise Detalhada:</strong> KPIs + Curva ABC + Análise Temporal + Financeira.
           </p>
         </div>
       )}
       {viewMode === 'cientifico' && (
-        <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg text-sm sm:text-base">
           <p className="text-green-900 font-medium">
-            🧬 <strong>Modo Científico:</strong> Visualização completa com insights científicos, correlações, previsões e recomendações de otimização.
+            🧬 <strong>Modo Científico:</strong> Visualização completa com insights, correlações e previsões.
+          </p>
+        </div>
+      )}
+      {viewMode === 'ponto' && (
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg text-sm sm:text-base">
+          <p className="text-purple-900 font-medium">
+            👥 <strong>Dashboard Ponto/RH:</strong> Frequência, atrasos, presença e análise de equipe.
           </p>
         </div>
       )}
 
-      {/* KPIs PRINCIPAIS COM TOOLTIPS E EXPLICAÇÕES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* KPIs PRINCIPAIS - RESPONSIVO MOBILE */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
         {[
           {
             title: 'Margem Líquida',
@@ -828,14 +883,14 @@ const DashboardPage: React.FC = () => {
         ].map((kpi, idx) => (
           <div
             key={idx}
-            className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer border border-gray-200 relative"
+            className="bg-white rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl p-4 sm:p-6 transform transition-all duration-300 hover:scale-100 sm:hover:scale-105 hover:shadow-lg sm:hover:shadow-2xl cursor-pointer border border-gray-200 relative"
             onMouseEnter={() => setHoveredKPI(idx)}
             onMouseLeave={() => setHoveredKPI(null)}
             onClick={() => setExpandedKPI(expandedKPI === idx ? null : idx)}
           >
-            {/* Tooltip on hover */}
+            {/* Tooltip on hover - Responsivo */}
             {hoveredKPI === idx && (
-              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-xs rounded-lg px-3 py-2 z-10 w-64 shadow-xl">
+              <div className="hidden sm:block absolute -top-2 left-1/2 transform -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-xs rounded-lg px-3 py-2 z-10 w-64 shadow-xl">
                 <div className="relative">
                   {kpi.tooltip}
                   <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
@@ -843,31 +898,31 @@ const DashboardPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-between items-start mb-4">
-              <div className={`${kpi.color} p-3 rounded-xl shadow-lg`}>
-                <kpi.icon className="w-6 h-6 text-white" />
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+              <div className={`${kpi.color} p-2 sm:p-3 rounded-lg sm:rounded-xl shadow-lg`}>
+                <kpi.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div className={`flex items-center px-3 py-1 rounded-full text-sm font-semibold ${kpi.change >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {kpi.change >= 0 ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+              <div className={`flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${kpi.change >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {kpi.change >= 0 ? <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> : <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />}
                 {Math.abs(kpi.change).toFixed(1)}%
               </div>
             </div>
             
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-gray-500 text-sm font-medium">{kpi.title}</h3>
-              <AlertCircle className="w-4 h-4 text-gray-400" />
+              <h3 className="text-gray-500 text-xs sm:text-sm font-medium">{kpi.title}</h3>
+              <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
             </div>
             
-            <p className="text-3xl font-bold text-gray-900 mb-2">{kpi.value}</p>
-            <p className="text-gray-600 text-sm mb-3">{kpi.details}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{kpi.value}</p>
+            <p className="text-gray-600 text-xs sm:text-sm mb-3">{kpi.details}</p>
             
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg mb-3">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-2 sm:p-3 rounded-lg mb-3">
               <p className="text-xs text-blue-900 font-medium">{kpi.explanation}</p>
             </div>
 
             {/* Expanded content */}
             {expandedKPI === idx && (
-              <div className="mt-4 pt-4 border-t border-gray-200 animate-fadeIn">
+              <div className="mt-4 pt-4 border-t border-gray-200 animate-fadeIn max-h-[400px] sm:max-h-none overflow-y-auto sm:overflow-y-visible">
                 {kpi.expandedContent}
               </div>
             )}
@@ -875,10 +930,10 @@ const DashboardPage: React.FC = () => {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-gray-500">
-                  {expandedKPI === idx ? 'Clique para recolher' : 'Clique para mais detalhes'}
+                  {expandedKPI === idx ? 'Clique para recolher' : 'Clique para detalhes'}
                 </span>
                 <span className={`font-semibold ${kpi.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {kpi.change >= 0 ? 'Acima da meta' : 'Abaixo da meta'}
+                  {kpi.change >= 0 ? 'Acima' : 'Abaixo'}
                 </span>
               </div>
             </div>
@@ -886,63 +941,63 @@ const DashboardPage: React.FC = () => {
         ))}
       </div>
 
-      {/* SEÇÃO PRINCIPAL: CURVA ABC COM GRÁFICO DE PARETO */}
+      {/* SEÇÃO CURVA ABC - RESPONSIVA */}
       {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
-      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl mb-6 sm:mb-8 overflow-hidden border border-gray-200">
         <div
-          className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+          className="p-4 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 cursor-pointer hover:bg-gray-50"
           onClick={() => toggleCard('curva-abc')}
         >
-          <div className="flex items-center gap-3">
-            <ChartBar className="w-8 h-8 text-blue-600" />
+          <div className="flex items-start sm:items-center gap-3">
+            <ChartBar className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
-              <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
+              <h2 className="text-lg sm:text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
+              <p className="text-xs sm:text-sm text-gray-600">{analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex space-x-1">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="flex gap-1 flex-wrap">
               <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                className={`px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-xs sm:text-sm ${selectedABC === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
                 onClick={(e) => { e.stopPropagation(); setSelectedABC('all'); }}
               >
                 Todos
               </button>
               <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'A' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                className={`px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-xs sm:text-sm ${selectedABC === 'A' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'}`}
                 onClick={(e) => { e.stopPropagation(); setSelectedABC('A'); }}
               >
                 Classe A
               </button>
               <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'B' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                className={`px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-xs sm:text-sm ${selectedABC === 'B' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'}`}
                 onClick={(e) => { e.stopPropagation(); setSelectedABC('B'); }}
               >
                 Classe B
               </button>
               <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'C' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                className={`px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-xs sm:text-sm ${selectedABC === 'C' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'}`}
                 onClick={(e) => { e.stopPropagation(); setSelectedABC('C'); }}
               >
                 Classe C
               </button>
             </div>
-            <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['curva-abc'] ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-5 h-5 sm:w-6 sm:h-6 text-gray-500 transform transition-transform flex-shrink-0 ${expandedCards['curva-abc'] ? 'rotate-180' : ''}`} />
           </div>
         </div>
 
         {expandedCards['curva-abc'] && analise_produtos?.curva_abc && (
-          <div className="p-6 animate-fadeIn">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* GRÁFICO DE PARETO */}
-              <div className="lg:col-span-2">
-                <div className="h-[400px]">
+          <div className="p-4 sm:p-6 animate-fadeIn">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+              {/* GRÁFICO DE PARETO - RESPONSIVO */}
+              <div className="lg:col-span-2 w-full overflow-x-auto">
+                <div className="h-[300px] sm:h-[400px] min-w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={produtosFiltrados.slice(0, 15)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" />
+                      <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11 }} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                       <Tooltip
                         content={({ payload, label }) => {
                           if (payload && payload.length > 0) {
@@ -1016,7 +1071,7 @@ const DashboardPage: React.FC = () => {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex justify-center gap-6 mt-6 flex-wrap">
+                <div className="flex justify-center gap-3 sm:gap-6 mt-6 flex-wrap">
                   {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => {
                     const getColors = (cls: string) => {
                       switch(cls) {
@@ -1028,14 +1083,14 @@ const DashboardPage: React.FC = () => {
                     };
                     const colors = getColors(classe);
                     return (
-                      <div key={classe} className="text-center p-2 rounded-lg hover:bg-gray-50 transition-colors">
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${colors.bg}`}>
-                          <span className={`text-xl font-bold ${colors.text}`}>
+                      <div key={classe} className="text-center p-2 sm:p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-2 ${colors.bg}`}>
+                          <span className={`text-lg sm:text-xl font-bold ${colors.text}`}>
                             {classe === 'TODOS' ? 'ALL' : classe}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600">{dados.quantidade} itens</p>
-                        <p className="text-sm font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% Fat.</p>
+                        <p className="text-xs sm:text-sm text-gray-600">{dados.quantidade} itens</p>
+                        <p className="text-sm sm:text-base font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% Fat.</p>
                         {dados.margem_media !== undefined && (
                           <p className="text-xs font-semibold text-gray-500 mt-1">
                             Margem: <span className={colors.text}>{dados.margem_media.toFixed(1)}%</span>
@@ -2079,6 +2134,167 @@ const DashboardPage: React.FC = () => {
           ))}
         </div>
       </div>
+      )}
+
+      {/* DASHBOARD PONTO/RH */}
+      {viewMode === 'ponto' && (
+        <div className="space-y-8">
+          {/* KPIs DE PONTO/RH */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm opacity-90 font-semibold">Taxa de Presença</p>
+                  <p className="text-4xl font-bold mt-1">94%</p>
+                  <p className="text-sm mt-3 opacity-90">28 de 30 dias</p>
+                </div>
+                <CheckCircle className="w-16 h-16 opacity-30" />
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl shadow-xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm opacity-90 font-semibold">Total de Atrasos</p>
+                  <p className="text-4xl font-bold mt-1">2</p>
+                  <p className="text-sm mt-3 opacity-90">15 minutos no total</p>
+                </div>
+                <AlertCircle className="w-16 h-16 opacity-30" />
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl shadow-xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm opacity-90 font-semibold">Funcionários Ativos</p>
+                  <p className="text-4xl font-bold mt-1">12</p>
+                  <p className="text-sm mt-3 opacity-90">Hoje online</p>
+                </div>
+                <Users className="w-16 h-16 opacity-30" />
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl shadow-xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm opacity-90 font-semibold">Registros Hoje</p>
+                  <p className="text-4xl font-bold mt-1">48</p>
+                  <p className="text-sm mt-3 opacity-90">Entradas/Saídas</p>
+                </div>
+                <Clock className="w-16 h-16 opacity-30" />
+              </div>
+            </div>
+          </div>
+
+          {/* GRÁFICO DE PRESENÇA */}
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <LineChartIcon className="w-6 h-6 text-blue-600" />
+              Tendência de Presença (30 dias)
+            </h3>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={[
+                  { data: '1', presentes: 12, ausentes: 0, atrasos: 1 },
+                  { data: '2', presentes: 11, ausentes: 1, atrasos: 0 },
+                  { data: '3', presentes: 12, ausentes: 0, atrasos: 0 },
+                  { data: '4', presentes: 12, ausentes: 0, atrasos: 1 },
+                  { data: '5', presentes: 12, ausentes: 0, atrasos: 0 },
+                  { data: '6', presentes: 10, ausentes: 2, atrasos: 0 },
+                  { data: '7', presentes: 12, ausentes: 0, atrasos: 0 },
+                ]}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="data" />
+                  <YAxis />
+                  <Tooltip contentStyle={{ backgroundColor: '#fff', border: '2px solid #3b82f6', borderRadius: '8px' }} />
+                  <Legend />
+                  <Line type="monotone" dataKey="presentes" stroke="#10B981" strokeWidth={2} name="Presentes" />
+                  <Line type="monotone" dataKey="atrasos" stroke="#F59E0B" strokeWidth={2} name="Atrasos" />
+                  <Line type="monotone" dataKey="ausentes" stroke="#EF4444" strokeWidth={2} name="Ausentes" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* RANKING DE PRESENÇA */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">🏆 Top Funcionários (Presença)</h3>
+              <div className="space-y-3">
+                {[
+                  { nome: 'João Silva', presenca: 100, atrasos: 0 },
+                  { nome: 'Maria Santos', presenca: 98, atrasos: 1 },
+                  { nome: 'Pedro Costa', presenca: 96, atrasos: 2 },
+                  { nome: 'Ana Lima', presenca: 94, atrasos: 3 },
+                  { nome: 'Carlos Oliveira', presenca: 92, atrasos: 2 },
+                ].map((func, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-blue-600">#{idx + 1}</span>
+                      <div>
+                        <p className="font-semibold text-gray-900">{func.nome}</p>
+                        <p className="text-xs text-gray-500">{func.atrasos} atrasos</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-green-600">{func.presenca}%</p>
+                      <div className="w-20 h-2 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${func.presenca}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">⚠️ Funcionários com Atrasos</h3>
+              <div className="space-y-3">
+                {[
+                  { nome: 'Roberto Alves', atrasos: 5, minutos_total: 45 },
+                  { nome: 'Fernanda Lima', atrasos: 3, minutos_total: 25 },
+                  { nome: 'Lucas Martins', atrasos: 2, minutos_total: 18 },
+                ].map((func, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border-l-4 border-red-500">
+                    <div>
+                      <p className="font-semibold text-gray-900">{func.nome}</p>
+                      <p className="text-xs text-gray-600">{func.atrasos} atrasos • {func.minutos_total}min total</p>
+                    </div>
+                    <AlertCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* REGISTROS RECENTES */}
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">📋 Últimos Registros de Ponto</h3>
+            <div className="space-y-2">
+              {[
+                { func: 'João Silva', tipo: 'Entrada', hora: '08:00', status: 'normal' },
+                { func: 'Maria Santos', tipo: 'Saída Almoço', hora: '12:05', status: 'atrasado' },
+                { func: 'Pedro Costa', tipo: 'Retorno Almoço', hora: '13:00', status: 'normal' },
+                { func: 'Ana Lima', tipo: 'Saída', hora: '18:00', status: 'normal' },
+                { func: 'Carlos Oliveira', tipo: 'Entrada', hora: '08:15', status: 'atrasado' },
+              ].map((reg, idx) => (
+                <div key={idx} className={`flex items-center justify-between p-3 rounded-lg ${
+                  reg.status === 'atrasado' ? 'bg-red-50 border-l-4 border-red-500' : 'bg-green-50 border-l-4 border-green-500'
+                }`}>
+                  <div>
+                    <p className="font-semibold text-gray-900">{reg.func}</p>
+                    <p className="text-xs text-gray-600">{reg.tipo} • {reg.hora}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    reg.status === 'atrasado' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {reg.status === 'atrasado' ? '⚠️ Atrasado' : '✅ No Horário'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL DE CORRELAÇÃO */}
