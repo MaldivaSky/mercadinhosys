@@ -47,8 +47,9 @@ def admin_required(f):
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se é admin - agora usa claims
-        if claims.get("role") != "admin":
+        # Verifica se é admin - agora usa claims (Case Insensitive)
+        role = claims.get("role", "").lower()
+        if role != "admin":
             return (
                 jsonify(
                     {
@@ -60,7 +61,8 @@ def admin_required(f):
             )
 
         # Verifica se não está bloqueado - agora usa claims
-        if claims.get("status") != "ativo":
+        status = claims.get("status", "").lower()
+        if status != "ativo":
             return jsonify({"error": "Acesso bloqueado"}), 403
 
         return f(*args, **kwargs)
@@ -81,9 +83,11 @@ def gerente_ou_admin_required(f):
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se é gerente ou admin - agora usa claims
-        allowed_roles = ["gerente", "admin"]
-        if claims.get("role") not in allowed_roles:
+        # Verifica se é gerente ou admin - agora usa claims (Case Insensitive)
+        role = claims.get("role", "").lower()
+        allowed_roles = ["gerente", "admin", "administrador"]
+        
+        if role not in allowed_roles:
             return (
                 jsonify(
                     {
@@ -95,7 +99,8 @@ def gerente_ou_admin_required(f):
             )
 
         # Verifica se não está bloqueado - agora usa claims
-        if claims.get("status") != "ativo":
+        status = claims.get("status", "").lower()
+        if status != "ativo":
             return jsonify({"error": "Acesso bloqueado"}), 403
 
         return f(*args, **kwargs)

@@ -6,14 +6,103 @@
 import { apiClient } from '../api/apiClient';
 import { API_CONFIG } from '../api/apiConfig';
 
+type TestConnectionConfig = {
+    BASE_URL: string;
+    IS_DEVELOPMENT: boolean;
+    TIMEOUT: number;
+    CURRENT_URL: string;
+    TOKENS: {
+        access_token: string;
+        refresh_token: string;
+    };
+};
+
+type HealthResult =
+    | {
+          status: number;
+          ok: boolean;
+          data: unknown;
+      }
+    | {
+          error: string;
+          type?: string;
+      };
+
+type AuthResult =
+    | {
+          status: 'authenticated';
+          user: unknown;
+      }
+    | {
+          status: 'failed';
+          error?: unknown;
+          statusCode?: number;
+      }
+    | {
+          status: 'no_token';
+      };
+
+type EndpointResult =
+    | {
+          status: '✅ OK';
+          statusCode: number;
+          hasData: boolean;
+      }
+    | {
+          status: '❌ ERRO';
+          statusCode?: number;
+          error?: unknown;
+      };
+
+type TestConnectionResults = {
+    config: TestConnectionConfig;
+    health: HealthResult;
+    auth: AuthResult;
+    endpoints: Record<string, EndpointResult>;
+};
+
+type ApiError = {
+    message?: string;
+    name?: string;
+    response?: {
+        data?: unknown;
+        status?: number;
+    };
+};
+
+const getApiError = (error: unknown): ApiError => {
+    if (typeof error === 'object' && error !== null) {
+        return error as ApiError;
+    }
+    if (typeof error === 'string') {
+        return { message: error };
+    }
+    return {};
+};
+
 export const testConnection = async () => {
     console.log('🔍 Iniciando teste de conectividade...\n');
     
-    const results = {
-        config: {} as any,
-        health: {} as any,
-        auth: {} as any,
-        endpoints: {} as any,
+    const results: TestConnectionResults = {
+        config: {
+            BASE_URL: '',
+            IS_DEVELOPMENT: false,
+            TIMEOUT: 0,
+            CURRENT_URL: '',
+            TOKENS: {
+                access_token: '',
+                refresh_token: '',
+            },
+        },
+        health: {
+            status: 0,
+            ok: false,
+            data: null,
+        },
+        auth: {
+            status: 'no_token',
+        },
+        endpoints: {},
     };
 
     // 1. Verificar configuração
@@ -41,10 +130,11 @@ export const testConnection = async () => {
             data: data,
         };
         console.log('✅ Health check:', results.health);
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = getApiError(error);
         results.health = {
-            error: error.message,
-            type: error.name,
+            error: err.message || 'Erro desconhecido',
+            type: err.name,
         };
         console.error('❌ Health check falhou:', results.health);
     }
@@ -59,11 +149,12 @@ export const testConnection = async () => {
                 user: response.data,
             };
             console.log('✅ Autenticação válida:', results.auth);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = getApiError(error);
             results.auth = {
                 status: 'failed',
-                error: error.response?.data || error.message,
-                statusCode: error.response?.status,
+                error: err.response?.data || err.message,
+                statusCode: err.response?.status,
             };
             console.error('❌ Autenticação falhou:', results.auth);
         }
@@ -91,11 +182,17 @@ export const testConnection = async () => {
                 hasData: !!response.data,
             };
             console.log(`✅ ${endpoint.name}:`, results.endpoints[endpoint.name]);
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = getApiError(error);
             results.endpoints[endpoint.name] = {
                 status: '❌ ERRO',
-                statusCode: error.response?.status,
-                error: error.response?.data?.message || error.message,
+                statusCode: err.response?.status,
+                error:
+                    (typeof err.response?.data === 'object' &&
+                    err.response?.data !== null &&
+                    'message' in err.response.data
+                        ? (err.response.data as { message?: string }).message
+                        : err.response?.data) || err.message,
             };
             console.error(`❌ ${endpoint.name}:`, results.endpoints[endpoint.name]);
         }
@@ -122,7 +219,7 @@ export const testConnection = async () => {
         console.log('  2. JWT_SECRET_KEY diferente entre ambientes');
     } else {
         const failedEndpoints = Object.entries(results.endpoints)
-            .filter(([_, v]: any) => v.status === '❌ ERRO');
+            .filter(([, v]) => v.status === '❌ ERRO');
         
         if (failedEndpoints.length > 0) {
             console.warn('⚠️ Alguns endpoints falharam:');
@@ -138,7 +235,13 @@ export const testConnection = async () => {
 };
 
 // Expor globalmente para uso no console
+declare global {
+    interface Window {
+        testConnection?: () => Promise<TestConnectionResults>;
+    }
+}
+
 if (typeof window !== 'undefined') {
-    (window as any).testConnection = testConnection;
+    window.testConnection = testConnection;
     console.log('💡 Use testConnection() no console para testar a conectividade');
 }
