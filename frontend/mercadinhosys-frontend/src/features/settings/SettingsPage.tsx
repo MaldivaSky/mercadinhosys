@@ -12,20 +12,43 @@ import { API_CONFIG } from '../../api/apiConfig';
 import { apiClient } from '../../api/apiClient';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
-const SectionTitle = ({ title, icon: Icon }: { title: string, icon: any }) => (
+type SectionTitleProps = {
+    title: string;
+    icon: React.ComponentType<{ className?: string }>;
+};
+
+type InputFieldProps = {
+    label: string;
+    value: string | number;
+    onChange: React.ChangeEventHandler<HTMLInputElement>;
+    type?: string;
+    placeholder?: string;
+    disabled?: boolean;
+    onBlur?: React.FocusEventHandler<HTMLInputElement>;
+};
+
+type SwitchFieldProps = {
+    label: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    description?: string;
+};
+
+const SectionTitle = ({ title, icon: Icon }: SectionTitleProps) => (
     <div className="flex items-center space-x-2 mb-4 border-b pb-2 border-gray-200 dark:border-gray-700">
         <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
         <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200">{title}</h3>
     </div>
 );
 
-const InputField = ({ label, value, onChange, type = "text", placeholder = "", disabled = false }: any) => (
+const InputField = ({ label, value, onChange, type = "text", placeholder = "", disabled = false, onBlur }: InputFieldProps) => (
     <div className="flex flex-col space-y-1">
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
         <input 
             type={type} 
             value={value} 
             onChange={onChange} 
+            onBlur={onBlur}
             disabled={disabled}
             placeholder={placeholder}
             className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white transition-colors"
@@ -33,7 +56,7 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", d
     </div>
 );
 
-const SwitchField = ({ label, checked, onChange, description }: any) => (
+const SwitchField = ({ label, checked, onChange, description }: SwitchFieldProps) => (
     <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-gray-200 dark:border-gray-700">
         <div className="flex flex-col">
             <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</span>
@@ -387,29 +410,29 @@ const SettingsPage: React.FC = () => {
                             <SectionTitle title="Dados da Empresa" icon={Building} />
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField label="Nome Fantasia" value={estab.nome_fantasia} onChange={(e: any) => setEstab({...estab, nome_fantasia: e.target.value})} />
-                                <InputField label="Razão Social" value={estab.razao_social} onChange={(e: any) => setEstab({...estab, razao_social: e.target.value})} />
-                                <InputField label="CNPJ" value={estab.cnpj} onChange={(e: any) => setEstab({...estab, cnpj: e.target.value})} />
-                                <InputField label="Inscrição Estadual" value={estab.inscricao_estadual || ''} onChange={(e: any) => setEstab({...estab, inscricao_estadual: e.target.value})} />
-                                <InputField label="Telefone" value={estab.telefone} onChange={(e: any) => setEstab({...estab, telefone: e.target.value})} />
-                                <InputField label="E-mail" value={estab.email} onChange={(e: any) => setEstab({...estab, email: e.target.value})} />
+                                <InputField label="Nome Fantasia" value={estab.nome_fantasia} onChange={(e) => setEstab({...estab, nome_fantasia: e.target.value})} />
+                                <InputField label="Razão Social" value={estab.razao_social} onChange={(e) => setEstab({...estab, razao_social: e.target.value})} />
+                                <InputField label="CNPJ" value={estab.cnpj} onChange={(e) => setEstab({...estab, cnpj: e.target.value})} />
+                                <InputField label="Inscrição Estadual" value={estab.inscricao_estadual || ''} onChange={(e) => setEstab({...estab, inscricao_estadual: e.target.value})} />
+                                <InputField label="Telefone" value={estab.telefone} onChange={(e) => setEstab({...estab, telefone: e.target.value})} />
+                                <InputField label="E-mail" value={estab.email} onChange={(e) => setEstab({...estab, email: e.target.value})} />
                             </div>
 
                             <SectionTitle title="Endereço" icon={Building} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
-                                    <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e: any) => setEstab({...estab, cep: formatCep(e.target.value)})} />
+                                    <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e) => setEstab({...estab, cep: formatCep(e.target.value)})} />
                                     {loadingCep && (
                                         <p className="text-xs text-blue-500 mt-1">Buscando endereço...</p>
                                     )}
                                 </div>
                                 <div className="md:col-span-2">
-                                    <InputField label="Logradouro" value={estab.logradouro} onChange={(e: any) => setEstab({...estab, logradouro: e.target.value})} />
+                                    <InputField label="Logradouro" value={estab.logradouro} onChange={(e) => setEstab({...estab, logradouro: e.target.value})} />
                                 </div>
-                                <InputField label="Número" value={estab.numero} onChange={(e: any) => setEstab({...estab, numero: e.target.value})} />
-                                <InputField label="Bairro" value={estab.bairro} onChange={(e: any) => setEstab({...estab, bairro: e.target.value})} />
-                                <InputField label="Cidade" value={estab.cidade} onChange={(e: any) => setEstab({...estab, cidade: e.target.value})} />
-                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e: any) => setEstab({...estab, estado: e.target.value})} />
+                                <InputField label="Número" value={estab.numero} onChange={(e) => setEstab({...estab, numero: e.target.value})} />
+                                <InputField label="Bairro" value={estab.bairro} onChange={(e) => setEstab({...estab, bairro: e.target.value})} />
+                                <InputField label="Cidade" value={estab.cidade} onChange={(e) => setEstab({...estab, cidade: e.target.value})} />
+                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({...estab, estado: e.target.value})} />
                             </div>
                         </div>
                     )}
@@ -482,13 +505,13 @@ const SettingsPage: React.FC = () => {
                                     label="Desconto Máximo (%)" 
                                     type="number" 
                                     value={config.desconto_maximo_percentual} 
-                                    onChange={(e: any) => setConfig({...config, desconto_maximo_percentual: parseFloat(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, desconto_maximo_percentual: parseFloat(e.target.value)})} 
                                 />
                                 <InputField 
                                     label="Desconto Máx. Funcionário (%)" 
                                     type="number" 
                                     value={config.desconto_maximo_funcionario} 
-                                    onChange={(e: any) => setConfig({...config, desconto_maximo_funcionario: parseFloat(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, desconto_maximo_funcionario: parseFloat(e.target.value)})} 
                                 />
                             </div>
                         </div>
@@ -520,13 +543,13 @@ const SettingsPage: React.FC = () => {
                                     label="Dias para Alerta de Validade" 
                                     type="number"
                                     value={config.dias_alerta_validade} 
-                                    onChange={(e: any) => setConfig({...config, dias_alerta_validade: parseInt(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, dias_alerta_validade: parseInt(e.target.value)})} 
                                 />
                                 <InputField 
                                     label="Estoque Mínimo Padrão" 
                                     type="number"
                                     value={config.estoque_minimo_padrao} 
-                                    onChange={(e: any) => setConfig({...config, estoque_minimo_padrao: parseInt(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, estoque_minimo_padrao: parseInt(e.target.value)})} 
                                 />
                             </div>
                         </div>
@@ -556,7 +579,7 @@ const SettingsPage: React.FC = () => {
                                     label="Tolerância de Atraso (minutos)" 
                                     type="number"
                                     value={config.tolerancia_atraso_minutos || 5} 
-                                    onChange={(e: any) => setConfig({...config, tolerancia_atraso_minutos: parseInt(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, tolerancia_atraso_minutos: parseInt(e.target.value)})} 
                                 />
                             </div>
 
@@ -572,7 +595,7 @@ const SettingsPage: React.FC = () => {
                                             type="number"
                                             step="0.000001"
                                             value={config.latitude_estabelecimento || ''} 
-                                            onChange={(e: any) => setConfig({...config, latitude_estabelecimento: parseFloat(e.target.value)})} 
+                                            onChange={(e) => setConfig({...config, latitude_estabelecimento: parseFloat(e.target.value)})} 
                                             placeholder="-23.550"
                                         />
                                         <InputField 
@@ -580,14 +603,14 @@ const SettingsPage: React.FC = () => {
                                             type="number"
                                             step="0.000001"
                                             value={config.longitude_estabelecimento || ''} 
-                                            onChange={(e: any) => setConfig({...config, longitude_estabelecimento: parseFloat(e.target.value)})} 
+                                            onChange={(e) => setConfig({...config, longitude_estabelecimento: parseFloat(e.target.value)})} 
                                             placeholder="-46.633"
                                         />
                                         <InputField 
                                             label="Raio de Validação (metros)" 
                                             type="number"
                                             value={config.raio_validacao_metros || 100} 
-                                            onChange={(e: any) => setConfig({...config, raio_validacao_metros: parseInt(e.target.value)})} 
+                                            onChange={(e) => setConfig({...config, raio_validacao_metros: parseInt(e.target.value)})} 
                                             placeholder="100"
                                         />
                                     </div>
@@ -691,13 +714,13 @@ const SettingsPage: React.FC = () => {
                                     label="Tempo de Sessão (minutos)" 
                                     type="number"
                                     value={config.tempo_sessao_minutos} 
-                                    onChange={(e: any) => setConfig({...config, tempo_sessao_minutos: parseInt(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, tempo_sessao_minutos: parseInt(e.target.value)})} 
                                 />
                                 <InputField 
                                     label="Tentativas de Senha antes do Bloqueio" 
                                     type="number"
                                     value={config.tentativas_senha_bloqueio} 
-                                    onChange={(e: any) => setConfig({...config, tentativas_senha_bloqueio: parseInt(e.target.value)})} 
+                                    onChange={(e) => setConfig({...config, tentativas_senha_bloqueio: parseInt(e.target.value)})} 
                                 />
                             </div>
 
@@ -818,7 +841,7 @@ const SyncPanel: React.FC = () => {
             setNeonStatus(resp.data?.neon ?? 'desconhecido');
             setLocalCounts(resp.data?.local_counts ?? null);
             setRemoteCounts(resp.data?.remote_counts ?? null);
-        } catch (e: any) {
+        } catch (e: unknown) {
             setNeonStatus('erro');
         } finally {
             setLoading(false);
@@ -830,8 +853,9 @@ const SyncPanel: React.FC = () => {
             await apiClient.post('/sync/replicar');
             await fetchHealth();
             toast.success('Replicação concluída');
-        } catch (e: any) {
-            toast.error(e?.response?.data?.message || 'Erro ao replicar');
+        } catch (e: unknown) {
+            const error = e as { response?: { data?: { message?: string } } };
+            toast.error(error.response?.data?.message || 'Erro ao replicar');
         } finally {
             setReplicating(false);
         }

@@ -559,6 +559,51 @@ class Produto(db.Model):
         ),
     )
 
+    def movimentar_estoque(self, quantidade: int, tipo: str, motivo: str, 
+                          usuario_id: int, venda_id: int = None):
+        """
+        Realiza a movimentação de estoque de forma segura e auditável.
+        Encapsula a regra de negócio e garante a criação do log.
+        """
+        # 1. Validação de Invariantes (Regra de Negócio)
+        if tipo == 'saida':
+            if quantidade <= 0:
+                raise ValueError("Quantidade de saída deve ser positiva")
+            
+            # Validação básica de estoque
+            if self.quantidade < quantidade:
+                 # Aqui poderia ser lançada uma exceção se a configuração não permitir estoque negativo
+                 pass
+
+        quantidade_anterior = self.quantidade
+        
+        # 2. Atualização de Estado
+        if tipo == 'entrada':
+            self.quantidade += quantidade
+        elif tipo == 'saida':
+            self.quantidade -= quantidade
+            self.quantidade_vendida += quantidade
+            self.total_vendido += float(self.preco_venda * quantidade)
+            self.ultima_venda = datetime.utcnow()
+            
+        # 3. Geração de Auditoria (Garante Integridade)
+        # MovimentacaoEstoque é resolvida em tempo de execução
+        movimentacao = MovimentacaoEstoque(
+            estabelecimento_id=self.estabelecimento_id,
+            produto_id=self.id,
+            venda_id=venda_id,
+            funcionario_id=usuario_id,
+            tipo=tipo,
+            quantidade=quantidade,
+            quantidade_anterior=quantidade_anterior,
+            quantidade_atual=self.quantidade,
+            custo_unitario=self.preco_custo,
+            valor_total=self.preco_venda * quantidade if tipo == 'saida' else self.preco_custo * quantidade,
+            motivo=motivo
+        )
+        
+        return movimentacao
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -1634,6 +1679,62 @@ class ConfiguracaoHorario(db.Model):
             'exigir_foto': self.exigir_foto,
             'exigir_localizacao': self.exigir_localizacao,
             'raio_permitido_metros': self.raio_permitido_metros
+        }
+
+
+# ============================================
+# 24. FILA DE SINCRONIZAÇÃO (OFFLINE-FIRST)
+# ============================================
+
+
+class SyncQueue(db.Model):
+    """
+    Fila de sincronização para garantir que operações realizadas offline
+    sejam replicadas para a nuvem quando a conexão retornar.
+    """
+    __tablename__ = "sync_queue"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    
+    # Identificação do recurso
+    tabela = db.Column(db.String(50), nullable=False) # ex: 'vendas'
+    registro_id = db.Column(db.Integer, nullable=False) # ID do registro local
+    operacao = db.Column(db.String(10), nullable=False) # 'INSERT', 'UPDATE', 'DELETE'
+    
+    # Payload para reconstrução (opcional, mas útil se o registro for deletado)
+    payload_json = db.Column(db.Text) 
+    
+    # Controle de Sincronização
+    status = db.Column(db.String(20), default="pendente") # pendente, erro, sincronizado
+    tentativas = db.Column(db.Integer, default=0)
+    mensagem_erro = db.Column(db.Text)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    synced_at = db.Column(db.DateTime)
+
+    estabelecimento = db.relationship(
+        "Estabelecimento", backref=db.backref("sync_queue", lazy=True)
+    )
+
+    __table_args__ = (
+        db.Index("idx_sync_status", "status"),
+        db.Index("idx_sync_created", "created_at"),
+    )
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tabela": self.tabela,
+            "registro_id": self.registro_id,
+            "operacao": self.operacao,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "synced_at": self.synced_at.isoformat() if self.synced_at else None
         }
 
 

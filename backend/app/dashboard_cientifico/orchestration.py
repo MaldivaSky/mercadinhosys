@@ -1,4 +1,4 @@
-"""
+﻿"""
 Orchestration Layer - Orquestra todas as camadas
 Foco: Simplicidade e clareza
 """
@@ -35,16 +35,48 @@ class DashboardOrchestrator:
             [day["total"] for day in sales_timeseries if day["total"] > 0]
         )
 
-        # Vendas anteriores (últimos 30-60 dias)
+        # Vendas anteriores (comparação direta com período anterior)
+        # Ex: se days=30, compara com os 30 dias anteriores a isso
+        # Isso ainda não é perfeito (não é homólogo), mas é melhor que dividir por 30
+        
+        # Calcular período anterior
+        # Nota: DataLayer.get_sales_summary usa "now() - days", então não dá pra passar range direto.
+        # Precisaríamos refatorar o DataLayer para aceitar start_date e end_date.
+        # Por enquanto, mantemos a lógica de "total / days" mas explicitamos a limitação ou
+        # melhoramos se possível. 
+        # A melhoria imediata é não assumir 30 dias fixos se days >= 60.
+        
         if days >= 60:
+            # Se pediu 60+ dias, pegamos os últimos 60 e assumimos média diária dos primeiros 30 como "anterior"
+            # Isso é uma aproximação.
             sales_previous_data = DataLayer.get_sales_summary(self.establishment_id, 60)
+            # Aproximação: metade do período longo vs metade atual
+            # Mas sales_summary retorna o TOTAL do período.
+            # Vamos simplificar para usar a média diária do período longo como base de comparação,
+            # ajustada para o número de dias atual.
+            avg_daily_long = sales_previous_data["total_faturado"] / 60
             sales_previous = {
-                "value": sales_previous_data["total_faturado"] / 30,
-                "sample_size": 30,
+                "value": avg_daily_long * days, # Projetado para o período atual
+                "sample_size": days,
             }
         else:
+            # Para períodos curtos (<60), idealmente deveríamos buscar o período anterior.
+            # Como DataLayer.get_sales_summary pega "ultimos N dias", se pedirmos 60 dias, 
+            # teremos (Atual + Anterior). 
+            # Então Anterior = Total(60) - Total(30).
+            
+            sales_total_extended = DataLayer.get_sales_summary(self.establishment_id, days * 2)
+            sales_total_current = sales_summary # Já buscado acima (days)
+            
+            val_extended = sales_total_extended["total_faturado"]
+            val_current = sales_total_current["total_faturado"]
+            val_previous = val_extended - val_current
+            
+            # Se o valor for negativo (inconsistência de dados), zeramos
+            if val_previous < 0: val_previous = 0
+            
             sales_previous = {
-                "value": sales_summary["total_faturado"] / days,
+                "value": val_previous,
                 "sample_size": days,
             }
 
@@ -130,7 +162,7 @@ class DashboardOrchestrator:
         """
         Dashboard científico - Análise avançada com insights
         """
-        try:
+        if True: # Refactor: removed try/except mock for ERP safety
             # 1. Coletar dados científicos
             sales_summary = DataLayer.get_sales_summary(self.establishment_id, days)
             sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, days)
@@ -333,163 +365,3 @@ class DashboardOrchestrator:
                     ],
                 },
             }
-        except Exception as e:
-            # Fallback para dados mock se houver erro
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Erro no dashboard científico: {e}")
-            return {
-                "hoje": {
-                    "total_vendas": 153520.13,
-                    "ticket_medio": 343.32,
-                    "clientes_atendidos": 446,
-                    "crescimento_vs_ontem": 15.5,
-                },
-                "mes": {
-                    "total_vendas": 153520.13,
-                    "total_despesas": 30704.03,
-                    "lucro_bruto": 122816.10,
-                    "margem_lucro": 80.0,
-                    "roi_mensal": 25.0,
-                    "investimentos": 0,
-                },
-                "analise_produtos": {
-                    "curva_abc": {
-                        "pareto_80_20": True,
-                        "produtos": [],
-                        "resumo": {
-                            "A": {"percentual": 20.0},
-                            "B": {"percentual": 30.0},
-                            "C": {"percentual": 50.0},
-                        },
-                    },
-                    "produtos_estrela": [],
-                    "produtos_lentos": [],
-                    "previsao_demanda": [],
-                },
-                "analise_financeira": {
-                    "despesas_detalhadas": [],
-                    "margens": {"bruta": 80.0, "operacional": 75.0, "liquida": 70.0},
-                    "indicadores": {"ponto_equilibrio": 50000.0, "margem_seguranca": 25.0, "ebitda": 107961.07},
-                },
-                "analise_temporal": {
-                    "tendencia_vendas": [
-                        {
-                            "data": f"2025-01-{str(i+1).zfill(2)}",
-                            "vendas": 153520.13 / 30 * (0.8 + (i * 0.02)),  # Variação diária simulada
-                            "previsao": 153520.13 / 30 * (0.8 + (i * 0.02)) * 1.05 if i > 22 else None
-                        }
-                        for i in range(30)
-                    ],
-                    "sazonalidade": [
-                        {
-                            "periodo": "Segunda-feira",
-                            "variacao": 15.2,
-                            "descricao": "Dia de maior movimento da semana"
-                        },
-                        {
-                            "periodo": "Sábado",
-                            "variacao": 8.7,
-                            "descricao": "Segundo melhor dia da semana"
-                        },
-                        {
-                            "periodo": "Domingo",
-                            "variacao": -25.3,
-                            "descricao": "Dia de menor movimento"
-                        }
-                    ],
-                    "comparacao_meses": [
-                        {
-                            "mes": "Janeiro 2025",
-                            "vendas": 138168.12,
-                            "meta": 153520.13,
-                            "crescimento": -10.0
-                        },
-                        {
-                            "mes": "Dezembro 2024",
-                            "vendas": 168872.14,
-                            "meta": 153520.13,
-                            "crescimento": 10.0
-                        }
-                    ],
-                    "previsao_proxima_semana": [
-                        {
-                            "dia": f"Dia {i+1}",
-                            "previsao": 153520.13 / 30 * (1 + (i * 0.02)),
-                            "intervalo_confianca": 5.0
-                        }
-                        for i in range(7)
-                    ]
-                },
-                "insights_cientificos": {
-                    "correlações": [
-                        {
-                            "variavel1": "Vendas",
-                            "variavel2": "Clientes", 
-                            "correlacao": 0.75,
-                            "significancia": 0.001,
-                            "insight": "Correlação positiva forte entre vendas e número de clientes"
-                        }
-                    ],
-                    "previsoes": [
-                        {
-                            "variavel": "Vendas Totais",
-                            "valor_atual": 153520.13,
-                            "previsao_30d": 176448.15,
-                            "intervalo_confianca": [145000.0, 190000.0],
-                            "confianca": 85.0
-                        }
-                    ],
-                    "recomendacoes_otimizacao": [
-                        {
-                            "area": "Estoque",
-                            "acao": "Aumentar estoque de produtos A",
-                            "impacto_esperado": 15.5,
-                            "complexidade": "media"
-                        },
-                        {
-                            "area": "Produtos", 
-                            "acao": "Reduzir produtos C com baixa rotatividade",
-                            "impacto_esperado": 8.2,
-                            "complexidade": "baixa"
-                        },
-                        {
-                            "area": "Precificação",
-                            "acao": "Otimizar precificação baseada na elasticidade",
-                            "impacto_esperado": 12.8,
-                            "complexidade": "alta"
-                        }
-                    ]
-                }
-            }
-        """
-        Análise detalhada por tipo de métrica
-        """
-        if metric_type == "sales":
-            data = DataLayer.get_sales_timeseries(self.establishment_id, days)
-            analysis = PracticalModels.detect_sales_trend(data)
-
-            return {"data": data, "analysis": analysis, "period": days}
-
-        elif metric_type == "inventory":
-            summary = DataLayer.get_inventory_summary(self.establishment_id)
-            top_products = DataLayer.get_top_products(self.establishment_id, 90, 100)
-            abc_analysis = PracticalModels.analyze_inventory_abc(
-                [
-                    {
-                        "nome": p["nome"],
-                        "valor_total": p["faturamento"] * 3,  # Estimativa de estoque
-                        "quantidade": p["quantidade_vendida"],
-                    }
-                    for p in top_products
-                ]
-            )
-
-            return {
-                "summary": summary,
-                "abc_analysis": abc_analysis,
-                "top_products": top_products[:20],
-            }
-
-        else:
-            return {"error": f"Tipo de análise não suportado: {metric_type}"}

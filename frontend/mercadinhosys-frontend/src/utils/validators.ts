@@ -1,5 +1,5 @@
 export const validators = {
-    required: (value: any) => {
+    required: (value: string | number | boolean | null | undefined) => {
         if (!value && value !== 0) return 'Campo obrigatório';
         return '';
     },
@@ -28,7 +28,7 @@ export const validators = {
         return '';
     },
 
-    number: (value: any) => {
+    number: (value: string | number | null | undefined) => {
         if (isNaN(Number(value))) return 'Deve ser um número';
         return '';
     },

@@ -94,13 +94,6 @@ const SuppliersPage: React.FC = () => {
         };
     }, [suppliers]);
 
-    // Remover variável não utilizada
-    // const estadoMaisComum = useMemo(() => {
-    //     const estados = Object.entries(stats.por_estado);
-    //     if (estados.length === 0) return '-';
-    //     return estados.reduce((a, b) => a[1] > b[1] ? a : b)[0];
-    // }, [stats]);
-
     const loadSuppliers = useCallback(async () => {
         try {
             setLoading(true);
