@@ -29,15 +29,15 @@ class Config:
         SQLALCHEMY_DATABASE_URI = DATABASE_URL
         USING_POSTGRES = DATABASE_URL.startswith("postgresql://")
         if USING_POSTGRES:
-            print(f"🌐 [DB: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
+            print(f"[DB: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
         else:
-            print(f"💾 [DB: SQLITE] {DATABASE_URL}")
+            print(f"[DB: SQLITE] {DATABASE_URL}")
     elif SQLITE_DB:
         SQLALCHEMY_DATABASE_URI = SQLITE_DB
-        print(f"💾 [DB: SQLITE] {SQLITE_DB}")
+        print(f"[DB: SQLITE] {SQLITE_DB}")
     else:
         SQLALCHEMY_DATABASE_URI = "sqlite:///mercadinho.db"
-        print(f"💾 [DB: SQLITE] {SQLALCHEMY_DATABASE_URI}")
+        print(f"[DB: SQLITE] {SQLALCHEMY_DATABASE_URI}")
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {

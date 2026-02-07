@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 import os
+from urllib.parse import urlparse
 from app.models import db, Estabelecimento, Funcionario, Cliente, Fornecedor, CategoriaProduto, Produto, Venda, VendaItem, Pagamento, MovimentacaoEstoque, Despesa
 
 sync_bp = Blueprint("sync", __name__)
@@ -149,6 +150,18 @@ def sync_health():
 def db_info():
     try:
         uri = current_app.config.get("SQLALCHEMY_DATABASE_URI") or ""
+        redacted_uri = uri
+        if uri:
+            try:
+                parsed = urlparse(uri)
+                if parsed.password:
+                    username = parsed.username or ""
+                    host = parsed.hostname or ""
+                    port = f":{parsed.port}" if parsed.port else ""
+                    auth = f"{username}:****@" if username else ""
+                    redacted_uri = parsed._replace(netloc=f"{auth}{host}{port}").geturl()
+            except Exception:
+                redacted_uri = uri
         engine = db.engine
         engine_name = getattr(engine, "name", "unknown")
         is_sqlite = engine_name == "sqlite" or uri.startswith("sqlite://")
@@ -159,12 +172,18 @@ def db_info():
                 rel = uri.replace("sqlite:///", "", 1)
                 file_path = os.path.abspath(os.path.join(os.getcwd(), rel))
                 file_exists = os.path.exists(file_path)
+        db_source = None
+        for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+            if os.environ.get(key):
+                db_source = key
+                break
         return jsonify({
             "success": True,
-            "uri": uri,
+            "uri": redacted_uri,
             "engine": engine_name,
             "sqlite_file_path": file_path,
             "sqlite_file_exists": file_exists,
+            "db_source": db_source,
         }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:120]}), 500
