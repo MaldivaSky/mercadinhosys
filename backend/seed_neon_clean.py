@@ -1,5 +1,5 @@
 """
-Seed Rápido para Neon PostgreSQL
+Seed Rapido para Neon PostgreSQL
 Cria apenas dados essenciais para testar o sistema
 """
 import os
@@ -21,8 +21,8 @@ local_db_url = f"sqlite:///{fallback_path.replace('\\', '/')}"
 os.environ['DATABASE_URL'] = local_db_url
 print(f"[LOCAL SEED] Usando SQLite: {local_db_url}")
 
-# Destino Neon: usar NEON_DATABASE_URL se existir; caso contrário, usar DATABASE_URL original do ambiente
-target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL_ORIG') or os.environ.get('NEON_DB_URL') or os.environ.get('DB_PRIMARY') or os.environ.get('DATABASE_URL_TARGET') or os.environ.get('DATABASE_URL')
+# Destino Neon: usar NEON_DATABASE_URL se existir
+target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL')
 if target_url:
     if target_url.startswith("postgres://"):
         target_url = target_url.replace("postgres://", "postgresql://", 1)
@@ -47,27 +47,27 @@ if target_url and target_url.startswith('postgresql://'):
         with engine_test.connect() as conn:
             conn.execute(text("SELECT 1"))
         parsed = urlparse(target_url)
-        print(f"✅ Conexão com Neon verificada (host: {parsed.hostname})")
+        print(f"Conexao com Neon verificada (host: {parsed.hostname})")
     except Exception as e:
         parsed = urlparse(target_url)
         host_info = parsed.hostname or "desconhecido"
-        print(f"❌ Falha ao conectar no Neon ({host_info}).")
-        print("   Verifique a URL de conexão do Neon (Dashboard > Connection string).")
+        print(f"Falha ao conectar no Neon ({host_info}).")
+        print("   Verifique a URL de conexao do Neon (Dashboard > Connection string).")
         print("   Exemplo: postgresql://USUARIO:SENHA@SEU_HOST.neon.tech/SEU_DB?sslmode=require&channel_binding=require")
-        print("   Dica: não use placeholders como 'host.neon.tech'; use o host real do seu projeto.")
+        print("   Dica: nao use placeholders como 'host.neon.tech'; use o host real do seu projeto.")
         print(f"   Erro: {str(e)[:200]}")
-        # Não aborta o seed local; apenas marcar que a replicação será pulada
+        # Nao aborta o seed local; apenas marcar que a replicacao sera pulada
         target_url = ""
 
 app = create_app()
 
 with app.app_context():
     try:
-        print("🔧 Garantindo schema do banco...")
+        print("[SETUP] Garantindo schema do banco...")
         db.create_all()
-        print("✅ Tabelas criadas (se necessário)")
+        print("[SETUP] Tabelas criadas (se necessario)")
         
-        print("⚠️  Este seed cria apenas dados essenciais (rápido)")
+        print("[INFO] Este seed cria apenas dados essenciais (rapido)")
         print()
         proceed = False
         auto = os.environ.get('SEED_CONFIRM', '').lower()
@@ -82,7 +82,7 @@ with app.app_context():
             except Exception:
                 proceed = False
         if not proceed:
-            print("❌ Cancelado")
+            print("[CANCELADO]")
             sys.exit(0)
         
         print()
@@ -106,21 +106,21 @@ with app.app_context():
             db.session.execute(text("DROP TABLE IF EXISTS despesas CASCADE"))
             db.session.execute(text("SET session_replication_role = 'origin'"))
             db.session.commit()
-            print("Tabelas removidas")
+            print("[OK] Tabelas removidas")
             
             # Recriar tabelas
             db.create_all()
             db.session.commit()
-            print("Tabelas criadas")
+            print("[OK] Tabelas criadas")
         except Exception as e:
-            print(f"Aviso na limpeza: {e}")
+            print(f"[AVISO] Na limpeza: {e}")
             db.create_all()
             db.session.commit()
         
         print()
         
         # 1. ESTABELECIMENTO
-        print("🏢 Criando estabelecimento...")
+        print("[SETUP] Criando estabelecimento...")
         est = Estabelecimento(
             nome_fantasia="Mercado Souza Center",
             razao_social="Mercado Souza Center LTDA",
@@ -142,11 +142,11 @@ with app.app_context():
         )
         db.session.add(est)
         db.session.flush()
-        print(f"✅ {est.nome_fantasia}")
+        print(f"[OK] {est.nome_fantasia}")
         
-        # 2. FUNCIONÁRIOS
+        # 2. FUNCIONARIOS
         print()
-        print("👥 Criando funcionários...")
+        print("[SETUP] Criando funcionarios...")
         
         admin = Funcionario(
             estabelecimento_id=est.id,
@@ -175,11 +175,11 @@ with app.app_context():
             permissoes_json='{"pdv":true,"estoque":true,"compras":true,"financeiro":true,"configuracoes":true,"relatorios":true}'
         )
         db.session.add(admin)
-        print(f"  ✅ {admin.nome} (admin/admin123)")
+        print(f"  [OK] {admin.nome} (admin/admin123)")
         
         joao = Funcionario(
             estabelecimento_id=est.id,
-            nome="João Silva",
+            nome="Joao Silva",
             username="joao",
             senha_hash=generate_password_hash("joao123"),
             email="joao@empresa.com",
@@ -195,7 +195,7 @@ with app.app_context():
             data_admissao=date.today(),
             salario_base=Decimal("1850.00"),
             cep="59000-000",
-            logradouro="Rua Secundária",
+            logradouro="Rua Secundaria",
             numero="200",
             bairro="Centro",
             cidade="Natal",
@@ -204,13 +204,13 @@ with app.app_context():
             permissoes_json='{"pdv":true,"estoque":false}'
         )
         db.session.add(joao)
-        print(f"  ✅ {joao.nome} (joao/joao123)")
+        print(f"  [OK] {joao.nome} (joao/joao123)")
         
         db.session.flush()
         
         # 3. CLIENTES
         print()
-        print("🛒 Criando clientes...")
+        print("[SETUP] Criando clientes...")
         
         clientes_data = [
             {"nome": "Maria Santos", "cpf": "333.444.555-66", "email": "maria@email.com", "telefone": "(84) 93456-7890", "celular": "(84) 93456-7890",
@@ -238,13 +238,13 @@ with app.app_context():
                 ativo=True
             )
             db.session.add(cliente)
-            print(f"  ✅ {cliente.nome}")
+            print(f"  [OK] {cliente.nome}")
         
         db.session.flush()
         
         # 4. FORNECEDORES
         print()
-        print("🚚 Criando fornecedores...")
+        print("[SETUP] Criando fornecedores...")
         
         fornecedores_data = [
             {"nome": "Distribuidora ABC", "cnpj": "11.222.333/0001-44", "telefone": "(84) 3111-2222",
@@ -272,13 +272,13 @@ with app.app_context():
             )
             db.session.add(fornecedor)
             fornecedores.append(fornecedor)
-            print(f"  ✅ {fornecedor.nome_fantasia}")
+            print(f"  [OK] {fornecedor.nome_fantasia}")
         
         db.session.flush()
         
         # 5. CATEGORIAS
         print()
-        print("📁 Criando categorias...")
+        print("[SETUP] Criando categorias...")
         
         categorias_data = ["Alimentos", "Bebidas", "Limpeza", "Higiene", "Padaria"]
         categorias = []
@@ -291,25 +291,25 @@ with app.app_context():
             )
             db.session.add(categoria)
             categorias.append(categoria)
-            print(f"  ✅ {categoria.nome}")
+            print(f"  [OK] {categoria.nome}")
         
         db.session.flush()
         
         # 6. PRODUTOS
         print()
-        print("📦 Criando produtos...")
+        print("[SETUP] Criando produtos...")
         
         produtos_data = [
             ("Arroz Tipo 1 5kg", 0, 0, "7891234567890", 15.00, 22.90, 50),
-            ("Feijão Preto 1kg", 0, 0, "7891234567891", 5.50, 8.90, 80),
-            ("Açúcar Cristal 1kg", 0, 0, "7891234567892", 3.20, 4.99, 100),
+            ("Feijao Preto 1kg", 0, 0, "7891234567891", 5.50, 8.90, 80),
+            ("Acucar Cristal 1kg", 0, 0, "7891234567892", 3.20, 4.99, 100),
             ("Refrigerante 2L", 1, 1, "7891234567893", 4.50, 7.99, 60),
-            ("Água Mineral 1.5L", 1, 1, "7891234567894", 1.20, 2.50, 120),
-            ("Detergente Líquido", 2, 0, "7891234567895", 1.80, 2.99, 90),
-            ("Sabão em Pó 1kg", 2, 0, "7891234567896", 8.50, 12.90, 40),
+            ("Agua Mineral 1.5L", 1, 1, "7891234567894", 1.20, 2.50, 120),
+            ("Detergente Liquido", 2, 0, "7891234567895", 1.80, 2.99, 90),
+            ("Sabao em Po 1kg", 2, 0, "7891234567896", 8.50, 12.90, 40),
             ("Shampoo 400ml", 3, 1, "7891234567897", 6.00, 9.99, 35),
             ("Sabonete 90g", 3, 1, "7891234567898", 1.50, 2.49, 150),
-            ("Pão Francês kg", 4, 0, "7891234567899", 8.00, 12.00, 20),
+            ("Pao Frances kg", 4, 0, "7891234567899", 8.00, 12.00, 20),
         ]
         
         for nome, cat_idx, forn_idx, codigo, custo, venda, qtd in produtos_data:
@@ -326,27 +326,27 @@ with app.app_context():
                 ativo=True
             )
             db.session.add(produto)
-            print(f"  ✅ {produto.nome} - R$ {produto.preco_venda}")
+            print(f"  [OK] {produto.nome} - R$ {produto.preco_venda}")
         
         # COMMIT PRODUTOS
         print()
-        print("💾 Salvando produtos...")
+        print("[SAVE] Salvando produtos...")
         db.session.commit()
-        print("✅ Produtos salvos!")
+        print("[OK] Produtos salvos")
         
         # 7. DESPESAS
         print()
-        print("💸 Criando despesas...")
+        print("[SETUP] Criando despesas...")
         hoje = date.today()
         primeiro_dia_mes = hoje.replace(day=1)
         despesas_data = [
-            {"descricao": "Salários Funcionários", "categoria": "salarios", "tipo": "fixa", "valor": Decimal("6000.00"), "recorrente": True, "forma_pagamento": "transferencia"},
+            {"descricao": "Salarios Funcionarios", "categoria": "salarios", "tipo": "fixa", "valor": Decimal("6000.00"), "recorrente": True, "forma_pagamento": "transferencia"},
             {"descricao": "Aluguel do Estabelecimento", "categoria": "aluguel", "tipo": "fixa", "valor": Decimal("3500.00"), "recorrente": True, "forma_pagamento": "transferencia"},
             {"descricao": "Conta de Energia", "categoria": "energia", "tipo": "variavel", "valor": Decimal("1200.00"), "recorrente": True, "forma_pagamento": "boleto"},
-            {"descricao": "Conta de Água", "categoria": "agua", "tipo": "variavel", "valor": Decimal("450.00"), "recorrente": True, "forma_pagamento": "boleto"},
+            {"descricao": "Conta de Agua", "categoria": "agua", "tipo": "variavel", "valor": Decimal("450.00"), "recorrente": True, "forma_pagamento": "boleto"},
             {"descricao": "Marketing Digital", "categoria": "marketing", "tipo": "variavel", "valor": Decimal("800.00"), "recorrente": True, "forma_pagamento": "cartao_credito"},
-            {"descricao": "Manutenção de Equipamentos", "categoria": "manutencao", "tipo": "variavel", "valor": Decimal("650.00"), "recorrente": False, "forma_pagamento": "pix"},
-            {"descricao": "Serviços de Limpeza", "categoria": "limpeza", "tipo": "variavel", "valor": Decimal("500.00"), "recorrente": True, "forma_pagamento": "dinheiro"},
+            {"descricao": "Manutencao de Equipamentos", "categoria": "manutencao", "tipo": "variavel", "valor": Decimal("650.00"), "recorrente": False, "forma_pagamento": "pix"},
+            {"descricao": "Servicos de Limpeza", "categoria": "limpeza", "tipo": "variavel", "valor": Decimal("500.00"), "recorrente": True, "forma_pagamento": "dinheiro"},
         ]
         for idx, d in enumerate(despesas_data):
             data_despesa = primeiro_dia_mes + timedelta(days=min(idx * 3, 27))
@@ -359,18 +359,18 @@ with app.app_context():
                 data_despesa=data_despesa,
                 forma_pagamento=d["forma_pagamento"],
                 recorrente=d["recorrente"],
-                observacoes="Seed automático"
+                observacoes="Seed automatico"
             )
             db.session.add(despesa)
-            print(f"  ✅ {despesa.descricao} - R$ {despesa.valor}")
+            print(f"  [OK] {despesa.descricao} - R$ {despesa.valor}")
         db.session.commit()
-        print("✅ Despesas salvas!")
+        print("[OK] Despesas salvas")
         
-        # 8. HISTÓRICO DE PONTO (sem fotos, realista)
+        # 8. HISTORICO DE PONTO (sem fotos, realista)
         print()
-        print("⏰ Criando histórico de ponto...")
+        print("[SETUP] Criando historico de ponto...")
         
-        # Dados de configuração de horário padrão - criar ou atualizar
+        # Dados de configuracao de horario padrao - criar ou atualizar
         config = db.session.query(ConfiguracaoHorario).filter_by(estabelecimento_id=est.id).first()
         if not config:
             config = ConfiguracaoHorario(
@@ -390,8 +390,7 @@ with app.app_context():
             db.session.add(config)
             db.session.flush()
         
-        # Criar registros de ponto para os últimos 30 dias
-        # Apenas para funcionários (admin e joao)
+        # Criar registros de ponto para os ultimos 30 dias
         pontos_criados = 0
         funcionarios_para_ponto = [admin, joao]
         
@@ -400,7 +399,7 @@ with app.app_context():
             data_registro = hoje - timedelta(days=dias_atras)
             
             # Pular fins de semana
-            if data_registro.weekday() >= 5:  # 5=sábado, 6=domingo
+            if data_registro.weekday() >= 5:  # 5=sabado, 6=domingo
                 continue
             
             for funcionario in funcionarios_para_ponto:
@@ -422,7 +421,7 @@ with app.app_context():
                 db.session.add(entrada)
                 pontos_criados += 1
                 
-                # Saída almoço (entre 11:55 e 12:10)
+                # Saida almoco (entre 11:55 e 12:10)
                 hora_saida_alm = datetime.strptime('12:00', '%H:%M').time()
                 minutos_var_alm = random.randint(-5, 10)
                 hora_saida_alm = (datetime.combine(data_registro, hora_saida_alm) + timedelta(minutes=minutos_var_alm)).time()
@@ -435,12 +434,12 @@ with app.app_context():
                     tipo_registro='saida_almoco',
                     status='normal',
                     minutos_atraso=0,
-                    observacao='Saída para almoço'
+                    observacao='Saida para almoco'
                 )
                 db.session.add(saida_almoco)
                 pontos_criados += 1
                 
-                # Retorno almoço (entre 12:55 e 13:15)
+                # Retorno almoco (entre 12:55 e 13:15)
                 hora_retorno_alm = datetime.strptime('13:00', '%H:%M').time()
                 minutos_var_ret = random.randint(-5, 15)
                 hora_retorno_alm = (datetime.combine(data_registro, hora_retorno_alm) + timedelta(minutes=minutos_var_ret)).time()
@@ -453,12 +452,12 @@ with app.app_context():
                     tipo_registro='retorno_almoco',
                     status='normal' if minutos_var_ret <= 10 else 'atrasado',
                     minutos_atraso=max(0, minutos_var_ret - 10),
-                    observacao='Retorno do almoço'
+                    observacao='Retorno do almoco'
                 )
                 db.session.add(retorno_almoco)
                 pontos_criados += 1
                 
-                # Saída (entre 17:50 e 18:15) - sem atraso (pode sair mais tarde)
+                # Saida (entre 17:50 e 18:15)
                 hora_saida_fim = datetime.strptime('18:00', '%H:%M').time()
                 minutos_var_fim = random.randint(-10, 30)
                 hora_saida_fim = (datetime.combine(data_registro, hora_saida_fim) + timedelta(minutes=minutos_var_fim)).time()
@@ -471,17 +470,17 @@ with app.app_context():
                     tipo_registro='saida',
                     status='normal',
                     minutos_atraso=0,
-                    observacao='Saída final'
+                    observacao='Saida final'
                 )
                 db.session.add(saida)
                 pontos_criados += 1
         
         db.session.commit()
-        print(f"✅ {pontos_criados} registros de ponto criados!")
+        print(f"[OK] {pontos_criados} registros de ponto criados")
         
         # 9. VENDAS (em lotes pequenos para evitar timeout)
         print()
-        print("🧾 Criando vendas...")
+        print("[SETUP] Criando vendas...")
         
         from app.models import Venda, VendaItem, Pagamento, MovimentacaoEstoque
         import random
@@ -514,7 +513,7 @@ with app.app_context():
         
         for i in range(max_vendas):
             try:
-                # Data da venda (últimos 30 dias)
+                # Data da venda (ultimos 30 dias)
                 dias_atras = random.randint(0, 30)
                 data_venda = datetime.now() - timedelta(days=dias_atras)
                 
@@ -583,7 +582,7 @@ with app.app_context():
                         produto.quantidade_vendida += quantidade
                         produto.total_vendido += float(total_item)
                         
-                        # Movimentação de estoque
+                        # Movimentacao de estoque
                         mov = MovimentacaoEstoque(
                             estabelecimento_id=est.id,
                             produto_id=produto.id,
@@ -599,7 +598,7 @@ with app.app_context():
                         )
                         db.session.add(mov)
                     
-                    # Desconto aleatório (0%, 5% ou 10%)
+                    # Desconto aleatorio (0%, 5% ou 10%)
                     desconto_pct = random.choice([0, 0, 5, 10])
                     desconto_valor = (subtotal * Decimal(str(desconto_pct))) / Decimal("100")
                     
@@ -611,7 +610,7 @@ with app.app_context():
                     
                     # Valor recebido e troco
                     if venda.forma_pagamento == "dinheiro":
-                        # pequeno troco
+                        # Pequeno troco
                         venda.valor_recebido = venda.total + Decimal(str(random.choice([0, 0, 2, 5])))
                         venda.troco = max(Decimal("0.00"), venda.valor_recebido - venda.total)
                     else:
@@ -632,31 +631,31 @@ with app.app_context():
                 else:
                     # Venda cancelada
                     venda.data_cancelamento = data_venda
-                    venda.motivo_cancelamento = random.choice(["cliente desistiu", "erro de cobrança", "produto indisponível"])
+                    venda.motivo_cancelamento = random.choice(["cliente desistiu", "erro de cobranca", "produto indisponivel"])
                 
                 # Commit a cada 5 vendas para evitar timeout
                 if (i + 1) % 5 == 0:
                     db.session.commit()
-                    print(f"  ✅ {i+1} vendas criadas...")
+                    print(f"  [OK] {i+1} vendas criadas...")
                 
                 vendas_criadas += 1
                 
             except Exception as e:
-                print(f"  ⚠️  Erro na venda {i+1}: {str(e)[:50]}")
+                print(f"  [AVISO] Erro na venda {i+1}: {str(e)[:50]}")
                 db.session.rollback()
                 break
         
         # Commit final
         db.session.commit()
-        print(f"✅ {vendas_criadas} vendas criadas!")
+        print(f"[OK] {vendas_criadas} vendas criadas")
         
-        # 10. REPLICAÇÃO PARA NEON (usa target_url)
+        # 10. REPLICACAO PARA NEON (usa target_url)
         if target_url and target_url.startswith('postgresql://'):
             print()
-            print("🔄 Replicando dados para Neon (PostgreSQL)...")
+            print("[REPLICACAO] Replicando dados para Neon...")
             try:
                 neon_engine = create_engine(target_url)
-                # Testar conexão
+                # Testar conexao
                 with neon_engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
                 NeonSession = sessionmaker(bind=neon_engine)
@@ -668,19 +667,19 @@ with app.app_context():
                 # Limpar dados em ordem segura (respeitando FKs)
                 for model in [
                     VendaItem, Pagamento, MovimentacaoEstoque, MovimentacaoCaixa, Venda, Caixa,
-                    RegistroPonto, ConfiguracaoHorario,  # 🔥 ADICIONADO
+                    RegistroPonto, ConfiguracaoHorario,
                     Produto, CategoriaProduto, Fornecedor, Cliente, LoginHistory, Funcionario,
                     Configuracao, Despesa, DashboardMetrica, Estabelecimento
                 ]:
                     try:
                         neon_session.query(model).delete()
                     except Exception as e:
-                        print(f"  ⚠️  Erro ao limpar {model.__tablename__}: {str(e)[:80]}")
+                        print(f"  [AVISO] Erro ao limpar {model.__tablename__}: {str(e)[:80]}")
                 neon_session.commit()
-                print("  ✅ Banco Neon limpo")
+                print("  [OK] Banco Neon limpo")
                 
                 def _clone(instance):
-                    """Clona uma instância de modelo para a sessão do Neon"""
+                    """Clona uma instancia de modelo para a sessao do Neon"""
                     data = {}
                     for col in instance.__table__.columns:
                         data[col.name] = getattr(instance, col.name)
@@ -692,10 +691,10 @@ with app.app_context():
                     for r in rows:
                         neon_session.add(_clone(r))
                     neon_session.commit()
-                    print(f"  ✅ {model.__tablename__}: {len(rows)} registros copiados")
+                    print(f"  [OK] {model.__tablename__}: {len(rows)} registros copiados")
                 
-                # Ordem de cópia respeitando FKs
-                print("\n  📋 Copiando dados...")
+                # Ordem de copia respeitando FKs
+                print("\n  [COPY] Copiando dados...")
                 _bulk_copy(Estabelecimento)
                 _bulk_copy(Configuracao)
                 _bulk_copy(Funcionario)
@@ -704,8 +703,8 @@ with app.app_context():
                 _bulk_copy(Fornecedor)
                 _bulk_copy(CategoriaProduto)
                 _bulk_copy(Produto)
-                _bulk_copy(ConfiguracaoHorario)  # 🔥 ANTES de RegistroPonto
-                _bulk_copy(RegistroPonto)        # 🔥 ADICIONADO
+                _bulk_copy(ConfiguracaoHorario)
+                _bulk_copy(RegistroPonto)
                 _bulk_copy(Caixa)
                 _bulk_copy(Venda)
                 _bulk_copy(VendaItem)
@@ -716,43 +715,43 @@ with app.app_context():
                 _bulk_copy(DashboardMetrica)
                 
                 neon_session.close()
-                print("\n✅ REPLICAÇÃO PARA NEON CONCLUÍDA COM SUCESSO!")
+                print("\n[OK] REPLICACAO PARA NEON CONCLUIDA COM SUCESSO!")
                 
             except Exception as e:
-                print(f"❌ ERRO NA REPLICAÇÃO: {str(e)}")
+                print(f"[ERRO] NA REPLICACAO: {str(e)}")
                 import traceback
                 traceback.print_exc()
         else:
             print()
-            print("ℹ️ Neon não configurado. Configure NEON_DATABASE_URL para replicar.")
+            print("[INFO] Neon nao configurado. Configure NEON_DATABASE_URL para replicar.")
 
         
         # RESUMO
         print()
         print("=" * 60)
-        print("📊 RESUMO")
+        print("RESUMO")
         print("=" * 60)
         print(f"  Estabelecimentos: {Estabelecimento.query.count()}")
-        print(f"  Funcionários:     {Funcionario.query.count()}")
+        print(f"  Funcionarios:     {Funcionario.query.count()}")
         print(f"  Clientes:         {Cliente.query.count()}")
         print(f"  Fornecedores:     {Fornecedor.query.count()}")
         print(f"  Categorias:       {CategoriaProduto.query.count()}")
         print(f"  Produtos:         {Produto.query.count()}")
         print(f"  Vendas:           {Venda.query.count()}")
         print(f"  Itens Vendidos:   {VendaItem.query.count()}")
-        print(f"  Movimentações:    {MovimentacaoEstoque.query.count()}")
+        print(f"  Movimentacoes:    {MovimentacaoEstoque.query.count()}")
         print("=" * 60)
         print()
-        print("🎉 SEED COMPLETO!")
+        print("[OK] SEED COMPLETO!")
         print()
-        print("📝 Credenciais:")
+        print("Credenciais:")
         print("  admin / admin123 (ADMIN)")
         print("  joao / joao123 (VENDEDOR)")
         print()
         print("=" * 60)
         
     except Exception as e:
-        print(f"\n❌ ERRO: {e}")
+        print(f"\n[ERRO] {e}")
         import traceback
         traceback.print_exc()
         db.session.rollback()

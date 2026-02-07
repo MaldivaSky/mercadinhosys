@@ -15,6 +15,7 @@ import os
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 # Inicializa as extensões
 migrate = Migrate()
@@ -50,6 +51,23 @@ def create_app(config_name=None):
     # Carrega configurações
     app.config.from_object(config[config_name])
 
+    db_source = None
+    runtime_db_url = (
+        os.environ.get("NEON_DATABASE_URL")
+        or os.environ.get("DATABASE_URL_TARGET")
+        or os.environ.get("DB_PRIMARY")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+    )
+    if runtime_db_url:
+        if runtime_db_url.startswith("postgres://"):
+            runtime_db_url = runtime_db_url.replace("postgres://", "postgresql://", 1)
+        app.config["SQLALCHEMY_DATABASE_URI"] = runtime_db_url
+        for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+            if os.environ.get(key):
+                db_source = key
+                break
+
     # Inicializa extensões
     db.init_app(app)
     migrate.init_app(app, db)
@@ -57,7 +75,21 @@ def create_app(config_name=None):
     cache.init_app(app)
     mail.init_app(app)
     
-    logger.info(f"DB URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+    redacted_db_uri = db_uri
+    if db_uri:
+        try:
+            parsed = urlparse(db_uri)
+            if parsed.password:
+                username = parsed.username or ""
+                host = parsed.hostname or ""
+                port = f":{parsed.port}" if parsed.port else ""
+                auth = f"{username}:****@" if username else ""
+                redacted_db_uri = parsed._replace(netloc=f"{auth}{host}{port}").geturl()
+        except Exception:
+            redacted_db_uri = db_uri
+    logger.info(f"DB URI: {redacted_db_uri}")
+    logger.info(f"DB SOURCE: {db_source or 'config'}")
     
     # Inicializa Flask-Login
     from app.models import login_manager
