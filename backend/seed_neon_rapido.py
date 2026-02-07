@@ -15,17 +15,23 @@ from sqlalchemy.orm import sessionmaker
 # Carregar .env
 load_dotenv()
 
-# Definição de origem local SEMPRE SQLite para popular dados
-fallback_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mercadinhosys_seed.sqlite'))
-local_db_url = f"sqlite:///{fallback_path.replace('\\', '/')}"
-os.environ['DATABASE_URL'] = local_db_url
-print(f"[LOCAL SEED] Usando SQLite: {local_db_url}")
+# Detectar URL do banco: Neon (prioridade) ou SQLite local
+target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL_ORIG') or os.environ.get('NEON_DB_URL') or os.environ.get('DB_PRIMARY') or os.environ.get('DATABASE_URL_TARGET')
 
-# Destino Neon: usar NEON_DATABASE_URL se existir; caso contrário, usar DATABASE_URL original do ambiente
-target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL_ORIG') or os.environ.get('NEON_DB_URL') or os.environ.get('DB_PRIMARY') or os.environ.get('DATABASE_URL_TARGET') or os.environ.get('DATABASE_URL')
-if target_url:
+# Se não tiver URL do Neon, usa SQLite local como fallback
+if not target_url:
+    fallback_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'mercadinhosys_seed.sqlite'))
+    local_db_url = f"sqlite:///{fallback_path.replace('\\', '/')}"
+    os.environ['DATABASE_URL'] = local_db_url
+    print(f"[LOCAL SEED] Usando SQLite: {local_db_url}")
+else:
+    # Ajustar protocolo postgres:// para postgresql:// se necessário
     if target_url.startswith("postgres://"):
         target_url = target_url.replace("postgres://", "postgresql://", 1)
+    
+    # IMPORTANTE: Configurar DATABASE_URL para que o create_app() use o Neon
+    os.environ['DATABASE_URL'] = target_url
+    print(f"[NEON SEED] Usando PostgreSQL: {target_url.split('@')[1] if '@' in target_url else target_url}")
 
 from app import create_app, db
 from app.models import (
@@ -91,20 +97,34 @@ with app.app_context():
         # Dropar todas as tabelas e recriar (mais seguro para PostgreSQL)
         try:
             from sqlalchemy import text
-            # Desabilitar constraints
-            db.session.execute(text("SET session_replication_role = 'replica'"))
+            
+            # Detectar se é SQLite
+            is_sqlite = 'sqlite' in str(db.engine.url)
+            
+            if not is_sqlite:
+                # Desabilitar constraints apenas no Postgres
+                db.session.execute(text("SET session_replication_role = 'replica'"))
+            
             # Dropar tabelas em ordem
-            db.session.execute(text("DROP TABLE IF EXISTS movimentacoes_estoque CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS registro_ponto CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS configuracao_horario CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS produtos CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS categorias_produto CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS fornecedores CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS clientes CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS funcionarios CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS estabelecimentos CASCADE"))
-            db.session.execute(text("DROP TABLE IF EXISTS despesas CASCADE"))
-            db.session.execute(text("SET session_replication_role = 'origin'"))
+            tables_to_drop = [
+                "movimentacoes_estoque", "registro_ponto", "configuracao_horario",
+                "produtos", "categorias_produto", "fornecedores", "clientes",
+                "funcionarios", "estabelecimentos", "despesas"
+            ]
+            
+            for table in tables_to_drop:
+                try:
+                    if is_sqlite:
+                        # SQLite não suporta CASCADE no DROP TABLE padrão, mas foreign_keys=OFF ajuda
+                        db.session.execute(text(f"DROP TABLE IF EXISTS {table}"))
+                    else:
+                        db.session.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
+                except Exception as e:
+                    print(f"Erro ao dropar {table}: {e}")
+
+            if not is_sqlite:
+                db.session.execute(text("SET session_replication_role = 'origin'"))
+                
             db.session.commit()
             print("Tabelas removidas")
             
@@ -121,28 +141,35 @@ with app.app_context():
         
         # 1. ESTABELECIMENTO
         print("🏢 Criando estabelecimento...")
-        est = Estabelecimento(
-            nome_fantasia="Mercado Souza Center",
-            razao_social="Mercado Souza Center LTDA",
-            cnpj="12.345.678/0001-90",
-            inscricao_estadual="ISENTO",
-            telefone="(84) 3234-5678",
-            email="contato@mercadosouza.com",
-            cep="59000-000",
-            logradouro="Rua Principal",
-            numero="123",
-            bairro="Centro",
-            cidade="Natal",
-            estado="RN",
-            pais="Brasil",
-            regime_tributario="SIMPLES NACIONAL",
-            ativo=True,
-            data_abertura=date.today() - timedelta(days=365),
-            data_cadastro=datetime.now()
-        )
-        db.session.add(est)
-        db.session.flush()
-        print(f"✅ {est.nome_fantasia}")
+        
+        # Check if exists to avoid Unique Constraint Error if drop failed
+        est = Estabelecimento.query.filter_by(cnpj="12.345.678/0001-90").first()
+        
+        if not est:
+            est = Estabelecimento(
+                nome_fantasia="Mercado Souza Center",
+                razao_social="Mercado Souza Center LTDA",
+                cnpj="12.345.678/0001-90",
+                inscricao_estadual="ISENTO",
+                telefone="(84) 3234-5678",
+                email="contato@mercadosouza.com",
+                cep="59000-000",
+                logradouro="Rua Principal",
+                numero="123",
+                bairro="Centro",
+                cidade="Natal",
+                estado="RN",
+                pais="Brasil",
+                regime_tributario="SIMPLES NACIONAL",
+                ativo=True,
+                data_abertura=date.today() - timedelta(days=365),
+                data_cadastro=datetime.now()
+            )
+            db.session.add(est)
+            db.session.flush()
+            print(f"✅ {est.nome_fantasia}")
+        else:
+            print(f"ℹ️ {est.nome_fantasia} já existe (pulando criação)")
         
         # 2. FUNCIONÁRIOS
         print()
