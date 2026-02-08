@@ -90,7 +90,7 @@ class SmartCache:
 
 
 # Decorator para cache automático
-def cache_response(ttl_seconds: int = 300):
+def cache_response(ttl_seconds: int = 300, require_db_check: bool = False):
     """
     Decorator para cache automático de respostas
     """
@@ -110,10 +110,49 @@ def cache_response(ttl_seconds: int = 300):
                 # Se não puder serializar, não usa cache
                 return func(*args, **kwargs)
 
-            # Usar cache inteligente
-            return SmartCache.get_or_compute(
-                cache_key, lambda: func(*args, **kwargs), ttl_seconds
-            )
+            use_flask_cache = False
+            flask_cache = None
+            try:
+                from app import cache as _flask_cache
+
+                flask_cache = _flask_cache
+                use_flask_cache = (
+                    hasattr(flask_cache, "get")
+                    and hasattr(flask_cache, "set")
+                    and hasattr(flask_cache, "app")
+                )
+            except Exception:
+                use_flask_cache = False
+
+            cached = None
+            if use_flask_cache:
+                try:
+                    cached = flask_cache.get(cache_key)
+                except Exception:
+                    use_flask_cache = False
+
+            if cached is None:
+                cached = SmartCache.get(cache_key, ttl_seconds)
+            if cached is not None:
+                if require_db_check:
+                    try:
+                        from sqlalchemy import text
+                        from app import db
+
+                        db.session.execute(text("SELECT 1"))
+                    except Exception as e:
+                        raise RuntimeError("Banco de dados indisponível") from e
+                return cached
+
+            result = func(*args, **kwargs)
+            if use_flask_cache:
+                try:
+                    flask_cache.set(cache_key, result, timeout=ttl_seconds)
+                except Exception:
+                    SmartCache.set(cache_key, result, ttl_seconds)
+            else:
+                SmartCache.set(cache_key, result, ttl_seconds)
+            return result
 
         return wrapper
 

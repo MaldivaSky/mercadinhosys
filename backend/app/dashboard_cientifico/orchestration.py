@@ -1,4 +1,4 @@
-﻿"""
+"""
 Orchestration Layer - Orquestra todas as camadas
 Foco: Simplicidade e clareza
 """
@@ -18,67 +18,52 @@ class DashboardOrchestrator:
     def __init__(self, establishment_id: int):
         self.establishment_id = establishment_id
 
-    @cache_response(ttl_seconds=60)  # Cache de 1 minuto para dashboard
+    @cache_response(ttl_seconds=60, require_db_check=True)
     def get_executive_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
         Dashboard executivo - Resumo para gestão
         """
         # 1. Coletar dados
-        sales_summary = DataLayer.get_sales_summary(self.establishment_id, days)
+        from datetime import timedelta
+        end_date = datetime.utcnow()
+        start_current = end_date - timedelta(days=days)
+        start_previous = end_date - timedelta(days=days * 2)
+        end_previous = end_date - timedelta(days=days)
+
+        sales_summary = DataLayer.get_sales_summary_range(
+            self.establishment_id, start_current, end_date
+        )
+        sales_summary_previous = DataLayer.get_sales_summary_range(
+            self.establishment_id, start_previous, end_previous
+        )
         sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, days)
         inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
         customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
 
-        # 2. Validar estatisticamente
-        # Vendas atuais
-        sales_current = StatsValidator.validate_metric(
-            [day["total"] for day in sales_timeseries if day["total"] > 0]
-        )
+        def _confidence_from_samples(samples: int) -> str:
+            if samples < 5:
+                return "INSUFICIENT"
+            if samples < 15:
+                return "LOW"
+            if samples < 30:
+                return "MEDIUM"
+            return "HIGH"
 
-        # Vendas anteriores (comparação direta com período anterior)
-        # Ex: se days=30, compara com os 30 dias anteriores a isso
-        # Isso ainda não é perfeito (não é homólogo), mas é melhor que dividir por 30
-        
-        # Calcular período anterior
-        # Nota: DataLayer.get_sales_summary usa "now() - days", então não dá pra passar range direto.
-        # Precisaríamos refatorar o DataLayer para aceitar start_date e end_date.
-        # Por enquanto, mantemos a lógica de "total / days" mas explicitamos a limitação ou
-        # melhoramos se possível. 
-        # A melhoria imediata é não assumir 30 dias fixos se days >= 60.
-        
-        if days >= 60:
-            # Se pediu 60+ dias, pegamos os últimos 60 e assumimos média diária dos primeiros 30 como "anterior"
-            # Isso é uma aproximação.
-            sales_previous_data = DataLayer.get_sales_summary(self.establishment_id, 60)
-            # Aproximação: metade do período longo vs metade atual
-            # Mas sales_summary retorna o TOTAL do período.
-            # Vamos simplificar para usar a média diária do período longo como base de comparação,
-            # ajustada para o número de dias atual.
-            avg_daily_long = sales_previous_data["total_faturado"] / 60
-            sales_previous = {
-                "value": avg_daily_long * days, # Projetado para o período atual
-                "sample_size": days,
-            }
-        else:
-            # Para períodos curtos (<60), idealmente deveríamos buscar o período anterior.
-            # Como DataLayer.get_sales_summary pega "ultimos N dias", se pedirmos 60 dias, 
-            # teremos (Atual + Anterior). 
-            # Então Anterior = Total(60) - Total(30).
-            
-            sales_total_extended = DataLayer.get_sales_summary(self.establishment_id, days * 2)
-            sales_total_current = sales_summary # Já buscado acima (days)
-            
-            val_extended = sales_total_extended["total_faturado"]
-            val_current = sales_total_current["total_faturado"]
-            val_previous = val_extended - val_current
-            
-            # Se o valor for negativo (inconsistência de dados), zeramos
-            if val_previous < 0: val_previous = 0
-            
-            sales_previous = {
-                "value": val_previous,
-                "sample_size": days,
-            }
+        sales_current = {
+            "value": sales_summary.get("total_faturado", 0),
+            "confidence": _confidence_from_samples(sales_summary.get("total_vendas", 0)),
+            "sample_size": sales_summary.get("total_vendas", 0),
+            "warnings": [],
+        }
+
+        sales_previous = {
+            "value": sales_summary_previous.get("total_faturado", 0),
+            "confidence": _confidence_from_samples(
+                sales_summary_previous.get("total_vendas", 0)
+            ),
+            "sample_size": sales_summary_previous.get("total_vendas", 0),
+            "warnings": [],
+        }
 
         # Calcular crescimento
         growth = StatsValidator.calculate_growth(
@@ -157,211 +142,364 @@ class DashboardOrchestrator:
             },
         }
 
-    @cache_response(ttl_seconds=60)  # Cache de 1 minuto para dashboard
+    @cache_response(ttl_seconds=60, require_db_check=True)
     def get_scientific_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
         Dashboard científico - Análise avançada com insights
         """
-        if True: # Refactor: removed try/except mock for ERP safety
-            # 1. Coletar dados científicos
-            sales_summary = DataLayer.get_sales_summary(self.establishment_id, days)
-            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, days)
-            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
-            customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
-            top_products = DataLayer.get_top_products(self.establishment_id, days, 50)
-            expense_details = DataLayer.get_expense_details(self.establishment_id, days)
+        from datetime import timedelta
+        from app.models import Cliente
+        from app.dashboard_cientifico.models_layer import PracticalModels as _PM
 
-            # 2. Análises científicas
-            sales_trend = PracticalModels.detect_sales_trend(sales_timeseries)
-            abc_analysis = PracticalModels.analyze_inventory_abc([
+        def _confidence_from_samples(samples: int) -> str:
+            if samples < 5:
+                return "INSUFICIENT"
+            if samples < 15:
+                return "LOW"
+            if samples < 30:
+                return "MEDIUM"
+            return "HIGH"
+
+        end_date = datetime.utcnow()
+        start_current = end_date - timedelta(days=days)
+        start_previous = end_date - timedelta(days=days * 2)
+        end_previous = end_date - timedelta(days=days)
+
+        sales_current_summary = DataLayer.get_sales_summary_range(
+            self.establishment_id, start_current, end_date
+        )
+        sales_previous_summary = DataLayer.get_sales_summary_range(
+            self.establishment_id, start_previous, end_previous
+        )
+
+        inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
+        
+        # 🔥 ADICIONADO: Detalhes de despesas
+        expense_details = DataLayer.get_expense_details(self.establishment_id, days)
+
+        # 4. Análise ABC (cálculo on-the-fly se não cacheado)
+        abc_analysis = self.get_abc_analysis(days)
+        
+        customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
+        sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, days)
+        
+        # 🔥 ADICIONADO: Previsão de demanda (Movido para DEPOIS de sales_timeseries ser definido)
+        forecast = PracticalModels.generate_forecast(sales_timeseries)
+
+        sales_current_metric = {
+            "value": sales_current_summary.get("total_faturado", 0),
+            "confidence": _confidence_from_samples(
+                sales_current_summary.get("total_vendas", 0)
+            ),
+            "sample_size": sales_current_summary.get("total_vendas", 0),
+            "warnings": [],
+        }
+        sales_previous_metric = {
+            "value": sales_previous_summary.get("total_faturado", 0),
+            "confidence": _confidence_from_samples(
+                sales_previous_summary.get("total_vendas", 0)
+            ),
+            "sample_size": sales_previous_summary.get("total_vendas", 0),
+            "warnings": [],
+        }
+
+        growth_period = StatsValidator.calculate_growth(
+            current_value=sales_current_metric.get("value", 0),
+            previous_value=sales_previous_metric.get("value", 0),
+            current_samples=sales_current_metric.get("sample_size", 0),
+            previous_samples=sales_previous_metric.get("sample_size", 0),
+        )
+
+        growth_homologo_week = None
+        if days >= 14:
+            start_week_current = end_date - timedelta(days=7)
+            start_week_previous = end_date - timedelta(days=14)
+            end_week_previous = end_date - timedelta(days=7)
+            week_current = DataLayer.get_sales_summary_range(
+                self.establishment_id, start_week_current, end_date
+            )
+            week_previous = DataLayer.get_sales_summary_range(
+                self.establishment_id, start_week_previous, end_week_previous
+            )
+            growth_homologo_week = StatsValidator.calculate_growth(
+                current_value=week_current.get("total_faturado", 0),
+                previous_value=week_previous.get("total_faturado", 0),
+                current_samples=week_current.get("total_vendas", 0),
+                previous_samples=week_previous.get("total_vendas", 0),
+            )
+
+        sales_trend = _PM.detect_sales_trend(sales_timeseries)
+        
+        # 🔥 NOVO: Calcular correlações estatísticas
+        correlations = _PM.calculate_correlations(sales_timeseries, expense_details)
+        
+        # 🔥 NOVO: Detectar anomalias
+        anomalies = _PM.detect_anomalies(sales_timeseries, expense_details)
+
+        abc_analysis = self.get_abc_analysis(days=days, limit=500)
+        rfm_analysis = self.get_rfm_analysis(window_days=180)
+        
+        # 🔥 NOVO: Produtos Estrela (Top 10 da Classe A com melhor margem)
+        produtos_estrela = []
+        if abc_analysis and abc_analysis.get("produtos"):
+            produtos_classe_a = [p for p in abc_analysis["produtos"] if p.get("classificacao") == "A"]
+            # Ordenar por margem e pegar top 10
+            produtos_classe_a_sorted = sorted(
+                produtos_classe_a,
+                key=lambda x: x.get("margem", 0),
+                reverse=True
+            )[:10]
+            
+            for p in produtos_classe_a_sorted:
+                produtos_estrela.append({
+                    "id": p.get("id", 0),
+                    "nome": p.get("nome", ""),
+                    "classificacao": "A",
+                    "margem": p.get("margem", 0),
+                    "market_share": p.get("percentual_acumulado", 0),
+                    "total_vendido": p.get("quantidade_vendida", 0),
+                    "custo_unitario": p.get("preco_custo", 0),
+                    "preco_venda": p.get("preco_venda", 0) if "preco_venda" in p else 0,
+                    "lucro_total": p.get("faturamento", 0) * (p.get("margem", 0) / 100),
+                    "roi": (p.get("margem", 0) / 100) if p.get("preco_custo", 0) > 0 else 0,
+                    "elasticidade": 0,
+                    "faturamento": p.get("faturamento", 0),
+                    "quantidade_vendida": p.get("quantidade_vendida", 0)
+                })
+        
+        # 🔥 NOVO: Produtos Lentos (Classe C ou produtos com menor desempenho)
+        produtos_lentos = []
+        if abc_analysis and abc_analysis.get("produtos"):
+            from app.models import Produto
+            
+            # Tentar pegar Classe C primeiro
+            produtos_classe_c = [p for p in abc_analysis["produtos"] if p.get("classificacao") == "C"]
+            
+            # Se não tiver Classe C, pegar os 10 piores da Classe B
+            if not produtos_classe_c:
+                produtos_classe_b = [p for p in abc_analysis["produtos"] if p.get("classificacao") == "B"]
+                produtos_lentos_candidatos = sorted(
+                    produtos_classe_b,
+                    key=lambda x: x.get("quantidade_vendida", 0)
+                )[:10]
+            else:
+                # Pegar os 10 piores da classe C
+                produtos_lentos_candidatos = sorted(
+                    produtos_classe_c,
+                    key=lambda x: x.get("quantidade_vendida", 0)
+                )[:10]
+            
+            produto_ids_lentos = [p.get("id") for p in produtos_lentos_candidatos if p.get("id")]
+            produtos_db_lentos = Produto.query.filter(
+                Produto.estabelecimento_id == self.establishment_id,
+                Produto.id.in_(produto_ids_lentos)
+            ).all()
+            
+            estoque_map_lentos = {p.id: p.quantidade for p in produtos_db_lentos}
+            
+            for p in produtos_lentos_candidatos:
+                produto_id = p.get("id", 0)
+                qtd_vendida = p.get("quantidade_vendida", 0)
+                estoque_atual = estoque_map_lentos.get(produto_id, 0)
+                preco_custo = p.get("preco_custo", 0)
+                
+                # Calcular giro de estoque
+                giro_estoque = (qtd_vendida / estoque_atual) if estoque_atual > 0 else 0
+                
+                # Calcular dias de estoque parado
+                demanda_diaria = qtd_vendida / days if days > 0 else 0
+                dias_estoque = (estoque_atual / demanda_diaria) if demanda_diaria > 0 else 999
+                
+                # Custo do capital parado
+                custo_parado = preco_custo * estoque_atual
+                
+                produtos_lentos.append({
+                    "id": produto_id,
+                    "nome": p.get("nome", ""),
+                    "quantidade": qtd_vendida,
+                    "total_vendido": p.get("faturamento", 0),
+                    "dias_estoque": round(dias_estoque, 0) if dias_estoque < 999 else 999,
+                    "giro_estoque": round(giro_estoque, 2),
+                    "custo_parado": round(custo_parado, 2),
+                    "perda_mensal": round(custo_parado * 0.01, 2),  # 1% ao mês de custo de oportunidade
+                    "estoque_atual": estoque_atual,
+                    "margem": p.get("margem", 0),
+                    "classificacao": p.get("classificacao", "B")
+                })
+        
+        # 🔥 NOVO: Previsão de Demanda (Top 20 produtos com previsão)
+        previsao_demanda = []
+        if abc_analysis and abc_analysis.get("produtos"):
+            from app.models import Produto
+            
+            top_20_produtos = abc_analysis["produtos"][:20]
+            produto_ids = [p.get("id") for p in top_20_produtos if p.get("id")]
+            
+            # Buscar estoque real dos produtos
+            produtos_db = Produto.query.filter(
+                Produto.estabelecimento_id == self.establishment_id,
+                Produto.id.in_(produto_ids)
+            ).all()
+            
+            estoque_map = {p.id: p.quantidade for p in produtos_db}
+            
+            for p in top_20_produtos:
+                produto_id = p.get("id", 0)
+                qtd_vendida = p.get("quantidade_vendida", 0)
+                demanda_diaria = qtd_vendida / days if days > 0 else 0
+                estoque_atual = estoque_map.get(produto_id, 0)
+                
+                # Calcular giro de estoque
+                giro_estoque = (qtd_vendida / estoque_atual) if estoque_atual > 0 else 0
+                
+                previsao_demanda.append({
+                    "produto_nome": p.get("nome", ""),
+                    "nome": p.get("nome", ""),
+                    "estoque_atual": estoque_atual,
+                    "demanda_diaria_prevista": round(demanda_diaria, 2),
+                    "risco_ruptura": (estoque_atual / demanda_diaria < 7) if demanda_diaria > 0 else False,
+                    "margem_lucro": p.get("margem", 0),
+                    "custo_estoque": p.get("preco_custo", 0) * estoque_atual,
+                    "giro_estoque": round(giro_estoque, 2),
+                    "classificação_abc": p.get("classificacao", "C"),
+                    "variavel": p.get("nome", ""),
+                    "valor_atual": p.get("faturamento", 0),
+                    "previsao_30d": p.get("faturamento", 0) * 1.1,  # Previsão simples: +10%
+                    "confianca": 75.0,
+                    "intervalo_confianca": [
+                        p.get("faturamento", 0) * 0.9,
+                        p.get("faturamento", 0) * 1.3
+                    ]
+                })
+
+        risco_ids = [
+            c["cliente_id"]
+            for c in rfm_analysis.get("customers", [])
+            if c.get("segment") in {"Risco", "Perdido"}
+        ][:50]
+        clientes_risco = []
+        if risco_ids:
+            rows = (
+                Cliente.query.filter(
+                    Cliente.estabelecimento_id == self.establishment_id,
+                    Cliente.id.in_(risco_ids),
+                )
+                .all()
+            )
+            by_id = {int(c.id): c for c in rows}
+            for cid in risco_ids:
+                cli = by_id.get(int(cid))
+                if not cli:
+                    continue
+                clientes_risco.append(
+                    {"id": int(cli.id), "nome": cli.nome, "celular": cli.celular}
+                )
+
+        segments = rfm_analysis.get("segments", {}) or {}
+        count_risco = int(segments.get("Risco", 0) or 0) + int(
+            segments.get("Perdido", 0) or 0
+        )
+
+        recomendacoes = []
+        if count_risco > 0:
+            recomendacoes.append(
                 {
-                    "id": p["id"],
-                    "nome": p["nome"],
-                    "valor_total": p["faturamento"],
-                    "quantidade": p["quantidade_vendida"],
+                    "tipo": "retencao",
+                    "mensagem": f"{count_risco} clientes em risco de abandono identificados.",
+                    "cta": "Clique para gerar lista de WhatsApp",
+                    "alvo": "clientes",
+                    "segmentos": ["Risco", "Perdido"],
+                    "clientes": clientes_risco,
+                }
+            )
+
+        baixo_estoque = int(inventory_summary.get("baixo_estoque", 0) or 0)
+        if baixo_estoque > 0:
+            recomendacoes.append(
+                {
+                    "tipo": "estoque",
+                    "mensagem": f"{baixo_estoque} produtos com estoque baixo. Repor para evitar ruptura.",
+                    "cta": "Ver lista de estoque baixo",
+                    "alvo": "produtos",
+                }
+            )
+
+        if growth_period.get("growth") is not None and growth_period.get("growth") < -10:
+            recomendacoes.append(
+                {
+                    "tipo": "vendas",
+                    "mensagem": "Queda relevante no faturamento versus período equivalente.",
+                    "cta": "Analisar produtos e clientes por período",
+                    "alvo": "dashboard",
+                }
+            )
+
+        margem_a = float(abc_analysis.get("resumo", {}).get("A", {}).get("margem_media", 0) or 0)
+        margem_b = float(abc_analysis.get("resumo", {}).get("B", {}).get("margem_media", 0) or 0)
+        if margem_b > margem_a + 5:
+            recomendacoes.append(
+                {
+                    "tipo": "margem",
+                    "mensagem": "Classe B com margem média maior que a Classe A. Priorize reposição e exposição dos B rentáveis.",
+                    "cta": "Filtrar produtos por margem",
+                    "alvo": "produtos",
+                }
+            )
+
+        return {
+            "success": True,
+            "timestamp": datetime.utcnow().isoformat(),
+            "period_days": int(days),
+            "summary": {
+                "revenue": DashboardSerializer.serialize_metric(sales_current_metric),
+                "growth": DashboardSerializer.serialize_growth(growth_period),
+                "growth_homologo_semana": (
+                    DashboardSerializer.serialize_growth(growth_homologo_week)
+                    if growth_homologo_week
+                    else {"value": None, "display": "--", "status": "no_data", "is_positive": False, "icon": "minus"}
+                ),
+                "avg_ticket": {
+                    "value": sales_current_summary.get("ticket_medio", 0),
+                    "display": f"{sales_current_summary.get('ticket_medio', 0):,.0f}",
+                    "status": "high_confidence",
+                },
+                "unique_customers": customer_metrics.get("clientes_unicos", 0),
+            },
+            "trend": sales_trend,
+            "timeseries": sales_timeseries,
+            "forecast": forecast,
+            "inventory": inventory_summary,
+            "expenses": expense_details,
+            "abc": abc_analysis,
+            "rfm": {"segments": segments, "window_days": rfm_analysis.get("window_days", 180)},
+            "recomendacoes": recomendacoes,
+            "correlations": correlations,
+            "anomalies": anomalies,
+            "produtos_estrela": produtos_estrela,  # 🔥 NOVO
+            "produtos_lentos": produtos_lentos,    # 🔥 NOVO
+            "previsao_demanda": previsao_demanda,  # 🔥 NOVO
+        }
+
+    @cache_response(ttl_seconds=900, require_db_check=True)
+    def get_abc_analysis(self, days: int = 30, limit: int = 500) -> Dict[str, Any]:
+        top_products = DataLayer.get_top_products(self.establishment_id, days, int(limit))
+        return PracticalModels.analyze_inventory_abc(
+            [
+                {
+                    "id": p.get("id", 0),
+                    "nome": p.get("nome", ""),
+                    "valor_total": p.get("faturamento", 0),
+                    "quantidade": p.get("quantidade_vendida", 0),
                     "preco_custo": p.get("preco_custo", 0),
                 }
                 for p in top_products
-            ])
+            ],
+            top_n=None,  # Retornar TODOS os produtos, não limitar
+            return_all_products=True,  # Forçar retorno de todos
+        )
 
-            # 3. Correlações e previsões (simplificadas)
-            correlations = [
-                {
-                    "variavel1": "Vendas",
-                    "variavel2": "Clientes",
-                    "correlacao": 0.75,
-                    "significancia": 0.001,
-                    "insight": "Correlação positiva forte entre vendas e número de clientes",
-                    "explicacao": "Indica que o volume de vendas cresce proporcionalmente ao fluxo de clientes na loja. Seus produtos têm boa conversão.",
-                    "acoes": [
-                        "Investir em campanhas de tráfego para trazer novos clientes",
-                        "Melhorar a visibilidade da fachada e sinalização externa",
-                        "Criar promoções de 'indique um amigo' para viralização"
-                    ]
-                },
-                {
-                    "variavel1": "Preço",
-                    "variavel2": "Demanda",
-                    "correlacao": -0.45,
-                    "significancia": 0.01,
-                    "insight": "Elasticidade de preço moderada detectada",
-                    "explicacao": "Existe uma relação inversa: quando o preço sobe, a demanda cai, mas não drasticamente. Isso sugere que seus clientes valorizam a qualidade ou conveniência, não apenas o preço baixo.",
-                    "acoes": [
-                        "Testar pequenos aumentos de margem em produtos exclusivos",
-                        "Criar combos (kits) para mascarar o preço unitário",
-                        "Focar em benefícios e qualidade na comunicação visual"
-                    ]
-                },
-                {
-                    "variavel1": "Marketing",
-                    "variavel2": "Vendas",
-                    "correlacao": 0.60,
-                    "significancia": 0.05,
-                    "insight": "Investimento em marketing traz retorno consistente",
-                    "explicacao": "Cada real investido em marketing está gerando um retorno positivo nas vendas, embora ainda haja espaço para otimização nas campanhas.",
-                    "acoes": [
-                        "Aumentar orçamento nas mídias de melhor performance",
-                        "Testar novos canais de divulgação (ex: redes sociais locais)",
-                        "Melhorar o rastreamento de origem dos clientes"
-                    ]
-                }
-            ]
-            
-            predictions = [
-                {
-                    "variavel": "Vendas Totais",
-                    "valor_atual": sales_summary.get("total_faturado", 0),
-                    "previsao_30d": sales_summary.get("total_faturado", 0) * 1.15,
-                    "intervalo_confianca": [sales_summary.get("total_faturado", 0) * 1.05, sales_summary.get("total_faturado", 0) * 1.25],
-                    "confianca": 85.0
-                },
-                {
-                    "variavel": "Ticket Médio",
-                    "valor_atual": sales_summary.get("ticket_medio", 0),
-                    "previsao_30d": sales_summary.get("ticket_medio", 0) * 1.08,
-                    "intervalo_confianca": [sales_summary.get("ticket_medio", 0) * 0.95, sales_summary.get("ticket_medio", 0) * 1.15],
-                    "confianca": 78.0
-                }
-            ]
+    @cache_response(ttl_seconds=900, require_db_check=True)
+    def get_rfm_analysis(self, window_days: int = 180) -> Dict[str, Any]:
+        from app.models import Cliente
 
-            return {
-                "hoje": {
-                    "total_vendas": sales_summary.get("total_faturado", 0),
-                    "ticket_medio": sales_summary.get("ticket_medio", 0),
-                    "clientes_atendidos": customer_metrics.get("clientes_unicos", 0),
-                    "crescimento_vs_ontem": sales_trend.get("growth_rate", 0),
-                },
-                "mes": {
-                    "total_vendas": sales_summary.get("total_faturado", 0),
-                    "total_despesas": sales_summary.get("total_faturado", 0) * 0.2,  # Estimativa de despesas
-                    "lucro_bruto": sales_summary.get("total_faturado", 0) * 0.3,  # Estimativa
-                    "margem_lucro": 30.0,
-                    "roi_mensal": 15.0,
-                    "investimentos": 0,
-                },
-                "analise_produtos": {
-                    "curva_abc": abc_analysis,
-                    "produtos_estrela": top_products[:10],
-                    "produtos_lentos": [p for p in top_products if p.get("quantidade_vendida", 0) < 5][-10:],
-                    "previsao_demanda": predictions,
-                },
-                "analise_financeira": {
-                    "despesas_detalhadas": expense_details,
-                    "margens": {"bruta": 35.0, "operacional": 25.0, "liquida": 15.0},
-                    "indicadores": {"ponto_equilibrio": 10000, "margem_seguranca": 20.0, "alavancagem_operacional": 2.5, "ebitda": 5000},
-                },
-                "analise_temporal": {
-                    "tendencia_vendas": [
-                        {
-                            "data": str(dia["data"]),
-                            "vendas": float(dia["total"]),
-                            "previsao": float(dia["total"]) * 1.05 if idx > len(sales_timeseries) - 8 else None
-                        }
-                        for idx, dia in enumerate(sales_timeseries[-30:])  # Últimos 30 dias
-                    ],
-                    "sazonalidade": [
-                        {
-                            "periodo": "Segunda-feira",
-                            "variacao": 15.2,
-                            "descricao": "Dia de maior movimento da semana"
-                        },
-                        {
-                            "periodo": "Sábado",
-                            "variacao": 8.7,
-                            "descricao": "Segundo melhor dia da semana"
-                        },
-                        {
-                            "periodo": "Domingo",
-                            "variacao": -25.3,
-                            "descricao": "Dia de menor movimento"
-                        }
-                    ],
-                    "comparacao_meses": [
-                        {
-                            "mes": "Janeiro 2025",
-                            "vendas": sales_summary.get("total_faturado", 0) * 0.9,
-                            "meta": sales_summary.get("total_faturado", 0),
-                            "crescimento": -10.0
-                        },
-                        {
-                            "mes": "Dezembro 2024",
-                            "vendas": sales_summary.get("total_faturado", 0) * 1.1,
-                            "meta": sales_summary.get("total_faturado", 0),
-                            "crescimento": 10.0
-                        }
-                    ],
-                    "previsao_proxima_semana": [
-                        {
-                            "dia": f"Dia {i+1}",
-                            "previsao": sales_summary.get("total_faturado", 0) / 30 * (1 + (i * 0.02)),  # Crescimento gradual
-                            "intervalo_confianca": 5.0
-                        }
-                        for i in range(7)
-                    ]
-                },
-                "insights_cientificos": {
-                    "correlações": correlations,
-                    "previsoes": predictions,
-                    "recomendacoes_otimizacao": [
-                        {
-                            "area": "Estoque",
-                            "acao": "Aumentar estoque de produtos A",
-                            "impacto_esperado": 15.5,
-                            "complexidade": "media",
-                            "esforco": 2,  # 1=baixa, 2=media, 3=alta
-                            "acoes_detalhadas": [
-                                "Identificar top 10 produtos Classe A por faturamento e ruptura",
-                                "Calcular estoque de segurança com base na demanda média semanal",
-                                "Ajustar ponto de pedido (reorder point) incluindo lead time de fornecedor",
-                                "Negociar condições com fornecedores para garantir reposição ágil"
-                            ]
-                        },
-                        {
-                            "area": "Produtos",
-                            "acao": "Reduzir produtos C com baixa rotatividade",
-                            "impacto_esperado": 8.2,
-                            "complexidade": "baixa",
-                            "esforco": 1,
-                            "acoes_detalhadas": [
-                                "Gerar lista de produtos Classe C com giro abaixo do limiar",
-                                "Aplicar promoções de escoamento (combo, desconto progressivo)",
-                                "Revisar sortimento e descontinuar SKUs com baixo retorno",
-                                "Liberar espaço de gôndola para produtos A e B"
-                            ]
-                        },
-                        {
-                            "area": "Precificação",
-                            "acao": "Otimizar precificação baseada na elasticidade",
-                            "impacto_esperado": 12.8,
-                            "complexidade": "alta",
-                            "esforco": 3,
-                            "acoes_detalhadas": [
-                                "Mapear elasticidade por categoria e por SKU estratégico",
-                                "Executar testes A/B de preço em faixas controladas",
-                                "Criar políticas de preço dinâmico por horário/dia (quando aplicável)",
-                                "Comunicar benefícios e diferenciais na ponta para reduzir sensibilidade a preço"
-                            ]
-                        }
-                    ],
-                },
-            }
+        return Cliente.calcular_rfm(self.establishment_id, days=int(window_days))

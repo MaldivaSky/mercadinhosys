@@ -61,6 +61,44 @@ class DataLayer:
         }
 
     @staticmethod
+    def get_sales_summary_range(
+        estabelecimento_id: int, start_date: datetime, end_date: datetime
+    ) -> Dict[str, Any]:
+        query = text(
+            """
+            SELECT 
+                COUNT(*) as total_vendas,
+                COALESCE(SUM(total), 0) as total_faturado,
+                COALESCE(AVG(total), 0) as ticket_medio,
+                COUNT(DISTINCT DATE(data_venda)) as dias_com_venda,
+                MAX(total) as maior_venda,
+                MIN(total) as menor_venda
+            FROM vendas 
+            WHERE estabelecimento_id = :est_id 
+                AND data_venda >= :start_date
+                AND data_venda < :end_date
+                AND status = 'finalizada'
+        """
+        )
+
+        result = db.session.execute(
+            query,
+            {"est_id": estabelecimento_id, "start_date": start_date, "end_date": end_date},
+        ).first()
+
+        periodo_dias = max(1, (end_date - start_date).days)
+
+        return {
+            "total_vendas": result.total_vendas or 0,
+            "total_faturado": float(result.total_faturado or 0),
+            "ticket_medio": float(result.ticket_medio or 0),
+            "dias_com_venda": result.dias_com_venda or 0,
+            "periodo_dias": periodo_dias,
+            "maior_venda": float(result.maior_venda or 0),
+            "menor_venda": float(result.menor_venda or 0),
+        }
+
+    @staticmethod
     def get_sales_timeseries(
         estabelecimento_id: int, days: int = 30
     ) -> List[Dict[str, Any]]:
@@ -102,24 +140,50 @@ class DataLayer:
         """
         Resumo de estoque otimizado
         """
-        # Query única com índices
+        data_inicio = datetime.now() - timedelta(days=365)
+
         query = text(
             """
+            WITH wac AS (
+                SELECT
+                    produto_id,
+                    SUM(quantidade * custo_unitario) / NULLIF(SUM(quantidade), 0) AS custo_medio_ponderado
+                FROM movimentacoes_estoque
+                WHERE estabelecimento_id = :est_id
+                    AND tipo = 'entrada'
+                    AND custo_unitario IS NOT NULL
+                    AND created_at >= :data_inicio
+                GROUP BY produto_id
+            ),
+            base AS (
+                SELECT
+                    p.id,
+                    p.quantidade,
+                    p.preco_venda,
+                    p.preco_custo,
+                    COALESCE(wac.custo_medio_ponderado, p.preco_custo) AS custo_unitario_base,
+                    CASE WHEN wac.custo_medio_ponderado IS NULL THEN 0 ELSE 1 END AS has_wac
+                FROM produtos p
+                LEFT JOIN wac ON wac.produto_id = p.id
+                WHERE p.estabelecimento_id = :est_id
+                    AND p.ativo = TRUE
+            )
             SELECT
                 COUNT(*) as total_produtos,
                 SUM(quantidade) as total_unidades,
                 SUM(quantidade * preco_venda) as valor_total,
-                SUM(quantidade * preco_custo) as custo_total,
+                SUM(quantidade * custo_unitario_base) as custo_total,
                 AVG(quantidade) as estoque_medio,
                 SUM(CASE WHEN quantidade < 10 THEN 1 ELSE 0 END) as baixo_estoque,
-                SUM(CASE WHEN quantidade = 0 THEN 1 ELSE 0 END) as sem_estoque
-            FROM produtos
-            WHERE estabelecimento_id = :est_id
-                AND ativo = TRUE
+                SUM(CASE WHEN quantidade = 0 THEN 1 ELSE 0 END) as sem_estoque,
+                SUM(has_wac) as produtos_com_wac
+            FROM base
         """
         )
 
-        result = db.session.execute(query, {"est_id": estabelecimento_id}).first()
+        result = db.session.execute(
+            query, {"est_id": estabelecimento_id, "data_inicio": data_inicio}
+        ).first()
 
         return {
             "total_produtos": result.total_produtos or 0,
@@ -132,6 +196,8 @@ class DataLayer:
             "estoque_medio": float(result.estoque_medio or 0),
             "baixo_estoque": result.baixo_estoque or 0,
             "sem_estoque": result.sem_estoque or 0,
+            "produtos_com_wac": int(getattr(result, "produtos_com_wac", 0) or 0),
+            "wac_days": 365,
         }
 
     @staticmethod

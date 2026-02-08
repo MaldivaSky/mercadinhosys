@@ -4,6 +4,7 @@ import MainLayout from '../components/layout/MainLayout';
 import ConnectionTest from '../components/ConnectionTest';
 import {LoginPage} from '../features/auth/LoginPage';
 import { authService } from '../features/auth/authService';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Lazy loading das páginas
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -53,7 +54,11 @@ const AppRoutes: React.FC = () => {
                 {isAuthenticated ? (
                     <Route path="/" element={<MainLayout />}>
                         <Route index element={<Navigate to="/dashboard" replace />} />
-                        <Route path="dashboard" element={<DashboardPage />} />
+                        <Route path="dashboard" element={
+                            <ErrorBoundary>
+                                <DashboardPage />
+                            </ErrorBoundary>
+                        } />
                         <Route path="pdv" element={<PDVPage />} />
                         <Route path="products" element={<ProductsPage />} />
                         <Route path="suppliers" element={<SuppliersPage />} />

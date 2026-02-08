@@ -371,6 +371,113 @@ class Cliente(db.Model, EnderecoMixin):
             "ativo": self.ativo,
         }
 
+    @staticmethod
+    def segmentar_rfm(recency_score: int, frequency_score: int, monetary_score: int) -> str:
+        r = int(recency_score)
+        f = int(frequency_score)
+        m = int(monetary_score)
+
+        if r >= 4 and f >= 4 and m >= 4:
+            return "Campeão"
+        if r >= 4 and f >= 3:
+            return "Fiel"
+        if r <= 2 and (f >= 3 or m >= 3):
+            return "Risco"
+        if r == 1 and f <= 2:
+            return "Perdido"
+        return "Regular"
+
+    @classmethod
+    def calcular_rfm(
+        cls, estabelecimento_id: int, days: int = 180
+    ) -> Dict[str, Any]:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+
+        days = int(days) if days else 180
+        if days <= 0:
+            days = 180
+
+        data_inicio = datetime.utcnow() - timedelta(days=days)
+
+        rows = (
+            db.session.query(
+                Venda.cliente_id.label("cliente_id"),
+                func.count(Venda.id).label("frequencia"),
+                func.coalesce(func.sum(Venda.total), 0).label("monetario"),
+                func.max(Venda.data_venda).label("ultima_compra"),
+            )
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == "finalizada",
+                Venda.cliente_id.isnot(None),
+            )
+            .group_by(Venda.cliente_id)
+            .all()
+        )
+
+        now = datetime.utcnow()
+        metrics = []
+        for r in rows:
+            ultima = r.ultima_compra
+            recency_days = (now - ultima).days if ultima else days
+            metrics.append(
+                {
+                    "cliente_id": int(r.cliente_id),
+                    "recency_days": int(recency_days),
+                    "frequency": int(r.frequencia or 0),
+                    "monetary": float(r.monetario or 0),
+                }
+            )
+
+        if not metrics:
+            return {"segments": {}, "customers": [], "window_days": days}
+
+        def _score_quintile(values_sorted, value, higher_is_better: bool) -> int:
+            n = len(values_sorted)
+            if n == 1:
+                return 3
+            import bisect
+
+            idx = bisect.bisect_right(values_sorted, value) - 1
+            if idx < 0:
+                idx = 0
+            p = (idx + 1) / n
+            score = int(p * 5)
+            if score < 1:
+                score = 1
+            if score > 5:
+                score = 5
+            return score if higher_is_better else (6 - score)
+
+        recency_sorted = sorted(m["recency_days"] for m in metrics)
+        frequency_sorted = sorted(m["frequency"] for m in metrics)
+        monetary_sorted = sorted(m["monetary"] for m in metrics)
+
+        segments_count = {"Campeão": 0, "Fiel": 0, "Risco": 0, "Perdido": 0, "Regular": 0}
+        customers = []
+
+        for m in metrics:
+            recency_score = _score_quintile(recency_sorted, m["recency_days"], higher_is_better=False)
+            frequency_score = _score_quintile(frequency_sorted, m["frequency"], higher_is_better=True)
+            monetary_score = _score_quintile(monetary_sorted, m["monetary"], higher_is_better=True)
+
+            segment = cls.segmentar_rfm(recency_score, frequency_score, monetary_score)
+            segments_count[segment] = segments_count.get(segment, 0) + 1
+
+            customers.append(
+                {
+                    **m,
+                    "recency_score": recency_score,
+                    "frequency_score": frequency_score,
+                    "monetary_score": monetary_score,
+                    "segment": segment,
+                }
+            )
+
+        return {"segments": segments_count, "customers": customers, "window_days": days}
+
 
 # ============================================
 # 5. FORNECEDOR
@@ -472,6 +579,36 @@ class CategoriaProduto(db.Model):
             "estabelecimento_id", "nome", name="uq_categoria_estab_nome"
         ),
     )
+
+    @staticmethod
+    def normalizar_nome_categoria(nome: str) -> str:
+        """
+        Normaliza o nome da categoria para evitar duplicatas por erros de digitação.
+        
+        Regras de normalização:
+        - Remove espaços extras no início e fim
+        - Converte para Title Case (primeira letra maiúscula)
+        - Remove espaços duplicados internos
+        - Remove caracteres especiais desnecessários
+        
+        Exemplos:
+        - "  bebidas  " -> "Bebidas"
+        - "ALIMENTOS" -> "Alimentos"
+        - "limpeza   doméstica" -> "Limpeza Doméstica"
+        
+        Args:
+            nome: Nome da categoria a ser normalizado
+            
+        Returns:
+            str: Nome normalizado
+        """
+        if not nome:
+            return ""
+        
+        # Remove espaços extras e converte para title case
+        nome_normalizado = " ".join(nome.strip().split()).title()
+        
+        return nome_normalizado
 
     def to_dict(self):
         return {
@@ -604,6 +741,325 @@ class Produto(db.Model):
         
         return movimentacao
 
+    def recalcular_preco_custo_ponderado(
+        self,
+        quantidade_entrada: int,
+        custo_unitario_entrada,
+        estoque_atual: int = None,
+        registrar_historico: bool = True,
+        funcionario_id: int = None,
+        motivo: str = "Entrada de estoque - CMP"
+    ):
+        """
+        Calcula o Custo Médio Ponderado (CMP) do produto.
+        
+        Fórmula: CMP = (Estoque_Atual × Custo_Atual + Qtd_Entrada × Custo_Entrada) / (Estoque_Atual + Qtd_Entrada)
+        
+        Esta é a metodologia contábil correta para valoração de estoques, conforme NBC TG 16.
+        Garante que o custo reflita a média ponderada de todas as aquisições.
+        
+        Args:
+            quantidade_entrada: Quantidade sendo adicionada ao estoque
+            custo_unitario_entrada: Custo unitário da nova entrada
+            estoque_atual: Estoque atual (se None, usa self.quantidade)
+            registrar_historico: Se deve criar registro de auditoria
+            funcionario_id: ID do funcionário responsável pela alteração
+            motivo: Motivo da alteração de custo
+        
+        Raises:
+            ValueError: Se quantidade ou custo forem inválidos
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+
+        if quantidade_entrada is None or int(quantidade_entrada) <= 0:
+            return
+
+        if custo_unitario_entrada is None:
+            return
+
+        custo_entrada = Decimal(str(custo_unitario_entrada))
+        if custo_entrada < 0:
+            raise ValueError("Custo unitário não pode ser negativo")
+
+        qtd_atual = int(self.quantidade or 0) if estoque_atual is None else int(estoque_atual)
+        if qtd_atual < 0:
+            qtd_atual = 0
+
+        # Guardar valores anteriores para auditoria
+        custo_anterior = Decimal(str(self.preco_custo or 0))
+        margem_anterior = Decimal(str(self.margem_lucro or 0))
+        
+        custo_atual = custo_anterior
+        qtd_entrada = int(quantidade_entrada)
+
+        base = qtd_atual + qtd_entrada
+        if base <= 0:
+            self.preco_custo = custo_entrada
+        else:
+            novo_custo = ((Decimal(qtd_atual) * custo_atual) + (Decimal(qtd_entrada) * custo_entrada)) / Decimal(base)
+            self.preco_custo = novo_custo.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        if self.preco_venda and self.preco_custo and self.preco_custo > 0:
+            self.margem_lucro = (self.preco_venda - self.preco_custo) / self.preco_custo * 100
+        else:
+            self.margem_lucro = 0
+
+        # Registrar histórico se houve mudança significativa e funcionario_id foi fornecido
+        if registrar_historico and funcionario_id and abs(self.preco_custo - custo_anterior) > Decimal("0.01"):
+            from app.models import HistoricoPrecos
+            historico = HistoricoPrecos(
+                estabelecimento_id=self.estabelecimento_id,
+                produto_id=self.id,
+                funcionario_id=funcionario_id,
+                preco_custo_anterior=custo_anterior,
+                preco_venda_anterior=self.preco_venda,
+                margem_anterior=margem_anterior,
+                preco_custo_novo=self.preco_custo,
+                preco_venda_novo=self.preco_venda,
+                margem_nova=self.margem_lucro,
+                motivo=motivo,
+                observacoes=f"CMP recalculado: entrada de {quantidade_entrada} unidades a R$ {custo_unitario_entrada}"
+            )
+            db.session.add(historico)
+
+    @staticmethod
+    def calcular_preco_por_markup(preco_custo, markup_percentual):
+        """
+        Calcula preço de venda baseado em markup sobre o custo.
+        
+        Fórmula: Preço_Venda = Custo × (1 + Markup/100)
+        
+        Exemplo: Custo R$ 10,00 com markup de 50% = R$ 15,00
+        
+        Args:
+            preco_custo: Custo do produto
+            markup_percentual: Percentual de markup desejado (ex: 50 para 50%)
+            
+        Returns:
+            Decimal: Preço de venda calculado
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+        
+        if preco_custo is None or markup_percentual is None:
+            return Decimal("0")
+        
+        custo = Decimal(str(preco_custo))
+        markup = Decimal(str(markup_percentual))
+        
+        if custo < 0 or markup < 0:
+            return Decimal("0")
+        
+        preco_venda = custo * (1 + markup / 100)
+        return preco_venda.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @staticmethod
+    def calcular_markup_de_preco(preco_custo, preco_venda):
+        """
+        Calcula o markup percentual a partir dos preços.
+        
+        Fórmula: Markup = ((Preço_Venda - Custo) / Custo) × 100
+        
+        Args:
+            preco_custo: Custo do produto
+            preco_venda: Preço de venda do produto
+            
+        Returns:
+            Decimal: Markup percentual
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+        
+        if preco_custo is None or preco_venda is None:
+            return Decimal("0")
+        
+        custo = Decimal(str(preco_custo))
+        venda = Decimal(str(preco_venda))
+        
+        if custo <= 0:
+            return Decimal("0")
+        
+        markup = ((venda - custo) / custo * 100)
+        return markup.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def calcular_status_giro(self, dias_analise: int = 30) -> str:
+        """
+        Calcula o status de giro do produto baseado na última venda.
+        
+        Classificação de giro para otimização de estoque:
+        - Rápido: Vendido nos últimos 7 dias (alta rotatividade)
+        - Normal: Vendido entre 8 e 30 dias (rotatividade média)
+        - Lento: Vendido há mais de 30 dias ou nunca vendido (baixa rotatividade)
+        
+        Args:
+            dias_analise: Período de análise (padrão: 30 dias)
+            
+        Returns:
+            str: "rapido", "normal" ou "lento"
+        """
+        if not self.ultima_venda:
+            return "lento"
+
+        dias_desde_ultima_venda = (datetime.utcnow() - self.ultima_venda).days
+
+        if dias_desde_ultima_venda <= 7:
+            return "rapido"
+        elif dias_desde_ultima_venda <= dias_analise:
+            return "normal"
+        else:
+            return "lento"
+
+    @staticmethod
+    def calcular_classificacao_abc_dinamica(estabelecimento_id: int, periodo_dias: int = 90):
+        """
+        Calcula classificação ABC dinâmica baseada no Princípio de Pareto (80/20).
+        
+        Metodologia:
+        - Classe A: Produtos que representam 80% do faturamento (alta prioridade)
+        - Classe B: Produtos que representam os próximos 15% do faturamento (média prioridade)
+        - Classe C: Produtos que representam os últimos 5% do faturamento (baixa prioridade)
+        
+        Esta é a abordagem correta para gestão de estoque, substituindo valores fixos arbitrários.
+        
+        Args:
+            estabelecimento_id: ID do estabelecimento
+            periodo_dias: Período de análise em dias (padrão: 90 dias)
+            
+        Returns:
+            dict: Mapeamento {produto_id: classificacao}
+        """
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+        from decimal import Decimal
+
+        data_inicio = datetime.utcnow() - timedelta(days=periodo_dias)
+
+        # Calcular faturamento por produto no período
+        faturamento_query = (
+            db.session.query(
+                VendaItem.produto_id,
+                func.sum(VendaItem.total_item).label('faturamento_total')
+            )
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.status == 'finalizada',
+                Venda.data_venda >= data_inicio
+            )
+            .group_by(VendaItem.produto_id)
+            .order_by(func.sum(VendaItem.total_item).desc())
+            .all()
+        )
+
+        if not faturamento_query:
+            return {}
+
+        # Calcular faturamento total
+        faturamento_total = sum(Decimal(str(item.faturamento_total or 0)) for item in faturamento_query)
+
+        if faturamento_total == 0:
+            return {}
+
+        # Aplicar Princípio de Pareto
+        classificacoes = {}
+        acumulado = Decimal('0')
+        
+        for item in faturamento_query:
+            produto_id = item.produto_id
+            faturamento = Decimal(str(item.faturamento_total or 0))
+            percentual_acumulado = (acumulado + faturamento) / faturamento_total * 100
+
+            if percentual_acumulado <= 80:
+                classificacoes[produto_id] = 'A'
+            elif percentual_acumulado <= 95:
+                classificacoes[produto_id] = 'B'
+            else:
+                classificacoes[produto_id] = 'C'
+
+            acumulado += faturamento
+
+        return classificacoes
+
+    @staticmethod
+    def atualizar_classificacoes_abc(estabelecimento_id: int, periodo_dias: int = 90):
+        """
+        Atualiza as classificações ABC de todos os produtos do estabelecimento.
+        
+        Deve ser executado periodicamente (ex: semanalmente) para manter
+        a classificação atualizada conforme o comportamento de vendas muda.
+        
+        Args:
+            estabelecimento_id: ID do estabelecimento
+            periodo_dias: Período de análise em dias (padrão: 90 dias)
+            
+        Returns:
+            dict: Estatísticas da atualização
+        """
+        classificacoes = Produto.calcular_classificacao_abc_dinamica(
+            estabelecimento_id, periodo_dias
+        )
+
+        # Atualizar produtos com classificação
+        produtos_atualizados = 0
+        for produto_id, classificacao in classificacoes.items():
+            produto = Produto.query.get(produto_id)
+            if produto and produto.estabelecimento_id == estabelecimento_id:
+                produto.classificacao_abc = classificacao
+                produtos_atualizados += 1
+
+        # Produtos sem vendas no período ficam como C
+        produtos_sem_classificacao = Produto.query.filter(
+            Produto.estabelecimento_id == estabelecimento_id,
+            Produto.ativo == True,
+            ~Produto.id.in_(classificacoes.keys())
+        ).all()
+
+        for produto in produtos_sem_classificacao:
+            produto.classificacao_abc = 'C'
+            produtos_atualizados += 1
+
+        db.session.commit()
+
+        return {
+            'produtos_atualizados': produtos_atualizados,
+            'classe_a': len([c for c in classificacoes.values() if c == 'A']),
+            'classe_b': len([c for c in classificacoes.values() if c == 'B']),
+            'classe_c': len([c for c in classificacoes.values() if c == 'C']),
+            'sem_vendas': len(produtos_sem_classificacao)
+        }
+
+    def demanda_media_diaria(self, days: int = 30) -> float:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+
+        days = int(days) if days else 30
+        if days <= 0:
+            days = 30
+
+        data_inicio = datetime.utcnow() - timedelta(days=days)
+
+        total_quantidade = (
+            db.session.query(func.coalesce(func.sum(VendaItem.quantidade), 0))
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(
+                Venda.estabelecimento_id == self.estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == "finalizada",
+                VendaItem.produto_id == self.id,
+            )
+            .scalar()
+            or 0
+        )
+
+        return float(total_quantidade) / float(days)
+
+    def ponto_ressuprimento(
+        self, lead_time_dias: int, days: int = 30, fator_seguranca: float = 1.5
+    ) -> float:
+        lead_time_dias = int(lead_time_dias) if lead_time_dias else 0
+        if lead_time_dias <= 0:
+            return 0.0
+        demanda = self.demanda_media_diaria(days=days)
+        return float(demanda) * float(lead_time_dias) * float(fator_seguranca)
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -730,6 +1186,7 @@ class VendaItem(db.Model):
 
     custo_unitario = db.Column(db.Numeric(10, 2))
     margem_item = db.Column(db.Numeric(5, 2))
+    margem_lucro_real = db.Column(db.Numeric(10, 2))  # Lucro real: (preco_venda - custo_atual) * quantidade
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -753,6 +1210,7 @@ class VendaItem(db.Model):
                 float(self.preco_unitario) if self.preco_unitario else 0.0
             ),
             "total_item": float(self.total_item) if self.total_item else 0.0,
+            "margem_lucro_real": float(self.margem_lucro_real) if self.margem_lucro_real else 0.0,
         }
 
 
@@ -868,6 +1326,91 @@ class MovimentacaoEstoque(db.Model):
             "quantidade_atual": self.quantidade_atual,
             "motivo": self.motivo,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ============================================
+# 11. HISTÓRICO DE PREÇOS (AUDITORIA)
+# ============================================
+
+
+class HistoricoPrecos(db.Model):
+    """
+    Tabela de auditoria para rastreamento de alterações de preços.
+    
+    Permite análise temporal de:
+    - Evolução de margem de lucro
+    - Impacto de reajustes no faturamento
+    - Elasticidade-preço da demanda
+    - Compliance e auditoria fiscal
+    """
+    __tablename__ = "historico_precos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    produto_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("produtos.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    funcionario_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("funcionarios.id"), 
+        nullable=False
+    )
+
+    # Valores anteriores
+    preco_custo_anterior = db.Column(db.Numeric(10, 2), nullable=False)
+    preco_venda_anterior = db.Column(db.Numeric(10, 2), nullable=False)
+    margem_anterior = db.Column(db.Numeric(5, 2), nullable=False)
+
+    # Valores novos
+    preco_custo_novo = db.Column(db.Numeric(10, 2), nullable=False)
+    preco_venda_novo = db.Column(db.Numeric(10, 2), nullable=False)
+    margem_nova = db.Column(db.Numeric(5, 2), nullable=False)
+
+    # Metadados
+    motivo = db.Column(db.String(100), nullable=False)
+    observacoes = db.Column(db.Text)
+    data_alteracao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    produto = db.relationship("Produto", backref=db.backref("historico_precos", lazy=True))
+    funcionario = db.relationship("Funcionario", backref=db.backref("alteracoes_precos", lazy=True))
+
+    __table_args__ = (
+        db.Index("idx_historico_produto", "produto_id"),
+        db.Index("idx_historico_data", "data_alteracao"),
+        db.Index("idx_historico_estabelecimento", "estabelecimento_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "produto_id": self.produto_id,
+            "produto_nome": self.produto.nome if self.produto else None,
+            "funcionario": self.funcionario.nome if self.funcionario else None,
+            "preco_custo_anterior": float(self.preco_custo_anterior),
+            "preco_venda_anterior": float(self.preco_venda_anterior),
+            "margem_anterior": float(self.margem_anterior),
+            "preco_custo_novo": float(self.preco_custo_novo),
+            "preco_venda_novo": float(self.preco_venda_novo),
+            "margem_nova": float(self.margem_nova),
+            "variacao_custo_pct": float(
+                ((self.preco_custo_novo - self.preco_custo_anterior) / self.preco_custo_anterior * 100)
+                if self.preco_custo_anterior > 0 else 0
+            ),
+            "variacao_venda_pct": float(
+                ((self.preco_venda_novo - self.preco_venda_anterior) / self.preco_venda_anterior * 100)
+                if self.preco_venda_anterior > 0 else 0
+            ),
+            "motivo": self.motivo,
+            "observacoes": self.observacoes,
+            "data_alteracao": self.data_alteracao.isoformat() if self.data_alteracao else None,
         }
 
 
@@ -1736,6 +2279,36 @@ class SyncQueue(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "synced_at": self.synced_at.isoformat() if self.synced_at else None
         }
+
+
+class SyncLog(db.Model):
+    __tablename__ = "sync_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+
+    operacao = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), default="running")
+    since = db.Column(db.String(50))
+
+    payload_json = db.Column(db.Text)
+    resultado_json = db.Column(db.Text)
+    mensagem_erro = db.Column(db.Text)
+
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    finished_at = db.Column(db.DateTime)
+
+    estabelecimento = db.relationship(
+        "Estabelecimento", backref=db.backref("sync_logs", lazy=True)
+    )
+    funcionario = db.relationship(
+        "Funcionario", backref=db.backref("sync_logs", lazy=True)
+    )
 
 
 print("Models.py carregado com todas as classes necessarias!")

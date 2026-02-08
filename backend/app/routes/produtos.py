@@ -17,6 +17,7 @@ from app.models import (
     MovimentacaoEstoque,
     VendaItem,
     PedidoCompraItem,
+    HistoricoPrecos,
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
@@ -116,11 +117,17 @@ def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
 
 
 def calcular_classificacao_abc(produto):
-    """Calcula classificação ABC do produto"""
+    """
+    Calcula classificação ABC do produto.
+    
+    DEPRECATED: Esta função usa valores fixos e será removida.
+    Use Produto.calcular_classificacao_abc_dinamica() para cálculo baseado em Pareto.
+    
+    Mantida apenas para compatibilidade com código legado.
+    """
     valor_total_vendido = float(produto.preco_venda * (produto.quantidade_vendida or 0))
 
-    # Esses valores deveriam ser calculados em relação ao total do estabelecimento
-    # Para simplificar, usamos valores fixos
+    # Valores fixos (DEPRECATED - usar classificação dinâmica)
     if valor_total_vendido > 10000:
         return "A"
     elif valor_total_vendido > 5000:
@@ -164,6 +171,7 @@ def listar_produtos():
         categoria = request.args.get("categoria", None, type=str)
         estoque_baixo = request.args.get("estoque_baixo", None, type=str)
         validade_proxima = request.args.get("validade_proxima", None, type=str)
+        status_giro = request.args.get("status_giro", None, type=str)  # Novo filtro
         busca = request.args.get("busca", "", type=str).strip()
 
         # Query base
@@ -221,6 +229,7 @@ def listar_produtos():
                 produto.quantidade * produto.preco_custo
             )
             produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
+            produto_dict["status_giro"] = produto.calcular_status_giro()  # Novo campo
 
             # Verificar alertas
             if verificar_estoque_baixo(produto):
@@ -247,6 +256,10 @@ def listar_produtos():
                 )
             else:
                 produto_dict["alerta_validade"] = False
+
+            # Aplicar filtro de status_giro se especificado
+            if status_giro and produto_dict["status_giro"] != status_giro.lower():
+                continue
 
             produtos.append(produto_dict)
 
@@ -468,8 +481,8 @@ def criar_produto():
         # Encontrar categoria_id baseado no nome da categoria
         categoria_id = None
         if data.get("categoria"):
-            categoria_nome = data["categoria"].strip()
-            current_app.logger.info(f"Procurando categoria: {categoria_nome}")
+            categoria_nome = CategoriaProduto.normalizar_nome_categoria(data["categoria"])
+            current_app.logger.info(f"Procurando categoria normalizada: {categoria_nome}")
             categoria_obj = CategoriaProduto.query.filter_by(
                 nome=categoria_nome,
                 estabelecimento_id=estabelecimento_id
@@ -490,6 +503,16 @@ def criar_produto():
                 current_app.logger.info(f"Nova categoria criada: {categoria_id}")
         else:
             current_app.logger.info("Nenhuma categoria fornecida")
+
+        # Calcular preços e margem
+        preco_custo = Decimal(str(data.get("preco_custo", 0)))
+        preco_venda = Decimal(str(data.get("preco_venda", 0)))
+        
+        # Calcular margem de lucro
+        if preco_custo > 0:
+            margem = (preco_venda - preco_custo) / preco_custo * 100
+        else:
+            margem = Decimal("0")
 
         # Criar produto
         produto = Produto(
@@ -527,6 +550,22 @@ def criar_produto():
 
         db.session.add(produto)
         db.session.flush()  # Para obter o ID do produto
+
+        # Registrar histórico inicial de preços
+        historico_inicial = HistoricoPrecos(
+            estabelecimento_id=estabelecimento_id,
+            produto_id=produto.id,
+            funcionario_id=int(get_jwt_identity()),
+            preco_custo_anterior=Decimal("0"),
+            preco_venda_anterior=Decimal("0"),
+            margem_anterior=Decimal("0"),
+            preco_custo_novo=produto.preco_custo,
+            preco_venda_novo=produto.preco_venda,
+            margem_nova=produto.margem_lucro,
+            motivo="Cadastro inicial do produto",
+            observacoes=f"Produto cadastrado por {claims.get('nome')}"
+        )
+        db.session.add(historico_inicial)
 
         # Criar movimentação inicial de estoque
         if produto.quantidade > 0:
@@ -599,6 +638,9 @@ def atualizar_produto(id):
 
         # Guardar valores antigos para auditoria
         quantidade_anterior = produto.quantidade
+        preco_custo_anterior = produto.preco_custo
+        preco_venda_anterior = produto.preco_venda
+        margem_anterior = produto.margem_lucro
 
         # Atualizar campos
         campos_atualizaveis = [
@@ -655,7 +697,7 @@ def atualizar_produto(id):
                     elif campo == "categoria":
                         # Tratar categoria separadamente - encontrar ou criar categoria
                         if data[campo] and data[campo].strip():
-                            categoria_nome = data[campo].strip()
+                            categoria_nome = CategoriaProduto.normalizar_nome_categoria(data[campo])
                             categoria_obj = CategoriaProduto.query.filter_by(
                                 nome=categoria_nome, 
                                 estabelecimento_id=estabelecimento_id
@@ -689,6 +731,35 @@ def atualizar_produto(id):
         else:
             produto.margem_lucro = 0
 
+        # Registrar histórico de preços se houve alteração
+        preco_alterado = False
+        motivo_alteracao = []
+        
+        if "preco_custo" in data and abs(produto.preco_custo - preco_custo_anterior) > Decimal("0.01"):
+            preco_alterado = True
+            motivo_alteracao.append("custo")
+        
+        if "preco_venda" in data and abs(produto.preco_venda - preco_venda_anterior) > Decimal("0.01"):
+            preco_alterado = True
+            motivo_alteracao.append("venda")
+        
+        if preco_alterado:
+            motivo = f"Atualização de preço ({', '.join(motivo_alteracao)})"
+            historico = HistoricoPrecos(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=produto.id,
+                funcionario_id=int(get_jwt_identity()),
+                preco_custo_anterior=preco_custo_anterior,
+                preco_venda_anterior=preco_venda_anterior,
+                margem_anterior=margem_anterior or Decimal("0"),
+                preco_custo_novo=produto.preco_custo,
+                preco_venda_novo=produto.preco_venda,
+                margem_nova=produto.margem_lucro or Decimal("0"),
+                motivo=motivo,
+                observacoes=f"Produto atualizado por {claims.get('nome')}"
+            )
+            db.session.add(historico)
+
         produto.updated_at = datetime.utcnow()
 
         # Se quantidade foi alterada, criar movimentação
@@ -698,6 +769,13 @@ def atualizar_produto(id):
                 diferenca = nova_quantidade - quantidade_anterior
 
                 if diferenca != 0:
+                    custo_unitario = data.get("custo_unitario", None)
+                    if diferenca > 0:
+                        produto.recalcular_preco_custo_ponderado(
+                            quantidade_entrada=diferenca,
+                            custo_unitario_entrada=custo_unitario,
+                            estoque_atual=quantidade_anterior,
+                        )
                     produto.quantidade = nova_quantidade
 
                     movimentacao = MovimentacaoEstoque(
@@ -708,8 +786,17 @@ def atualizar_produto(id):
                         quantidade=abs(diferenca),
                         quantidade_anterior=quantidade_anterior,
                         quantidade_atual=nova_quantidade,
-                        custo_unitario=produto.preco_custo,
-                        valor_total=abs(diferenca) * produto.preco_custo,
+                        custo_unitario=(
+                            custo_unitario
+                            if (diferenca > 0 and custo_unitario is not None)
+                            else produto.preco_custo
+                        ),
+                        valor_total=abs(diferenca)
+                        * (
+                            custo_unitario
+                            if (diferenca > 0 and custo_unitario is not None)
+                            else produto.preco_custo
+                        ),
                         motivo="Ajuste manual de estoque",
                         observacoes=f"Produto atualizado por {claims.get('nome')}. Diferença: {diferenca}",
                     )
@@ -793,6 +880,7 @@ def ajustar_estoque(id):
 
         tipo = data.get("tipo")  # 'entrada' ou 'saida'
         quantidade = data.get("quantidade", 0)
+        custo_unitario = data.get("custo_unitario", None)
         motivo = data.get("motivo", "")
         observacoes = data.get("observacoes", "")
 
@@ -816,6 +904,11 @@ def ajustar_estoque(id):
         quantidade_anterior = produto.quantidade
 
         if tipo == "entrada":
+            produto.recalcular_preco_custo_ponderado(
+                quantidade_entrada=quantidade,
+                custo_unitario_entrada=custo_unitario,
+                estoque_atual=quantidade_anterior,
+            )
             produto.quantidade += quantidade
         else:  # saida
             if produto.quantidade < quantidade:
@@ -839,8 +932,13 @@ def ajustar_estoque(id):
             quantidade=quantidade,
             quantidade_anterior=quantidade_anterior,
             quantidade_atual=produto.quantidade,
-            custo_unitario=produto.preco_custo,
-            valor_total=quantidade * produto.preco_custo,
+            custo_unitario=(
+                custo_unitario if (tipo == "entrada" and custo_unitario is not None) else produto.preco_custo
+            ),
+            valor_total=quantidade
+            * (
+                custo_unitario if (tipo == "entrada" and custo_unitario is not None) else produto.preco_custo
+            ),
             motivo=motivo,
             observacoes=observacoes,
         )
@@ -1119,7 +1217,7 @@ def listar_produtos_estoque():
         # Estatísticas
         total_query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
         total_produtos = total_query.count()
-        produtos_esgotados = total_query.filter(Produto.quantidade == 0).count()
+        produtos_esgotados = total_query.filter(Produto.quantidade <= 0).count()
         produtos_baixo_estoque = total_query.filter(
             Produto.quantidade > 0,
             Produto.quantidade <= Produto.quantidade_minima
@@ -1950,3 +2048,219 @@ def deletar_produto_estoque(id):
             "success": False,
             "message": f"Erro ao desativar produto: {str(e)}"
         }), 500
+
+
+# ============================================
+# ROTAS PROFISSIONAIS - UPGRADE DE ENGENHARIA
+# ============================================
+
+
+@produtos_bp.route("/<int:id>/historico-precos", methods=["GET"])
+@funcionario_required
+def obter_historico_precos(id):
+    """
+    Obtém o histórico completo de alterações de preços de um produto.
+    
+    Permite análise temporal de:
+    - Evolução de margem de lucro
+    - Impacto de reajustes no faturamento
+    - Elasticidade-preço da demanda
+    - Compliance e auditoria fiscal
+    """
+    try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        # Verificar se produto existe e pertence ao estabelecimento
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+        
+        # Buscar histórico ordenado por data (mais recente primeiro)
+        historico = (
+            HistoricoPrecos.query
+            .filter_by(produto_id=id, estabelecimento_id=estabelecimento_id)
+            .order_by(HistoricoPrecos.data_alteracao.desc())
+            .all()
+        )
+        
+        historico_lista = [h.to_dict() for h in historico]
+        
+        # Calcular estatísticas do histórico
+        if historico_lista:
+            primeira_alteracao = historico[-1]  # Mais antiga
+            ultima_alteracao = historico[0]  # Mais recente
+            
+            variacao_custo_total = (
+                (ultima_alteracao.preco_custo_novo - primeira_alteracao.preco_custo_anterior) 
+                / primeira_alteracao.preco_custo_anterior * 100
+                if primeira_alteracao.preco_custo_anterior > 0 else 0
+            )
+            
+            variacao_venda_total = (
+                (ultima_alteracao.preco_venda_novo - primeira_alteracao.preco_venda_anterior)
+                / primeira_alteracao.preco_venda_anterior * 100
+                if primeira_alteracao.preco_venda_anterior > 0 else 0
+            )
+            
+            estatisticas = {
+                "total_alteracoes": len(historico_lista),
+                "primeira_alteracao": primeira_alteracao.data_alteracao.isoformat(),
+                "ultima_alteracao": ultima_alteracao.data_alteracao.isoformat(),
+                "variacao_custo_total_pct": float(variacao_custo_total),
+                "variacao_venda_total_pct": float(variacao_venda_total),
+                "preco_custo_inicial": float(primeira_alteracao.preco_custo_anterior),
+                "preco_custo_atual": float(produto.preco_custo),
+                "preco_venda_inicial": float(primeira_alteracao.preco_venda_anterior),
+                "preco_venda_atual": float(produto.preco_venda),
+            }
+        else:
+            estatisticas = {
+                "total_alteracoes": 0,
+                "preco_custo_atual": float(produto.preco_custo),
+                "preco_venda_atual": float(produto.preco_venda),
+            }
+        
+        return jsonify({
+            "success": True,
+            "produto": {
+                "id": produto.id,
+                "nome": produto.nome,
+                "codigo_interno": produto.codigo_interno,
+            },
+            "historico": historico_lista,
+            "estatisticas": estatisticas,
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter histórico de preços do produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao obter histórico de preços"}),
+            500,
+        )
+
+
+@produtos_bp.route("/calcular-preco-markup", methods=["POST"])
+@funcionario_required
+def calcular_preco_markup():
+    """
+    Calcula preço de venda baseado em markup sobre o custo.
+    
+    Útil para precificação rápida e padronizada.
+    
+    Body:
+    {
+        "preco_custo": 10.00,
+        "markup_percentual": 50
+    }
+    
+    Response:
+    {
+        "preco_custo": 10.00,
+        "markup_percentual": 50,
+        "preco_venda_sugerido": 15.00,
+        "margem_lucro": 50.00
+    }
+    """
+    try:
+        data = request.get_json()
+        
+        preco_custo = data.get("preco_custo")
+        markup_percentual = data.get("markup_percentual")
+        
+        if preco_custo is None or markup_percentual is None:
+            return (
+                jsonify({
+                    "success": False,
+                    "message": "Informe preco_custo e markup_percentual"
+                }),
+                400,
+            )
+        
+        # Calcular preço de venda
+        preco_venda = Produto.calcular_preco_por_markup(preco_custo, markup_percentual)
+        
+        # Calcular margem de lucro (para confirmação)
+        margem = Produto.calcular_markup_de_preco(preco_custo, preco_venda)
+        
+        return jsonify({
+            "success": True,
+            "preco_custo": float(preco_custo),
+            "markup_percentual": float(markup_percentual),
+            "preco_venda_sugerido": float(preco_venda),
+            "margem_lucro": float(margem),
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao calcular preço por markup: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao calcular preço"}),
+            500,
+        )
+
+
+@produtos_bp.route("/atualizar-abc", methods=["POST"])
+@funcionario_required
+def atualizar_classificacao_abc():
+    """
+    Atualiza classificações ABC de todos os produtos usando Princípio de Pareto (80/20).
+    
+    Esta é a metodologia correta para gestão de estoque, substituindo valores fixos arbitrários.
+    
+    Body (opcional):
+    {
+        "periodo_dias": 90  // Período de análise (padrão: 90 dias)
+    }
+    
+    Response:
+    {
+        "success": true,
+        "estatisticas": {
+            "produtos_atualizados": 150,
+            "classe_a": 30,  // 20% dos produtos, 80% do faturamento
+            "classe_b": 45,  // 30% dos produtos, 15% do faturamento
+            "classe_c": 75,  // 50% dos produtos, 5% do faturamento
+            "sem_vendas": 20
+        }
+    }
+    """
+    try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        data = request.get_json() or {}
+        periodo_dias = data.get("periodo_dias", 90)
+        
+        # Validar período
+        if periodo_dias < 7 or periodo_dias > 365:
+            return (
+                jsonify({
+                    "success": False,
+                    "message": "Período deve estar entre 7 e 365 dias"
+                }),
+                400,
+            )
+        
+        # Atualizar classificações
+        estatisticas = Produto.atualizar_classificacoes_abc(
+            estabelecimento_id, periodo_dias
+        )
+        
+        current_app.logger.info(
+            f"Classificação ABC atualizada para estabelecimento {estabelecimento_id}: "
+            f"{estatisticas['produtos_atualizados']} produtos atualizados"
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": f"Classificação ABC atualizada com sucesso ({periodo_dias} dias)",
+            "estatisticas": estatisticas,
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar classificação ABC: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao atualizar classificação ABC"}),
+            500,
+        )

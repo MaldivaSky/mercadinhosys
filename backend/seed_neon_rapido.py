@@ -105,11 +105,15 @@ with app.app_context():
                 # Desabilitar constraints apenas no Postgres
                 db.session.execute(text("SET session_replication_role = 'replica'"))
             
-            # Dropar tabelas em ordem
+            # Dropar tabelas em ordem (dependentes primeiro)
             tables_to_drop = [
-                "movimentacoes_estoque", "registro_ponto", "configuracao_horario",
+                "sync_queue", "relatorios_agendados", "dashboard_metricas",
+                "movimentacoes_caixa", "movimentacoes_estoque",
+                "pagamentos", "venda_itens", "vendas", "caixas",
+                "registros_ponto", "configuracoes_horario",
+                "contas_pagar", "contas_receber", "pedidos_compra_itens", "pedidos_compra",
                 "produtos", "categorias_produto", "fornecedores", "clientes",
-                "funcionarios", "estabelecimentos", "despesas"
+                "login_history", "funcionarios", "configuracoes", "despesas", "estabelecimentos"
             ]
             
             for table in tables_to_drop:
@@ -240,15 +244,21 @@ with app.app_context():
         print("🛒 Criando clientes...")
         
         clientes_data = [
-            {"nome": "Maria Santos", "cpf": "333.444.555-66", "email": "maria@email.com", "telefone": "(84) 93456-7890", "celular": "(84) 93456-7890",
-             "cep": "59000-001", "logradouro": "Rua das Flores", "numero": "10", "bairro": "Centro", "cidade": "Natal", "estado": "RN"},
-            {"nome": "Pedro Oliveira", "cpf": "444.555.666-77", "email": "pedro@email.com", "telefone": "(84) 94567-8901", "celular": "(84) 94567-8901",
-             "cep": "59000-002", "logradouro": "Av. Brasil", "numero": "200", "bairro": "Tirol", "cidade": "Natal", "estado": "RN"},
-            {"nome": "Ana Costa", "cpf": "555.666.777-88", "email": "ana@email.com", "telefone": "(84) 95678-9012", "celular": "(84) 95678-9012",
-             "cep": "59000-003", "logradouro": "Rua Projetada", "numero": "300", "bairro": "Lagoa Nova", "cidade": "Natal", "estado": "RN"},
+            {"nome": "Maria Santos", "cpf": "333.444.555-66", "email": "maria@email.com", "telefone": "(84) 93456-7890", "celular": "(84) 93456-7890", "bairro": "Centro"},
+            {"nome": "Pedro Oliveira", "cpf": "444.555.666-77", "email": "pedro@email.com", "telefone": "(84) 94567-8901", "celular": "(84) 94567-8901", "bairro": "Tirol"},
+            {"nome": "Ana Costa", "cpf": "555.666.777-88", "email": "ana@email.com", "telefone": "(84) 95678-9012", "celular": "(84) 95678-9012", "bairro": "Lagoa Nova"},
+            {"nome": "Lucas Pereira", "cpf": "666.777.888-99", "email": "lucas@email.com", "telefone": "(84) 96789-0123", "celular": "(84) 96789-0123", "bairro": "Alecrim"},
+            {"nome": "Juliana Lima", "cpf": "777.888.999-00", "email": "juliana@email.com", "telefone": "(84) 97890-1234", "celular": "(84) 97890-1234", "bairro": "Ponta Negra"},
+            {"nome": "Roberto Souza", "cpf": "888.999.000-11", "email": "roberto@email.com", "telefone": "(84) 98901-2345", "celular": "(84) 98901-2345", "bairro": "Candelária"},
+            {"nome": "Fernanda Alves", "cpf": "999.000.111-22", "email": "fernanda@email.com", "telefone": "(84) 99012-3456", "celular": "(84) 99012-3456", "bairro": "Petrópolis"},
+            {"nome": "Carlos Silva", "cpf": "000.111.222-33", "email": "carlos@email.com", "telefone": "(84) 90123-4567", "celular": "(84) 90123-4567", "bairro": "Cidade Verde"},
+            {"nome": "Patrícia Gomes", "cpf": "111.222.333-44", "email": "patricia@email.com", "telefone": "(84) 91234-5678", "celular": "(84) 91234-5678", "bairro": "Nova Parnamirim"},
+            {"nome": "Ricardo Mendes", "cpf": "222.333.444-55", "email": "ricardo@email.com", "telefone": "(84) 92345-6789", "celular": "(84) 92345-6789", "bairro": "Emaús"},
+            {"nome": "Camila Rocha", "cpf": "012.345.678-99", "email": "camila@email.com", "telefone": "(84) 93456-7890", "celular": "(84) 93456-7890", "bairro": "Cohabinal"},
+            {"nome": "Felipe Martins", "cpf": "987.654.321-00", "email": "felipe@email.com", "telefone": "(84) 94567-8901", "celular": "(84) 94567-8901", "bairro": "Centro"},
         ]
         
-        for c_data in clientes_data:
+        for i, c_data in enumerate(clientes_data):
             cliente = Cliente(
                 estabelecimento_id=est.id,
                 nome=c_data["nome"],
@@ -256,12 +266,12 @@ with app.app_context():
                 email=c_data["email"],
                 telefone=c_data["telefone"],
                 celular=c_data["celular"],
-                cep=c_data["cep"],
-                logradouro=c_data["logradouro"],
-                numero=c_data["numero"],
+                cep=f"59000-{i:03d}",
+                logradouro="Rua Exemplo",
+                numero=str(10 + i),
                 bairro=c_data["bairro"],
-                cidade=c_data["cidade"],
-                estado=c_data["estado"],
+                cidade="Natal",
+                estado="RN",
                 ativo=True
             )
             db.session.add(cliente)
@@ -274,27 +284,28 @@ with app.app_context():
         print("🚚 Criando fornecedores...")
         
         fornecedores_data = [
-            {"nome": "Distribuidora ABC", "cnpj": "11.222.333/0001-44", "telefone": "(84) 3111-2222",
-             "cep": "59010-000", "logradouro": "Rua dos Comerciantes", "numero": "50", "bairro": "Alecrim", "cidade": "Natal", "estado": "RN"},
-            {"nome": "Atacado XYZ", "cnpj": "22.333.444/0001-55", "telefone": "(84) 3222-3333",
-             "cep": "59020-000", "logradouro": "Av. Sete", "numero": "120", "bairro": "Cidade Alta", "cidade": "Natal", "estado": "RN"},
+            {"nome": "Distribuidora ABC", "cnpj": "11.222.333/0001-44"},
+            {"nome": "Atacado XYZ", "cnpj": "22.333.444/0001-55"},
+            {"nome": "Logística Norte", "cnpj": "33.444.555/0001-66"},
+            {"nome": "Alimentos Brasil", "cnpj": "44.555.666/0001-77"},
+            {"nome": "Bebidas Premium", "cnpj": "55.666.777/0001-88"},
         ]
         
         fornecedores = []
-        for f_data in fornecedores_data:
+        for i, f_data in enumerate(fornecedores_data):
             fornecedor = Fornecedor(
                 estabelecimento_id=est.id,
                 nome_fantasia=f_data["nome"],
                 razao_social=f"{f_data['nome']} LTDA",
                 cnpj=f_data["cnpj"],
-                telefone=f_data["telefone"],
+                telefone=f"(84) 3000-{1000+i}",
                 email=f"{f_data['nome'].lower().replace(' ', '')}@email.com",
-                cep=f_data["cep"],
-                logradouro=f_data["logradouro"],
-                numero=f_data["numero"],
-                bairro=f_data["bairro"],
-                cidade=f_data["cidade"],
-                estado=f_data["estado"],
+                cep="59000-000",
+                logradouro="Av Industrial",
+                numero=str(500 + i * 10),
+                bairro="Distrito Industrial",
+                cidade="Natal",
+                estado="RN",
                 ativo=True
             )
             db.session.add(fornecedor)
@@ -307,7 +318,7 @@ with app.app_context():
         print()
         print("📁 Criando categorias...")
         
-        categorias_data = ["Alimentos", "Bebidas", "Limpeza", "Higiene", "Padaria"]
+        categorias_data = ["Alimentos", "Bebidas", "Limpeza", "Higiene", "Padaria", "Hortifruti", "Carnes", "Laticínios"]
         categorias = []
         
         for cat_nome in categorias_data:
@@ -326,34 +337,101 @@ with app.app_context():
         print()
         print("📦 Criando produtos...")
         
+        # (nome, cat_idx, forn_idx, codigo_sufixo, custo, venda, qtd)
+        # cat_idx: 0=Alim, 1=Beb, 2=Limp, 3=Hig, 4=Pad, 5=Horti, 6=Carnes, 7=Lat
         produtos_data = [
-            ("Arroz Tipo 1 5kg", 0, 0, "7891234567890", 15.00, 22.90, 50),
-            ("Feijão Preto 1kg", 0, 0, "7891234567891", 5.50, 8.90, 80),
-            ("Açúcar Cristal 1kg", 0, 0, "7891234567892", 3.20, 4.99, 100),
-            ("Refrigerante 2L", 1, 1, "7891234567893", 4.50, 7.99, 60),
-            ("Água Mineral 1.5L", 1, 1, "7891234567894", 1.20, 2.50, 120),
-            ("Detergente Líquido", 2, 0, "7891234567895", 1.80, 2.99, 90),
-            ("Sabão em Pó 1kg", 2, 0, "7891234567896", 8.50, 12.90, 40),
-            ("Shampoo 400ml", 3, 1, "7891234567897", 6.00, 9.99, 35),
-            ("Sabonete 90g", 3, 1, "7891234567898", 1.50, 2.49, 150),
-            ("Pão Francês kg", 4, 0, "7891234567899", 8.00, 12.00, 20),
+            # Alimentos
+            ("Arroz Tipo 1 5kg", 0, 0, "01", 15.00, 22.90, 50),
+            ("Feijão Preto 1kg", 0, 0, "02", 5.50, 8.90, 80),
+            ("Açúcar Cristal 1kg", 0, 0, "03", 3.20, 4.99, 100),
+            ("Café Torrado 500g", 0, 0, "04", 12.00, 18.50, 40),
+            ("Macarrão Espaguete 500g", 0, 0, "05", 2.50, 4.20, 60),
+            ("Óleo de Soja 900ml", 0, 0, "06", 5.80, 8.50, 70),
+            ("Farinha de Trigo 1kg", 0, 0, "07", 3.50, 5.90, 50),
+            ("Biscoito Recheado", 0, 0, "08", 1.80, 3.50, 120),
+            
+            # Bebidas
+            ("Refrigerante 2L", 1, 1, "09", 5.50, 8.99, 60),
+            ("Água Mineral 1.5L", 1, 1, "10", 1.20, 2.50, 120),
+            ("Suco de Uva 1L", 1, 1, "11", 6.00, 10.90, 30),
+            ("Cerveja Lata 350ml", 1, 1, "12", 2.50, 4.50, 200),
+            ("Energético 473ml", 1, 1, "13", 7.00, 12.90, 40),
+            
+            # Limpeza
+            ("Detergente Líquido", 2, 2, "14", 1.80, 2.99, 90),
+            ("Sabão em Pó 1kg", 2, 2, "15", 8.50, 12.90, 40),
+            ("Água Sanitária 1L", 2, 2, "16", 2.50, 4.50, 60),
+            ("Amaciante 2L", 2, 2, "17", 10.00, 16.90, 30),
+            ("Esponja de Aço", 2, 2, "18", 1.50, 2.80, 100),
+            
+            # Higiene
+            ("Shampoo 400ml", 3, 2, "19", 8.00, 14.99, 35),
+            ("Sabonete 90g", 3, 2, "20", 1.50, 2.49, 150),
+            ("Papel Higiênico 4un", 3, 2, "21", 4.50, 7.90, 80),
+            ("Creme Dental 90g", 3, 2, "22", 3.00, 5.50, 90),
+            ("Desodorante Aerosol", 3, 2, "23", 9.00, 15.90, 40),
+            
+            # Padaria
+            ("Pão Francês kg", 4, 3, "24", 8.00, 14.90, 20),
+            ("Bolo de Chocolate", 4, 3, "25", 15.00, 25.00, 10),
+            ("Pão de Queijo kg", 4, 3, "26", 18.00, 29.90, 15),
+            
+            # Hortifruti
+            ("Tomate kg", 5, 3, "27", 4.00, 7.99, 30),
+            ("Cebola kg", 5, 3, "28", 3.50, 6.90, 40),
+            ("Batata kg", 5, 3, "29", 3.00, 5.90, 50),
+            ("Banana Prata kg", 5, 3, "30", 2.50, 4.99, 45),
+            ("Maçã Nacional kg", 5, 3, "31", 5.00, 9.90, 25),
+            
+            # Carnes
+            ("Carne Moída kg", 6, 4, "32", 22.00, 34.90, 15),
+            ("Frango Inteiro kg", 6, 4, "33", 9.00, 14.90, 20),
+            ("Linguiça Toscana kg", 6, 4, "34", 14.00, 22.90, 18),
+            
+            # Laticínios
+            ("Leite Integral 1L", 7, 4, "35", 3.80, 5.99, 80),
+            ("Queijo Mussarela kg", 7, 4, "36", 28.00, 45.90, 10),
+            ("Manteiga 200g", 7, 4, "37", 8.50, 13.90, 25),
+            ("Iogurte 1L", 7, 4, "38", 9.00, 15.90, 20),
+
+            # Mercearia / Enlatados
+            ("Molho de Tomate 340g", 0, 0, "39", 2.50, 3.99, 60),
+            ("Macarrão Inst. 85g", 0, 0, "40", 1.20, 2.50, 100),
+            ("Sardinha Lata 125g", 0, 0, "41", 4.50, 7.90, 40),
+            ("Atum Ralado 170g", 0, 0, "42", 6.50, 10.90, 30),
+            ("Milho Verde Lata", 0, 0, "43", 3.00, 5.50, 50),
+            ("Ervilha Lata", 0, 0, "44", 3.00, 5.50, 45),
+            
+            # Mais Bebidas
+            ("Cerveja Garrafa 600ml", 1, 1, "45", 6.00, 10.00, 48),
+            ("Vodka 1L", 1, 1, "46", 25.00, 45.00, 12),
+            ("Whisky 1L", 1, 1, "47", 80.00, 149.90, 6),
+            ("Suco Caixa 1L", 1, 1, "48", 5.50, 8.90, 40),
+            ("Água de Coco 1L", 1, 1, "49", 7.00, 12.00, 24),
+
+            # Bazar / Utilidades
+            ("Isqueiro", 2, 2, "50", 3.00, 6.00, 50),
+            ("Pilha AA (par)", 2, 2, "51", 5.00, 9.90, 30),
+            ("Lâmpada LED 9W", 2, 2, "52", 8.00, 14.90, 20),
+            ("Fósforos (maço)", 2, 2, "53", 0.50, 1.00, 100),
         ]
         
-        for nome, cat_idx, forn_idx, codigo, custo, venda, qtd in produtos_data:
+        for nome, cat_idx, forn_idx, sufixo, custo, venda, qtd in produtos_data:
             produto = Produto(
                 estabelecimento_id=est.id,
                 nome=nome,
-                codigo_barras=codigo,
+                codigo_barras=f"7890000000{sufixo}",
                 categoria_id=categorias[cat_idx].id,
                 fornecedor_id=fornecedores[forn_idx].id,
                 preco_custo=Decimal(str(custo)),
                 preco_venda=Decimal(str(venda)),
                 quantidade=qtd,
-                unidade_medida="UN",
+                unidade_medida="KG" if "kg" in nome.lower() else "UN",
                 ativo=True
             )
             db.session.add(produto)
             print(f"  ✅ {produto.nome} - R$ {produto.preco_venda}")
+
         
         # COMMIT PRODUTOS
         print()
@@ -365,31 +443,57 @@ with app.app_context():
         print()
         print("💸 Criando despesas...")
         hoje = date.today()
-        primeiro_dia_mes = hoje.replace(day=1)
-        despesas_data = [
-            {"descricao": "Salários Funcionários", "categoria": "salarios", "tipo": "fixa", "valor": Decimal("6000.00"), "recorrente": True, "forma_pagamento": "transferencia"},
-            {"descricao": "Aluguel do Estabelecimento", "categoria": "aluguel", "tipo": "fixa", "valor": Decimal("3500.00"), "recorrente": True, "forma_pagamento": "transferencia"},
-            {"descricao": "Conta de Energia", "categoria": "energia", "tipo": "variavel", "valor": Decimal("1200.00"), "recorrente": True, "forma_pagamento": "boleto"},
-            {"descricao": "Conta de Água", "categoria": "agua", "tipo": "variavel", "valor": Decimal("450.00"), "recorrente": True, "forma_pagamento": "boleto"},
-            {"descricao": "Marketing Digital", "categoria": "marketing", "tipo": "variavel", "valor": Decimal("800.00"), "recorrente": True, "forma_pagamento": "cartao_credito"},
-            {"descricao": "Manutenção de Equipamentos", "categoria": "manutencao", "tipo": "variavel", "valor": Decimal("650.00"), "recorrente": False, "forma_pagamento": "pix"},
-            {"descricao": "Serviços de Limpeza", "categoria": "limpeza", "tipo": "variavel", "valor": Decimal("500.00"), "recorrente": True, "forma_pagamento": "dinheiro"},
+        
+        # Gerar despesas para os últimos 3 meses
+        despesas_base = [
+            {"descricao": "Salários Funcionários", "categoria": "salarios", "tipo": "fixa", "valor": Decimal("6000.00"), "forma_pagamento": "transferencia"},
+            {"descricao": "Aluguel do Estabelecimento", "categoria": "aluguel", "tipo": "fixa", "valor": Decimal("3500.00"), "forma_pagamento": "transferencia"},
+            {"descricao": "Conta de Energia", "categoria": "energia", "tipo": "variavel", "valor_min": 1100, "valor_max": 1300, "forma_pagamento": "boleto"},
+            {"descricao": "Conta de Água", "categoria": "agua", "tipo": "variavel", "valor_min": 400, "valor_max": 500, "forma_pagamento": "boleto"},
+            {"descricao": "Internet/Telefone", "categoria": "telefonia", "tipo": "fixa", "valor": Decimal("250.00"), "forma_pagamento": "boleto"},
+            {"descricao": "Sistema de Gestão", "categoria": "software", "tipo": "fixa", "valor": Decimal("150.00"), "forma_pagamento": "cartao_credito"},
+            {"descricao": "Marketing Digital", "categoria": "marketing", "tipo": "variavel", "valor_min": 500, "valor_max": 1000, "forma_pagamento": "cartao_credito"},
+            {"descricao": "Material de Limpeza", "categoria": "limpeza", "tipo": "variavel", "valor_min": 200, "valor_max": 400, "forma_pagamento": "dinheiro"},
+            {"descricao": "Manutenção Predial", "categoria": "manutencao", "tipo": "variavel", "valor_min": 100, "valor_max": 800, "forma_pagamento": "pix", "chance": 0.3},
         ]
-        for idx, d in enumerate(despesas_data):
-            data_despesa = primeiro_dia_mes + timedelta(days=min(idx * 3, 27))
-            despesa = Despesa(
-                estabelecimento_id=est.id,
-                descricao=d["descricao"],
-                categoria=d["categoria"],
-                tipo=d["tipo"],
-                valor=d["valor"],
-                data_despesa=data_despesa,
-                forma_pagamento=d["forma_pagamento"],
-                recorrente=d["recorrente"],
-                observacoes="Seed automático"
-            )
-            db.session.add(despesa)
-            print(f"  ✅ {despesa.descricao} - R$ {despesa.valor}")
+        
+        for mes_offset in range(3): # Mês atual, mês passado, mês retrasado
+            data_base = hoje.replace(day=1) - timedelta(days=mes_offset * 30)
+            data_base = data_base.replace(day=1) # Garantir dia 1
+            
+            for d in despesas_base:
+                # Verificar chance (para despesas eventuais)
+                if "chance" in d and random.random() > d["chance"]:
+                    continue
+                    
+                # Calcular valor
+                if "valor" in d:
+                    valor = d["valor"]
+                else:
+                    valor = Decimal(str(random.randint(d["valor_min"], d["valor_max"])))
+                
+                # Calcular data (espalhar pelo mês)
+                dia_pagto = random.randint(1, 28)
+                data_despesa = data_base.replace(day=dia_pagto)
+                
+                # Se for futuro, ignorar
+                if data_despesa > hoje:
+                    continue
+                    
+                despesa = Despesa(
+                    estabelecimento_id=est.id,
+                    descricao=f"{d['descricao']} (Mês {data_base.month})",
+                    categoria=d["categoria"],
+                    tipo=d["tipo"],
+                    valor=valor,
+                    data_despesa=data_despesa,
+                    forma_pagamento=d["forma_pagamento"],
+                    recorrente=True,
+                    observacoes="Seed automático"
+                )
+                db.session.add(despesa)
+                print(f"  ✅ {despesa.descricao} - R$ {despesa.valor}")
+
         db.session.commit()
         print("✅ Despesas salvas!")
         
@@ -537,12 +641,12 @@ with app.app_context():
             return codigo
         
         vendas_criadas = 0
-        max_vendas = 60  # Mais vendas para enriquecer os dados
+        max_vendas = 150  # Mais vendas para enriquecer os dados (Aumentado para 150)
         
         for i in range(max_vendas):
             try:
-                # Data da venda (últimos 30 dias)
-                dias_atras = random.randint(0, 30)
+                # Data da venda (últimos 60 dias para histórico maior)
+                dias_atras = random.randint(0, 60)
                 data_venda = datetime.now() - timedelta(days=dias_atras)
                 
                 # Criar venda
@@ -677,8 +781,10 @@ with app.app_context():
         db.session.commit()
         print(f"✅ {vendas_criadas} vendas criadas!")
         
-        # 10. REPLICAÇÃO PARA NEON (usa target_url)
-        if target_url and target_url.startswith('postgresql://'):
+        # 10. REPLICAÇÃO PARA NEON (apenas se estiver usando SQLite local e quiser replicar)
+        is_sqlite_main = 'sqlite' in str(db.engine.url)
+        
+        if is_sqlite_main and target_url and target_url.startswith('postgresql://'):
             print()
             print("🔄 Replicando dados para Neon (PostgreSQL)...")
             try:

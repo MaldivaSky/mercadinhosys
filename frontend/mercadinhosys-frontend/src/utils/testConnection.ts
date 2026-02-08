@@ -206,7 +206,7 @@ export const testConnection = async () => {
 
     // Diagnóstico
     console.log('\n🔍 DIAGNÓSTICO:');
-    if (results.health.error) {
+    if ('error' in results.health) {
         console.error('❌ Backend não está acessível!');
         console.log('Possíveis causas:');
         console.log('  1. Backend offline no Render');

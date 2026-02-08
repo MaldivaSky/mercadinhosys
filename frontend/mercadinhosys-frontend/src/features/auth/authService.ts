@@ -68,6 +68,40 @@ class AuthService {
         }
     }
 
+    async bootstrapAdmin(identifier: string, password: string): Promise<{ success: boolean; message?: string; error?: string; code?: string }> {
+        const bootstrapData = {
+            email: identifier.includes('@') ? identifier : undefined,
+            username: !identifier.includes('@') ? identifier : undefined,
+            identifier,
+            senha: password,
+            password
+        };
+
+        try {
+            const response = await axios.post(
+                `${API_URL}/auth/bootstrap`,
+                bootstrapData,
+                {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 10000
+                }
+            );
+            const data = response.data as { success: boolean; message?: string; error?: string; code?: string };
+            if (!data || typeof data !== 'object') {
+                throw new Error('Resposta inválida do servidor');
+            }
+            return data;
+        } catch (error: unknown) {
+            const err = error as { message?: string; response?: { status?: number; data?: any } };
+            const serverData = err.response?.data;
+            return {
+                success: false,
+                error: serverData?.error || err.message || 'Erro ao executar bootstrap',
+                code: serverData?.code
+            };
+        }
+    }
+
     async updateProfile(payload: { nome?: string; email?: string; telefone?: string; foto_url?: string }): Promise<{ success: boolean; data?: { nome?: string; email?: string; telefone?: string; foto_url?: string }; message?: string }> {
         const token = this.getToken();
         if (!token) {

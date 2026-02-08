@@ -2,7 +2,9 @@
 """
 Script de teste para Dashboard Científico
 """
-import requests
+import pytest
+
+requests = pytest.importorskip("requests")
 import json
 import sys
 import os

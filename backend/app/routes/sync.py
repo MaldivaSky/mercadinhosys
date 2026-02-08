@@ -4,7 +4,25 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 import os
 from urllib.parse import urlparse
-from app.models import db, Estabelecimento, Funcionario, Cliente, Fornecedor, CategoriaProduto, Produto, Venda, VendaItem, Pagamento, MovimentacaoEstoque, Despesa
+from datetime import datetime
+import json
+from flask_jwt_extended import get_jwt_identity, get_jwt
+from app.decorators.decorator_jwt import gerente_ou_admin_required
+from app.models import (
+    db,
+    Estabelecimento,
+    Funcionario,
+    Cliente,
+    Fornecedor,
+    CategoriaProduto,
+    Produto,
+    Venda,
+    VendaItem,
+    Pagamento,
+    MovimentacaoEstoque,
+    Despesa,
+    SyncLog,
+)
 
 sync_bp = Blueprint("sync", __name__)
 
@@ -31,8 +49,13 @@ def _upsert(session, model, data, pk_field="id"):
 
 
 @sync_bp.route("/api/sync/replicar", methods=["POST"])
+@gerente_ou_admin_required
 def replicar_para_neon():
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        funcionario_id = int(get_jwt_identity())
+
         db_url = os.environ.get("DATABASE_URL")
         if not db_url:
             return jsonify({"success": False, "message": "DATABASE_URL não configurada"}), 400
@@ -63,40 +86,75 @@ def replicar_para_neon():
         ]
 
         since = request.args.get("since")
+        sync_log = SyncLog(
+            estabelecimento_id=estabelecimento_id,
+            funcionario_id=funcionario_id,
+            operacao="replicar_para_neon",
+            status="running",
+            since=since,
+            started_at=datetime.utcnow(),
+        )
+        db.session.add(sync_log)
+        db.session.commit()
+
         resultado = {}
-        for model in models:
-            query = db.session.query(model)
+        try:
+            since_dt = None
             if since:
                 try:
-                    from datetime import datetime
                     since_dt = datetime.fromisoformat(since)
                 except Exception:
-                    return jsonify({"success": False, "message": "Parâmetro 'since' inválido"}), 400
-                ts_field = None
-                if hasattr(model, "updated_at"):
-                    ts_field = getattr(model, "updated_at")
-                elif hasattr(model, "created_at"):
-                    ts_field = getattr(model, "created_at")
-                if ts_field is not None:
-                    query = query.filter(ts_field >= since_dt)
-            rows = query.all()
-            inseridos = 0
-            atualizados = 0
-            for r in rows:
-                data = _clone_data(r)
-                updated = _upsert(remote_session, model, data)
-                if updated:
-                    atualizados += 1
-                else:
-                    inseridos += 1
-            remote_session.commit()
-            resultado[model.__tablename__] = {
-                "inseridos": inseridos,
-                "atualizados": atualizados,
-                "total_local": len(rows),
-            }
+                    sync_log.status = "error"
+                    sync_log.mensagem_erro = "Parâmetro 'since' inválido"
+                    sync_log.finished_at = datetime.utcnow()
+                    db.session.commit()
+                    return (
+                        jsonify({"success": False, "message": "Parâmetro 'since' inválido"}),
+                        400,
+                    )
 
-        return jsonify({"success": True, "resultado": resultado}), 200
+            with remote_session.begin():
+                for model in models:
+                    query = db.session.query(model)
+                    if since_dt:
+                        ts_field = None
+                        if hasattr(model, "updated_at"):
+                            ts_field = getattr(model, "updated_at")
+                        elif hasattr(model, "created_at"):
+                            ts_field = getattr(model, "created_at")
+                        if ts_field is not None:
+                            query = query.filter(ts_field >= since_dt)
+                    rows = query.all()
+
+                    inseridos = 0
+                    atualizados = 0
+                    for r in rows:
+                        data = _clone_data(r)
+                        updated = _upsert(remote_session, model, data)
+                        if updated:
+                            atualizados += 1
+                        else:
+                            inseridos += 1
+
+                    resultado[model.__tablename__] = {
+                        "inseridos": inseridos,
+                        "atualizados": atualizados,
+                        "total_local": len(rows),
+                    }
+
+            sync_log.status = "success"
+            sync_log.resultado_json = json.dumps(resultado, ensure_ascii=False)
+            sync_log.finished_at = datetime.utcnow()
+            db.session.commit()
+
+            return jsonify({"success": True, "resultado": resultado, "sync_log_id": sync_log.id}), 200
+        except Exception as e:
+            remote_session.rollback()
+            sync_log.status = "error"
+            sync_log.mensagem_erro = str(e)[:2000]
+            sync_log.finished_at = datetime.utcnow()
+            db.session.commit()
+            raise
 
     except SQLAlchemyError as e:
         if 'remote_session' in locals():
@@ -107,6 +165,7 @@ def replicar_para_neon():
 
 
 @sync_bp.route("/api/sync/health", methods=["GET"])
+@gerente_ou_admin_required
 def sync_health():
     try:
         db_url = (
@@ -147,6 +206,7 @@ def sync_health():
 
 
 @sync_bp.route("/api/sync/db-info", methods=["GET"])
+@gerente_ou_admin_required
 def db_info():
     try:
         uri = current_app.config.get("SQLALCHEMY_DATABASE_URI") or ""

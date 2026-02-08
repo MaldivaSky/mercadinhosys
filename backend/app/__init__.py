@@ -257,26 +257,39 @@ def create_app(config_name=None):
 
             # Importa o orchestrator do dashboard científico
             from app.dashboard_cientifico.orchestration import DashboardOrchestrator
+            from app.decorators.decorator_jwt import gerente_ou_admin_required
+            from flask_jwt_extended import get_jwt
 
             @cientifico_bp.route("/dashboard/<int:estabelecimento_id>", methods=["GET"])
+            @gerente_ou_admin_required
             def get_dashboard_cientifico(estabelecimento_id):
                 try:
+                    claims = get_jwt()
+                    if int(claims.get("estabelecimento_id") or 0) != int(estabelecimento_id):
+                        return jsonify({"success": False, "error": "Acesso negado"}), 403
                     orchestrator = DashboardOrchestrator(estabelecimento_id)
-                    return jsonify(orchestrator.get_executive_dashboard(days=30))
+                    return jsonify(orchestrator.get_scientific_dashboard(days=30))
                 except Exception as e:
-                    return jsonify({"error": str(e)}), 500
+                    status = 503 if "Banco de dados indisponível" in str(e) else 500
+                    return jsonify({"success": False, "error": str(e)}), status
 
             @cientifico_bp.route(
                 "/analise/<int:estabelecimento_id>/<string:tipo>", methods=["GET"]
             )
+            @gerente_ou_admin_required
             def get_analise_detalhada(estabelecimento_id, tipo):
                 try:
+                    claims = get_jwt()
+                    if int(claims.get("estabelecimento_id") or 0) != int(estabelecimento_id):
+                        return jsonify({"success": False, "error": "Acesso negado"}), 403
                     orchestrator = DashboardOrchestrator(estabelecimento_id)
                     return jsonify(orchestrator.get_detailed_analysis(tipo, days=90))
                 except Exception as e:
-                    return jsonify({"error": str(e)}), 500
+                    status = 503 if "Banco de dados indisponível" in str(e) else 500
+                    return jsonify({"success": False, "error": str(e)}), status
 
             @cientifico_bp.route("/health", methods=["GET"])
+            @gerente_ou_admin_required
             def health_cientifico():
                 return jsonify(
                     {

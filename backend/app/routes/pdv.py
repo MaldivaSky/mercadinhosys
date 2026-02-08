@@ -1,11 +1,18 @@
 # app/routes/pdv.py
 """
-PDV - Ponto de Venda
+PDV - Ponto de Venda MISSION-CRITICAL
 Rotas otimizadas para operações em tempo real no PDV
 Separado de vendas.py para melhor performance e manutenibilidade
+
+OTIMIZAÇÕES IMPLEMENTADAS:
+- Custo Médio Ponderado (CMP) em tempo real
+- Validação de estoque com lock pessimista (with_for_update)
+- Inteligência RFM para sugestão de descontos
+- Auditoria completa de vendas
+- Alertas de produtos Classe A (alto giro)
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, request, jsonify, current_app
 from app import db
@@ -25,7 +32,111 @@ import string
 
 pdv_bp = Blueprint("pdv", __name__)
 
+
+# ==================== EXCEÇÕES PERSONALIZADAS ====================
+
+class InsuficientStockError(Exception):
+    """Exceção lançada quando não há estoque suficiente para a venda"""
+    pass
+
 # ==================== FUNÇÕES AUXILIARES ====================
+
+def calcular_rfm_cliente(cliente_id: int, estabelecimento_id: int) -> dict:
+    """
+    Calcula o segmento RFM de um cliente específico.
+    
+    Retorna dados RFM incluindo flag de sugestão de desconto para clientes em risco.
+    
+    Args:
+        cliente_id: ID do cliente
+        estabelecimento_id: ID do estabelecimento
+        
+    Returns:
+        dict: Dados RFM com segmento e flag sugerir_desconto
+    """
+    from datetime import datetime, timedelta
+    
+    # Buscar vendas do cliente nos últimos 180 dias
+    data_inicio = datetime.utcnow() - timedelta(days=180)
+    
+    vendas = Venda.query.filter(
+        Venda.estabelecimento_id == estabelecimento_id,
+        Venda.cliente_id == cliente_id,
+        Venda.data_venda >= data_inicio,
+        Venda.status == "finalizada"
+    ).all()
+    
+    if not vendas:
+        return {
+            "segmento": "Novo",
+            "sugerir_desconto": False,
+            "recency_days": None,
+            "frequency": 0,
+            "monetary": 0.0
+        }
+    
+    # Calcular métricas
+    now = datetime.utcnow()
+    ultima_compra = max(v.data_venda for v in vendas)
+    recency_days = (now - ultima_compra).days
+    frequency = len(vendas)
+    monetary = sum(float(v.total) for v in vendas)
+    
+    # Calcular scores simplificados (1-5)
+    # Recency: quanto menor o número de dias, melhor (score invertido)
+    if recency_days <= 30:
+        recency_score = 5
+    elif recency_days <= 60:
+        recency_score = 4
+    elif recency_days <= 90:
+        recency_score = 3
+    elif recency_days <= 120:
+        recency_score = 2
+    else:
+        recency_score = 1
+    
+    # Frequency: quanto mais compras, melhor
+    if frequency >= 10:
+        frequency_score = 5
+    elif frequency >= 7:
+        frequency_score = 4
+    elif frequency >= 5:
+        frequency_score = 3
+    elif frequency >= 3:
+        frequency_score = 2
+    else:
+        frequency_score = 1
+    
+    # Monetary: quanto maior o valor, melhor
+    if monetary >= 1000:
+        monetary_score = 5
+    elif monetary >= 500:
+        monetary_score = 4
+    elif monetary >= 250:
+        monetary_score = 3
+    elif monetary >= 100:
+        monetary_score = 2
+    else:
+        monetary_score = 1
+    
+    # Determinar segmento usando a lógica do modelo Cliente
+    segmento = Cliente.segmentar_rfm(recency_score, frequency_score, monetary_score)
+    
+    # Sugerir desconto para clientes em risco de abandono
+    sugerir_desconto = segmento in ["Risco", "Perdido"]
+    
+    return {
+        "segmento": segmento,
+        "sugerir_desconto": sugerir_desconto,
+        "recency_days": recency_days,
+        "recency_score": recency_score,
+        "frequency": frequency,
+        "frequency_score": frequency_score,
+        "monetary": round(monetary, 2),
+        "monetary_score": monetary_score,
+        "ultima_compra": ultima_compra.isoformat() if ultima_compra else None
+    }
+
 
 def to_decimal(value):
     """Converte qualquer valor numérico para Decimal de forma segura (2 casas decimais)"""
@@ -116,6 +227,8 @@ def calcular_totais_venda(itens, desconto_geral=0, desconto_percentual=False):
 def obter_configuracoes_pdv():
     """
     Retorna configurações do PDV para o funcionário logado
+    
+    OTIMIZAÇÃO: Inclui dados RFM do cliente se cliente_id for fornecido
     """
     try:
         current_user_id = get_jwt_identity()
@@ -133,26 +246,77 @@ def obter_configuracoes_pdv():
             {"tipo": "outros", "label": "Outros", "taxa": 0, "permite_troco": False},
         ]
         
+        configuracoes = {
+            "funcionario": {
+                "id": funcionario.id,
+                "nome": funcionario.nome,
+                "role": funcionario.role,
+                "pode_dar_desconto": funcionario.permissoes.get("pode_dar_desconto", False),
+                "limite_desconto": funcionario.permissoes.get("limite_desconto", 0),
+                "pode_cancelar_venda": funcionario.permissoes.get("pode_cancelar_venda", False),
+            },
+            "formas_pagamento": formas_pagamento,
+            "permite_venda_sem_cliente": True,
+            "exige_observacao_desconto": True,
+        }
+        
+        # OTIMIZAÇÃO: Incluir dados RFM se cliente_id for fornecido
+        cliente_id = request.args.get("cliente_id", type=int)
+        if cliente_id:
+            try:
+                rfm_data = calcular_rfm_cliente(cliente_id, funcionario.estabelecimento_id)
+                if rfm_data:
+                    configuracoes["rfm"] = rfm_data
+            except Exception as rfm_error:
+                current_app.logger.warning(f"Erro ao calcular RFM: {str(rfm_error)}")
+        
         return jsonify({
             "success": True,
-            "configuracoes": {
-                "funcionario": {
-                    "id": funcionario.id,
-                    "nome": funcionario.nome,
-                    "role": funcionario.role,
-                    "pode_dar_desconto": funcionario.permissoes.get("pode_dar_desconto", False),
-                    "limite_desconto": funcionario.permissoes.get("limite_desconto", 0),
-                    "pode_cancelar_venda": funcionario.permissoes.get("pode_cancelar_venda", False),
-                },
-                "formas_pagamento": formas_pagamento,
-                "permite_venda_sem_cliente": True,
-                "exige_observacao_desconto": True,
-            }
+            "configuracoes": configuracoes
         }), 200
         
     except Exception as e:
         current_app.logger.error(f"Erro ao obter configurações PDV: {str(e)}")
         return jsonify({"error": "Erro ao carregar configurações"}), 500
+
+
+@pdv_bp.route("/cliente/<int:cliente_id>/rfm", methods=["GET"])
+@funcionario_required
+def obter_rfm_cliente(cliente_id):
+    """
+    Retorna dados RFM de um cliente específico.
+    
+    OTIMIZAÇÃO: Inteligência RFM para sugestão de descontos no PDV.
+    Se o cliente estiver em "Risco" ou "Perdido", retorna flag sugerir_desconto=True.
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        funcionario = Funcionario.query.get(current_user_id)
+        
+        if not funcionario:
+            return jsonify({"error": "Funcionário não encontrado"}), 404
+        
+        # Verificar se cliente existe
+        cliente = Cliente.query.get(cliente_id)
+        if not cliente:
+            return jsonify({"error": "Cliente não encontrado"}), 404
+        
+        # Calcular RFM
+        rfm_data = calcular_rfm_cliente(cliente_id, funcionario.estabelecimento_id)
+        
+        return jsonify({
+            "success": True,
+            "cliente": {
+                "id": cliente.id,
+                "nome": cliente.nome,
+                "cpf": cliente.cpf
+            },
+            "rfm": rfm_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter RFM do cliente: {str(e)}")
+        return jsonify({"error": "Erro ao calcular RFM"}), 500
 
 
 @pdv_bp.route("/validar-produto", methods=["POST"])
@@ -161,6 +325,8 @@ def validar_produto():
     """
     Valida se produto está disponível e retorna informações completas
     Útil para busca por código de barras ou ID
+    
+    OTIMIZAÇÃO: Retorna alerta para produtos Classe A (alto giro)
     """
     try:
         data = request.get_json()
@@ -195,6 +361,13 @@ def validar_produto():
         categoria_nome = "Sem categoria"
         if produto.categoria:
             categoria_nome = produto.categoria.nome
+        
+        # OTIMIZAÇÃO: Verificar se é produto Classe A (alto giro)
+        alerta_alto_giro = False
+        mensagem_alerta = None
+        if produto.classificacao_abc == "A":
+            alerta_alto_giro = True
+            mensagem_alerta = "Produto de Alto Giro - Verificar se precisa de reposição na gôndola"
             
         return jsonify({
             "valido": True,
@@ -210,6 +383,9 @@ def validar_produto():
                 "unidade_medida": produto.unidade_medida or "UN",
                 "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0,
                 "ativo": produto.ativo,
+                "classificacao_abc": produto.classificacao_abc,
+                "alerta_alto_giro": alerta_alto_giro,
+                "mensagem_alerta": mensagem_alerta,
             }
         }), 200
         
@@ -395,22 +571,26 @@ def finalizar_venda():
                 # Converter quantidade do produto para int para comparação
                 estoque_disponivel = int(produto.quantidade) if produto.quantidade else 0
                 
+                # OTIMIZAÇÃO: Validação de estoque com exceção personalizada
                 if estoque_disponivel < quantidade:
-                    raise ValueError(
+                    raise InsuficientStockError(
                         f"Estoque insuficiente para '{produto.nome}'. "
                         f"Disponível: {estoque_disponivel}, Solicitado: {quantidade}"
                     )
                 
-                # Calcular valores
+                # OTIMIZAÇÃO: Usar CMP (Custo Médio Ponderado) em tempo real
                 preco_unitario = decimal_to_float(produto.preco_venda)
-                preco_custo = decimal_to_float(produto.preco_custo)
+                preco_custo_atual = decimal_to_float(produto.preco_custo)  # CMP já calculado no modelo
                 total_item = (preco_unitario * quantidade) - desconto_item
                 
-                # Calcular margem
+                # OTIMIZAÇÃO: Calcular margem de lucro REAL (preço venda - custo atual)
+                margem_lucro_real = (preco_unitario - preco_custo_atual) * quantidade
+                
+                # Calcular margem percentual
                 margem_item = 0.0
                 if preco_unitario > 0:
                     margem_item = round(
-                        ((preco_unitario - preco_custo) / preco_unitario * 100),
+                        ((preco_unitario - preco_custo_atual) / preco_unitario * 100),
                         2
                     )
                 
@@ -425,8 +605,9 @@ def finalizar_venda():
                     preco_unitario=preco_unitario,
                     desconto=desconto_item,
                     total_item=total_item,
-                    custo_unitario=preco_custo,
-                    margem_item=margem_item
+                    custo_unitario=preco_custo_atual,
+                    margem_item=margem_item,
+                    margem_lucro_real=margem_lucro_real  # NOVO CAMPO
                 )
                 
                 db.session.add(venda_item)
@@ -542,6 +723,11 @@ def finalizar_venda():
             db.session.rollback()
             current_app.logger.warning(f"⚠️ Validação falhou: {str(ve)}")
             return jsonify({"error": str(ve)}), 400
+        
+        except InsuficientStockError as ise:
+            db.session.rollback()
+            current_app.logger.warning(f"⚠️ Estoque insuficiente: {str(ise)}")
+            return jsonify({"error": str(ise), "tipo": "estoque_insuficiente"}), 400
             
         except Exception as e:
             db.session.rollback()

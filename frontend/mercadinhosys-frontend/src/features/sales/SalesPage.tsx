@@ -108,8 +108,8 @@ export default function SalesPage() {
         formas_pagamento: {},
     });
     const [filtros, setFiltros] = useState({
-        data_inicio: "",
-        data_fim: "",
+        data_inicio: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 dias atrás
+        data_fim: new Date().toISOString().split('T')[0], // Hoje
         search: "",
         status: "",
         forma_pagamento: "",
@@ -225,8 +225,8 @@ export default function SalesPage() {
 
     function limparFiltros() {
         setFiltros({
-            data_inicio: "",
-            data_fim: "",
+            data_inicio: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Manter 90 dias
+            data_fim: new Date().toISOString().split('T')[0], // Manter hoje
             search: "",
             status: "",
             forma_pagamento: "",
@@ -577,115 +577,346 @@ export default function SalesPage() {
                     </div>
                 ) : analisesData && (
                 <div className="space-y-6 mb-6">
-                    {/* Gráfico de Tendência */}
+                    {/* Dashboard de Tendência PROFISSIONAL */}
                     {analisesData.vendas_por_dia && analisesData.vendas_por_dia.length > 0 && (
-                        <div className="bg-white p-6 rounded-lg shadow-md border">
-                            <h3 className="text-lg font-semibold mb-4 text-gray-900 flex items-center gap-2">
-                                <span>📈</span> Tendência de Vendas
-                                <span className="text-sm font-normal text-gray-500">
-                                    ({analisesData.vendas_por_dia.length} {analisesData.vendas_por_dia.length === 1 ? 'dia' : 'dias'})
-                                </span>
-                            </h3>
-                            <div className="h-80">
-                                <Line
-                                    data={{
-                                        labels: analisesData.vendas_por_dia.map((v: any) => {
-                                            const date = new Date(v.data);
-                                            return analisesData.vendas_por_dia.length === 1 
-                                                ? 'Hoje'
-                                                : `${date.getDate()}/${date.getMonth() + 1}`;
-                                        }),
-                                        datasets: [
-                                            {
-                                                label: "Vendas (R$)",
-                                                data: analisesData.vendas_por_dia.map((v: any) => v.total),
-                                                borderColor: "#3B82F6", // Blue-500
-                                                backgroundColor: (context) => {
-                                                    const ctx = context.chart.ctx;
-                                                    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-                                                    gradient.addColorStop(0, "rgba(59, 130, 246, 0.5)");
-                                                    gradient.addColorStop(1, "rgba(59, 130, 246, 0.0)");
-                                                    return gradient;
+                        <div className="space-y-6">
+                            {/* Cards de Comparação Rápida */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                {/* Hoje vs Ontem */}
+                                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium opacity-90">Hoje vs Ontem</span>
+                                        {(() => {
+                                            const hoje = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0;
+                                            const ontem = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0;
+                                            const diff = ontem > 0 ? ((hoje - ontem) / ontem * 100) : 0;
+                                            return diff >= 0 ? (
+                                                <span className="text-green-300 text-xs flex items-center gap-1">
+                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                    +{diff.toFixed(1)}%
+                                                </span>
+                                            ) : (
+                                                <span className="text-red-300 text-xs flex items-center gap-1">
+                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                    {diff.toFixed(1)}%
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
+                                    <div className="text-3xl font-bold">
+                                        {formatCurrency(analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0)}
+                                    </div>
+                                    <div className="text-xs opacity-75 mt-1">
+                                        Ontem: {formatCurrency(analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0)}
+                                    </div>
+                                </div>
+
+                                {/* Esta Semana vs Semana Passada */}
+                                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium opacity-90">Esta Semana</span>
+                                        {(() => {
+                                            const ultimos7 = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0);
+                                            const anteriores7 = analisesData.vendas_por_dia.slice(-14, -7).reduce((sum: number, v: any) => sum + v.total, 0);
+                                            const diff = anteriores7 > 0 ? ((ultimos7 - anteriores7) / anteriores7 * 100) : 0;
+                                            return diff >= 0 ? (
+                                                <span className="text-green-200 text-xs">+{diff.toFixed(1)}%</span>
+                                            ) : (
+                                                <span className="text-red-200 text-xs">{diff.toFixed(1)}%</span>
+                                            );
+                                        })()}
+                                    </div>
+                                    <div className="text-3xl font-bold">
+                                        {formatCurrency(analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0))}
+                                    </div>
+                                    <div className="text-xs opacity-75 mt-1">
+                                        Últimos 7 dias
+                                    </div>
+                                </div>
+
+                                {/* Previsão Próxima Semana */}
+                                {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
+                                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium opacity-90">Previsão 7 Dias</span>
+                                            <span className="text-xs bg-white/20 px-2 py-1 rounded">IA</span>
+                                        </div>
+                                        <div className="text-3xl font-bold">
+                                            {formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0))}
+                                        </div>
+                                        <div className="text-xs opacity-75 mt-1">
+                                            Média: {formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0) / 7)}/dia
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Melhor Dia */}
+                                <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium opacity-90">Melhor Dia</span>
+                                        <span className="text-2xl">🏆</span>
+                                    </div>
+                                    <div className="text-3xl font-bold">
+                                        {formatCurrency(Math.max(...analisesData.vendas_por_dia.map((v: any) => v.total)))}
+                                    </div>
+                                    <div className="text-xs opacity-75 mt-1">
+                                        {(() => {
+                                            const melhorDia = analisesData.vendas_por_dia.reduce((max: any, v: any) => v.total > max.total ? v : max);
+                                            const data = new Date(melhorDia.data);
+                                            const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                            return `${diasSemana[data.getDay()]}, ${data.getDate()}/${data.getMonth() + 1}`;
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Gráfico com Previsão */}
+                            <div className="bg-white p-6 rounded-lg shadow-md border">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                            <span>📈</span> Histórico e Previsão de Vendas
+                                        </h3>
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            {analisesData.vendas_por_dia.length} dias de histórico
+                                            {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && 
+                                                ` + ${analisesData.previsao_vendas.length} dias de previsão`
+                                            }
+                                        </p>
+                                    </div>
+                                    {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
+                                        <div className="flex items-center gap-4 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                                                <span className="text-gray-600">Real</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 bg-green-500 rounded border-2 border-dashed border-green-600"></div>
+                                                <span className="text-gray-600">Previsão</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {analisesData.vendas_por_dia.length < 7 && (
+                                    <div className="mb-4 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                        <p className="text-sm text-orange-700">
+                                            ⚠️ <strong>Atenção:</strong> Previsão requer pelo menos 7 dias de dados. Ajuste os filtros de data.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="h-96">
+                                    <Line
+                                        data={{
+                                            labels: [
+                                                ...analisesData.vendas_por_dia.map((v: any) => {
+                                                    const date = new Date(v.data);
+                                                    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                                    return `${diasSemana[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+                                                }),
+                                                ...(analisesData.previsao_vendas || []).map((v: any) => {
+                                                    const date = new Date(v.data);
+                                                    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                                    return `${diasSemana[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+                                                })
+                                            ],
+                                            datasets: [
+                                                {
+                                                    label: "Vendas Reais",
+                                                    data: [
+                                                        ...analisesData.vendas_por_dia.map((v: any) => v.total),
+                                                        ...Array((analisesData.previsao_vendas || []).length).fill(null)
+                                                    ],
+                                                    borderColor: "#3B82F6",
+                                                    backgroundColor: (context) => {
+                                                        const ctx = context.chart.ctx;
+                                                        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                                                        gradient.addColorStop(0, "rgba(59, 130, 246, 0.3)");
+                                                        gradient.addColorStop(1, "rgba(59, 130, 246, 0.0)");
+                                                        return gradient;
+                                                    },
+                                                    fill: true,
+                                                    tension: 0.4,
+                                                    pointRadius: 5,
+                                                    pointHoverRadius: 8,
+                                                    pointBackgroundColor: "#3B82F6",
+                                                    pointBorderColor: "#fff",
+                                                    pointBorderWidth: 2,
+                                                    borderWidth: 3,
                                                 },
-                                                fill: true,
-                                                tension: 0.4,
-                                                pointRadius: 4,
-                                                pointHoverRadius: 6,
-                                                pointBackgroundColor: "#3B82F6",
-                                                pointBorderColor: "#fff",
-                                                pointBorderWidth: 2,
-                                                borderWidth: 3,
+                                                ...(analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 ? [{
+                                                    label: "Previsão IA",
+                                                    data: [
+                                                        ...Array(analisesData.vendas_por_dia.length - 1).fill(null),
+                                                        analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1].total,
+                                                        ...(analisesData.previsao_vendas || []).map((v: any) => v.total)
+                                                    ],
+                                                    borderColor: "#10B981",
+                                                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                                    fill: false,
+                                                    tension: 0.4,
+                                                    pointRadius: 5,
+                                                    pointHoverRadius: 8,
+                                                    pointBackgroundColor: "#10B981",
+                                                    pointBorderColor: "#fff",
+                                                    pointBorderWidth: 2,
+                                                    borderWidth: 3,
+                                                    borderDash: [8, 4],
+                                                }] : []),
+                                            ],
+                                        }}
+                                        options={{
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            interaction: {
+                                                mode: 'index',
+                                                intersect: false,
                                             },
-                                        ],
-                                    }}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        interaction: {
-                                            mode: 'index',
-                                            intersect: false,
-                                        },
-                                        plugins: {
-                                            legend: { display: false },
-                                            tooltip: {
-                                                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                titleColor: '#1F2937',
-                                                bodyColor: '#4B5563',
-                                                borderColor: '#E5E7EB',
-                                                borderWidth: 1,
-                                                padding: 10,
-                                                displayColors: false,
-                                                callbacks: {
-                                                    label: (context) => `Vendas: ${formatCurrency(context.parsed.y || 0)}`,
-                                                    afterLabel: (context) => {
-                                                        const item = analisesData.vendas_por_dia[context.dataIndex];
-                                                        return `Quantidade: ${item.quantidade} vendas`;
+                                            plugins: {
+                                                legend: { 
+                                                    display: false
+                                                },
+                                                tooltip: {
+                                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                                    titleColor: '#1F2937',
+                                                    bodyColor: '#4B5563',
+                                                    borderColor: '#E5E7EB',
+                                                    borderWidth: 2,
+                                                    padding: 12,
+                                                    displayColors: true,
+                                                    titleFont: {
+                                                        size: 14,
+                                                        weight: 'bold'
+                                                    },
+                                                    bodyFont: {
+                                                        size: 13
+                                                    },
+                                                    callbacks: {
+                                                        title: (context) => {
+                                                            return context[0].label;
+                                                        },
+                                                        label: (context) => {
+                                                            const label = context.dataset.label || '';
+                                                            const value = context.parsed.y;
+                                                            return `${label}: ${formatCurrency(value || 0)}`;
+                                                        },
+                                                        afterBody: (context) => {
+                                                            const idx = context[0].dataIndex;
+                                                            if (idx < analisesData.vendas_por_dia.length) {
+                                                                const venda = analisesData.vendas_por_dia[idx];
+                                                                return [
+                                                                    '',
+                                                                    `Quantidade: ${venda.quantidade} vendas`,
+                                                                    `Ticket Médio: ${formatCurrency(venda.total / venda.quantidade)}`
+                                                                ];
+                                                            }
+                                                            return [];
+                                                        }
+                                                    },
+                                                },
+                                            },
+                                            scales: {
+                                                y: {
+                                                    beginAtZero: true,
+                                                    grid: {
+                                                        color: '#F3F4F6',
+                                                    },
+                                                    ticks: {
+                                                        callback: (value) => formatCurrency(Number(value) || 0),
+                                                        font: {
+                                                            size: 12,
+                                                            weight: '500'
+                                                        },
+                                                        color: '#6B7280'
+                                                    },
+                                                    border: {
+                                                        display: false
                                                     }
                                                 },
-                                            },
-                                        },
-                                        scales: {
-                                            y: {
-                                                beginAtZero: true,
-                                                grid: {
-                                                    color: '#F3F4F6',
-                                                },
-                                                ticks: {
-                                                    callback: (value) => formatCurrency(Number(value) || 0),
-                                                    font: {
-                                                        family: "'Inter', sans-serif",
-                                                        size: 11
+                                                x: {
+                                                    grid: {
+                                                        display: false
                                                     },
-                                                    color: '#6B7280'
-                                                },
-                                                border: {
-                                                    display: false
+                                                    ticks: {
+                                                        font: {
+                                                            size: 11,
+                                                            weight: '500'
+                                                        },
+                                                        color: '#6B7280',
+                                                        maxRotation: 45,
+                                                        minRotation: 45
+                                                    },
+                                                    border: {
+                                                        display: false
+                                                    }
                                                 }
                                             },
-                                            x: {
-                                                grid: {
-                                                    display: false
-                                                },
-                                                ticks: {
-                                                    font: {
-                                                        family: "'Inter', sans-serif",
-                                                        size: 11
-                                                    },
-                                                    color: '#6B7280'
-                                                },
-                                                border: {
-                                                    display: false
-                                                }
-                                            }
-                                        },
-                                    }}
-                                />
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Insights Automáticos */}
+                                {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
+                                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-2xl">💰</span>
+                                                <span className="font-semibold text-blue-900">Faturamento Previsto</span>
+                                            </div>
+                                            <p className="text-sm text-blue-700">
+                                                Próximos 7 dias: <strong>{formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0))}</strong>
+                                            </p>
+                                        </div>
+
+                                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-2xl">📦</span>
+                                                <span className="font-semibold text-green-900">Recomendação</span>
+                                            </div>
+                                            <p className="text-sm text-green-700">
+                                                {(() => {
+                                                    const mediaAtual = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                    const mediaPrevisao = analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                    const diff = ((mediaPrevisao - mediaAtual) / mediaAtual * 100);
+                                                    
+                                                    if (diff > 10) {
+                                                        return "Vendas em alta! Considere aumentar estoque.";
+                                                    } else if (diff < -10) {
+                                                        return "Vendas em queda. Planeje promoções.";
+                                                    } else {
+                                                        return "Vendas estáveis. Mantenha o ritmo.";
+                                                    }
+                                                })()}
+                                            </p>
+                                        </div>
+
+                                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-2xl">📊</span>
+                                                <span className="font-semibold text-purple-900">Tendência</span>
+                                            </div>
+                                            <p className="text-sm text-purple-700">
+                                                {(() => {
+                                                    const primeira = analisesData.vendas_por_dia.slice(0, 7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                    const ultima = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                    const crescimento = ((ultima - primeira) / primeira * 100);
+                                                    
+                                                    if (crescimento > 0) {
+                                                        return `Crescimento de ${crescimento.toFixed(1)}% no período`;
+                                                    } else {
+                                                        return `Queda de ${Math.abs(crescimento).toFixed(1)}% no período`;
+                                                    }
+                                                })()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            {analisesData.vendas_por_dia.length === 1 && (
-                                <p className="text-sm text-gray-500 mt-3 text-center">
-                                    💡 Dica: Aplique filtros de data para ver a tendência ao longo do tempo
-                                </p>
-                            )}
                         </div>
                     )}
 
