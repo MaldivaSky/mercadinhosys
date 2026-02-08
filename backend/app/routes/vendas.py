@@ -299,8 +299,9 @@ def listar_vendas():
                     "valor_recebido": float(v.valor_recebido),
                     "troco": float(v.troco),
                     "status": v.status,
-                    "data": v.created_at.isoformat(),
-                    "data_formatada": v.created_at.strftime("%d/%m/%Y %H:%M"),
+                    "data_venda": v.data_venda.isoformat() if v.data_venda else v.created_at.isoformat(),
+                    "data": v.data_venda.isoformat() if v.data_venda else v.created_at.isoformat(),
+                    "data_formatada": (v.data_venda if v.data_venda else v.created_at).strftime("%d/%m/%Y %H:%M"),
                     "quantidade_itens": len(v.itens),
                     "observacoes": v.observacoes or "",
                     "detalhes_url": f"/api/vendas/{v.id}",
@@ -364,20 +365,20 @@ def estatisticas_vendas():
         # Iniciar query
         query = Venda.query.filter(Venda.status == "finalizada")
 
-        # Aplicar filtros
+        # Aplicar filtros de data usando data_venda
         if data_inicio:
             try:
-                data_inicio_dt = datetime.fromisoformat(
-                    data_inicio.replace("Z", "+00:00")
-                )
-                query = query.filter(Venda.created_at >= data_inicio_dt)
+                # Converter string para date
+                data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+                query = query.filter(func.date(Venda.data_venda) >= data_inicio_dt)
             except ValueError:
                 pass
 
         if data_fim:
             try:
-                data_fim_dt = datetime.fromisoformat(data_fim.replace("Z", "+00:00"))
-                query = query.filter(Venda.created_at <= data_fim_dt)
+                # Converter string para date
+                data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d').date()
+                query = query.filter(func.date(Venda.data_venda) <= data_fim_dt)
             except ValueError:
                 pass
 
@@ -401,19 +402,86 @@ def estatisticas_vendas():
 
         ticket_medio = total_valor / total_vendas if total_vendas > 0 else 0
 
-        # Vendas por dia (últimos 30 dias)
-        data_limite = datetime.now() - timedelta(days=30)
+        # Vendas por dia - USAR OS FILTROS DO USUÁRIO, NÃO FIXAR 30 DIAS
+        vendas_query = Venda.query.filter(Venda.status == "finalizada")
+        
+        if data_inicio:
+            try:
+                data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+                vendas_query = vendas_query.filter(func.date(Venda.data_venda) >= data_inicio_dt)
+            except ValueError:
+                pass
+        
+        if data_fim:
+            try:
+                data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d').date()
+                vendas_query = vendas_query.filter(func.date(Venda.data_venda) <= data_fim_dt)
+            except ValueError:
+                pass
+        
         vendas_por_dia = (
             db.session.query(
-                func.date(Venda.created_at).label("data"),
+                func.date(Venda.data_venda).label("data"),
                 func.count(Venda.id).label("quantidade"),
                 func.sum(Venda.total).label("total"),
             )
-            .filter(Venda.created_at >= data_limite, Venda.status == "finalizada")
-            .group_by(func.date(Venda.created_at))
-            .order_by(func.date(Venda.created_at).desc())
+            .filter(Venda.id.in_([v.id for v in vendas_query.all()]))
+            .group_by(func.date(Venda.data_venda))
+            .order_by(func.date(Venda.data_venda).asc())
             .all()
         )
+        
+        # ==================== PREVISÃO DE VENDAS (7 DIAS) ====================
+        # Calcular tendência usando regressão linear simples
+        previsao_vendas = []
+        if len(vendas_por_dia) >= 7:  # Precisa de pelo menos 7 dias de dados
+            # Preparar dados para regressão
+            valores_y = [float(vpd.total) if vpd.total else 0 for vpd in vendas_por_dia]
+            n = len(valores_y)
+            valores_x = list(range(n))
+            
+            # Calcular médias
+            media_x = sum(valores_x) / n
+            media_y = sum(valores_y) / n
+            
+            # Calcular coeficientes da regressão linear (y = a + bx)
+            numerador = sum((valores_x[i] - media_x) * (valores_y[i] - media_y) for i in range(n))
+            denominador = sum((valores_x[i] - media_x) ** 2 for i in range(n))
+            
+            if denominador != 0:
+                b = numerador / denominador  # Inclinação
+                a = media_y - b * media_x     # Intercepto
+                
+                # Gerar previsões para os próximos 7 dias
+                ultima_data = vendas_por_dia[-1].data
+                if isinstance(ultima_data, str):
+                    ultima_data = datetime.strptime(ultima_data, '%Y-%m-%d').date()
+                
+                for i in range(1, 8):  # Próximos 7 dias
+                    proxima_data = ultima_data + timedelta(days=i)
+                    x_futuro = n + i - 1
+                    valor_previsto = max(0, a + b * x_futuro)  # Não permitir valores negativos
+                    
+                    previsao_vendas.append({
+                        "data": proxima_data.isoformat(),
+                        "total": round(valor_previsto, 2),
+                        "tipo": "previsao"
+                    })
+        
+        # Adicionar flag de tipo aos dados históricos
+        vendas_historicas = [
+            {
+                "data": (
+                    vpd.data.isoformat()
+                    if hasattr(vpd.data, "isoformat")
+                    else str(vpd.data)
+                ),
+                "quantidade": vpd.quantidade,
+                "total": float(vpd.total) if vpd.total else 0,
+                "tipo": "historico"
+            }
+            for vpd in vendas_por_dia
+        ]
 
         # Formas de pagamento mais utilizadas
         formas_pagamento = (
@@ -518,18 +586,8 @@ def estatisticas_vendas():
                             "data_fim": data_fim,
                         },
                     },
-                    "vendas_por_dia": [
-                        {
-                            "data": (
-                                vpd.data.isoformat()
-                                if hasattr(vpd.data, "isoformat")
-                                else str(vpd.data)
-                            ),
-                            "quantidade": vpd.quantidade,
-                            "total": float(vpd.total) if vpd.total else 0,
-                        }
-                        for vpd in vendas_por_dia
-                    ],
+                    "vendas_por_dia": vendas_historicas,
+                    "previsao_vendas": previsao_vendas,
                     "formas_pagamento": [
                         {
                             "forma": fp.forma_pagamento,

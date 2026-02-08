@@ -22,6 +22,7 @@ type InputFieldProps = {
     value: string | number;
     onChange: React.ChangeEventHandler<HTMLInputElement>;
     type?: string;
+    step?: string | number;
     placeholder?: string;
     disabled?: boolean;
     onBlur?: React.FocusEventHandler<HTMLInputElement>;
@@ -41,11 +42,12 @@ const SectionTitle = ({ title, icon: Icon }: SectionTitleProps) => (
     </div>
 );
 
-const InputField = ({ label, value, onChange, type = "text", placeholder = "", disabled = false, onBlur }: InputFieldProps) => (
+const InputField = ({ label, value, onChange, type = "text", step, placeholder = "", disabled = false, onBlur }: InputFieldProps) => (
     <div className="flex flex-col space-y-1">
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
         <input 
             type={type} 
+            step={step}
             value={value} 
             onChange={onChange} 
             onBlur={onBlur}
@@ -564,14 +566,14 @@ const SettingsPage: React.FC = () => {
                                 <SwitchField 
                                     label="Exigir Foto no Ponto" 
                                     description="Obrigatório tirar foto no registro de entrada/saída"
-                                    checked={config.exigir_foto_ponto}
+                                    checked={config.exigir_foto_ponto ?? false}
                                     onChange={(val: boolean) => setConfig({...config, exigir_foto_ponto: val})}
                                 />
                                 
                                 <SwitchField 
                                     label="Exigir Localização no Ponto" 
                                     description="Validar localização do funcionário via GPS"
-                                    checked={config.exigir_localizacao_ponto}
+                                    checked={config.exigir_localizacao_ponto ?? false}
                                     onChange={(val: boolean) => setConfig({...config, exigir_localizacao_ponto: val})}
                                 />
                                 

@@ -13,7 +13,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('access_token');
-        if (token) {
+        if (token && token !== 'undefined' && token !== 'null') {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -66,6 +66,26 @@ apiClient.interceptors.response.use(
                     window.location.href = '/login';
                     return Promise.reject(refreshError);
                 }
+            }
+        }
+
+        if (error.response?.status === 422) {
+            const msg =
+                typeof error.response.data === 'object' &&
+                error.response.data !== null &&
+                'msg' in error.response.data
+                    ? String((error.response.data as { msg?: unknown }).msg || '')
+                    : '';
+            const looksLikeJwt =
+                msg.toLowerCase().includes('token') ||
+                msg.toLowerCase().includes('jwt') ||
+                msg.toLowerCase().includes('segments') ||
+                msg.toLowerCase().includes('authorization');
+            const token = localStorage.getItem('access_token');
+            if (looksLikeJwt || token === 'undefined' || token === 'null') {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                window.location.href = '/login';
             }
         }
         return Promise.reject(error);

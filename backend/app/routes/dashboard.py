@@ -7,7 +7,6 @@ from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.dashboard_cientifico import DashboardOrchestrator
 from app.models import Funcionario
 from app.decorators.decorator_jwt import gerente_ou_admin_required
-from app import cache
 import logging
 from datetime import datetime
 
@@ -45,7 +44,6 @@ def get_establishment_id():
 
 @dashboard_bp.route("/cientifico", methods=["GET"])
 @gerente_ou_admin_required
-@cache.cached(timeout=900, key_prefix=make_dashboard_cache_key)
 def dashboard_cientifico():
     """
     Endpoint para o Dashboard Científico.
@@ -69,7 +67,7 @@ def dashboard_cientifico():
             "metadata": {
                 "timestamp": datetime.utcnow().isoformat(),
                 "version": "2.0",
-                "cached": True # Flag para indicar que esta rota usa cache
+                "cache_strategy": "smartcache"
             },
             "data": data
         }), 200
@@ -85,6 +83,9 @@ def dashboard_cientifico():
         # Se for erro de conexão ou infra, mantém 500.
         # Se fosse erro de negócio conhecido, poderia ser 400/422.
         
+        if "Banco de dados indisponível" in str(e):
+            status_code = 503
+
         return jsonify({
             "success": False,
             "error": "Erro interno ao processar indicadores",

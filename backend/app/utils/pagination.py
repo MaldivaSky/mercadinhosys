@@ -77,6 +77,11 @@ def paginate(query, schema=None):
     return paginator.paginate()
 
 
+def paginate_query(query, schema=None):
+    paginator = Pagination(query, schema)
+    return paginator.paginate()
+
+
 def get_pagination_params():
     """Retorna os parâmetros de paginação da requisição atual"""
     page = request.args.get("page", 1, type=int)
