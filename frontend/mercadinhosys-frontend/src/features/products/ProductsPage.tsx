@@ -18,7 +18,13 @@ import {
     FileText,
     DollarSign,
     ShoppingCart,
-    Archive
+    Archive,
+    Calculator,
+    History,
+    Zap,
+    Clock,
+    Percent,
+    Check
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
@@ -27,6 +33,7 @@ import { apiClient } from '../../api/apiClient';
 import { Toaster, toast } from 'react-hot-toast';
 import ProductModal from './ProductModal';
 import { useConfig } from '../../contexts/ConfigContext';
+import ProductAnalyticsDashboard from './components/ProductAnalyticsDashboard';
 
 interface ProductFormData {
     nome: string;
@@ -52,6 +59,7 @@ interface ProductFormData {
 const ProductsPage: React.FC = () => {
     // Estados principais
     const [produtos, setProdutos] = useState<Produto[]>([]);
+    const [todosProdutos, setTodosProdutos] = useState<Produto[]>([]); // Para o dashboard
     const [loading, setLoading] = useState(true);
     const [categorias, setCategorias] = useState<string[]>([]);
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -99,6 +107,20 @@ const ProductsPage: React.FC = () => {
     const [alerts, setAlerts] = useState<any[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
     const [editMode, setEditMode] = useState(false);
+
+    // NOVOS MODAIS PROFISSIONAIS
+    const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
+    const [showPriceHistory, setShowPriceHistory] = useState(false);
+    const [priceHistory, setPriceHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    
+    // Calculadora de Markup
+    const [markupCalc, setMarkupCalc] = useState({
+        preco_custo: 0,
+        markup: 30,
+        preco_venda: 0,
+        modo: 'markup' as 'markup' | 'preco_venda'
+    });
 
     // Form data
     const [formData, setFormData] = useState<ProductFormData>({
@@ -235,6 +257,52 @@ const ProductsPage: React.FC = () => {
         setFormData(prev => ({ ...prev, data_validade: value }));
     }, []);
 
+    // ==================== CALCULADORA DE MARKUP ====================
+    const calcularMarkup = useCallback(() => {
+        if (markupCalc.modo === 'markup') {
+            // Calcular preço de venda baseado no markup
+            const precoVenda = markupCalc.preco_custo * (1 + markupCalc.markup / 100);
+            setMarkupCalc(prev => ({ ...prev, preco_venda: parseFloat(precoVenda.toFixed(2)) }));
+        } else {
+            // Calcular markup baseado no preço de venda
+            if (markupCalc.preco_custo > 0) {
+                const markup = ((markupCalc.preco_venda - markupCalc.preco_custo) / markupCalc.preco_custo) * 100;
+                setMarkupCalc(prev => ({ ...prev, markup: parseFloat(markup.toFixed(2)) }));
+            }
+        }
+    }, [markupCalc]);
+
+    const aplicarMarkupAoProduto = useCallback(() => {
+        setFormData(prev => ({
+            ...prev,
+            preco_custo: markupCalc.preco_custo,
+            preco_venda: markupCalc.preco_venda,
+            margem_lucro: markupCalc.markup
+        }));
+        setShowMarkupCalculator(false);
+        toast.success('Valores aplicados ao formulário!');
+    }, [markupCalc]);
+
+    // ==================== HISTÓRICO DE PREÇOS ====================
+    const loadPriceHistory = useCallback(async (produtoId: number) => {
+        try {
+            setLoadingHistory(true);
+            const response = await apiClient.get(`/produtos/${produtoId}/historico-precos`);
+            setPriceHistory(response.data.historico || []);
+        } catch (error) {
+            console.error('Erro ao carregar histórico:', error);
+            toast.error('Erro ao carregar histórico de preços');
+        } finally {
+            setLoadingHistory(false);
+        }
+    }, []);
+
+    const openPriceHistory = useCallback((produto: Produto) => {
+        setSelectedProduct(produto);
+        setShowPriceHistory(true);
+        loadPriceHistory(produto.id);
+    }, [loadPriceHistory]);
+
     // Ajuste de estoque
     const [stockAdjust, setStockAdjust] = useState({
         quantidade: 0,
@@ -261,6 +329,7 @@ const ProductsPage: React.FC = () => {
             setTotalItems(response.paginacao.total_itens);
 
             if (response.estatisticas) {
+                // Calcular valor total e margem média APENAS dos produtos da página atual
                 const valorTotal = response.produtos.reduce(
                     (sum, p) => sum + p.preco_custo * p.quantidade,
                     0
@@ -283,6 +352,16 @@ const ProductsPage: React.FC = () => {
             setLoading(false);
         }
     }, [page, filtros]);
+
+    // Carregar TODOS os produtos para o dashboard (sem paginação)
+    const loadTodosProdutos = useCallback(async () => {
+        try {
+            const response = await productsService.getAllEstoque(1, 10000, { ativos: true });
+            setTodosProdutos(response.produtos);
+        } catch (error) {
+            console.error('Erro ao carregar todos os produtos:', error);
+        }
+    }, []);
 
     // Debounce para busca
     useEffect(() => {
@@ -323,6 +402,7 @@ const ProductsPage: React.FC = () => {
         loadProdutos();
         loadCategorias();
         loadFornecedores();
+        loadTodosProdutos(); // Carregar todos os produtos para o dashboard
         (async () => {
             try {
                 const alertas = await productsService.getAlertas();
@@ -330,7 +410,7 @@ const ProductsPage: React.FC = () => {
                 if (alertas && alertas.length > 0) setShowAlertsModal(true);
             } catch (e) {}
         })();
-    }, [loadProdutos, loadCategorias, loadFornecedores]);
+    }, [loadProdutos, loadCategorias, loadFornecedores, loadTodosProdutos]);
 
     const diasAlertaValidade: number = useMemo(() => {
         return config?.dias_alerta_validade ?? 30;
@@ -339,23 +419,31 @@ const ProductsPage: React.FC = () => {
     const calcularDiasRestantes = useCallback((dateStr?: string): number | null => {
         if (!dateStr) return null;
         const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0); // Zerar horas para comparação correta
         const validade = new Date(dateStr);
+        validade.setHours(0, 0, 0, 0);
         const diffMs = validade.getTime() - hoje.getTime();
-        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         return diffDias;
     }, []);
 
     const produtosProximosValidade = useMemo(() => {
         if (!config?.controlar_validade) return [];
-        const items = produtos
+        const items = todosProdutos // Usar todos os produtos
+            .filter(p => p.quantidade > 0) // IGNORAR produtos esgotados ou com estoque negativo
             .map((p) => ({
                 produto: p,
                 diasRestantes: calcularDiasRestantes(p.data_validade),
             }))
-            .filter((i) => i.diasRestantes !== null && (i.diasRestantes as number) <= diasAlertaValidade)
+            .filter((i) => {
+                // Apenas produtos com validade FUTURA dentro do limite
+                return i.diasRestantes !== null && 
+                       i.diasRestantes >= 0 && 
+                       i.diasRestantes <= diasAlertaValidade;
+            })
             .sort((a, b) => (a.diasRestantes as number) - (b.diasRestantes as number));
         return items.slice(0, 10);
-    }, [produtos, diasAlertaValidade, calcularDiasRestantes, config]);
+    }, [todosProdutos, diasAlertaValidade, calcularDiasRestantes, config]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -542,93 +630,13 @@ const ProductsPage: React.FC = () => {
     }, []);
 
     // Memoizar dashboard de stats para não re-renderizar
-    const statsCards = useMemo(() => (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {/* Total de Produtos */}
-            <div 
-                onClick={() => handleCardClick('all')}
-                className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <Package className="w-8 h-8 opacity-80" />
-                    <TrendingUp className="w-5 h-5" />
-                </div>
-                <p className="text-sm opacity-90 mb-1">Total Produtos</p>
-                <p className="text-3xl font-bold">{stats.total_produtos}</p>
-                <p className="text-xs opacity-75 mt-2">Clique para ver todos</p>
-            </div>
-
-            {/* Produtos Normais */}
-            <div 
-                onClick={() => handleCardClick('normal')}
-                className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <ShoppingCart className="w-8 h-8 opacity-80" />
-                    <BarChart3 className="w-5 h-5" />
-                </div>
-                <p className="text-sm opacity-90 mb-1">Estoque Normal</p>
-                <p className="text-3xl font-bold">{stats.produtos_normal}</p>
-                <p className="text-xs opacity-75 mt-2">Clique para filtrar</p>
-            </div>
-
-            {/* Baixo Estoque */}
-            <div 
-                onClick={() => handleCardClick('baixo')}
-                className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <AlertTriangle className="w-8 h-8 opacity-80" />
-                    <TrendingDown className="w-5 h-5" />
-                </div>
-                <p className="text-sm opacity-90 mb-1">Baixo Estoque</p>
-                <p className="text-3xl font-bold">{stats.produtos_baixo_estoque}</p>
-                <p className="text-xs opacity-75 mt-2">⚠️ Clique para repor</p>
-            </div>
-
-            {/* Esgotados */}
-            <div 
-                onClick={() => handleCardClick('esgotado')}
-                className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 animate-pulse"
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <Archive className="w-8 h-8 opacity-80" />
-                    <X className="w-5 h-5" />
-                </div>
-                <p className="text-sm opacity-90 mb-1">Esgotados</p>
-                <p className="text-3xl font-bold">{stats.produtos_esgotados}</p>
-                <p className="text-xs opacity-75 mt-2">🚨 URGENTE - Clique aqui</p>
-            </div>
-
-            {/* Valor Total */}
-            <div 
-                onClick={() => handleCardClick('valor')}
-                className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <DollarSign className="w-8 h-8 opacity-80" />
-                    <TrendingUp className="w-5 h-5" />
-                </div>
-                <p className="text-sm opacity-90 mb-1">Valor Estoque</p>
-                <p className="text-2xl font-bold">{formatCurrency(stats.valor_total_estoque)}</p>
-                <p className="text-xs opacity-75 mt-2">Clique para ordenar</p>
-            </div>
-
-            {/* Margem Média */}
-            <div 
-                onClick={() => handleCardClick('margem')}
-                className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <FileText className="w-8 h-8 opacity-80" />
-                    <BarChart3 className="w-5 h-5" />
-                </div>
-                <p className="text-sm opacity-90 mb-1">Margem Média</p>
-                <p className="text-3xl font-bold">{stats.margem_media.toFixed(1)}%</p>
-                <p className="text-xs opacity-75 mt-2">Clique para ordenar</p>
-            </div>
-        </div>
-    ), [stats, handleCardClick]);
+    const analyticsDashboard = useMemo(() => (
+        <ProductAnalyticsDashboard 
+            produtos={todosProdutos} // Usar TODOS os produtos, não apenas da página
+            stats={stats}
+            onCardClick={handleCardClick}
+        />
+    ), [todosProdutos, stats, handleCardClick]);
 
     return (
         <div className="space-y-6 p-6">
@@ -645,8 +653,16 @@ const ProductsPage: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                     <button
+                        onClick={() => setShowMarkupCalculator(true)}
+                        className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2 transition-colors shadow-lg hover:shadow-xl"
+                        title="Calculadora de Markup"
+                    >
+                        <Calculator className="w-5 h-5" />
+                        <span>Markup</span>
+                    </button>
+                    <button
                         onClick={handleExportCSV}
-                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors"
+                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors shadow-lg hover:shadow-xl"
                     >
                         <Download className="w-5 h-5" />
                         <span>Exportar CSV</span>
@@ -656,7 +672,7 @@ const ProductsPage: React.FC = () => {
                             resetForm();
                             setShowProductModal(true);
                         }}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 transition-colors"
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 transition-colors shadow-lg hover:shadow-xl"
                     >
                         <Plus className="w-5 h-5" />
                         <span>Novo Produto</span>
@@ -664,8 +680,8 @@ const ProductsPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Dashboard de Estatísticas */}
-            {statsCards}
+            {/* Dashboard de Estatísticas e Análises */}
+            {analyticsDashboard}
 
             {/* Filtros e Busca */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
@@ -1079,6 +1095,13 @@ const ProductsPage: React.FC = () => {
                                                     title="Ver detalhes"
                                                 >
                                                     <Eye className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => openPriceHistory(produto)}
+                                                    className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors"
+                                                    title="Histórico de Preços"
+                                                >
+                                                    <History className="w-5 h-5" />
                                                 </button>
                                                 <button
                                                     onClick={() => openEditModalMemo(produto)}
@@ -1538,6 +1561,305 @@ const ProductsPage: React.FC = () => {
                         <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
                             <button
                                 onClick={() => setShowAlertsModal(false)}
+                                className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* ==================== MODAL CALCULADORA DE MARKUP ==================== */}
+            {showMarkupCalculator && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full">
+                        <div className="bg-gradient-to-r from-purple-500 to-purple-600 px-6 py-4 flex justify-between items-center rounded-t-xl">
+                            <div className="flex items-center gap-3">
+                                <Calculator className="w-6 h-6 text-white" />
+                                <h2 className="text-2xl font-bold text-white">Calculadora de Markup</h2>
+                            </div>
+                            <button
+                                onClick={() => setShowMarkupCalculator(false)}
+                                className="text-white hover:text-gray-200"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Modo de Cálculo */}
+                            <div className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <button
+                                    onClick={() => setMarkupCalc(prev => ({ ...prev, modo: 'markup' }))}
+                                    className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+                                        markupCalc.modo === 'markup'
+                                            ? 'bg-purple-500 text-white shadow-lg'
+                                            : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                >
+                                    <Percent className="w-5 h-5 mx-auto mb-1" />
+                                    Calcular por Markup
+                                </button>
+                                <button
+                                    onClick={() => setMarkupCalc(prev => ({ ...prev, modo: 'preco_venda' }))}
+                                    className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all ${
+                                        markupCalc.modo === 'preco_venda'
+                                            ? 'bg-purple-500 text-white shadow-lg'
+                                            : 'bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                >
+                                    <DollarSign className="w-5 h-5 mx-auto mb-1" />
+                                    Calcular por Preço
+                                </button>
+                            </div>
+
+                            {/* Campos de Entrada */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Preço de Custo (R$)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={markupCalc.preco_custo}
+                                        onChange={(e) => setMarkupCalc(prev => ({ ...prev, preco_custo: parseFloat(e.target.value) || 0 }))}
+                                        onBlur={calcularMarkup}
+                                        className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-semibold"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+
+                                {markupCalc.modo === 'markup' ? (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Markup (%)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={markupCalc.markup}
+                                            onChange={(e) => setMarkupCalc(prev => ({ ...prev, markup: parseFloat(e.target.value) || 0 }))}
+                                            onBlur={calcularMarkup}
+                                            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-semibold"
+                                            placeholder="30.00"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Preço de Venda (R$)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={markupCalc.preco_venda}
+                                            onChange={(e) => setMarkupCalc(prev => ({ ...prev, preco_venda: parseFloat(e.target.value) || 0 }))}
+                                            onBlur={calcularMarkup}
+                                            className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-semibold"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Resultado */}
+                            <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900 dark:to-purple-800 rounded-xl border-2 border-purple-200 dark:border-purple-700">
+                                <div className="grid grid-cols-3 gap-4 text-center">
+                                    <div>
+                                        <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Custo</p>
+                                        <p className="text-2xl font-bold text-purple-900 dark:text-white">
+                                            {formatCurrency(markupCalc.preco_custo)}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Markup</p>
+                                        <p className="text-2xl font-bold text-purple-900 dark:text-white">
+                                            {markupCalc.markup.toFixed(2)}%
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Venda</p>
+                                        <p className="text-2xl font-bold text-purple-900 dark:text-white">
+                                            {formatCurrency(markupCalc.preco_venda)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-purple-300 dark:border-purple-600">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Lucro Unitário:</span>
+                                        <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                                            {formatCurrency(markupCalc.preco_venda - markupCalc.preco_custo)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Exemplos Rápidos */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <button
+                                    onClick={() => {
+                                        setMarkupCalc(prev => ({ ...prev, markup: 30, modo: 'markup' }));
+                                        setTimeout(calcularMarkup, 100);
+                                    }}
+                                    className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors text-sm font-semibold"
+                                >
+                                    30% Markup
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setMarkupCalc(prev => ({ ...prev, markup: 50, modo: 'markup' }));
+                                        setTimeout(calcularMarkup, 100);
+                                    }}
+                                    className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors text-sm font-semibold"
+                                >
+                                    50% Markup
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setMarkupCalc(prev => ({ ...prev, markup: 100, modo: 'markup' }));
+                                        setTimeout(calcularMarkup, 100);
+                                    }}
+                                    className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors text-sm font-semibold"
+                                >
+                                    100% Markup
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowMarkupCalculator(false)}
+                                className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                onClick={aplicarMarkupAoProduto}
+                                className="px-6 py-2.5 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors flex items-center gap-2 shadow-lg"
+                            >
+                                <Check className="w-5 h-5" />
+                                Aplicar ao Formulário
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ==================== MODAL HISTÓRICO DE PREÇOS ==================== */}
+            {showPriceHistory && selectedProduct && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-4 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <History className="w-6 h-6 text-white" />
+                                <div>
+                                    <h2 className="text-2xl font-bold text-white">Histórico de Preços</h2>
+                                    <p className="text-indigo-100 text-sm">{selectedProduct.nome}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowPriceHistory(false)}
+                                className="text-white hover:text-gray-200"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {loadingHistory ? (
+                                <div className="flex justify-center items-center h-64">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+                                </div>
+                            ) : priceHistory.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-64">
+                                    <History className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
+                                    <p className="text-gray-500 dark:text-gray-400 text-lg">
+                                        Nenhum histórico de alteração de preços
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {priceHistory.map((item, index) => (
+                                        <div
+                                            key={index}
+                                            className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-md transition-shadow"
+                                        >
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                        {new Date(item.data_alteracao).toLocaleString('pt-BR')}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        Por: {item.funcionario_nome || 'Sistema'}
+                                                    </p>
+                                                </div>
+                                                <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-semibold">
+                                                    {item.motivo}
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Custo</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm line-through text-gray-400">
+                                                            {formatCurrency(item.preco_custo_anterior)}
+                                                        </span>
+                                                        <TrendingUp className="w-4 h-4 text-green-500" />
+                                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                            {formatCurrency(item.preco_custo_novo)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Venda</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm line-through text-gray-400">
+                                                            {formatCurrency(item.preco_venda_anterior)}
+                                                        </span>
+                                                        <TrendingUp className="w-4 h-4 text-green-500" />
+                                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                            {formatCurrency(item.preco_venda_novo)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Margem</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm line-through text-gray-400">
+                                                            {item.margem_anterior?.toFixed(1)}%
+                                                        </span>
+                                                        <TrendingUp className="w-4 h-4 text-green-500" />
+                                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                            {item.margem_nova?.toFixed(1)}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {item.observacoes && (
+                                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                        {item.observacoes}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
+                            <button
+                                onClick={() => setShowPriceHistory(false)}
                                 className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                             >
                                 Fechar

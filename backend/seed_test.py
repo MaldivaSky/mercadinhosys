@@ -195,7 +195,7 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
 
     funcionarios_data = [
         {
-            "nome": "Administrador Sistema",
+            "nome": "Rafael Maldivas",
             "username": "admin",
             "cpf": fake.cpf(),
             "rg": f"MG-{random.randint(10000000, 99999999)}",
@@ -694,6 +694,61 @@ def seed_produtos(
     categorias_map = {c.nome: c for c in categorias}
 
     produtos = []
+    
+    # Lista de produtos reais conhecidos no Brasil
+    produtos_reais = [
+        # Bebidas
+        ("Coca-Cola 2L", "Bebidas", "COC-001", "7894900010015", "Coca-Cola", 7.50, 11.90),
+        ("Guaraná Antarctica 2L", "Bebidas", "GUA-001", "7891991000853", "Ambev", 6.80, 10.90),
+        ("Pepsi 2L", "Bebidas", "PEP-001", "7892840800000", "Pepsico", 6.50, 9.90),
+        ("Cerveja Skol 350ml", "Bebidas", "SKO-001", "7891149103100", "Ambev", 2.80, 4.50),
+        ("Cerveja Heineken 330ml", "Bebidas", "HEI-001", "7896045500000", "Heineken", 4.50, 7.90),
+        ("Água Mineral Crystal 500ml", "Bebidas", "AGU-001", "7892840822941", "Crystal", 1.20, 3.00),
+        ("Suco Del Valle Uva 1L", "Bebidas", "SCO-001", "7891098000251", "Del Valle", 4.50, 8.90),
+        
+        # Mercearia
+        ("Arroz Tio João 5kg", "Mercearia", "ARR-001", "7896006741025", "Tio João", 24.00, 32.90),
+        ("Arroz Camil 5kg", "Mercearia", "ARR-002", "7896006700000", "Camil", 23.50, 31.90),
+        ("Feijão Carioca Camil 1kg", "Mercearia", "FEI-001", "7896079001015", "Camil", 7.50, 11.90),
+        ("Feijão Preto Kicaldo 1kg", "Mercearia", "FEI-002", "7896079000000", "Kicaldo", 8.50, 12.90),
+        ("Macarrão Renata Espaguete 500g", "Mercearia", "MAC-001", "7896051110223", "Renata", 3.50, 6.90),
+        ("Óleo de Soja Liza 900ml", "Mercearia", "OLE-001", "7898909987042", "Liza", 6.50, 9.90),
+        ("Açúcar União 1kg", "Mercearia", "ACU-001", "7891000053508", "União", 4.50, 6.90),
+        ("Café Pilão 500g", "Mercearia", "CAF-001", "7896005800000", "Pilão", 14.50, 22.90),
+        
+        # Frios e Laticínios
+        ("Leite Integral Italac 1L", "Frios e Laticínios", "LEI-001", "7898080640000", "Italac", 4.20, 6.50),
+        ("Queijo Mussarela Fatiado kg", "Frios e Laticínios", "QUE-001", "7891000055502", "Itambé", 35.00, 59.90),
+        ("Presunto Cozido Sadia kg", "Frios e Laticínios", "PRE-001", "7893000415101", "Sadia", 25.00, 45.90),
+        ("Manteiga Aviação 200g", "Frios e Laticínios", "MAN-001", "7896051130000", "Aviação", 12.00, 19.90),
+        ("Requeijão Vigor 200g", "Frios e Laticínios", "REQ-001", "7891000100000", "Vigor", 7.50, 12.90),
+        ("Iogurte Nestlé Morango 1L", "Frios e Laticínios", "IOG-001", "7891072001308", "Nestlé", 9.90, 16.90),
+        
+        # Higiene e Limpeza
+        ("Sabonete Dove Original 90g", "Higiene Pessoal", "SAB-001", "7891150037605", "Dove", 3.50, 5.90),
+        ("Pasta de Dente Colgate Total 12", "Higiene Pessoal", "PAS-001", "7891024035000", "Colgate", 6.50, 12.90),
+        ("Papel Higiênico Neve 12un", "Higiene Pessoal", "PAP-001", "7891150000000", "Neve", 18.00, 29.90),
+        ("Detergente Ypê Neutro 500ml", "Limpeza", "DET-001", "7891024113405", "Ypê", 2.20, 3.90),
+        ("Sabão em Pó Omo 800g", "Limpeza", "OMO-001", "7891150000001", "Omo", 12.50, 19.90),
+        ("Amaciante Confort 1L", "Limpeza", "AMA-001", "7891150000002", "Confort", 14.50, 22.90),
+        ("Água Sanitária Qboa 1L", "Limpeza", "SAN-001", "7896094908015", "Qboa", 5.50, 8.90),
+        
+        # Carnes e Hortifrúti
+        ("Contra Filé Bovino kg", "Carnes", "CAR-001", None, "Friboi", 45.00, 69.90),
+        ("Filé de Peito Frango kg", "Carnes", "FRA-001", None, "Seara", 18.00, 28.90),
+        ("Linguiça Toscana Na Brasa kg", "Carnes", "LIN-001", None, "Perdigão", 16.00, 24.90),
+        ("Banana Prata kg", "Hortifrúti", "BAN-001", None, None, 4.50, 8.90),
+        ("Tomate Italiano kg", "Hortifrúti", "TOM-001", None, None, 6.50, 12.90),
+        ("Batata Lavada kg", "Hortifrúti", "BAT-001", None, None, 4.50, 8.90),
+        ("Cebola kg", "Hortifrúti", "CEB-001", None, None, 3.50, 6.90),
+        ("Ovos Brancos Dúzia", "Hortifrúti", "OVO-001", None, None, 8.00, 14.90),
+        
+        # Padaria
+        ("Pão Francês kg", "Padaria", "PAO-001", None, "Própria", 12.00, 18.90),
+        ("Pão de Forma Pullman", "Padaria", "FOR-001", "7896000000000", "Pullman", 6.50, 10.90),
+        ("Biscoito Trakinas", "Padaria", "BIS-001", "7896000000001", "Mondelez", 3.50, 5.90),
+    ]
+
     for i, (
         nome,
         categoria_nome,
@@ -702,21 +757,31 @@ def seed_produtos(
         marca,
         preco_custo,
         preco_venda,
-    ) in enumerate(produtos_data):
+    ) in enumerate(produtos_reais):
         categoria = categorias_map.get(categoria_nome)
         if not categoria:
             continue
 
         # Gerar dados variados
-        quantidade = random.randint(10, 100)
-        quantidade_minima = max(5, quantidade // 4)
+        quantidade = random.randint(20, 200)
+        quantidade_minima = max(10, quantidade // 4)
         margem = ((preco_venda - preco_custo) / preco_custo) * 100
+
+        # DATA DE VALIDADE - Focar em 2025 e 2026
+        ano_validade = random.choice([2025, 2026])
+        mes_validade = random.randint(1, 12)
+        dia_validade = random.randint(1, 28)
+        data_validade = date(ano_validade, mes_validade, dia_validade)
+        
+        # Alguns produtos vencidos ou quase vencendo (2025 já passou ou está perto)
+        if random.random() < 0.2:
+            data_validade = date.today() + timedelta(days=random.randint(-30, 60))
 
         p = Produto(
             estabelecimento_id=estabelecimento_id,
             categoria_id=categoria.id,
             fornecedor_id=random.choice(fornecedores).id if fornecedores else None,
-            codigo_barras=codigo_barras,
+            codigo_barras=codigo_barras or fake.ean13(),
             codigo_interno=codigo,
             nome=nome,
             descricao=f"{nome} - {marca if marca else 'Produto fresco'}",
@@ -732,12 +797,8 @@ def seed_produtos(
             total_vendido=0.0,
             quantidade_vendida=0,
             classificacao_abc=random.choice(["A", "B", "C"]),
-            controlar_validade=random.random() > 0.5,
-            data_validade=(
-                date.today() + timedelta(days=random.randint(30, 365))
-                if random.random() > 0.3
-                else None
-            ),
+            controlar_validade=True,
+            data_validade=data_validade,
             lote=f"L{random.randint(1000, 9999)}" if random.random() > 0.5 else None,
             imagem_url=None,
             ativo=True,
@@ -746,14 +807,20 @@ def seed_produtos(
         db.session.add(p)
         produtos.append(p)
 
-    # Criar produtos adicionais se necessário
+    # Criar produtos adicionais aleatórios para volume
     while len(produtos) < n:
         categoria = random.choice(categorias)
         fornecedor = random.choice(fornecedores) if fornecedores else None
 
-        nome = f"Produto Genérico {len(produtos)+1}"
+        nome = f"{fake.word().capitalize()} {fake.word().capitalize()}"
         preco_custo = round(random.uniform(2.0, 50.0), 2)
-        preco_venda = round(preco_custo * random.uniform(1.3, 2.0), 2)
+        preco_venda = round(preco_custo * random.uniform(1.3, 2.5), 2)
+        
+        # DATA DE VALIDADE - 2025 e 2026
+        ano_validade = random.choice([2025, 2026])
+        mes_validade = random.randint(1, 12)
+        dia_validade = random.randint(1, 28)
+        data_validade = date(ano_validade, mes_validade, dia_validade)
 
         p = Produto(
             estabelecimento_id=estabelecimento_id,
@@ -776,6 +843,8 @@ def seed_produtos(
             origem=0,
             total_vendido=0.0,
             quantidade_vendida=0,
+            controlar_validade=True,
+            data_validade=data_validade,
             ativo=random.random() > 0.1,
         )
 
@@ -1630,10 +1699,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--produtos", type=int, default=100)
     parser.add_argument("--dias", type=int, default=90)
     parser.add_argument("--test-login", action="store_true", help="Apenas testa login")
+    parser.add_argument("--local", action="store_true", help="Força uso do banco local (SQLite)")
 
     args = parser.parse_args(argv)
 
     fake = _faker()
+
+    if args.local:
+        # Remover variáveis de ambiente que apontam para bancos externos
+        for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+            if key in os.environ:
+                del os.environ[key]
+        print("🏠 Modo LOCAL ativado: Variáveis de banco externo removidas.")
 
     app = create_app(os.getenv("FLASK_ENV", "default"))
 

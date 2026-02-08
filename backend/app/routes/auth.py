@@ -7,8 +7,10 @@ from flask_jwt_extended import (
     get_jwt,
 )
 from datetime import datetime, timedelta
+from decimal import Decimal
 from app import db
 from app.models import Funcionario, Estabelecimento, LoginHistory
+from werkzeug.security import generate_password_hash
 import traceback
 import pytz
 import hashlib
@@ -67,7 +69,7 @@ def login():
     Autenticação de usuário com auditoria de login
     """
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         current_app.logger.info(f"[LOGIN] Payload recebido: {data}")
 
         if not data:
@@ -83,9 +85,15 @@ def login():
                 400,
             )
 
-        # Aceitar tanto 'email' quanto 'username' no campo de login
-        identifier = data.get("email", data.get("username", "")).strip()
-        senha = data.get("senha", "")
+        # Aceitar 'email', 'username' e compatibilidade com versões antigas ('identifier')
+        identifier = (
+            data.get("email")
+            or data.get("username")
+            or data.get("identifier")
+            or ""
+        ).strip()
+        # Aceitar 'senha' e compatibilidade com versões antigas ('password')
+        senha = (data.get("senha") or data.get("password") or "").strip()
         dispositivo = request.headers.get("User-Agent", "Desconhecido")
         ip_address = request.remote_addr
 
@@ -349,7 +357,133 @@ def login():
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Erro no login: {str(e)}\n{traceback.format_exc()}")
+        current_app.logger.error(
+            f"Erro no login: {str(e)}\n{traceback.format_exc()}"
+        )
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Erro interno no servidor",
+                    "message": str(e),
+                    "code": "INTERNAL_ERROR",
+                }
+            ),
+            500,
+        )
+
+
+@auth_bp.route("/bootstrap", methods=["POST"])
+def bootstrap_admin():
+    try:
+        data = request.get_json() or {}
+        identifier = (
+            data.get("email")
+            or data.get("username")
+            or data.get("identifier")
+            or ""
+        ).strip()
+        senha = (data.get("senha") or data.get("password") or "").strip()
+
+        if not identifier or not senha:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Email/Username e senha são obrigatórios",
+                        "code": "CREDENTIALS_REQUIRED",
+                    }
+                ),
+                400,
+            )
+
+        if Funcionario.query.first() is not None:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Bootstrap indisponível: o sistema já possui usuários",
+                        "code": "BOOTSTRAP_DISABLED",
+                    }
+                ),
+                409,
+            )
+
+        if "@" in identifier:
+            email = identifier.lower()
+            username = identifier.split("@", 1)[0]
+        else:
+            username = identifier
+            email = "admin@empresa.com"
+
+        estabelecimento = Estabelecimento.query.first()
+        if estabelecimento is None:
+            estabelecimento = Estabelecimento(
+                nome_fantasia="Mercado Souza Center",
+                razao_social="Mercado Souza Center LTDA",
+                cnpj="12.345.678/0001-90",
+                inscricao_estadual="ISENTO",
+                telefone="(84) 3234-5678",
+                email="contato@mercadosouza.com",
+                cep="59000-000",
+                logradouro="Rua Principal",
+                numero="123",
+                bairro="Centro",
+                cidade="Natal",
+                estado="RN",
+                pais="Brasil",
+                regime_tributario="SIMPLES NACIONAL",
+                ativo=True,
+                data_abertura=datetime.utcnow().date(),
+                data_cadastro=datetime.utcnow(),
+            )
+            db.session.add(estabelecimento)
+            db.session.flush()
+
+        admin = Funcionario(
+            estabelecimento_id=estabelecimento.id,
+            nome="Administrador Sistema",
+            username=username,
+            senha_hash=generate_password_hash(senha),
+            email=email,
+            cpf="111.222.333-44",
+            rg="RN-12345678",
+            data_nascimento=datetime(1985, 1, 1).date(),
+            telefone="(84) 91234-5678",
+            celular="(84) 91234-5678",
+            cargo="Gerente",
+            role="ADMIN",
+            ativo=True,
+            status="ativo",
+            data_admissao=datetime.utcnow().date(),
+            salario_base=Decimal("3500.00"),
+            cep="59000-000",
+            logradouro="Rua Principal",
+            numero="100",
+            bairro="Centro",
+            cidade="Natal",
+            estado="RN",
+            pais="Brasil",
+            permissoes_json='{"pdv":true,"estoque":true,"compras":true,"financeiro":true,"configuracoes":true,"relatorios":true}',
+        )
+        db.session.add(admin)
+        db.session.commit()
+
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "message": "Bootstrap concluído: usuário admin criado",
+                    "data": {"username": admin.username, "email": admin.email},
+                }
+            ),
+            201,
+        )
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(
+            f"Erro no bootstrap: {str(e)}\n{traceback.format_exc()}"
+        )
         return (
             jsonify(
                 {

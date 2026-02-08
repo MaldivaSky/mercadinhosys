@@ -34,6 +34,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [debugInfo, setDebugInfo] = useState('');
+  const [showBootstrap, setShowBootstrap] = useState(false);
 
   // Função de login com useCallback para evitar recriação
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -47,6 +48,7 @@ export function LoginPage() {
 
     setLoading(true);
     setError('');
+    setShowBootstrap(false);
 
     try {
       console.log('🔐 Tentando login:', identifier);
@@ -81,8 +83,10 @@ export function LoginPage() {
         const axiosError = err as { response?: { status?: number }; request?: unknown };
         if (axiosError.response?.status === 401) {
           errorMessage = 'Credenciais inválidas';
+          setShowBootstrap(true);
         } else if (axiosError.response?.status === 404) {
           errorMessage = 'Usuário não encontrado';
+          setShowBootstrap(true);
         } else if (axiosError.request) {
           errorMessage = 'Servidor não respondeu. Verifique se o backend está rodando.';
         }
@@ -316,6 +320,47 @@ export function LoginPage() {
                   'ENTRAR NO SISTEMA'
                 )}
               </Button>
+
+              {showBootstrap && !loading && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="large"
+                  disabled={!isFormValid}
+                  onClick={async () => {
+                    setLoading(true);
+                    setError('');
+                    try {
+                      const bootstrap = await authService.bootstrapAdmin(identifier, password);
+                      if (bootstrap.success) {
+                        await authService.login(identifier, password);
+                        window.dispatchEvent(new Event('auth-change'));
+                        return;
+                      }
+                      if (bootstrap.code && bootstrap.code !== 'BOOTSTRAP_DISABLED') {
+                        setError(bootstrap.error || 'Falha no bootstrap');
+                      }
+                      const response: LoginApiResponse = await authService.login(identifier, password);
+                      if (!response.success) {
+                        throw new Error(response.error || 'Falha no login');
+                      }
+                      window.dispatchEvent(new Event('auth-change'));
+                    } catch (e) {
+                      console.error(e);
+                      setError('Credenciais inválidas');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  sx={{
+                    py: 1.5,
+                    mb: 2,
+                    borderRadius: 2,
+                  }}
+                >
+                  Primeiro acesso: criar admin e entrar
+                </Button>
+              )}
 
               {/* Login demo sempre disponível */}
               {import.meta.env.DEV && (
