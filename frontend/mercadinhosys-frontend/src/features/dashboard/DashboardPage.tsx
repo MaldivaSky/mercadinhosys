@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
@@ -15,7 +15,7 @@ import {
 // API Client
 import { apiClient } from '../../api/apiClient';
 
-// TIPOS CIENTÍFICOS
+// TIPOS CIENT├ìFICOS
 type ProdutoPrevisao = {
   produto_nome?: string;
   nome?: string;
@@ -25,7 +25,7 @@ type ProdutoPrevisao = {
   margem_lucro?: number;
   custo_estoque?: number;
   giro_estoque?: number;
-  classificação_abc?: string;
+  classifica├º├úo_abc?: string;
 };
 
 interface ProdutoEstrela {
@@ -104,7 +104,7 @@ interface AnaliseFinanceira {
 }
 
 interface InsightsCientificos {
-  correlações: Array<{
+  correla├º├Áes: Array<{
     variavel1: string;
     variavel2: string;
     correlacao: number;
@@ -241,9 +241,9 @@ const DashboardPage: React.FC = () => {
       setLoading(true);
       const response = await apiClient.get('/dashboard/cientifico');
       
-      console.log('🔍 Backend Response:', response.data);
+      console.log('­ƒöì Backend Response:', response.data);
       
-      // 🔥 MAPEAR ESTRUTURA DO BACKEND PARA O FORMATO ESPERADO PELO FRONTEND
+      // ­ƒöÑ MAPEAR ESTRUTURA DO BACKEND PARA O FORMATO ESPERADO PELO FRONTEND
       const backendData = response.data.data;
       
       // Calcular despesas totais
@@ -282,7 +282,7 @@ const DashboardPage: React.FC = () => {
           quantidade_vendida: p.quantidade_vendida || p.total_vendido || 0
         })) || [];
       
-      // 🔥 FORÇAR GERAÇÃO DE PRODUTOS LENTOS SEMPRE
+      // ­ƒöÑ FOR├çAR GERA├ç├âO DE PRODUTOS LENTOS SEMPRE
       let produtosLentos = [];
       
       // Sempre gerar produtos lentos a partir da Classe C
@@ -311,7 +311,7 @@ const DashboardPage: React.FC = () => {
         produtosLentos = backendData.produtos_lentos;
       }
       
-      // Mapear previsão de demanda
+      // Mapear previs├úo de demanda
       const previsaoDemanda = backendData?.previsao_demanda || [];
       
       // Mapear timeseries para formato correto
@@ -325,7 +325,7 @@ const DashboardPage: React.FC = () => {
           }))
         : [];
       
-      // 🔥 GERAR SAZONALIDADE a partir do trend
+      // ­ƒöÑ GERAR SAZONALIDADE a partir do trend
       const sazonalidadeData = [];
       if (backendData?.trend?.best_day && backendData?.trend?.worst_day) {
         const melhorDia = backendData.trend.best_day;
@@ -335,7 +335,7 @@ const DashboardPage: React.FC = () => {
           : 0;
         
         sazonalidadeData.push({
-          periodo: "Padrão Semanal",
+          periodo: "Padr├úo Semanal",
           variacao: variacaoSemanal,
           descricao: `Melhor dia: ${melhorDia.day} (R$ ${melhorDia.avg_sales.toFixed(0)}). Pior dia: ${piorDia.day} (R$ ${piorDia.avg_sales.toFixed(0)})`
         });
@@ -343,20 +343,20 @@ const DashboardPage: React.FC = () => {
       
       if (backendData?.trend?.trend) {
         const trendText = backendData.trend.trend === 'up' ? 'Crescimento' : 
-                         backendData.trend.trend === 'down' ? 'Queda' : 'Estável';
+                         backendData.trend.trend === 'down' ? 'Queda' : 'Est├ível';
         const growthPercent = backendData.trend.growth_percent || 0;
         
         sazonalidadeData.push({
-          periodo: "Tendência Geral",
+          periodo: "Tend├¬ncia Geral",
           variacao: growthPercent,
-          descricao: `${trendText} de ${Math.abs(growthPercent).toFixed(1)}% no período analisado`
+          descricao: `${trendText} de ${Math.abs(growthPercent).toFixed(1)}% no per├¡odo analisado`
         });
       }
       
-      // 🔥 GERAR COMPARAÇÃO MENSAL a partir do timeseries
+      // ­ƒöÑ GERAR COMPARA├ç├âO MENSAL a partir do timeseries
       const comparacaoMensal = [];
       if (Array.isArray(backendData?.timeseries) && backendData.timeseries.length >= 30) {
-        // Agrupar por mês
+        // Agrupar por m├¬s
         const vendasPorMes: Record<string, number[]> = {};
         backendData.timeseries.forEach((item: any) => {
           if (item.data && item.total) {
@@ -366,7 +366,7 @@ const DashboardPage: React.FC = () => {
           }
         });
         
-        // Calcular totais por mês
+        // Calcular totais por m├¬s
         const meses = Object.keys(vendasPorMes).sort();
         const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
         
@@ -463,7 +463,7 @@ const DashboardPage: React.FC = () => {
             previsao_proxima_semana: forecastFormatted
           },
           insights_cientificos: {
-            correlações: backendData?.correlations || [],
+            correla├º├Áes: backendData?.correlations || [],
             anomalias: backendData?.anomalies || [],
             previsoes: backendData?.previsao_demanda || [],
             recomendacoes_otimizacao: (backendData?.recomendacoes && backendData.recomendacoes.length > 0) 
@@ -476,7 +476,7 @@ const DashboardPage: React.FC = () => {
               : [
                   {
                     area: 'Estoque',
-                    acao: 'Revisar produtos com baixo giro e considerar promoções para liberar capital',
+                    acao: 'Revisar produtos com baixo giro e considerar promo├º├Áes para liberar capital',
                     impacto_esperado: 15,
                     complexidade: 'baixa'
                   },
@@ -488,7 +488,7 @@ const DashboardPage: React.FC = () => {
                   },
                   {
                     area: 'Margem',
-                    acao: 'Analisar produtos com margem abaixo de 20% e ajustar precificação',
+                    acao: 'Analisar produtos com margem abaixo de 20% e ajustar precifica├º├úo',
                     impacto_esperado: 18,
                     complexidade: 'media'
                   }
@@ -498,18 +498,18 @@ const DashboardPage: React.FC = () => {
         }
       };
       
-      console.log('✅ Mapped Data:', mappedData);
-      console.log('🔍 Backend Raw Data:', backendData);
-      console.log('🔍 Produtos Lentos (backend):', backendData?.produtos_lentos);
-      console.log('🔍 Produtos Lentos (mapped):', produtosLentos);
-      console.log('🔍 Recomendações (backend):', backendData?.recomendacoes);
-      console.log('🔍 Sazonalidade:', sazonalidadeData);
-      console.log('🔍 Comparação Mensal:', comparacaoMensal);
-      console.log('🔍 ABC Analysis:', backendData?.abc);
+      console.log('Ô£à Mapped Data:', mappedData);
+      console.log('­ƒöì Backend Raw Data:', backendData);
+      console.log('­ƒöì Produtos Lentos (backend):', backendData?.produtos_lentos);
+      console.log('­ƒöì Produtos Lentos (mapped):', produtosLentos);
+      console.log('­ƒöì Recomenda├º├Áes (backend):', backendData?.recomendacoes);
+      console.log('­ƒöì Sazonalidade:', sazonalidadeData);
+      console.log('­ƒöì Compara├º├úo Mensal:', comparacaoMensal);
+      console.log('­ƒöì ABC Analysis:', backendData?.abc);
       setData(mappedData);
     } catch (err) {
-      console.error('❌ Dashboard Error:', err);
-      setError('Erro ao carregar dados científicos');
+      console.error('ÔØî Dashboard Error:', err);
+      setError('Erro ao carregar dados cient├¡ficos');
     } finally {
       setLoading(false);
     }
@@ -531,14 +531,14 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // FILTRAR PRODUTOS DA CURVA ABC BASEADO NA SELEÇÃO
+  // FILTRAR PRODUTOS DA CURVA ABC BASEADO NA SELE├ç├âO
   const produtosFiltrados = useMemo(() => {
     if (!data?.data?.analise_produtos?.curva_abc?.produtos) return [];
     
     const todosProdutos = data.data.analise_produtos.curva_abc.produtos;
     
     if (selectedABC === 'all') {
-      // Quando "TODOS" está selecionado, pegar uma AMOSTRA de cada classe
+      // Quando "TODOS" est├í selecionado, pegar uma AMOSTRA de cada classe
       const produtosA = todosProdutos.filter((p: any) => p.classificacao === 'A');
       const produtosB = todosProdutos.filter((p: any) => p.classificacao === 'B');
       const produtosC = todosProdutos.filter((p: any) => p.classificacao === 'C');
@@ -561,8 +561,8 @@ const DashboardPage: React.FC = () => {
     <div className="flex items-center justify-center h-screen">
       <div className="text-center">
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-lg font-semibold text-gray-700">Carregando Análise Científica...</p>
-        <p className="text-gray-500">Processando dados estatísticos e modelos preditivos</p>
+        <p className="mt-4 text-lg font-semibold text-gray-700">Carregando An├ílise Cient├¡fica...</p>
+        <p className="text-gray-500">Processando dados estat├¡sticos e modelos preditivos</p>
       </div>
     </div>
   );
@@ -571,9 +571,9 @@ const DashboardPage: React.FC = () => {
     <div className="p-8 bg-red-50 rounded-xl">
       <div className="flex items-center gap-3 text-red-700 mb-4">
         <AlertTriangle className="w-8 h-8" />
-        <h2 className="text-2xl font-bold">Erro na Análise Científica</h2>
+        <h2 className="text-2xl font-bold">Erro na An├ílise Cient├¡fica</h2>
       </div>
-      <p className="text-red-600 mb-4">{error || 'Dados não disponíveis'}</p>
+      <p className="text-red-600 mb-4">{error || 'Dados n├úo dispon├¡veis'}</p>
       <button onClick={loadDashboard} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
         <RefreshCw className="w-4 h-4" />
         Tentar Novamente
@@ -582,7 +582,7 @@ const DashboardPage: React.FC = () => {
   );
 
   const { hoje, mes, analise_produtos, analise_financeira, insights_cientificos = {
-    correlações: [],
+    correla├º├Áes: [],
     anomalias: [],
     previsoes: [],
     recomendacoes_otimizacao: []
@@ -595,13 +595,13 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
-      {/* HEADER CIENTÍFICO */}
+      {/* HEADER CIENT├ìFICO */}
       <div className="mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Dashboard Executivo</h1>
             <p className="text-gray-600 mt-1">
-              Análise completa do seu negócio • {new Date().toLocaleDateString('pt-BR')}
+              An├ílise completa do seu neg├│cio ÔÇó {new Date().toLocaleDateString('pt-BR')}
             </p>
           </div>
           <div className="flex gap-3">
@@ -610,9 +610,9 @@ const DashboardPage: React.FC = () => {
               value={viewMode}
               onChange={(e) => setViewMode(e.target.value as any)}
             >
-              <option value="visao-geral">📊 Visão Geral</option>
-              <option value="detalhado">📈 Análise Detalhada</option>
-              <option value="cientifico">🔬 Modo Avançado</option>
+              <option value="visao-geral">­ƒôè Vis├úo Geral</option>
+              <option value="detalhado">­ƒôê An├ílise Detalhada</option>
+              <option value="cientifico">­ƒö¼ Modo Avan├ºado</option>
             </select>
             <button onClick={loadDashboard} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors">
               <RefreshCw className="w-4 h-4" />
@@ -634,7 +634,7 @@ const DashboardPage: React.FC = () => {
             subtitle: `${mes?.margem_lucro?.toFixed(1) || 0}% de margem`
           },
           {
-            title: 'Lucro Líquido',
+            title: 'Lucro L├¡quido',
             value: `R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: 5.2,
             icon: TrendingUpFill,
@@ -642,7 +642,7 @@ const DashboardPage: React.FC = () => {
             subtitle: `ROI: ${(mes?.roi_mensal || 0).toFixed(1)}%`
           },
           {
-            title: 'Ticket Médio',
+            title: 'Ticket M├®dio',
             value: `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
             change: 8.7,
             icon: TrendingUp,
@@ -677,7 +677,7 @@ const DashboardPage: React.FC = () => {
         ))}
       </div>
 
-      {/* SEÇÃO PRINCIPAL: CURVA ABC COM GRÁFICO DE PARETO */}
+      {/* SE├ç├âO PRINCIPAL: CURVA ABC COM GR├üFICO DE PARETO */}
       {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
       <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
         <div
@@ -688,7 +688,7 @@ const DashboardPage: React.FC = () => {
             <ChartBar className="w-8 h-8 text-blue-600" />
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
-              <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
+              <p className="text-gray-600">An├ílise 80/20 dos produtos ÔÇó {analise_produtos?.curva_abc?.pareto_80_20 ? 'Ô£à Lei de Pareto Confirmada' : 'ÔÜá´©Å Distribui├º├úo At├¡pica'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -726,7 +726,7 @@ const DashboardPage: React.FC = () => {
           <div className="p-6 animate-fadeIn">
             {produtosFiltrados.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* GRÁFICO DE PARETO */}
+              {/* GR├üFICO DE PARETO */}
               <div className="lg:col-span-2">
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -739,7 +739,7 @@ const DashboardPage: React.FC = () => {
                           <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
                             <p className="font-bold text-gray-900">{label}</p>
                             <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-sm text-gray-600">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
+                            <p className="text-sm text-gray-600">Classifica├º├úo: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
                             <p className="text-sm text-gray-600">Margem: {(payload?.[0]?.payload?.margem || 0).toFixed(1)}%</p>
                             <p className="text-sm text-gray-600">Qtd Vendida: {payload?.[0]?.payload?.quantidade_vendida}</p>
                             <p className="text-sm text-gray-600">% Acumulado: {(payload?.[0]?.payload?.percentual_acumulado || 0).toFixed(1)}%</p>
@@ -775,27 +775,27 @@ const DashboardPage: React.FC = () => {
               {/* LEGENDA E DETALHES */}
               <div className="space-y-6">
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
-                  <h3 className="font-bold text-gray-900 mb-4">📊 Interpretação da Curva ABC</h3>
+                  <h3 className="font-bold text-gray-900 mb-4">­ƒôè Interpreta├º├úo da Curva ABC</h3>
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-green-500"></div>
                       <div>
                         <p className="font-semibold text-gray-900">Classe A (20% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.A?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                        <p className="text-sm text-gray-600">Respons├íveis por {analise_produtos?.curva_abc?.resumo?.A?.percentual?.toFixed(1) || 0}% do faturamento</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                       <div>
                         <p className="font-semibold text-gray-900">Classe B (30% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                        <p className="text-sm text-gray-600">Respons├íveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-red-500"></div>
                       <div>
                         <p className="font-semibold text-gray-900">Classe C (50% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                        <p className="text-sm text-gray-600">Respons├íveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
                       </div>
                     </div>
                   </div>
@@ -804,7 +804,7 @@ const DashboardPage: React.FC = () => {
                 {/* TOP 5 PRODUTOS DA CLASSE SELECIONADA */}
                 <div className="border border-gray-200 rounded-xl p-4">
                   <h4 className="font-bold text-gray-900 mb-3">
-                    🏆 Top Produtos {selectedABC === 'all' ? 'Geral' : `Classe ${selectedABC}`}
+                    ­ƒÅå Top Produtos {selectedABC === 'all' ? 'Geral' : `Classe ${selectedABC}`}
                   </h4>
                   <div className="space-y-3">
                     {produtosFiltrados
@@ -825,7 +825,7 @@ const DashboardPage: React.FC = () => {
                             <div>
                               <p className="font-medium text-gray-900">{produto.nome}</p>
                               <p className="text-xs text-gray-500">
-                                Classe {produto.classificacao} • Margem: {produto.margem.toFixed(1)}%
+                                Classe {produto.classificacao} ÔÇó Margem: {produto.margem.toFixed(1)}%
                               </p>
                             </div>
                           </div>
@@ -854,7 +854,7 @@ const DashboardPage: React.FC = () => {
                   </p>
                   <p className="text-gray-500 text-sm">
                     {selectedABC === 'C' 
-                      ? 'Parabéns! Você não tem produtos de baixo desempenho (Classe C).'
+                      ? 'Parab├®ns! Voc├¬ n├úo tem produtos de baixo desempenho (Classe C).'
                       : 'Selecione outra classe para visualizar os produtos.'}
                   </p>
                   <button
@@ -871,7 +871,7 @@ const DashboardPage: React.FC = () => {
       </div>
       )}
 
-      {/* SEÇÃO: ANÁLISE TEMPORAL - TENDÊNCIA DE VENDAS */}
+      {/* SE├ç├âO: AN├üLISE TEMPORAL - TEND├èNCIA DE VENDAS */}
       {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
       <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
         <div
@@ -881,8 +881,8 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <TrendingUp className="w-8 h-8 text-purple-600" />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Análise Temporal de Vendas</h2>
-              <p className="text-gray-600">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
+              <h2 className="text-2xl font-bold text-gray-900">An├ílise Temporal de Vendas</h2>
+              <p className="text-gray-600">Tend├¬ncia ÔÇó Sazonalidade ÔÇó Previs├Áes ÔÇó Evolu├º├úo Mensal</p>
             </div>
           </div>
           <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-temporal'] ? 'rotate-180' : ''}`} />
@@ -891,11 +891,11 @@ const DashboardPage: React.FC = () => {
         {expandedCards['analise-temporal'] && (
           <div className="p-6 animate-fadeIn">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
+              {/* GR├üFICO DE LINHA: EVOLU├ç├âO DAS VENDAS */}
               <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-200">
                 <h3 className="font-bold text-gray-900 mb-6 text-lg flex items-center gap-2">
                   <LineChartIcon className="w-5 h-5 text-purple-600" />
-                  Evolução das Vendas (30 dias)
+                  Evolu├º├úo das Vendas (30 dias)
                 </h3>
                 <div className="h-[300px]">
                   {analise_temporal?.tendencia_vendas?.length > 0 ? (
@@ -928,7 +928,7 @@ const DashboardPage: React.FC = () => {
                           stroke="#8b5cf6"
                           strokeWidth={3}
                           dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
-                          name="Vendas Diárias"
+                          name="Vendas Di├írias"
                         />
                         <Line
                           type="monotone"
@@ -937,7 +937,7 @@ const DashboardPage: React.FC = () => {
                           strokeWidth={2}
                           strokeDasharray="5 5"
                           dot={false}
-                          name="Previsão"
+                          name="Previs├úo"
                           connectNulls={false}
                         />
                       </LineChart>
@@ -946,26 +946,26 @@ const DashboardPage: React.FC = () => {
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
                         <LineChartIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500">Dados de tendência não disponíveis</p>
+                        <p className="text-gray-500">Dados de tend├¬ncia n├úo dispon├¡veis</p>
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-4 text-center">
                   <div className="bg-purple-50 p-3 rounded-lg">
-                    <p className="text-sm text-purple-600 font-medium">Tendência</p>
+                    <p className="text-sm text-purple-600 font-medium">Tend├¬ncia</p>
                     <p className={`text-lg font-bold ${analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-600' : 'text-red-600'}`}>
-                      {analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? '📈 Crescendo' : '📉 Caindo'}
+                      {analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? '­ƒôê Crescendo' : '­ƒôë Caindo'}
                     </p>
                   </div>
                   <div className="bg-blue-50 p-3 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium">Média 7 dias</p>
+                    <p className="text-sm text-blue-600 font-medium">M├®dia 7 dias</p>
                     <p className="text-lg font-bold text-blue-700">
                       R$ {(analise_temporal?.tendencia_vendas?.slice(-7).reduce((acc, curr) => acc + (curr.vendas || 0), 0) / Math.max(1, Math.min(7, analise_temporal?.tendencia_vendas?.length || 0)))?.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) || '0'}
                     </p>
                   </div>
                   <div className="bg-green-50 p-3 rounded-lg">
-                    <p className="text-sm text-green-600 font-medium">Previsão Amanhã</p>
+                    <p className="text-sm text-green-600 font-medium">Previs├úo Amanh├ú</p>
                     <p className="text-lg font-bold text-green-700">
                       R$ {(analise_temporal?.previsao_proxima_semana?.[0]?.previsao || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                     </p>
@@ -973,13 +973,13 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* MÉTRICAS DE SAZONALIDADE E PREVISÕES */}
+              {/* M├ëTRICAS DE SAZONALIDADE E PREVIS├òES */}
               <div className="space-y-6">
                 {/* SAZONALIDADE */}
                 <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-200">
                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-indigo-600" />
-                    Padrões Sazonais
+                    Padr├Áes Sazonais
                   </h3>
                   <div className="space-y-3">
                     {analise_temporal?.sazonalidade && analise_temporal?.sazonalidade.length > 0 ? (
@@ -997,18 +997,18 @@ const DashboardPage: React.FC = () => {
                     ) : (
                       <div className="bg-white/70 p-6 rounded-lg text-center">
                         <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500">Dados insuficientes para análise sazonal</p>
-                        <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 3 meses de histórico</p>
+                        <p className="text-gray-500">Dados insuficientes para an├ílise sazonal</p>
+                        <p className="text-sm text-gray-400 mt-1">Necess├írio pelo menos 3 meses de hist├│rico</p>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* PREVISÃO PRÓXIMA SEMANA */}
+                {/* PREVIS├âO PR├ôXIMA SEMANA */}
                 <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <TargetIcon className="w-5 h-5 text-green-600" />
-                    Previsão Próxima Semana
+                    Previs├úo Pr├│xima Semana
                   </h3>
                   <div className="space-y-3">
                     {analise_temporal?.previsao_proxima_semana && analise_temporal?.previsao_proxima_semana.length > 0 ? (
@@ -1018,7 +1018,7 @@ const DashboardPage: React.FC = () => {
                             <span className="font-medium text-gray-900">{prev?.dia || `Dia ${idx + 1}`}</span>
                             <div className="text-right">
                               <p className="font-bold text-green-700">R$ {(prev?.previsao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <p className="text-xs text-gray-500">±{prev?.intervalo_confianca?.toFixed(1) || '5.0'}%</p>
+                              <p className="text-xs text-gray-500">┬▒{prev?.intervalo_confianca?.toFixed(1) || '5.0'}%</p>
                             </div>
                           </div>
                         </div>
@@ -1026,18 +1026,18 @@ const DashboardPage: React.FC = () => {
                     ) : (
                       <div className="bg-white/70 p-6 rounded-lg text-center">
                         <TargetIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500">Previsões não disponíveis</p>
-                        <p className="text-sm text-gray-400 mt-1">Necessário mais dados históricos</p>
+                        <p className="text-gray-500">Previs├Áes n├úo dispon├¡veis</p>
+                        <p className="text-sm text-gray-400 mt-1">Necess├írio mais dados hist├│ricos</p>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* COMPARAÇÃO MENSAL */}
+                {/* COMPARA├ç├âO MENSAL */}
                 <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-200">
                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <LucideBarChart className="w-5 h-5 text-orange-600" />
-                    Comparação Mensal
+                    Compara├º├úo Mensal
                   </h3>
                   <div className="space-y-3">
                     {analise_temporal?.comparacao_meses && analise_temporal?.comparacao_meses.length > 0 ? (
@@ -1058,8 +1058,8 @@ const DashboardPage: React.FC = () => {
                     ) : (
                       <div className="bg-white/70 p-6 rounded-lg text-center">
                         <LucideBarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500">Comparação mensal não disponível</p>
-                        <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 2 meses de dados</p>
+                        <p className="text-gray-500">Compara├º├úo mensal n├úo dispon├¡vel</p>
+                        <p className="text-sm text-gray-400 mt-1">Necess├írio pelo menos 2 meses de dados</p>
                       </div>
                     )}
                   </div>
@@ -1071,7 +1071,7 @@ const DashboardPage: React.FC = () => {
       </div>
       )}
 
-      {/* SEÇÃO: ANÁLISE FINANCEIRA DETALHADA */}
+      {/* SE├ç├âO: AN├üLISE FINANCEIRA DETALHADA */}
       {(viewMode === 'detalhado' || viewMode === 'cientifico') && (
       <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
         <div
@@ -1081,8 +1081,8 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <DollarIcon className="w-8 h-8 text-green-600" />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Análise Financeira Científica</h2>
-              <p className="text-gray-600">Despesas vs Lucro • Margens • Indicadores de Performance</p>
+              <h2 className="text-2xl font-bold text-gray-900">An├ílise Financeira Cient├¡fica</h2>
+              <p className="text-gray-600">Despesas vs Lucro ÔÇó Margens ÔÇó Indicadores de Performance</p>
             </div>
           </div>
           <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-financeira'] ? 'rotate-180' : ''}`} />
@@ -1091,9 +1091,9 @@ const DashboardPage: React.FC = () => {
         {expandedCards['analise-financeira'] && (
           <div className="p-6 animate-fadeIn">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
+              {/* GR├üFICO DE COLUNAS: DISTRIBUI├ç├âO DE DESPESAS */}
               <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
-                <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
+                <h3 className="font-bold text-gray-900 mb-6 text-lg">­ƒôè Distribui├º├úo de Despesas</h3>
                 <div className="h-[300px]">
                   {analise_financeira?.despesas_detalhadas && analise_financeira?.despesas_detalhadas.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -1115,7 +1115,7 @@ const DashboardPage: React.FC = () => {
                               <p className="text-gray-600">Percentual: {payload?.[0]?.payload?.percentual?.toFixed(1)}%</p>
                               <p className="text-gray-600">Impacto no Lucro: {payload?.[0]?.payload?.impacto_lucro?.toFixed(1)}%</p>
                               <p className="text-sm text-gray-500 mt-2">
-                                Tendência: {payload?.[0]?.payload?.tendencia === 'alta' ? '📈 Alta' : payload?.[0]?.payload?.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                                Tend├¬ncia: {payload?.[0]?.payload?.tendencia === 'alta' ? '­ƒôê Alta' : payload?.[0]?.payload?.tendencia === 'baixa' ? '­ƒôë Baixa' : 'Ô×í´©Å Est├ível'}
                               </p>
                             </div>
                           )}
@@ -1135,11 +1135,11 @@ const DashboardPage: React.FC = () => {
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
                         <DollarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600 font-medium mb-2">Nenhuma despesa registrada no período</p>
-                        <p className="text-gray-500 text-sm">As despesas aparecerão aqui quando forem cadastradas no sistema</p>
+                        <p className="text-gray-600 font-medium mb-2">Nenhuma despesa registrada no per├¡odo</p>
+                        <p className="text-gray-500 text-sm">As despesas aparecer├úo aqui quando forem cadastradas no sistema</p>
                         <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                           <p className="text-sm text-blue-800">
-                            💡 <strong>Dica:</strong> Cadastre despesas para visualizar a distribuição e análise financeira completa
+                            ­ƒÆí <strong>Dica:</strong> Cadastre despesas para visualizar a distribui├º├úo e an├ílise financeira completa
                           </p>
                         </div>
                       </div>
@@ -1160,7 +1160,7 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* MÉTRICAS DE MARGEM */}
+              {/* M├ëTRICAS DE MARGEM */}
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   {Object.entries(analise_financeira?.margens || {}).map(([nome, valor]) => (
@@ -1168,7 +1168,7 @@ const DashboardPage: React.FC = () => {
                       <p className="text-sm text-gray-600 font-medium mb-2">
                         {nome === 'bruta' ? 'Margem Bruta' :
                           nome === 'operacional' ? 'Margem Operacional' :
-                            nome === 'liquida' ? 'Margem Líquida' : 'Margem Contribuição'}
+                            nome === 'liquida' ? 'Margem L├¡quida' : 'Margem Contribui├º├úo'}
                       </p>
                       <p className={`text-3xl font-bold ${valor >= 20 ? 'text-green-600' : valor >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
                         {valor.toFixed(1)}%
@@ -1185,16 +1185,16 @@ const DashboardPage: React.FC = () => {
                   ))}
                 </div>
 
-                {/* INDICADORES AVANÇADOS */}
+                {/* INDICADORES AVAN├çADOS */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
-                  <h4 className="font-bold text-gray-900 mb-4">📈 Indicadores Financeiros</h4>
+                  <h4 className="font-bold text-gray-900 mb-4">­ƒôê Indicadores Financeiros</h4>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Ponto de Equilíbrio</span>
+                      <span className="text-gray-700">Ponto de Equil├¡brio</span>
                       <span className="font-bold text-blue-600">{(analise_financeira?.indicadores?.ponto_equilibrio || 0).toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Margem de Segurança</span>
+                      <span className="text-gray-700">Margem de Seguran├ºa</span>
                       <span className="font-bold text-green-600">{(analise_financeira?.indicadores?.margem_seguranca || 0).toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -1214,7 +1214,7 @@ const DashboardPage: React.FC = () => {
       </div>
       )}
 
-      {/* SEÇÃO: INSIGHTS CIENTÍFICOS */}
+      {/* SE├ç├âO: INSIGHTS CIENT├ìFICOS */}
       {viewMode === 'cientifico' && (
       <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl overflow-hidden mb-8">
         <div
@@ -1224,8 +1224,8 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <Brain className="w-8 h-8 text-cyan-400" />
             <div>
-              <h2 className="text-2xl font-bold text-white">🧠 Insights Científicos</h2>
-              <p className="text-gray-300">Correlações • Anomalias • Previsões • Recomendações de Otimização</p>
+              <h2 className="text-2xl font-bold text-white">­ƒºá Insights Cient├¡ficos</h2>
+              <p className="text-gray-300">Correla├º├Áes ÔÇó Anomalias ÔÇó Previs├Áes ÔÇó Recomenda├º├Áes de Otimiza├º├úo</p>
             </div>
           </div>
           <ChevronDown className={`w-6 h-6 text-gray-400 transform transition-transform ${expandedCards['insights'] ? 'rotate-180' : ''}`} />
@@ -1234,17 +1234,17 @@ const DashboardPage: React.FC = () => {
         {expandedCards['insights'] && (
           <div className="p-6 animate-fadeIn">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* CORRELAÇÕES */}
+              {/* CORRELA├ç├òES */}
               <div className="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm">
                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                   <GitMerge className="w-5 h-5" />
-                  Correlações Estatísticas
+                  Correla├º├Áes Estat├¡sticas
                 </h3>
                 <div className="space-y-4">
-                  {(insights_cientificos?.correlações || []).map((corr, idx) => (
+                  {(insights_cientificos?.correla├º├Áes || []).map((corr, idx) => (
                     <div key={idx} className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-colors">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-gray-300 font-medium">{corr.variavel1} × {corr.variavel2}</span>
+                        <span className="text-gray-300 font-medium">{corr.variavel1} ├ù {corr.variavel2}</span>
                         <span className={`px-3 py-1 rounded-full text-sm font-bold ${Math.abs(corr.correlacao) > 0.7 ? 'bg-red-500/20 text-red-300' :
                             Math.abs(corr.correlacao) > 0.4 ? 'bg-yellow-500/20 text-yellow-300' :
                               'bg-green-500/20 text-green-300'
@@ -1254,25 +1254,25 @@ const DashboardPage: React.FC = () => {
                       </div>
                       <p className="text-gray-400 text-sm mb-2">{corr.insight}</p>
                       <div className="flex justify-between text-xs text-gray-500">
-                        <span>Significância: p = {corr.significancia.toFixed(3)}</span>
-                        <span>{Math.abs(corr.correlacao) > 0.7 ? '🔴 Forte' : Math.abs(corr.correlacao) > 0.4 ? '🟡 Moderada' : '🟢 Fraca'}</span>
+                        <span>Signific├óncia: p = {corr.significancia.toFixed(3)}</span>
+                        <span>{Math.abs(corr.correlacao) > 0.7 ? '­ƒö┤ Forte' : Math.abs(corr.correlacao) > 0.4 ? '­ƒƒí Moderada' : '­ƒƒó Fraca'}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* PREVISÕES E RECOMENDAÇÕES */}
+              {/* PREVIS├òES E RECOMENDA├ç├òES */}
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-6">🔮 Previsões (Próximos 30 dias)</h3>
+                  <h3 className="text-xl font-bold text-white mb-6">­ƒö« Previs├Áes (Pr├│ximos 30 dias)</h3>
                   <div className="space-y-4">
                     {(insights_cientificos?.previsoes || []).map((prev, idx) => (
                       <div key={idx} className="bg-black/30 p-4 rounded-lg">
                         <div className="flex justify-between items-center mb-3">
                           <span className="text-gray-300 font-medium">{prev.variavel}</span>
                           <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
-                            {prev.confianca.toFixed(1)}% confiança
+                            {prev.confianca.toFixed(1)}% confian├ºa
                           </span>
                         </div>
                         <div className="flex items-center gap-4">
@@ -1282,7 +1282,7 @@ const DashboardPage: React.FC = () => {
                           </div>
                           <ArrowUpRight className="w-6 h-6 text-green-400" />
                           <div className="text-center">
-                            <p className="text-sm text-gray-400">Previsão</p>
+                            <p className="text-sm text-gray-400">Previs├úo</p>
                             <p className="text-xl font-bold text-green-400">R$ {(prev?.previsao_30d || 0).toLocaleString('pt-BR')}</p>
                           </div>
                         </div>
@@ -1294,9 +1294,9 @@ const DashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* RECOMENDAÇÕES DE OTIMIZAÇÃO */}
+                {/* RECOMENDA├ç├òES DE OTIMIZA├ç├âO */}
                 <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-6">🚀 Recomendações de Otimização</h3>
+                  <h3 className="text-xl font-bold text-white mb-6">­ƒÜÇ Recomenda├º├Áes de Otimiza├º├úo</h3>
                   <div className="space-y-4">
                     {(insights_cientificos?.recomendacoes_otimizacao || []).map((rec, idx) => (
                       <div key={idx} className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-colors cursor-pointer">
@@ -1306,7 +1306,7 @@ const DashboardPage: React.FC = () => {
                               rec.complexidade === 'media' ? 'bg-yellow-500/30 text-yellow-300' :
                                 'bg-red-500/30 text-red-300'
                             }`}>
-                            {rec.complexidade === 'baixa' ? '🟢 Fácil' : rec.complexidade === 'media' ? '🟡 Médio' : '🔴 Complexo'}
+                            {rec.complexidade === 'baixa' ? '­ƒƒó F├ícil' : rec.complexidade === 'media' ? '­ƒƒí M├®dio' : '­ƒö┤ Complexo'}
                           </span>
                         </div>
                         <p className="text-gray-300 mb-3">{rec.acao}</p>
@@ -1325,7 +1325,7 @@ const DashboardPage: React.FC = () => {
       </div>
       )}
 
-      {/* SEÇÃO: PRODUTOS ESTRATÉGICOS */}
+      {/* SE├ç├âO: PRODUTOS ESTRAT├ëGICOS */}
       {viewMode === 'cientifico' && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* PRODUTOS ESTRELA */}
@@ -1333,8 +1333,8 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-3 mb-6">
             <Star className="w-8 h-8 text-yellow-600" />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">⭐ Produtos Estrela</h2>
-              <p className="text-gray-600">Alta margem + Alta participação + Alta rentabilidade</p>
+              <h2 className="text-2xl font-bold text-gray-900">Ô¡É Produtos Estrela</h2>
+              <p className="text-gray-600">Alta margem + Alta participa├º├úo + Alta rentabilidade</p>
             </div>
           </div>
           <div className="space-y-4">
@@ -1368,7 +1368,7 @@ const DashboardPage: React.FC = () => {
                     <p className="text-lg font-bold text-blue-600">{produto.quantidade_vendida}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Ticket Médio</p>
+                    <p className="text-sm text-gray-600">Ticket M├®dio</p>
                     <p className="text-lg font-bold text-purple-600">R$ {(produto.faturamento / produto.quantidade_vendida).toFixed(2)}</p>
                   </div>
                 </div>
@@ -1382,7 +1382,7 @@ const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-3 mb-6">
             <AlertTriangle className="w-8 h-8 text-red-600" />
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">⚠️ Produtos Lentos</h2>
+              <h2 className="text-2xl font-bold text-gray-900">ÔÜá´©Å Produtos Lentos</h2>
               <p className="text-gray-600">Baixo giro + Alto custo de estoque + Oportunidade de melhoria</p>
             </div>
           </div>
@@ -1416,7 +1416,7 @@ const DashboardPage: React.FC = () => {
                     </div>
                     <div className="bg-orange-50 p-3 rounded-lg">
                       <p className="text-xs text-orange-600 font-medium">Dias de Estoque</p>
-                      <p className="text-lg font-bold text-orange-700">{produto.dias_estoque < 999 ? `${produto.dias_estoque} dias` : '∞'}</p>
+                      <p className="text-lg font-bold text-orange-700">{produto.dias_estoque < 999 ? `${produto.dias_estoque} dias` : 'Ôê×'}</p>
                     </div>
                     <div className="bg-yellow-50 p-3 rounded-lg">
                       <p className="text-xs text-yellow-600 font-medium">Capital Parado</p>
@@ -1440,13 +1440,13 @@ const DashboardPage: React.FC = () => {
                   </div>
                   
                   <div className="mt-3 bg-red-50 p-3 rounded-lg">
-                    <p className="text-xs font-bold text-red-800 mb-1">💡 Recomendação:</p>
+                    <p className="text-xs font-bold text-red-800 mb-1">­ƒÆí Recomenda├º├úo:</p>
                     <p className="text-xs text-red-700">
                       {produto.giro_estoque < 0.5 
-                        ? 'Considere promoção agressiva ou descontinuar produto'
+                        ? 'Considere promo├º├úo agressiva ou descontinuar produto'
                         : produto.giro_estoque < 1.0
-                        ? 'Faça promoção para acelerar vendas'
-                        : 'Reduza reposição e monitore de perto'}
+                        ? 'Fa├ºa promo├º├úo para acelerar vendas'
+                        : 'Reduza reposi├º├úo e monitore de perto'}
                     </p>
                   </div>
                 </div>
@@ -1455,7 +1455,7 @@ const DashboardPage: React.FC = () => {
               <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 text-center border border-red-100">
                 <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600 font-medium">Nenhum produto lento identificado</p>
-                <p className="text-gray-500 text-sm">Todos os produtos estão com bom desempenho!</p>
+                <p className="text-gray-500 text-sm">Todos os produtos est├úo com bom desempenho!</p>
               </div>
             )}
           </div>
@@ -1463,16 +1463,16 @@ const DashboardPage: React.FC = () => {
       </div>
       )}
 
-      {/* SEÇÃO: PREVISÃO DE DEMANDA */}
+      {/* SE├ç├âO: PREVIS├âO DE DEMANDA */}
       {viewMode === 'cientifico' && (
       <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl shadow-xl p-6 mb-8 border border-purple-200">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
           <Target className="w-8 h-8 text-purple-600" />
-          📊 Previsão de Demanda Inteligente
+          ­ƒôè Previs├úo de Demanda Inteligente
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {analise_produtos?.previsao_demanda?.map((previsao, idx) => {
-            // Calcular dias até acabar o estoque
+            // Calcular dias at├® acabar o estoque
             const estoqueAtual = previsao.estoque_atual || 0;
             const demandaDiaria = previsao.demanda_diaria_prevista || 0;
             const diasAteAcabar = demandaDiaria > 0 ? Math.floor(estoqueAtual / demandaDiaria) : 999;
@@ -1485,11 +1485,11 @@ const DashboardPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   {riscoRuptura && (
                     <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                      ⚠️ Risco Ruptura
+                      ÔÜá´©Å Risco Ruptura
                     </span>
                   )}
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${previsao.confianca > 80 ? 'bg-green-100 text-green-800' : previsao.confianca > 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                    {previsao.confianca?.toFixed(0) || 75}% confiança
+                    {previsao.confianca?.toFixed(0) || 75}% confian├ºa
                   </span>
                 </div>
               </div>
@@ -1503,15 +1503,15 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Demanda Diária</span>
+                  <span className="text-gray-600">Demanda Di├íria</span>
                   <span className="font-bold text-purple-600">{demandaDiaria.toFixed(1)} un/dia</span>
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Dias até Acabar</span>
+                  <span className="text-gray-600">Dias at├® Acabar</span>
                   <div className="flex items-center gap-2">
                     <span className={`font-bold text-xl ${diasAteAcabar < 7 ? 'text-red-600' : diasAteAcabar < 14 ? 'text-yellow-600' : 'text-green-600'}`}>
-                      {diasAteAcabar < 999 ? `${diasAteAcabar} dias` : '∞'}
+                      {diasAteAcabar < 999 ? `${diasAteAcabar} dias` : 'Ôê×'}
                     </span>
                     {diasAteAcabar < 7 && <AlertTriangle className="w-5 h-5 text-red-500" />}
                   </div>
@@ -1523,28 +1523,28 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Classificação ABC</span>
+                  <span className="text-gray-600">Classifica├º├úo ABC</span>
                   <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                    previsao.classificação_abc === 'A' ? 'bg-green-100 text-green-800' :
-                    previsao.classificação_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
+                    previsao.classifica├º├úo_abc === 'A' ? 'bg-green-100 text-green-800' :
+                    previsao.classifica├º├úo_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
                     'bg-red-100 text-red-800'
                   }`}>
-                    Classe {previsao.classificação_abc || 'C'}
+                    Classe {previsao.classifica├º├úo_abc || 'C'}
                   </span>
                 </div>
 
                 {riscoRuptura && (
                   <div className="pt-4 border-t border-red-200 bg-red-50 p-3 rounded-lg">
-                    <p className="text-sm font-bold text-red-800 mb-1">🚨 Ação Urgente Necessária!</p>
+                    <p className="text-sm font-bold text-red-800 mb-1">­ƒÜ¿ A├º├úo Urgente Necess├íria!</p>
                     <p className="text-xs text-red-700">
-                      Estoque acabará em {diasAteAcabar} dias. Faça reposição imediatamente para evitar ruptura.
+                      Estoque acabar├í em {diasAteAcabar} dias. Fa├ºa reposi├º├úo imediatamente para evitar ruptura.
                     </p>
                   </div>
                 )}
 
                 <div className="pt-4 border-t border-purple-200">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Previsão Vendas 30d</span>
+                    <span className="text-sm text-gray-600">Previs├úo Vendas 30d</span>
                     <span className="font-bold text-purple-600">
                       R$ {(previsao.previsao_30d || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </span>
