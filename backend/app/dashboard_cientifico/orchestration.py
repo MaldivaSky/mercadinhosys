@@ -176,12 +176,42 @@ class DashboardOrchestrator:
         
         # 🔥 ADICIONADO: Detalhes de despesas
         expense_details = DataLayer.get_expense_details(self.establishment_id, days)
+        
+        # 🔥 NOVO: Vendas por hora
+        sales_by_hour = DataLayer.get_sales_by_hour(self.establishment_id, days)
+        
+        # 🔥 NOVO: Top produtos por hora
+        top_products_by_hour = DataLayer.get_top_products_by_hour(self.establishment_id, days, top_n=5)
+        
+        # 🔥 NOVO: Padrões temporais de clientes
+        customer_temporal_patterns = DataLayer.get_customer_temporal_patterns(self.establishment_id, days=90)
+        
+        # 🔥 NOVO: Métricas de concentração por horário
+        hourly_concentration = DataLayer.get_hourly_concentration_metrics(self.establishment_id, days)
+        
+        # 🔥 NOVO: Matriz de correlação Produto x Horário
+        product_hour_matrix = DataLayer.get_product_hour_correlation_matrix(self.establishment_id, days, top_products=10)
+        
+        # 🔥 NOVO: Afinidade Cliente x Produto
+        customer_product_affinity = DataLayer.get_customer_product_affinity(self.establishment_id, days=90, min_support=3)
+        
+        # 🔥 NOVO: Comportamento de clientes por horário
+        hourly_customer_behavior = DataLayer.get_hourly_customer_behavior(self.establishment_id, days=60)
 
         # 4. Análise ABC (cálculo on-the-fly se não cacheado)
         abc_analysis = self.get_abc_analysis(days)
         
         customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
-        sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, days)
+        
+        # 🔥 CORREÇÃO: Buscar timeseries com período maior para garantir comparação mensal
+        # Para comparação mensal funcionar, precisamos de pelo menos 60 dias de dados
+        timeseries_days = max(days, 90)  # Garantir pelo menos 90 dias para análise mensal
+        sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
+        
+        # Log para debug
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"📊 Timeseries retornado: {len(sales_timeseries)} dias de dados")
         
         # 🔥 ADICIONADO: Previsão de demanda (Movido para DEPOIS de sales_timeseries ser definido)
         forecast = PracticalModels.generate_forecast(sales_timeseries)
@@ -290,28 +320,48 @@ class DashboardOrchestrator:
                 )[:10]
             
             produto_ids_lentos = [p.get("id") for p in produtos_lentos_candidatos if p.get("id")]
+            
+            # 🔥 CORREÇÃO: Buscar produtos do banco com todos os dados necessários
             produtos_db_lentos = Produto.query.filter(
                 Produto.estabelecimento_id == self.establishment_id,
                 Produto.id.in_(produto_ids_lentos)
             ).all()
             
-            estoque_map_lentos = {p.id: p.quantidade for p in produtos_db_lentos}
+            # Criar mapa com estoque E preço de custo do banco (dados reais)
+            produtos_db_map = {
+                p.id: {
+                    'estoque': p.quantidade,
+                    'preco_custo': float(p.preco_custo) if p.preco_custo else 0.0
+                } 
+                for p in produtos_db_lentos
+            }
             
             for p in produtos_lentos_candidatos:
                 produto_id = p.get("id", 0)
                 qtd_vendida = p.get("quantidade_vendida", 0)
-                estoque_atual = estoque_map_lentos.get(produto_id, 0)
-                preco_custo = p.get("preco_custo", 0)
                 
-                # Calcular giro de estoque
+                # 🔥 CORREÇÃO: Pegar estoque e preço de custo REAIS do banco
+                produto_db_data = produtos_db_map.get(produto_id, {'estoque': 0, 'preco_custo': 0})
+                estoque_atual = produto_db_data['estoque']
+                preco_custo = produto_db_data['preco_custo']
+                
+                # Se preco_custo do banco for 0, tentar pegar do ABC
+                if preco_custo == 0:
+                    preco_custo = p.get("preco_custo", 0)
+                
+                # Calcular giro de estoque (vendas / estoque médio)
+                # Para produtos lentos, o giro será baixo
                 giro_estoque = (qtd_vendida / estoque_atual) if estoque_atual > 0 else 0
                 
                 # Calcular dias de estoque parado
                 demanda_diaria = qtd_vendida / days if days > 0 else 0
                 dias_estoque = (estoque_atual / demanda_diaria) if demanda_diaria > 0 else 999
                 
-                # Custo do capital parado
+                # 🔥 CORREÇÃO: Custo do capital parado = preço de custo × estoque atual
                 custo_parado = preco_custo * estoque_atual
+                
+                # 🔥 CORREÇÃO: Perda mensal = 1% do capital parado (custo de oportunidade)
+                perda_mensal = custo_parado * 0.01
                 
                 produtos_lentos.append({
                     "id": produto_id,
@@ -321,7 +371,7 @@ class DashboardOrchestrator:
                     "dias_estoque": round(dias_estoque, 0) if dias_estoque < 999 else 999,
                     "giro_estoque": round(giro_estoque, 2),
                     "custo_parado": round(custo_parado, 2),
-                    "perda_mensal": round(custo_parado * 0.01, 2),  # 1% ao mês de custo de oportunidade
+                    "perda_mensal": round(perda_mensal, 2),
                     "estoque_atual": estoque_atual,
                     "margem": p.get("margem", 0),
                     "classificacao": p.get("classificacao", "B")
@@ -470,6 +520,13 @@ class DashboardOrchestrator:
             "forecast": forecast,
             "inventory": inventory_summary,
             "expenses": expense_details,
+            "sales_by_hour": sales_by_hour,  # 🔥 NOVO
+            "top_products_by_hour": top_products_by_hour,  # 🔥 NOVO
+            "customer_temporal_patterns": customer_temporal_patterns,  # 🔥 NOVO
+            "hourly_concentration": hourly_concentration,  # 🔥 NOVO
+            "product_hour_matrix": product_hour_matrix,  # 🔥 NOVO: Matriz de correlação
+            "customer_product_affinity": customer_product_affinity,  # 🔥 NOVO: Afinidade
+            "hourly_customer_behavior": hourly_customer_behavior,  # 🔥 NOVO: Comportamento por hora
             "abc": abc_analysis,
             "rfm": {"segments": segments, "window_days": rfm_analysis.get("window_days", 180)},
             "recomendacoes": recomendacoes,
