@@ -830,7 +830,7 @@ export default function SalesPage() {
                                                         callback: (value) => formatCurrency(Number(value) || 0),
                                                         font: {
                                                             size: 12,
-                                                            weight: '500'
+                                                            weight: 500
                                                         },
                                                         color: '#6B7280'
                                                     },
@@ -845,7 +845,7 @@ export default function SalesPage() {
                                                     ticks: {
                                                         font: {
                                                             size: 11,
-                                                            weight: '500'
+                                                            weight: 500
                                                         },
                                                         color: '#6B7280',
                                                         maxRotation: 45,

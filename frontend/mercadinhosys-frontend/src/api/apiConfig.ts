@@ -32,12 +32,24 @@ const getRuntimeApiUrl = (): string | undefined => {
 const getBaseUrl = (): string => {
     // Em desenvolvimento com Vite proxy, usar caminho relativo para evitar CORS
     if (isDevelopment) return '/api';
+    
     const host = window.location.hostname || '';
     const isVercel = host.endsWith('.vercel.app');
+    
+    // 1. Prioridade: Runtime override (window.__API_URL__)
     const runtimeUrl = getRuntimeApiUrl();
     if (runtimeUrl) return normalizeUrl(runtimeUrl);
+    
+    // 2. Variável de ambiente do Vite
     if (import.meta.env.VITE_API_URL) return normalizeUrl(import.meta.env.VITE_API_URL as string);
-    if (isVercel) return normalizeUrl('https://mercadinhosys.onrender.com');
+    
+    // 3. Fallback para Vercel: usar URL do Render
+    if (isVercel) {
+        const renderUrl = import.meta.env.VITE_RENDER_API_URL || 'https://mercadinhosys.onrender.com';
+        return normalizeUrl(renderUrl);
+    }
+    
+    // 4. Último fallback: mesma origem
     return normalizeUrl(window.location.origin);
 };
 

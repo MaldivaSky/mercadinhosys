@@ -103,9 +103,13 @@ def create_app(config_name=None):
         if config_name == 'development':
             cors_origins = ["http://localhost:3000", "http://localhost:5173"]
         else:
-            # Em produção sem CORS configurado, logar aviso mas permitir
-            logger.warning("⚠️ CORS_ORIGINS não configurado! Configure no Render Dashboard.")
-            cors_origins = "*"
+            # Em produção sem CORS configurado, usar domínios padrão do Vercel/Render
+            logger.warning("⚠️ CORS_ORIGINS não configurado! Usando domínios padrão.")
+            cors_origins = [
+                "https://mercadinhosys.vercel.app",
+                "https://*.vercel.app",
+                "https://*.onrender.com"
+            ]
     
     # Log de CORS para debug
     logger.info(f"🌐 CORS configurado para: {cors_origins}")

@@ -14,7 +14,7 @@ class Config:
     # Seleção robusta do banco: usa Postgres quando disponível; caso contrário, SQLite cross-platform
     
     # FORÇAR SQLITE SE NECESSÁRIO (Descomente abaixo para forçar localmente mesmo se tiver env vars)
-    FORCE_SQLITE = True 
+    FORCE_SQLITE = os.environ.get("FORCE_SQLITE", "false").lower() == "true" 
     
     DATABASE_URL = (
         os.environ.get("NEON_DATABASE_URL")

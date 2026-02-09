@@ -16,7 +16,6 @@ import {
     Search,
     Clock,
     Target,
-    AlertTriangle,
     Zap,
     Brain
 } from 'lucide-react';
@@ -250,7 +249,7 @@ const ReportsPage: React.FC = () => {
                     'Qtd Itens': venda.quantidade_itens || 0,
                     'Status': venda.status?.toUpperCase() || '-'
                 };
-            }).sort((a, b) => {
+            }).sort((a: any, b: any) => {
                 // Ordenar por data/hora (mais recente primeiro)
                 try {
                     const dateA = a['Data/Hora'].split(' ')[0].split('/').reverse().join('-');
