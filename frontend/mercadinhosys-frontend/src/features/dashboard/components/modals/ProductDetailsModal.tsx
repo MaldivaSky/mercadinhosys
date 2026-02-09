@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Package, AlertTriangle, TrendingUp } from 'lucide-react';
+import { X, Package, AlertTriangle } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { Badge } from '../../../../components/ui/badge';
 

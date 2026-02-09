@@ -596,26 +596,13 @@ const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
       {/* HEADER CIENTÍFICO */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <Brain className="w-10 h-10 text-blue-600" />
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Dashboard de Ciência de Dados</h1>
-            </div>
-            <p className="text-gray-600">
-              Análises estatísticas, modelos preditivos e otimização baseada em dados
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Dashboard Executivo</h1>
+            <p className="text-gray-600 mt-1">
+              Análise completa do seu negócio • {new Date().toLocaleDateString('pt-BR')}
             </p>
-            <div className="flex items-center gap-4 mt-3">
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                <Cpu className="w-4 h-4 inline mr-1" />
-                Modelos Ativos: 12
-              </span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                <Database className="w-4 h-4 inline mr-1" />
-                {new Date().toLocaleDateString('pt-BR')}
-              </span>
-            </div>
           </div>
           <div className="flex gap-3">
             <select
@@ -625,250 +612,67 @@ const DashboardPage: React.FC = () => {
             >
               <option value="visao-geral">📊 Visão Geral</option>
               <option value="detalhado">📈 Análise Detalhada</option>
-              <option value="cientifico">🧬 Modo Científico</option>
+              <option value="cientifico">🔬 Modo Avançado</option>
             </select>
-            <button onClick={loadDashboard} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <button onClick={loadDashboard} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors">
               <RefreshCw className="w-4 h-4" />
-              Atualizar Modelos
+              Atualizar
             </button>
           </div>
         </div>
       </div>
 
-      {/* DESCRIÇÃO DO MODO SELECIONADO */}
-      {viewMode === 'visao-geral' && (
-        <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
-          <p className="text-blue-900 font-medium">
-            📊 <strong>Visão Geral:</strong> Visualização simplificada com apenas os KPIs principais para acompanhamento rápido.
-          </p>
-        </div>
-      )}
-      {viewMode === 'detalhado' && (
-        <div className="mb-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r-lg">
-          <p className="text-purple-900 font-medium">
-            📈 <strong>Análise Detalhada:</strong> KPIs + Curva ABC + Análise Temporal + Análise Financeira para decisões estratégicas.
-          </p>
-        </div>
-      )}
-      {viewMode === 'cientifico' && (
-        <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
-          <p className="text-green-900 font-medium">
-            🧬 <strong>Modo Científico:</strong> Visualização completa com insights científicos, correlações, previsões e recomendações de otimização.
-          </p>
-        </div>
-      )}
-
-      {/* KPIs PRINCIPAIS COM TOOLTIPS E EXPLICAÇÕES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* KPIs PRINCIPAIS - SIMPLIFICADOS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           {
-            title: 'Margem Líquida',
-            tooltip: 'Percentual de lucro sobre as vendas. Quanto maior, melhor a rentabilidade.',
-            value: `${(mes?.margem_lucro || 0).toFixed(1)}%`,
+            title: 'Faturamento',
+            value: `R$ ${(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: hoje?.crescimento_vs_ontem || 0,
-            icon: TrendingUpFill,
-            color: 'bg-gradient-to-r from-green-500 to-emerald-600',
-            details: `Lucro: R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            explanation: `De cada R$ 100 em vendas, R$ ${(mes?.margem_lucro || 0).toFixed(0)} é lucro`,
-            expandedContent: (
-              <div className="space-y-3">
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-green-900 mb-1">💡 O que isso significa?</p>
-                  <p className="text-sm text-green-800">
-                    A margem líquida mostra quanto sobra de lucro depois de pagar todos os custos. 
-                    Uma margem de {(mes?.margem_lucro || 0).toFixed(1)}% significa que você está lucrando 
-                    R$ {(mes?.margem_lucro || 0).toFixed(0)} para cada R$ 100 vendidos.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Total Vendas</p>
-                    <p className="font-bold text-gray-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Lucro Líquido</p>
-                    <p className="font-bold text-green-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 italic">
-                  ✅ Margem saudável: acima de 20% | ⚠️ Atenção: abaixo de 10%
-                </div>
-              </div>
-            )
+            icon: DollarIcon,
+            color: 'from-green-500 to-emerald-600',
+            subtitle: `${mes?.margem_lucro?.toFixed(1) || 0}% de margem`
           },
           {
-            title: 'ROI Mensal',
-            tooltip: 'Retorno sobre Investimento. Mostra quanto você ganhou em relação ao que investiu em estoque.',
-            value: `${(mes?.roi_mensal || 0).toFixed(1)}%`,
+            title: 'Lucro Líquido',
+            value: `R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: 5.2,
-            icon: TrendingUp,
-            color: 'bg-gradient-to-r from-blue-500 to-cyan-600',
-            details: `Investido: R$ ${(mes?.investimentos || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            explanation: `Para cada R$ 100 investidos, você ganhou R$ ${(mes?.roi_mensal || 0).toFixed(0)}`,
-            expandedContent: (
-              <div className="space-y-3">
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-blue-900 mb-1">💡 O que isso significa?</p>
-                  <p className="text-sm text-blue-800">
-                    O ROI mostra o retorno do seu investimento em estoque. Um ROI de {(mes?.roi_mensal || 0).toFixed(1)}% 
-                    significa que para cada R$ 100 investidos em produtos, você ganhou R$ {(mes?.roi_mensal || 0).toFixed(0)} de lucro.
-                  </p>
-                </div>
-                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-blue-900 mb-2">🏆 Produtos que mais contribuíram:</p>
-                  <div className="space-y-2">
-                    {analise_produtos?.produtos_estrela?.slice(0, 3).map((produto: any, idx: number) => (
-                      <div key={produto.id} className="flex justify-between items-center text-sm">
-                        <span className="text-blue-800 truncate flex-1">{idx + 1}. {produto.nome}</span>
-                        <span className="font-bold text-blue-600 ml-2">R$ {produto.faturamento.toFixed(0)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 italic">
-                  ✅ ROI excelente: acima de 30% | ⚠️ Atenção: abaixo de 10%
-                </div>
-              </div>
-            )
+            icon: TrendingUpFill,
+            color: 'from-blue-500 to-cyan-600',
+            subtitle: `ROI: ${(mes?.roi_mensal || 0).toFixed(1)}%`
           },
           {
             title: 'Ticket Médio',
-            tooltip: 'Valor médio que cada cliente gasta por compra. Quanto maior, melhor.',
             value: `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
             change: 8.7,
-            icon: DollarIcon,
-            color: 'bg-gradient-to-r from-purple-500 to-pink-600',
-            details: `${hoje?.clientes_atendidos || 0} clientes hoje`,
-            explanation: `Cada cliente gastou em média R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
-            expandedContent: (
-              <div className="space-y-3">
-                <div className="bg-purple-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-purple-900 mb-1">💡 O que isso significa?</p>
-                  <p className="text-sm text-purple-800">
-                    O ticket médio mostra quanto cada cliente gasta por compra. Um ticket de R$ {(hoje?.ticket_medio || 0).toFixed(2)} 
-                    indica que, em média, cada cliente compra esse valor por visita.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Clientes Hoje</p>
-                    <p className="font-bold text-gray-900">{hoje?.clientes_atendidos || 0}</p>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Total Vendas</p>
-                    <p className="font-bold text-purple-600">R$ {(hoje?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                </div>
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded-lg">
-                  <p className="text-xs font-semibold text-purple-900 mb-1">💡 Como aumentar o ticket médio?</p>
-                  <ul className="text-xs text-purple-800 space-y-1">
-                    <li>• Ofereça combos e promoções</li>
-                    <li>• Sugira produtos complementares</li>
-                    <li>• Destaque produtos premium</li>
-                  </ul>
-                </div>
-              </div>
-            )
+            icon: TrendingUp,
+            color: 'from-purple-500 to-pink-600',
+            subtitle: `${hoje?.clientes_atendidos || 0} clientes`
           },
           {
-            title: 'Ponto de Equilíbrio',
-            tooltip: 'Quanto você precisa vender para cobrir todos os custos. Abaixo disso, você tem prejuízo.',
-            value: `R$ ${(analise_financeira?.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`,
+            title: 'Despesas',
+            value: `R$ ${(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: -2.3,
-            icon: TargetIcon,
-            color: 'bg-gradient-to-r from-orange-500 to-red-600',
-            details: `Margem de Segurança: ${(analise_financeira?.indicadores?.margem_seguranca || 0).toFixed(1)}%`,
-            explanation: `Você precisa vender R$ ${(analise_financeira?.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} para não ter prejuízo`,
-            expandedContent: (
-              <div className="space-y-3">
-                <div className="bg-orange-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-orange-900 mb-1">💡 O que isso significa?</p>
-                  <p className="text-sm text-orange-800">
-                    O ponto de equilíbrio é o valor mínimo que você precisa vender para cobrir todos os custos 
-                    (produtos, despesas, salários, etc). Abaixo de R$ {(analise_financeira?.indicadores?.ponto_equilibrio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}, 
-                    você tem prejuízo. Acima disso, você lucra!
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Vendas Atuais</p>
-                    <p className="font-bold text-gray-900">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                  <div className="bg-gray-50 p-2 rounded">
-                    <p className="text-gray-600">Total Despesas</p>
-                    <p className="font-bold text-red-600">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                </div>
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-3 rounded-lg">
-                  <p className="text-sm font-semibold text-green-900 mb-1">✅ Situação Atual</p>
-                  <p className="text-sm text-green-800">
-                    Você está {((mes?.total_vendas || 0) / (analise_financeira?.indicadores?.ponto_equilibrio || 1) * 100).toFixed(0)}% 
-                    acima do ponto de equilíbrio. Margem de segurança: {(analise_financeira?.indicadores?.margem_seguranca || 0).toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-xs text-gray-500 italic">
-                  ✅ Seguro: margem acima de 20% | ⚠️ Atenção: margem abaixo de 10%
-                </div>
-              </div>
-            )
+            icon: AlertCircle,
+            color: 'from-orange-500 to-red-600',
+            subtitle: `${(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% do faturamento`
           }
         ].map((kpi, idx) => (
           <div
             key={idx}
-            className="bg-white rounded-2xl shadow-xl p-6 transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer border border-gray-200 relative"
-            onMouseEnter={() => setHoveredKPI(idx)}
-            onMouseLeave={() => setHoveredKPI(null)}
-            onClick={() => setExpandedKPI(expandedKPI === idx ? null : idx)}
+            className={`bg-gradient-to-br ${kpi.color} rounded-xl shadow-lg p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl`}
           >
-            {/* Tooltip on hover */}
-            {hoveredKPI === idx && (
-              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 -translate-y-full bg-gray-900 text-white text-xs rounded-lg px-3 py-2 z-10 w-64 shadow-xl">
-                <div className="relative">
-                  {kpi.tooltip}
-                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                </div>
-              </div>
-            )}
-
             <div className="flex justify-between items-start mb-4">
-              <div className={`${kpi.color} p-3 rounded-xl shadow-lg`}>
-                <kpi.icon className="w-6 h-6 text-white" />
-              </div>
-              <div className={`flex items-center px-3 py-1 rounded-full text-sm font-semibold ${kpi.change >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {kpi.change >= 0 ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+              <kpi.icon className="w-8 h-8 opacity-80" />
+              <div className={`flex items-center px-2 py-1 rounded-full text-xs font-bold ${kpi.change >= 0 ? 'bg-white/20' : 'bg-black/20'}`}>
+                {kpi.change >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                 {Math.abs(kpi.change).toFixed(1)}%
               </div>
             </div>
             
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-gray-500 text-sm font-medium">{kpi.title}</h3>
-              <AlertCircle className="w-4 h-4 text-gray-400" />
-            </div>
-            
-            <p className="text-3xl font-bold text-gray-900 mb-2">{kpi.value}</p>
-            <p className="text-gray-600 text-sm mb-3">{kpi.details}</p>
-            
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg mb-3">
-              <p className="text-xs text-blue-900 font-medium">{kpi.explanation}</p>
-            </div>
-
-            {/* Expanded content */}
-            {expandedKPI === idx && (
-              <div className="mt-4 pt-4 border-t border-gray-200 animate-fadeIn">
-                {kpi.expandedContent}
-              </div>
-            )}
-
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-500">
-                  {expandedKPI === idx ? 'Clique para recolher' : 'Clique para mais detalhes'}
-                </span>
-                <span className={`font-semibold ${kpi.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {kpi.change >= 0 ? 'Acima da meta' : 'Abaixo da meta'}
-                </span>
-              </div>
-            </div>
+            <p className="text-sm opacity-80 mb-1">{kpi.title}</p>
+            <p className="text-3xl font-bold mb-2">{kpi.value}</p>
+            <p className="text-sm opacity-90">{kpi.subtitle}</p>
           </div>
         ))}
       </div>
