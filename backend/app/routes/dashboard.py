@@ -53,13 +53,23 @@ def dashboard_cientifico():
         # 1. Obter contexto seguro (já validado pelo decorator)
         estabelecimento_id = get_establishment_id()
         
+        # 🔥 CORREÇÃO CRÍTICA: Pegar parâmetro 'days' da query string
+        days = request.args.get('days', default=30, type=int)
+        
+        # Validar range de dias (mínimo 7, máximo 365)
+        if days < 7:
+            days = 7
+        elif days > 365:
+            days = 365
+        
+        logger.info(f"📊 Dashboard científico solicitado para {days} dias")
+        
         # 2. Orquestração (Injeção de Dependência Simplificada)
         # O Orchestrator encapsula a complexidade e acesso a dados
         orchestrator = DashboardOrchestrator(estabelecimento_id)
         
-        # 3. Execução Direta (Contrato Definido)
-        # Removemos checks de hasattr para forçar consistência de contrato
-        data = orchestrator.get_scientific_dashboard()
+        # 3. Execução Direta (Contrato Definido) - 🔥 PASSANDO O PARÂMETRO DAYS
+        data = orchestrator.get_scientific_dashboard(days=days)
 
         # 4. Resposta Padronizada
         return jsonify({
@@ -67,7 +77,8 @@ def dashboard_cientifico():
             "metadata": {
                 "timestamp": datetime.utcnow().isoformat(),
                 "version": "2.0",
-                "cache_strategy": "smartcache"
+                "cache_strategy": "smartcache",
+                "period_days": days  # 🔥 NOVO: Retornar período usado
             },
             "data": data
         }), 200

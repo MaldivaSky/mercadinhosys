@@ -315,3 +315,661 @@ class DataLayer:
             }
             for r in results
         ]
+
+    @staticmethod
+    def get_sales_by_hour(estabelecimento_id: int, days: int = 30) -> List[Dict[str, Any]]:
+        """
+        Vendas agrupadas por hora do dia - Para análise de pico de vendas
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query agrupada por hora
+        results = (
+            db.session.query(
+                func.extract('hour', Venda.data_venda).label('hora'),
+                func.count(Venda.id).label('quantidade'),
+                func.sum(Venda.total).label('total'),
+                func.avg(Venda.total).label('ticket_medio')
+            )
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada'
+            )
+            .group_by(func.extract('hour', Venda.data_venda))
+            .order_by(func.extract('hour', Venda.data_venda))
+            .all()
+        )
+        
+        # Calcular margem aproximada (assumindo 30% de margem média)
+        return [
+            {
+                "hora": int(r.hora),
+                "quantidade": int(r.quantidade or 0),
+                "total": float(r.total or 0),
+                "ticket_medio": float(r.ticket_medio or 0),
+                "lucro": float(r.total or 0) * 0.3,  # Margem aproximada
+                "margem": 30.0  # Margem padrão
+            }
+            for r in results
+        ]
+
+    @staticmethod
+    def get_top_products_by_hour(estabelecimento_id: int, days: int = 30, top_n: int = 5) -> Dict[int, List[Dict[str, Any]]]:
+        """
+        Top produtos mais vendidos por hora do dia
+        Retorna um dicionário onde a chave é a hora (0-23) e o valor é a lista dos top N produtos
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query para buscar produtos vendidos por hora
+        results = (
+            db.session.query(
+                func.extract('hour', Venda.data_venda).label('hora'),
+                Produto.id.label('produto_id'),
+                Produto.nome.label('produto_nome'),
+                func.sum(ItemVenda.quantidade).label('quantidade_vendida'),
+                func.sum(ItemVenda.total_item).label('faturamento')
+            )
+            .join(ItemVenda, ItemVenda.venda_id == Venda.id)
+            .join(Produto, Produto.id == ItemVenda.produto_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada'
+            )
+            .group_by(
+                func.extract('hour', Venda.data_venda),
+                Produto.id,
+                Produto.nome
+            )
+            .order_by(
+                func.extract('hour', Venda.data_venda),
+                func.sum(ItemVenda.total_item).desc()
+            )
+            .all()
+        )
+        
+        # Organizar por hora
+        produtos_por_hora = {}
+        for r in results:
+            hora = int(r.hora)
+            if hora not in produtos_por_hora:
+                produtos_por_hora[hora] = []
+            
+            # Adicionar apenas os top N produtos por hora
+            if len(produtos_por_hora[hora]) < top_n:
+                produtos_por_hora[hora].append({
+                    "produto_id": r.produto_id,
+                    "produto_nome": r.produto_nome,
+                    "quantidade_vendida": int(r.quantidade_vendida or 0),
+                    "faturamento": float(r.faturamento or 0)
+                })
+        
+        return produtos_por_hora
+
+    @staticmethod
+    def get_customer_temporal_patterns(estabelecimento_id: int, days: int = 90) -> Dict[str, Any]:
+        """
+        Análise de padrões temporais de clientes
+        Retorna perfis de compra por horário e segmentação temporal
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query para padrões de clientes por horário
+        results = (
+            db.session.query(
+                Cliente.id.label('cliente_id'),
+                Cliente.nome.label('cliente_nome'),
+                func.extract('hour', Venda.data_venda).label('hora_preferida'),
+                func.count(Venda.id).label('total_compras'),
+                func.sum(Venda.total).label('total_gasto'),
+                func.avg(Venda.total).label('ticket_medio')
+            )
+            .join(Venda, Venda.cliente_id == Cliente.id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Cliente.id.isnot(None)
+            )
+            .group_by(
+                Cliente.id,
+                Cliente.nome,
+                func.extract('hour', Venda.data_venda)
+            )
+            .all()
+        )
+        
+        # Organizar dados
+        clientes_por_horario = {}
+        perfis_temporais = {
+            'matutino': [],  # 6h-12h
+            'vespertino': [],  # 12h-18h
+            'noturno': []  # 18h-23h
+        }
+        
+        for r in results:
+            hora = int(r.hora_preferida)
+            if hora not in clientes_por_horario:
+                clientes_por_horario[hora] = {
+                    'total_clientes': 0,
+                    'faturamento_total': 0,
+                    'ticket_medio': 0
+                }
+            
+            clientes_por_horario[hora]['total_clientes'] += 1
+            clientes_por_horario[hora]['faturamento_total'] += float(r.total_gasto or 0)
+            
+            # Classificar cliente por perfil temporal
+            cliente_data = {
+                'cliente_id': r.cliente_id,
+                'cliente_nome': r.cliente_nome,
+                'hora_preferida': hora,
+                'total_compras': r.total_compras,
+                'total_gasto': float(r.total_gasto or 0),
+                'ticket_medio': float(r.ticket_medio or 0)
+            }
+            
+            if 6 <= hora < 12:
+                perfis_temporais['matutino'].append(cliente_data)
+            elif 12 <= hora < 18:
+                perfis_temporais['vespertino'].append(cliente_data)
+            elif 18 <= hora <= 23:
+                perfis_temporais['noturno'].append(cliente_data)
+        
+        # Calcular ticket médio por horário
+        for hora in clientes_por_horario:
+            if clientes_por_horario[hora]['total_clientes'] > 0:
+                clientes_por_horario[hora]['ticket_medio'] = (
+                    clientes_por_horario[hora]['faturamento_total'] / 
+                    clientes_por_horario[hora]['total_clientes']
+                )
+        
+        return {
+            'clientes_por_horario': clientes_por_horario,
+            'perfis_temporais': perfis_temporais,
+            'total_clientes_analisados': len(results)
+        }
+
+    @staticmethod
+    def get_hourly_concentration_metrics(estabelecimento_id: int, days: int = 30) -> Dict[str, Any]:
+        """
+        Métricas de concentração de faturamento por horário
+        Calcula índice de Gini e análise de diversificação
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query para faturamento por horário
+        results = (
+            db.session.query(
+                func.extract('hour', Venda.data_venda).label('hora'),
+                func.sum(Venda.total).label('faturamento')
+            )
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada'
+            )
+            .group_by(func.extract('hour', Venda.data_venda))
+            .order_by(func.sum(Venda.total).desc())
+            .all()
+        )
+        
+        if not results:
+            return {
+                'gini_index': 0,
+                'concentration_ratio': 0,
+                'diversification_score': 0,
+                'top_hours': []
+            }
+        
+        # Calcular métricas
+        faturamentos = [float(r.faturamento or 0) for r in results]
+        total_faturamento = sum(faturamentos)
+        
+        # Top 3 horas (concentração)
+        top_3_faturamento = sum(faturamentos[:3]) if len(faturamentos) >= 3 else sum(faturamentos)
+        concentration_ratio = (top_3_faturamento / total_faturamento * 100) if total_faturamento > 0 else 0
+        
+        # Índice de Gini simplificado (0 = perfeita igualdade, 100 = máxima concentração)
+        n = len(faturamentos)
+        if n > 1 and total_faturamento > 0:
+            faturamentos_sorted = sorted(faturamentos)
+            cumsum = 0
+            for i, val in enumerate(faturamentos_sorted):
+                cumsum += (2 * (i + 1) - n - 1) * val
+            gini_index = cumsum / (n * total_faturamento) * 100
+        else:
+            gini_index = 0
+        
+        # Score de diversificação (inverso da concentração)
+        diversification_score = 100 - concentration_ratio
+        
+        return {
+            'gini_index': round(gini_index, 2),
+            'concentration_ratio': round(concentration_ratio, 2),
+            'diversification_score': round(diversification_score, 2),
+            'top_hours': [
+                {
+                    'hora': int(r.hora),
+                    'faturamento': float(r.faturamento or 0),
+                    'percentual': (float(r.faturamento or 0) / total_faturamento * 100) if total_faturamento > 0 else 0
+                }
+                for r in results[:5]
+            ]
+        }
+
+    @staticmethod
+    def get_product_hour_correlation_matrix(estabelecimento_id: int, days: int = 30, top_products: int = 10) -> Dict[str, Any]:
+        """
+        Matriz de correlação Produto x Horário
+        Mostra quais produtos vendem melhor em quais horários
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Buscar top produtos
+        top_prods = (
+            db.session.query(
+                Produto.id,
+                Produto.nome,
+                func.sum(ItemVenda.quantidade).label('total_vendido')
+            )
+            .join(ItemVenda, ItemVenda.produto_id == Produto.id)
+            .join(Venda, Venda.id == ItemVenda.venda_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada'
+            )
+            .group_by(Produto.id, Produto.nome)
+            .order_by(func.sum(ItemVenda.quantidade).desc())
+            .limit(top_products)
+            .all()
+        )
+        
+        if not top_prods:
+            return {'matrix': [], 'products': [], 'hours': []}
+        
+        produto_ids = [p.id for p in top_prods]
+        produto_nomes = {p.id: p.nome for p in top_prods}
+        
+        # Buscar vendas por produto e horário
+        results = (
+            db.session.query(
+                Produto.id.label('produto_id'),
+                func.extract('hour', Venda.data_venda).label('hora'),
+                func.sum(ItemVenda.quantidade).label('quantidade'),
+                func.sum(ItemVenda.total_item).label('faturamento')
+            )
+            .join(ItemVenda, ItemVenda.produto_id == Produto.id)
+            .join(Venda, Venda.id == ItemVenda.venda_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Produto.id.in_(produto_ids)
+            )
+            .group_by(Produto.id, func.extract('hour', Venda.data_venda))
+            .all()
+        )
+        
+        # Organizar em matriz
+        matrix = {}
+        for r in results:
+            produto_id = r.produto_id
+            hora = int(r.hora)
+            if produto_id not in matrix:
+                matrix[produto_id] = {}
+            matrix[produto_id][hora] = {
+                'quantidade': int(r.quantidade or 0),
+                'faturamento': float(r.faturamento or 0)
+            }
+        
+        # Normalizar para percentuais (0-100) por produto
+        matrix_normalized = []
+        for produto_id in produto_ids:
+            if produto_id not in matrix:
+                continue
+            
+            total_produto = sum([v['faturamento'] for v in matrix[produto_id].values()])
+            if total_produto == 0:
+                continue
+            
+            row = {
+                'produto_id': produto_id,
+                'produto_nome': produto_nomes[produto_id],
+                'horas': {}
+            }
+            
+            for hora in range(24):
+                if hora in matrix[produto_id]:
+                    percentual = (matrix[produto_id][hora]['faturamento'] / total_produto) * 100
+                    row['horas'][hora] = {
+                        'percentual': round(percentual, 1),
+                        'quantidade': matrix[produto_id][hora]['quantidade'],
+                        'faturamento': matrix[produto_id][hora]['faturamento']
+                    }
+                else:
+                    row['horas'][hora] = {
+                        'percentual': 0,
+                        'quantidade': 0,
+                        'faturamento': 0
+                    }
+            
+            matrix_normalized.append(row)
+        
+        return {
+            'matrix': matrix_normalized,
+            'products': [{'id': p.id, 'nome': p.nome} for p in top_prods],
+            'hours': list(range(24))
+        }
+
+    @staticmethod
+    def get_customer_product_affinity(estabelecimento_id: int, days: int = 90, min_support: int = 3) -> List[Dict[str, Any]]:
+        """
+        Análise de afinidade Cliente x Produto
+        Identifica quais clientes compram quais produtos com frequência
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query para buscar padrões de compra
+        results = (
+            db.session.query(
+                Cliente.id.label('cliente_id'),
+                Cliente.nome.label('cliente_nome'),
+                Produto.id.label('produto_id'),
+                Produto.nome.label('produto_nome'),
+                func.count(Venda.id).label('frequencia_compra'),
+                func.sum(ItemVenda.quantidade).label('quantidade_total'),
+                func.sum(ItemVenda.total_item).label('faturamento_total'),
+                func.avg(ItemVenda.total_item).label('ticket_medio')
+            )
+            .join(Venda, Venda.cliente_id == Cliente.id)
+            .join(ItemVenda, ItemVenda.venda_id == Venda.id)
+            .join(Produto, Produto.id == ItemVenda.produto_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Cliente.id.isnot(None)
+            )
+            .group_by(Cliente.id, Cliente.nome, Produto.id, Produto.nome)
+            .having(func.count(Venda.id) >= min_support)
+            .order_by(func.count(Venda.id).desc())
+            .limit(50)
+            .all()
+        )
+        
+        return [
+            {
+                'cliente_id': r.cliente_id,
+                'cliente_nome': r.cliente_nome,
+                'produto_id': r.produto_id,
+                'produto_nome': r.produto_nome,
+                'frequencia_compra': r.frequencia_compra,
+                'quantidade_total': int(r.quantidade_total or 0),
+                'faturamento_total': float(r.faturamento_total or 0),
+                'ticket_medio': float(r.ticket_medio or 0),
+                'score_afinidade': r.frequencia_compra * float(r.faturamento_total or 0)
+            }
+            for r in results
+        ]
+
+    @staticmethod
+    def get_hourly_customer_behavior(estabelecimento_id: int, days: int = 60) -> Dict[str, Any]:
+        """
+        Comportamento de clientes por horário
+        Analisa ticket médio, frequência e preferências por horário
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        results = (
+            db.session.query(
+                func.extract('hour', Venda.data_venda).label('hora'),
+                func.count(func.distinct(Venda.cliente_id)).label('clientes_unicos'),
+                func.count(Venda.id).label('total_vendas'),
+                func.avg(Venda.total).label('ticket_medio'),
+                func.sum(Venda.total).label('faturamento_total')
+            )
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Venda.cliente_id.isnot(None)
+            )
+            .group_by(func.extract('hour', Venda.data_venda))
+            .order_by(func.extract('hour', Venda.data_venda))
+            .all()
+        )
+        
+        comportamento_por_hora = []
+        for r in results:
+            hora = int(r.hora)
+            clientes_unicos = r.clientes_unicos or 0
+            total_vendas = r.total_vendas or 0
+            
+            # Calcular frequência média (vendas por cliente)
+            frequencia_media = (total_vendas / clientes_unicos) if clientes_unicos > 0 else 0
+            
+            comportamento_por_hora.append({
+                'hora': hora,
+                'clientes_unicos': clientes_unicos,
+                'total_vendas': total_vendas,
+                'ticket_medio': float(r.ticket_medio or 0),
+                'faturamento_total': float(r.faturamento_total or 0),
+                'frequencia_media': round(frequencia_media, 2),
+                'valor_por_cliente': float(r.faturamento_total or 0) / clientes_unicos if clientes_unicos > 0 else 0
+            })
+        
+        return {
+            'comportamento_por_hora': comportamento_por_hora,
+            'total_horas_analisadas': len(comportamento_por_hora)
+        }
+
+    @staticmethod
+    def get_product_hour_correlation_matrix(estabelecimento_id: int, days: int = 30, top_products: int = 10) -> Dict[str, Any]:
+        """
+        Matriz de correlação Produto x Horário
+        Mostra quais produtos vendem melhor em quais horários
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Buscar top produtos
+        top_prods = (
+            db.session.query(
+                Produto.id,
+                Produto.nome,
+                func.sum(ItemVenda.quantidade).label('total_vendido')
+            )
+            .join(ItemVenda, ItemVenda.produto_id == Produto.id)
+            .join(Venda, Venda.id == ItemVenda.venda_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada'
+            )
+            .group_by(Produto.id, Produto.nome)
+            .order_by(func.sum(ItemVenda.quantidade).desc())
+            .limit(top_products)
+            .all()
+        )
+        
+        if not top_prods:
+            return {'matrix': [], 'products': [], 'hours': []}
+        
+        produto_ids = [p.id for p in top_prods]
+        produto_nomes = {p.id: p.nome for p in top_prods}
+        
+        # Buscar vendas por produto e horário
+        results = (
+            db.session.query(
+                Produto.id.label('produto_id'),
+                func.extract('hour', Venda.data_venda).label('hora'),
+                func.sum(ItemVenda.quantidade).label('quantidade'),
+                func.sum(ItemVenda.total_item).label('faturamento')
+            )
+            .join(ItemVenda, ItemVenda.produto_id == Produto.id)
+            .join(Venda, Venda.id == ItemVenda.venda_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Produto.id.in_(produto_ids)
+            )
+            .group_by(Produto.id, func.extract('hour', Venda.data_venda))
+            .all()
+        )
+        
+        # Organizar em matriz
+        matrix = {}
+        for r in results:
+            produto_id = r.produto_id
+            hora = int(r.hora)
+            if produto_id not in matrix:
+                matrix[produto_id] = {}
+            matrix[produto_id][hora] = {
+                'quantidade': int(r.quantidade or 0),
+                'faturamento': float(r.faturamento or 0)
+            }
+        
+        # Normalizar para percentuais (0-100) por produto
+        matrix_normalized = []
+        for produto_id in produto_ids:
+            if produto_id not in matrix:
+                continue
+            
+            total_produto = sum([v['faturamento'] for v in matrix[produto_id].values()])
+            if total_produto == 0:
+                continue
+            
+            row = {
+                'produto_id': produto_id,
+                'produto_nome': produto_nomes[produto_id],
+                'horas': {}
+            }
+            
+            for hora in range(24):
+                if hora in matrix[produto_id]:
+                    percentual = (matrix[produto_id][hora]['faturamento'] / total_produto) * 100
+                    row['horas'][hora] = {
+                        'percentual': round(percentual, 1),
+                        'quantidade': matrix[produto_id][hora]['quantidade'],
+                        'faturamento': matrix[produto_id][hora]['faturamento']
+                    }
+                else:
+                    row['horas'][hora] = {
+                        'percentual': 0,
+                        'quantidade': 0,
+                        'faturamento': 0
+                    }
+            
+            matrix_normalized.append(row)
+        
+        return {
+            'matrix': matrix_normalized,
+            'products': [{'id': p.id, 'nome': p.nome} for p in top_prods],
+            'hours': list(range(24))
+        }
+
+    @staticmethod
+    def get_customer_product_affinity(estabelecimento_id: int, days: int = 90, min_support: int = 3) -> List[Dict[str, Any]]:
+        """
+        Análise de afinidade Cliente x Produto
+        Identifica quais clientes compram quais produtos com frequência
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        # Query para buscar padrões de compra
+        results = (
+            db.session.query(
+                Cliente.id.label('cliente_id'),
+                Cliente.nome.label('cliente_nome'),
+                Produto.id.label('produto_id'),
+                Produto.nome.label('produto_nome'),
+                func.count(Venda.id).label('frequencia_compra'),
+                func.sum(ItemVenda.quantidade).label('quantidade_total'),
+                func.sum(ItemVenda.total_item).label('faturamento_total'),
+                func.avg(ItemVenda.total_item).label('ticket_medio')
+            )
+            .join(Venda, Venda.cliente_id == Cliente.id)
+            .join(ItemVenda, ItemVenda.venda_id == Venda.id)
+            .join(Produto, Produto.id == ItemVenda.produto_id)
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Cliente.id.isnot(None)
+            )
+            .group_by(Cliente.id, Cliente.nome, Produto.id, Produto.nome)
+            .having(func.count(Venda.id) >= min_support)
+            .order_by(func.count(Venda.id).desc())
+            .limit(50)
+            .all()
+        )
+        
+        return [
+            {
+                'cliente_id': r.cliente_id,
+                'cliente_nome': r.cliente_nome,
+                'produto_id': r.produto_id,
+                'produto_nome': r.produto_nome,
+                'frequencia_compra': r.frequencia_compra,
+                'quantidade_total': int(r.quantidade_total or 0),
+                'faturamento_total': float(r.faturamento_total or 0),
+                'ticket_medio': float(r.ticket_medio or 0),
+                'score_afinidade': r.frequencia_compra * float(r.faturamento_total or 0)
+            }
+            for r in results
+        ]
+
+    @staticmethod
+    def get_hourly_customer_behavior(estabelecimento_id: int, days: int = 60) -> Dict[str, Any]:
+        """
+        Comportamento de clientes por horário
+        Analisa ticket médio, frequência e preferências por horário
+        """
+        data_inicio = datetime.now() - timedelta(days=days)
+        
+        results = (
+            db.session.query(
+                func.extract('hour', Venda.data_venda).label('hora'),
+                func.count(func.distinct(Venda.cliente_id)).label('clientes_unicos'),
+                func.count(Venda.id).label('total_vendas'),
+                func.avg(Venda.total).label('ticket_medio'),
+                func.sum(Venda.total).label('faturamento_total')
+            )
+            .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_inicio,
+                Venda.status == 'finalizada',
+                Venda.cliente_id.isnot(None)
+            )
+            .group_by(func.extract('hour', Venda.data_venda))
+            .order_by(func.extract('hour', Venda.data_venda))
+            .all()
+        )
+        
+        comportamento_por_hora = []
+        for r in results:
+            hora = int(r.hora)
+            clientes_unicos = r.clientes_unicos or 0
+            total_vendas = r.total_vendas or 0
+            
+            # Calcular frequência média (vendas por cliente)
+            frequencia_media = (total_vendas / clientes_unicos) if clientes_unicos > 0 else 0
+            
+            comportamento_por_hora.append({
+                'hora': hora,
+                'clientes_unicos': clientes_unicos,
+                'total_vendas': total_vendas,
+                'ticket_medio': float(r.ticket_medio or 0),
+                'faturamento_total': float(r.faturamento_total or 0),
+                'frequencia_media': round(frequencia_media, 2),
+                'valor_por_cliente': float(r.faturamento_total or 0) / clientes_unicos if clientes_unicos > 0 else 0
+            })
+        
+        return {
+            'comportamento_por_hora': comportamento_por_hora,
+            'total_horas_analisadas': len(comportamento_por_hora)
+        }
