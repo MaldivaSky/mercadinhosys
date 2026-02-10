@@ -48,6 +48,58 @@ def listar():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@fornecedores_fix_bp.route("/<int:id>", methods=["GET", "OPTIONS"])
+def obter_fornecedor(id):
+    """Obtém detalhes de um fornecedor específico"""
+    # Responder OPTIONS sem autenticação
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
+    # Aplicar autenticação apenas para GET
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+        
+    try:
+        jwt_data = get_jwt()
+        est_id = jwt_data.get("estabelecimento_id", 1)
+        
+        fornecedor = Fornecedor.query.filter_by(id=id, estabelecimento_id=est_id).first_or_404()
+        
+        # Contar produtos ativos
+        produtos_ativos = Produto.query.filter_by(fornecedor_id=id, ativo=True).count()
+        
+        fornecedor_dict = {
+            "id": fornecedor.id,
+            "nome": fornecedor.nome_fantasia or fornecedor.razao_social,
+            "nome_fantasia": fornecedor.nome_fantasia,
+            "razao_social": fornecedor.razao_social,
+            "cnpj": fornecedor.cnpj,
+            "telefone": fornecedor.telefone,
+            "email": fornecedor.email,
+            "contato_nome": fornecedor.contato_nome,
+            "contato_telefone": fornecedor.contato_telefone,
+            "cep": fornecedor.cep,
+            "logradouro": fornecedor.logradouro,
+            "numero": fornecedor.numero,
+            "complemento": fornecedor.complemento,
+            "bairro": fornecedor.bairro,
+            "cidade": fornecedor.cidade,
+            "estado": fornecedor.estado,
+            "pais": fornecedor.pais,
+            "prazo_entrega": fornecedor.prazo_entrega,
+            "forma_pagamento": fornecedor.forma_pagamento,
+            "classificacao": fornecedor.classificacao or "REGULAR",
+            "ativo": fornecedor.ativo,
+            "produtos_ativos": produtos_ativos,
+            "total_compras": fornecedor.total_compras or 0,
+            "valor_total_comprado": float(fornecedor.valor_total_comprado or 0),
+        }
+        
+        return jsonify({"success": True, "fornecedor": fornecedor_dict})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @fornecedores_fix_bp.route("", methods=["POST", "OPTIONS"])
 @fornecedores_fix_bp.route("/", methods=["POST", "OPTIONS"])
 def criar():

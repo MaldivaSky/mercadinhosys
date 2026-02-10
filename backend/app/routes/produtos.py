@@ -15,6 +15,7 @@ from app.models import (
     Fornecedor,
     CategoriaProduto,
     MovimentacaoEstoque,
+    Venda,
     VendaItem,
     PedidoCompraItem,
     HistoricoPrecos,
@@ -1165,15 +1166,35 @@ def listar_produtos_estoque():
 
         if categoria:
             # Buscar categoria pelo nome
+            current_app.logger.info(f"🔍 Filtrando por categoria: '{categoria}'")
             cat = CategoriaProduto.query.filter_by(
                 estabelecimento_id=estabelecimento_id,
                 nome=categoria
             ).first()
             if cat:
+                current_app.logger.info(f"✅ Categoria encontrada: ID={cat.id}, Nome={cat.nome}")
                 query = query.filter_by(categoria_id=cat.id)
+            else:
+                current_app.logger.warning(f"⚠️ Categoria '{categoria}' não encontrada no banco")
+                # Tentar buscar com normalização
+                categoria_normalizada = CategoriaProduto.normalizar_nome_categoria(categoria)
+                current_app.logger.info(f"🔄 Tentando com nome normalizado: '{categoria_normalizada}'")
+                cat = CategoriaProduto.query.filter_by(
+                    estabelecimento_id=estabelecimento_id,
+                    nome=categoria_normalizada
+                ).first()
+                if cat:
+                    current_app.logger.info(f"✅ Categoria encontrada após normalização: ID={cat.id}")
+                    query = query.filter_by(categoria_id=cat.id)
+                else:
+                    current_app.logger.error(f"❌ Categoria não encontrada mesmo após normalização")
 
         if tipo:
-            query = query.filter(Produto.descricao.ilike(f"%{tipo}%"))
+            # CORRIGIDO: Filtrar por campo 'tipo' ao invés de 'descricao'
+            current_app.logger.info(f"🔍 Filtrando por tipo: '{tipo}'")
+            query = query.filter(Produto.tipo.ilike(f"%{tipo}%"))
+            count_tipo = query.count()
+            current_app.logger.info(f"📊 Produtos encontrados com tipo '{tipo}': {count_tipo}")
 
         if fornecedor_id:
             query = query.filter_by(fornecedor_id=fornecedor_id)
@@ -1243,7 +1264,7 @@ def listar_produtos_estoque():
             else:
                 estoque_status_produto = "normal"
 
-            produtos_lista.append({
+            produto_dict = {
                 "id": produto.id,
                 "nome": produto.nome,
                 "codigo_barras": produto.codigo_barras,
@@ -1251,7 +1272,7 @@ def listar_produtos_estoque():
                 "descricao": produto.descricao,
                 "categoria": categoria_nome,
                 "marca": produto.marca or "",
-                "fabricante": "",
+                "fabricante": produto.fabricante or "",
                 "tipo": "",
                 "unidade_medida": produto.unidade_medida or "UN",
                 "preco_custo": float(produto.preco_custo),
@@ -1270,7 +1291,19 @@ def listar_produtos_estoque():
                 "data_validade": produto.data_validade.isoformat() if hasattr(produto, 'data_validade') and produto.data_validade else None,
                 "created_at": produto.created_at.isoformat() if produto.created_at else None,
                 "updated_at": produto.updated_at.isoformat() if produto.updated_at else None,
-            })
+                "quantidade_vendida": produto.quantidade_vendida or 0,
+                "total_vendido": float(produto.total_vendido) if produto.total_vendido else 0.0,
+                "ultima_venda": produto.ultima_venda.isoformat() if produto.ultima_venda else None,
+            }
+            
+            produtos_lista.append(produto_dict)
+
+        # DEBUG: Log do primeiro produto para verificar dados
+        if produtos_lista:
+            current_app.logger.info(f"🔍 PRIMEIRO PRODUTO ENVIADO: {produtos_lista[0]['nome']}")
+            current_app.logger.info(f"   quantidade_vendida: {produtos_lista[0]['quantidade_vendida']}")
+            current_app.logger.info(f"   total_vendido: {produtos_lista[0]['total_vendido']}")
+            current_app.logger.info(f"   ultima_venda: {produtos_lista[0]['ultima_venda']}")
 
         return jsonify({
             "produtos": produtos_lista,
@@ -2136,6 +2169,116 @@ def obter_historico_precos(id):
         current_app.logger.error(f"Erro ao obter histórico de preços do produto {id}: {str(e)}")
         return (
             jsonify({"success": False, "message": "Erro interno ao obter histórico de preços"}),
+            500,
+        )
+
+
+@produtos_bp.route("/<int:id>/vendas-historico", methods=["GET"])
+@funcionario_required
+def obter_vendas_historico(id):
+    """
+    Obtém o histórico de vendas de um produto nos últimos 90 dias.
+    
+    Retorna dados agregados por dia para análise temporal:
+    - Quantidade vendida por dia
+    - Faturamento por dia
+    - Identificação de padrões e sazonalidade
+    """
+    try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        # Verificar se produto existe e pertence ao estabelecimento
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+        
+        # Calcular data de 90 dias atrás
+        from datetime import datetime, timedelta
+        data_inicio = datetime.utcnow() - timedelta(days=90)
+        
+        # Buscar vendas dos últimos 90 dias
+        # Agregar por data usando func.date() que é mais compatível
+        from sqlalchemy import func
+        
+        vendas_por_dia = (
+            db.session.query(
+                func.date(VendaItem.created_at).label('data'),
+                func.sum(VendaItem.quantidade).label('quantidade_total'),
+                func.sum(VendaItem.total_item).label('valor_total'),
+                func.count(VendaItem.id).label('numero_vendas')
+            )
+            .join(Venda, VendaItem.venda_id == Venda.id)
+            .filter(
+                VendaItem.produto_id == id,
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.status == 'finalizada',
+                VendaItem.created_at >= data_inicio
+            )
+            .group_by(func.date(VendaItem.created_at))
+            .order_by(func.date(VendaItem.created_at).asc())
+            .all()
+        )
+        
+        # Formatar dados para o frontend
+        historico_vendas = []
+        for venda in vendas_por_dia:
+            # A data vem como string do func.date()
+            data_str = str(venda.data) if venda.data else None
+            
+            if data_str:
+                historico_vendas.append({
+                    'data': data_str,
+                    'quantidade': int(venda.quantidade_total or 0),
+                    'valor_total': float(venda.valor_total or 0),
+                    'numero_vendas': int(venda.numero_vendas or 0),
+                    'ticket_medio': float(venda.valor_total / venda.numero_vendas) if venda.numero_vendas and venda.numero_vendas > 0 else 0
+                })
+        
+        # Calcular estatísticas
+        if historico_vendas:
+            total_quantidade = sum(v['quantidade'] for v in historico_vendas)
+            total_valor = sum(v['valor_total'] for v in historico_vendas)
+            dias_com_venda = len(historico_vendas)
+            media_diaria = total_quantidade / 90  # Média considerando todos os 90 dias
+            
+            estatisticas = {
+                'total_vendido_90d': total_quantidade,
+                'faturamento_90d': total_valor,
+                'dias_com_venda': dias_com_venda,
+                'dias_sem_venda': 90 - dias_com_venda,
+                'media_diaria': round(media_diaria, 2),
+                'ticket_medio': round(total_valor / total_quantidade, 2) if total_quantidade > 0 else 0
+            }
+        else:
+            estatisticas = {
+                'total_vendido_90d': 0,
+                'faturamento_90d': 0,
+                'dias_com_venda': 0,
+                'dias_sem_venda': 90,
+                'media_diaria': 0,
+                'ticket_medio': 0
+            }
+        
+        return jsonify({
+            "success": True,
+            "produto": {
+                "id": produto.id,
+                "nome": produto.nome,
+            },
+            "historico": historico_vendas,
+            "estatisticas": estatisticas,
+            "periodo": {
+                "data_inicio": data_inicio.date().isoformat(),
+                "data_fim": datetime.utcnow().date().isoformat(),
+                "dias": 90
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter histórico de vendas do produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": f"Erro interno ao obter histórico de vendas: {str(e)}"}),
             500,
         )
 
