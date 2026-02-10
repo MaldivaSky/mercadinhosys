@@ -617,6 +617,11 @@ def finalizar_venda():
                 produto.quantidade = estoque_anterior - quantidade
                 produto.updated_at = datetime.now()
                 
+                # ATUALIZAR CAMPOS DE VENDAS PARA ANÁLISE ABC
+                produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
+                produto.total_vendido = (produto.total_vendido or 0) + total_item
+                produto.ultima_venda = datetime.now()
+                
                 # Registrar movimentação
                 movimentacao = MovimentacaoEstoque(
                     estabelecimento_id=funcionario.estabelecimento_id,

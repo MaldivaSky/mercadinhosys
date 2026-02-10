@@ -41,6 +41,19 @@ export const productsService = {
         }
 
         const response = await apiClient.get<ProdutosResponse>('/produtos/estoque', { params });
+        
+        // DEBUG: Log do primeiro produto
+        if (response.data.produtos && response.data.produtos.length > 0) {
+            const primeiro = response.data.produtos[0];
+            console.log('🌐 API RESPONSE - Primeiro produto:', {
+                nome: primeiro.nome,
+                total_vendido: primeiro.total_vendido,
+                quantidade_vendida: primeiro.quantidade_vendida,
+                ultima_venda: primeiro.ultima_venda,
+                margem_lucro: primeiro.margem_lucro,
+            });
+        }
+        
         return response.data;
     },
 

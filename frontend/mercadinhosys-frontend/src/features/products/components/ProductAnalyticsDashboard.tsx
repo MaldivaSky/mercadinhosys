@@ -59,31 +59,32 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             return;
         }
 
-        // ==================== CLASSIFICAÇÃO ABC CORRETA (Pareto 80/20) ====================
-        // Ordenar produtos por faturamento (preco_venda * quantidade_vendida)
-        const produtosComFaturamento = produtos.map(p => ({
-            ...p,
-            faturamento: p.preco_venda * (p.quantidade_vendida || 0)
-        })).sort((a, b) => b.faturamento - a.faturamento);
-
-        const faturamentoTotal = produtosComFaturamento.reduce((sum, p) => sum + p.faturamento, 0);
+        // ==================== CLASSIFICAÇÃO ABC POR FATURAMENTO (PARETO 80/15/5) ====================
+        const faturamentoTotal = produtos.reduce((sum, p) => sum + (p.total_vendido || 0), 0);
         
-        let acumulado = 0;
         const abc = { A: 0, B: 0, C: 0 };
         
-        produtosComFaturamento.forEach(p => {
-            acumulado += p.faturamento;
-            const percentualAcumulado = faturamentoTotal > 0 ? (acumulado / faturamentoTotal) : 0;
-            
-            // Classificação ABC baseada em Pareto
-            if (percentualAcumulado <= 0.80) {
-                abc.A++;
-            } else if (percentualAcumulado <= 0.95) {
-                abc.B++;
-            } else {
-                abc.C++;
-            }
-        });
+        if (faturamentoTotal === 0) {
+            // Sem faturamento, todos são classe C
+            abc.C = produtos.length;
+        } else {
+            // Ordenar por faturamento (total_vendido)
+            const produtosComFaturamento = produtos.map(p => ({
+                ...p,
+                faturamento: p.total_vendido || 0
+            })).sort((a, b) => b.faturamento - a.faturamento);
+
+            let acumulado = 0;
+            produtosComFaturamento.forEach(p => {
+                acumulado += p.faturamento;
+                const percentualAcumulado = acumulado / faturamentoTotal;
+                
+                // Pareto: 80% do faturamento = Classe A, 15% = Classe B, 5% = Classe C
+                if (percentualAcumulado <= 0.80) abc.A++;
+                else if (percentualAcumulado <= 0.95) abc.B++;
+                else abc.C++;
+            });
+        }
         
         setClassificacaoABC(abc);
 
