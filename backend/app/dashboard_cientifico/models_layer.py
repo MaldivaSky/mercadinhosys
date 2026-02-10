@@ -438,6 +438,146 @@ class PracticalModels:
         }
 
     @staticmethod
+    def generate_forecast(
+        daily_sales: List[Dict[str, Any]],
+        period: int = 7,
+        forecast_periods: int = 7,
+    ) -> List[Dict[str, Any]]:
+        from app.utils.utils import prever_demanda_holt_winters
+
+        series: List[float] = []
+        for day in daily_sales:
+            try:
+                total = day.get("total")
+                if total is None:
+                    continue
+                series.append(float(total))
+            except (TypeError, ValueError):
+                continue
+
+        if not series:
+            return []
+
+        forecasts = prever_demanda_holt_winters(
+            series, period=period, forecast_periods=forecast_periods
+        )
+
+        out: List[Dict[str, Any]] = []
+        for idx, value in enumerate(forecasts):
+            out.append(
+                {
+                    "data": None,
+                    "valor_previsto": float(value),
+                    "previsao": float(value),
+                    "value": float(value),
+                    "dia": f"Dia {idx + 1}",
+                    "confianca": "media",
+                }
+            )
+
+        return out
+
+    @staticmethod
+    def calculate_correlations(
+        sales_timeseries: List[Dict[str, Any]],
+        expense_details: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        from app.utils.utils import calcular_correlacao_cruzada
+
+        if not sales_timeseries or not expense_details:
+            return []
+
+        sales_series = []
+        for day in sales_timeseries:
+            try:
+                total = day.get("total")
+                if total is None:
+                    continue
+                sales_series.append(float(total))
+            except (TypeError, ValueError):
+                continue
+
+        if len(sales_series) < 3:
+            return []
+
+        total_expenses = sum(float(e.get("valor", 0)) for e in expense_details)
+        if total_expenses <= 0:
+            return []
+
+        correlations: List[Dict[str, Any]] = []
+        for expense in expense_details:
+            try:
+                ratio = float(expense.get("valor", 0)) / total_expenses
+            except (TypeError, ValueError, ZeroDivisionError):
+                ratio = 0.0
+
+            expense_series = [v * ratio for v in sales_series]
+            result = calcular_correlacao_cruzada(sales_series, expense_series)
+
+            correlations.append(
+                {
+                    "variavel1": "Vendas",
+                    "variavel2": expense.get("tipo", "Despesa"),
+                    "correlacao": float(result.get("correlacao", 0.0)),
+                    "significancia": float(result.get("p_value", 1.0)),
+                    "insight": result.get("interpretacao", "correlação fraca"),
+                }
+            )
+
+        correlations.sort(key=lambda x: abs(x["correlacao"]), reverse=True)
+        return correlations
+
+    @staticmethod
+    def detect_anomalies(
+        sales_timeseries: List[Dict[str, Any]],
+        expense_details: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        from app.utils.utils import detectar_anomalias
+
+        if not sales_timeseries:
+            return []
+
+        sales_series = []
+        dates = []
+        for day in sales_timeseries:
+            try:
+                total = day.get("total")
+                if total is None:
+                    continue
+                sales_series.append(float(total))
+                dates.append(day.get("data"))
+            except (TypeError, ValueError):
+                continue
+
+        if len(sales_series) < 3:
+            return []
+
+        anomaly_indices = detectar_anomalias(sales_series)
+
+        anomalies: List[Dict[str, Any]] = []
+        for idx in anomaly_indices:
+            if idx < 0 or idx >= len(sales_series):
+                continue
+
+            date_str = dates[idx] if idx < len(dates) else None
+            value = sales_series[idx]
+            mean_value = sum(sales_series) / len(sales_series) if sales_series else 0.0
+
+            direction = "alta" if value > mean_value else "baixa"
+            impact = abs(value - mean_value)
+
+            anomalies.append(
+                {
+                    "tipo": f"venda_{direction}",
+                    "descricao": f"Vendas {direction} atípicas em {date_str or 'dia desconhecido'}",
+                    "impacto": float(impact),
+                    "causa_provavel": "variação pontual de demanda",
+                }
+            )
+
+        return anomalies
+
+    @staticmethod
     def calculate_health_score(
         sales_data: Dict[str, Any],
         inventory_data: Dict[str, Any],
