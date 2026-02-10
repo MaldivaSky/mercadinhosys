@@ -17,9 +17,9 @@ import {
     DollarSign,
     Archive,
     Calculator,
-    History,
     Percent,
-    Check
+    Check,
+    Star,
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
@@ -29,6 +29,18 @@ import { Toaster, toast } from 'react-hot-toast';
 import ProductModal from './ProductModal';
 import { useConfig } from '../../contexts/ConfigContext';
 import ProductAnalyticsDashboard from './components/ProductAnalyticsDashboard';
+import QuickFiltersPanel from './components/QuickFiltersPanel';
+import ProductHistoryModal from './components/ProductHistoryModal';
+import {
+    getClassificacaoABC,
+    getDiasDesdeUltimaVenda,
+    aplicarFiltroRapido,
+    calcularContadoresFiltros,
+} from './utils/quickFilters';
+import {
+    calcularValorInvestido,
+    calcularLucroPotencial,
+} from './utils/strategicFilters';
 
 interface ProductFormData {
     nome: string;
@@ -86,6 +98,9 @@ const ProductsPage: React.FC = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [showExpiring, setShowExpiring] = useState<boolean>(true);
 
+    // Filtros Estratégicos
+    const [filtroRapido, setFiltroRapido] = useState<string | null>(null);
+
     // Modais
     const [showProductModal, setShowProductModal] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
@@ -98,16 +113,12 @@ const ProductsPage: React.FC = () => {
         'produto com promoção',
         'comprado com o vendedor pronta entrega',
     ]), []);
-    const [showAlertsModal, setShowAlertsModal] = useState(false);
-    const [alerts, setAlerts] = useState<any[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
     const [editMode, setEditMode] = useState(false);
 
     // NOVOS MODAIS PROFISSIONAIS
     const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
-    const [showPriceHistory, setShowPriceHistory] = useState(false);
-    const [priceHistory, setPriceHistory] = useState<any[]>([]);
-    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [showProductHistory, setShowProductHistory] = useState(false);
     
     // Calculadora de Markup
     const [markupCalc, setMarkupCalc] = useState({
@@ -278,25 +289,10 @@ const ProductsPage: React.FC = () => {
         toast.success('Valores aplicados ao formulário!');
     }, [markupCalc]);
 
-    // ==================== HISTÓRICO DE PREÇOS ====================
-    const loadPriceHistory = useCallback(async (produtoId: number) => {
-        try {
-            setLoadingHistory(true);
-            const response = await apiClient.get(`/produtos/${produtoId}/historico-precos`);
-            setPriceHistory(response.data.historico || []);
-        } catch (error) {
-            console.error('Erro ao carregar histórico:', error);
-            toast.error('Erro ao carregar histórico de preços');
-        } finally {
-            setLoadingHistory(false);
-        }
-    }, []);
-
-    const openPriceHistory = useCallback((produto: Produto) => {
+    const openProductHistory = useCallback((produto: Produto) => {
         setSelectedProduct(produto);
-        setShowPriceHistory(true);
-        loadPriceHistory(produto.id);
-    }, [loadPriceHistory]);
+        setShowProductHistory(true);
+    }, []);
 
     // Ajuste de estoque
     const [stockAdjust, setStockAdjust] = useState({
@@ -323,24 +319,8 @@ const ProductsPage: React.FC = () => {
             setTotalPages(response.paginacao.total_paginas);
             setTotalItems(response.paginacao.total_itens);
 
-            if (response.estatisticas) {
-                // Calcular valor total e margem média APENAS dos produtos da página atual
-                const valorTotal = response.produtos.reduce(
-                    (sum, p) => sum + p.preco_custo * p.quantidade,
-                    0
-                );
-                const margemMedia =
-                    response.produtos.length > 0
-                        ? response.produtos.reduce((sum, p) => sum + (p.margem_lucro || 0), 0) /
-                          response.produtos.length
-                        : 0;
-
-                setStats({
-                    ...response.estatisticas,
-                    valor_total_estoque: valorTotal,
-                    margem_media: margemMedia,
-                });
-            }
+            // NÃO USAR STATS DA RESPOSTA - CALCULAR DOS TODOS OS PRODUTOS
+            // As estatísticas da API são apenas da página atual, não do total
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
         } finally {
@@ -352,9 +332,34 @@ const ProductsPage: React.FC = () => {
     const loadTodosProdutos = useCallback(async () => {
         try {
             const response = await productsService.getAllEstoque(1, 10000, { ativos: true });
+            
+            // LOG CRÍTICO: Ver resposta RAW antes de qualquer processamento
+            console.log('🌐 RESPONSE COMPLETA:', response);
+            console.log('🌐 PRIMEIRO PRODUTO RAW:', response.produtos[0]);
+            console.log('🌐 CAMPOS DO PRIMEIRO PRODUTO:', Object.keys(response.produtos[0]));
+            
             setTodosProdutos(response.produtos);
+            
+            // CALCULAR STATS DE TODOS OS PRODUTOS
+            const total = response.produtos.length;
+            const esgotados = response.produtos.filter(p => p.quantidade <= 0).length;
+            const baixo = response.produtos.filter(p => p.quantidade > 0 && p.quantidade <= p.quantidade_minima).length;
+            const normal = total - esgotados - baixo;
+            const valorTotal = response.produtos.reduce((sum, p) => sum + p.preco_custo * p.quantidade, 0);
+            const margemMedia = total > 0 
+                ? response.produtos.reduce((sum, p) => sum + (p.margem_lucro || 0), 0) / total 
+                : 0;
+            
+            setStats({
+                total_produtos: total,
+                produtos_esgotados: esgotados,
+                produtos_baixo_estoque: baixo,
+                produtos_normal: normal,
+                valor_total_estoque: valorTotal,
+                margem_media: margemMedia,
+            });
         } catch (error) {
-            console.error('Erro ao carregar todos os produtos:', error);
+            console.error('❌ Erro ao carregar todos os produtos:', error);
         }
     }, []);
 
@@ -395,17 +400,13 @@ const ProductsPage: React.FC = () => {
 
     useEffect(() => {
         loadProdutos();
+    }, [loadProdutos]);
+
+    useEffect(() => {
         loadCategorias();
         loadFornecedores();
         loadTodosProdutos(); // Carregar todos os produtos para o dashboard
-        (async () => {
-            try {
-                const alertas = await productsService.getAlertas();
-                setAlerts(alertas || []);
-                if (alertas && alertas.length > 0) setShowAlertsModal(true);
-            } catch (e) {}
-        })();
-    }, [loadProdutos, loadCategorias, loadFornecedores, loadTodosProdutos]);
+    }, [loadCategorias, loadFornecedores, loadTodosProdutos]);
 
     const diasAlertaValidade: number = useMemo(() => {
         return config?.dias_alerta_validade ?? 30;
@@ -624,14 +625,42 @@ const ProductsPage: React.FC = () => {
         setPage(1);
     }, []);
 
+    // Handler para filtros estratégicos
+    const handleFiltroRapidoChange = useCallback((filtro: string | null) => {
+        setFiltroRapido(filtro);
+        setPage(1);
+    }, []);
+
+    // Aplicar filtro rápido aos produtos
+    const produtosFiltrados = useMemo(() => {
+        // Se não há filtro ativo, retornar produtos da página atual
+        if (!filtroRapido) return produtos;
+        // Se há filtro, aplicar aos produtos da página
+        return aplicarFiltroRapido(produtos, filtroRapido, todosProdutos);
+    }, [produtos, filtroRapido, todosProdutos]);
+
+    // Calcular contadores para filtros rápidos
+    const contadoresFiltros = useMemo(() => {
+        return calcularContadoresFiltros(todosProdutos, todosProdutos);
+    }, [todosProdutos]);
+
+    // Produtos para o dashboard: se há filtro ativo, usar todos os produtos filtrados
+    // Se não há filtro, usar todos os produtos
+    const produtosDashboard = useMemo(() => {
+        if (!filtroRapido) return todosProdutos;
+        return aplicarFiltroRapido(todosProdutos, filtroRapido, todosProdutos);
+    }, [todosProdutos, filtroRapido]);
+
     // Memoizar dashboard de stats para não re-renderizar
-    const analyticsDashboard = useMemo(() => (
-        <ProductAnalyticsDashboard 
-            produtos={todosProdutos} // Usar TODOS os produtos, não apenas da página
-            stats={stats}
-            onCardClick={handleCardClick}
-        />
-    ), [todosProdutos, stats, handleCardClick]);
+    const analyticsDashboard = useMemo(() => {
+        return (
+            <ProductAnalyticsDashboard 
+                produtos={produtosDashboard}
+                stats={stats}
+                onCardClick={handleCardClick}
+            />
+        );
+    }, [produtosDashboard, stats, handleCardClick]);
 
     return (
         <div className="space-y-6 p-6">
@@ -674,6 +703,37 @@ const ProductsPage: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Filtros Rápidos Simplificados */}
+            <QuickFiltersPanel
+                activeFilter={filtroRapido}
+                onFilterChange={handleFiltroRapidoChange}
+                counts={contadoresFiltros}
+            />
+
+            {/* Indicador de Filtro Ativo */}
+            {filtroRapido && (
+                <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <Filter className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                        <div>
+                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                Filtro Ativo
+                            </p>
+                            <p className="text-xs text-blue-700 dark:text-blue-300">
+                                Os cards do dashboard e a tabela estão mostrando apenas produtos do filtro selecionado
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleFiltroRapidoChange(null)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        <X className="w-4 h-4" />
+                        Limpar Filtro
+                    </button>
+                </div>
+            )}
 
             {/* Dashboard de Estatísticas e Análises */}
             {analyticsDashboard}
@@ -960,7 +1020,13 @@ const ProductsPage: React.FC = () => {
                                     Categoria
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Classificação / Tempo
+                                </th>
+                                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Estoque
+                                </th>
+                                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    Fornecedor / Valores
                                 </th>
                                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                     Preços
@@ -976,7 +1042,7 @@ const ProductsPage: React.FC = () => {
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center">
+                                    <td colSpan={9} className="px-6 py-12 text-center">
                                         <div className="flex justify-center">
                                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
                                         </div>
@@ -984,7 +1050,7 @@ const ProductsPage: React.FC = () => {
                                 </tr>
                             ) : produtos.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center">
+                                    <td colSpan={9} className="px-6 py-12 text-center">
                                         <div className="flex flex-col items-center">
                                             <Package className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
                                             <p className="text-gray-500 dark:text-gray-400 text-lg">
@@ -997,7 +1063,7 @@ const ProductsPage: React.FC = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                produtos.map((produto) => (
+                                produtosFiltrados.map((produto) => (
                                     <tr
                                         key={produto.id}
                                         className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -1036,6 +1102,36 @@ const ProductsPage: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
+                                            <div className="space-y-1">
+                                                {/* Classificação ABC */}
+                                                {(() => {
+                                                    const abc = getClassificacaoABC(produto, todosProdutos);
+                                                    const colors = {
+                                                        A: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300',
+                                                        B: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300',
+                                                        C: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300',
+                                                    };
+                                                    return (
+                                                        <span className={`px-2 py-0.5 inline-flex items-center gap-1 text-xs font-semibold rounded-full ${colors[abc]}`}>
+                                                            <Star className="w-3 h-3" />
+                                                            {abc}
+                                                        </span>
+                                                    );
+                                                })()}
+                                                {/* Dias Parado */}
+                                                <div className="text-xs text-gray-600 dark:text-gray-400">
+                                                    {(() => {
+                                                        const dias = getDiasDesdeUltimaVenda(produto);
+                                                        if (dias === null) return '❌ Nunca vendeu';
+                                                        if (dias === 0) return '✅ Vendeu hoje';
+                                                        if (dias <= 7) return `⚡ ${dias}d atrás`;
+                                                        if (dias <= 30) return `🕐 ${dias}d atrás`;
+                                                        return `🐌 ${dias}d parado`;
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
                                             <div className="text-sm">
                                                 <div className="font-semibold text-gray-900 dark:text-white">
                                                     {produto.quantidade} {produto.unidade_medida}
@@ -1050,6 +1146,53 @@ const ProductsPage: React.FC = () => {
                                                 >
                                                     {produto.estoque_status || 'normal'}
                                                 </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="space-y-1">
+                                                {/* Fornecedor com link clicável */}
+                                                <div className="text-sm">
+                                                    {produto.fornecedor_nome ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-gray-900 dark:text-white font-medium truncate max-w-[150px]" title={produto.fornecedor_nome}>
+                                                                {produto.fornecedor_nome}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    // TODO: Abrir modal de fornecedor ou navegar para página de fornecedores
+                                                                    toast('Funcionalidade em desenvolvimento', {
+                                                                        icon: 'ℹ️',
+                                                                    });
+                                                                }}
+                                                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                                                title="Ver fornecedor"
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1">
+                                                            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                                            <span className="text-red-600 dark:text-red-400 text-xs font-semibold">
+                                                                Sem fornecedor
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {/* Valor Investido */}
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <span className="text-gray-600 dark:text-gray-400">Investido: </span>
+                                                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                                                        {formatCurrency(calcularValorInvestido(produto))}
+                                                    </span>
+                                                </div>
+                                                {/* Lucro Potencial */}
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <span className="text-gray-600 dark:text-gray-400">Lucro: </span>
+                                                    <span className="font-semibold text-green-600 dark:text-green-400">
+                                                        {formatCurrency(calcularLucroPotencial(produto))}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -1083,20 +1226,20 @@ const ProductsPage: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={() => openProductHistory(produto)}
+                                                    className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors font-semibold"
+                                                    title="Ver Histórico Completo (Vendas, Preços, Fornecedor)"
+                                                >
+                                                    <TrendingUp className="w-5 h-5" />
+                                                </button>
                                                 <button
                                                     onClick={() => openDetailModalMemo(produto.id)}
                                                     className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
                                                     title="Ver detalhes"
                                                 >
                                                     <Eye className="w-5 h-5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => openPriceHistory(produto)}
-                                                    className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900 rounded-lg transition-colors"
-                                                    title="Histórico de Preços"
-                                                >
-                                                    <History className="w-5 h-5" />
                                                 </button>
                                                 <button
                                                     onClick={() => openEditModalMemo(produto)}
@@ -1137,7 +1280,7 @@ const ProductsPage: React.FC = () => {
                     <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
                         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="text-sm text-gray-700 dark:text-gray-300">
-                                Mostrando <span className="font-semibold">{produtos.length}</span> de{' '}
+                                Mostrando <span className="font-semibold">{produtosFiltrados.length}</span> de{' '}
                                 <span className="font-semibold">{totalItems}</span> produtos
                             </div>
                             <div className="flex items-center gap-2">
@@ -1521,48 +1664,16 @@ const ProductsPage: React.FC = () => {
                     </div>
                 </div>
             )}
-            {showAlertsModal && alerts && alerts.length > 0 && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full">
-                        <div className="bg-gradient-to-r from-red-500 to-yellow-500 px-6 py-4 flex justify-between items-center rounded-t-xl">
-                            <h2 className="text-2xl font-bold text-white">Alertas de Produtos</h2>
-                            <button
-                                onClick={() => setShowAlertsModal(false)}
-                                className="text-white hover:text-gray-200"
-                            >
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-red-50 dark:bg-red-900 rounded-lg p-4">
-                                    <p className="font-semibold text-red-700 dark:text-red-200 mb-2">Esgotados</p>
-                                    <ul className="space-y-1">
-                                        {alerts.filter(a => a.tipo === 'estoque_baixo' && a.nivel === 'alto').map((a, idx) => (
-                                            <li key={idx} className="text-sm text-red-800 dark:text-red-100">• {a.produto_nome} ({a.mensagem})</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                                <div className="bg-yellow-50 dark:bg-yellow-900 rounded-lg p-4">
-                                    <p className="font-semibold text-yellow-700 dark:text-yellow-200 mb-2">Validade Próxima</p>
-                                    <ul className="space-y-1">
-                                        {alerts.filter(a => a.tipo === 'validade_proxima').map((a, idx) => (
-                                            <li key={idx} className="text-sm text-yellow-800 dark:text-yellow-100">• {a.produto_nome} ({a.mensagem})</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
-                            <button
-                                onClick={() => setShowAlertsModal(false)}
-                                className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                            >
-                                Fechar
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            
+            {/* ==================== MODAL DE HISTÓRICO COMPLETO DO PRODUTO ==================== */}
+            {showProductHistory && selectedProduct && (
+                <ProductHistoryModal
+                    produto={selectedProduct}
+                    onClose={() => {
+                        setShowProductHistory(false);
+                        setSelectedProduct(null);
+                    }}
+                />
             )}
             
             {/* ==================== MODAL CALCULADORA DE MARKUP ==================== */}
@@ -1745,124 +1856,6 @@ const ProductsPage: React.FC = () => {
                 </div>
             )}
 
-            {/* ==================== MODAL HISTÓRICO DE PREÇOS ==================== */}
-            {showPriceHistory && selectedProduct && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-4 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <History className="w-6 h-6 text-white" />
-                                <div>
-                                    <h2 className="text-2xl font-bold text-white">Histórico de Preços</h2>
-                                    <p className="text-indigo-100 text-sm">{selectedProduct.nome}</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setShowPriceHistory(false)}
-                                className="text-white hover:text-gray-200"
-                            >
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-6">
-                            {loadingHistory ? (
-                                <div className="flex justify-center items-center h-64">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
-                                </div>
-                            ) : priceHistory.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-64">
-                                    <History className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" />
-                                    <p className="text-gray-500 dark:text-gray-400 text-lg">
-                                        Nenhum histórico de alteração de preços
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {priceHistory.map((item, index) => (
-                                        <div
-                                            key={index}
-                                            className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-md transition-shadow"
-                                        >
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                                        {new Date(item.data_alteracao).toLocaleString('pt-BR')}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                        Por: {item.funcionario_nome || 'Sistema'}
-                                                    </p>
-                                                </div>
-                                                <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-semibold">
-                                                    {item.motivo}
-                                                </span>
-                                            </div>
-
-                                            <div className="grid grid-cols-3 gap-4">
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Custo</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm line-through text-gray-400">
-                                                            {formatCurrency(item.preco_custo_anterior)}
-                                                        </span>
-                                                        <TrendingUp className="w-4 h-4 text-green-500" />
-                                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                                                            {formatCurrency(item.preco_custo_novo)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Venda</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm line-through text-gray-400">
-                                                            {formatCurrency(item.preco_venda_anterior)}
-                                                        </span>
-                                                        <TrendingUp className="w-4 h-4 text-green-500" />
-                                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                                                            {formatCurrency(item.preco_venda_novo)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Margem</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm line-through text-gray-400">
-                                                            {item.margem_anterior?.toFixed(1)}%
-                                                        </span>
-                                                        <TrendingUp className="w-4 h-4 text-green-500" />
-                                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                                                            {item.margem_nova?.toFixed(1)}%
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {item.observacoes && (
-                                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                                                        {item.observacoes}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
-                            <button
-                                onClick={() => setShowPriceHistory(false)}
-                                className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                            >
-                                Fechar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

@@ -13,9 +13,6 @@ class Config:
     # ==================== DATABASE CONFIGURATION ====================
     # Seleção robusta do banco: usa Postgres quando disponível; caso contrário, SQLite cross-platform
     
-    # FORÇAR SQLITE SE NECESSÁRIO (Descomente abaixo para forçar localmente mesmo se tiver env vars)
-    FORCE_SQLITE = os.environ.get("FORCE_SQLITE", "false").lower() == "true" 
-    
     DATABASE_URL = (
         os.environ.get("NEON_DATABASE_URL")
         or os.environ.get("DATABASE_URL_TARGET")
@@ -26,7 +23,7 @@ class Config:
     SQLITE_DB = os.environ.get("SQLITE_DB")
     USING_POSTGRES = False
     
-    if not FORCE_SQLITE and DATABASE_URL:
+    if DATABASE_URL:
         if DATABASE_URL.startswith("postgres://"):
             DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         SQLALCHEMY_DATABASE_URI = DATABASE_URL

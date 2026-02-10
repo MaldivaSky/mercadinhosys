@@ -416,9 +416,9 @@ def seed_clientes(fake: Faker, estabelecimento_id: int, n: int = 50) -> List[Cli
 
 
 def seed_fornecedores(
-    fake: Faker, estabelecimento_id: int, n: int = 8
+    fake: Faker, estabelecimento_id: int, n: int = 15
 ) -> List[Fornecedor]:
-    """Cria fornecedores de teste."""
+    """Cria fornecedores de teste com variedade realista."""
     print("🏭 Criando fornecedores...")
 
     fornecedores = []
@@ -468,7 +468,7 @@ def seed_fornecedores(
 def seed_categorias_produto(
     fake: Faker, estabelecimento_id: int
 ) -> List[CategoriaProduto]:
-    """Cria categorias de produtos."""
+    """Cria categorias de produtos completas para supermercado."""
     print("🏷️ Criando categorias de produtos...")
 
     categorias_data = [
@@ -476,6 +476,8 @@ def seed_categorias_produto(
         {"nome": "Mercearia", "descricao": "Arroz, feijão, macarrão, óleo"},
         {"nome": "Frios e Laticínios", "descricao": "Queijos, iogurtes, manteiga"},
         {"nome": "Carnes", "descricao": "Bovinas, suínas, aves, peixes"},
+        {"nome": "Congelados", "descricao": "Pizzas, lasanhas, sorvetes, vegetais congelados"},
+        {"nome": "Açougue", "descricao": "Carnes frescas, aves, suínos, embutidos"},
         {"nome": "Higiene Pessoal", "descricao": "Sabonetes, shampoos, cremes"},
         {"nome": "Limpeza", "descricao": "Detergentes, desinfetantes, água sanitária"},
         {"nome": "Padaria", "descricao": "Pães, bolos, biscoitos"},
@@ -871,19 +873,22 @@ def seed_vendas(
     vendas_criadas = 0
     hoje = date.today()
 
-    # Distribuição horária de vendas (mais vendas entre 10h-19h)
+    # Distribuição horária de vendas (8h às 21h - horário comercial estendido)
     horarios_pico = [
-        (9, 0.5),
-        (10, 2),
-        (11, 3),
-        (12, 4),
-        (13, 2),
+        (8, 1),   # Abertura
+        (9, 2),
+        (10, 3),
+        (11, 4),
+        (12, 5),  # Pico almoço
+        (13, 3),
         (14, 2),
         (15, 2),
         (16, 3),
         (17, 4),
-        (18, 3),
-        (19, 1),
+        (18, 5),  # Pico saída do trabalho
+        (19, 4),
+        (20, 3),
+        (21, 1),  # Fechamento
     ]
 
     for dia_offset in range(dias_passados, -1, -1):
@@ -1169,8 +1174,8 @@ def seed_pedidos_compra(
 
 
 def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Fornecedor]):
-    """Cria despesas fixas e variáveis."""
-    print("💸 Criando despesas...")
+    """Cria despesas fixas, variáveis e DESNECESSÁRIAS para teste do sistema."""
+    print("💸 Criando despesas (incluindo desnecessárias)...")
 
     despesas_fixas = [
         {
@@ -1209,13 +1214,66 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
             "recorrente": True,
         },
     ]
+    
+    # 🔥 DESPESAS DESNECESSÁRIAS/PROBLEMÁTICAS para o sistema detectar
+    despesas_problematicas = [
+        {
+            "descricao": "Assinatura de revista de fofocas",
+            "categoria": "Outros",
+            "valor": 89.90,
+            "tipo": "variavel",
+            "recorrente": True,
+        },
+        {
+            "descricao": "Decoração de Natal fora de época",
+            "categoria": "Marketing",
+            "valor": 1200.00,
+            "tipo": "variavel",
+            "recorrente": False,
+        },
+        {
+            "descricao": "Almoço executivo em restaurante caro",
+            "categoria": "Alimentação",
+            "valor": 450.00,
+            "tipo": "variavel",
+            "recorrente": False,
+        },
+        {
+            "descricao": "Curso de astrologia empresarial",
+            "categoria": "Treinamento",
+            "valor": 890.00,
+            "tipo": "variavel",
+            "recorrente": False,
+        },
+        {
+            "descricao": "Plantas ornamentais de luxo",
+            "categoria": "Outros",
+            "valor": 650.00,
+            "tipo": "variavel",
+            "recorrente": False,
+        },
+        {
+            "descricao": "Assinatura de streaming premium",
+            "categoria": "Outros",
+            "valor": 55.90,
+            "tipo": "variavel",
+            "recorrente": True,
+        },
+        {
+            "descricao": "Consultoria de feng shui",
+            "categoria": "Consultoria",
+            "valor": 1500.00,
+            "tipo": "variavel",
+            "recorrente": False,
+        },
+    ]
 
     despesas = []
     hoje = date.today()
 
-    # Despesas fixas
+    # Despesas fixas (últimos 6 meses)
     for despesa_data in despesas_fixas:
-        for mes_offset in range(6, -1, -1):  # Últimos 6 meses
+        for mes_offset in range(6, -1, -1):
             data_despesa = hoje - timedelta(days=30 * mes_offset)
 
             d = Despesa(
@@ -1241,8 +1299,48 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
 
             db.session.add(d)
             despesas.append(d)
+    
+    # 🔥 Despesas problemáticas (últimos 3 meses)
+    for despesa_data in despesas_problematicas:
+        # Se é recorrente, criar para os últimos 3 meses
+        if despesa_data["recorrente"]:
+            for mes_offset in range(3, -1, -1):
+                data_despesa = hoje - timedelta(days=30 * mes_offset)
+                
+                d = Despesa(
+                    estabelecimento_id=estabelecimento_id,
+                    fornecedor_id=None,  # Despesas problemáticas geralmente sem fornecedor
+                    descricao=despesa_data["descricao"],
+                    categoria=despesa_data["categoria"],
+                    tipo=despesa_data["tipo"],
+                    valor=Decimal(str(despesa_data["valor"])),
+                    data_despesa=data_despesa,
+                    forma_pagamento=random.choice(["cartao_credito", "pix"]),
+                    recorrente=True,
+                    observacoes="⚠️ Despesa questionável",
+                )
+                db.session.add(d)
+                despesas.append(d)
+        else:
+            # Despesa única nos últimos 90 dias
+            data_despesa = hoje - timedelta(days=random.randint(1, 90))
+            
+            d = Despesa(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=None,
+                descricao=despesa_data["descricao"],
+                categoria=despesa_data["categoria"],
+                tipo=despesa_data["tipo"],
+                valor=Decimal(str(despesa_data["valor"])),
+                data_despesa=data_despesa,
+                forma_pagamento=random.choice(["cartao_credito", "dinheiro"]),
+                recorrente=False,
+                observacoes="⚠️ Despesa questionável",
+            )
+            db.session.add(d)
+            despesas.append(d)
 
-    # Despesas variáveis
+    # Despesas variáveis normais
     categorias_variaveis = [
         "Manutenção",
         "Material de Escritório",
@@ -1275,7 +1373,7 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
         despesas.append(d)
 
     db.session.commit()
-    print(f"✅ {len(despesas)} despesas criadas")
+    print(f"✅ {len(despesas)} despesas criadas (incluindo {len(despesas_problematicas)} problemáticas)")
     return despesas
 
 
@@ -1695,7 +1793,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--estabelecimento-id", type=int, default=DEFAULT_ESTABELECIMENTO_ID
     )
     parser.add_argument("--clientes", type=int, default=50)
-    parser.add_argument("--fornecedores", type=int, default=8)
+    parser.add_argument("--fornecedores", type=int, default=15)
     parser.add_argument("--produtos", type=int, default=100)
     parser.add_argument("--dias", type=int, default=90)
     parser.add_argument("--test-login", action="store_true", help="Apenas testa login")

@@ -14,7 +14,6 @@ export const ProdutoLentoModal: React.FC<ProdutoLentoModalProps> = ({
 }) => {
   if (!isOpen || !produto) return null;
 
-  const custoUnitario = produto.estoque_atual > 0 ? produto.custo_parado / produto.estoque_atual : 0;
   const recuperacao70 = produto.custo_parado * 0.7;
   const beneficioLiquido = recuperacao70 - produto.perda_mensal;
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Star, DollarSign, Target, TrendingUp, AlertCircle, Lightbulb } from 'lucide-react';
+import { X, Star, DollarSign, Target, TrendingUp, AlertCircle } from 'lucide-react';
 
 interface ProdutoEstrelaModalProps {
   produto: any;

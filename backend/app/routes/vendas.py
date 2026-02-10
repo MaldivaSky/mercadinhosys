@@ -1045,6 +1045,11 @@ def criar_venda():
             quantidade_anterior = produto.quantidade
             produto.quantidade -= quantidade
             quantidade_atual = produto.quantidade
+            
+            # ATUALIZAR CAMPOS DE VENDAS PARA ANÁLISE ABC
+            produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
+            produto.total_vendido = (produto.total_vendido or 0) + total_item
+            produto.ultima_venda = datetime.utcnow()
 
             # 5. REGISTRAR MOVIMENTAÇÃO DE ESTOQUE
             movimentacao = MovimentacaoEstoque(
