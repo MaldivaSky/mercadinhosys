@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
@@ -19,7 +19,6 @@ import { apiClient } from '../../api/apiClient';
 import {
   AnomalyDetailsModal,
   CorrelationDetailsModal,
-  ProductDetailsModal,
   RecommendationDetailsModal,
   ProdutoEstrelaModal,
   ProdutoLentoModal
@@ -3268,14 +3267,6 @@ const DashboardPage: React.FC = () => {
           correlation={selectedCorrelation}
           isOpen={!!selectedCorrelation}
           onClose={() => setSelectedCorrelation(null)}
-        />
-      )}
-
-      {selectedProduct && (
-        <ProductDetailsModal
-          productData={selectedProduct.productData}
-          isOpen={!!selectedProduct}
-          onClose={() => setSelectedProduct(null)}
         />
       )}
 

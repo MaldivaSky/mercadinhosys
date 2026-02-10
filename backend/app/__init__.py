@@ -124,6 +124,8 @@ def create_app(config_name=None):
         max_age=3600,
     )
 
+
+    
     # Cria pastas necessárias
     for folder in ["instance", "instance/uploads", "logs", "backups"]:
         if not os.path.exists(folder):

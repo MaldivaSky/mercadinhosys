@@ -29,11 +29,11 @@ app.config["SECRET_KEY"] = "emergencia-mercadinho-2026"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"  # Banco em memória
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-CORS(
-    app,
-    supports_credentials=True,
-    origins=["http://localhost:3000", "http://localhost:5173"],
-)
+# Configuração CORS segura - usando mesma configuração da aplicação principal
+from config import config
+app.config.from_object(config['production'])
+
+# CORS será configurado pela aplicação principal através do blueprint
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 
