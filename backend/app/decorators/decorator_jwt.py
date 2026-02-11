@@ -1,7 +1,11 @@
 # decorator.py - VERSÃO CORRIGIDA
 from functools import wraps
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import jwt_required as jwt_required_flask, get_jwt_identity, get_jwt
 from flask import jsonify
+
+
+# Alias para compatibilidade
+jwt_required = jwt_required_flask
 
 
 def funcionario_required(f):
@@ -77,14 +81,14 @@ def gerente_ou_admin_required(f):
     @jwt_required()
     def decorated_function(*args, **kwargs):
         current_user_id = get_jwt_identity()
-        claims = get_jwt()  # ✅ Agora pega os claims adicionais
+        claims = get_jwt()
 
         # Verifica se o usuário está autenticado
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
         # Verifica se é gerente ou admin - agora usa claims (Case Insensitive)
-        role = claims.get("role", "").lower()
+        role = (claims.get("role") or "").lower()
         allowed_roles = ["gerente", "admin", "administrador"]
         
         if role not in allowed_roles:
@@ -92,15 +96,15 @@ def gerente_ou_admin_required(f):
                 jsonify(
                     {
                         "error": "Acesso restrito",
-                        "message": "Apenas gerentes ou administradores podem acessar",
+                        "message": f"Apenas gerentes ou administradores podem acessar. Seu role: {role}",
                     }
                 ),
                 403,
             )
 
         # Verifica se não está bloqueado - agora usa claims
-        status = claims.get("status", "").lower()
-        if status != "ativo":
+        status = (claims.get("status") or "ativo").lower()
+        if status not in ["ativo", "active"]:
             return jsonify({"error": "Acesso bloqueado"}), 403
 
         return f(*args, **kwargs)

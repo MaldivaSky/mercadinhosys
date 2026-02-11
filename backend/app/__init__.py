@@ -51,6 +51,10 @@ def create_app(config_name=None):
     # Carrega configurações
     app.config.from_object(config[config_name])
 
+    # Configurar JSON Provider Customizado (Decimal, Date, etc)
+    from app.utils.json_provider import CustomJSONProvider
+    app.json = CustomJSONProvider(app)
+
     db_source = None
     runtime_db_url = (
         os.environ.get("NEON_DATABASE_URL")
@@ -211,7 +215,8 @@ def create_app(config_name=None):
         app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
         logger.info("✅ Blueprint dashboard registrado em /api/dashboard")
     except Exception as e:
-        logger.error(f"❌ Erro ao registrar dashboard: {e}")
+        import traceback
+        logger.error(f"❌ Erro ao registrar dashboard: {e}\n{traceback.format_exc()}")
 
     # Despesas
     try:
@@ -246,6 +251,14 @@ def create_app(config_name=None):
         logger.info("✅ Blueprint ponto registrado em /api/ponto")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar ponto: {e}")
+
+    # Pedidos de Compra
+    try:
+        from app.routes.pedidos_compra import pedidos_compra_bp
+        app.register_blueprint(pedidos_compra_bp, url_prefix="/api")
+        logger.info("✅ Blueprint pedidos_compra registrado em /api")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar pedidos_compra: {e}")
 
     # Dashboard Científico - verifica se existe a pasta
     dashboard_cientifico_disponivel = False

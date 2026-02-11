@@ -157,13 +157,6 @@ def decimal_to_float(value):
     return value
 
 
-def decimal_to_float(value):
-    """Converte Decimal para float APENAS para serialização JSON"""
-    if isinstance(value, Decimal):
-        return float(value)
-    return value
-
-
 def gerar_codigo_venda():
     """Gera código único para venda no formato V-YYYYMMDD-XXXX"""
     data_atual = datetime.now().strftime("%Y%m%d")

@@ -12,6 +12,7 @@ import {
     FileText,
     Truck,
     Clock,
+    Briefcase,
 } from 'lucide-react';
 
 const menuItems = [
@@ -23,6 +24,7 @@ const menuItems = [
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/employees', icon: UserCog, label: 'Funcionários' },
+    { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/settings', icon: Settings, label: 'Configurações' },

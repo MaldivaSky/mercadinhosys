@@ -157,4 +157,40 @@ export const productsService = {
         const response = await productsService.getAllEstoque(1, 100, { categoria });
         return response.produtos;
     },
+
+    // ==================== NOVO: ESTATÍSTICAS AGREGADAS ====================
+    getEstatisticas: async (filtros?: ProdutoFiltros & { filtro_rapido?: string }): Promise<{
+        success: boolean;
+        estatisticas: {
+            total_produtos: number;
+            produtos_baixo_estoque: number;
+            produtos_esgotados: number;
+            produtos_normal: number;
+            valor_total_estoque: number;
+            margem_media: number;
+            classificacao_abc: { A: number; B: number; C: number };
+            giro_estoque: { rapido: number; normal: number; lento: number };
+            filtros_aplicados: any;
+        };
+    }> => {
+        const params: any = {};
+
+        if (filtros) {
+            if (filtros.busca) params.busca = filtros.busca;
+            if (filtros.categoria) params.categoria = filtros.categoria;
+            if (filtros.fornecedor_id) params.fornecedor_id = filtros.fornecedor_id;
+            if (filtros.ativos !== undefined) params.ativos = filtros.ativos;
+            if (filtros.preco_min) params.preco_min = filtros.preco_min;
+            if (filtros.preco_max) params.preco_max = filtros.preco_max;
+            if (filtros.estoque_status) params.estoque_status = filtros.estoque_status;
+            if (filtros.tipo) params.tipo = filtros.tipo;
+            if (filtros.filtro_rapido) params.filtro_rapido = filtros.filtro_rapido;
+        }
+
+        const response = await apiClient.get<any>('/produtos/estatisticas', { params });
+        
+        console.log('📊 ESTATÍSTICAS RECEBIDAS:', response.data.estatisticas);
+        
+        return response.data;
+    },
 };

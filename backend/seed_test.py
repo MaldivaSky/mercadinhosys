@@ -1,14 +1,15 @@
 """
-Seed de dados completo para o sistema ERP comercial (compatível com models.py atual).
+Seed de dados completo para o sistema ERP comercial (compativel com models.py atual).
 
 Objetivos:
 - Gerar dados realistas e completos para testar todas as funcionalidades do sistema
-- Compatível com SQLite (localhost) e PostgreSQL (nuvem)
+- Compativel com SQLite (localhost) e PostgreSQL (nuvem)
 - Credenciais de teste: admin / admin123
 
 Uso:
-  - `python seed.py --reset` (apaga e recria todos os dados)
-  - `python seed.py` (apenas preenche se estiver vazio)
+  - `python seed_test.py --reset --local` (apaga e recria todos os dados localmente)
+  - `python seed_test.py --reset` (apaga e recria todos os dados no banco configurado)
+  - `python seed_test.py` (apenas preenche se estiver vazio)
 
 Automaticamente executado no Render pelo Start Command.
 """
@@ -20,10 +21,16 @@ import sys
 import argparse
 import random
 import json
-import hashlib  # 🔥 ADICIONADO
+import hashlib
 from datetime import datetime, timedelta, date, time
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
+
+# Configurar encoding UTF-8 para evitar problemas de Unicode
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 from sqlalchemy import text
 
@@ -42,6 +49,7 @@ from app.models import (
     Fornecedor,
     CategoriaProduto,
     Produto,
+    ProdutoLote,
     Venda,
     VendaItem,
     Pagamento,
@@ -71,7 +79,7 @@ def _faker() -> Faker:
 
 def reset_database():
     """Destrói e recria o esquema do banco (SQLite/Postgres)."""
-    print("🧹 Iniciando RESET do banco de dados...")
+    print("[RESET] Iniciando RESET do banco de dados...")
 
     try:
         engine_name = db.engine.name
@@ -190,83 +198,98 @@ def ensure_configuracao(estabelecimento_id: int) -> Configuracao:
 
 
 def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]:
-    """Cria funcionários de teste, incluindo admin."""
-    print("👥 Criando funcionários...")
+    """Cria funcionários ativos e histórico de demitidos."""
+    print("👥 Criando funcionários (4 ativos + 25 demitidos)...")
 
-    funcionarios_data = [
+    # FUNCIONÁRIOS ATIVOS (4)
+    funcionarios_ativos_data = [
         {
             "nome": "Rafael Maldivas",
             "username": "admin",
-            "cpf": fake.cpf(),
-            "rg": f"MG-{random.randint(10000000, 99999999)}",
-            "data_nascimento": date(1985, 1, 1),
-            "telefone": fake.phone_number(),
-            "celular": fake.cellphone_number(),
+            "cpf": "343.721.318-01",
+            "data_nascimento": date(1987, 4, 28),
             "email": "admin@empresa.com",
-            "cargo": "Gerente",
-            "data_admissao": date.today() - timedelta(days=365),
-            "salario_base": Decimal("3500.00"),
+            "cargo": "Proprietário",
+            "data_admissao": date.today() - timedelta(days=730),  # 2 anos
+            "salario_base": Decimal("8000.00"),
             "role": "ADMIN",
-            "permissoes": {
-                "pdv": True,
-                "estoque": True,
-                "compras": True,
-                "financeiro": True,
-                "configuracoes": True,
-                "relatorios": True,
-            },
+            "permissoes": {"pdv": True, "estoque": True, "compras": True, "financeiro": True, "configuracoes": True, "relatorios": True},
             "senha": "admin123",
         },
         {
-            "nome": fake.name(),
-            "username": "caixa01",
-            "cpf": fake.cpf(),
-            "rg": f"SP-{random.randint(10000000, 99999999)}",
-            "data_nascimento": date(1990, 5, 15),
-            "telefone": fake.phone_number(),
-            "celular": fake.cellphone_number(),
-            "email": fake.email(),
-            "cargo": "Caixa",
-            "data_admissao": date.today() - timedelta(days=180),
-            "salario_base": Decimal("1850.00"),
-            "role": "FUNCIONARIO",
-            "permissoes": {
-                "pdv": True,
-                "estoque": False,
-                "compras": False,
-                "financeiro": False,
-                "configuracoes": False,
-                "relatorios": False,
-            },
-            "senha": "123456",
+            "nome": "Ana Paula Santos",
+            "username": "gerente01",
+            "cpf": "234.567.890-11",
+            "data_nascimento": date(1985, 4, 12),
+            "email": "ana@empresa.com",
+            "cargo": "Gerente",
+            "data_admissao": date.today() - timedelta(days=550),  # 1.5 anos
+            "salario_base": Decimal("4500.00"),
+            "role": "GERENTE",
+            "permissoes": {"pdv": True, "estoque": True, "compras": True, "financeiro": True, "configuracoes": False, "relatorios": True},
+            "senha": "gerente123",
         },
         {
-            "nome": fake.name(),
-            "username": "estoque01",
-            "cpf": fake.cpf(),
-            "rg": f"RJ-{random.randint(10000000, 99999999)}",
-            "data_nascimento": date(1992, 8, 22),
-            "telefone": fake.phone_number(),
-            "celular": fake.cellphone_number(),
-            "email": fake.email(),
-            "cargo": "Estoquista",
-            "data_admissao": date.today() - timedelta(days=90),
-            "salario_base": Decimal("2100.00"),
+            "nome": "Maria Silva",
+            "username": "caixa01",
+            "cpf": "456.789.012-33",
+            "data_nascimento": date(1995, 2, 14),
+            "email": "maria@empresa.com",
+            "cargo": "Operador de Caixa",
+            "data_admissao": date.today() - timedelta(days=365),  # 1 ano
+            "salario_base": Decimal("2200.00"),
             "role": "FUNCIONARIO",
-            "permissoes": {
-                "pdv": True,
-                "estoque": True,
-                "compras": False,
-                "financeiro": False,
-                "configuracoes": False,
-                "relatorios": False,
-            },
-            "senha": "123456",
+            "permissoes": {"pdv": True, "estoque": False, "compras": False, "financeiro": False, "configuracoes": False, "relatorios": False},
+            "senha": "caixa123",
+        },
+        {
+            "nome": "João Santos",
+            "username": "estoque01",
+            "cpf": "567.890.123-44",
+            "data_nascimento": date(1998, 7, 22),
+            "email": "joao@empresa.com",
+            "cargo": "Repositor",
+            "data_admissao": date.today() - timedelta(days=180),  # 6 meses
+            "salario_base": Decimal("1800.00"),
+            "role": "FUNCIONARIO",
+            "permissoes": {"pdv": True, "estoque": True, "compras": False, "financeiro": False, "configuracoes": False, "relatorios": False},
+            "senha": "estoque123",
         },
     ]
 
+    # FUNCIONÁRIOS DEMITIDOS (25) - com histórico realista
+    ex_funcionarios_data = [
+        ("Roberto Oliveira", "345.678.901-22", date(1980, 6, 1), date.today() - timedelta(days=450), "Supervisor de Vendas", "Pediu demissão"),
+        ("Fernanda Costa", "678.901.234-55", date(1988, 1, 10), date.today() - timedelta(days=200), "Operador de Caixa", "Demitida - faltas"),
+        ("Pedro Almeida", "789.012.345-66", date(1992, 8, 5), date.today() - timedelta(days=300), "Repositor", "Pediu demissão"),
+        ("Lucas Ferreira", "890.123.456-77", date(1994, 2, 1), date.today() - timedelta(days=550), "Repositor", "Demitido - desempenho"),
+        ("Carla Rodrigues", "901.234.567-88", date(1991, 11, 15), date.today() - timedelta(days=100), "Operador de Caixa", "Pediu demissão"),
+        ("André Souza", "012.345.678-99", date(1996, 1, 20), date.today() - timedelta(days=250), "Auxiliar Geral", "Demitido - experiência"),
+        ("Juliana Pereira", "111.222.333-44", date(1989, 8, 10), date.today() - timedelta(days=600), "Operador de Caixa", "Pediu demissão"),
+        ("Marcos Lima", "222.333.444-55", date(1987, 5, 20), date.today() - timedelta(days=750), "Repositor", "Demitido - conflitos"),
+        ("Sandra Martins", "333.444.555-66", date(1990, 12, 1), date.today() - timedelta(days=500), "Auxiliar Admin", "Pediu demissão"),
+        ("Carlos Eduardo", "444.555.666-77", date(1985, 6, 15), date.today() - timedelta(days=900), "Supervisor", "Demitido - reestruturação"),
+        ("Patrícia Lima", "555.666.777-88", date(1993, 3, 10), date.today() - timedelta(days=350), "Operador de Caixa", "Pediu demissão"),
+        ("Ricardo Santos", "666.777.888-99", date(1988, 8, 15), date.today() - timedelta(days=650), "Repositor", "Demitido - disciplina"),
+        ("Camila Oliveira", "777.888.999-00", date(1997, 6, 20), date.today() - timedelta(days=150), "Auxiliar Limpeza", "Pediu demissão"),
+        ("Bruno Silva", "888.999.000-11", date(1991, 11, 5), date.today() - timedelta(days=400), "Operador de Caixa", "Demitido - erro caixa"),
+        ("Larissa Costa", "999.000.111-22", date(1999, 2, 14), date.today() - timedelta(days=50), "Repositor", "Pediu demissão"),
+        ("Diego Ferreira", "000.111.222-33", date(1986, 9, 20), date.today() - timedelta(days=800), "Auxiliar Geral", "Demitido - faltas"),
+        ("Amanda Rodrigues", "111.222.333-45", date(1994, 4, 12), date.today() - timedelta(days=200), "Operador de Caixa", "Pediu demissão"),
+        ("Thiago Almeida", "222.333.444-56", date(1989, 1, 25), date.today() - timedelta(days=700), "Repositor", "Demitido - rendimento"),
+        ("Vanessa Souza", "333.444.555-67", date(1992, 7, 30), date.today() - timedelta(days=300), "Auxiliar Admin", "Pediu demissão"),
+        ("Rafael Martins", "444.555.666-78", date(1995, 9, 15), date.today() - timedelta(days=150), "Operador de Caixa", "Demitido - cliente"),
+        ("Gabriela Pereira", "555.666.777-89", date(1998, 5, 8), date.today() - timedelta(days=80), "Repositor", "Pediu demissão"),
+        ("Felipe Lima", "666.777.888-90", date(1990, 12, 20), date.today() - timedelta(days=450), "Auxiliar Estoque", "Demitido - negligência"),
+        ("Natália Santos", "777.888.999-01", date(1996, 8, 3), date.today() - timedelta(days=200), "Operador de Caixa", "Pediu demissão"),
+        ("Gustavo Oliveira", "888.999.000-12", date(1988, 11, 12), date.today() - timedelta(days=650), "Repositor", "Demitido - pontualidade"),
+        ("Priscila Silva", "999.000.111-23", date(1997, 3, 22), date.today() - timedelta(days=100), "Auxiliar Limpeza", "Pediu demissão"),
+    ]
+
     funcionarios = []
-    for func_data in funcionarios_data:
+    
+    # Criar funcionários ativos
+    for func_data in funcionarios_ativos_data:
         existente = Funcionario.query.filter_by(
             estabelecimento_id=estabelecimento_id, username=func_data["username"]
         ).first()
@@ -280,10 +303,9 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
             nome=func_data["nome"],
             username=func_data["username"],
             cpf=func_data["cpf"],
-            rg=func_data["rg"],
             data_nascimento=func_data["data_nascimento"],
-            telefone=func_data["telefone"],
-            celular=func_data["celular"],
+            telefone=fake.phone_number(),
+            celular=fake.cellphone_number(),
             email=func_data["email"],
             cargo=func_data["cargo"],
             data_admissao=func_data["data_admissao"],
@@ -291,70 +313,66 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
             role=func_data["role"],
             permissoes_json=json.dumps(func_data["permissoes"]),
             ativo=True,
-            foto_url=None,
             cep=fake.postcode(),
             logradouro=fake.street_name(),
             numero=str(random.randint(1, 999)),
-            complemento="",
             bairro=fake.bairro(),
             cidade=fake.city(),
             estado=fake.estado_sigla(),
             pais="Brasil",
         )
-
-        # 🔥🔥🔥 CORREÇÃO CRÍTICA: Usar a MESMA lógica do auth.py
-        # O auth.py usa hashlib.sha256(f"{senha}{salt}").hexdigest()
-        # Vamos replicar EXATAMENTE isso
-        senha_plana = func_data["senha"]
-
-        # 1. Se o model tem método set_senha, use-o
-        try:
-            f.set_senha(senha_plana)
-        except:
-            # 2. Se não, use a lógica do auth.py
-            # Supondo que seu model tem campo 'salt' e armazena hash em 'senha'
-            salt = "sistema"  # Isso DEVE ser o mesmo que no seu model!
-            senha_hash = hashlib.sha256(f"{senha_plana}{salt}".encode()).hexdigest()
-
-            # Setar diretamente nos campos (ajuste conforme seu model)
-            f.senha = senha_hash
-            if hasattr(f, "salt"):
-                f.salt = salt
-
+        f.set_senha(func_data["senha"])
         db.session.add(f)
         funcionarios.append(f)
 
+    # Criar ex-funcionários (demitidos)
+    for nome, cpf, data_nasc, data_demissao, cargo, motivo in ex_funcionarios_data:
+        username = nome.lower().replace(" ", "")[:10]
+        
+        existente = Funcionario.query.filter_by(
+            estabelecimento_id=estabelecimento_id, cpf=cpf
+        ).first()
+
+        if existente:
+            continue
+
+        # Data de admissão: entre 1-3 anos antes da demissão
+        dias_trabalhados = random.randint(180, 1095)
+        data_admissao = data_demissao - timedelta(days=dias_trabalhados)
+
+        ex_func = Funcionario(
+            estabelecimento_id=estabelecimento_id,
+            nome=nome,
+            username=username,
+            cpf=cpf,
+            data_nascimento=data_nasc,
+            telefone=fake.phone_number(),
+            celular=fake.cellphone_number(),
+            email=f"{username}@empresa.com",
+            cargo=cargo,
+            data_admissao=data_admissao,
+            data_demissao=data_demissao,
+            salario_base=Decimal(str(random.uniform(1800, 3500))),
+            role="FUNCIONARIO",
+            permissoes_json=json.dumps({"pdv": True, "estoque": True, "compras": False, "financeiro": False, "configuracoes": False, "relatorios": False}),
+            ativo=False,
+            cep=fake.postcode(),
+            logradouro=fake.street_name(),
+            numero=str(random.randint(1, 999)),
+            bairro=fake.bairro(),
+            cidade=fake.city(),
+            estado=fake.estado_sigla(),
+            pais="Brasil",
+        )
+        ex_func.set_senha("123456")
+        db.session.add(ex_func)
+        funcionarios.append(ex_func)
+
     db.session.commit()
 
-    # 🔥 VERIFICAÇÃO IMEDIATA: Testar se o login funciona
-    print("\n🔐 Verificando login do admin...")
-    admin = Funcionario.query.filter_by(
-        username="admin", estabelecimento_id=estabelecimento_id
-    ).first()
-    if admin:
-        # Testar se a senha funciona
-        if hasattr(admin, "check_senha"):
-            if admin.check_senha("admin123"):
-                print("✅ Admin pode logar com 'admin123'")
-            else:
-                print("❌ ERRO: Senha do admin NÃO FUNCIONA!")
-                print(
-                    "   Hash armazenado:",
-                    admin.senha[:50] + "..." if admin.senha else "None",
-                )
-                print("   Salt:", admin.salt if hasattr(admin, "salt") else "Não tem")
-
-                # Calcular hash manualmente para debug
-                if hasattr(admin, "salt") and admin.salt:
-                    test_hash = hashlib.sha256(
-                        f"admin123{admin.salt}".encode()
-                    ).hexdigest()
-                    print("   Hash calculado:", test_hash[:50] + "...")
-                    print("   Hash correto?", admin.senha == test_hash)
-        else:
-            print("⚠️  Método check_senha não encontrado no model")
-
-    print(f"✅ {len(funcionarios)} funcionários criados")
+    print(f"✅ {len(funcionarios_ativos_data)} funcionários ativos criados")
+    print(f"✅ {len(ex_funcionarios_data)} ex-funcionários (histórico) criados")
+    print(f"✅ Total: {len(funcionarios)} registros de RH")
     return funcionarios
 
 
@@ -416,52 +434,96 @@ def seed_clientes(fake: Faker, estabelecimento_id: int, n: int = 50) -> List[Cli
 
 
 def seed_fornecedores(
-    fake: Faker, estabelecimento_id: int, n: int = 15
+    fake: Faker, estabelecimento_id: int, n: int = 50
 ) -> List[Fornecedor]:
-    """Cria fornecedores de teste com variedade realista."""
-    print("🏭 Criando fornecedores...")
+    """Cria fornecedores REAIS do Brasil."""
+    print("🏭 Criando fornecedores reais do Brasil...")
+
+    # Fornecedores REAIS do Brasil
+    fornecedores_reais = [
+        ("Ambev", "Ambev S/A", "07526847000148", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("Coca-Cola", "The Coca-Cola Company Brasil", "34028316000152", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("Nestlé", "Nestlé Brasil Ltda", "44477053000161", "São Paulo", 10, "30 DIAS", "PREFERENCIAL"),
+        ("JBS", "JBS S/A", "17343969000164", "Goiás", 3, "15 DIAS", "PREFERENCIAL"),
+        ("Seara", "Seara Alimentos S/A", "07526847000149", "Santa Catarina", 3, "15 DIAS", "PREFERENCIAL"),
+        ("Perdigão", "Perdigão S/A", "07526847000150", "Santa Catarina", 3, "15 DIAS", "PREFERENCIAL"),
+        ("Sadia", "Sadia S/A", "07526847000151", "Santa Catarina", 3, "15 DIAS", "PREFERENCIAL"),
+        ("Friboi", "Friboi Frigorífico", "07526847000152", "Goiás", 2, "À VISTA", "REGULAR"),
+        ("Itambé", "Itambé Alimentos", "17343969000165", "Minas Gerais", 5, "30 DIAS", "PREFERENCIAL"),
+        ("Vigor", "Vigor Alimentos", "07526847000153", "São Paulo", 5, "30 DIAS", "PREFERENCIAL"),
+        ("Danone", "Danone Brasil", "44477053000162", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("Yoplait", "Yoplait Brasil", "07526847000154", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("Pilão", "Pilão Alimentos", "07526847000155", "São Paulo", 10, "30 DIAS", "REGULAR"),
+        ("Nescafé", "Nescafé Brasil", "44477053000163", "São Paulo", 10, "30 DIAS", "PREFERENCIAL"),
+        ("Ypê", "Ypê Produtos de Limpeza", "07526847000156", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Veja", "Veja Produtos de Limpeza", "07526847000157", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Confort", "Confort Amaciante", "07526847000158", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Dove", "Dove Brasil", "07526847000159", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Clear", "Clear Xampus", "07526847000160", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Colgate", "Colgate-Palmolive", "07526847000161", "São Paulo", 15, "30 DIAS", "PREFERENCIAL"),
+        ("Mondelez", "Mondelez Brasil", "07526847000162", "São Paulo", 10, "30 DIAS", "PREFERENCIAL"),
+        ("Marilan", "Marilan Alimentos", "07526847000163", "São Paulo", 10, "30 DIAS", "REGULAR"),
+        ("Tio João", "Tio João Alimentos", "07526847000164", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Camil", "Camil Alimentos", "07526847000165", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Renata", "Renata Alimentos", "07526847000166", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Liza", "Liza Óleos", "07526847000167", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Kicaldo", "Kicaldo Alimentos", "07526847000168", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Aviação", "Aviação Alimentos", "07526847000169", "São Paulo", 15, "30 DIAS", "REGULAR"),
+        ("Neve", "Neve Papel Higiênico", "07526847000170", "São Paulo", 20, "30 DIAS", "REGULAR"),
+        ("Omo", "Omo Detergentes", "07526847000171", "São Paulo", 20, "30 DIAS", "REGULAR"),
+        ("Qboa", "Qboa Produtos", "07526847000172", "São Paulo", 20, "30 DIAS", "REGULAR"),
+        ("Pullman", "Pullman Pão", "07526847000173", "São Paulo", 3, "À VISTA", "REGULAR"),
+        ("Bimbo", "Bimbo Brasil", "07526847000174", "São Paulo", 3, "À VISTA", "PREFERENCIAL"),
+        ("Pão de Queijo", "Pão de Queijo Artesanal", "07526847000175", "Minas Gerais", 2, "À VISTA", "NOVO"),
+        ("Distribuidor Local 1", "Distribuidor Local 1 LTDA", "12345678000190", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 2", "Distribuidor Local 2 LTDA", "12345678000191", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 3", "Distribuidor Local 3 LTDA", "12345678000192", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 4", "Distribuidor Local 4 LTDA", "12345678000193", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 5", "Distribuidor Local 5 LTDA", "12345678000194", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 6", "Distribuidor Local 6 LTDA", "12345678000195", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 7", "Distribuidor Local 7 LTDA", "12345678000196", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 8", "Distribuidor Local 8 LTDA", "12345678000197", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 9", "Distribuidor Local 9 LTDA", "12345678000198", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 10", "Distribuidor Local 10 LTDA", "12345678000199", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 11", "Distribuidor Local 11 LTDA", "12345678000200", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 12", "Distribuidor Local 12 LTDA", "12345678000201", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 13", "Distribuidor Local 13 LTDA", "12345678000202", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 14", "Distribuidor Local 14 LTDA", "12345678000203", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Distribuidor Local 15", "Distribuidor Local 15 LTDA", "12345678000204", "São Paulo", 1, "À VISTA", "REGULAR"),
+    ]
 
     fornecedores = []
-    for i in range(n):
-        nome_empresa = fake.company()
-
-        # Gerar complemento aleatório
-        complementos = ["Galpão 1", "Sede", "Matriz", "Filial", "Depósito", ""]
-        complemento = random.choice(complementos) if random.random() > 0.5 else ""
-
+    for nome, razao, cnpj, cidade, prazo, pagamento, classificacao in fornecedores_reais[:n]:
         f = Fornecedor(
             estabelecimento_id=estabelecimento_id,
-            nome_fantasia=nome_empresa,
-            razao_social=f"{nome_empresa} LTDA",
-            cnpj=fake.cnpj(),
-            inscricao_estadual=f"ISENTO",
+            nome_fantasia=nome,
+            razao_social=razao,
+            cnpj=cnpj,
+            inscricao_estadual="ISENTO",
             telefone=fake.phone_number(),
-            email=fake.company_email(),
+            email=f"contato@{nome.lower().replace(' ', '')}.com.br",
             contato_nome=fake.name(),
             contato_telefone=fake.phone_number(),
-            prazo_entrega=random.choice([7, 15, 30, 45]),
-            forma_pagamento=random.choice(
-                ["30 DIAS", "45 DIAS", "À VISTA", "14/28/42"]
-            ),
-            classificacao=random.choice(["REGULAR", "PREFERENCIAL", "NOVO"]),
-            total_compras=random.randint(0, 50),
-            valor_total_comprado=Decimal(str(round(random.uniform(5000, 50000), 2))),
-            ativo=random.random() > 0.1,  # 90% ativos
-            cep=fake.postcode(),
-            logradouro=fake.street_name(),
-            numero=str(random.randint(1, 9999)),
-            complemento=complemento,
-            bairro="Industrial",
-            cidade=fake.city(),
-            estado=fake.estado_sigla(),
+            prazo_entrega=prazo,
+            forma_pagamento=pagamento,
+            classificacao=classificacao,
+            total_compras=random.randint(5, 100),
+            valor_total_comprado=Decimal(str(round(random.uniform(10000, 500000), 2))),
+            ativo=True,
+            cep="01310100",
+            logradouro="Avenida Paulista",
+            numero=str(random.randint(1000, 9999)),
+            complemento="",
+            bairro="Bela Vista",
+            cidade=cidade,
+            estado="SP",
             pais="Brasil",
         )
-
         db.session.add(f)
         fornecedores.append(f)
 
     db.session.commit()
-    print(f"✅ {len(fornecedores)} fornecedores criados")
+    print(f"✅ {len(fornecedores)} fornecedores reais criados")
     return fornecedores
 
 
@@ -697,6 +759,17 @@ def seed_produtos(
 
     produtos = []
     
+    # Mapa de marca -> fornecedor_id para garantir que cada produto tenha o fornecedor correto
+    marca_fornecedor_map = {}
+    for fornecedor in fornecedores:
+        # Mapear nomes de marcas conhecidas para fornecedores
+        if fornecedor.nome_fantasia.lower() in ["coca-cola", "ambev", "heineken", "crystal", "del valle", 
+                                                   "tio joão", "camil", "kicaldo", "renata", "liza", "união", 
+                                                   "pilão", "italac", "itambé", "sadia", "aviação", "vigor", 
+                                                   "nestlé", "dove", "colgate", "neve", "omo", "confort", "qboa",
+                                                   "friboi", "seara", "perdigão", "pullman", "mondelez", "pepsico"]:
+            marca_fornecedor_map[fornecedor.nome_fantasia.lower()] = fornecedor.id
+    
     # Lista de produtos reais conhecidos no Brasil
     produtos_reais = [
         # Bebidas
@@ -739,14 +812,14 @@ def seed_produtos(
         ("Contra Filé Bovino kg", "Carnes", "CAR-001", None, "Friboi", 45.00, 69.90),
         ("Filé de Peito Frango kg", "Carnes", "FRA-001", None, "Seara", 18.00, 28.90),
         ("Linguiça Toscana Na Brasa kg", "Carnes", "LIN-001", None, "Perdigão", 16.00, 24.90),
-        ("Banana Prata kg", "Hortifrúti", "BAN-001", None, None, 4.50, 8.90),
-        ("Tomate Italiano kg", "Hortifrúti", "TOM-001", None, None, 6.50, 12.90),
-        ("Batata Lavada kg", "Hortifrúti", "BAT-001", None, None, 4.50, 8.90),
-        ("Cebola kg", "Hortifrúti", "CEB-001", None, None, 3.50, 6.90),
-        ("Ovos Brancos Dúzia", "Hortifrúti", "OVO-001", None, None, 8.00, 14.90),
+        ("Banana Prata kg", "Hortifrúti", "BAN-001", None, "Distribuidor Local 1", 4.50, 8.90),
+        ("Tomate Italiano kg", "Hortifrúti", "TOM-001", None, "Distribuidor Local 2", 6.50, 12.90),
+        ("Batata Lavada kg", "Hortifrúti", "BAT-001", None, "Distribuidor Local 3", 4.50, 8.90),
+        ("Cebola kg", "Hortifrúti", "CEB-001", None, "Distribuidor Local 4", 3.50, 6.90),
+        ("Ovos Brancos Dúzia", "Hortifrúti", "OVO-001", None, "Distribuidor Local 5", 8.00, 14.90),
         
         # Padaria
-        ("Pão Francês kg", "Padaria", "PAO-001", None, "Própria", 12.00, 18.90),
+        ("Pão Francês kg", "Padaria", "PAO-001", None, "Distribuidor Local 6", 12.00, 18.90),
         ("Pão de Forma Pullman", "Padaria", "FOR-001", "7896000000000", "Pullman", 6.50, 10.90),
         ("Biscoito Trakinas", "Padaria", "BIS-001", "7896000000001", "Mondelez", 3.50, 5.90),
     ]
@@ -764,9 +837,30 @@ def seed_produtos(
         if not categoria:
             continue
 
+        # Determinar fornecedor_id baseado na marca
+        fornecedor_id = None
+        if marca:
+            # Tentar encontrar o fornecedor pela marca
+            marca_lower = marca.lower()
+            if marca_lower in marca_fornecedor_map:
+                fornecedor_id = marca_fornecedor_map[marca_lower]
+            else:
+                # Se não encontrar, procurar um fornecedor com nome similar
+                for fornecedor in fornecedores:
+                    if fornecedor.nome_fantasia.lower() == marca_lower:
+                        fornecedor_id = fornecedor.id
+                        break
+                # Se ainda não encontrou, usar o primeiro fornecedor disponível
+                if not fornecedor_id and fornecedores:
+                    fornecedor_id = fornecedores[0].id
+        else:
+            # Se não tem marca, usar um fornecedor aleatório
+            if fornecedores:
+                fornecedor_id = random.choice(fornecedores).id
+
         # Gerar dados variados
-        quantidade = random.randint(20, 200)
-        quantidade_minima = max(10, quantidade // 4)
+        quantidade = random.randint(500, 1000)  # Aumentado de 20-200 para 500-1000
+        quantidade_minima = max(10, quantidade // 10)  # Reduzido para 10% em vez de 25%
         margem = ((preco_venda - preco_custo) / preco_custo) * 100
 
         # DATA DE VALIDADE - Focar em 2025 e 2026
@@ -782,15 +876,15 @@ def seed_produtos(
         p = Produto(
             estabelecimento_id=estabelecimento_id,
             categoria_id=categoria.id,
-            fornecedor_id=random.choice(fornecedores).id if fornecedores else None,
+            fornecedor_id=fornecedor_id,
             codigo_barras=codigo_barras or fake.ean13(),
             codigo_interno=codigo,
             nome=nome,
             descricao=f"{nome} - {marca if marca else 'Produto fresco'}",
             marca=marca if marca else None,
             unidade_medida=random.choice(["UN", "KG", "L", "CX"]),
-            quantidade=quantidade,
-            quantidade_minima=quantidade_minima,
+            quantidade=0,  # IMPORTANTE: Estoque vem de pedidos de compra
+            quantidade_minima=random.randint(20, 50),
             preco_custo=Decimal(str(preco_custo)),
             preco_venda=Decimal(str(preco_venda)),
             margem_lucro=Decimal(str(round(margem, 2))),
@@ -801,53 +895,9 @@ def seed_produtos(
             classificacao_abc=random.choice(["A", "B", "C"]),
             controlar_validade=True,
             data_validade=data_validade,
-            lote=f"L{random.randint(1000, 9999)}" if random.random() > 0.5 else None,
+            lote=f"L{random.randint(1000, 9999)}",  # OBRIGATÓRIO
             imagem_url=None,
             ativo=True,
-        )
-
-        db.session.add(p)
-        produtos.append(p)
-
-    # Criar produtos adicionais aleatórios para volume
-    while len(produtos) < n:
-        categoria = random.choice(categorias)
-        fornecedor = random.choice(fornecedores) if fornecedores else None
-
-        nome = f"{fake.word().capitalize()} {fake.word().capitalize()}"
-        preco_custo = round(random.uniform(2.0, 50.0), 2)
-        preco_venda = round(preco_custo * random.uniform(1.3, 2.5), 2)
-        
-        # DATA DE VALIDADE - 2025 e 2026
-        ano_validade = random.choice([2025, 2026])
-        mes_validade = random.randint(1, 12)
-        dia_validade = random.randint(1, 28)
-        data_validade = date(ano_validade, mes_validade, dia_validade)
-
-        p = Produto(
-            estabelecimento_id=estabelecimento_id,
-            categoria_id=categoria.id,
-            fornecedor_id=fornecedor.id if fornecedor else None,
-            codigo_barras=fake.ean13(),
-            codigo_interno=f"GEN-{len(produtos)+1:03d}",
-            nome=nome,
-            descricao=f"Produto genérico para testes",
-            marca=fake.company() if random.random() > 0.5 else None,
-            unidade_medida=random.choice(["UN", "KG", "L", "CX"]),
-            quantidade=random.randint(0, 200),
-            quantidade_minima=random.randint(5, 20),
-            preco_custo=Decimal(str(preco_custo)),
-            preco_venda=Decimal(str(preco_venda)),
-            margem_lucro=Decimal(
-                str(round(((preco_venda - preco_custo) / preco_custo) * 100, 2))
-            ),
-            ncm="".join([str(random.randint(0, 9)) for _ in range(8)]),
-            origem=0,
-            total_vendido=0.0,
-            quantidade_vendida=0,
-            controlar_validade=True,
-            data_validade=data_validade,
-            ativo=random.random() > 0.1,
         )
 
         db.session.add(p)
@@ -864,8 +914,8 @@ def seed_vendas(
     funcionarios: List[Funcionario],
     clientes: List[Cliente],
     produtos: List[Produto],
-    dias_passados: int = 90,
-    vendas_por_dia: tuple = (3, 8),
+    dias_passados: int = 90,  # Reduzido de 180 para 90 dias
+    vendas_por_dia: tuple = (2, 5),  # Reduzido de (3, 8) para (2, 5)
 ):
     """Cria vendas realistas com itens e pagamentos."""
     print("🧾 Criando vendas...")
@@ -949,11 +999,20 @@ def seed_vendas(
             num_itens = random.randint(1, 8)
             subtotal = Decimal("0.00")
 
-            produtos_venda = random.sample(produtos, min(num_itens, len(produtos)))
+            # DISTRIBUIÇÃO DE PARETO: 80% das vendas vêm de 20% dos produtos
+            # Selecionar produtos com probabilidade ponderada (alguns produtos vendem muito mais)
+            if random.random() < 0.80:  # 80% das vendas
+                # Usar os 20% dos produtos mais populares
+                num_produtos_populares = max(1, len(produtos) // 5)
+                produtos_populares = produtos[:num_produtos_populares]
+                produtos_venda = random.choices(produtos_populares, k=min(num_itens, len(produtos_populares)))
+            else:  # 20% das vendas
+                # Usar produtos aleatórios (incluindo os menos populares)
+                produtos_venda = random.sample(produtos, min(num_itens, len(produtos)))
 
             for produto in produtos_venda:
                 quantidade = random.randint(1, 3)
-                preco_unitario = produto.preco_venda
+                preco_unitario = Decimal(str(produto.preco_venda))
                 desconto_item = Decimal("0.00")
 
                 # Aplicar desconto ocasional
@@ -972,7 +1031,7 @@ def seed_vendas(
                     preco_unitario=preco_unitario,
                     desconto=desconto_item,
                     total_item=total_item,
-                    custo_unitario=produto.preco_custo,
+                    custo_unitario=Decimal(str(produto.preco_custo)),
                     margem_item=Decimal(
                         str(
                             round(
@@ -989,10 +1048,10 @@ def seed_vendas(
 
                 db.session.add(item)
 
-                # Atualizar estoque
+                # Atualizar estoque - usar Decimal
                 produto.quantidade -= quantidade
-                produto.quantidade_vendida += quantidade
-                produto.total_vendido += float(total_item)
+                produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
+                produto.total_vendido = float(Decimal(str(produto.total_vendido or 0)) + total_item)
                 produto.ultima_venda = data_hora_venda
 
                 # Criar movimentação de estoque
@@ -1005,8 +1064,8 @@ def seed_vendas(
                     quantidade=quantidade,
                     quantidade_anterior=produto.quantidade + quantidade,
                     quantidade_atual=produto.quantidade,
-                    custo_unitario=produto.preco_custo,
-                    valor_total=produto.preco_custo * Decimal(str(quantidade)),
+                    custo_unitario=Decimal(str(produto.preco_custo)),
+                    valor_total=Decimal(str(produto.preco_custo)) * Decimal(str(quantidade)),
                     motivo="Venda",
                     observacoes=None,
                     created_at=data_hora_venda,
@@ -1044,8 +1103,8 @@ def seed_vendas(
 
             # Atualizar cliente
             if cliente:
-                cliente.total_compras += 1
-                cliente.valor_total_gasto += total_venda
+                cliente.total_compras = (cliente.total_compras or 0) + 1
+                cliente.valor_total_gasto = Decimal(str(cliente.valor_total_gasto or 0)) + total_venda
                 cliente.ultima_compra = data_hora_venda
 
             vendas_criadas += 1
@@ -1055,6 +1114,136 @@ def seed_vendas(
     return vendas_criadas
 
 
+def seed_garantir_vendas_todos_produtos(
+    fake: Faker,
+    estabelecimento_id: int,
+    funcionarios: List[Funcionario],
+    clientes: List[Cliente],
+    produtos: List[Produto],
+):
+    """Garante que TODOS os produtos tenham pelo menos uma venda registrada.
+    Mantém a distribuição de Pareto: produtos populares vendem muito, produtos menos populares vendem pouco."""
+    print("🔄 Garantindo que todos os produtos tenham vendas com distribuição de Pareto...")
+
+    produtos_sem_venda = [p for p in produtos if not p.ultima_venda or p.quantidade_vendida == 0]
+    
+    if not produtos_sem_venda:
+        print(f"✅ Todos os {len(produtos)} produtos já têm vendas")
+        return
+
+    print(f"⚠️  {len(produtos_sem_venda)} produtos sem vendas - criando vendas para eles...")
+
+    hoje = date.today()
+    funcionario = random.choice([f for f in funcionarios if f.ativo])
+    
+    # Dividir produtos em grupos para distribuição de Pareto
+    num_produtos_populares = max(1, len(produtos) // 5)  # 20% dos produtos
+    
+    for idx, produto in enumerate(produtos_sem_venda):
+        # Determinar quantas vendas este produto deve ter (Pareto)
+        if idx < num_produtos_populares:
+            # Produtos populares: 5-15 vendas
+            num_vendas = random.randint(5, 15)
+        else:
+            # Produtos menos populares: 1-3 vendas
+            num_vendas = random.randint(1, 3)
+        
+        for venda_num in range(num_vendas):
+            # Criar uma venda para este produto
+            data_venda = hoje - timedelta(days=random.randint(1, 180))
+            hora = random.randint(8, 20)
+            minuto = random.randint(0, 59)
+            data_hora_venda = datetime.combine(data_venda, time(hour=hora, minute=minuto))
+            
+            cliente = random.choice([None] + clientes) if random.random() > 0.3 else None
+            
+            venda = Venda(
+                estabelecimento_id=estabelecimento_id,
+                cliente_id=cliente.id if cliente else None,
+                funcionario_id=funcionario.id,
+                codigo=f"V{data_venda.strftime('%Y%m%d')}{random.randint(1000, 9999):04d}",
+                subtotal=Decimal("0.00"),
+                desconto=Decimal("0.00"),
+                total=Decimal("0.00"),
+                forma_pagamento=random.choice(["dinheiro", "pix", "cartao_debito", "cartao_credito"]),
+                valor_recebido=Decimal("0.00"),
+                troco=Decimal("0.00"),
+                status="finalizada",
+                quantidade_itens=1,
+                data_venda=data_hora_venda,
+            )
+            
+            db.session.add(venda)
+            db.session.flush()
+            
+            # Criar item da venda
+            quantidade = random.randint(1, 5)
+            preco_unitario = Decimal(str(produto.preco_venda))
+            total_item = preco_unitario * Decimal(str(quantidade))
+            
+            item = VendaItem(
+                venda_id=venda.id,
+                produto_id=produto.id,
+                produto_nome=produto.nome,
+                produto_codigo=produto.codigo_interno or produto.codigo_barras,
+                produto_unidade=produto.unidade_medida,
+                quantidade=quantidade,
+                preco_unitario=preco_unitario,
+                desconto=Decimal("0.00"),
+                total_item=total_item,
+                custo_unitario=Decimal(str(produto.preco_custo)),
+                margem_item=Decimal(str(round(((float(preco_unitario) - float(produto.preco_custo)) / float(produto.preco_custo) * 100), 2))),
+            )
+            
+            db.session.add(item)
+            
+            # Atualizar produto - usar Decimal e depois converter para float para o banco
+            produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
+            produto.total_vendido = float(Decimal(str(produto.total_vendido or 0)) + total_item)
+            produto.ultima_venda = data_hora_venda
+            
+            # Criar movimentação
+            mov = MovimentacaoEstoque(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=produto.id,
+                venda_id=venda.id,
+                funcionario_id=funcionario.id,
+                tipo="saida",
+                quantidade=quantidade,
+                quantidade_anterior=produto.quantidade + quantidade,
+                quantidade_atual=produto.quantidade,
+                custo_unitario=Decimal(str(produto.preco_custo)),
+                valor_total=Decimal(str(produto.preco_custo)) * Decimal(str(quantidade)),
+                motivo="Venda (garantia de dados)",
+            )
+            db.session.add(mov)
+            
+            # Criar pagamento
+            pagamento = Pagamento(
+                venda_id=venda.id,
+                estabelecimento_id=estabelecimento_id,
+                forma_pagamento=venda.forma_pagamento,
+                valor=total_item,
+                troco=Decimal("0.00"),
+                status="aprovado",
+                data_pagamento=data_hora_venda,
+            )
+            db.session.add(pagamento)
+            
+            # Atualizar cliente
+            if cliente:
+                cliente.total_compras = (cliente.total_compras or 0) + 1
+                cliente.valor_total_gasto = Decimal(str(cliente.valor_total_gasto or 0)) + total_item
+                cliente.ultima_compra = data_hora_venda
+            
+            venda.subtotal = total_item
+            venda.total = total_item
+            venda.valor_recebido = total_item
+    
+    db.session.commit()
+    print(f"✅ {len(produtos_sem_venda)} produtos agora têm vendas registradas com distribuição de Pareto")
+
+
 def seed_pedidos_compra(
     fake: Faker,
     estabelecimento_id: int,
@@ -1062,13 +1251,14 @@ def seed_pedidos_compra(
     fornecedores: List[Fornecedor],
     produtos: List[Produto],
 ):
-    """Cria pedidos de compra realistas."""
-    print("📋 Criando pedidos de compra...")
+    """Cria pedidos de compra realistas com boletos."""
+    print("Criando pedidos de compra com boletos...")
 
     pedidos_criados = 0
+    lotes_criados = 0
     hoje = date.today()
 
-    for _ in range(random.randint(5, 15)):
+    for _ in range(random.randint(20, 35)):
         funcionario = random.choice([f for f in funcionarios if f.cargo != "Caixa"])
         fornecedor = random.choice(fornecedores)
 
@@ -1082,8 +1272,8 @@ def seed_pedidos_compra(
             numero_pedido=f"PC{data_pedido.strftime('%Y%m%d')}{pedidos_criados+1:03d}",
             data_pedido=data_pedido,
             data_previsao_entrega=data_previsao,
-            data_recebimento=data_previsao if random.random() > 0.3 else None,
-            status=random.choice(["pendente", "recebido", "cancelado"]),
+            data_recebimento=data_previsao,  # SEMPRE recebido para seed de teste
+            status="recebido",  # SEMPRE recebido para seed de teste
             subtotal=Decimal("0.00"),
             desconto=Decimal("0.00"),
             frete=Decimal(str(round(random.uniform(20, 100), 2))),
@@ -1133,7 +1323,7 @@ def seed_pedidos_compra(
             db.session.add(item)
             subtotal_pedido += total_item
 
-            # Se recebido, criar movimentação de estoque
+            # Se recebido, criar movimentacao de estoque
             if pedido.data_recebimento:
                 produto.quantidade += quantidade
 
@@ -1153,6 +1343,26 @@ def seed_pedidos_compra(
                     created_at=pedido.data_pedido,
                 )
                 db.session.add(mov)
+                
+                # CRIAR LOTE DO PRODUTO
+                meses_validade = random.randint(6, 24)
+                data_validade = data_previsao + timedelta(days=meses_validade * 30)
+                
+                lote = ProdutoLote(
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=produto.id,
+                    pedido_compra_id=pedido.id,
+                    fornecedor_id=fornecedor.id,
+                    numero_lote=f"L{data_pedido.strftime('%Y%m%d')}{random.randint(1000, 9999)}",
+                    quantidade_inicial=quantidade,
+                    quantidade=quantidade,
+                    data_validade=data_validade,
+                    data_entrada=data_pedido,
+                    preco_custo_unitario=preco_unitario,
+                    ativo=True,
+                )
+                db.session.add(lote)
+                lotes_criados += 1
 
         # Calcular totais do pedido
         pedido.subtotal = subtotal_pedido
@@ -1170,7 +1380,51 @@ def seed_pedidos_compra(
         pedidos_criados += 1
 
     db.session.commit()
-    print(f"✅ {pedidos_criados} pedidos de compra criados")
+    
+    # Criar boletos (contas a pagar) para os pedidos
+    print("Criando boletos (contas a pagar)...")
+    boletos_criados = 0
+    
+    pedidos = PedidoCompra.query.filter_by(estabelecimento_id=estabelecimento_id).all()
+    for pedido in pedidos:
+        if random.random() > 0.2:  # 80% dos pedidos geram boleto
+            # Gerar data de vencimento (7-30 dias após o pedido)
+            dias_vencimento = random.randint(7, 30)
+            # data_pedido é datetime, converter para date
+            data_pedido_date = pedido.data_pedido.date() if isinstance(pedido.data_pedido, datetime) else pedido.data_pedido
+            data_vencimento = data_pedido_date + timedelta(days=dias_vencimento)
+            
+            # 60% dos boletos já foram pagos
+            foi_pago = random.random() > 0.4
+            data_pagamento = None
+            if foi_pago:
+                # Pago entre 1 dia antes e 15 dias depois do vencimento
+                dias_atraso = random.randint(-1, 15)
+                data_pagamento = data_vencimento + timedelta(days=dias_atraso)
+            
+            boleto = ContaPagar(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=pedido.fornecedor_id,
+                pedido_compra_id=pedido.id,
+                numero_documento=f"BOL{pedido.numero_pedido}",
+                tipo_documento="boleto",
+                valor_original=pedido.total,
+                valor_pago=pedido.total if foi_pago else Decimal("0.00"),
+                valor_atual=Decimal("0.00") if foi_pago else pedido.total,
+                data_emissao=data_pedido_date,
+                data_vencimento=data_vencimento,
+                data_pagamento=data_pagamento,
+                status="pago" if foi_pago else ("vencido" if data_vencimento < hoje else "aberto"),
+                forma_pagamento="transferencia" if foi_pago else None,
+                observacoes=f"Boleto referente ao pedido {pedido.numero_pedido}",
+            )
+            db.session.add(boleto)
+            boletos_criados += 1
+    
+    db.session.commit()
+    print(f"OK {pedidos_criados} pedidos de compra criados")
+    print(f"OK {lotes_criados} lotes de produtos criados")
+    print(f"OK {boletos_criados} boletos (contas a pagar) criados")
 
 
 def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Fornecedor]):
@@ -1797,7 +2051,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--produtos", type=int, default=100)
     parser.add_argument("--dias", type=int, default=90)
     parser.add_argument("--test-login", action="store_true", help="Apenas testa login")
-    parser.add_argument("--local", action="store_true", help="Força uso do banco local (SQLite)")
+    parser.add_argument("--local", action="store_true", help="Popula APENAS banco local (SQLite)")
 
     args = parser.parse_args(argv)
 
@@ -1808,13 +2062,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
             if key in os.environ:
                 del os.environ[key]
-        print("🏠 Modo LOCAL ativado: Variáveis de banco externo removidas.")
+        print("Modo LOCAL: Populando APENAS SQLite")
 
     app = create_app(os.getenv("FLASK_ENV", "default"))
 
     with app.app_context():
         print("=" * 60)
-        print("🚀 INICIANDO SEED DE DADOS COMPLETO")
+        print("INICIANDO SEED DE DADOS COMPLETO")
         print("=" * 60)
 
         # Se apenas testar login
@@ -1861,18 +2115,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             # 6. Criar categorias
             categorias = seed_categorias_produto(fake, est.id)
 
-            # 7. Criar produtos
+            # 7. Criar produtos (SEM estoque - quantidade=0)
             produtos = seed_produtos(
                 fake, est.id, categorias, fornecedores, n=args.produtos
             )
 
-            # 8. Criar vendas
+            # 8. Criar pedidos de compra (PRIMEIRO - isso popula o estoque via lotes)
+            seed_pedidos_compra(fake, est.id, funcionarios, fornecedores, produtos)
+
+            # 9. Criar vendas (DEPOIS - agora há estoque disponível)
             seed_vendas(
                 fake, est.id, funcionarios, clientes, produtos, dias_passados=args.dias
             )
 
-            # 9. Criar pedidos de compra
-            seed_pedidos_compra(fake, est.id, funcionarios, fornecedores, produtos)
+            # 9.5. Garantir que todos os produtos tenham vendas
+            seed_garantir_vendas_todos_produtos(fake, est.id, funcionarios, clientes, produtos)
 
             # 10. Criar despesas
             seed_despesas(fake, est.id, fornecedores)
