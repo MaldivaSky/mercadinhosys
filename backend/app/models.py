@@ -737,7 +737,7 @@ class Produto(db.Model):
 
     preco_custo = db.Column(db.Numeric(10, 2), nullable=False)
     preco_venda = db.Column(db.Numeric(10, 2), nullable=False)
-    margem_lucro = db.Column(db.Numeric(5, 2))
+    margem_lucro = db.Column(db.Numeric(10, 2), nullable=True)
 
     ncm = db.Column(db.String(8))
     origem = db.Column(db.Integer, default=0)

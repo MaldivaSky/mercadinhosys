@@ -1384,10 +1384,14 @@ def curva_compras():
             meses.append(mes)
 
         # Buscar vendas agrupadas por ano/mês
+        from app.utils.query_helpers import get_year_extract, get_month_extract
+        year_extract = get_year_extract(Venda.data_venda)
+        month_extract = get_month_extract(Venda.data_venda)
+
         results = (
             db.session.query(
-                db.func.extract("year", Venda.data_venda).label("ano"),
-                db.func.extract("month", Venda.data_venda).label("mes"),
+                year_extract.label("ano"),
+                month_extract.label("mes"),
                 db.func.count(Venda.id).label("quantidade"),
                 db.func.sum(Venda.total).label("total"),
             )
@@ -1396,8 +1400,8 @@ def curva_compras():
                 Venda.data_venda >= meses[-1],
                 Venda.status == "finalizada",
             )
-            .group_by("ano", "mes")
-            .order_by("ano", "mes")
+            .group_by(year_extract, month_extract)
+            .order_by(year_extract, month_extract)
             .all()
         )
 

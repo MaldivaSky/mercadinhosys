@@ -6,38 +6,51 @@ basedir = Path(__file__).parent.absolute()
 db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
 
 
+# ==================== DATABASE CONFIGURATION ====================
+_database_url = (
+    os.environ.get("NEON_DATABASE_URL")
+    or os.environ.get("DATABASE_URL_TARGET")
+    or os.environ.get("DB_PRIMARY")
+    or os.environ.get("DATABASE_URL")
+    or os.environ.get("POSTGRES_URL")
+)
+_sqlite_db = os.environ.get("SQLITE_DB")
+_using_postgres = False
+_sqlalchemy_database_uri = None
+
+if _database_url:
+    if _database_url.startswith("postgres://"):
+        _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+    _sqlalchemy_database_uri = _database_url
+    _using_postgres = _database_url.startswith("postgresql://")
+    if _using_postgres:
+        print(f"[DB: POSTGRES] {_database_url.split('@')[1] if '@' in _database_url else 'cloud'}")
+    else:
+        print(f"[DB: SQLITE] {_database_url}")
+elif _sqlite_db:
+    # Garantir prefixo sqlite:///
+    if not _sqlite_db.startswith("sqlite:///"):
+        _sqlite_db = f"sqlite:///{_sqlite_db}"
+    
+    # Se for apenas o nome do arquivo, redirecionar para 'instance/'
+    db_relative_path = _sqlite_db[10:] # Tirar 'sqlite:///'
+    if not any(c in db_relative_path for c in [':', '\\', '/']):
+        instance_path = os.path.join(basedir, 'instance', db_relative_path)
+        _sqlalchemy_database_uri = f"sqlite:///{instance_path}"
+    else:
+        _sqlalchemy_database_uri = _sqlite_db
+    print(f"[DB: SQLITE] {_sqlalchemy_database_uri}")
+else:
+    # Padrão: SQLite na pasta instance
+    _sqlalchemy_database_uri = f"sqlite:///{os.path.join(basedir, 'instance', 'mercadinho.db')}"
+    print(f"[DB: SQLITE] {_sqlalchemy_database_uri}")
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-fallback-secret-key-12345"
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or "dev-fallback-jwt-key-67890"
 
-    # ==================== DATABASE CONFIGURATION ====================
-    # Seleção robusta do banco: usa Postgres quando disponível; caso contrário, SQLite cross-platform
-    
-    DATABASE_URL = (
-        os.environ.get("NEON_DATABASE_URL")
-        or os.environ.get("DATABASE_URL_TARGET")
-        or os.environ.get("DB_PRIMARY")
-        or os.environ.get("DATABASE_URL")
-        or os.environ.get("POSTGRES_URL")
-    )
-    SQLITE_DB = os.environ.get("SQLITE_DB")
-    USING_POSTGRES = False
-    
-    if DATABASE_URL:
-        if DATABASE_URL.startswith("postgres://"):
-            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-        SQLALCHEMY_DATABASE_URI = DATABASE_URL
-        USING_POSTGRES = DATABASE_URL.startswith("postgresql://")
-        if USING_POSTGRES:
-            print(f"[DB: POSTGRES] {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'cloud'}")
-        else:
-            print(f"[DB: SQLITE] {DATABASE_URL}")
-    elif SQLITE_DB:
-        SQLALCHEMY_DATABASE_URI = SQLITE_DB
-        print(f"[DB: SQLITE] {SQLITE_DB}")
-    else:
-        SQLALCHEMY_DATABASE_URI = "sqlite:///mercadinho.db"
-        print(f"[DB: SQLITE] {SQLALCHEMY_DATABASE_URI}")
+    SQLALCHEMY_DATABASE_URI = _sqlalchemy_database_uri
+    USING_POSTGRES = _using_postgres
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
