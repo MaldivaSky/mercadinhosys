@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Package, 
-  Plus, 
-  Eye, 
-  CheckCircle, 
-  Clock, 
-  Truck, 
+import {
+  Package,
+  Plus,
+  Eye,
+  CheckCircle,
+  Clock,
+  Truck,
   Calendar,
   DollarSign,
   AlertCircle,
@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from '../../../utils/formatters';
 import toast from 'react-hot-toast';
 import PurchaseOrderModal from './PurchaseOrderModal';
 import ReceivePurchaseModal from './ReceivePurchaseModal';
+import PurchaseOrderDetailsModal from './PurchaseOrderDetailsModal';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 import CollapsibleSection from '../../../components/ui/CollapsibleSection';
 
@@ -36,25 +37,26 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState<PedidoCompra | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   const [filtros, setFiltros] = useState({
     status: '',
     fornecedor_id: '',
     busca: ''
   });
-  
+
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  
+
   const loadPedidos = async () => {
     setLoading(true);
     try {
       const params: any = { page, per_page: 20 };
       if (filtros.status) params.status = filtros.status;
       if (filtros.fornecedor_id) params.fornecedor_id = filtros.fornecedor_id;
-      
+
       const response = await purchaseOrderService.listarPedidos(params);
       setPedidos(response.pedidos);
       setTotalPages(response.paginacao.total_paginas);
@@ -65,28 +67,28 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
     if (isOpen) {
       loadPedidos();
     }
   }, [isOpen, page, filtros]);
-  
+
   const getStatusBadge = (status: string) => {
     const styles = {
       pendente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
       recebido: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
       cancelado: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
     };
-    
+
     const icons = {
       pendente: Clock,
       recebido: CheckCircle,
       cancelado: AlertCircle
     };
-    
+
     const Icon = icons[status as keyof typeof icons] || Clock;
-    
+
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${styles[status as keyof typeof styles] || styles.pendente}`}>
         <Icon className="w-3 h-3" />
@@ -94,7 +96,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
       </span>
     );
   };
-  
+
   const handleReceivePedido = (pedido: PedidoCompra) => {
     setSelectedPedido(pedido);
     setShowReceiveModal(true);
@@ -102,10 +104,11 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
 
   const handleVerDetalhes = (pedido: PedidoCompra) => {
     setSelectedPedido(pedido);
+    setShowDetailsModal(true);
   };
-  
+
   if (!isOpen) return null;
-  
+
   return (
     <>
       <ResponsiveModal
@@ -151,7 +154,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
               <span className="hidden sm:inline">Novo Pedido</span>
               <span className="sm:hidden">Novo</span>
             </button>
-            
+
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center sm:justify-start gap-2 transition-colors text-sm"
@@ -160,7 +163,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
               <span className="hidden sm:inline">Filtros</span>
             </button>
           </div>
-          
+
           {showFilters && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
               <div>
@@ -181,7 +184,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                   <option value="cancelado">Cancelado</option>
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Fornecedor
@@ -202,7 +205,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                   ))}
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Buscar
@@ -224,7 +227,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
             </div>
           )}
         </div>
-        
+
         {/* Conteúdo */}
         <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
           {loading ? (
@@ -267,21 +270,21 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                           {pedido.fornecedor_nome}
                         </p>
                       </div>
-                      
+
                       <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 sm:p-3">
                         <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Data do Pedido</p>
                         <p className="text-sm sm:text-base font-medium text-gray-800 dark:text-white">
                           {formatDate(pedido.data_pedido)}
                         </p>
                       </div>
-                      
+
                       <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 sm:p-3">
                         <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Total</p>
                         <p className="text-sm sm:text-base font-bold text-blue-600 dark:text-blue-400">
                           {formatCurrency(pedido.total)}
                         </p>
                       </div>
-                      
+
                       {pedido.data_previsao_entrega && (
                         <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 sm:p-3">
                           <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Previsão</p>
@@ -290,7 +293,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                           </p>
                         </div>
                       )}
-                      
+
                       {pedido.data_recebimento && (
                         <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 sm:p-3">
                           <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Recebido em</p>
@@ -299,7 +302,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                           </p>
                         </div>
                       )}
-                      
+
                       <div className="bg-gray-50 dark:bg-gray-700 rounded p-2 sm:p-3">
                         <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Itens</p>
                         <p className="text-sm sm:text-base font-medium text-gray-800 dark:text-white">
@@ -307,7 +310,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                       {pedido.status === 'pendente' && (
                         <button
@@ -318,7 +321,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
                           Receber
                         </button>
                       )}
-                      
+
                       <button
                         onClick={() => handleVerDetalhes(pedido)}
                         className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors text-sm font-medium"
@@ -334,7 +337,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
           )}
         </div>
       </ResponsiveModal>
-      
+
       <PurchaseOrderModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -344,7 +347,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
         }}
         fornecedores={fornecedores}
       />
-      
+
       {selectedPedido && (
         <ReceivePurchaseModal
           isOpen={showReceiveModal}
@@ -358,6 +361,17 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
             setShowReceiveModal(false);
             setSelectedPedido(null);
           }}
+        />
+      )}
+
+      {selectedPedido && (
+        <PurchaseOrderDetailsModal
+          isOpen={showDetailsModal}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedPedido(null);
+          }}
+          pedido={selectedPedido}
         />
       )}
     </>

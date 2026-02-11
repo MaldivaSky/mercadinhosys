@@ -6,7 +6,7 @@ interface CollapsibleSectionProps {
   icon?: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
-  badge?: number | string;
+  badge?: ReactNode;
   variant?: 'default' | 'card' | 'minimal';
 }
 

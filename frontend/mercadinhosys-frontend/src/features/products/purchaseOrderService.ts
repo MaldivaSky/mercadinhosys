@@ -19,6 +19,16 @@ export interface PedidoCompra {
   observacoes?: string;
   total_itens: number;
   itens?: PedidoCompraItem[];
+  // Campos expandidos para detalhes
+  fornecedor?: {
+    cnpj: string;
+    email: string;
+  };
+  funcionario?: {
+    cargo: string;
+  };
+  numero_nota_fiscal?: string;
+  serie_nota_fiscal?: string;
 }
 
 export interface PedidoCompraItem {
@@ -31,6 +41,7 @@ export interface PedidoCompraItem {
   desconto_percentual: number;
   total_item: number;
   status: string;
+  produto_unidade?: string;
 }
 
 export interface BoletoFornecedor {
@@ -84,7 +95,7 @@ export interface ReceberPedidoData {
 
 class PurchaseOrderService {
   // ==================== PEDIDOS DE COMPRA ====================
-  
+
   async listarPedidos(params?: {
     page?: number;
     per_page?: number;
@@ -127,7 +138,7 @@ class PurchaseOrderService {
   }
 
   // ==================== BOLETOS DE FORNECEDORES ====================
-  
+
   async listarBoletos(params?: {
     page?: number;
     per_page?: number;
@@ -168,7 +179,7 @@ class PurchaseOrderService {
   }
 
   // ==================== INTEGRAÇÃO COM DESPESAS ====================
-  
+
   async boletosAVencer(params?: {
     dias?: number;
     apenas_vencidos?: boolean;
