@@ -1,11 +1,10 @@
 // src/features/expenses/components/BoletosAVencerPanel.tsx
 import React, { useState, useEffect } from 'react';
-import { 
-  AlertTriangle, 
-  Calendar, 
-  DollarSign, 
-  FileText, 
-  CheckCircle, 
+import {
+  AlertTriangle,
+  Calendar,
+  DollarSign,
+  CheckCircle,
   Clock,
   Truck,
   Eye,
@@ -44,7 +43,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
         dias: 30,
         apenas_vencidos: false
       });
-      
+
       setBoletos(response.boletos);
       setResumo(response.resumo);
     } catch (error) {
@@ -191,41 +190,37 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
         <div className="flex gap-2 mt-4">
           <button
             onClick={() => setFiltro('todos')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              filtro === 'todos' 
-                ? 'bg-orange-600 text-white' 
+            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'todos'
+                ? 'bg-orange-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             Todos
           </button>
           <button
             onClick={() => setFiltro('vencidos')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              filtro === 'vencidos' 
-                ? 'bg-red-600 text-white' 
+            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'vencidos'
+                ? 'bg-red-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             Vencidos ({resumo.vencidos})
           </button>
           <button
             onClick={() => setFiltro('hoje')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              filtro === 'hoje' 
-                ? 'bg-orange-600 text-white' 
+            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'hoje'
+                ? 'bg-orange-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             Hoje ({resumo.vence_hoje})
           </button>
           <button
             onClick={() => setFiltro('7_dias')}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-              filtro === '7_dias' 
-                ? 'bg-yellow-600 text-white' 
+            className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === '7_dias'
+                ? 'bg-yellow-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
+              }`}
           >
             7 Dias ({resumo.vence_7_dias})
           </button>
@@ -241,7 +236,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
               {filtro === 'todos' ? 'Nenhum boleto encontrado' : 'Nenhum boleto neste filtro'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              {filtro === 'todos' 
+              {filtro === 'todos'
                 ? 'Não há boletos de fornecedores pendentes no momento'
                 : 'Tente outro filtro para ver mais boletos'
               }
@@ -433,18 +428,17 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600 dark:text-gray-400">Dias para Vencer:</span>
-                    <div className={`font-medium text-lg ${
-                      selectedBoleto.dias_vencimento < 0 
-                        ? 'text-red-600 dark:text-red-400' 
-                        : selectedBoleto.dias_vencimento === 0 
-                        ? 'text-orange-600 dark:text-orange-400'
-                        : 'text-green-600 dark:text-green-400'
-                    }`}>
-                      {selectedBoleto.dias_vencimento < 0 
+                    <div className={`font-medium text-lg ${selectedBoleto.dias_vencimento < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : selectedBoleto.dias_vencimento === 0
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : 'text-green-600 dark:text-green-400'
+                      }`}>
+                      {selectedBoleto.dias_vencimento < 0
                         ? `Vencido há ${Math.abs(selectedBoleto.dias_vencimento)} dias`
                         : selectedBoleto.dias_vencimento === 0
-                        ? 'Vence Hoje'
-                        : `${selectedBoleto.dias_vencimento} dias`
+                          ? 'Vence Hoje'
+                          : `${selectedBoleto.dias_vencimento} dias`
                       }
                     </div>
                   </div>
@@ -565,7 +559,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
               <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
                 Registrar Pagamento
               </h3>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -578,15 +572,15 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                     Valor: {formatCurrency(selectedBoleto.valor_atual)}
                   </div>
                 </div>
-                
+
                 <div className="bg-yellow-50 dark:bg-yellow-900 p-3 rounded-lg">
                   <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    Funcionalidade de pagamento será implementada em breve. 
+                    Funcionalidade de pagamento será implementada em breve.
                     Por enquanto, registre o pagamento manualmente nas despesas.
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   onClick={() => {
