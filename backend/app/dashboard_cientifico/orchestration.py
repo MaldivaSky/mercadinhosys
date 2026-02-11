@@ -39,6 +39,7 @@ class DashboardOrchestrator:
         sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, days)
         inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
         customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
+        rh_metrics = DataLayer.get_rh_metrics(self.establishment_id, days)
 
         def _confidence_from_samples(samples: int) -> str:
             if samples < 5:
@@ -140,6 +141,10 @@ class DashboardOrchestrator:
                 "avg_ticket_customer": customer_metrics["ticket_medio_cliente"],
                 "max_purchase": customer_metrics["maior_compra"],
             },
+            "rh": rh_metrics,
+            "charts": {
+                "sales_trend": sales_timeseries,
+            },
         }
 
     @cache_response(ttl_seconds=60, require_db_check=True)
@@ -198,10 +203,22 @@ class DashboardOrchestrator:
         # 🔥 NOVO: Comportamento de clientes por horário
         hourly_customer_behavior = DataLayer.get_hourly_customer_behavior(self.establishment_id, days=60)
 
+        # 🔥 NOVO: Análises Temporais Avançadas (Pensando como o dono do mercado)
+        from .temporal_analysis import TemporalAnalysis
+        
+        hourly_sales_by_category = TemporalAnalysis.get_hourly_sales_by_category(self.establishment_id, days)
+        period_analysis = TemporalAnalysis.get_period_analysis(self.establishment_id, days)
+        weekday_analysis = TemporalAnalysis.get_weekday_analysis(self.establishment_id, days)
+        product_hourly_recommendations = TemporalAnalysis.get_product_hourly_recommendations(self.establishment_id, days)
+        category_performance_by_time = TemporalAnalysis.get_category_performance_by_time(self.establishment_id, days)
+
         # 4. Análise ABC (cálculo on-the-fly se não cacheado)
         abc_analysis = self.get_abc_analysis(days)
         
         customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
+
+        # 🔥 NOVO: Métricas de RH para o dashboard científico
+        rh_metrics = DataLayer.get_rh_metrics(self.establishment_id, days)
         
         # 🔥 CORREÇÃO: Buscar timeseries com período maior para garantir comparação mensal
         # Para comparação mensal funcionar, precisamos de pelo menos 60 dias de dados
@@ -496,6 +513,9 @@ class DashboardOrchestrator:
                 }
             )
 
+        # 🔥 CORREÇÃO: Calcular total de despesas para o período
+        total_despesas_periodo = sum([float(exp.get("valor", 0)) for exp in expense_details])
+        
         return {
             "success": True,
             "timestamp": datetime.utcnow().isoformat(),
@@ -520,6 +540,7 @@ class DashboardOrchestrator:
             "forecast": forecast,
             "inventory": inventory_summary,
             "expenses": expense_details,
+            "total_despesas": total_despesas_periodo,  # 🔥 NOVO: Total de despesas do período
             "sales_by_hour": sales_by_hour,  # 🔥 NOVO
             "top_products_by_hour": top_products_by_hour,  # 🔥 NOVO
             "customer_temporal_patterns": customer_temporal_patterns,  # 🔥 NOVO
@@ -527,6 +548,11 @@ class DashboardOrchestrator:
             "product_hour_matrix": product_hour_matrix,  # 🔥 NOVO: Matriz de correlação
             "customer_product_affinity": customer_product_affinity,  # 🔥 NOVO: Afinidade
             "hourly_customer_behavior": hourly_customer_behavior,  # 🔥 NOVO: Comportamento por hora
+            "hourly_sales_by_category": hourly_sales_by_category,  # 🔥 NOVO: Qual categoria vende em cada hora
+            "period_analysis": period_analysis,  # 🔥 NOVO: Análise por período (Manhã/Tarde/Noite)
+            "weekday_analysis": weekday_analysis,  # 🔥 NOVO: Análise por dia da semana
+            "product_hourly_recommendations": product_hourly_recommendations,  # 🔥 NOVO: Recomendações de estoque
+            "category_performance_by_time": category_performance_by_time,  # 🔥 NOVO: Performance de categorias
             "abc": abc_analysis,
             "rfm": {"segments": segments, "window_days": rfm_analysis.get("window_days", 180)},
             "recomendacoes": recomendacoes,
@@ -535,6 +561,7 @@ class DashboardOrchestrator:
             "produtos_estrela": produtos_estrela,  # 🔥 NOVO
             "produtos_lentos": produtos_lentos,    # 🔥 NOVO
             "previsao_demanda": previsao_demanda,  # 🔥 NOVO
+            "rh": rh_metrics,                      # 🔥 NOVO: Métricas de RH
         }
 
     @cache_response(ttl_seconds=900, require_db_check=True)

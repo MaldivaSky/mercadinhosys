@@ -607,13 +607,7 @@ const PontoPage: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </button>
-            <button
-              onClick={limparRegistrosDeTeste}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 font-semibold transition text-sm"
-              title="🧪 Modo Teste - Limpar registros para testar novamente"
-            >
-              🧪 Limpar Teste
-            </button>
+           
           </div>
         </div>
       </div>

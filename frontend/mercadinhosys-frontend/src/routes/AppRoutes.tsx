@@ -15,6 +15,7 @@ const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 const SalesPage = lazy(() => import('../features/sales/SalesPage'));
 const ExpensesPage = lazy(() => import('../features/expenses/ExpensesPage'));
 const EmployeesPage = lazy(() => import('../features/employees/EmployeesPage'));
+const RHPage = lazy(() => import('../features/employees/RHPage'));
 const PontoPage = lazy(() => import('../features/ponto/PontoPage'));
 const PontoHistoricoPage = lazy(() => import('../features/ponto/PontoHistoricoPage'));
 const RelatoriosPontoPage = lazy(() => import('../features/ponto/RelatoriosPontoPage'));
@@ -66,6 +67,7 @@ const AppRoutes: React.FC = () => {
                         <Route path="sales" element={<SalesPage />} />
                         <Route path="expenses" element={<ExpensesPage />} />
                         <Route path="employees" element={<EmployeesPage />} />
+                        <Route path="rh" element={<RHPage />} />
                         <Route path="ponto" element={<PontoPage />} />
                         <Route path="ponto-historico" element={<PontoHistoricoPage />} />
                         <Route path="ponto-relatorios" element={<RelatoriosPontoPage />} />

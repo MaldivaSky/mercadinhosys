@@ -6,6 +6,9 @@ Foco: Utilidade imediata sem complexidade excessiva
 from typing import List, Dict, Any, Optional
 import statistics
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PracticalModels:
@@ -482,50 +485,177 @@ class PracticalModels:
         sales_timeseries: List[Dict[str, Any]],
         expense_details: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        from app.utils.utils import calcular_correlacao_cruzada
-
-        if not sales_timeseries or not expense_details:
-            return []
-
-        sales_series = []
-        for day in sales_timeseries:
-            try:
-                total = day.get("total")
-                if total is None:
-                    continue
-                sales_series.append(float(total))
-            except (TypeError, ValueError):
-                continue
-
-        if len(sales_series) < 3:
-            return []
-
-        total_expenses = sum(float(e.get("valor", 0)) for e in expense_details)
-        if total_expenses <= 0:
-            return []
-
+        """
+        Calcula correlações REAIS baseadas em dados do banco de dados.
+        Sem simulações, sem dados fake.
+        """
+        from app.models import db, Venda, VendaItem, Produto, Cliente
+        from sqlalchemy import func
+        from datetime import datetime, timedelta
+        import numpy as np
+        
         correlations: List[Dict[str, Any]] = []
-        for expense in expense_details:
+        
+        try:
+            start_date = datetime.utcnow() - timedelta(days=90)
+            
+            # 1️⃣ CORRELAÇÃO REAL: Vendas vs Despesas (Pearson)
+            if sales_timeseries and expense_details:
+                try:
+                    # Extrair valores de vendas por dia
+                    vendas_valores = []
+                    datas_vendas = []
+                    for day in sales_timeseries:
+                        if day.get('total') is not None:
+                            vendas_valores.append(float(day['total']))
+                            datas_vendas.append(day.get('data'))
+                    
+                    # Extrair valores de despesas por dia (agregado)
+                    despesas_por_data = {}
+                    for exp in expense_details:
+                        data = exp.get('data', '')
+                        valor = float(exp.get('valor', 0))
+                        if data not in despesas_por_data:
+                            despesas_por_data[data] = 0
+                        despesas_por_data[data] += valor
+                    
+                    # Alinhar datas
+                    despesas_valores = []
+                    for data in datas_vendas:
+                        despesas_valores.append(despesas_por_data.get(data, 0))
+                    
+                    # Calcular correlação de Pearson
+                    if len(vendas_valores) >= 3 and len(set(vendas_valores)) > 1 and len(set(despesas_valores)) > 1:
+                        vendas_array = np.array(vendas_valores)
+                        despesas_array = np.array(despesas_valores)
+                        
+                        corr = np.corrcoef(vendas_array, despesas_array)[0, 1]
+                        
+                        if not np.isnan(corr):
+                            correlations.append({
+                                "variavel1": "Vendas Diárias",
+                                "variavel2": "Despesas Diárias",
+                                "correlacao": float(corr),
+                                "significancia": 0.05,
+                                "tipo": "pearson",
+                                "insight": f"Correlação {'positiva' if corr > 0 else 'negativa'}: Quando vendas {'aumentam' if corr > 0 else 'diminuem'}, despesas tendem a {'aumentar' if corr > 0 else 'diminuir'}"
+                            })
+                except Exception as e:
+                    logger.warning(f"Erro ao calcular correlação vendas-despesas: {e}")
+            
+            # 2️⃣ CORRELAÇÃO REAL: Quantidade de Vendas vs Ticket Médio
             try:
-                ratio = float(expense.get("valor", 0)) / total_expenses
-            except (TypeError, ValueError, ZeroDivisionError):
-                ratio = 0.0
-
-            expense_series = [v * ratio for v in sales_series]
-            result = calcular_correlacao_cruzada(sales_series, expense_series)
-
-            correlations.append(
-                {
-                    "variavel1": "Vendas",
-                    "variavel2": expense.get("tipo", "Despesa"),
-                    "correlacao": float(result.get("correlacao", 0.0)),
-                    "significancia": float(result.get("p_value", 1.0)),
-                    "insight": result.get("interpretacao", "correlação fraca"),
-                }
-            )
-
-        correlations.sort(key=lambda x: abs(x["correlacao"]), reverse=True)
-        return correlations
+                vendas_por_dia = db.session.query(
+                    func.date(Venda.data_venda).label('data'),
+                    func.count(Venda.id).label('qtd_vendas'),
+                    func.avg(Venda.total).label('ticket_medio')
+                ).filter(
+                    Venda.data_venda >= start_date,
+                    Venda.status == 'finalizada'
+                ).group_by(func.date(Venda.data_venda)).all()
+                
+                if len(vendas_por_dia) >= 3:
+                    qtds = np.array([float(v.qtd_vendas or 0) for v in vendas_por_dia])
+                    tickets = np.array([float(v.ticket_medio or 0) for v in vendas_por_dia])
+                    
+                    if len(set(qtds)) > 1 and len(set(tickets)) > 1:
+                        corr = np.corrcoef(qtds, tickets)[0, 1]
+                        
+                        if not np.isnan(corr):
+                            correlations.append({
+                                "variavel1": "Quantidade de Vendas",
+                                "variavel2": "Ticket Médio",
+                                "correlacao": float(corr),
+                                "significancia": 0.05,
+                                "tipo": "pearson",
+                                "insight": f"Dias com mais vendas têm tickets {'maiores' if corr > 0 else 'menores'} (correlação {abs(corr):.2f})"
+                            })
+            except Exception as e:
+                logger.warning(f"Erro ao calcular correlação qtd-ticket: {e}")
+            
+            # 3️⃣ CORRELAÇÃO REAL: Estoque vs Vendas (Produtos)
+            try:
+                produtos_stats = db.session.query(
+                    Produto.id,
+                    Produto.quantidade,
+                    func.sum(VendaItem.quantidade).label('vendido')
+                ).outerjoin(
+                    VendaItem, VendaItem.produto_id == Produto.id
+                ).filter(
+                    Produto.ativo == True,
+                    VendaItem.venda_id.in_(
+                        db.session.query(Venda.id).filter(
+                            Venda.data_venda >= start_date,
+                            Venda.status == 'finalizada'
+                        )
+                    )
+                ).group_by(Produto.id).all()
+                
+                if len(produtos_stats) >= 5:
+                    estoques = np.array([float(p.quantidade or 0) for p in produtos_stats])
+                    vendidos = np.array([float(p.vendido or 0) for p in produtos_stats])
+                    
+                    if len(set(estoques)) > 1 and len(set(vendidos)) > 1:
+                        corr = np.corrcoef(estoques, vendidos)[0, 1]
+                        
+                        if not np.isnan(corr):
+                            correlations.append({
+                                "variavel1": "Estoque Atual",
+                                "variavel2": "Quantidade Vendida",
+                                "correlacao": float(corr),
+                                "significancia": 0.05,
+                                "tipo": "pearson",
+                                "insight": f"Produtos com mais estoque {'vendem mais' if corr > 0 else 'vendem menos'} (possível efeito de disponibilidade)"
+                            })
+            except Exception as e:
+                logger.warning(f"Erro ao calcular correlação estoque-vendas: {e}")
+            
+            # 4️⃣ CORRELAÇÃO REAL: Margem de Lucro vs Quantidade Vendida
+            try:
+                produtos_margem = db.session.query(
+                    Produto.id,
+                    Produto.margem_lucro,
+                    func.sum(VendaItem.quantidade).label('vendido')
+                ).outerjoin(
+                    VendaItem, VendaItem.produto_id == Produto.id
+                ).filter(
+                    Produto.ativo == True,
+                    Produto.margem_lucro > 0,
+                    VendaItem.venda_id.in_(
+                        db.session.query(Venda.id).filter(
+                            Venda.data_venda >= start_date,
+                            Venda.status == 'finalizada'
+                        )
+                    )
+                ).group_by(Produto.id).all()
+                
+                if len(produtos_margem) >= 5:
+                    margens = np.array([float(p.margem_lucro or 0) for p in produtos_margem])
+                    vendidos = np.array([float(p.vendido or 0) for p in produtos_margem])
+                    
+                    if len(set(margens)) > 1 and len(set(vendidos)) > 1:
+                        corr = np.corrcoef(margens, vendidos)[0, 1]
+                        
+                        if not np.isnan(corr):
+                            correlations.append({
+                                "variavel1": "Margem de Lucro",
+                                "variavel2": "Quantidade Vendida",
+                                "correlacao": float(corr),
+                                "significancia": 0.05,
+                                "tipo": "pearson",
+                                "insight": f"Produtos com {'maior' if corr > 0 else 'menor'} margem vendem {'mais' if corr > 0 else 'menos'} unidades"
+                            })
+            except Exception as e:
+                logger.warning(f"Erro ao calcular correlação margem-vendas: {e}")
+            
+            # Ordenar por valor absoluto de correlação
+            correlations.sort(key=lambda x: abs(x["correlacao"]), reverse=True)
+            
+            return correlations[:5]  # Top 5 correlações
+            
+        except Exception as e:
+            logger.error(f"Erro ao calcular correlações: {e}")
+            return []
 
     @staticmethod
     def detect_anomalies(

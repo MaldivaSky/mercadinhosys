@@ -4,6 +4,7 @@
 
 from datetime import datetime, date
 from decimal import Decimal
+from typing import List, Dict, Any
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -120,6 +121,9 @@ class Configuracao(db.Model):
     alertas_email = db.Column(db.Boolean, default=False)
     alertas_whatsapp = db.Column(db.Boolean, default=False)
 
+    # RH
+    horas_extras_percentual = db.Column(db.Numeric(5, 2), default=50.00)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -159,7 +163,8 @@ class Configuracao(db.Model):
             "tempo_sessao_minutos": self.tempo_sessao_minutos,
             "tentativas_senha_bloqueio": self.tentativas_senha_bloqueio,
             "alertas_email": self.alertas_email,
-            "alertas_whatsapp": self.alertas_whatsapp
+            "alertas_whatsapp": self.alertas_whatsapp,
+            "horas_extras_percentual": float(self.horas_extras_percentual) if self.horas_extras_percentual else 50.0
         }
 
 
@@ -189,6 +194,7 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
 
     cargo = db.Column(db.String(50), nullable=False)
     data_admissao = db.Column(db.Date, nullable=False)
+    data_demissao = db.Column(db.Date)
     salario_base = db.Column(db.Numeric(10, 2), default=0)
 
     username = db.Column(db.String(50), nullable=False)
@@ -303,6 +309,83 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
             "nivel_acesso": self.role,
             "salario": float(self.salario_base) if self.salario_base else 0.0,
         }
+
+
+# ============================================
+# 3.1. BENEFÍCIOS E BANCO DE HORAS
+# ============================================
+
+class Beneficio(db.Model):
+    __tablename__ = "beneficios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    nome = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(200))
+    valor_padrao = db.Column(db.Numeric(10, 2), default=0)
+    ativo = db.Column(db.Boolean, default=True)
+
+    estabelecimento = db.relationship("Estabelecimento", backref=db.backref("beneficios", lazy=True))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "descricao": self.descricao,
+            "valor_padrao": float(self.valor_padrao) if self.valor_padrao else 0.0,
+            "ativo": self.ativo
+        }
+
+class FuncionarioBeneficio(db.Model):
+    __tablename__ = "funcionario_beneficios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("funcionarios.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    beneficio_id = db.Column(
+        db.Integer,
+        db.ForeignKey("beneficios.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    valor = db.Column(db.Numeric(10, 2), nullable=False) # Valor específico para o funcionário
+    data_inicio = db.Column(db.Date, default=date.today)
+    ativo = db.Column(db.Boolean, default=True)
+
+    funcionario = db.relationship("Funcionario", backref=db.backref("beneficios_ativos", lazy=True))
+    beneficio = db.relationship("Beneficio")
+
+class BancoHoras(db.Model):
+    __tablename__ = "banco_horas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("funcionarios.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    mes_referencia = db.Column(db.String(7), nullable=False) # Formato YYYY-MM
+    saldo_minutos = db.Column(db.Integer, default=0) # Saldo acumulado do mês em minutos
+    valor_hora_extra = db.Column(db.Numeric(10, 2), default=0) # Valor monetário acumulado
+    
+    # Detalhes
+    horas_trabalhadas_minutos = db.Column(db.Integer, default=0)
+    horas_esperadas_minutos = db.Column(db.Integer, default=0)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    funcionario = db.relationship("Funcionario", backref=db.backref("banco_horas", lazy=True))
+
+    __table_args__ = (
+        db.UniqueConstraint("funcionario_id", "mes_referencia", name="uq_banco_func_mes"),
+    )
 
 
 # ============================================
@@ -1071,6 +1154,7 @@ class Produto(db.Model):
             "fabricante": self.fabricante,
             "unidade_medida": self.unidade_medida,
             "categoria": self.categoria.nome if self.categoria else None,
+            "categoria_id": self.categoria_id,
             "quantidade": self.quantidade,
             "quantidade_minima": self.quantidade_minima,
             "preco_custo": float(self.preco_custo) if self.preco_custo else 0.0,
@@ -1084,6 +1168,177 @@ class Produto(db.Model):
             "lote": self.lote,
             "imagem_url": self.imagem_url,
             "controlar_validade": self.controlar_validade,
+            "total_vendido": float(self.total_vendido) if self.total_vendido else 0.0,
+            "quantidade_vendida": int(self.quantidade_vendida) if self.quantidade_vendida else 0,
+            "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
+            "classificação_abc": self.classificacao_abc,
+        }
+
+    def get_lotes_disponiveis(self):
+        """Retorna lotes disponíveis ordenados por FIFO (data de validade)"""
+        from app.models import ProdutoLote
+        return ProdutoLote.query.filter_by(
+            produto_id=self.id,
+            ativo=True
+        ).filter(
+            ProdutoLote.quantidade > 0
+        ).order_by(
+            ProdutoLote.data_validade.asc()
+        ).all()
+
+    def consumir_estoque_fifo(self, quantidade: int) -> List[Dict]:
+        """
+        Consome estoque usando FIFO (First In, First Out) por data de validade.
+        Retorna lista de lotes consumidos com quantidades.
+        
+        Args:
+            quantidade: Quantidade total a consumir
+            
+        Returns:
+            List[Dict]: Lista com {lote_id, quantidade_consumida, lote}
+        """
+        lotes_consumidos = []
+        quantidade_restante = quantidade
+        
+        lotes = self.get_lotes_disponiveis()
+        
+        for lote in lotes:
+            if quantidade_restante <= 0:
+                break
+            
+            quantidade_consumida = min(quantidade_restante, lote.quantidade)
+            lote.quantidade -= quantidade_consumida
+            quantidade_restante -= quantidade_consumida
+            
+            lotes_consumidos.append({
+                'lote_id': lote.id,
+                'quantidade_consumida': quantidade_consumida,
+                'lote': lote
+            })
+        
+        # Atualizar quantidade total do produto
+        self.quantidade -= quantidade
+        
+        return lotes_consumidos
+
+
+# ============================================
+# 7.1. LOTE/BATCH DE PRODUTO (VALIDADE)
+# ============================================
+
+
+class ProdutoLote(db.Model):
+    """
+    Modelo para rastreamento de lotes/batches de produtos com datas de validade diferentes.
+    
+    Permite que o mesmo produto tenha múltiplos lotes com diferentes datas de validade,
+    essencial para:
+    - Controle de validade por lote
+    - Seleção FIFO (First In, First Out) na venda
+    - Rastreabilidade de origem (fornecedor, data de entrada)
+    - Gestão de recalls por lote
+    
+    Exemplo:
+    - Produto: Leite Integral 1L
+    - Lote 1: 50 unidades, validade 2025-02-15, entrada 2025-01-15
+    - Lote 2: 30 unidades, validade 2025-03-20, entrada 2025-02-01
+    
+    Ao vender, o sistema seleciona primeiro o Lote 1 (FIFO por validade).
+    """
+    __tablename__ = "produto_lotes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    produto_id = db.Column(
+        db.Integer,
+        db.ForeignKey("produtos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
+    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"))
+
+    # Identificação do lote
+    numero_lote = db.Column(db.String(50), nullable=False)  # Ex: "LOTE-2025-001"
+    
+    # Quantidade e validade
+    quantidade = db.Column(db.Integer, nullable=False)  # Quantidade atual no lote
+    quantidade_inicial = db.Column(db.Integer, nullable=False)  # Quantidade quando recebido
+    
+    data_validade = db.Column(db.Date, nullable=False)
+    data_entrada = db.Column(db.Date, default=date.today, nullable=False)
+    
+    # Preço de custo (pode variar por lote)
+    preco_custo_unitario = db.Column(db.Numeric(10, 2), nullable=False)
+    
+    # Status
+    ativo = db.Column(db.Boolean, default=True)  # False se lote foi descartado/devolvido
+    motivo_inativacao = db.Column(db.String(100))  # Ex: "Validade expirada", "Devolução"
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    estabelecimento = db.relationship(
+        "Estabelecimento",
+        backref=db.backref("produto_lotes", lazy=True, cascade="all, delete-orphan"),
+    )
+    produto = db.relationship(
+        "Produto",
+        backref=db.backref("lotes", lazy=True, cascade="all, delete-orphan"),
+    )
+    fornecedor = db.relationship(
+        "Fornecedor",
+        backref=db.backref("lotes_fornecidos", lazy=True),
+    )
+    pedido_compra = db.relationship(
+        "PedidoCompra",
+        backref=db.backref("lotes_recebidos", lazy=True),
+    )
+
+    __table_args__ = (
+        db.Index("idx_lote_produto", "produto_id"),
+        db.Index("idx_lote_validade", "data_validade"),
+        db.Index("idx_lote_entrada", "data_entrada"),
+        db.UniqueConstraint(
+            "estabelecimento_id", "numero_lote", name="uq_lote_estab_numero"
+        ),
+    )
+
+    @property
+    def dias_para_vencer(self) -> int:
+        """Retorna dias até a validade (negativo se vencido)"""
+        return (self.data_validade - date.today()).days
+
+    @property
+    def esta_vencido(self) -> bool:
+        """Retorna True se o lote está vencido"""
+        return self.dias_para_vencer < 0
+
+    @property
+    def esta_proximo_vencer(self, dias_alerta: int = 30) -> bool:
+        """Retorna True se o lote vence em breve"""
+        return 0 <= self.dias_para_vencer <= dias_alerta
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "numero_lote": self.numero_lote,
+            "produto_id": self.produto_id,
+            "produto_nome": self.produto.nome if self.produto else None,
+            "quantidade": self.quantidade,
+            "quantidade_inicial": self.quantidade_inicial,
+            "data_validade": self.data_validade.isoformat() if self.data_validade else None,
+            "data_entrada": self.data_entrada.isoformat() if self.data_entrada else None,
+            "dias_para_vencer": self.dias_para_vencer,
+            "esta_vencido": self.esta_vencido,
+            "preco_custo_unitario": float(self.preco_custo_unitario) if self.preco_custo_unitario else 0.0,
+            "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
+            "ativo": self.ativo,
         }
 
 
@@ -2152,19 +2407,23 @@ class RegistroPonto(db.Model):
             'id': self.id,
             'funcionario_id': self.funcionario_id,
             'funcionario_nome': self.funcionario.nome if self.funcionario else 'Desconhecido',
+            'funcionario_cargo': self.funcionario.cargo if self.funcionario else 'N/A',
             'estabelecimento_id': self.estabelecimento_id,
             'data': self.data.isoformat() if self.data else None,
             'hora': self.hora.strftime('%H:%M:%S') if self.hora else None,
+            'tipo': self.tipo_registro,  # Alias para compatibilidade com frontend
             'tipo_registro': self.tipo_registro,
             'latitude': self.latitude,
             'longitude': self.longitude,
             'localizacao_endereco': self.localizacao_endereco,
             'foto_url': self.foto_url,
+            'foto_path': self.foto_url,  # Alias para compatibilidade
             'dispositivo': self.dispositivo,
             'ip_address': self.ip_address,
             'observacao': self.observacao,
             'status': self.status,
             'minutos_atraso': self.minutos_atraso,
+            'minutos_extras': 0,  # Placeholder - calcular se necessário
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

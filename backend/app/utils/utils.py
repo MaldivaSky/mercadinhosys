@@ -381,13 +381,24 @@ def gerar_cor_por_percentual(percentual: float) -> str:
 
 
 def calcular_margem_lucro(preco_venda, preco_custo):
-    """Calcula a margem de lucro em porcentagem"""
-    if not preco_venda or preco_venda == 0:
+    """
+    Calcula a margem de lucro em porcentagem.
+    Fórmula: (Preço Venda - Preço Custo) / Preço Custo * 100
+    
+    Exemplo: Custo=10, Venda=15 => (15-10)/10*100 = 50%
+    """
+    preco_custo_float = float(preco_custo) if preco_custo else 0
+    preco_venda_float = float(preco_venda) if preco_venda else 0
+    
+    # Se custo é zero ou negativo, não pode calcular margem
+    if preco_custo_float <= 0:
         return 0.0
+    
     try:
-        lucro = float(preco_venda) - float(preco_custo)
-        return (lucro / float(preco_venda)) * 100
-    except (ValueError, TypeError):
+        lucro = preco_venda_float - preco_custo_float
+        margem = (lucro / preco_custo_float) * 100
+        return round(margem, 2)
+    except (ValueError, TypeError, ZeroDivisionError):
         return 0.0
 
 

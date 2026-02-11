@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
 from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import re
 from app.models import (
     db,
@@ -22,7 +22,7 @@ from app.models import (
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
-from sqlalchemy import text
+from sqlalchemy import text, func, or_
 
 produtos_bp = Blueprint("produtos", __name__)
 
@@ -119,22 +119,17 @@ def validar_dados_produto(data, produto_id=None, estabelecimento_id=None):
 
 def calcular_classificacao_abc(produto):
     """
-    Calcula classificação ABC do produto.
+    Calcula classificação ABC do produto usando Pareto dinâmico.
     
-    DEPRECATED: Esta função usa valores fixos e será removida.
-    Use Produto.calcular_classificacao_abc_dinamica() para cálculo baseado em Pareto.
-    
-    Mantida apenas para compatibilidade com código legado.
+    Usa a classificação já calculada no modelo se disponível.
+    Caso contrário, retorna 'C' como padrão.
     """
-    valor_total_vendido = float(produto.preco_venda * (produto.quantidade_vendida or 0))
-
-    # Valores fixos (DEPRECATED - usar classificação dinâmica)
-    if valor_total_vendido > 10000:
-        return "A"
-    elif valor_total_vendido > 5000:
-        return "B"
-    else:
-        return "C"
+    # Se o produto já tem classificação calculada, usar ela
+    if hasattr(produto, 'classificacao_abc') and produto.classificacao_abc:
+        return produto.classificacao_abc
+    
+    # Padrão: retornar C
+    return "C"
 
 
 def verificar_estoque_baixo(produto):
@@ -224,13 +219,21 @@ def listar_produtos():
 
             # Adicionar informações calculadas
             produto_dict["margem_lucro"] = calcular_margem_lucro(
-                float(produto.preco_custo), float(produto.preco_venda)
+                float(produto.preco_venda), float(produto.preco_custo)
             )
             produto_dict["valor_total_estoque"] = float(
                 produto.quantidade * produto.preco_custo
             )
             produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
             produto_dict["status_giro"] = produto.calcular_status_giro()  # Novo campo
+            
+            # 🔥 NOVO: Adicionar estoque_status para o frontend
+            if produto.quantidade == 0:
+                produto_dict["estoque_status"] = "esgotado"
+            elif produto.quantidade <= produto.quantidade_minima:
+                produto_dict["estoque_status"] = "baixo"
+            else:
+                produto_dict["estoque_status"] = "normal"
 
             # Verificar alertas
             if verificar_estoque_baixo(produto):
@@ -333,7 +336,7 @@ def obter_produto(id):
 
         # Adicionar informações calculadas
         dados_produto["margem_lucro"] = calcular_margem_lucro(
-            float(produto.preco_custo), float(produto.preco_venda)
+            float(produto.preco_venda), float(produto.preco_custo)
         )
         dados_produto["valor_total_estoque"] = float(
             produto.quantidade * produto.preco_custo
@@ -568,8 +571,18 @@ def criar_produto():
         )
         db.session.add(historico_inicial)
 
-        # Criar movimentação inicial de estoque
+        # Criar movimentação inicial de estoque com CMP
         if produto.quantidade > 0:
+            # Aplicar CMP na criação se houver quantidade inicial
+            produto.recalcular_preco_custo_ponderado(
+                quantidade_entrada=produto.quantidade,
+                custo_unitario_entrada=preco_custo,
+                estoque_atual=0,
+                registrar_historico=False,  # Já registramos no histórico acima
+                funcionario_id=int(get_jwt_identity()),
+                motivo="Cadastro inicial do produto"
+            )
+            
             movimentacao = MovimentacaoEstoque(
                 estabelecimento_id=estabelecimento_id,
                 produto_id=produto.id,
@@ -905,12 +918,36 @@ def ajustar_estoque(id):
         quantidade_anterior = produto.quantidade
 
         if tipo == "entrada":
+            # Guardar custo anterior para auditoria
+            custo_anterior = Decimal(str(produto.preco_custo or 0))
+            
+            # Aplicar CMP (Custo Médio Ponderado)
             produto.recalcular_preco_custo_ponderado(
                 quantidade_entrada=quantidade,
                 custo_unitario_entrada=custo_unitario,
                 estoque_atual=quantidade_anterior,
+                registrar_historico=True,
+                funcionario_id=int(get_jwt_identity()),
+                motivo=motivo
             )
             produto.quantidade += quantidade
+            
+            # Registrar no histórico se houve mudança de custo
+            if abs(produto.preco_custo - custo_anterior) > Decimal("0.01"):
+                historico = HistoricoPrecos(
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=produto.id,
+                    funcionario_id=int(get_jwt_identity()),
+                    preco_custo_anterior=custo_anterior,
+                    preco_venda_anterior=produto.preco_venda,
+                    margem_anterior=produto.margem_lucro,
+                    preco_custo_novo=produto.preco_custo,
+                    preco_venda_novo=produto.preco_venda,
+                    margem_nova=produto.margem_lucro,
+                    motivo=f"CMP - Entrada de {quantidade} unidades",
+                    observacoes=f"Custo anterior: R$ {custo_anterior}, Novo custo: R$ {produto.preco_custo}"
+                )
+                db.session.add(historico)
         else:  # saida
             if produto.quantidade < quantidade:
                 return (
@@ -977,10 +1014,11 @@ def ajustar_estoque(id):
 @produtos_bp.route("/<int:id>/preco", methods=["POST"])
 @funcionario_required
 def atualizar_preco(id):
-    """Atualiza preços do produto com histórico"""
+    """Atualiza preços do produto com histórico de auditoria"""
     try:
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
+        funcionario_id = int(get_jwt_identity())
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -990,6 +1028,7 @@ def atualizar_preco(id):
 
         novo_preco_custo = data.get("preco_custo")
         novo_preco_venda = data.get("preco_venda")
+        motivo = data.get("motivo", "Ajuste de preço")
 
         if not novo_preco_custo and not novo_preco_venda:
             return (
@@ -1002,9 +1041,10 @@ def atualizar_preco(id):
                 400,
             )
 
-        # Guardar valores antigos
-        preco_custo_anterior = produto.preco_custo
-        preco_venda_anterior = produto.preco_venda
+        # Guardar valores antigos para auditoria
+        preco_custo_anterior = Decimal(str(produto.preco_custo or 0))
+        preco_venda_anterior = Decimal(str(produto.preco_venda or 0))
+        margem_anterior = Decimal(str(produto.margem_lucro or 0))
 
         # Atualizar preços
         if novo_preco_custo:
@@ -1018,8 +1058,26 @@ def atualizar_preco(id):
             produto.margem_lucro = (
                 (produto.preco_venda - produto.preco_custo) / produto.preco_custo * 100
             )
+        else:
+            produto.margem_lucro = Decimal("0")
 
         produto.updated_at = datetime.utcnow()
+        
+        # Registrar histórico de preços para auditoria
+        historico = HistoricoPrecos(
+            estabelecimento_id=estabelecimento_id,
+            produto_id=produto.id,
+            funcionario_id=funcionario_id,
+            preco_custo_anterior=preco_custo_anterior,
+            preco_venda_anterior=preco_venda_anterior,
+            margem_anterior=margem_anterior,
+            preco_custo_novo=produto.preco_custo,
+            preco_venda_novo=produto.preco_venda,
+            margem_nova=produto.margem_lucro,
+            motivo=motivo,
+            observacoes=f"Atualizado por {claims.get('nome')}"
+        )
+        db.session.add(historico)
         db.session.commit()
 
         current_app.logger.info(
@@ -1037,7 +1095,7 @@ def atualizar_preco(id):
                     "preco_custo_atual": float(produto.preco_custo),
                     "preco_venda_anterior": float(preco_venda_anterior),
                     "preco_venda_atual": float(produto.preco_venda),
-                    "margem_lucro": float(produto.margem_lucro),
+                    "margem_lucro": calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo)),
                 },
             }
         )
@@ -1112,7 +1170,7 @@ def buscar_produtos():
                     "preco_custo": float(produto.preco_custo),
                     "preco_venda": float(produto.preco_venda),
                     "margem_lucro": calcular_margem_lucro(
-                        float(produto.preco_custo), float(produto.preco_venda)
+                        float(produto.preco_venda), float(produto.preco_custo)
                     ),
                     "ativo": produto.ativo,
                     "estoque_baixo": verificar_estoque_baixo(produto),
@@ -1146,6 +1204,13 @@ def listar_produtos_estoque():
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
         
+        # Atualizar classificações ABC se não foram atualizadas recentemente
+        try:
+            Produto.atualizar_classificacoes_abc(estabelecimento_id, periodo_dias=90)
+        except Exception as abc_error:
+            current_app.logger.warning(f"⚠️ Erro ao atualizar ABC: {str(abc_error)}")
+            # Continuar mesmo se falhar
+        
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
         ativos = request.args.get("ativos", None, type=str)
@@ -1165,29 +1230,34 @@ def listar_produtos_estoque():
             query = query.filter_by(ativo=ativos.lower() == "true")
 
         if categoria:
-            # Buscar categoria pelo nome
+            # Buscar categoria pelo nome (case insensitive)
             current_app.logger.info(f"🔍 Filtrando por categoria: '{categoria}'")
-            cat = CategoriaProduto.query.filter_by(
-                estabelecimento_id=estabelecimento_id,
-                nome=categoria
+            cat = CategoriaProduto.query.filter(
+                CategoriaProduto.estabelecimento_id == estabelecimento_id,
+                CategoriaProduto.nome.ilike(categoria)
             ).first()
+
             if cat:
                 current_app.logger.info(f"✅ Categoria encontrada: ID={cat.id}, Nome={cat.nome}")
                 query = query.filter_by(categoria_id=cat.id)
             else:
-                current_app.logger.warning(f"⚠️ Categoria '{categoria}' não encontrada no banco")
+                current_app.logger.warning(f"⚠️ Categoria '{categoria}' não encontrada na busca direta")
                 # Tentar buscar com normalização
                 categoria_normalizada = CategoriaProduto.normalizar_nome_categoria(categoria)
                 current_app.logger.info(f"🔄 Tentando com nome normalizado: '{categoria_normalizada}'")
-                cat = CategoriaProduto.query.filter_by(
-                    estabelecimento_id=estabelecimento_id,
-                    nome=categoria_normalizada
+                
+                cat = CategoriaProduto.query.filter(
+                    CategoriaProduto.estabelecimento_id == estabelecimento_id,
+                    CategoriaProduto.nome.ilike(categoria_normalizada)
                 ).first()
+                
                 if cat:
                     current_app.logger.info(f"✅ Categoria encontrada após normalização: ID={cat.id}")
                     query = query.filter_by(categoria_id=cat.id)
                 else:
-                    current_app.logger.error(f"❌ Categoria não encontrada mesmo após normalização")
+                    current_app.logger.error(f"❌ Categoria não encontrada mesmo após normalização. Retornando vazio.")
+                    # Se filtrou por categoria e ela não existe, não deve retornar nada
+                    query = query.filter(Produto.id == -1)
 
         if tipo:
             # CORRIGIDO: Filtrar por campo 'tipo' ao invés de 'descricao'
@@ -1264,6 +1334,11 @@ def listar_produtos_estoque():
             else:
                 estoque_status_produto = "normal"
 
+            # Calcular margem de lucro corretamente
+            margem_lucro_calculada = calcular_margem_lucro(
+                float(produto.preco_venda), float(produto.preco_custo)
+            )
+
             produto_dict = {
                 "id": produto.id,
                 "nome": produto.nome,
@@ -1273,11 +1348,11 @@ def listar_produtos_estoque():
                 "categoria": categoria_nome,
                 "marca": produto.marca or "",
                 "fabricante": produto.fabricante or "",
-                "tipo": "",
+                "tipo": produto.tipo or "",
                 "unidade_medida": produto.unidade_medida or "UN",
-                "preco_custo": float(produto.preco_custo),
-                "preco_venda": float(produto.preco_venda),
-                "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0.0,
+                "preco_custo": float(produto.preco_custo.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+                "preco_venda": float(produto.preco_venda.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+                "margem_lucro": margem_lucro_calculada,
                 "quantidade": produto.quantidade,
                 "quantidade_estoque": produto.quantidade,
                 "quantidade_minima": produto.quantidade_minima,
@@ -1292,8 +1367,9 @@ def listar_produtos_estoque():
                 "created_at": produto.created_at.isoformat() if produto.created_at else None,
                 "updated_at": produto.updated_at.isoformat() if produto.updated_at else None,
                 "quantidade_vendida": produto.quantidade_vendida or 0,
-                "total_vendido": float(produto.total_vendido) if produto.total_vendido else 0.0,
+                "total_vendido": float((produto.total_vendido or Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
                 "ultima_venda": produto.ultima_venda.isoformat() if produto.ultima_venda else None,
+                "classificacao_abc": produto.classificacao_abc or "C",
             }
             
             produtos_lista.append(produto_dict)
@@ -1338,7 +1414,8 @@ def listar_produtos_estoque():
             order_dir = "ASC" if direcao == "asc" else "DESC"
             sql = text(
                 f"SELECT id, nome, codigo_barras, codigo_interno, descricao, marca, unidade_medida, "
-                f"preco_custo, preco_venda, quantidade, quantidade_minima, ativo "
+                f"preco_custo, preco_venda, quantidade, quantidade_minima, ativo, "
+                f"quantidade_vendida, total_vendido, ultima_venda, classificacao_abc, fornecedor_id "
                 f"FROM produtos "
                 f"WHERE estabelecimento_id = :estabelecimento_id "
                 f"ORDER BY {order_clause} {order_dir} "
@@ -1361,6 +1438,30 @@ def listar_produtos_estoque():
                 quantidade = r.get("quantidade", 0) if hasattr(r, "get") else r[9]
                 quantidade_minima = r.get("quantidade_minima", 0) if hasattr(r, "get") else r[10]
                 ativo = r.get("ativo", True) if hasattr(r, "get") else r[11]
+                quantidade_vendida = r.get("quantidade_vendida", 0) if hasattr(r, "get") else r[12]
+                total_vendido = r.get("total_vendido", 0) if hasattr(r, "get") else r[13]
+                ultima_venda = r.get("ultima_venda", None) if hasattr(r, "get") else r[14]
+                classificacao_abc = r.get("classificacao_abc", "C") if hasattr(r, "get") else r[15]
+                fornecedor_id = r.get("fornecedor_id", None) if hasattr(r, "get") else r[16]
+                
+                # Formatar ultima_venda se existir
+                ultima_venda_iso = None
+                if ultima_venda:
+                    if isinstance(ultima_venda, str):
+                        ultima_venda_iso = ultima_venda
+                    else:
+                        ultima_venda_iso = ultima_venda.isoformat() if hasattr(ultima_venda, 'isoformat') else str(ultima_venda)
+                
+                # Buscar fornecedor_nome se fornecedor_id existe
+                fornecedor_nome = None
+                if fornecedor_id:
+                    try:
+                        fornecedor = Fornecedor.query.get(fornecedor_id)
+                        if fornecedor:
+                            fornecedor_nome = fornecedor.razao_social or fornecedor.nome_fantasia
+                    except Exception as e:
+                        current_app.logger.warning(f"⚠️ Erro ao buscar fornecedor {fornecedor_id}: {str(e)}")
+                
                 estoque_status_produto = "esgotado" if quantidade <= 0 else ("baixo" if quantidade <= quantidade_minima else "normal")
                 produtos_lista.append({
                     "id": rid,
@@ -1375,20 +1476,24 @@ def listar_produtos_estoque():
                     "unidade_medida": unidade_medida or "UN",
                     "preco_custo": float(preco_custo or 0),
                     "preco_venda": float(preco_venda or 0),
-                    "margem_lucro": 0.0,
+                    "margem_lucro": calcular_margem_lucro(float(preco_venda or 0), float(preco_custo or 0)),
                     "quantidade": quantidade,
                     "quantidade_estoque": quantidade,
                     "quantidade_minima": quantidade_minima,
                     "estoque_minimo": quantidade_minima,
                     "estoque_status": estoque_status_produto,
-                    "fornecedor_id": None,
-                    "fornecedor_nome": None,
+                    "fornecedor_id": fornecedor_id,
+                    "fornecedor_nome": fornecedor_nome,
                     "ativo": bool(ativo),
                     "lote": None,
                     "data_fabricacao": None,
                     "data_validade": None,
                     "created_at": None,
                     "updated_at": None,
+                    "quantidade_vendida": quantidade_vendida or 0,
+                    "total_vendido": float(total_vendido or 0),
+                    "ultima_venda": ultima_venda_iso,
+                    "classificacao_abc": classificacao_abc or "C",
                 })
             total_sql = text(
                 "SELECT COUNT(*) FROM produtos WHERE estabelecimento_id = :estabelecimento_id"
@@ -1411,6 +1516,317 @@ def listar_produtos_estoque():
         except Exception as e2:
             current_app.logger.error(f"Fallback estoque falhou: {str(e2)}")
             return jsonify({"error": f"Erro ao listar produtos: {str(e)}"}), 500
+
+
+@produtos_bp.route("/estatisticas", methods=["GET"])
+@funcionario_required
+def obter_estatisticas_produtos():
+    """
+    Retorna estatísticas agregadas dos produtos com filtros aplicados.
+    Suporta os mesmos filtros da listagem para consistência.
+    """
+    try:
+        # Obter claims do JWT
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        # Obter filtros (mesmos da listagem)
+        ativos = request.args.get("ativos", None, type=str)
+        categoria = request.args.get("categoria", None, type=str)
+        estoque_status = request.args.get("estoque_status", None, type=str)
+        tipo = request.args.get("tipo", None, type=str)
+        fornecedor_id = request.args.get("fornecedor_id", None, type=int)
+        busca = request.args.get("busca", "", type=str).strip()
+        filtro_rapido = request.args.get("filtro_rapido", None, type=str)
+
+        # Query base
+        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
+
+        # Aplicar mesmos filtros da listagem
+        if ativos is not None:
+            query = query.filter_by(ativo=ativos.lower() == "true")
+
+        if categoria:
+            cat = CategoriaProduto.query.filter(
+                CategoriaProduto.estabelecimento_id == estabelecimento_id,
+                CategoriaProduto.nome.ilike(categoria)
+            ).first()
+            if cat:
+                query = query.filter_by(categoria_id=cat.id)
+            else:
+                # Categoria não encontrada, retornar estatísticas zeradas
+                return jsonify({
+                    "success": True,
+                    "estatisticas": {
+                        "total_produtos": 0,
+                        "produtos_baixo_estoque": 0,
+                        "produtos_esgotados": 0,
+                        "produtos_normal": 0,
+                        "valor_total_estoque": 0.0,
+                        "margem_media": 0.0,
+                        "classificacao_abc": {"A": 0, "B": 0, "C": 0},
+                        "giro_estoque": {"rapido": 0, "normal": 0, "lento": 0},
+                        "filtros_aplicados": {
+                            "categoria": categoria,
+                            "ativos": ativos,
+                            "estoque_status": estoque_status,
+                            "tipo": tipo,
+                            "fornecedor_id": fornecedor_id,
+                            "busca": busca,
+                            "filtro_rapido": filtro_rapido
+                        }
+                    }
+                })
+
+        if tipo:
+            query = query.filter(Produto.tipo.ilike(f"%{tipo}%"))
+
+        if fornecedor_id:
+            query = query.filter_by(fornecedor_id=fornecedor_id)
+
+        if estoque_status:
+            if estoque_status == "esgotado":
+                query = query.filter(Produto.quantidade == 0)
+            elif estoque_status == "baixo":
+                query = query.filter(
+                    Produto.quantidade > 0,
+                    Produto.quantidade <= Produto.quantidade_minima
+                )
+            elif estoque_status == "normal":
+                query = query.filter(Produto.quantidade > Produto.quantidade_minima)
+
+        if busca:
+            busca_termo = f"%{busca}%"
+            query = query.filter(
+                db.or_(
+                    Produto.nome.ilike(busca_termo),
+                    Produto.codigo_barras.ilike(busca_termo),
+                    Produto.codigo_interno.ilike(busca_termo),
+                    Produto.descricao.ilike(busca_termo),
+                    Produto.marca.ilike(busca_termo),
+                )
+            )
+
+        # Aplicar filtro rápido
+        if filtro_rapido:
+            hoje = datetime.utcnow()
+            
+            if filtro_rapido == "classe_a":
+                # Para classe A, precisamos calcular baseado no faturamento
+                # Por simplicidade, vamos usar produtos com maior total_vendido
+                query = query.filter(Produto.total_vendido > 0).order_by(Produto.total_vendido.desc())
+                total_produtos = query.count()
+                limite_a = int(total_produtos * 0.2)  # Top 20%
+                if limite_a > 0:
+                    produtos_classe_a = query.limit(limite_a).all()
+                    ids_classe_a = [p.id for p in produtos_classe_a]
+                    query = query.filter(Produto.id.in_(ids_classe_a))
+                else:
+                    query = query.filter(Produto.id == -1)  # Nenhum resultado
+                    
+            elif filtro_rapido == "classe_c":
+                # Classe C: produtos com menor faturamento ou sem vendas
+                query = query.filter(
+                    or_(
+                        Produto.total_vendido == None,
+                        Produto.total_vendido == 0,
+                        Produto.quantidade_vendida == None,
+                        Produto.quantidade_vendida == 0
+                    )
+                )
+                
+            elif filtro_rapido == "giro_rapido":
+                # Vendido nos últimos 7 dias
+                data_limite = hoje - timedelta(days=7)
+                query = query.filter(Produto.ultima_venda >= data_limite)
+                
+            elif filtro_rapido == "giro_lento":
+                # Mais de 30 dias sem venda ou nunca vendeu
+                data_limite = hoje - timedelta(days=30)
+                query = query.filter(
+                    or_(
+                        Produto.ultima_venda == None,
+                        Produto.ultima_venda < data_limite
+                    )
+                )
+                
+            elif filtro_rapido == "margem_alta":
+                # Filtrar em Python: margem > 50%
+                # Será aplicado após buscar todos os produtos
+                pass
+                
+            elif filtro_rapido == "margem_baixa":
+                # Filtrar em Python: margem < 30%
+                # Será aplicado após buscar todos os produtos
+                pass
+                
+            elif filtro_rapido == "repor_urgente":
+                query = query.filter(
+                    or_(
+                        Produto.quantidade == 0,
+                        Produto.quantidade <= Produto.quantidade_minima
+                    )
+                )
+                
+            elif filtro_rapido == "sem_fornecedor":
+                query = query.filter(Produto.fornecedor_id == None)
+
+        # Obter todos os produtos filtrados
+        produtos = query.all()
+        
+        # Aplicar filtros de margem em Python (após calcular a margem corretamente)
+        if filtro_rapido == "margem_alta":
+            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda), float(p.preco_custo)) >= 50]
+        elif filtro_rapido == "margem_baixa":
+            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda), float(p.preco_custo)) < 30]
+
+        # CALCULAR ESTATÍSTICAS COM DECIMAL PARA PRECISÃO
+        total_produtos = len(produtos)
+        produtos_esgotados = 0
+        produtos_baixo_estoque = 0
+        produtos_normal = 0
+        valor_total_estoque = Decimal('0')
+        soma_margens = Decimal('0')
+        
+        # Classificação ABC
+        abc_counts = {"A": 0, "B": 0, "C": 0}
+        
+        # Giro de estoque
+        giro_counts = {"rapido": 0, "normal": 0, "lento": 0}
+        
+        hoje = datetime.utcnow()
+        
+        # Calcular faturamento total para classificação ABC
+        produtos_com_faturamento = []
+        faturamento_total = Decimal('0')
+        
+        for produto in produtos:
+            faturamento = Decimal(str(produto.total_vendido or 0))
+            produtos_com_faturamento.append({
+                'produto': produto,
+                'faturamento': faturamento
+            })
+            faturamento_total += faturamento
+        
+        # Ordenar por faturamento para classificação ABC
+        produtos_com_faturamento.sort(key=lambda x: x['faturamento'], reverse=True)
+        
+        # Processar cada produto - LOOP ÚNICO
+        acumulado_faturamento = Decimal('0')
+        
+        for item in produtos_com_faturamento:
+            produto = item['produto']
+            faturamento = item['faturamento']
+            
+            # Status do estoque
+            if produto.quantidade <= 0:
+                produtos_esgotados += 1
+            elif produto.quantidade <= produto.quantidade_minima:
+                produtos_baixo_estoque += 1
+            else:
+                produtos_normal += 1
+            
+            # Valor total do estoque
+            valor_produto = Decimal(str(produto.preco_custo or 0)) * Decimal(str(produto.quantidade or 0))
+            valor_total_estoque += valor_produto
+            
+            # Margem - USAR FÓRMULA CORRIGIDA
+            margem_calculada = calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo))
+            soma_margens += Decimal(str(margem_calculada))
+            
+            # Acumular faturamento para ABC
+            acumulado_faturamento += faturamento
+            
+            # Classificação ABC (Pareto 80/20)
+            # A: primeiros 80% do faturamento acumulado (produtos mais valiosos)
+            # B: próximos 15% (até 95% acumulado)
+            # C: últimos 5% (produtos menos valiosos)
+            if faturamento_total > 0:
+                percentual_acumulado = acumulado_faturamento / faturamento_total
+                
+                # Classificar baseado no percentual acumulado
+                if percentual_acumulado <= Decimal('0.80'):
+                    abc_counts["A"] += 1
+                    produto.classificacao_abc = "A"
+                elif percentual_acumulado <= Decimal('0.95'):
+                    abc_counts["B"] += 1
+                    produto.classificacao_abc = "B"
+                else:
+                    abc_counts["C"] += 1
+                    produto.classificacao_abc = "C"
+            else:
+                # Se não há faturamento, classificar como C
+                abc_counts["C"] += 1
+                produto.classificacao_abc = "C"
+            
+            # Giro de estoque - Corrigido
+            # Rápido: vendido nos últimos 7 dias
+            # Normal: vendido entre 8 e 30 dias
+            # Lento: não vendido há mais de 30 dias ou nunca vendeu
+            if produto.ultima_venda:
+                dias_desde_venda = (hoje - produto.ultima_venda).days
+                if dias_desde_venda <= 7:
+                    giro_counts["rapido"] += 1
+                elif dias_desde_venda <= 30:
+                    giro_counts["normal"] += 1
+                else:
+                    giro_counts["lento"] += 1
+            else:
+                # Nunca vendeu = giro lento
+                giro_counts["lento"] += 1
+
+        # Calcular margem média
+        margem_media = soma_margens / total_produtos if total_produtos > 0 else Decimal('0')
+
+        # Preparar lista de produtos com todos os campos
+        produtos_lista = []
+        for produto in produtos:
+            prod_dict = produto.to_dict()
+            # Garantir que os campos estão presentes
+            prod_dict['total_vendido'] = float(produto.total_vendido or 0)
+            prod_dict['quantidade_vendida'] = int(produto.quantidade_vendida or 0)
+            prod_dict['ultima_venda'] = produto.ultima_venda.isoformat() if produto.ultima_venda else None
+            # USAR FÓRMULA CORRIGIDA PARA MARGEM
+            prod_dict['margem_lucro'] = calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo))
+            produtos_lista.append(prod_dict)
+
+        # Preparar resposta
+        estatisticas = {
+            "total_produtos": total_produtos,
+            "produtos_baixo_estoque": produtos_baixo_estoque,
+            "produtos_esgotados": produtos_esgotados,
+            "produtos_normal": produtos_normal,
+            "valor_total_estoque": float(valor_total_estoque.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "margem_media": float(margem_media.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "classificacao_abc": abc_counts,
+            "giro_estoque": giro_counts,
+            "produtos": produtos_lista,
+            "filtros_aplicados": {
+                "categoria": categoria,
+                "ativos": ativos,
+                "estoque_status": estoque_status,
+                "tipo": tipo,
+                "fornecedor_id": fornecedor_id,
+                "busca": busca,
+                "filtro_rapido": filtro_rapido
+            }
+        }
+
+        current_app.logger.info(f"📊 Estatísticas calculadas: {total_produtos} produtos, filtros: {filtro_rapido}")
+
+        return jsonify({
+            "success": True,
+            "estatisticas": estatisticas
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro ao calcular estatísticas: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+        return jsonify({
+            "success": False,
+            "message": f"Erro interno ao calcular estatísticas: {str(e)}"
+        }), 500
 
 
 @produtos_bp.route("/categorias", methods=["GET"])
@@ -1674,7 +2090,7 @@ def exportar_produtos():
             )
             classificacao = calcular_classificacao_abc(produto)
             margem = calcular_margem_lucro(
-                float(produto.preco_custo), float(produto.preco_venda)
+                float(produto.preco_venda), float(produto.preco_custo)
             )
 
             writer.writerow(
@@ -1828,7 +2244,7 @@ def exportar_csv():
                 produto.quantidade_minima,
                 float(produto.preco_custo),
                 float(produto.preco_venda),
-                float(produto.margem_lucro) if produto.margem_lucro else 0.0,
+                calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo)),
                 fornecedor_nome,
                 "Sim" if produto.ativo else "Não",
                 produto.created_at.strftime("%d/%m/%Y %H:%M") if produto.created_at else ""
@@ -1953,7 +2369,7 @@ def obter_produto_estoque(id):
 
         dados_produto = produto.to_dict()
         dados_produto["margem_lucro"] = calcular_margem_lucro(
-            float(produto.preco_custo), float(produto.preco_venda)
+            float(produto.preco_venda), float(produto.preco_custo)
         )
 
         return jsonify({

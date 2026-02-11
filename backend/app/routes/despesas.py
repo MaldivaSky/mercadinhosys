@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import or_, and_
+from decimal import Decimal, ROUND_HALF_UP
 
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import get_jwt_identity, get_jwt
@@ -352,9 +353,9 @@ def obter_estatisticas_despesas():
         if despesas_mes_anterior > 0:
             variacao_percentual = (
                 (despesas_mes_atual - despesas_mes_anterior) / despesas_mes_anterior
-            ) * 100
+            ) * Decimal('100')
         else:
-            variacao_percentual = 100.0 if despesas_mes_atual > 0 else 0.0
+            variacao_percentual = Decimal('100') if despesas_mes_atual > 0 else Decimal('0')
 
         # Despesas por categoria
         despesas_por_categoria = (
@@ -382,9 +383,16 @@ def obter_estatisticas_despesas():
             or 0.0
         )
 
+        # Convert to Decimal to avoid arithmetic issues
+        despesas_recorrentes = Decimal(str(despesas_recorrentes))
+        soma_total = Decimal(str(soma_total))
+        despesas_mes_atual = Decimal(str(despesas_mes_atual))
+        despesas_mes_anterior = Decimal(str(despesas_mes_anterior))
+
         # Evolução mensal (últimos 6 meses)
         evolucao_mensal = []
         for i in range(6):
+            # Calcular data do mês
             mes_data = hoje.replace(day=1)
             for _ in range(i):
                 # Subtrair um mês
@@ -393,27 +401,27 @@ def obter_estatisticas_despesas():
                 else:
                     mes_data = mes_data.replace(month=mes_data.month - 1)
 
-            mes_fim = mes_data
-            # Encontrar último dia do mês
-            if mes_fim.month == 12:
-                mes_fim = mes_fim.replace(
-                    year=mes_fim.year + 1, month=1, day=1
-                ) - timedelta(days=1)
+            # Calcular último dia do mês
+            if mes_data.month == 12:
+                mes_fim = mes_data.replace(year=mes_data.year + 1, month=1, day=1) - timedelta(days=1)
             else:
-                mes_fim = mes_fim.replace(month=mes_fim.month + 1, day=1) - timedelta(
-                    days=1
-                )
+                mes_fim = mes_data.replace(month=mes_data.month + 1, day=1) - timedelta(days=1)
 
-            total_mes = (
-                db.session.query(func.sum(Despesa.valor))
-                .filter(
-                    Despesa.estabelecimento_id == estabelecimento_id,
-                    Despesa.data_despesa >= mes_data,
-                    Despesa.data_despesa <= mes_fim,
+            try:
+                total_mes = (
+                    db.session.query(func.sum(Despesa.valor))
+                    .filter(
+                        Despesa.estabelecimento_id == estabelecimento_id,
+                        Despesa.data_despesa >= mes_data,
+                        Despesa.data_despesa <= mes_fim,
+                    )
+                    .scalar()
+                    or Decimal('0')
                 )
-                .scalar()
-                or 0.0
-            )
+                total_mes = Decimal(str(total_mes))
+            except Exception as e:
+                current_app.logger.error(f"Erro ao calcular evolução mensal: {e}")
+                total_mes = Decimal('0')
 
             evolucao_mensal.append(
                 {
@@ -426,7 +434,23 @@ def obter_estatisticas_despesas():
         evolucao_mensal.reverse()  # Do mais antigo para o mais recente
 
         # Calcular média por despesa
-        media_valor = float(soma_total / total_despesas) if total_despesas > 0 else 0.0
+        media_valor = soma_total / Decimal(str(total_despesas)) if total_despesas > 0 else Decimal('0')
+
+        # Garantir que despesas_por_categoria não seja None
+        despesas_por_categoria_list = []
+        if despesas_por_categoria:
+            for categoria, total, quantidade in despesas_por_categoria:
+                if total is not None and soma_total > 0:
+                    total_decimal = Decimal(str(total))
+                    percentual = ((total_decimal / soma_total) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                else:
+                    percentual = Decimal('0')
+                despesas_por_categoria_list.append({
+                    "categoria": categoria or "Sem categoria",
+                    "total": float(total) if total else 0.0,
+                    "quantidade": quantidade or 0,
+                    "percentual": float(percentual),
+                })
 
         return (
             jsonify(
@@ -435,27 +459,13 @@ def obter_estatisticas_despesas():
                     "estatisticas": {
                         "total_despesas": total_despesas,
                         "soma_total": float(soma_total),
-                        "media_valor": media_valor,
+                        "media_valor": float(media_valor),
                         "despesas_mes_atual": float(despesas_mes_atual),
                         "despesas_mes_anterior": float(despesas_mes_anterior),
-                        "variacao_percentual": round(variacao_percentual, 2),
+                        "variacao_percentual": float(variacao_percentual.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
                         "despesas_recorrentes": float(despesas_recorrentes),
-                        "despesas_nao_recorrentes": float(
-                            soma_total - despesas_recorrentes
-                        ),
-                        "despesas_por_categoria": [
-                            {
-                                "categoria": categoria,
-                                "total": float(total),
-                                "quantidade": quantidade,
-                                "percentual": (
-                                    round((float(total) / float(soma_total)) * 100, 2)
-                                    if soma_total > 0
-                                    else 0
-                                ),
-                            }
-                            for categoria, total, quantidade in despesas_por_categoria
-                        ],
+                        "despesas_nao_recorrentes": float(soma_total - despesas_recorrentes),
+                        "despesas_por_categoria": despesas_por_categoria_list,
                         "evolucao_mensal": evolucao_mensal,
                     },
                 }
@@ -632,3 +642,97 @@ def deletar_despesa(despesa_id: int):
     db.session.commit()
 
     return jsonify({"success": True}), 200
+@despesas_bp.route("/boletos-a-vencer/", methods=["GET"])
+@funcionario_required
+def boletos_a_vencer():
+    """Lista boletos de fornecedores que estão próximos ao vencimento"""
+    try:
+        from app.models import ContaPagar, Fornecedor
+        from datetime import date, timedelta
+        
+        current_user_id = get_jwt_identity()
+        funcionario = Funcionario.query.get(current_user_id)
+        if funcionario and funcionario.estabelecimento_id:
+            estabelecimento_id = funcionario.estabelecimento_id
+        else:
+            claims = get_jwt()
+            estabelecimento_id = claims.get("estabelecimento_id")
+        
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
+        
+        # Parâmetros
+        dias_antecedencia = int(request.args.get('dias', 30))  # Próximos 30 dias por padrão
+        apenas_vencidos = request.args.get('apenas_vencidos') == 'true'
+        
+        # Query base
+        query = db.session.query(ContaPagar).join(Fornecedor).filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == 'aberto'
+        )
+        
+        if apenas_vencidos:
+            # Apenas boletos já vencidos
+            query = query.filter(ContaPagar.data_vencimento < date.today())
+        else:
+            # Boletos que vencem nos próximos X dias
+            data_limite = date.today() + timedelta(days=dias_antecedencia)
+            query = query.filter(ContaPagar.data_vencimento <= data_limite)
+        
+        boletos = query.order_by(ContaPagar.data_vencimento.asc()).all()
+        
+        # Processar resultados
+        boletos_data = []
+        total_valor = Decimal('0')
+        
+        for boleto in boletos:
+            dias_vencimento = (boleto.data_vencimento - date.today()).days
+            
+            boleto_info = {
+                'id': boleto.id,
+                'numero_documento': boleto.numero_documento,
+                'fornecedor_nome': boleto.fornecedor.nome_fantasia if boleto.fornecedor else 'N/A',
+                'fornecedor_id': boleto.fornecedor_id,
+                'valor_original': float(boleto.valor_original),
+                'valor_atual': float(boleto.valor_atual),
+                'data_emissao': boleto.data_emissao.isoformat() if boleto.data_emissao else None,
+                'data_vencimento': boleto.data_vencimento.isoformat() if boleto.data_vencimento else None,
+                'dias_vencimento': dias_vencimento,
+                'status_vencimento': (
+                    'vencido' if dias_vencimento < 0 else
+                    'vence_hoje' if dias_vencimento == 0 else
+                    'vence_em_breve' if dias_vencimento <= 7 else
+                    'normal'
+                ),
+                'pedido_numero': boleto.pedido_compra.numero_pedido if boleto.pedido_compra else None,
+                'pedido_id': boleto.pedido_compra.id if boleto.pedido_compra else None,
+                'data_pedido': boleto.pedido_compra.data_pedido.isoformat() if boleto.pedido_compra and boleto.pedido_compra.data_pedido else None,
+                'itens': [item.to_dict() for item in boleto.pedido_compra.itens] if boleto.pedido_compra else [],
+                'observacoes': boleto.observacoes
+            }
+            
+            boletos_data.append(boleto_info)
+            total_valor += boleto.valor_atual
+        
+        # Estatísticas
+        vencidos = [b for b in boletos_data if b['dias_vencimento'] < 0]
+        vence_hoje = [b for b in boletos_data if b['dias_vencimento'] == 0]
+        vence_7_dias = [b for b in boletos_data if 0 < b['dias_vencimento'] <= 7]
+        
+        return jsonify({
+            'boletos': boletos_data,
+            'resumo': {
+                'total_boletos': len(boletos_data),
+                'total_valor': float(total_valor),
+                'vencidos': len(vencidos),
+                'vence_hoje': len(vence_hoje),
+                'vence_7_dias': len(vence_7_dias),
+                'valor_vencidos': float(sum(Decimal(str(b['valor_atual'])) for b in vencidos)),
+                'valor_vence_hoje': float(sum(Decimal(str(b['valor_atual'])) for b in vence_hoje)),
+                'valor_vence_7_dias': float(sum(Decimal(str(b['valor_atual'])) for b in vence_7_dias))
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao buscar boletos a vencer: {str(e)}")
+        return jsonify({"error": "Erro interno do servidor"}), 500

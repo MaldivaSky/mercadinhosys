@@ -21,6 +21,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { employeesService, Funcionario, EstatisticasFuncionarios } from "./employeesService";
 import { buscarCep, formatCep, formatCpf, formatPhone } from "../../utils/cepUtils";
+import { useLocation } from "react-router-dom";
 
 ChartJS.register(
     BarElement,
@@ -119,13 +120,25 @@ export default function EmployeesPage() {
         ativo: true,
     });
 
-    // Analytics
+    const location = useLocation();
+
     const [mostrarAnalises, setMostrarAnalises] = useState(true);
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
 
     // Toast notifications (renomeado para evitar conflito com react-hot-toast)
     const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const analyticsParam = params.get("analytics");
+        if (analyticsParam === "0" || analyticsParam === "false") {
+            setMostrarAnalises(false);
+        }
+        if (analyticsParam === "1" || analyticsParam === "true") {
+            setMostrarAnalises(true);
+        }
+    }, [location.search]);
 
     useEffect(() => {
         if (toastNotification) {

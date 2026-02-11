@@ -14,6 +14,7 @@ import {
 } from "chart.js";
 import { apiClient } from "../../api/apiClient";
 import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle, CheckCircle } from "lucide-react";
+import BoletosAVencerPanel from "./components/BoletosAVencerPanel";
 
 ChartJS.register(
     BarElement,
@@ -548,6 +549,9 @@ export default function ExpensesPage() {
                     </div>
                 </div>
             )}
+
+            {/* Painel de Boletos a Vencer */}
+            <BoletosAVencerPanel className="mb-6" />
 
             {/* Análises e Gráficos */}
             {mostrarAnalises && (

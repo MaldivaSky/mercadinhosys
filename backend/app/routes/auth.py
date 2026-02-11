@@ -1109,7 +1109,7 @@ def get_permissions_for_role(role, permissoes_db=None):
     }
 
     # Permissões padrão baseadas no role
-    permissions = role_permissions.get(role, ["view_products", "view_clients"])
+    permissions = role_permissions.get(role_key, ["view_products", "view_clients"])
 
     # Adicionar permissões específicas do banco de dados
     if permissoes_db and isinstance(permissoes_db, dict):
