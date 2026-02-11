@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 from app import create_app, db
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='function')
 def app():
     """Cria aplicação Flask para testes"""
     app = create_app()
@@ -19,30 +19,18 @@ def app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['WTF_CSRF_ENABLED'] = False
     
-    return app
-
-@pytest.fixture(scope='session')
-def _db(app):
-    """Cria banco de dados para testes"""
     with app.app_context():
         db.create_all()
-        yield db
+        yield app
         db.session.remove()
         db.drop_all()
 
 @pytest.fixture(scope='function')
-def session(_db):
-    """Cria sessão de banco de dados para cada teste"""
-    connection = _db.engine.connect()
-    transaction = connection.begin()
-    
-    session = _db.create_scoped_session(
-        options={"bind": connection, "binds": {}}
-    )
-    _db.session = session
-    
-    yield session
-    
-    transaction.rollback()
-    connection.close()
-    session.remove()
+def client(app):
+    """Client de teste"""
+    return app.test_client()
+
+@pytest.fixture(scope='function')
+def _db(app):
+    """Retorna db"""
+    return db

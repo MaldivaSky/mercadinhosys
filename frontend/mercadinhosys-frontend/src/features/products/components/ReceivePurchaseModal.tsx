@@ -1,6 +1,6 @@
 // src/features/products/components/ReceivePurchaseModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Package, FileText, Calendar, DollarSign, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { X, Package, FileText, DollarSign, CheckCircle, ChevronDown } from 'lucide-react';
 import { PedidoCompra, ReceberPedidoData, purchaseOrderService } from '../purchaseOrderService';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import toast from 'react-hot-toast';
@@ -29,14 +29,14 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
   pedido
 }) => {
   const [loading, setLoading] = useState(false);
-  const [pedidoDetalhado, setPedidoDetalhado] = useState<PedidoCompra | null>(null);
+
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     notaFiscal: false,
     boleto: true
   });
-  const [compactMode, setCompactMode] = useState(true);
-  
+
+
   // Form data
   const [formData, setFormData] = useState({
     numero_nota_fiscal: '',
@@ -45,28 +45,28 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
     data_vencimento: '',
     numero_documento: ''
   });
-  
+
   const [itensRecebimento, setItensRecebimento] = useState<ItemRecebimento[]>([]);
-  
+
   // Carregar detalhes do pedido
   useEffect(() => {
     if (isOpen && pedido) {
       loadPedidoDetails();
     }
   }, [isOpen, pedido]);
-  
+
   const loadPedidoDetails = async () => {
     setLoadingDetails(true);
     try {
       const detalhes = await purchaseOrderService.obterPedido(pedido.id);
-      setPedidoDetalhado(detalhes);
-      
+
+
       // Inicializar itens de recebimento
       if (detalhes.itens) {
         // Calcular data de validade padrão (1 ano a partir de hoje)
         const dataValidadePadrao = new Date();
         dataValidadePadrao.setFullYear(dataValidadePadrao.getFullYear() + 1);
-        
+
         const itens = detalhes.itens.map((item, index) => ({
           item_id: item.id!,
           produto_nome: item.produto_nome,
@@ -78,17 +78,17 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
         }));
         setItensRecebimento(itens);
       }
-      
+
       // Configurar dados padrão do boleto
       const dataVencimento = new Date();
       dataVencimento.setDate(dataVencimento.getDate() + 30); // 30 dias por padrão
-      
+
       setFormData(prev => ({
         ...prev,
         data_vencimento: dataVencimento.toISOString().split('T')[0],
         numero_documento: `BOL-${detalhes.numero_pedido}`
       }));
-      
+
     } catch (error) {
       console.error('Erro ao carregar detalhes do pedido:', error);
       toast.error('Erro ao carregar detalhes do pedido');
@@ -96,25 +96,25 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
       setLoadingDetails(false);
     }
   };
-  
+
   const handleQuantidadeChange = (index: number, quantidade: number) => {
     const novosItens = [...itensRecebimento];
     novosItens[index].quantidade_recebida = Math.max(0, quantidade);
     setItensRecebimento(novosItens);
   };
-  
+
   const handleDataValidadeChange = (index: number, data: string) => {
     const novosItens = [...itensRecebimento];
     novosItens[index].data_validade = data;
     setItensRecebimento(novosItens);
   };
-  
+
   const handleNumeroLoteChange = (index: number, lote: string) => {
     const novosItens = [...itensRecebimento];
     novosItens[index].numero_lote = lote;
     setItensRecebimento(novosItens);
   };
-  
+
   const handleReceberTudo = () => {
     const novosItens = itensRecebimento.map(item => ({
       ...item,
@@ -122,7 +122,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
     }));
     setItensRecebimento(novosItens);
   };
-  
+
   const handleLimparTudo = () => {
     const novosItens = itensRecebimento.map(item => ({
       ...item,
@@ -130,30 +130,30 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
     }));
     setItensRecebimento(novosItens);
   };
-  
+
   const calcularTotalRecebido = () => {
     return itensRecebimento.reduce((total, item) => {
       return total + (item.quantidade_recebida * item.preco_unitario);
     }, 0);
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const itensComRecebimento = itensRecebimento.filter(item => item.quantidade_recebida > 0);
-    
+
     if (itensComRecebimento.length === 0) {
       toast.error('Informe a quantidade recebida para pelo menos um item');
       return;
     }
-    
+
     if (formData.gerar_boleto && !formData.data_vencimento) {
       toast.error('Informe a data de vencimento do boleto');
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
       const dadosRecebimento: ReceberPedidoData = {
         pedido_id: pedido.id,
@@ -169,13 +169,13 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
           numero_lote: item.numero_lote       // NOVO
         }))
       };
-      
+
       await purchaseOrderService.receberPedido(dadosRecebimento);
-      
+
       // Feedback visual detalhado
       const totalRecebido = itensComRecebimento.reduce((sum, item) => sum + item.quantidade_recebida, 0);
       const totalValor = calcularTotalRecebido();
-      
+
       toast.success(
         `✅ Pedido Recebido!\n📦 ${totalRecebido} unidades\n💰 R$ ${totalValor.toFixed(2)}\n📊 Estoque Ajustado${formData.gerar_boleto ? '\n📄 Boleto Gerado' : ''}`,
         {
@@ -183,13 +183,13 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
           icon: '✅'
         }
       );
-      
+
       // Aguardar um pouco para o usuário ver o feedback
       setTimeout(() => {
         onSuccess();
         onClose();
       }, 1500);
-      
+
     } catch (error: any) {
       console.error('Erro ao receber pedido:', error);
       toast.error(error.response?.data?.error || 'Erro ao receber pedido');
@@ -197,9 +197,9 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
       setLoading(false);
     }
   };
-  
+
   if (!isOpen) return null;
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col">
@@ -223,7 +223,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         {loadingDetails ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
@@ -257,7 +257,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                   </div>
                 </div>
               </div>
-              
+
               {/* Itens para Recebimento */}
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -281,7 +281,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="overflow-x-auto -mx-6 px-6">
                   <table className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg">
                     <thead className="bg-gray-50 dark:bg-gray-700">
@@ -342,7 +342,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                     </tbody>
                   </table>
                 </div>
-                
+
                 <div className="mt-3 flex justify-end">
                   <div className="text-sm font-semibold text-gray-800 dark:text-white">
                     Total: <span className="text-green-600 dark:text-green-400">
@@ -351,7 +351,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                   </div>
                 </div>
               </div>
-              
+
               {/* Informações da Nota Fiscal */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <button
@@ -365,7 +365,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                   </span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections.notaFiscal ? 'rotate-180' : ''}`} />
                 </button>
-                
+
                 {expandedSections.notaFiscal && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
                     <div>
@@ -380,7 +380,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                         placeholder="Ex: 123456"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Série
@@ -396,7 +396,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                   </div>
                 )}
               </div>
-              
+
               {/* Geração de Boleto */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <button
@@ -410,7 +410,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                   </span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections.boleto ? 'rotate-180' : ''}`} />
                 </button>
-                
+
                 {expandedSections.boleto && (
                   <div className="pl-6 space-y-3">
                     <div className="flex items-center gap-3 mb-3">
@@ -425,7 +425,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                         Sim, gerar boleto
                       </label>
                     </div>
-                    
+
                     {formData.gerar_boleto && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
@@ -440,7 +440,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                             required={formData.gerar_boleto}
                           />
                         </div>
-                        
+
                         <div>
                           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Número do Documento
@@ -459,7 +459,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                 )}
               </div>
             </div>
-            
+
             {/* Footer */}
             <div className="flex justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
               <button
