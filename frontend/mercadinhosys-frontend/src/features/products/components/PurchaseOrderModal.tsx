@@ -1,6 +1,6 @@
 // src/features/products/components/PurchaseOrderModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Package, Calculator, Save, AlertCircle } from 'lucide-react';
+import { X, Trash2, Package, Save } from 'lucide-react';
 import { Fornecedor, Produto } from '../../../types';
 import { CreatePedidoData, purchaseOrderService } from '../purchaseOrderService';
 import { apiClient } from '../../../api/apiClient';

@@ -56,60 +56,84 @@ def client(app):
     """Cliente de teste"""
     return app.test_client()
 
+
 @pytest.fixture(scope='function')
 def estabelecimento(app):
     """Cria estabelecimento de teste"""
-    with app.app_context():
-        estab = Estabelecimento(
-            nome_fantasia="Mercado Teste",
-            razao_social="Mercado Teste LTDA",
-            cnpj="12.345.678/0001-90",
+    estab = Estabelecimento(
+            nome_fantasia=f"Mercado Teste {datetime.now().timestamp()}",
+            razao_social=f"Mercado Teste LTDA {datetime.now().timestamp()}",
+            cnpj=f"{datetime.now().strftime('%d%H%M%S')}/0001-{datetime.now().strftime('%f')[:2]}",
             telefone="(11) 1234-5678",
-            email="teste@mercado.com",
-            data_abertura=date.today() - timedelta(days=365),  # Campo obrigatório
+            email=f"teste{datetime.now().timestamp()}@mercado.com",
+            data_abertura=date.today() - timedelta(days=365),
+            
+            # Campos de Endereço (Obrigatórios)
+            cep="12345-678",
+            logradouro="Rua Teste",
+            numero="123",
+            bairro="Centro",
+            cidade="São Paulo",
+            estado="SP",
+            pais="Brasil",
+            
             ativo=True
         )
-        db.session.add(estab)
-        db.session.commit()
-        return estab
+    db.session.add(estab)
+    db.session.commit()
+    return estab
+
 
 @pytest.fixture(scope='function')
 def funcionario(app, estabelecimento):
     """Cria funcionário de teste"""
-    with app.app_context():
-        func = Funcionario(
-            estabelecimento_id=estabelecimento.id,
-            nome="Funcionário Teste",
-            username="teste",
-            cpf="123.456.789-00",
-            cargo="Caixa",
-            role="FUNCIONARIO",
-            ativo=True
-        )
-        func.set_senha("123456")
-        db.session.add(func)
-        db.session.commit()
-        return func
+    func = Funcionario(
+        estabelecimento_id=estabelecimento.id,
+        nome="Funcionário Teste",
+        username="teste",
+        cpf="123.456.789-00",
+        cargo="Caixa",
+        role="FUNCIONARIO",
+        data_nascimento=date(1995, 5, 20),
+        data_admissao=date.today() - timedelta(days=90),
+        celular="(11) 97777-7777",
+        email="func@mercado.com",
+        
+        # Campos de Endereço (Obrigatórios)
+        cep="12345-678",
+        logradouro="Rua do Funcionário",
+        numero="20",
+        bairro="Bairro Novo",
+        cidade="São Paulo",
+        estado="SP",
+        pais="Brasil",
+        
+        ativo=True
+    )
+    func.set_senha("123456")
+    db.session.add(func)
+    db.session.commit()
+    return func
+
 
 @pytest.fixture(scope='function')
 def categoria(app, estabelecimento):
     """Cria categoria de teste"""
-    with app.app_context():
-        cat = CategoriaProduto(
+    cat = CategoriaProduto(
             estabelecimento_id=estabelecimento.id,
             nome="Bebidas",
             codigo="BEB001",
             ativo=True
         )
-        db.session.add(cat)
-        db.session.commit()
-        return cat
+    db.session.add(cat)
+    db.session.commit()
+    return cat
+
 
 @pytest.fixture(scope='function')
 def produto(app, estabelecimento, categoria):
     """Cria produto de teste com estoque"""
-    with app.app_context():
-        prod = Produto(
+    prod = Produto(
             estabelecimento_id=estabelecimento.id,
             categoria_id=categoria.id,
             nome="Coca-Cola 2L",
@@ -117,44 +141,55 @@ def produto(app, estabelecimento, categoria):
             codigo_barras="7894900010015",
             preco_custo=Decimal("5.00"),
             preco_venda=Decimal("10.00"),
-            estoque_atual=1000,  # Estoque inicial alto para testes
-            estoque_minimo=10,
+            quantidade=1000,  # Estoque inicial alto para testes
+            quantidade_minima=10,
             ativo=True
         )
-        db.session.add(prod)
-        db.session.commit()
-        
-        # Criar lote inicial
-        lote = ProdutoLote(
-            produto_id=prod.id,
-            estabelecimento_id=estabelecimento.id,
-            numero_lote="LOTE001",
-            quantidade_inicial=1000,
-            quantidade_atual=1000,
-            custo_unitario=Decimal("5.00"),
-            data_fabricacao=date.today() - timedelta(days=30),
-            data_validade=date.today() + timedelta(days=365)
-        )
-        db.session.add(lote)
-        db.session.commit()
-        
-        return prod
+    db.session.add(prod)
+    db.session.commit()
+    
+    # Criar lote inicial
+    lote = ProdutoLote(
+        produto_id=prod.id,
+        estabelecimento_id=estabelecimento.id,
+        numero_lote="LOTE001",
+        quantidade_inicial=1000,
+        quantidade=1000,
+        preco_custo_unitario=Decimal("5.00"),
+        data_entrada=date.today() - timedelta(days=30),
+        data_validade=date.today() + timedelta(days=365)
+    )
+    db.session.add(lote)
+    db.session.commit()
+    
+    return prod
+
 
 @pytest.fixture(scope='function')
 def cliente_teste(app, estabelecimento):
     """Cria cliente de teste"""
-    with app.app_context():
-        cli = Cliente(
-            estabelecimento_id=estabelecimento.id,
-            nome="Cliente Teste",
-            cpf="987.654.321-00",
-            ativo=True,
-            total_compras=0,
-            valor_total_gasto=Decimal("0.00")
-        )
-        db.session.add(cli)
-        db.session.commit()
-        return cli
+    cli = Cliente(
+        estabelecimento_id=estabelecimento.id,
+        nome="Cliente Teste",
+        cpf="987.654.321-00",
+        celular="(11) 98888-8888",
+        
+        # Campos de Endereço (Obrigatórios)
+        cep="12345-678",
+        logradouro="Rua Teste",
+        numero="123",
+        bairro="Centro",
+        cidade="São Paulo",
+        estado="SP",
+        pais="Brasil",
+        
+        ativo=True,
+        total_compras=0,
+        valor_total_gasto=Decimal("0.00")
+    )
+    db.session.add(cli)
+    db.session.commit()
+    return cli
 
 # ============================================================================
 # TESTE 1: 100 VENDAS CONSECUTIVAS
@@ -175,9 +210,15 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
         print("🧪 TESTE 1: 100 Vendas Consecutivas")
         print("="*70)
         
+        # Recarregar objetos na sessão atual para evitar DetachedInstanceError
+        estabelecimento = db.session.merge(estabelecimento)
+        funcionario = db.session.merge(funcionario)
+        cliente_teste = db.session.merge(cliente_teste)
+        produto = db.session.merge(produto)
+        
         # Estado inicial
         produto_inicial = Produto.query.get(produto.id)
-        estoque_inicial = produto_inicial.estoque_atual
+        estoque_inicial = produto_inicial.quantidade
         print(f"📦 Estoque inicial: {estoque_inicial}")
         
         vendas_criadas = []
@@ -191,6 +232,7 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
                 estabelecimento_id=estabelecimento.id,
                 cliente_id=cliente_teste.id,
                 funcionario_id=funcionario.id,
+                codigo=f"VENDA-{i}-{datetime.now().timestamp()}",
                 data_venda=datetime.now(),
                 status='finalizada',
                 forma_pagamento='DINHEIRO',
@@ -203,6 +245,9 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
             item = VendaItem(
                 venda_id=venda.id,
                 produto_id=produto.id,
+                produto_nome=produto.nome,
+                produto_codigo=produto.codigo_interno,
+                produto_unidade=produto_inicial.unidade_medida,
                 quantidade=quantidade_por_venda,
                 preco_unitario=produto.preco_venda,
                 custo_unitario=produto.preco_custo,
@@ -215,7 +260,7 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
             
             # Atualizar estoque
             produto_obj = Produto.query.get(produto.id)
-            produto_obj.estoque_atual -= quantidade_por_venda
+            produto_obj.quantidade -= quantidade_por_venda
             
             # Criar movimentação
             mov = MovimentacaoEstoque(
@@ -223,9 +268,11 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
                 produto_id=produto.id,
                 tipo='SAIDA',
                 quantidade=quantidade_por_venda,
+                quantidade_anterior=produto_obj.quantidade + quantidade_por_venda,
+                quantidade_atual=produto_obj.quantidade,
                 motivo='VENDA',
-                referencia_id=venda.id,
-                data_movimentacao=datetime.now()
+                venda_id=venda.id,
+                created_at=datetime.now()
             )
             db.session.add(mov)
             
@@ -238,7 +285,7 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
         
         # Verificações finais
         produto_final = Produto.query.get(produto.id)
-        estoque_final = produto_final.estoque_atual
+        estoque_final = produto_final.quantidade
         estoque_esperado = estoque_inicial - (total_vendas * quantidade_por_venda)
         
         print(f"\n📊 Resultados:")
@@ -276,7 +323,7 @@ def test_100_consecutive_sales(app, estabelecimento, produto, cliente_teste, fun
 # TESTE 2: INTEGRIDADE DE ESTOQUE
 # ============================================================================
 
-def test_inventory_integrity(app, estabelecimento, produto):
+def test_inventory_integrity(app, estabelecimento, produto, funcionario):
     """
     TESTE CRÍTICO 2: Integridade de Estoque
     
@@ -289,9 +336,13 @@ def test_inventory_integrity(app, estabelecimento, produto):
         print("🧪 TESTE 2: Integridade de Estoque")
         print("="*70)
         
+        # Recarregar objetos
+        estabelecimento = db.session.merge(estabelecimento)
+        produto = db.session.merge(produto)
+        
         # Criar produto com estoque baixo
         prod = Produto.query.get(produto.id)
-        prod.estoque_atual = 5
+        prod.quantidade = 5
         db.session.commit()
         
         # Tentar vender mais do que tem
@@ -300,6 +351,8 @@ def test_inventory_integrity(app, estabelecimento, produto):
         try:
             venda = Venda(
                 estabelecimento_id=estabelecimento.id,
+                funcionario_id=funcionario.id,
+                codigo=f"VENDA-INT-{datetime.now().timestamp()}",
                 data_venda=datetime.now(),
                 status='finalizada',
                 forma_pagamento='DINHEIRO',
@@ -311,6 +364,9 @@ def test_inventory_integrity(app, estabelecimento, produto):
             item = VendaItem(
                 venda_id=venda.id,
                 produto_id=produto.id,
+                produto_nome=prod.nome,
+                produto_codigo=prod.codigo_interno,
+                produto_unidade=prod.unidade_medida,
                 quantidade=10,  # Mais do que tem!
                 preco_unitario=Decimal("10.00"),
                 custo_unitario=Decimal("5.00"),
@@ -319,9 +375,9 @@ def test_inventory_integrity(app, estabelecimento, produto):
             db.session.add(item)
             
             # Tentar atualizar estoque
-            prod.estoque_atual -= 10
+            prod.quantidade -= 10
             
-            if prod.estoque_atual < 0:
+            if prod.quantidade < 0:
                 db.session.rollback()
                 raise ValueError("Estoque insuficiente")
             
@@ -336,17 +392,17 @@ def test_inventory_integrity(app, estabelecimento, produto):
         
         # Verificar que estoque não mudou
         prod_final = Produto.query.get(produto.id)
-        assert prod_final.estoque_atual == 5, "Estoque foi alterado incorretamente"
+        assert prod_final.quantidade == 5, "Estoque foi alterado incorretamente"
         
         print(f"\n✅ TESTE 2 PASSOU!")
         print(f"   ✓ Estoque negativo bloqueado")
-        print(f"   ✓ Estoque permanece em {prod_final.estoque_atual}")
+        print(f"   ✓ Estoque permanece em {prod_final.quantidade}")
 
 # ============================================================================
 # TESTE 3: CÁLCULO DE TOTAIS
 # ============================================================================
 
-def test_total_calculations(app, estabelecimento, produto, cliente_teste):
+def test_total_calculations(app, estabelecimento, produto, cliente_teste, funcionario):
     """
     TESTE CRÍTICO 3: Cálculo de Totais
     
@@ -360,10 +416,17 @@ def test_total_calculations(app, estabelecimento, produto, cliente_teste):
         print("🧪 TESTE 3: Cálculo de Totais")
         print("="*70)
         
+        # Recarregar objetos
+        estabelecimento = db.session.merge(estabelecimento)
+        produto = db.session.merge(produto)
+        cliente_teste = db.session.merge(cliente_teste)
+        
         # Criar venda com múltiplos itens
         venda = Venda(
             estabelecimento_id=estabelecimento.id,
             cliente_id=cliente_teste.id,
+            funcionario_id=funcionario.id,
+            codigo=f"VENDA-TOT-{datetime.now().timestamp()}",
             data_venda=datetime.now(),
             status='finalizada',
             forma_pagamento='DINHEIRO',
@@ -376,6 +439,9 @@ def test_total_calculations(app, estabelecimento, produto, cliente_teste):
         item1 = VendaItem(
             venda_id=venda.id,
             produto_id=produto.id,
+            produto_nome=produto.nome,
+            produto_codigo=produto.codigo_interno,
+            produto_unidade=produto.unidade_medida,
             quantidade=3,
             preco_unitario=Decimal("10.00"),
             custo_unitario=Decimal("5.00"),
@@ -387,6 +453,9 @@ def test_total_calculations(app, estabelecimento, produto, cliente_teste):
         item2 = VendaItem(
             venda_id=venda.id,
             produto_id=produto.id,
+            produto_nome=produto.nome,
+            produto_codigo=produto.codigo_interno,
+            produto_unidade=produto.unidade_medida,
             quantidade=5,
             preco_unitario=Decimal("10.00"),
             custo_unitario=Decimal("5.00"),
@@ -430,7 +499,7 @@ def test_total_calculations(app, estabelecimento, produto, cliente_teste):
         print(f"   Margem: {margem:.2f}%")
         
         assert lucro_bruto == Decimal("40.00"), "Lucro bruto incorreto"
-        assert abs(margem - 50.00) < 0.01, "Margem incorreta"
+        assert abs(margem - Decimal("50.00")) < Decimal("0.01"), "Margem incorreta"
         
         print(f"\n✅ TESTE 3 PASSOU!")
         print(f"   ✓ Totais calculados corretamente")
@@ -441,7 +510,7 @@ def test_total_calculations(app, estabelecimento, produto, cliente_teste):
 # TESTE 4: GERAÇÃO DE MOVIMENTAÇÕES
 # ============================================================================
 
-def test_movement_generation(app, estabelecimento, produto):
+def test_movement_generation(app, estabelecimento, produto, funcionario):
     """
     TESTE CRÍTICO 4: Geração de Movimentações
     
@@ -456,6 +525,10 @@ def test_movement_generation(app, estabelecimento, produto):
         print("🧪 TESTE 4: Geração de Movimentações")
         print("="*70)
         
+        # Recarregar objetos
+        estabelecimento = db.session.merge(estabelecimento)
+        produto = db.session.merge(produto)
+        
         # Contar movimentações antes
         movs_antes = MovimentacaoEstoque.query.filter_by(
             produto_id=produto.id
@@ -465,6 +538,8 @@ def test_movement_generation(app, estabelecimento, produto):
         for i in range(5):
             venda = Venda(
                 estabelecimento_id=estabelecimento.id,
+                funcionario_id=funcionario.id,
+                codigo=f"VENDA-MOV-{i}-{datetime.now().timestamp()}",
                 data_venda=datetime.now(),
                 status='finalizada',
                 forma_pagamento='DINHEIRO',
@@ -476,6 +551,9 @@ def test_movement_generation(app, estabelecimento, produto):
             item = VendaItem(
                 venda_id=venda.id,
                 produto_id=produto.id,
+                produto_nome=produto.nome,
+                produto_codigo=produto.codigo_interno,
+                produto_unidade=produto.unidade_medida,
                 quantidade=2,
                 preco_unitario=Decimal("10.00"),
                 custo_unitario=Decimal("5.00"),
@@ -489,9 +567,11 @@ def test_movement_generation(app, estabelecimento, produto):
                 produto_id=produto.id,
                 tipo='SAIDA',
                 quantidade=2,
+                quantidade_anterior=produto.quantidade, # Simplificado para teste
+                quantidade_atual=produto.quantidade - 2,
                 motivo='VENDA',
-                referencia_id=venda.id,
-                data_movimentacao=datetime.now()
+                venda_id=venda.id,
+                created_at=datetime.now()
             )
             db.session.add(mov)
             
@@ -521,7 +601,7 @@ def test_movement_generation(app, estabelecimento, produto):
             assert mov.tipo == 'SAIDA', "Tipo incorreto"
             assert mov.quantidade == 2, "Quantidade incorreta"
             assert mov.motivo == 'VENDA', "Motivo incorreto"
-            assert mov.referencia_id is not None, "Referência à venda ausente"
+            assert mov.venda_id is not None, "Referência à venda ausente"
         
         print(f"\n✅ TESTE 4 PASSOU!")
         print(f"   ✓ 5 movimentações criadas")
@@ -532,7 +612,7 @@ def test_movement_generation(app, estabelecimento, produto):
 # TESTE 5: ATUALIZAÇÃO DE ESTATÍSTICAS DO CLIENTE
 # ============================================================================
 
-def test_customer_stats_update(app, estabelecimento, produto, cliente_teste):
+def test_customer_stats_update(app, estabelecimento, produto, cliente_teste, funcionario):
     """
     TESTE CRÍTICO 5: Atualização de Estatísticas do Cliente
     
@@ -545,6 +625,11 @@ def test_customer_stats_update(app, estabelecimento, produto, cliente_teste):
         print("\n" + "="*70)
         print("🧪 TESTE 5: Atualização de Estatísticas do Cliente")
         print("="*70)
+        
+        # Recarregar objetos
+        estabelecimento = db.session.merge(estabelecimento)
+        produto = db.session.merge(produto)
+        cliente_teste = db.session.merge(cliente_teste)
         
         # Estado inicial do cliente
         cli = Cliente.query.get(cliente_teste.id)
@@ -560,6 +645,8 @@ def test_customer_stats_update(app, estabelecimento, produto, cliente_teste):
             venda = Venda(
                 estabelecimento_id=estabelecimento.id,
                 cliente_id=cliente_teste.id,
+                funcionario_id=funcionario.id,
+                codigo=f"VENDA-CLI-{i}-{datetime.now().timestamp()}",
                 data_venda=datetime.now(),
                 status='finalizada',
                 forma_pagamento='DINHEIRO',
@@ -571,6 +658,9 @@ def test_customer_stats_update(app, estabelecimento, produto, cliente_teste):
             item = VendaItem(
                 venda_id=venda.id,
                 produto_id=produto.id,
+                produto_nome=produto.nome,
+                produto_codigo=produto.codigo_interno,
+                produto_unidade=produto.unidade_medida,
                 quantidade=5,
                 preco_unitario=Decimal("10.00"),
                 custo_unitario=Decimal("5.00"),
