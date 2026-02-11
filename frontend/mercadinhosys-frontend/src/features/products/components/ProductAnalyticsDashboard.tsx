@@ -69,7 +69,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             // Fallback: calcular localmente (apenas para os produtos da página)
             const faturamentoTotal = produtos.reduce((sum, p) => sum + (p.total_vendido || 0), 0);
             const abc = { A: 0, B: 0, C: 0 };
-            
+
             if (faturamentoTotal === 0) {
                 abc.C = produtos.length;
             } else {
@@ -82,7 +82,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 produtosComFaturamento.forEach(p => {
                     acumulado += p.faturamento;
                     const percentualAcumulado = acumulado / faturamentoTotal;
-                    
+
                     if (percentualAcumulado <= 0.80) abc.A++;
                     else if (percentualAcumulado <= 0.95) abc.B++;
                     else abc.C++;
@@ -98,14 +98,14 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             // Fallback: calcular localmente
             const hoje = new Date();
             const giro = { rapido: 0, normal: 0, lento: 0 };
-            
+
             produtos.forEach(p => {
                 if (!p.ultima_venda) {
                     giro.lento++;
                 } else {
                     const dataUltimaVenda = new Date(p.ultima_venda);
                     const diasDesdeVenda = Math.floor((hoje.getTime() - dataUltimaVenda.getTime()) / (1000 * 60 * 60 * 24));
-                    
+
                     if (diasDesdeVenda <= 7) {
                         giro.rapido++;
                     } else if (diasDesdeVenda <= 30) {
@@ -131,11 +131,11 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 // Esgotado
                 if (p.quantidade === 0) return true;
                 if (p.estoque_status === 'esgotado') return true;
-                
+
                 // Baixo estoque
                 if (p.estoque_status === 'baixo') return true;
                 if (p.quantidade <= (p.quantidade_minima || 0)) return true;
-                
+
                 return false;
             })
             .sort((a, b) => {
@@ -145,7 +145,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 return (a.quantidade || 0) - (b.quantidade || 0);
             })
             .slice(0, 10);
-        
+
         setProdutosCriticos(criticos);
     }, [produtos, stats]);
 
@@ -166,7 +166,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             {/* Cards Principais - Grid Responsivo */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 {/* Total de Produtos */}
-                <div 
+                <div
                     onClick={() => onCardClick('all')}
                     className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
                 >
@@ -180,7 +180,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Produtos Normais */}
-                <div 
+                <div
                     onClick={() => onCardClick('normal')}
                     className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
                 >
@@ -194,7 +194,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Baixo Estoque */}
-                <div 
+                <div
                     onClick={() => onCardClick('baixo')}
                     className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
                 >
@@ -208,7 +208,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Esgotados */}
-                <div 
+                <div
                     onClick={() => onCardClick('esgotado')}
                     className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 animate-pulse"
                 >
@@ -222,7 +222,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Valor Total */}
-                <div 
+                <div
                     onClick={() => onCardClick('valor')}
                     className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
                 >
@@ -236,7 +236,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Margem Média */}
-                <div 
+                <div
                     onClick={() => onCardClick('margem')}
                     className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
                 >
@@ -267,7 +267,16 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </p>
                         </div>
                     </div>
-                    
+
+                    <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
+                        <p className="text-xs text-blue-800 dark:text-blue-200">
+                            <strong>Nota:</strong> A classificação ABC ajuda a priorizar esforços.
+                            <br />• <strong>Classe A:</strong> Produtos vitais (80% do faturamento). Nunca devem faltar.
+                            <br />• <strong>Classe B:</strong> Intermediários (15%). Estoque moderado.
+                            <br />• <strong>Classe C:</strong> Menor impacto (5%). Evitar excesso de estoque.
+                        </p>
+                    </div>
+
                     <div className="space-y-4">
                         {/* Classe A */}
                         <div>
@@ -280,7 +289,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${percentualABC.A}%` }}
                                 />
@@ -301,7 +310,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-yellow-500 to-yellow-600 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${percentualABC.B}%` }}
                                 />
@@ -322,7 +331,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-red-500 to-red-600 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${percentualABC.C}%` }}
                                 />
@@ -349,7 +358,16 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </p>
                         </div>
                     </div>
-                    
+
+                    <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800">
+                        <p className="text-xs text-purple-800 dark:text-purple-200">
+                            <strong>Nota:</strong> Mede há quanto tempo o produto não é vendido.
+                            <br />• <strong>Rápido:</strong> Venda nos últimos 7 dias.
+                            <br />• <strong>Normal:</strong> Venda entre 8 e 30 dias.
+                            <br />• <strong>Lento:</strong> Sem vendas há mais de 30 dias.
+                        </p>
+                    </div>
+
                     <div className="space-y-4">
                         {/* Giro Rápido */}
                         <div>
@@ -365,7 +383,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${percentualGiro.rapido}%` }}
                                 />
@@ -389,7 +407,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-yellow-500 to-yellow-600 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${percentualGiro.normal}%` }}
                                 />
@@ -413,7 +431,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                <div 
+                                <div
                                     className="bg-gradient-to-r from-red-500 to-red-600 h-3 rounded-full transition-all duration-500"
                                     style={{ width: `${percentualGiro.lento}%` }}
                                 />
@@ -443,7 +461,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </p>
                         </div>
                     </div>
-                    
+
                     <div className="space-y-3">
                         {topProdutos.length === 0 ? (
                             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
@@ -451,7 +469,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </p>
                         ) : (
                             topProdutos.map((produto, index) => (
-                                <div 
+                                <div
                                     key={produto.id}
                                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                                 >
@@ -494,7 +512,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </p>
                         </div>
                     </div>
-                    
+
                     <div className="space-y-3">
                         {produtosCriticos.length === 0 ? (
                             <div className="text-center py-8">
@@ -510,7 +528,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </div>
                         ) : (
                             produtosCriticos.map((produto) => (
-                                <div 
+                                <div
                                     key={produto.id}
                                     className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
                                 >
@@ -526,11 +544,10 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                         </div>
                                     </div>
                                     <div className="text-right flex-shrink-0">
-                                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                            produto.estoque_status === 'esgotado'
-                                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                                        }`}>
+                                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${produto.estoque_status === 'esgotado'
+                                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                                            }`}>
                                             {produto.quantidade} un
                                         </span>
                                     </div>

@@ -301,35 +301,27 @@ def receber_pedido_compra():
                 
                 db.session.add(lote)
                 
-                # Criar movimentação de estoque
-                movimentacao = MovimentacaoEstoque(
-                    estabelecimento_id=user.estabelecimento_id,
-                    produto_id=produto.id,
-                    funcionario_id=user.id,
-                    pedido_compra_id=pedido.id,
-                    tipo='entrada',
-                    quantidade=quantidade_recebida,
-                    quantidade_anterior=produto.quantidade,
-                    quantidade_atual=produto.quantidade + quantidade_recebida,
-                    custo_unitario=item.preco_unitario,
-                    valor_total=item.preco_unitario * quantidade_recebida,
-                    motivo=f'Recebimento pedido {pedido.numero_pedido}',
-                    observacoes=f'Fornecedor: {pedido.fornecedor.nome_fantasia if pedido.fornecedor else "N/A"}, Lote: {numero_lote}'
-                )
-                
-                db.session.add(movimentacao)
-                
-                # Atualizar quantidade do produto (soma de todos os lotes)
-                produto.quantidade += quantidade_recebida
-                
-                # Recalcular preço de custo médio ponderado se necessário
+                # Recalcular preço de custo médio ponderado ANTES de atualizar o estoque
+                # para usar o estoque atual correto no cálculo
                 if hasattr(produto, 'recalcular_preco_custo_ponderado'):
                     produto.recalcular_preco_custo_ponderado(
-                        quantidade_recebida,
-                        item.preco_unitario,
+                        quantidade_entrada=quantidade_recebida,
+                        custo_unitario_entrada=item.preco_unitario,
                         funcionario_id=user.id,
                         motivo=f'Recebimento pedido {pedido.numero_pedido}'
                     )
+
+                # Usar método centralizado para movimentar estoque (atualiza qtd e cria histórico)
+                movimentacao = produto.movimentar_estoque(
+                    quantidade=quantidade_recebida,
+                    tipo='entrada',
+                    motivo=f'Recebimento pedido {pedido.numero_pedido}. Lote: {numero_lote}',
+                    usuario_id=user.id
+                )
+                
+                # Associar movimentação ao pedido de compra
+                movimentacao.pedido_compra_id = pedido.id
+                db.session.add(movimentacao)
             
             total_recebido += item.preco_unitario * quantidade_recebida
         

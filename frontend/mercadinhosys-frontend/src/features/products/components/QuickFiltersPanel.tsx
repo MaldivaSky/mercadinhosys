@@ -7,7 +7,6 @@ import {
     DollarSign,
     Package,
     Clock,
-    Users,
 } from 'lucide-react';
 
 interface QuickFiltersPanelProps {
@@ -22,6 +21,8 @@ interface QuickFiltersPanelProps {
         margem_baixa: number;
         repor_urgente: number;
         sem_fornecedor: number;
+        vencimento_proximo: number;
+        vencido: number;
     };
 }
 
@@ -48,6 +49,24 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
             description: 'Baixo faturamento',
         },
         {
+            id: 'vencimento_proximo',
+            label: 'Vence em 30 dias',
+            icon: <Clock className="w-4 h-4" />,
+            color: 'yellow',
+            count: counts.vencimento_proximo,
+            description: 'Atenção à validade',
+            pulse: counts.vencimento_proximo > 0,
+        },
+        {
+            id: 'vencido',
+            label: 'Vencidos',
+            icon: <AlertTriangle className="w-4 h-4" />,
+            color: 'red',
+            count: counts.vencido,
+            description: 'Remover do estoque',
+            pulse: counts.vencido > 0,
+        },
+        {
             id: 'giro_rapido',
             label: 'Vendendo Bem',
             icon: <Zap className="w-4 h-4" />,
@@ -72,14 +91,6 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
             description: 'Mais rentáveis',
         },
         {
-            id: 'margem_baixa',
-            label: 'Margem Baixa (<30%)',
-            icon: <AlertTriangle className="w-4 h-4" />,
-            color: 'yellow',
-            count: counts.margem_baixa,
-            description: 'Revisar preços',
-        },
-        {
             id: 'repor_urgente',
             label: 'Repor Urgente',
             icon: <Package className="w-4 h-4" />,
@@ -87,14 +98,6 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
             count: counts.repor_urgente,
             description: 'Esgotados ou baixo estoque',
             pulse: true,
-        },
-        {
-            id: 'sem_fornecedor',
-            label: 'Sem Fornecedor',
-            icon: <Users className="w-4 h-4" />,
-            color: 'gray',
-            count: counts.sem_fornecedor,
-            description: 'Cadastrar fornecedor',
         },
     ];
 
@@ -164,7 +167,7 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
                 {filters.map((filter) => {
                     const isActive = activeFilter === filter.id;
                     const colors = colorClasses[filter.color as keyof typeof colorClasses];
-                    
+
                     return (
                         <button
                             key={filter.id}

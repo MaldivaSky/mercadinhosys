@@ -728,6 +728,7 @@ class Produto(db.Model):
     descricao = db.Column(db.Text)
     marca = db.Column(db.String(50))
     fabricante = db.Column(db.String(100))  # Adicionado campo fabricante
+    tipo = db.Column(db.String(50))  # Tipo do produto: Higiene, Limpeza, Alimentos, etc.
 
     unidade_medida = db.Column(db.String(20), default="UN")
 
@@ -1152,6 +1153,7 @@ class Produto(db.Model):
             "descricao": self.descricao,
             "marca": self.marca,
             "fabricante": self.fabricante,
+            "tipo": self.tipo,
             "unidade_medida": self.unidade_medida,
             "categoria": self.categoria.nome if self.categoria else None,
             "categoria_id": self.categoria_id,
