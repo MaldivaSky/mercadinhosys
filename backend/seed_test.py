@@ -257,7 +257,7 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
         },
     ]
 
-    # FUNCIONÁRIOS DEMITIDOS (25) - com histórico realista
+    # FUNCIONÁRIOS DEMITIDOS (6) - com histórico realista
     ex_funcionarios_data = [
         ("Roberto Oliveira", "345.678.901-22", date(1980, 6, 1), date.today() - timedelta(days=450), "Supervisor de Vendas", "Pediu demissão"),
         ("Fernanda Costa", "678.901.234-55", date(1988, 1, 10), date.today() - timedelta(days=200), "Operador de Caixa", "Demitida - faltas"),
@@ -265,25 +265,6 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
         ("Lucas Ferreira", "890.123.456-77", date(1994, 2, 1), date.today() - timedelta(days=550), "Repositor", "Demitido - desempenho"),
         ("Carla Rodrigues", "901.234.567-88", date(1991, 11, 15), date.today() - timedelta(days=100), "Operador de Caixa", "Pediu demissão"),
         ("André Souza", "012.345.678-99", date(1996, 1, 20), date.today() - timedelta(days=250), "Auxiliar Geral", "Demitido - experiência"),
-        ("Juliana Pereira", "111.222.333-44", date(1989, 8, 10), date.today() - timedelta(days=600), "Operador de Caixa", "Pediu demissão"),
-        ("Marcos Lima", "222.333.444-55", date(1987, 5, 20), date.today() - timedelta(days=750), "Repositor", "Demitido - conflitos"),
-        ("Sandra Martins", "333.444.555-66", date(1990, 12, 1), date.today() - timedelta(days=500), "Auxiliar Admin", "Pediu demissão"),
-        ("Carlos Eduardo", "444.555.666-77", date(1985, 6, 15), date.today() - timedelta(days=900), "Supervisor", "Demitido - reestruturação"),
-        ("Patrícia Lima", "555.666.777-88", date(1993, 3, 10), date.today() - timedelta(days=350), "Operador de Caixa", "Pediu demissão"),
-        ("Ricardo Santos", "666.777.888-99", date(1988, 8, 15), date.today() - timedelta(days=650), "Repositor", "Demitido - disciplina"),
-        ("Camila Oliveira", "777.888.999-00", date(1997, 6, 20), date.today() - timedelta(days=150), "Auxiliar Limpeza", "Pediu demissão"),
-        ("Bruno Silva", "888.999.000-11", date(1991, 11, 5), date.today() - timedelta(days=400), "Operador de Caixa", "Demitido - erro caixa"),
-        ("Larissa Costa", "999.000.111-22", date(1999, 2, 14), date.today() - timedelta(days=50), "Repositor", "Pediu demissão"),
-        ("Diego Ferreira", "000.111.222-33", date(1986, 9, 20), date.today() - timedelta(days=800), "Auxiliar Geral", "Demitido - faltas"),
-        ("Amanda Rodrigues", "111.222.333-45", date(1994, 4, 12), date.today() - timedelta(days=200), "Operador de Caixa", "Pediu demissão"),
-        ("Thiago Almeida", "222.333.444-56", date(1989, 1, 25), date.today() - timedelta(days=700), "Repositor", "Demitido - rendimento"),
-        ("Vanessa Souza", "333.444.555-67", date(1992, 7, 30), date.today() - timedelta(days=300), "Auxiliar Admin", "Pediu demissão"),
-        ("Rafael Martins", "444.555.666-78", date(1995, 9, 15), date.today() - timedelta(days=150), "Operador de Caixa", "Demitido - cliente"),
-        ("Gabriela Pereira", "555.666.777-89", date(1998, 5, 8), date.today() - timedelta(days=80), "Repositor", "Pediu demissão"),
-        ("Felipe Lima", "666.777.888-90", date(1990, 12, 20), date.today() - timedelta(days=450), "Auxiliar Estoque", "Demitido - negligência"),
-        ("Natália Santos", "777.888.999-01", date(1996, 8, 3), date.today() - timedelta(days=200), "Operador de Caixa", "Pediu demissão"),
-        ("Gustavo Oliveira", "888.999.000-12", date(1988, 11, 12), date.today() - timedelta(days=650), "Repositor", "Demitido - pontualidade"),
-        ("Priscila Silva", "999.000.111-23", date(1997, 3, 22), date.today() - timedelta(days=100), "Auxiliar Limpeza", "Pediu demissão"),
     ]
 
     funcionarios = []
@@ -372,7 +353,7 @@ def seed_funcionarios(fake: Faker, estabelecimento_id: int) -> List[Funcionario]
 
     print(f"✅ {len(funcionarios_ativos_data)} funcionários ativos criados")
     print(f"✅ {len(ex_funcionarios_data)} ex-funcionários (histórico) criados")
-    print(f"✅ Total: {len(funcionarios)} registros de RH")
+    print(f"✅ Total: {len(funcionarios_ativos_data) + len(ex_funcionarios_data)} registros de RH")
     return funcionarios
 
 
@@ -575,184 +556,248 @@ def seed_produtos(
     """Cria produtos realistas com categorias."""
     print("📦 Criando produtos...")
 
-    produtos_data = [
-        # Bebidas
-        (
-            "Coca-Cola 2L",
-            "Bebidas",
-            "COC-001",
-            "7894900010015",
-            "Coca-Cola",
-            6.50,
-            10.90,
-        ),
-        (
-            "Guaraná Antarctica 2L",
-            "Bebidas",
-            "GUA-001",
-            "7891991000853",
-            "Ambev",
-            5.80,
-            9.90,
-        ),
-        (
-            "Água Mineral 500ml",
-            "Bebidas",
-            "AGU-001",
-            "7892840822941",
-            "Crystal",
-            1.20,
-            2.50,
-        ),
-        (
-            "Suco Del Vale 1L",
-            "Bebidas",
-            "SCO-001",
-            "7891098000251",
-            "Del Valle",
-            3.50,
-            6.90,
-        ),
-        # Mercearia
-        (
-            "Arroz Tio João 5kg",
-            "Mercearia",
-            "ARR-001",
-            "7896006741025",
-            "Tio João",
-            22.00,
-            29.90,
-        ),
-        (
-            "Feijão Carioca 1kg",
-            "Mercearia",
-            "FEI-001",
-            "7896079001015",
-            "Camil",
-            6.50,
-            9.90,
-        ),
-        (
-            "Macarrão Espaguete 500g",
-            "Mercearia",
-            "MAC-001",
-            "7896051110223",
-            "Renata",
-            3.20,
-            5.90,
-        ),
-        (
-            "Óleo de Soja 900ml",
-            "Mercearia",
-            "OLE-001",
-            "7898909987042",
-            "Liza",
-            5.90,
-            8.90,
-        ),
-        # Frios
-        (
-            "Queijo Mussarela 1kg",
-            "Frios e Laticínios",
-            "QUE-001",
-            "7891000055502",
-            "Itambé",
-            28.00,
-            42.90,
-        ),
-        (
-            "Presunto Sadia 500g",
-            "Frios e Laticínios",
-            "PRE-001",
-            "7893000415101",
-            "Sadia",
-            12.50,
-            19.90,
-        ),
-        (
-            "Iogurte Natural 1L",
-            "Frios e Laticínios",
-            "IOG-001",
-            "7891072001308",
-            "Nestlé",
-            8.90,
-            14.90,
-        ),
-        # Carnes
-        ("Carne Bovina Alcatra 1kg", "Carnes", "CAR-001", None, "Friboi", 38.00, 59.90),
-        ("Peito de Frango 1kg", "Carnes", "FRN-001", None, "Seara", 15.90, 24.90),
-        ("Linguiça Toscana 500g", "Carnes", "LIN-001", None, "Perdigão", 11.90, 18.90),
-        # Higiene
-        (
-            "Sabonete Dove 90g",
-            "Higiene Pessoal",
-            "SAB-001",
-            "7891150037605",
-            "Dove",
-            2.50,
-            4.90,
-        ),
-        (
-            "Shampoo Clear 200ml",
-            "Higiene Pessoal",
-            "SHA-001",
-            "7891150054664",
-            "Clear",
-            12.90,
-            22.90,
-        ),
-        (
-            "Creme Dental Colgate 90g",
-            "Higiene Pessoal",
-            "CRE-001",
-            "7891021008203",
-            "Colgate",
-            3.90,
-            7.90,
-        ),
-        # Limpeza
-        (
-            "Detergente Ypê 500ml",
-            "Limpeza",
-            "DET-001",
-            "7891024113405",
-            "Ypê",
-            1.90,
-            3.90,
-        ),
-        (
-            "Água Sanitária Qboa 1L",
-            "Limpeza",
-            "SAN-001",
-            "7896094908015",
-            "Qboa",
-            4.90,
-            8.90,
-        ),
-        (
-            "Desinfetante Veja 500ml",
-            "Limpeza",
-            "DES-001",
-            "7891024023117",
-            "Veja",
-            6.90,
-            12.90,
-        ),
-        # Padaria
-        ("Pão Francês kg", "Padaria", "PAO-001", None, None, 8.90, 15.90),
-        (
-            "Biscoito Maizena 400g",
-            "Padaria",
-            "BIS-001",
-            "7891000315504",
-            "Marilan",
-            3.90,
-            7.90,
-        ),
-        # Hortifrúti
-        ("Banana Prata kg", "Hortifrúti", "BAN-001", None, None, 3.90, 7.90),
-        ("Tomate kg", "Hortifrúti", "TOM-001", None, None, 4.90, 9.90),
-        ("Alface Un", "Hortifrúti", "ALF-001", None, None, 1.50, 3.50),
+    # PRODUTOS EXPANDIDOS - Mercado Brasileiro Real (150+ produtos)
+    produtos_reais = [
+        # ========== BEBIDAS (20 produtos) ==========
+        ("Coca-Cola 2L", "Bebidas", "COC-001", "7894900010015", "Coca-Cola", 6.50, 10.90),
+        ("Guaraná Antarctica 2L", "Bebidas", "GUA-001", "7891991000853", "Ambev", 5.80, 9.90),
+        ("Pepsi 2L", "Bebidas", "PEP-001", "7894900530001", "PepsiCo", 6.20, 10.50),
+        ("Fanta Laranja 2L", "Bebidas", "FAN-001", "7894900011005", "Coca-Cola", 6.00, 9.90),
+        ("Sprite 2L", "Bebidas", "SPR-001", "7894900012002", "Coca-Cola", 6.00, 9.90),
+        ("Água Mineral Crystal 500ml", "Bebidas", "AGU-001", "7892840822941", "Crystal", 1.20, 2.50),
+        ("Suco Del Valle Laranja 1L", "Bebidas", "SUC-001", "7891098000251", "Del Valle", 3.50, 6.90),
+        ("Suco Del Valle Uva 1L", "Bebidas", "SUC-002", "7891098000268", "Del Valle", 3.50, 6.90),
+        ("Chá Matte Leão 1.5L", "Bebidas", "CHA-001", "7896005800015", "Matte Leão", 4.20, 7.50),
+        ("Energético Red Bull 250ml", "Bebidas", "ENE-001", "9002490100015", "Red Bull", 8.50, 14.90),
+        ("Cerveja Skol Lata 350ml", "Bebidas", "CER-001", "7891991010856", "Ambev", 2.80, 4.50),
+        ("Cerveja Brahma Lata 350ml", "Bebidas", "CER-002", "7891991010863", "Ambev", 2.80, 4.50),
+        ("Vinho Tinto Salton 750ml", "Bebidas", "VIN-001", "7896007200015", "Salton", 22.00, 35.90),
+        ("Água de Coco Ducoco 1L", "Bebidas", "AGC-001", "7896094906015", "Ducoco", 5.50, 9.90),
+        ("Suco Tang Laranja 25g", "Bebidas", "TAN-001", "7622300862015", "Mondelez", 1.20, 2.50),
+        ("Refrigerante Dolly Guaraná 2L", "Bebidas", "DOL-001", "7896094901015", "Dolly", 4.50, 7.50),
+        ("Achocolatado Toddynho 200ml", "Bebidas", "TOD-001", "7622300862022", "PepsiCo", 2.80, 4.90),
+        ("Leite Fermentado Yakult 480ml", "Bebidas", "YAK-001", "7891095200015", "Yakult", 6.50, 11.90),
+        ("Isotônico Gatorade 500ml", "Bebidas", "ISO-001", "7894900530018", "PepsiCo", 4.20, 7.50),
+        ("Café Solúvel Nescafé 50g", "Bebidas", "CAF-SOL-001", "7891000100015", "Nestlé", 8.50, 14.90),
+
+        # ========== MERCEARIA (35 produtos) ==========
+        ("Arroz Tio João 5kg", "Mercearia", "ARR-001", "7896006741025", "Tio João", 24.00, 32.90),
+        ("Arroz Camil 5kg", "Mercearia", "ARR-002", "7896006700000", "Camil", 23.50, 31.90),
+        ("Feijão Carioca Camil 1kg", "Mercearia", "FEI-001", "7896079001015", "Camil", 7.50, 11.90),
+        ("Feijão Preto Kicaldo 1kg", "Mercearia", "FEI-002", "7896079000000", "Kicaldo", 8.50, 12.90),
+        ("Macarrão Renata Espaguete 500g", "Mercearia", "MAC-001", "7896051110223", "Renata", 3.50, 6.90),
+        ("Óleo de Soja Liza 900ml", "Mercearia", "OLE-001", "7898909987042", "Liza", 6.50, 9.90),
+        ("Açúcar União 1kg", "Mercearia", "ACU-001", "7891000053508", "União", 4.50, 6.90),
+        ("Café Pilão 500g", "Mercearia", "CAF-001", "7896005800000", "Pilão", 14.50, 22.90),
+        ("Sal Refinado Lebre 1kg", "Mercearia", "SAL-001", "7896000000000", "Distribuidor Local 2", 2.50, 4.20),
+        ("Milho Pipoca Yoki 500g", "Mercearia", "PIPO-001", "7891000000000", "Yoki", 4.50, 7.80),
+        ("Maionese Hellmann's 500g", "Mercearia", "MAIO-001", "7891000000001", "Unilever", 8.50, 13.90),
+        ("Ketchup Heinz 397g", "Mercearia", "KET-001", "7891000000002", "Heinz", 10.50, 16.90),
+        ("Leite Condensado Moça 395g", "Mercearia", "LEIT-001", "7891000000003", "Nestlé", 5.50, 8.90),
+        ("Creme de Leite Nestlé 200g", "Mercearia", "CREM-001", "7891000000004", "Nestlé", 3.50, 5.90),
+        ("Chocolate em Pó Nescau 400g", "Mercearia", "CHOC-001", "7891000000005", "Nestlé", 7.50, 11.90),
+        ("Biscoito Cream Cracker Vitarella", "Mercearia", "BIS-002", "7891000000006", "M. Dias Branco", 3.50, 5.80),
+        ("Macarrão Instantâneo Nissin", "Mercearia", "MIO-001", "7891000000007", "Distribuidor Local 5", 1.50, 2.90),
+        ("Farinha de Trigo Dona Benta 1kg", "Mercearia", "FAR-001", "7896006700017", "J. Macêdo", 5.50, 8.90),
+        ("Extrato de Tomate Elefante 340g", "Mercearia", "EXT-001", "7896036090015", "Cargill", 3.20, 5.50),
+        ("Molho de Tomate Pomarola 520g", "Mercearia", "MOL-001", "7891150000018", "Unilever", 4.50, 7.50),
+        ("Vinagre Castelo 750ml", "Mercearia", "VIN-002", "7896094900019", "Castelo", 3.80, 6.50),
+        ("Azeite Português Andorinha 500ml", "Mercearia", "AZE-001", "5601012011015", "Sovena", 18.50, 29.90),
+        ("Sardinha Gomes da Costa 125g", "Mercearia", "SAR-001", "7891167011015", "Gomes da Costa", 5.50, 9.50),
+        ("Atum Ralado Gomes da Costa 170g", "Mercearia", "ATU-001", "7891167012015", "Gomes da Costa", 6.50, 11.90),
+        ("Ervilha Quero 200g", "Mercearia", "ERV-001", "7896036091015", "Cargill", 2.80, 4.90),
+        ("Milho Verde Quero 200g", "Mercearia", "MIL-001", "7896036092015", "Cargill", 2.80, 4.90),
+        ("Catchup Heinz 200g", "Mercearia", "CAT-001", "7896036093015", "Heinz", 4.50, 7.50),
+        ("Mostarda Hemmer 200g", "Mercearia", "MOS-001", "7896036094015", "Hemmer", 3.50, 5.90),
+        ("Gelatina Royal Morango 85g", "Mercearia", "GEL-001", "7622300862029", "Mondelez", 2.20, 3.90),
+        ("Fermento Royal 100g", "Mercearia", "FER-001", "7622300862036", "Mondelez", 4.50, 7.50),
+        ("Aveia Quaker 500g", "Mercearia", "AVE-001", "7894900530025", "PepsiCo", 6.50, 11.50),
+        ("Granola Nutry 1kg", "Mercearia", "GRA-001", "7896006700024", "Nutry", 12.50, 19.90),
+        ("Amendoim Dori 500g", "Mercearia", "AME-001", "7896058200015", "Dori", 8.50, 14.90),
+        ("Pipoca Microondas Yoki 100g", "Mercearia", "PIP-002", "7891000000015", "Yoki", 3.50, 5.90),
+        ("Tempero Knorr Galinha 1kg", "Mercearia", "TEM-001", "7891150000025", "Knorr", 8.50, 14.50),
+
+        # ========== FRIOS E LATICÍNIOS (15 produtos) ==========
+        ("Leite Integral Italac 1L", "Frios e Laticínios", "LEI-001", "7898080640000", "Italac", 4.20, 6.50),
+        ("Queijo Mussarela Fatiado kg", "Frios e Laticínios", "QUE-001", "7891000055502", "Itambé", 35.00, 59.90),
+        ("Presunto Cozido Sadia kg", "Frios e Laticínios", "PRE-001", "7893000415101", "Sadia", 25.00, 45.90),
+        ("Manteiga Aviação 200g", "Frios e Laticínios", "MAN-001", "7896051130000", "Aviação", 12.00, 19.90),
+        ("Requeijão Vigor 200g", "Frios e Laticínios", "REQ-001", "7891000100000", "Vigor", 7.50, 12.90),
+        ("Iogurte Nestlé Morango 1L", "Frios e Laticínios", "IOG-001", "7891072001308", "Nestlé", 9.90, 16.90),
+        ("Iogurte Danone Natural 170g", "Frios e Laticínios", "IOG-002", "7891000000008", "Danone", 2.20, 3.80),
+        ("Margarina Qualy 500g", "Frios e Laticínios", "MAR-001", "7891000000009", "BRF", 6.50, 10.90),
+        ("Mortadela Perdigão 1kg", "Frios e Laticínios", "MOR-001", "7891000000010", "Perdigão", 15.50, 24.90),
+        ("Queijo Prato Itambé kg", "Frios e Laticínios", "QUE-002", "7891000000011", "Itambé", 38.50, 62.00),
+        ("Cream Cheese Philadelphia 150g", "Frios e Laticínios", "CRE-002", "7622300862043", "Mondelez", 8.50, 14.90),
+        ("Leite Condensado Moça 395g", "Frios e Laticínios", "LEI-002", "7891000100022", "Nestlé", 5.50, 8.90),
+        ("Salsicha Hot Dog Sadia 500g", "Frios e Laticínios", "SAL-002", "7893000415118", "Sadia", 8.50, 14.50),
+        ("Bacon Fatiado Seara 250g", "Frios e Laticínios", "BAC-001", "7894904300015", "Seara", 12.50, 19.90),
+        ("Queijo Coalho 500g", "Frios e Laticínios", "QUE-003", "7891000000018", "Tirolez", 18.50, 29.90),
+
+        # ========== HIGIENE PESSOAL (20 produtos) ==========
+        ("Sabonete Dove Original 90g", "Higiene Pessoal", "SAB-001", "7891150037605", "Dove", 3.50, 5.90),
+        ("Pasta de Dente Colgate Total 12", "Higiene Pessoal", "PAS-001", "7891024035000", "Colgate", 6.50, 12.90),
+        ("Papel Higiênico Neve 12un", "Higiene Pessoal", "PAP-001", "7891150000000", "Neve", 18.00, 29.90),
+        ("Shampoo Pantene 400ml", "Higiene Pessoal", "SHA-002", "7891000000012", "P&G", 15.50, 25.90),
+        ("Desodorante Rexona Aerosol", "Higiene Pessoal", "DESO-001", "7891000000013", "Unilever", 12.50, 18.90),
+        ("Escova de Dente Oral-B", "Higiene Pessoal", "ESC-001", "7891000000014", "P&G", 8.50, 14.90),
+        ("Fio Dental Colgate", "Higiene Pessoal", "FIO-001", "7891000000015", "Colgate", 5.50, 9.90),
+        ("Absorvente Always", "Higiene Pessoal", "ABS-001", "7891000000016", "P&G", 7.50, 12.90),
+        ("Condicionador Seda 325ml", "Higiene Pessoal", "CON-001", "7891150000032", "Unilever", 12.50, 19.90),
+        ("Sabonete Líquido Protex 250ml", "Higiene Pessoal", "SAB-002", "7891024000033", "Colgate", 8.50, 14.50),
+        ("Creme Dental Sensodyne 90g", "Higiene Pessoal", "PAS-002", "7891024000040", "GSK", 12.50, 21.90),
+        ("Lenço Umedecido Huggies 48un", "Higiene Pessoal", "LEN-001", "7896004700015", "Kimberly", 9.50, 15.90),
+        ("Fralda Pampers M 36un", "Higiene Pessoal", "FRA-002", "7891000000023", "P&G", 45.00, 69.90),
+        ("Aparelho de Barbear Gillette", "Higiene Pessoal", "APA-001", "7891000000024", "Gillette", 18.50, 29.90),
+        ("Creme de Barbear Gillette 200g", "Higiene Pessoal", "CRE-003", "7891000000025", "Gillette", 12.50, 19.90),
+        ("Talco Johnson's 200g", "Higiene Pessoal", "TAL-001", "7891010000015", "Johnson's", 8.50, 14.50),
+        ("Sabonete Líquido Dove 250ml", "Higiene Pessoal", "SAB-003", "7891150037612", "Dove", 12.50, 19.90),
+        ("Desodorante Nivea Roll-on 50ml", "Higiene Pessoal", "DESO-002", "4005900000015", "Nivea", 9.50, 15.90),
+        ("Shampoo Clear Men 400ml", "Higiene Pessoal", "SHA-003", "7891150054671", "Clear", 15.50, 25.90),
+        ("Creme Hidratante Nivea 200ml", "Higiene Pessoal", "CRE-004", "4005900000022", "Nivea", 14.50, 23.90),
+
+        # ========== LIMPEZA (15 produtos) ==========
+        ("Detergente Ypê Neutro 500ml", "Limpeza", "DET-001", "7891024113405", "Ypê", 2.20, 3.90),
+        ("Sabão em Pó Omo 800g", "Limpeza", "OMO-001", "7891150000001", "Omo", 12.50, 19.90),
+        ("Amaciante Confort 1L", "Limpeza", "AMA-001", "7891150000002", "Confort", 14.50, 22.90),
+        ("Água Sanitária Qboa 1L", "Limpeza", "SAN-001", "7896094908015", "Qboa", 5.50, 8.90),
+        ("Desinfetante Pinho Sol 500ml", "Limpeza", "DES-001", "7891024000057", "Pinho Sol", 6.50, 10.90),
+        ("Esponja de Aço Bombril 8un", "Limpeza", "ESP-001", "7896003700015", "Bombril", 3.50, 5.90),
+        ("Sabão em Barra Ypê 5un", "Limpeza", "SAB-004", "7891024113412", "Ypê", 8.50, 13.90),
+        ("Limpador Veja Multiuso 500ml", "Limpeza", "LIM-001", "7891150000064", "Veja", 7.50, 12.50),
+        ("Alvejante Ypê 1L", "Limpeza", "ALV-001", "7891024113429", "Ypê", 6.50, 10.90),
+        ("Sabão Líquido Omo 500ml", "Limpeza", "SAB-005", "7891150000071", "Omo", 14.50, 23.90),
+        ("Lã de Aço Assolan 8un", "Limpeza", "LAA-001", "7896003700022", "Assolan", 3.50, 5.90),
+        ("Detergente Ypê Limão 500ml", "Limpeza", "DET-002", "7891024113436", "Ypê", 2.20, 3.90),
+        ("Desinfetante Lysoform 1L", "Limpeza", "DES-002", "7891024000064", "Lysoform", 12.50, 19.90),
+        ("Saco de Lixo 100L 10un", "Limpeza", "SAC-001", "7896003700039", "Embalixo", 8.50, 14.50),
+        ("Pano de Chão Perfex 5un", "Limpeza", "PAN-001", "7896003700046", "Perfex", 6.50, 10.90),
+
+        # ========== CARNES (8 produtos) ==========
+        ("Contra Filé Bovino kg", "Carnes", "CAR-001", None, "Friboi", 45.00, 69.90),
+        ("Filé de Peito Frango kg", "Carnes", "FRA-001", None, "Seara", 18.00, 28.90),
+        ("Linguiça Toscana Na Brasa kg", "Carnes", "LIN-001", None, "Perdigão", 16.00, 24.90),
+        ("Picanha Bovina kg", "Carnes", "CAR-002", None, "Friboi", 55.00, 89.90),
+        ("Costela Bovina kg", "Carnes", "CAR-003", None, "Friboi", 28.00, 45.90),
+        ("Coxa e Sobrecoxa Frango kg", "Carnes", "FRA-003", None, "Seara", 12.00, 19.90),
+        ("Carne Moída kg", "Carnes", "CAR-004", None, "Friboi", 22.00, 35.90),
+        ("Linguiça Calabresa kg", "Carnes", "LIN-002", None, "Perdigão", 14.00, 22.90),
+
+        # ========== HORTIFRÚTI (12 produtos) ==========
+        ("Banana Prata kg", "Hortifrúti", "BAN-001", None, "Distribuidor Local 1", 4.50, 8.90),
+        ("Tomate Italiano kg", "Hortifrúti", "TOM-001", None, "Distribuidor Local 2", 6.50, 12.90),
+        ("Batata Lavada kg", "Hortifrúti", "BAT-001", None, "Distribuidor Local 3", 4.50, 8.90),
+        ("Cebola kg", "Hortifrúti", "CEB-001", None, "Distribuidor Local 4", 3.50, 6.90),
+        ("Ovos Brancos Dúzia", "Hortifrúti", "OVO-001", None, "Distribuidor Local 5", 8.00, 14.90),
+        ("Maçã Argentina kg", "Hortifrúti", "MAC-002", None, "Distribuidor Local 1", 8.50, 15.90),
+        ("Laranja Pera kg", "Hortifrúti", "LAR-001", None, "Distribuidor Local 1", 4.50, 8.50),
+        ("Alface Crespa un", "Hortifrúti", "ALF-001", None, "Distribuidor Local 2", 2.50, 4.90),
+        ("Cenoura kg", "Hortifrúti", "CEN-001", None, "Distribuidor Local 3", 3.50, 6.50),
+        ("Limão Taiti kg", "Hortifrúti", "LIM-HOR-001", None, "Distribuidor Local 4", 4.50, 8.50),
+        ("Abacaxi Pérola un", "Hortifrúti", "ABA-001", None, "Distribuidor Local 1", 5.50, 9.90),
+        ("Melancia kg", "Hortifrúti", "MEL-001", None, "Distribuidor Local 1", 2.50, 4.90),
+
+        # ========== CONGELADOS (10 produtos) ==========
+        ("Pizza Sadia Mussarela 460g", "Congelados", "PIZ-001", "7893000415125", "Sadia", 12.50, 19.90),
+        ("Lasanha Sadia Bolonhesa 600g", "Congelados", "LAS-001", "7893000415132", "Sadia", 18.50, 29.90),
+        ("Nuggets Sadia 300g", "Congelados", "NUG-001", "7893000415149", "Sadia", 14.50, 22.90),
+        ("Batata Pré-Frita McCain 1.5kg", "Congelados", "BAT-002", "7896004700022", "McCain", 16.50, 26.90),
+        ("Sorvete Kibon Napolitano 2L", "Congelados", "SOR-001", "7891150000088", "Kibon", 22.50, 35.90),
+        ("Hambúrguer Seara 672g", "Congelados", "HAM-001", "7894904300022", "Seara", 18.50, 29.90),
+        ("Polpa de Açaí 1kg", "Congelados", "POL-001", "7896004700039", "Distribuidor Local 6", 24.50, 39.90),
+        ("Empanado de Frango Sadia 300g", "Congelados", "EMP-001", "7893000415156", "Sadia", 16.50, 26.90),
+        ("Pão de Queijo Forno de Minas 400g", "Congelados", "PAO-002", "7896004700046", "Forno de Minas", 12.50, 19.90),
+        ("Strogonoff Perdigão 500g", "Congelados", "STR-001", "7891000000030", "Perdigão", 18.50, 29.90),
+
+        # ========== PADARIA (8 produtos) ==========
+        ("Pão Francês kg", "Padaria", "PAO-001", None, "Distribuidor Local 6", 12.00, 18.90),
+        ("Biscoito Trakinas", "Padaria", "BIS-001", "7896000000001", "Mondelez", 3.50, 5.90),
+        ("Bolo Pronto Pullman 250g", "Padaria", "BOL-001", "7896004700053", "Pullman", 8.50, 14.50),
+        ("Pão de Forma Pullman 500g", "Padaria", "PAO-003", "7896004700060", "Pullman", 6.50, 10.90),
+        ("Pão Integral Wickbold 400g", "Padaria", "PAO-004", "7891962000015", "Wickbold", 8.50, 14.50),
+        ("Torrada Marilan 160g", "Padaria", "TOR-001", "7896003700053", "Marilan", 5.50, 9.50),
+        ("Bisnaguinha Seven Boys 300g", "Padaria", "BIS-003", "7896004700077", "Seven Boys", 6.50, 10.90),
+        ("Pão de Queijo Congelado 1kg", "Padaria", "PAO-005", "7896004700084", "Forno de Minas", 18.50, 29.90),
+        
+        # ========== PRODUTOS ADICIONAIS PARA COMPLETAR 200 (58 produtos) ==========
+        
+        # Bebidas Adicionais (10)
+        ("Suco Maguary Laranja 1L", "Bebidas", "SUC-003", "7896004700091", "Maguary", 4.50, 7.90),
+        ("Refrigerante Fanta Uva 2L", "Bebidas", "FAN-002", "7894900012019", "Coca-Cola", 6.00, 9.90),
+        ("Água Tônica Schweppes 350ml", "Bebidas", "AGU-002", "7894900530032", "Schweppes", 3.50, 5.90),
+        ("Cerveja Itaipava Lata 350ml", "Bebidas", "CER-003", "7896004700107", "Petrópolis", 2.50, 4.20),
+        ("Leite Longa Vida Parmalat 1L", "Bebidas", "LEI-003", "7896004700114", "Parmalat", 4.50, 7.20),
+        ("Achocolatado Nescau 200ml", "Bebidas", "ACH-002", "7891000100039", "Nestlé", 2.80, 4.90),
+        ("Suco Ades Laranja 1L", "Bebidas", "SUC-004", "7896004700121", "Unilever", 5.50, 9.50),
+        ("Refrigerante Guaraná Kuat 2L", "Bebidas", "GUA-002", "7894900012026", "Coca-Cola", 5.50, 9.50),
+        ("Água de Coco Sococo 1L", "Bebidas", "AGC-002", "7896004700138", "Sococo", 5.50, 9.90),
+        ("Cerveja Heineken Long Neck 330ml", "Bebidas", "CER-004", "8715428002391", "Heineken", 4.50, 7.90),
+        
+        # Mercearia Adicional (15)
+        ("Biscoito Oreo 144g", "Mercearia", "BIS-004", "7622300862050", "Mondelez", 4.50, 7.50),
+        ("Biscoito Passatempo 150g", "Mercearia", "BIS-005", "7896004700145", "Nestlé", 3.50, 5.90),
+        ("Wafer Bauducco 140g", "Mercearia", "WAF-001", "7896004700152", "Bauducco", 3.80, 6.50),
+        ("Achocolatado em Pó Toddy 400g", "Mercearia", "ACH-003", "7894900530049", "PepsiCo", 7.50, 12.50),
+        ("Leite em Pó Ninho 400g", "Mercearia", "LEI-004", "7891000100046", "Nestlé", 18.50, 29.90),
+        ("Cereal Sucrilhos Kellogg's 320g", "Mercearia", "CER-005", "7896004700169", "Kellogg's", 12.50, 19.90),
+        ("Panetone Bauducco 500g", "Mercearia", "PAN-002", "7896004700176", "Bauducco", 15.50, 24.90),
+        ("Goiabada Cascão 600g", "Mercearia", "GOI-001", "7896004700183", "Distribuidor Local 7", 8.50, 14.50),
+        ("Doce de Leite Nestlé 400g", "Mercearia", "DOC-001", "7891000100053", "Nestlé", 9.50, 15.90),
+        ("Mel Puro 500g", "Mercearia", "MEL-002", "7896004700190", "Distribuidor Local 8", 22.50, 35.90),
+        ("Castanha de Caju 200g", "Mercearia", "CAS-001", "7896004700206", "Distribuidor Local 9", 18.50, 29.90),
+        ("Amendoim Japonês 150g", "Mercearia", "AME-002", "7896058200022", "Dori", 5.50, 9.50),
+        ("Barra de Cereal Nutry 3un", "Mercearia", "BAR-001", "7896006700031", "Nutry", 4.50, 7.50),
+        ("Sopa Knorr Galinha 68g", "Mercearia", "SOP-001", "7891150000095", "Knorr", 3.50, 5.90),
+        ("Tempero Sazon 60g", "Mercearia", "TEM-002", "7891150000101", "Knorr", 2.80, 4.90),
+        
+        # Frios e Laticínios Adicional (8)
+        ("Iogurte Activia 170g", "Frios e Laticínios", "IOG-003", "7891000000037", "Danone", 2.50, 4.20),
+        ("Petit Suisse Danoninho 320g", "Frios e Laticínios", "PET-001", "7891000000044", "Danone", 8.50, 14.50),
+        ("Queijo Parmesão Ralado 50g", "Frios e Laticínios", "QUE-004", "7891000000051", "Kraft", 5.50, 9.50),
+        ("Requeijão Catupiry 200g", "Frios e Laticínios", "REQ-002", "7896004700213", "Catupiry", 9.50, 15.90),
+        ("Manteiga com Sal Aviação 200g", "Frios e Laticínios", "MAN-002", "7896051130017", "Aviação", 12.50, 20.50),
+        ("Leite Fermentado Chamyto 480ml", "Frios e Laticínios", "LEI-005", "7891000000068", "Nestlé", 6.50, 11.50),
+        ("Queijo Minas Frescal 500g", "Frios e Laticínios", "QUE-005", "7891000000075", "Tirolez", 16.50, 26.90),
+        ("Peito de Peru Sadia 200g", "Frios e Laticínios", "PEI-001", "7893000415163", "Sadia", 14.50, 23.90),
+        
+        # Higiene Pessoal Adicional (8)
+        ("Sabonete Líquido Palmolive 250ml", "Higiene Pessoal", "SAB-006", "7891024000071", "Colgate", 8.50, 14.50),
+        ("Shampoo Elseve 400ml", "Higiene Pessoal", "SHA-004", "7896004700220", "L'Oréal", 16.50, 27.90),
+        ("Condicionador Pantene 400ml", "Higiene Pessoal", "CON-002", "7891000000082", "P&G", 15.50, 25.90),
+        ("Creme Dental Sensodyne Branqueador 90g", "Higiene Pessoal", "PAS-003", "7891024000088", "GSK", 14.50, 23.90),
+        ("Enxaguante Bucal Listerine 500ml", "Higiene Pessoal", "ENX-001", "7891024000095", "Johnson's", 18.50, 29.90),
+        ("Sabonete Líquido Nivea 250ml", "Higiene Pessoal", "SAB-007", "4005900000039", "Nivea", 12.50, 19.90),
+        ("Desodorante Dove Roll-on 50ml", "Higiene Pessoal", "DESO-003", "7891150037629", "Dove", 9.50, 15.90),
+        ("Creme para Pentear Seda 300ml", "Higiene Pessoal", "CRE-005", "7891150000118", "Unilever", 14.50, 23.90),
+        
+        # Limpeza Adicional (5)
+        ("Sabão Líquido Ypê 500ml", "Limpeza", "SAB-LIM-001", "7891024113443", "Ypê", 12.50, 19.90),
+        ("Limpador Multiuso Mr Músculo 500ml", "Limpeza", "LIM-002", "7891024000101", "SC Johnson", 8.50, 14.50),
+        ("Amaciante Downy 1L", "Limpeza", "AMA-002", "7891000000099", "P&G", 16.50, 26.90),
+        ("Esponja de Limpeza Scotch-Brite 3un", "Limpeza", "ESP-002", "7896004700237", "3M", 6.50, 10.90),
+        ("Lustra Móveis Poliflor 200ml", "Limpeza", "LUS-001", "7896004700244", "Bombril", 8.50, 14.50),
+        
+        # Congelados Adicional (5)
+        ("Batata Palito McCain 1kg", "Congelados", "BAT-003", "7896004700251", "McCain", 14.50, 23.90),
+        ("Sorvete Kibon Chocolate 2L", "Congelados", "SOR-002", "7891150000125", "Kibon", 22.50, 35.90),
+        ("Pizza Sadia Calabresa 460g", "Congelados", "PIZ-002", "7893000415170", "Sadia", 12.50, 19.90),
+        ("Hambúrguer Perdigão 672g", "Congelados", "HAM-002", "7891000000105", "Perdigão", 18.50, 29.90),
+        ("Polpa de Morango 1kg", "Congelados", "POL-002", "7896004700268", "Distribuidor Local 10", 18.50, 29.90),
+        
+        # Hortifrúti Adicional (3)
+        ("Mamão Papaya kg", "Hortifrúti", "MAM-001", None, "Distribuidor Local 1", 5.50, 10.90),
+        ("Uva Itália kg", "Hortifrúti", "UVA-001", None, "Distribuidor Local 1", 12.50, 19.90),
+        ("Manga Palmer kg", "Hortifrúti", "MAN-003", None, "Distribuidor Local 1", 6.50, 12.50),
+        
+        # Pet Shop (4)
+        ("Ração Pedigree Carne 1kg", "Pet Shop", "RAC-001", "7896004700275", "Mars", 18.50, 29.90),
+        ("Ração Whiskas Peixe 1kg", "Pet Shop", "RAC-002", "7896004700282", "Mars", 16.50, 26.90),
+        ("Areia Higiênica Pipicat 4kg", "Pet Shop", "ARE-001", "7896004700299", "Distribuidor Local 11", 22.50, 35.90),
+        ("Petisco Pedigree Dentastix 110g", "Pet Shop", "PET-002", "7896004700305", "Mars", 12.50, 19.90),
+        
+        # Produtos Finais para completar 200 (2)
+        ("Refrigerante Sprite Zero 2L", "Bebidas", "SPR-002", "7894900012033", "Coca-Cola", 6.50, 10.50),
+        ("Biscoito Recheado Bono 126g", "Mercearia", "BIS-006", "7896004700312", "Nestlé", 3.80, 6.50),
     ]
 
     # Mapear categorias por nome
@@ -771,112 +816,17 @@ def seed_produtos(
             "nestlé", "dove", "colgate", "neve", "omo", "confort", "qboa",
             "friboi", "seara", "perdigão", "pullman", "mondelez", "pepsico",
             "unilever", "brf", "danone", "m. dias branco", "minerva foods",
-            "aurora alimentos", "p&g", "yoki", "heinz"
+            "aurora alimentos", "p&g", "yoki", "heinz", "salton", "ducoco",
+            "dolly", "yakult", "j. macêdo", "cargill", "castelo", "sovena",
+            "gomes da costa", "hemmer", "nutry", "dori", "knorr", "tirolez",
+            "gsk", "kimberly", "gillette", "johnson's", "nivea", "pinho sol",
+            "bombril", "veja", "assolan", "lysoform", "embalixo", "perfex",
+            "mccain", "kibon", "forno de minas", "wickbold", "seven boys"
         ]:
             marca_fornecedor_map[fornecedor.nome_fantasia.lower()] = fornecedor.id
     
     # Lista de produtos reais conhecidos no Brasil
-    produtos_reais = [
-        # Bebidas
-        ("Coca-Cola 2L", "Bebidas", "COC-001", "7894900010015", "Coca-Cola", 7.50, 11.90),
-        ("Guaraná Antarctica 2L", "Bebidas", "GUA-001", "7891991000853", "Ambev", 6.80, 10.90),
-        ("Pepsi 2L", "Bebidas", "PEP-001", "7892840800000", "PepsiCo", 6.50, 9.90),
-        ("Cerveja Skol 350ml", "Bebidas", "SKO-001", "7891149103100", "Ambev", 2.80, 4.50),
-        ("Cerveja Heineken 330ml", "Bebidas", "HEI-001", "7896045500000", "Heineken", 4.50, 7.90),
-        ("Água Mineral Crystal 500ml", "Bebidas", "AGU-001", "7892840822941", "Crystal", 1.20, 3.00),
-        ("Suco Del Valle Uva 1L", "Bebidas", "SCO-001", "7891098000251", "Del Valle", 4.50, 8.90),
-        ("Cerveja Brahma 350ml", "Bebidas", "BRA-001", "7891149103105", "Ambev", 2.70, 4.40),
-        ("Energético Red Bull 250ml", "Bebidas", "RED-001", "9002490100070", "Ambev", 6.50, 10.50),
-        ("Vinho Tinto Concha y Toro 750ml", "Bebidas", "VIN-001", "7804300101416", "Distribuidor Local 1", 25.00, 42.00),
-        ("Vinho Cabernet Sauvignon Tinto Concha y Toro 750ml", "Bebidas", "VIN-002", "7804300101417", "Distribuidor Local 1", 25.00, 42.00),
-        ("Vinho Merlot Tinto Concha y Toro 750ml", "Bebidas", "VIN-003", "7804350101418", "Distribuidor Local 1", 25.00, 42.00),
-        ("Vinho Pinot Noir Tinto Concha y Toro 750ml", "Bebidas", "VIN-004", "7804800101419", "Distribuidor Local 2", 25.00, 42.00),
-        ("Vinho Camernere Tinto Concha y Toro 750ml", "Bebidas", "VIN-005", "7804900101330", "Distribuidor Local 3", 25.00, 42.00),
-        ("Vinho Cabernet Branco Concha y Toro 750ml", "Bebidas", "VIN-006", "7804700101410", "Distribuidor Local 4", 25.00, 42.00),
-        ("Vinho Sauvignon Branco Concha y Toro 750ml", "Bebidas", "VIN-007", "7804500101411", "Distribuidor Local 1", 25.00, 42.00),
-
-
-        # Mercearia
-        ("Arroz Tio João 5kg", "Mercearia", "ARR-001", "7896006741025", "Tio João", 24.00, 32.90),
-        ("Arroz Camil 5kg", "Mercearia", "ARR-002", "7896006700000", "Camil", 23.50, 31.90),
-        ("Feijão Carioca Camil 1kg", "Mercearia", "FEI-001", "7896079001015", "Camil", 7.50, 11.90),
-        ("Feijão Preto Kicaldo 1kg", "Mercearia", "FEI-002", "7896079000000", "Kicaldo", 8.50, 12.90),
-        ("Macarrão Renata Espaguete 500g", "Mercearia", "MAC-001", "7896051110223", "Renata", 3.50, 6.90),
-        ("Óleo de Soja Liza 900ml", "Mercearia", "OLE-001", "7898909987042", "Liza", 6.50, 9.90),
-        ("Açúcar União 1kg", "Mercearia", "ACU-001", "7891000053508", "União", 4.50, 6.90),
-        ("Café Pilão 500g", "Mercearia", "CAF-001", "7896005800000", "Pilão", 14.50, 22.90),
-        ("Sal Refinado Lebre 1kg", "Mercearia", "SAL-001", "7896000000000", "Distribuidor Local 2", 2.50, 4.20),
-        ("Milho Pipoca Yoki 500g", "Mercearia", "PIPO-001", "7891000000000", "Yoki", 4.50, 7.80),
-        ("Maionese Hellmann's 500g", "Mercearia", "MAIO-001", "7891000000001", "Unilever", 8.50, 13.90),
-        ("Ketchup Heinz 397g", "Mercearia", "KET-001", "7891000000002", "Heinz", 10.50, 16.90),
-        ("Leite Condensado Moça 395g", "Mercearia", "LEIT-001", "7891000000003", "Nestlé", 5.50, 8.90),
-        ("Creme de Leite Nestlé 200g", "Mercearia", "CREM-001", "7891000000004", "Nestlé", 3.50, 5.90),
-        ("Chocolate em Pó Nescau 400g", "Mercearia", "CHOC-001", "7891000000005", "Nestlé", 7.50, 11.90),
-        ("Biscoito Cream Cracker Vitarella", "Mercearia", "BIS-002", "7891000000006", "M. Dias Branco", 3.50, 5.80),
-        ("Macarrão Instantâneo Nissin", "Mercearia", "MIO-001", "7891000000007", "Distribuidor Local 5", 1.50, 2.90),
-
-        # Frios e Laticínios
-        ("Leite Integral Italac 1L", "Frios e Laticínios", "LEI-001", "7898080640000", "Italac", 4.20, 6.50),
-        ("Queijo Mussarela Fatiado kg", "Frios e Laticínios", "QUE-001", "7891000055502", "Itambé", 35.00, 59.90),
-        ("Presunto Cozido Sadia kg", "Frios e Laticínios", "PRE-001", "7893000415101", "Sadia", 25.00, 45.90),
-        ("Manteiga Aviação 200g", "Frios e Laticínios", "MAN-001", "7896051130000", "Aviação", 12.00, 19.90),
-        ("Requeijão Vigor 200g", "Frios e Laticínios", "REQ-001", "7891000100000", "Vigor", 7.50, 12.90),
-        ("Iogurte Nestlé Morango 1L", "Frios e Laticínios", "IOG-001", "7891072001308", "Nestlé", 9.90, 16.90),
-        ("Iogurte Danone Natural 170g", "Frios e Laticínios", "IOG-002", "7891000000008", "Danone", 2.20, 3.80),
-        ("Margarina Qualy 500g", "Frios e Laticínios", "MAR-001", "7891000000009", "BRF", 6.50, 10.90),
-        ("Mortadela Perdigão 1kg", "Frios e Laticínios", "MOR-001", "7891000000010", "Perdigão", 15.50, 24.90),
-        ("Queijo Prato Itambé kg", "Frios e Laticínios", "QUE-002", "7891000000011", "Itambé", 38.50, 62.00),
-
-        # Higiene Pessoal
-        ("Sabonete Dove Original 90g", "Higiene Pessoal", "SAB-001", "7891150037605", "Dove", 3.50, 5.90),
-        ("Pasta de Dente Colgate Total 12", "Higiene Pessoal", "PAS-001", "7891024035000", "Colgate", 6.50, 12.90),
-        ("Papel Higiênico Neve 12un", "Higiene Pessoal", "PAP-001", "7891150000000", "Neve", 18.00, 29.90),
-        ("Shampoo Pantene 400ml", "Higiene Pessoal", "SHA-002", "7891000000012", "P&G", 15.50, 25.90),
-        ("Desodorante Rexona Aerosol", "Higiene Pessoal", "DESO-001", "7891000000013", "Unilever", 12.50, 18.90),
-        ("Escova de Dente Oral-B", "Higiene Pessoal", "ESC-001", "7891000000014", "P&G", 8.50, 14.90),
-        ("Fio Dental Colgate", "Higiene Pessoal", "FIO-001", "7891000000015", "Colgate", 5.50, 9.90),
-        ("Absorvente Always", "Higiene Pessoal", "ABS-001", "7891000000016", "P&G", 7.50, 12.90),
-
-        # Limpeza
-        ("Detergente Ypê Neutro 500ml", "Limpeza", "DET-001", "7891024113405", "Ypê", 2.20, 3.90),
-        ("Sabão em Pó Omo 800g", "Limpeza", "OMO-001", "7891150000001", "Omo", 12.50, 19.90),
-        ("Amaciante Confort 1L", "Limpeza", "AMA-001", "7891150000002", "Confort", 14.50, 22.90),
-        ("Água Sanitária Qboa 1L", "Limpeza", "SAN-001", "7896094908015", "Qboa", 5.50, 8.90),
-        # Carnes e Hortifrúti
-        ("Contra Filé Bovino kg", "Carnes", "CAR-001", None, "Friboi", 45.00, 69.90),
-        ("Filé de Peito Frango kg", "Carnes", "FRA-001", None, "Seara", 18.00, 28.90),
-        ("Linguiça Toscana Na Brasa kg", "Carnes", "LIN-001", None, "Perdigão", 16.00, 24.90),
-        ("Banana Prata kg", "Hortifrúti", "BAN-001", None, "Distribuidor Local 1", 4.50, 8.90),
-        ("Tomate Italiano kg", "Hortifrúti", "TOM-001", None, "Distribuidor Local 2", 6.50, 12.90),
-        ("Batata Lavada kg", "Hortifrúti", "BAT-001", None, "Distribuidor Local 3", 4.50, 8.90),
-        ("Cebola kg", "Hortifrúti", "CEB-001", None, "Distribuidor Local 4", 3.50, 6.90),
-        ("Ovos Brancos Dúzia", "Hortifrúti", "OVO-001", None, "Distribuidor Local 5", 8.00, 14.90),
-        
-        # Pet Shop
-        ("Ração Canina", "Pet Shop", "RAO-001", None, "Distribuidor Local 6", 12.00, 18.90),
-        ("Ração Felina", "Pet Shop", "RAF-001", None, "Distribuidor Local 7", 15.00, 22.90),
-        ("Cama de Pet", "Pet Shop", "CAM-001", None, "Distribuidor Local 8", 25.00, 38.90),
-        ("Brinquedo de Pet", "Pet Shop", "BRE-001", None, "Distribuidor Local 9", 10.00, 16.90),
-        ("Collar de Pet", "Pet Shop", "COL-001", None, "Distribuidor Local 10", 5.00, 8.90),
-        ("Fita Dental de Pet", "Pet Shop", "FIT-001", None, "Distribuidor Local 11", 8.00, 14.90),
-        ("Escova de Dente de Pet", "Pet Shop", "ESC-PET-001", None, "Distribuidor Local 12", 12.00, 18.90),
-        ("Fio Dental de Pet", "Pet Shop", "FIO-PET-001", None, "Distribuidor Local 13", 15.00, 22.90),
-        ("Absorvente de Pet", "Pet Shop", "ABS-PET-001", None, "Distribuidor Local 14", 25.00, 38.90),
-        ("Biscoito de Pet", "Pet Shop", "BIS-PET-001", None, "Distribuidor Local 15", 10.00, 16.90),
-
-        # Beleza e Saúde
-        ("Shampoo para Cabelo", "Beleza e Saúde", "SHA-001", None, "Distribuidor Local 16", 12.00, 18.90),
-        ("Creme para Pele", "Beleza e Saúde", "CRE-001", None, "Distribuidor Local 17", 15.00, 22.90),
-        ("Escova de Dente", "Beleza e Saúde", "ESC-BEZ-001", None, "Distribuidor Local 18", 25.00, 38.90),
-        ("Fio Dental", "Beleza e Saúde", "FIO-BEZ-001", None, "Distribuidor Local 19", 10.00, 16.90),
-        ("Absorvente", "Beleza e Saúde", "ABS-BEZ-001", None, "Distribuidor Local 20", 25.00, 38.90),
-        ("Biscoito", "Beleza e Saúde", "BIS-BEZ-001", None, "Distribuidor Local 21", 10.00, 16.90),
-
-
-        # Padaria
-        ("Pão Francês kg", "Padaria", "PAO-001", None, "Distribuidor Local 6", 12.00, 18.90),
-        ("Biscoito Trakinas", "Padaria", "BIS-001", "7896000000001", "Mondelez", 3.50, 5.90),
-    ]
+    # The previous produtos_reais list was replaced with the expanded one above.
 
     used_codes = set()
     for p in produtos_reais:
@@ -2076,10 +2026,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--estabelecimento-id", type=int, default=DEFAULT_ESTABELECIMENTO_ID
     )
-    parser.add_argument("--clientes", type=int, default=100)
-    parser.add_argument("--fornecedores", type=int, default=50)
-    parser.add_argument("--produtos", type=int, default=200)
-    parser.add_argument("--dias", type=int, default=180)
+    parser.add_argument("--clientes", type=int, default=100)  # 100 clientes
+    parser.add_argument("--fornecedores", type=int, default=50)  # 50 fornecedores
+    parser.add_argument("--produtos", type=int, default=200)  # 200 produtos
+    parser.add_argument("--dias", type=int, default=300)  # 300 dias de histórico
     parser.add_argument("--test-login", action="store_true", help="Apenas testa login")
     parser.add_argument("--local", action="store_true", help="Popula APENAS banco local (SQLite)")
 
