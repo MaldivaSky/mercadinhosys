@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, TrendingUp, DollarSign, Clock, AlertCircle, 
+import {
+  Users, TrendingUp, DollarSign, Clock, AlertCircle,
   Download, Calendar, Filter, ChevronDown, ChevronUp,
-  UserCheck, UserX, Award, Target, GitMerge, BarChart
+  UserCheck, UserX, Award
 } from 'lucide-react';
-import { 
-  BarChart as RechartsBarChart, Bar, LineChart, Line, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie
+import {
+  BarChart as RechartsBarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { apiClient } from '../../../api/apiClient';
 import jsPDF from 'jspdf';
@@ -32,15 +32,15 @@ interface RHMetrics {
   atrasos_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; atrasos_qtd: number; minutos_atraso: number }>;
   horas_extras_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; minutos_extras: number; custo_extras: number }>;
   faltas_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; faltas: number; dias_uteis: number; dias_presenca: number }>;
-  espelho_pagamento_mes?: Array<{ 
-    funcionario_id: number; nome: string; cargo: string; salario_base: number; 
-    beneficios: number; horas_extras_horas: number; custo_horas_extras: number; 
-    atrasos_minutos: number; faltas: number; total_estimado: number 
+  espelho_pagamento_mes?: Array<{
+    funcionario_id: number; nome: string; cargo: string; salario_base: number;
+    beneficios: number; horas_extras_horas: number; custo_horas_extras: number;
+    atrasos_minutos: number; faltas: number; total_estimado: number
   }>;
   resumo_mes?: { inicio: string | null; fim: string | null; dias_uteis: number; total_atrasos_minutos: number; total_atrasos_qtd: number; total_extras_minutos: number; total_faltas: number };
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+
 
 export default function RHDashboard() {
   const [rhData, setRhData] = useState<RHMetrics | null>(null);
@@ -66,7 +66,7 @@ export default function RHDashboard() {
       setError(null);
       const response = await apiClient.get(`/dashboard/cientifico?days=${periodoDias}`);
       const rhMetrics = response.data?.data?.rh;
-      
+
       if (rhMetrics) {
         setRhData(rhMetrics);
       } else {
@@ -91,7 +91,7 @@ export default function RHDashboard() {
     if (!rhData?.espelho_pagamento_mes) return;
 
     const doc = new jsPDF();
-    
+
     doc.setFillColor(99, 102, 241);
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(255, 255, 255);
@@ -199,7 +199,7 @@ export default function RHDashboard() {
           <p className="text-xs text-green-600 mt-1">Estimado mensal</p>
         </div>
 
-        <div 
+        <div
           className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl shadow-md border border-red-200 cursor-pointer hover:shadow-lg transition-shadow"
           onClick={() => setFiltroAtrasados(!filtroAtrasados)}
         >
@@ -240,7 +240,7 @@ export default function RHDashboard() {
             {expandedSections['turnover'] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </button>
         </div>
-        
+
         {expandedSections['turnover'] && (
           <div className="h-[400px]">
             {rhData.evolution_turnover && rhData.evolution_turnover.length > 0 ? (
@@ -249,7 +249,7 @@ export default function RHDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
                   <Bar dataKey="admissoes" name="Admissões" fill="#10B981" />
