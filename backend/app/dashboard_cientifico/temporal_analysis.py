@@ -41,8 +41,12 @@ class TemporalAnalysis:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
+            # Compatibilidade cross-database para extração de hora
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+
             results = db.session.query(
-                func.extract('hour', Venda.data_venda).label('hora'),
+                hour_extract.label('hora'),
                 func.count(Venda.id).label('qtd_vendas'),
                 func.sum(Venda.total).label('faturamento'),
                 func.avg(Venda.total).label('ticket_medio')
@@ -51,9 +55,9 @@ class TemporalAnalysis:
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
             ).group_by(
-                func.extract('hour', Venda.data_venda)
+                hour_extract
             ).order_by(
-                func.extract('hour', Venda.data_venda)
+                hour_extract
             ).all()
             
             periodos = {

@@ -129,8 +129,9 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
     # Filtro por dia da semana
     if "dia_semana" in filtros and filtros["dia_semana"]:
         try:
+            from app.utils.query_helpers import get_dow_extract
             dia_num = int(filtros["dia_semana"])
-            query = query.filter(extract("dow", Venda.created_at) == dia_num)
+            query = query.filter(get_dow_extract(Venda.created_at) == dia_num)
         except (ValueError, TypeError):
             pass
 
@@ -526,14 +527,16 @@ def estatisticas_vendas():
         )
 
         # Vendas por hora do dia
+        from app.utils.query_helpers import get_hour_extract
+        hour_extract = get_hour_extract(Venda.created_at)
         vendas_por_hora = (
             db.session.query(
-                func.extract("hour", Venda.created_at).label("hora"),
+                hour_extract.label("hora"),
                 func.count(Venda.id).label("quantidade"),
                 func.sum(Venda.total).label("total"),
             )
             .filter(Venda.status == "finalizada")
-            .group_by(func.extract("hour", Venda.created_at))
+            .group_by(hour_extract)
             .order_by("hora")
             .all()
         )

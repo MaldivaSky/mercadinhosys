@@ -249,16 +249,19 @@ class DataLayer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
-            # Extrair hora da data de venda (SQLite/Postgres compatibility needs checking, assuming extract works)
+            # Compatibilidade cross-database para extração de hora
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+
             results = db.session.query(
-                func.extract('hour', Venda.data_venda).label('hora'),
+                hour_extract.label('hora'),
                 func.count(Venda.id).label('qtd'),
                 func.sum(Venda.total).label('total')
             ).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by('hora').order_by('hora').all()
+            ).group_by(hour_extract).order_by(hour_extract).all()
 
             return [
                 {"hora": int(r.hora), "qtd": r.qtd, "total": float(r.total or 0)}
@@ -280,18 +283,19 @@ class DataLayer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
-            # 0=Domingo, 1=Segunda... dependendo do dialeto SQL. 
-            # SQLite strftime('%w', date) retorna 0-6 (0=Domingo)
+            # Compatibilidade cross-database para extração de dia da semana
+            from app.utils.query_helpers import get_dow_extract
+            dow_extract = get_dow_extract(Venda.data_venda)
             
             results = db.session.query(
-                func.strftime('%w', Venda.data_venda).label('dia_semana'),
+                dow_extract.label('dia_semana'),
                 func.count(Venda.id).label('qtd'),
                 func.sum(Venda.total).label('total')
             ).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by('dia_semana').all()
+            ).group_by(dow_extract).all()
             
             dias_map = {
                 '0': 'Domingo', '1': 'Segunda', '2': 'Terça', '3': 'Quarta',
@@ -319,15 +323,19 @@ class DataLayer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
+            # Compatibilidade cross-database para extração de hora
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+
             # Buscar vendas por hora
             results = db.session.query(
-                func.extract('hour', Venda.data_venda).label('hora'),
+                hour_extract.label('hora'),
                 func.sum(Venda.total).label('total')
             ).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by('hora').order_by('hora').all()
+            ).group_by(hour_extract).order_by(hour_extract).all()
             
             if not results:
                 return {
