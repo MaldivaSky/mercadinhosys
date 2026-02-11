@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Plus, Search, Filter, Download,
-  X, ChevronDown, RefreshCw, Calculator,
+  Download,
+  Plus,
   ShoppingCart,
+  Calculator,
+  Search,
+  Filter,
+  ChevronDown,
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
-import { formatCurrency } from '../../utils/formatters';
 import { apiClient } from '../../api/apiClient';
 import { Toaster, toast } from 'react-hot-toast';
+import { formatCurrency } from '../../utils/formatters';
 
 import ProductAnalyticsDashboard from './components/ProductAnalyticsDashboard';
 import QuickFiltersPanel from './components/QuickFiltersPanel';
@@ -20,16 +26,12 @@ import { aplicarFiltroRapido, calcularContadoresFiltros } from './utils/quickFil
 import ProductFormModal from './components/ProductFormModal';
 import { ProductsTable } from './components/ProductsTable';
 
-// Product Form Modal Component - Moved to independent file
-
 const ProductsPage: React.FC = () => {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [todosProdutos, setTodosProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
-  // const { config } = useConfig();
-
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -56,7 +58,7 @@ const ProductsPage: React.FC = () => {
 
   const [showProductModal, setShowProductModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  // showDetailModal removed
   const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
   const [showProductHistory, setShowProductHistory] = useState(false);
   const [showPurchaseOrders, setShowPurchaseOrders] = useState(false);
@@ -76,12 +78,6 @@ const ProductsPage: React.FC = () => {
     markup: 30,
     preco_venda: 0,
   });
-
-  // Calcular produtos com validade próxima
-  // const diasAlertaValidade = config?.dias_alerta_validade ?? 30; // Unused
-
-
-  // Removido lógica duplicada de validade, agora gerenciada pelos filtros rápidos
 
   // Data Loading
   const loadProdutos = useCallback(async () => {
@@ -199,21 +195,6 @@ const ProductsPage: React.FC = () => {
   const openOrderModal = (produto: Produto) => {
     setSelectedProductForOrder(produto);
     setShowPurchaseOrders(true);
-    // Note: We need to pass this state down to PurchaseOrdersPanel -> PurchaseOrderModal
-    // Or just open the modal directly if PurchaseOrdersPanel is not the right place.
-    // Actually, looking at the code, PurchaseOrdersPanel HAS a PurchaseOrderModal legally.
-    // BUT, the implementation plan said to use PurchaseOrderModal directly.
-    // Let's check where PurchaseOrderModal is used. It's used at the bottom of ProductsPage if we adding it there.
-    // Wait, ProductsPage uses PurchaseOrdersPanel which contains PurchaseOrderModal?
-    // Let's check Lines 690: <PurchaseOrdersPanel ... />
-    // And Lines 608: <ProductFormModal ... />
-    // It seems PurchaseOrderModal IS NOT currently used directly in ProductsPage, only inside PurchaseOrdersPanel?
-    // Let's check the file content of ProductsPage again.
-    // Line 17: import PurchaseOrdersPanel from './components/PurchaseOrdersPanel';
-    // It does NOT import PurchaseOrderModal.
-    // I should import PurchaseOrderModal in ProductsPage to use it directly for this feature, 
-    // OR create a state in PurchaseOrdersPanel to open it.
-    // Direct usage seems easier for "Quick Order".
   };
 
   const calcularMarkup = () => {
@@ -222,7 +203,7 @@ const ProductsPage: React.FC = () => {
   };
 
   const handleCardClick = (filterType: string) => {
-    setFiltroRapido(null); // Limpa filtro rápido ao clicar no dashboard
+    setFiltroRapido(null);
     if (filterType === 'esgotado') setFiltros(prev => ({ ...prev, estoque_status: 'esgotado' }));
     else if (filterType === 'baixo') setFiltros(prev => ({ ...prev, estoque_status: 'baixo' }));
     else if (filterType === 'normal') setFiltros(prev => ({ ...prev, estoque_status: 'normal' }));
@@ -233,7 +214,6 @@ const ProductsPage: React.FC = () => {
   const handleQuickFilterChange = (filter: string | null) => {
     setFiltroRapido(filter);
     if (filter) {
-      // Se ativar um filtro rápido, limpa os filtros de servidor para evitar confusão
       setFiltros({ busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' });
       setPage(1);
     }
@@ -250,27 +230,22 @@ const ProductsPage: React.FC = () => {
 
   const currentTableData = useMemo(() => {
     if (filtroRapido) {
-      // Modo Filtro Rápido (Client-Side)
       let filtered = aplicarFiltroRapido(todosProdutos, filtroRapido, todosProdutos);
 
-      // Client-side Sorting
       if (filtros.ordenar_por) {
         filtered = [...filtered].sort((a, b) => {
           let valA = a[filtros.ordenar_por as keyof Produto];
           let valB = b[filtros.ordenar_por as keyof Produto];
 
-          // Handle special cases / nulls
           if (valA === undefined || valA === null) valA = '';
           if (valB === undefined || valB === null) valB = '';
 
-          // String comparison
           if (typeof valA === 'string' && typeof valB === 'string') {
             return filtros.direcao === 'asc'
               ? valA.localeCompare(valB)
               : valB.localeCompare(valA);
           }
 
-          // Numeric comparison
           if (valA < valB) return filtros.direcao === 'asc' ? -1 : 1;
           if (valA > valB) return filtros.direcao === 'asc' ? 1 : -1;
           return 0;
@@ -290,7 +265,6 @@ const ProductsPage: React.FC = () => {
         isClientSide: true
       };
     } else {
-      // Modo Normal (Server-Side)
       return {
         produtos: produtos,
         totalItems: totalItems,
@@ -300,10 +274,7 @@ const ProductsPage: React.FC = () => {
     }
   }, [produtos, filtroRapido, todosProdutos, page, totalItems, totalPages, filtros.ordenar_por, filtros.direcao]);
 
-
   const contadoresFiltros = useMemo(() => calcularContadoresFiltros(todosProdutos, todosProdutos), [todosProdutos]);
-
-
 
   return (
     <div className="space-y-6 p-6">
@@ -331,15 +302,10 @@ const ProductsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Filters */}
       <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
-      {/* Seção de expiração removida em favor dos novos cards de filtro */}
-
-      {/* Dashboard */}
       <ProductAnalyticsDashboard produtos={todosProdutos} stats={stats} onCardClick={handleCardClick} />
 
-      {/* Search and Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
@@ -411,7 +377,6 @@ const ProductsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Products Table */}
       <ProductsTable
         produtos={currentTableData.produtos}
         loading={loading}
@@ -428,7 +393,6 @@ const ProductsPage: React.FC = () => {
         sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
       />
 
-      {/* Product Modal */}
       <ProductFormModal
         show={showProductModal}
         editMode={editMode}
@@ -439,7 +403,6 @@ const ProductsPage: React.FC = () => {
         onSuccess={() => { setShowProductModal(false); loadProdutos(); loadTodosProdutos(); }}
       />
 
-      {/* Stock Adjustment Modal */}
       {showStockModal && selectedProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
@@ -476,7 +439,6 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Markup Calculator Modal */}
       {showMarkupCalculator && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
@@ -503,15 +465,12 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Product History Modal */}
       {showProductHistory && selectedProduct && (
         <ProductHistoryModal produto={selectedProduct} onClose={() => { setShowProductHistory(false); setSelectedProduct(null); }} />
       )}
 
-      {/* Purchase Orders Panel */}
       <PurchaseOrdersPanel isOpen={showPurchaseOrders} onClose={() => setShowPurchaseOrders(false)} fornecedores={fornecedores} />
 
-      {/* Quick Purchase Order Modal */}
       {selectedProductForOrder && (
         <PurchaseOrderModal
           isOpen={!!selectedProductForOrder}

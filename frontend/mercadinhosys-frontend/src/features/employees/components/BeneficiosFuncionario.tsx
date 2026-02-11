@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, Plus, Trash2, Edit2, DollarSign, Calendar, AlertCircle } from 'lucide-react';
+import { Gift, Plus, Trash2, Edit2, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../../api/apiClient';
 
 interface Beneficio {

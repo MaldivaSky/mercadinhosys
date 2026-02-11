@@ -48,87 +48,127 @@ def app():
 @pytest.fixture(scope='function')
 def estabelecimento(app):
     """Cria estabelecimento de teste"""
-    with app.app_context():
-        estab = Estabelecimento(
-            nome_fantasia="Mercado Teste",
-            razao_social="Mercado Teste LTDA",
-            cnpj="12.345.678/0001-90",
-            telefone="(11) 1234-5678",
-            email="teste@mercado.com",
-            data_abertura=date.today() - timedelta(days=365),
-            ativo=True
-        )
-        db.session.add(estab)
-        db.session.commit()
-        return estab
+    estab = Estabelecimento(
+        nome_fantasia=f"Mercado Teste {datetime.now().timestamp()}",
+        razao_social=f"Mercado Teste LTDA {datetime.now().timestamp()}",
+        cnpj=f"{datetime.now().strftime('%d%H%M%S')}/0001-{datetime.now().strftime('%f')[:2]}",
+        telefone="(11) 1234-5678",
+        email=f"teste{datetime.now().timestamp()}@mercado.com",
+        data_abertura=date.today() - timedelta(days=365),
+        
+        # Campos de Endereço (Obrigatórios)
+        cep="12345-678",
+        logradouro="Rua Teste",
+        numero="123",
+        bairro="Centro",
+        cidade="São Paulo",
+        estado="SP",
+        pais="Brasil",
+        
+        ativo=True
+    )
+    db.session.add(estab)
+    db.session.commit()
+    return estab
 
 @pytest.fixture(scope='function')
 def funcionario(app, estabelecimento):
     """Cria funcionário de teste"""
-    with app.app_context():
-        func = Funcionario(
-            estabelecimento_id=estabelecimento.id,
-            nome="João Silva",
-            username="joao",
-            cpf="123.456.789-00",
-            cargo="Gerente",
-            role="GERENTE",
-            ativo=True
-        )
-        func.set_senha("123456")
-        db.session.add(func)
-        db.session.commit()
-        return func
+    func = Funcionario(
+        estabelecimento_id=estabelecimento.id,
+        nome="João Silva",
+        username="joao",
+        cpf="123.456.789-00",
+        cargo="Gerente",
+        role="GERENTE",
+        data_nascimento=date(1990, 1, 1),
+        data_admissao=date.today() - timedelta(days=365),
+        celular="(11) 98888-8888",
+        email="joao@mercado.com",
+        
+        # Campos de Endereço (Obrigatórios)
+        cep="12345-678",
+        logradouro="Rua do Gerente",
+        numero="10",
+        bairro="Centro",
+        cidade="São Paulo",
+        estado="SP",
+        pais="Brasil",
+        
+        ativo=True
+    )
+    func.set_senha("123456")
+    db.session.add(func)
+    db.session.commit()
+    return func
 
 @pytest.fixture(scope='function')
 def fornecedor(app, estabelecimento):
     """Cria fornecedor REAL"""
-    with app.app_context():
-        forn = Fornecedor(
-            estabelecimento_id=estabelecimento.id,
-            nome_fantasia="Coca-Cola Brasil",
-            razao_social="The Coca-Cola Company Brasil LTDA",
-            cnpj="34.028.316/0001-52",
-            telefone="(11) 3000-1234",
-            email="vendas@cocacola.com.br",
-            prazo_entrega=7,
-            forma_pagamento="30 DIAS",
-            classificacao="PREFERENCIAL",
-            ativo=True
-        )
-        db.session.add(forn)
-        db.session.commit()
-        return forn
+    forn = Fornecedor(
+        estabelecimento_id=estabelecimento.id,
+        nome_fantasia="Coca-Cola Brasil",
+        razao_social="The Coca-Cola Company Brasil LTDA",
+        cnpj="34.028.316/0001-52",
+        telefone="(11) 3000-1234",
+        email="vendas@cocacola.com.br",
+        prazo_entrega=7,
+        forma_pagamento="30 DIAS",
+        classificacao="PREFERENCIAL",
+        
+        # Campos de Endereço (Obrigatórios)
+        cep="12345-678",
+        logradouro="Avenida Industrial",
+        numero="1000",
+        bairro="Distrito Industrial",
+        cidade="São Paulo",
+        estado="SP",
+        pais="Brasil",
+        
+        ativo=True
+    )
+    db.session.add(forn)
+    db.session.commit()
+    return forn
 
 @pytest.fixture(scope='function')
 def categoria(app, estabelecimento):
     """Cria categoria de teste"""
-    with app.app_context():
-        cat = CategoriaProduto(
-            estabelecimento_id=estabelecimento.id,
-            nome="Bebidas",
-            codigo="BEB001",
-            ativo=True
-        )
-        db.session.add(cat)
-        db.session.commit()
-        return cat
+    cat = CategoriaProduto(
+        estabelecimento_id=estabelecimento.id,
+        nome="Bebidas",
+        codigo="BEB001",
+        ativo=True
+    )
+    db.session.add(cat)
+    db.session.commit()
+    return cat
 
 @pytest.fixture(scope='function')
 def cliente_teste(app, estabelecimento):
     """Cria cliente de teste"""
-    with app.app_context():
-        cli = Cliente(
-            estabelecimento_id=estabelecimento.id,
-            nome="Maria Santos",
-            cpf="987.654.321-00",
-            ativo=True,
-            total_compras=0,
-            valor_total_gasto=Decimal("0.00")
-        )
-        db.session.add(cli)
-        db.session.commit()
-        return cli
+    cli = Cliente(
+        estabelecimento_id=estabelecimento.id,
+        nome="Maria Santos",
+        cpf="987.654.321-00",
+        celular="(11) 99999-9999",
+        
+        # Campos de Endereço (Obrigatórios)
+        cep="12345-678",
+        logradouro="Rua das Flores",
+        numero="50",
+        bairro="Jardim",
+        cidade="São Paulo",
+        estado="SP",
+        pais="Brasil",
+        
+        ativo=True,
+        total_compras=0,
+        valor_total_gasto=Decimal("0.00")
+    )
+    db.session.add(cli)
+    db.session.commit()
+    return cli
 
 # ============================================================================
 # HELPERS PARA CRIAR FLUXO REALISTA
@@ -166,7 +206,7 @@ def criar_pedido_compra(estabelecimento, fornecedor, funcionario, produto, quant
         estabelecimento_id=estabelecimento.id,
         fornecedor_id=fornecedor.id,
         funcionario_id=funcionario.id,
-        numero_pedido=f"PC-{datetime.now().strftime('%Y%m%d')}-001",
+        numero_pedido=f"PC-{datetime.now().strftime('%Y%m%d%H%M%S')}-{produto.id}-{datetime.now().microsecond}",
         data_pedido=datetime.now(),
         data_previsao_entrega=date.today() + timedelta(days=7),
         status="pendente",
@@ -214,7 +254,7 @@ def receber_pedido_compra(pedido, item, produto, data_validade=None):
         produto_id=produto.id,
         fornecedor_id=pedido.fornecedor_id,
         pedido_compra_id=pedido.id,
-        numero_lote=f"LOTE-{datetime.now().strftime('%Y%m%d')}-{produto.id:03d}",
+        numero_lote=f"LOTE-{datetime.now().strftime('%Y%m%d%H%M%S')}-{produto.id:03d}-{datetime.now().microsecond}",
         quantidade=item.quantidade_solicitada,
         quantidade_inicial=item.quantidade_solicitada,
         data_validade=data_validade,
@@ -245,9 +285,11 @@ def receber_pedido_compra(pedido, item, produto, data_validade=None):
         produto_id=produto.id,
         tipo='ENTRADA',
         quantidade=item.quantidade_solicitada,
+        quantidade_anterior=produto.quantidade - item.quantidade_solicitada,
+        quantidade_atual=produto.quantidade,
         motivo='COMPRA',
-        referencia_id=pedido.id,
-        data_movimentacao=datetime.now()
+        pedido_compra_id=pedido.id,
+        created_at=datetime.now()
     )
     db.session.add(mov)
     
@@ -273,6 +315,13 @@ def test_complete_realistic_flow(app, estabelecimento, fornecedor, funcionario, 
         print("\n" + "="*70)
         print("🧪 TESTE REALISTA: Fluxo Completo de Negócio")
         print("="*70)
+        
+        # Recarregar objetos na sessão atual
+        estabelecimento = db.session.merge(estabelecimento)
+        fornecedor = db.session.merge(fornecedor)
+        funcionario = db.session.merge(funcionario)
+        categoria = db.session.merge(categoria)
+        cliente_teste = db.session.merge(cliente_teste)
         
         # ETAPA 1: Criar produto base
         print("\n📦 ETAPA 1: Criando produto...")
@@ -324,6 +373,7 @@ def test_complete_realistic_flow(app, estabelecimento, fornecedor, funcionario, 
             estabelecimento_id=estabelecimento.id,
             cliente_id=cliente_teste.id,
             funcionario_id=funcionario.id,
+            codigo=f"VENDA-{datetime.now().strftime('%Y%m%d%H%M%S')}",
             data_venda=datetime.now(),
             status='finalizada',
             forma_pagamento='DINHEIRO',
@@ -337,6 +387,9 @@ def test_complete_realistic_flow(app, estabelecimento, fornecedor, funcionario, 
         item_venda = VendaItem(
             venda_id=venda.id,
             produto_id=produto.id,
+            produto_nome=produto.nome,
+            produto_codigo=produto.codigo_interno,
+            produto_unidade=produto.unidade_medida,
             quantidade=quantidade_venda,
             preco_unitario=produto.preco_venda,
             custo_unitario=lote.preco_custo_unitario,  # Custo do lote (FIFO)
@@ -358,9 +411,11 @@ def test_complete_realistic_flow(app, estabelecimento, fornecedor, funcionario, 
             produto_id=produto.id,
             tipo='SAIDA',
             quantidade=quantidade_venda,
+            quantidade_anterior=produto.quantidade + quantidade_venda,
+            quantidade_atual=produto.quantidade,
             motivo='VENDA',
-            referencia_id=venda.id,
-            data_movimentacao=datetime.now()
+            venda_id=venda.id,
+            created_at=datetime.now()
         )
         db.session.add(mov)
         
@@ -441,6 +496,12 @@ def test_fifo_multiple_lotes(app, estabelecimento, fornecedor, funcionario, cate
         print("\n" + "="*70)
         print("🧪 TESTE FIFO: Múltiplos Lotes")
         print("="*70)
+        
+        # Recarregar objetos
+        estabelecimento = db.session.merge(estabelecimento)
+        fornecedor = db.session.merge(fornecedor)
+        funcionario = db.session.merge(funcionario)
+        categoria = db.session.merge(categoria)
         
         # Criar produto
         produto = criar_produto_base(estabelecimento, categoria, fornecedor)
