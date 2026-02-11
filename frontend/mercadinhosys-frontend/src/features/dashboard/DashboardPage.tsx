@@ -279,24 +279,24 @@ const DashboardPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'avancado' | 'rh'>('visao-geral'); // 🔥 Inicia em Visão Geral
   const [hoveredKPI, setHoveredKPI] = useState<number | null>(null);
   const [expandedKPI, setExpandedKPI] = useState<number | null>(null);
-  
+
   // 🔥 NOVO: Filtro de período
   const [periodoDias, setPeriodoDias] = useState<number>(30);
   const [modoFiltro, setModoFiltro] = useState<'rapido' | 'personalizado'>('rapido');
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
-  
+
   // 🔥 NOVO: Modal de KPI com gráfico
   const [kpiModalAberto, setKpiModalAberto] = useState<string | null>(null);
   const [visualizacaoModal, setVisualizacaoModal] = useState<'dias' | 'meses'>('dias');
   const [dadosHistoricoKPI, setDadosHistoricoKPI] = useState<any>(null);
-  
+
   // 🔥 RESTAURADO: Estados para controlar modais
   const [selectedAnomaly, setSelectedAnomaly] = useState<any>(null);
   const [selectedCorrelation, setSelectedCorrelation] = useState<any>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedRecommendation, setSelectedRecommendation] = useState<any>(null);
-  
+
   // 🔥 NOVO: Estados para modais de análises avançadas
   const [modalProdutoEstrela, setModalProdutoEstrela] = useState<any>(null);
   const [modalProdutoLento, setModalProdutoLento] = useState<any>(null);
@@ -362,19 +362,19 @@ const DashboardPage: React.FC = () => {
       loadRhPontoHistorico(1);
     }
   }, [viewMode]);
-  
+
   // 🔥 NOVO: Aplicar filtro personalizado
   const aplicarFiltroPersonalizado = () => {
     if (!dataInicio || !dataFim) {
       alert('Por favor, selecione data de início e fim');
       return;
     }
-    
+
     const inicio = new Date(dataInicio);
     const fim = new Date(dataFim);
     const diffTime = Math.abs(fim.getTime() - inicio.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     setPeriodoDias(diffDays);
     loadDashboard();
   };
@@ -382,10 +382,10 @@ const DashboardPage: React.FC = () => {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      
+
       // 🔥 NOVO: Se o usuário filtrou datas específicas, enviar essas datas
       let url = `/dashboard/cientifico?days=${periodoDias}`;
-      
+
       if (dataInicio && dataFim) {
         // Enviar datas específicas para o backend respeitar o filtro
         url = `/dashboard/cientifico?start_date=${dataInicio}T00:00:00&end_date=${dataFim}T23:59:59`;
@@ -393,37 +393,31 @@ const DashboardPage: React.FC = () => {
       } else {
         console.log(`🔍 Carregando dashboard com período de ${periodoDias} dias`);
       }
-      
+
       const response = await apiClient.get(url);
-      
+
       console.log('🔍 Backend Response:', response.data);
       console.log('📊 Período retornado pelo backend:', response.data?.metadata?.period_days);
-      
+
       // 🔥 MAPEAR ESTRUTURA DO BACKEND PARA O FORMATO ESPERADO PELO FRONTEND
       const backendData = response.data.data;
-      
-      // 🔥 CORREÇÃO: Usar total_despesas do backend (já filtrado por período)
-      const totalDespesas = backendData?.total_despesas || 
-        (Array.isArray(backendData?.expenses) 
-          ? backendData.expenses.reduce((sum: number, exp: any) => sum + (exp.total || exp.valor || 0), 0) 
-          : 0);
-      
-      // 🔥 CORREÇÃO: Fórmula correta de lucro
-      const totalVendas = backendData?.summary?.revenue?.value || 0;
-      const custoEstoque = backendData?.inventory?.custo_total || 0;
-      
-      // Lucro Bruto = Vendas - Custo de Estoque (COGS)
-      const lucroBruto = totalVendas - custoEstoque;
-      
-      // 🔥 NOVO: Lucro Líquido = Lucro Bruto - Despesas Operacionais
-      const lucroLiquido = lucroBruto - totalDespesas;
-      
-      // Calcular margem de lucro (sobre vendas)
-      const margemLucro = totalVendas > 0 ? (lucroLiquido / totalVendas) * 100 : 0;
-      
-      // Calcular ROI (sobre estoque)
-      const roiMensal = custoEstoque > 0 ? (lucroLiquido / custoEstoque) * 100 : 0;
-      
+      const financials = backendData?.financials || {};
+
+      // 🔥 CORREÇÃO: Usar dados financeiros pré-calculados pelo backend (Unica Fonte de Verdade)
+      const totalVendas = financials.revenue || backendData?.summary?.revenue?.value || 0;
+      const cogs = financials.cogs || 0; // Custo das Mercadorias Vendidas (Real)
+      const totalDespesas = financials.expenses || backendData?.total_despesas || 0;
+
+      const lucroBruto = financials.gross_profit || (totalVendas - cogs);
+      const lucroLiquido = financials.net_profit || (lucroBruto - totalDespesas);
+
+      const margemLucro = financials.net_margin || (totalVendas > 0 ? (lucroLiquido / totalVendas) * 100 : 0);
+      const roiMensal = financials.roi || 0;
+
+      // Valor do estoque (Ativo) - Diferente de COGS (Despesa)
+      const valorEstoqueAtivo = backendData?.inventory?.custo_total || 0;
+      const custoEstoque = valorEstoqueAtivo; // Alias para compatibilidade com restante do código
+
       // Mapear produtos da curva ABC para produtos_estrela
       const produtosEstrela = backendData?.produtos_estrela || backendData?.abc?.produtos
         ?.filter((p: any) => p.classificacao === 'A')
@@ -443,17 +437,17 @@ const DashboardPage: React.FC = () => {
           faturamento: p.faturamento || 0,
           quantidade_vendida: p.quantidade_vendida || p.total_vendido || 0
         })) || [];
-      
+
       // 🔥 FORÇAR GERAÇÃO DE PRODUTOS LENTOS SEMPRE
       let produtosLentos = [];
-      
+
       // Sempre gerar produtos lentos a partir da Classe C
       if (backendData?.abc?.produtos && backendData.abc.produtos.length > 0) {
         const produtosClasseC = backendData.abc.produtos
           .filter((p: any) => p.classificacao === 'C')
           .sort((a: any, b: any) => (a.quantidade_vendida || 0) - (b.quantidade_vendida || 0))
           .slice(0, 10);
-        
+
         produtosLentos = produtosClasseC.map((p: any) => ({
           id: p.id,
           nome: p.nome,
@@ -467,54 +461,54 @@ const DashboardPage: React.FC = () => {
           margem: p.margem || 0
         }));
       }
-      
+
       // Se o backend retornou produtos lentos, usar eles
       if (backendData?.produtos_lentos && backendData.produtos_lentos.length > 0) {
         produtosLentos = backendData.produtos_lentos;
       }
-      
+
       // Mapear previsão de demanda
       const previsaoDemanda = backendData?.previsao_demanda || [];
-      
+
       // Mapear timeseries para formato correto
       const timeseriesFormatted = Array.isArray(backendData?.timeseries)
         ? backendData.timeseries.map((item: any) => ({
-            data: item.data || item.date || '',
-            vendas: item.total || item.vendas || 0,
-            quantidade: item.quantidade || 0,
-            ticket_medio: item.ticket_medio || 0,
-            previsao: null
-          }))
+          data: item.data || item.date || '',
+          vendas: item.total || item.vendas || 0,
+          quantidade: item.quantidade || 0,
+          ticket_medio: item.ticket_medio || 0,
+          previsao: null
+        }))
         : [];
-      
+
       // 🔥 GERAR SAZONALIDADE a partir do trend
       const sazonalidadeData = [];
       if (backendData?.trend?.best_day && backendData?.trend?.worst_day) {
         const melhorDia = backendData.trend.best_day;
         const piorDia = backendData.trend.worst_day;
-        const variacaoSemanal = melhorDia.avg_sales > 0 
-          ? ((melhorDia.avg_sales - piorDia.avg_sales) / piorDia.avg_sales) * 100 
+        const variacaoSemanal = melhorDia.avg_sales > 0
+          ? ((melhorDia.avg_sales - piorDia.avg_sales) / piorDia.avg_sales) * 100
           : 0;
-        
+
         sazonalidadeData.push({
           periodo: "Padrão Semanal",
           variacao: variacaoSemanal,
           descricao: `Melhor dia: ${melhorDia.day} (R$ ${melhorDia.avg_sales.toFixed(0)}). Pior dia: ${piorDia.day} (R$ ${piorDia.avg_sales.toFixed(0)})`
         });
       }
-      
+
       if (backendData?.trend?.trend) {
-        const trendText = backendData.trend.trend === 'up' ? 'Crescimento' : 
-                         backendData.trend.trend === 'down' ? 'Queda' : 'Estável';
+        const trendText = backendData.trend.trend === 'up' ? 'Crescimento' :
+          backendData.trend.trend === 'down' ? 'Queda' : 'Estável';
         const growthPercent = backendData.trend.growth_percent || 0;
-        
+
         sazonalidadeData.push({
           periodo: "Tendência Geral",
           variacao: growthPercent,
           descricao: `${trendText} de ${Math.abs(growthPercent).toFixed(1)}% no período analisado`
         });
       }
-      
+
       // 🔥 GERAR COMPARAÇÃO MENSAL a partir do timeseries
       const comparacaoMensal = [];
       if (Array.isArray(backendData?.timeseries) && backendData.timeseries.length >= 30) {
@@ -527,21 +521,21 @@ const DashboardPage: React.FC = () => {
             vendasPorMes[mesAno].push(item.total);
           }
         });
-        
+
         // Calcular totais por mês
         const meses = Object.keys(vendasPorMes).sort();
         const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        
+
         for (let i = 0; i < meses.length; i++) {
           const mesAtual = meses[i];
           const totalAtual = vendasPorMes[mesAtual].reduce((a, b) => a + b, 0);
           const mesAnterior = i > 0 ? meses[i - 1] : null;
           const totalAnterior = mesAnterior ? vendasPorMes[mesAnterior].reduce((a, b) => a + b, 0) : totalAtual;
-          
+
           const crescimento = totalAnterior > 0 ? ((totalAtual - totalAnterior) / totalAnterior) * 100 : 0;
           const mesNumero = parseInt(mesAtual.split('-')[1]);
           const mesNome = mesesNomes[mesNumero - 1];
-          
+
           comparacaoMensal.push({
             mes: mesNome,
             vendas: totalAtual,
@@ -550,16 +544,16 @@ const DashboardPage: React.FC = () => {
           });
         }
       }
-      
+
       // Mapear forecast CORRETAMENTE
       const forecastFormatted = Array.isArray(backendData?.forecast)
         ? backendData.forecast.map((item: any, idx: number) => ({
-            dia: item.data || `Dia ${idx + 1}`,
-            previsao: item.valor_previsto || item.value || item.previsao || 0,
-            intervalo_confianca: item.confianca === 'alta' ? 3.0 : item.confianca === 'media' ? 5.0 : 10.0
-          }))
+          dia: item.data || `Dia ${idx + 1}`,
+          previsao: item.valor_previsto || item.value || item.previsao || 0,
+          intervalo_confianca: item.confianca === 'alta' ? 3.0 : item.confianca === 'media' ? 5.0 : 10.0
+        }))
         : [];
-      
+
       const mappedData = {
         ...response.data,
         data: {
@@ -572,20 +566,20 @@ const DashboardPage: React.FC = () => {
             crescimento_vs_ontem: backendData?.summary?.growth?.value || 0,
             meta_atingida: 0,
             vendas_por_forma_pagamento: {},
-            custo_vendas: custoEstoque,
-            lucro_liquido: lucroLiquido,  // 🔥 CORRIGIDO: Usar lucroLiquido (não lucroBruto)
+            custo_vendas: cogs, // 🔥 CORRIGIDO: Usar CMV (Custo das Mercadorias Vendidas)
+            lucro_liquido: lucroLiquido,
             margem_diaria: margemLucro
           },
           mes: {
             total_vendas: totalVendas,
             total_despesas: totalDespesas,
             lucro_bruto: lucroBruto,
-            lucro_liquido: lucroLiquido,  // 🔥 NOVO: Adicionar lucro_liquido
+            lucro_liquido: lucroLiquido,
             margem_lucro: margemLucro,
             crescimento_mensal: backendData?.summary?.growth?.value || 0,
             despesas_por_tipo: {},
-            custo_produtos_vendidos: custoEstoque,
-            investimentos: custoEstoque,
+            custo_produtos_vendidos: cogs, // 🔥 CORRIGIDO: Usar CMV
+            investimentos: valorEstoqueAtivo, // 🔥 Manter valor do estoque como investimento (Ativo)
             roi_mensal: roiMensal
           },
           rh: backendData?.rh, // 🔥 NOVO: Dados de RH mapeados
@@ -630,7 +624,7 @@ const DashboardPage: React.FC = () => {
               // 🔥 CORREÇÃO: Transformar lista em Record<hora, produtos[]>
               const topProducts = backendData?.top_products_by_hour || [];
               if (!Array.isArray(topProducts)) return {};
-              
+
               // Se for array simples, agrupar por hora (ou retornar vazio se não tiver hora)
               const grouped: Record<number, any[]> = {};
               topProducts.forEach((p: any) => {
@@ -644,7 +638,7 @@ const DashboardPage: React.FC = () => {
               // 🔥 CORREÇÃO: Backend retorna lista simples, frontend espera objeto com perfis_temporais
               const patterns = backendData?.customer_temporal_patterns || [];
               if (!Array.isArray(patterns)) return {};
-              
+
               // Transformar lista em objeto com estrutura esperada
               return {
                 perfis_temporais: {}  // Vazio por enquanto, já que backend não retorna perfis
@@ -664,38 +658,38 @@ const DashboardPage: React.FC = () => {
             correlações: backendData?.correlations || [],
             anomalias: backendData?.anomalies || [],
             previsoes: backendData?.previsao_demanda || [],
-            recomendacoes_otimizacao: (backendData?.recomendacoes && backendData.recomendacoes.length > 0) 
+            recomendacoes_otimizacao: (backendData?.recomendacoes && backendData.recomendacoes.length > 0)
               ? backendData.recomendacoes.map((rec: any) => ({
-                  area: rec.tipo || rec.area || 'Geral',
-                  acao: rec.mensagem || rec.acao || '',
-                  impacto_esperado: rec.impacto_esperado || 10,
-                  complexidade: rec.complexidade || 'media'
-                }))
+                area: rec.tipo || rec.area || 'Geral',
+                acao: rec.mensagem || rec.acao || '',
+                impacto_esperado: rec.impacto_esperado || 10,
+                complexidade: rec.complexidade || 'media'
+              }))
               : [
-                  {
-                    area: 'Estoque',
-                    acao: 'Revisar produtos com baixo giro e considerar promoções para liberar capital',
-                    impacto_esperado: 15,
-                    complexidade: 'baixa'
-                  },
-                  {
-                    area: 'Vendas',
-                    acao: 'Focar nos produtos Classe A que representam 80% do faturamento',
-                    impacto_esperado: 25,
-                    complexidade: 'baixa'
-                  },
-                  {
-                    area: 'Margem',
-                    acao: 'Analisar produtos com margem abaixo de 20% e ajustar precificação',
-                    impacto_esperado: 18,
-                    complexidade: 'media'
-                  }
-                ]
+                {
+                  area: 'Estoque',
+                  acao: 'Revisar produtos com baixo giro e considerar promoções para liberar capital',
+                  impacto_esperado: 15,
+                  complexidade: 'baixa'
+                },
+                {
+                  area: 'Vendas',
+                  acao: 'Focar nos produtos Classe A que representam 80% do faturamento',
+                  impacto_esperado: 25,
+                  complexidade: 'baixa'
+                },
+                {
+                  area: 'Margem',
+                  acao: 'Analisar produtos com margem abaixo de 20% e ajustar precificação',
+                  impacto_esperado: 18,
+                  complexidade: 'media'
+                }
+              ]
           },
           alertas_cientificos: []
         }
       };
-      
+
       console.log('✅ Mapped Data:', mappedData);
       console.log('🔍 Backend Raw Data:', backendData);
       console.log('🔍 Timeseries:', backendData?.timeseries);
@@ -738,24 +732,24 @@ const DashboardPage: React.FC = () => {
   // FILTRAR PRODUTOS DA CURVA ABC BASEADO NA SELEÇÃO
   const produtosFiltrados = useMemo(() => {
     if (!data?.data?.analise_produtos?.curva_abc?.produtos) return [];
-    
+
     const todosProdutos = data.data.analise_produtos.curva_abc.produtos;
-    
+
     if (selectedABC === 'all') {
       // Quando "TODOS" está selecionado, pegar uma AMOSTRA de cada classe
       const produtosA = todosProdutos.filter((p: any) => p.classificacao === 'A');
       const produtosB = todosProdutos.filter((p: any) => p.classificacao === 'B');
       const produtosC = todosProdutos.filter((p: any) => p.classificacao === 'C');
-      
+
       // Pegar 5 de cada classe para mostrar diversidade
       const amostraA = produtosA.slice(0, 5);
       const amostraB = produtosB.slice(0, 5);
       const amostraC = produtosC.slice(0, 5);
-      
+
       // Combinar as amostras
       return [...amostraA, ...amostraB, ...amostraC];
     }
-    
+
     return todosProdutos.filter(
       (p: any) => p.classificacao === selectedABC
     );
@@ -817,7 +811,7 @@ const DashboardPage: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            
+
             <button
               onClick={loadDashboard}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
@@ -836,21 +830,19 @@ const DashboardPage: React.FC = () => {
           <div className="flex gap-4 border-b border-gray-200 pb-4">
             <button
               onClick={() => setModoFiltro('rapido')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                modoFiltro === 'rapido'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${modoFiltro === 'rapido'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
             >
               ⚡ Filtro Rápido
             </button>
             <button
               onClick={() => setModoFiltro('personalizado')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                modoFiltro === 'personalizado'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${modoFiltro === 'personalizado'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
             >
               📅 Período Personalizado
             </button>
@@ -877,11 +869,10 @@ const DashboardPage: React.FC = () => {
                       key={periodo.dias}
                       onClick={() => setPeriodoDias(periodo.dias)}
                       disabled={loading}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        periodoDias === periodo.dias
-                          ? 'bg-blue-600 text-white shadow-lg scale-105 ring-2 ring-blue-300'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-102'
-                      } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all ${periodoDias === periodo.dias
+                        ? 'bg-blue-600 text-white shadow-lg scale-105 ring-2 ring-blue-300'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-102'
+                        } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       title={periodo.desc}
                     >
                       {periodo.label}
@@ -1026,7 +1017,7 @@ const DashboardPage: React.FC = () => {
                 {Math.abs(kpi.change).toFixed(1)}%
               </div>
             </div>
-            
+
             <p className="text-xs opacity-70 mb-1">📅 {kpi.periodo}</p>
             <p className="text-sm opacity-80 mb-1">{kpi.title}</p>
             <p className="text-3xl font-bold mb-2">{kpi.value}</p>
@@ -1057,101 +1048,101 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <TargetIcon className="w-8 h-8 text-blue-600" />
-            📊 Resumo Executivo - Últimos {periodoDias} dias
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Desempenho Financeiro */}
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <DollarIcon className="w-5 h-5 text-green-600" />
-                Desempenho Financeiro
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Faturamento Total:</span>
-                  <span className="font-bold text-green-600">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+              <TargetIcon className="w-8 h-8 text-blue-600" />
+              📊 Resumo Executivo - Últimos {periodoDias} dias
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Desempenho Financeiro */}
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <DollarIcon className="w-5 h-5 text-green-600" />
+                  Desempenho Financeiro
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Faturamento Total:</span>
+                    <span className="font-bold text-green-600">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Lucro Líquido:</span>
+                    <span className="font-bold text-blue-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Margem de Lucro:</span>
+                    <span className="font-bold text-purple-600">{mes?.margem_lucro?.toFixed(1) || 0}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">ROI:</span>
+                    <span className="font-bold text-orange-600">{(mes?.roi_mensal || 0).toFixed(1)}%</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Lucro Líquido:</span>
-                  <span className="font-bold text-blue-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+
+              {/* Produtos e Estoque */}
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-600" />
+                  Produtos e Estoque
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Produtos Estrela (Classe A):</span>
+                    <span className="font-bold text-green-600">{analise_produtos?.produtos_estrela?.length || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Produtos Lentos (Classe C):</span>
+                    <span className="font-bold text-red-600">{analise_produtos?.produtos_lentos?.length || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Total de Produtos ABC:</span>
+                    <span className="font-bold text-blue-600">{analise_produtos?.curva_abc?.produtos?.length || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Ticket Médio:</span>
+                    <span className="font-bold text-purple-600">R$ {(hoje?.ticket_medio || 0).toFixed(2)}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Margem de Lucro:</span>
-                  <span className="font-bold text-purple-600">{mes?.margem_lucro?.toFixed(1) || 0}%</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">ROI:</span>
-                  <span className="font-bold text-orange-600">{(mes?.roi_mensal || 0).toFixed(1)}%</span>
+              </div>
+
+              {/* Insights Rápidos */}
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200 md:col-span-2">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-purple-600" />
+                  💡 Insights Rápidos
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white/80 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Crescimento</p>
+                    <p className={`text-2xl font-bold ${(mes?.crescimento_mensal || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {(mes?.crescimento_mensal || 0) >= 0 ? '+' : ''}{(mes?.crescimento_mensal || 0).toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">vs período anterior</p>
+                  </div>
+                  <div className="bg-white/80 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Clientes Atendidos</p>
+                    <p className="text-2xl font-bold text-blue-600">{hoje?.clientes_atendidos || 0}</p>
+                    <p className="text-xs text-gray-500 mt-1">no período</p>
+                  </div>
+                  <div className="bg-white/80 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Despesas / Faturamento</p>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">índice de eficiência</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Produtos e Estoque */}
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Package className="w-5 h-5 text-blue-600" />
-                Produtos e Estoque
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Produtos Estrela (Classe A):</span>
-                  <span className="font-bold text-green-600">{analise_produtos?.produtos_estrela?.length || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Produtos Lentos (Classe C):</span>
-                  <span className="font-bold text-red-600">{analise_produtos?.produtos_lentos?.length || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Total de Produtos ABC:</span>
-                  <span className="font-bold text-blue-600">{analise_produtos?.curva_abc?.produtos?.length || 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700">Ticket Médio:</span>
-                  <span className="font-bold text-purple-600">R$ {(hoje?.ticket_medio || 0).toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Insights Rápidos */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200 md:col-span-2">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Brain className="w-5 h-5 text-purple-600" />
-                💡 Insights Rápidos
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white/80 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Crescimento</p>
-                  <p className={`text-2xl font-bold ${(mes?.crescimento_mensal || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {(mes?.crescimento_mensal || 0) >= 0 ? '+' : ''}{(mes?.crescimento_mensal || 0).toFixed(1)}%
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">vs período anterior</p>
-                </div>
-                <div className="bg-white/80 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Clientes Atendidos</p>
-                  <p className="text-2xl font-bold text-blue-600">{hoje?.clientes_atendidos || 0}</p>
-                  <p className="text-xs text-gray-500 mt-1">no período</p>
-                </div>
-                <div className="bg-white/80 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Despesas / Faturamento</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}%
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">índice de eficiência</p>
-                </div>
-              </div>
+            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Dica:</strong> Para análises mais detalhadas, selecione <strong>"Análise Detalhada"</strong> ou <strong>"Análise Avançada"</strong> nos filtros acima.
+              </p>
             </div>
           </div>
-
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              💡 <strong>Dica:</strong> Para análises mais detalhadas, selecione <strong>"Análise Detalhada"</strong> ou <strong>"Análise Avançada"</strong> nos filtros acima.
-            </p>
-          </div>
-        </div>
         </div>
       )}
 
@@ -1199,1969 +1190,1959 @@ const DashboardPage: React.FC = () => {
 
       {/* SEÇÃO PRINCIPAL: CURVA ABC COM GRÁFICO DE PARETO */}
       {viewMode === 'detalhado' && (
-      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
-        <div
-          className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleCard('curva-abc')}
-        >
-          <div className="flex items-center gap-3">
-            <ChartBar className="w-8 h-8 text-blue-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
-              <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex space-x-1">
-              <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                onClick={(e) => { e.stopPropagation(); setSelectedABC('all'); }}
-              >
-                Todos
-              </button>
-              <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'A' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                onClick={(e) => { e.stopPropagation(); setSelectedABC('A'); }}
-              >
-                Classe A
-              </button>
-              <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'B' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                onClick={(e) => { e.stopPropagation(); setSelectedABC('B'); }}
-              >
-                Classe B
-              </button>
-              <button
-                className={`px-4 py-2 rounded-lg ${selectedABC === 'C' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'}`}
-                onClick={(e) => { e.stopPropagation(); setSelectedABC('C'); }}
-              >
-                Classe C
-              </button>
-            </div>
-            <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['curva-abc'] ? 'rotate-180' : ''}`} />
-          </div>
-        </div>
-
-        {expandedCards['curva-abc'] && analise_produtos?.curva_abc && (
-          <div className="p-6 animate-fadeIn">
-            {produtosFiltrados.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* GRÁFICO DE PARETO */}
-              <div className="lg:col-span-2">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={produtosFiltrados.slice(0, 15)}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
-                      <YAxis />
-                      <Tooltip
-                        content={({ payload, label }) => (
-                          <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                            <p className="font-bold text-gray-900">{label}</p>
-                            <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                            <p className="text-sm text-gray-600">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
-                            <p className="text-sm text-gray-600">Margem: {(payload?.[0]?.payload?.margem || 0).toFixed(1)}%</p>
-                            <p className="text-sm text-gray-600">Qtd Vendida: {payload?.[0]?.payload?.quantidade_vendida}</p>
-                            <p className="text-sm text-gray-600">% Acumulado: {(payload?.[0]?.payload?.percentual_acumulado || 0).toFixed(1)}%</p>
-                          </div>
-                        )}
-                      />
-                      <Bar
-                        dataKey="faturamento"
-                        name="Faturamento"
-                      >
-                        {produtosFiltrados.slice(0, 15).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={getABCColor(entry.classificacao)} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex justify-center gap-6 mt-6">
-                  {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => (
-                    <div key={classe} className="text-center">
-                      <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100' : classe === 'B' ? 'bg-yellow-100' : 'bg-red-100'}`}>
-                        <span className={`text-2xl font-bold ${classe === 'A' ? 'text-green-600' : classe === 'B' ? 'text-yellow-600' : 'text-red-600'}`}>
-                          {classe}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">{dados.quantidade} produtos</p>
-                      <p className="text-lg font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% do faturamento</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* LEGENDA E DETALHES */}
-              <div className="space-y-6">
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
-                  <h3 className="font-bold text-gray-900 mb-4">📊 Interpretação da Curva ABC</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Classe A (20% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.A?.percentual?.toFixed(1) || 0}% do faturamento</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Classe B (30% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      <div>
-                        <p className="font-semibold text-gray-900">Classe C (50% dos produtos)</p>
-                        <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* TOP 5 PRODUTOS DA CLASSE SELECIONADA */}
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <h4 className="font-bold text-gray-900 mb-3">
-                    🏆 Top Produtos {selectedABC === 'all' ? 'Geral' : `Classe ${selectedABC}`}
-                  </h4>
-                  <div className="space-y-3">
-                    {produtosFiltrados
-                      ?.slice(0, 5)
-                      ?.map((produto, idx) => (
-                        <div
-                          key={produto.id}
-                          className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                              produto.classificacao === 'A' ? 'bg-green-100 text-green-800' :
-                              produto.classificacao === 'B' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {idx + 1}
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{produto.nome}</p>
-                              <p className="text-xs text-gray-500">
-                                Classe {produto.classificacao} • Margem: {produto.margem.toFixed(1)}%
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-bold ${
-                              produto.classificacao === 'A' ? 'text-green-600' :
-                              produto.classificacao === 'B' ? 'text-yellow-600' :
-                              'text-red-600'
-                            }`}>
-                              R$ {(produto?.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                            <p className="text-xs text-gray-500">{produto?.quantidade_vendida || 0} unidades</p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
+        <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+          <div
+            className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+            onClick={() => toggleCard('curva-abc')}
+          >
+            <div className="flex items-center gap-3">
+              <ChartBar className="w-8 h-8 text-blue-600" />
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
+                <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
               </div>
             </div>
-            ) : (
-              <div className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <ChartBar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-600 font-medium mb-2">
-                    Nenhum produto encontrado na Classe {selectedABC}
-                  </p>
-                  <p className="text-gray-500 text-sm">
-                    {selectedABC === 'C' 
-                      ? 'Parabéns! Você não tem produtos de baixo desempenho (Classe C).'
-                      : 'Selecione outra classe para visualizar os produtos.'}
-                  </p>
-                  <button
-                    onClick={() => setSelectedABC('all')}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    Ver Todos os Produtos
-                  </button>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="flex space-x-1">
+                <button
+                  className={`px-4 py-2 rounded-lg ${selectedABC === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  onClick={(e) => { e.stopPropagation(); setSelectedABC('all'); }}
+                >
+                  Todos
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg ${selectedABC === 'A' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  onClick={(e) => { e.stopPropagation(); setSelectedABC('A'); }}
+                >
+                  Classe A
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg ${selectedABC === 'B' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  onClick={(e) => { e.stopPropagation(); setSelectedABC('B'); }}
+                >
+                  Classe B
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-lg ${selectedABC === 'C' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  onClick={(e) => { e.stopPropagation(); setSelectedABC('C'); }}
+                >
+                  Classe C
+                </button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* SEÇÃO: ANÁLISE TEMPORAL - TENDÊNCIA DE VENDAS */}
-      {viewMode === 'detalhado' && (
-      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
-        <div
-          className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleCard('analise-temporal')}
-        >
-          <div className="flex items-center gap-3">
-            <TrendingUp className="w-8 h-8 text-purple-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Análise Temporal de Vendas</h2>
-              <p className="text-gray-600">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
+              <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['curva-abc'] ? 'rotate-180' : ''}`} />
             </div>
           </div>
-          <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-temporal'] ? 'rotate-180' : ''}`} />
-        </div>
 
-        {expandedCards['analise-temporal'] && (
-          <div className="p-6 animate-fadeIn">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
-              <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-200 lg:col-span-2">
-                <h3 className="font-bold text-gray-900 mb-6 text-lg flex items-center gap-2">
-                  <LineChartIcon className="w-5 h-5 text-purple-600" />
-                  Evolução das Vendas (30 dias)
-                </h3>
-                <div className="h-[300px]">
-                  {analise_temporal?.tendencia_vendas?.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analise_temporal?.tendencia_vendas || []}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                        <XAxis
-                          dataKey="data"
-                          tick={{ fontSize: 12 }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={60}
-                        />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip
-                          content={({ payload, label }) => (
-                            <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                              <p className="font-bold text-gray-900">{label}</p>
-                              {payload?.map((entry, index) => (
-                                <p key={index} className="text-sm" style={{ color: entry.color }}>
-                                  {entry.name}: R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="vendas"
-                          stroke="#8b5cf6"
-                          strokeWidth={3}
-                          dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
-                          name="Vendas Diárias"
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="previsao"
-                          stroke="#ef4444"
-                          strokeWidth={2}
-                          strokeDasharray="5 5"
-                          dot={false}
-                          name="Previsão"
-                          connectNulls={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center">
-                        <LineChartIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500">Dados de tendência não disponíveis</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-                  <div className="bg-purple-50 p-3 rounded-lg">
-                    <p className="text-sm text-purple-600 font-medium">Tendência</p>
-                    <p className={`text-lg font-bold ${analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-600' : 'text-red-600'}`}>
-                      {analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? '📈 Alta' : '📉 Baixa'}
-                    </p>
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium">Média 7 dias</p>
-                    <p className="text-lg font-bold text-blue-700">
-                      R$ {(analise_temporal?.tendencia_vendas?.slice(-7).reduce((acc, curr) => acc + (curr.vendas || 0), 0) / Math.max(1, Math.min(7, analise_temporal?.tendencia_vendas?.length || 0)))?.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) || '0'}
-                    </p>
-                  </div>
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <p className="text-sm text-green-600 font-medium">Previsão Amanhã</p>
-                    <p className="text-lg font-bold text-green-700">
-                      R$ {(analise_temporal?.previsao_proxima_semana?.[0]?.previsao || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 🔥 MOVIDO: COMPARAÇÃO MENSAL - AGORA ABAIXO DO GRÁFICO */}
-              <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-200 lg:col-span-2">
-                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <LucideBarChart className="w-5 h-5 text-orange-600" />
-                  Comparação Mensal
-                </h3>
-                <div className="space-y-3">
-                  {analise_temporal?.comparacao_meses && analise_temporal?.comparacao_meses.length > 0 ? (
-                    analise_temporal?.comparacao_meses.map((comp, idx) => (
-                      <div key={`mes-${comp.mes || idx}`} className="bg-white/70 p-4 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-medium text-gray-900">{comp.mes}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {comp.crescimento > 0 ? '+' : ''}{comp.crescimento.toFixed(1)}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Vendas: R$ {(comp?.vendas || 0).toLocaleString('pt-BR')}</span>
-                          <span className="text-gray-600">Meta: R$ {(comp?.meta || 0).toLocaleString('pt-BR')}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="bg-white/70 p-6 rounded-lg text-center">
-                      <LucideBarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">Comparação mensal não disponível</p>
-                      <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 2 meses de dados</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* 🔥 NOVO: SEÇÃO DE ANÁLISE DE VENDAS POR HORÁRIO */}
-      {viewMode === 'detalhado' && (
-      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
-          <div className="flex items-center gap-3">
-            <Clock className="w-8 h-8 text-indigo-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">⏰ Análise de Vendas por Horário</h2>
-              <p className="text-gray-600">Identifique os melhores horários para vendas e otimize sua operação</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6">
-          {analise_temporal?.vendas_por_hora && analise_temporal.vendas_por_hora.length > 0 ? (
-            <div className="space-y-6">
-              {/* Gráfico de Barras - Vendas por Hora */}
-              <div className="bg-gradient-to-br from-gray-50 to-indigo-50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Volume de Vendas por Horário</h3>
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={analise_temporal.vendas_por_hora}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                      <XAxis 
-                        dataKey="hora" 
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => `${value}h`}
-                      />
-                      <YAxis 
-                        yAxisId="left"
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
-                      />
-                      <YAxis 
-                        yAxisId="right"
-                        orientation="right"
-                        tick={{ fontSize: 12 }}
-                      />
-                      <Tooltip
-                        content={({ payload, label }) => {
-                          if (!payload || payload.length === 0) return null;
-                          const data = payload[0]?.payload;
-                          return (
-                            <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-lg border-2 border-indigo-200">
-                              <p className="font-bold text-gray-900 dark:text-gray-100 mb-2">
-                                🕐 {label}:00 - {label}:59
-                              </p>
-                              <div className="space-y-1">
-                                <p className="text-sm text-gray-700 dark:text-gray-300">
-                                  💰 Faturamento: <span className="font-bold text-indigo-600">R$ {data?.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                </p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300">
-                                  🛒 Vendas: <span className="font-bold text-purple-600">{data?.quantidade}</span>
-                                </p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300">
-                                  💵 Ticket Médio: <span className="font-bold text-green-600">R$ {(data?.total / data?.quantidade || 0).toFixed(2)}</span>
-                                </p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300">
-                                  📈 Margem: <span className="font-bold text-blue-600">{data?.margem?.toFixed(1)}%</span>
-                                </p>
+          {expandedCards['curva-abc'] && analise_produtos?.curva_abc && (
+            <div className="p-6 animate-fadeIn">
+              {produtosFiltrados.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* GRÁFICO DE PARETO */}
+                  <div className="lg:col-span-2">
+                    <div className="h-[400px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={produtosFiltrados.slice(0, 15)}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
+                          <YAxis />
+                          <Tooltip
+                            content={({ payload, label }) => (
+                              <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
+                                <p className="font-bold text-gray-900">{label}</p>
+                                <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-sm text-gray-600">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
+                                <p className="text-sm text-gray-600">Margem: {(payload?.[0]?.payload?.margem || 0).toFixed(1)}%</p>
+                                <p className="text-sm text-gray-600">Qtd Vendida: {payload?.[0]?.payload?.quantidade_vendida}</p>
+                                <p className="text-sm text-gray-600">% Acumulado: {(payload?.[0]?.payload?.percentual_acumulado || 0).toFixed(1)}%</p>
                               </div>
-                            </div>
-                          );
-                        }}
-                      />
-                      <Bar 
-                        yAxisId="left"
-                        dataKey="total" 
-                        fill="#6366F1" 
-                        radius={[8, 8, 0, 0]}
-                        name="Faturamento"
-                      />
-                      <Bar 
-                        yAxisId="right"
-                        dataKey="quantidade" 
-                        fill="#A855F7" 
-                        radius={[8, 8, 0, 0]}
-                        name="Quantidade"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Insights Inteligentes */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {(() => {
-                  // Calcular insights
-                  const vendasPorHora = analise_temporal.vendas_por_hora;
-                  
-                  // 🔥 DEFENSIVE: Verificar se há dados
-                  if (!vendasPorHora || vendasPorHora.length === 0) {
-                    return <div className="col-span-3 text-center text-gray-500">Sem dados de vendas por hora</div>;
-                  }
-                  
-                  const melhorHorario = vendasPorHora.reduce((max, h) => h.total > max.total ? h : max, vendasPorHora[0]);
-                  const piorHorario = vendasPorHora.reduce((min, h) => h.total < min.total ? h : min, vendasPorHora[0]);
-                  const totalVendas = vendasPorHora.reduce((sum, h) => sum + h.total, 0);
-                  const mediaHoraria = totalVendas / vendasPorHora.length;
-                  const horariosAcimaDaMedia = vendasPorHora.filter(h => h.total > mediaHoraria);
-                  
-                  // 🔥 DEFENSIVE: Garantir que melhorHorario e piorHorario têm valores válidos
-                  const melhorMargemSafe = melhorHorario?.margem ?? 0;
-                  const piorTotalSafe = piorHorario?.total ?? 0;
-                  const melhorTotalSafe = melhorHorario?.total ?? 1; // Evitar divisão por zero
-                  
-                  return (
-                    <>
-                      {/* Melhor Horário */}
-                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
-                            <TrendingUp className="w-6 h-6 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-green-700 font-medium">🏆 Melhor Horário</p>
-                            <p className="text-2xl font-bold text-green-900">{melhorHorario?.hora ?? 0}h</p>
-                          </div>
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <p className="text-gray-700">💰 R$ {(melhorHorario?.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <p className="text-gray-700">🛒 {melhorHorario?.quantidade ?? 0} vendas</p>
-                          <p className="text-gray-700">📈 {melhorMargemSafe.toFixed(1)}% margem</p>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-green-200">
-                          <p className="text-xs text-green-700">
-                            💡 <strong>Dica:</strong> Concentre promoções e equipe neste horário
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Horário Crítico */}
-                      <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
-                            <AlertTriangle className="w-6 h-6 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-red-700 font-medium">⚠️ Horário Crítico</p>
-                            <p className="text-2xl font-bold text-red-900">{piorHorario?.hora ?? 0}h</p>
-                          </div>
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <p className="text-gray-700">💰 R$ {(piorHorario?.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <p className="text-gray-700">🛒 {piorHorario?.quantidade ?? 0} vendas</p>
-                          <p className="text-gray-700">📉 {((piorTotalSafe / melhorTotalSafe) * 100).toFixed(0)}% do melhor</p>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-red-200">
-                          <p className="text-xs text-red-700">
-                            💡 <strong>Dica:</strong> Avalie necessidade de equipe reduzida
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Horários de Pico */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
-                            <TargetIcon className="w-6 h-6 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-blue-700 font-medium">🎯 Horários de Pico</p>
-                            <p className="text-2xl font-bold text-blue-900">{horariosAcimaDaMedia.length}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-1 text-sm">
-                          <p className="text-gray-700">📊 Média: R$ {mediaHoraria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <p className="text-gray-700">⏰ Horários:</p>
-                          <p className="text-gray-700 font-mono text-xs">
-                            {horariosAcimaDaMedia.slice(0, 5).map(h => `${h.hora}h`).join(', ')}
-                            {horariosAcimaDaMedia.length > 5 && '...'}
-                          </p>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-blue-200">
-                          <p className="text-xs text-blue-700">
-                            💡 <strong>Dica:</strong> Foque recursos nos horários de pico
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* Recomendações Estratégicas */}
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5 text-purple-600" />
-                  💡 Recomendações Estratégicas
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white/70 p-4 rounded-lg">
-                    <p className="font-semibold text-purple-900 mb-2">👥 Gestão de Equipe</p>
-                    <ul className="text-sm text-gray-700 space-y-1">
-                      <li>• Escale mais funcionários nos horários de pico</li>
-                      <li>• Reduza equipe nos horários de baixo movimento</li>
-                      <li>• Planeje intervalos fora dos horários críticos</li>
-                    </ul>
-                  </div>
-                  <div className="bg-white/70 p-4 rounded-lg">
-                    <p className="font-semibold text-purple-900 mb-2">🎯 Estratégias de Vendas</p>
-                    <ul className="text-sm text-gray-700 space-y-1">
-                      <li>• Lance promoções nos horários de maior movimento</li>
-                      <li>• Teste ofertas especiais em horários fracos</li>
-                      <li>• Monitore ticket médio por horário</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* 🔥 NOVO: Produtos Mais Vendidos por Horário */}
-              {analise_temporal?.produtos_por_hora && Object.keys(analise_temporal.produtos_por_hora).length > 0 && (
-                <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-6 border border-cyan-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-cyan-600" />
-                    🏆 Top Produtos por Horário
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Descubra quais produtos vendem melhor em cada período do dia
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
-                    {Object.entries(analise_temporal.produtos_por_hora)
-                      .sort(([horaA], [horaB]) => Number(horaA) - Number(horaB))
-                      .filter(([hora, produtos]: [string, any]) => {
-                        // 🔥 FILTER: Remover entradas vazias antes do map
-                        const produtosArray = Array.isArray(produtos) ? produtos : [];
-                        return produtosArray.length > 0;
-                      })
-                      .map(([hora, produtos]: [string, any]) => {
-                        const produtosArray = Array.isArray(produtos) ? produtos : [];
-                        
-                        return (
-                        <div key={hora} className="bg-white/80 rounded-lg p-4 border border-cyan-100 hover:shadow-md transition-shadow">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-bold text-cyan-900 flex items-center gap-2">
-                              <Clock className="w-4 h-4" />
-                              {hora}h - {Number(hora) + 1}h
-                            </h4>
-                            <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">
-                              Top {produtosArray.length}
+                            )}
+                          />
+                          <Bar
+                            dataKey="faturamento"
+                            name="Faturamento"
+                          >
+                            {produtosFiltrados.slice(0, 15).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={getABCColor(entry.classificacao)} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-center gap-6 mt-6">
+                      {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => (
+                        <div key={classe} className="text-center">
+                          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100' : classe === 'B' ? 'bg-yellow-100' : 'bg-red-100'}`}>
+                            <span className={`text-2xl font-bold ${classe === 'A' ? 'text-green-600' : classe === 'B' ? 'text-yellow-600' : 'text-red-600'}`}>
+                              {classe}
                             </span>
                           </div>
-                          
-                          <div className="space-y-2">
-                            {produtosArray.map((produto, idx) => (
-                              <div 
-                                key={produto.produto_id} 
-                                className="flex items-center justify-between p-2 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg hover:from-cyan-100 hover:to-blue-100 transition-colors"
-                              >
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                    idx === 0 ? 'bg-yellow-400 text-yellow-900' :
-                                    idx === 1 ? 'bg-gray-300 text-gray-700' :
-                                    idx === 2 ? 'bg-orange-400 text-orange-900' :
-                                    'bg-blue-100 text-blue-700'
+                          <p className="text-sm text-gray-600">{dados.quantidade} produtos</p>
+                          <p className="text-lg font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% do faturamento</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* LEGENDA E DETALHES */}
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+                      <h3 className="font-bold text-gray-900 mb-4">📊 Interpretação da Curva ABC</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                          <div>
+                            <p className="font-semibold text-gray-900">Classe A (20% dos produtos)</p>
+                            <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.A?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                          <div>
+                            <p className="font-semibold text-gray-900">Classe B (30% dos produtos)</p>
+                            <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                          <div>
+                            <p className="font-semibold text-gray-900">Classe C (50% dos produtos)</p>
+                            <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* TOP 5 PRODUTOS DA CLASSE SELECIONADA */}
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <h4 className="font-bold text-gray-900 mb-3">
+                        🏆 Top Produtos {selectedABC === 'all' ? 'Geral' : `Classe ${selectedABC}`}
+                      </h4>
+                      <div className="space-y-3">
+                        {produtosFiltrados
+                          ?.slice(0, 5)
+                          ?.map((produto, idx) => (
+                            <div
+                              key={produto.id}
+                              className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${produto.classificacao === 'A' ? 'bg-green-100 text-green-800' :
+                                  produto.classificacao === 'B' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-red-100 text-red-800'
                                   }`}>
-                                    {idx + 1}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate" title={produto.produto_nome}>
-                                      {produto.produto_nome}
-                                    </p>
-                                    <p className="text-xs text-gray-600">
-                                      {produto.quantidade_vendida} un
-                                    </p>
-                                  </div>
+                                  {idx + 1}
                                 </div>
-                                <div className="text-right ml-2">
-                                  <p className="text-sm font-bold text-cyan-700">
-                                    R$ {produto.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                <div>
+                                  <p className="font-medium text-gray-900">{produto.nome}</p>
+                                  <p className="text-xs text-gray-500">
+                                    Classe {produto.classificacao} • Margem: {produto.margem.toFixed(1)}%
                                   </p>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                        );
-                      })}
-                  </div>
-
-                  {/* Insights sobre produtos por horário */}
-                  <div className="mt-6 bg-white/80 rounded-lg p-4 border border-cyan-100">
-                    <h4 className="font-semibold text-cyan-900 mb-3 flex items-center gap-2">
-                      <Lightbulb className="w-4 h-4" />
-                      💡 Insights de Produtos por Horário
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-600">•</span>
-                        <p>Use esses dados para planejar o estoque e garantir disponibilidade nos horários de pico</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-600">•</span>
-                        <p>Crie combos e promoções com os produtos mais vendidos em cada horário</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-600">•</span>
-                        <p>Posicione produtos estrategicamente conforme o horário de maior demanda</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-cyan-600">•</span>
-                        <p>Treine a equipe para sugerir os produtos certos no momento certo</p>
+                              <div className="text-right">
+                                <p className={`font-bold ${produto.classificacao === 'A' ? 'text-green-600' :
+                                  produto.classificacao === 'B' ? 'text-yellow-600' :
+                                    'text-red-600'
+                                  }`}>
+                                  R$ {(produto?.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-xs text-gray-500">{produto?.quantidade_vendida || 0} unidades</p>
+                              </div>
+                            </div>
+                          ))}
                       </div>
                     </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <ChartBar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-600 font-medium mb-2">
+                      Nenhum produto encontrado na Classe {selectedABC}
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      {selectedABC === 'C'
+                        ? 'Parabéns! Você não tem produtos de baixo desempenho (Classe C).'
+                        : 'Selecione outra classe para visualizar os produtos.'}
+                    </p>
+                    <button
+                      onClick={() => setSelectedABC('all')}
+                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Ver Todos os Produtos
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">Dados de vendas por horário não disponíveis</p>
-              <p className="text-gray-400 text-sm mt-2">Necessário mais dados históricos para análise</p>
+          )}
+        </div>
+      )}
+
+      {/* SEÇÃO: ANÁLISE TEMPORAL - TENDÊNCIA DE VENDAS */}
+      {viewMode === 'detalhado' && (
+        <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+          <div
+            className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+            onClick={() => toggleCard('analise-temporal')}
+          >
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-8 h-8 text-purple-600" />
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Análise Temporal de Vendas</h2>
+                <p className="text-gray-600">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
+              </div>
+            </div>
+            <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-temporal'] ? 'rotate-180' : ''}`} />
+          </div>
+
+          {expandedCards['analise-temporal'] && (
+            <div className="p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
+                <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-200 lg:col-span-2">
+                  <h3 className="font-bold text-gray-900 mb-6 text-lg flex items-center gap-2">
+                    <LineChartIcon className="w-5 h-5 text-purple-600" />
+                    Evolução das Vendas (30 dias)
+                  </h3>
+                  <div className="h-[300px]">
+                    {analise_temporal?.tendencia_vendas?.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={analise_temporal?.tendencia_vendas || []}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                          <XAxis
+                            dataKey="data"
+                            tick={{ fontSize: 12 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            content={({ payload, label }) => (
+                              <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
+                                <p className="font-bold text-gray-900">{label}</p>
+                                {payload?.map((entry, index) => (
+                                  <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                    {entry.name}: R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="vendas"
+                            stroke="#8b5cf6"
+                            strokeWidth={3}
+                            dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                            name="Vendas Diárias"
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="previsao"
+                            stroke="#ef4444"
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={false}
+                            name="Previsão"
+                            connectNulls={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <LineChartIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500">Dados de tendência não disponíveis</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+                    <div className="bg-purple-50 p-3 rounded-lg">
+                      <p className="text-sm text-purple-600 font-medium">Tendência</p>
+                      <p className={`text-lg font-bold ${analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? 'text-green-600' : 'text-red-600'}`}>
+                        {analise_temporal?.tendencia_vendas?.length > 1 && (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 1]?.vendas || 0) > (analise_temporal?.tendencia_vendas[analise_temporal?.tendencia_vendas.length - 2]?.vendas || 0) ? '📈 Alta' : '📉 Baixa'}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <p className="text-sm text-blue-600 font-medium">Média 7 dias</p>
+                      <p className="text-lg font-bold text-blue-700">
+                        R$ {(analise_temporal?.tendencia_vendas?.slice(-7).reduce((acc, curr) => acc + (curr.vendas || 0), 0) / Math.max(1, Math.min(7, analise_temporal?.tendencia_vendas?.length || 0)))?.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) || '0'}
+                      </p>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <p className="text-sm text-green-600 font-medium">Previsão Amanhã</p>
+                      <p className="text-lg font-bold text-green-700">
+                        R$ {(analise_temporal?.previsao_proxima_semana?.[0]?.previsao || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🔥 MOVIDO: COMPARAÇÃO MENSAL - AGORA ABAIXO DO GRÁFICO */}
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-200 lg:col-span-2">
+                  <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <LucideBarChart className="w-5 h-5 text-orange-600" />
+                    Comparação Mensal
+                  </h3>
+                  <div className="space-y-3">
+                    {analise_temporal?.comparacao_meses && analise_temporal?.comparacao_meses.length > 0 ? (
+                      analise_temporal?.comparacao_meses.map((comp, idx) => (
+                        <div key={`mes-${comp.mes || idx}`} className="bg-white/70 p-4 rounded-lg">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-medium text-gray-900">{comp.mes}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {comp.crescimento > 0 ? '+' : ''}{comp.crescimento.toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Vendas: R$ {(comp?.vendas || 0).toLocaleString('pt-BR')}</span>
+                            <span className="text-gray-600">Meta: R$ {(comp?.meta || 0).toLocaleString('pt-BR')}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="bg-white/70 p-6 rounded-lg text-center">
+                        <LucideBarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">Comparação mensal não disponível</p>
+                        <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 2 meses de dados</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
-      </div>
       )}
 
-      {/* SEÇÃO: ANÁLISE FINANCEIRA DETALHADA */}
+      {/* 🔥 NOVO: SEÇÃO DE ANÁLISE DE VENDAS POR HORÁRIO */}
       {viewMode === 'detalhado' && (
-      <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
-        <div
-          className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-          onClick={() => toggleCard('analise-financeira')}
-        >
-          <div className="flex items-center gap-3">
-            <DollarIcon className="w-8 h-8 text-green-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Análise Financeira Científica</h2>
-              <p className="text-gray-600">Despesas vs Lucro • Margens • Indicadores de Performance</p>
+        <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+            <div className="flex items-center gap-3">
+              <Clock className="w-8 h-8 text-indigo-600" />
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">⏰ Análise de Vendas por Horário</h2>
+                <p className="text-gray-600">Identifique os melhores horários para vendas e otimize sua operação</p>
+              </div>
             </div>
           </div>
-          <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-financeira'] ? 'rotate-180' : ''}`} />
-        </div>
 
-        {expandedCards['analise-financeira'] && (
-          <div className="p-6 animate-fadeIn">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
-              <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
-                <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
-                <div className="h-[300px]">
-                  {analise_financeira?.despesas_detalhadas && analise_financeira?.despesas_detalhadas.length > 0 ? (
+          <div className="p-6">
+            {analise_temporal?.vendas_por_hora && analise_temporal.vendas_por_hora.length > 0 ? (
+              <div className="space-y-6">
+                {/* Gráfico de Barras - Vendas por Hora */}
+                <div className="bg-gradient-to-br from-gray-50 to-indigo-50 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Volume de Vendas por Horário</h3>
+                  <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={analise_financeira?.despesas_detalhadas}>
+                      <BarChart data={analise_temporal.vendas_por_hora}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                        <XAxis 
-                          dataKey="tipo" 
-                          angle={-45} 
-                          textAnchor="end" 
-                          height={80}
+                        <XAxis
+                          dataKey="hora"
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `${value}h`}
+                        />
+                        <YAxis
+                          yAxisId="left"
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                        />
+                        <YAxis
+                          yAxisId="right"
+                          orientation="right"
                           tick={{ fontSize: 12 }}
                         />
-                        <YAxis tick={{ fontSize: 12 }} />
                         <Tooltip
-                          content={({ payload }) => (
-                            <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                              <p className="font-bold text-gray-900">{payload?.[0]?.payload?.tipo}</p>
-                              <p className="text-gray-600">Valor: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <p className="text-gray-600">Percentual: {payload?.[0]?.payload?.percentual?.toFixed(1)}%</p>
-                              <p className="text-gray-600">Impacto no Lucro: {payload?.[0]?.payload?.impacto_lucro?.toFixed(1)}%</p>
-                              <p className="text-sm text-gray-500 mt-2">
-                                Tendência: {payload?.[0]?.payload?.tendencia === 'alta' ? '📈 Alta' : payload?.[0]?.payload?.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
-                              </p>
-                            </div>
-                          )}
+                          content={({ payload, label }) => {
+                            if (!payload || payload.length === 0) return null;
+                            const data = payload[0]?.payload;
+                            return (
+                              <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-lg border-2 border-indigo-200">
+                                <p className="font-bold text-gray-900 dark:text-gray-100 mb-2">
+                                  🕐 {label}:00 - {label}:59
+                                </p>
+                                <div className="space-y-1">
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                                    💰 Faturamento: <span className="font-bold text-indigo-600">R$ {data?.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                  </p>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                                    🛒 Vendas: <span className="font-bold text-purple-600">{data?.quantidade}</span>
+                                  </p>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                                    💵 Ticket Médio: <span className="font-bold text-green-600">R$ {(data?.total / data?.quantidade || 0).toFixed(2)}</span>
+                                  </p>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                                    📈 Margem: <span className="font-bold text-blue-600">{data?.margem?.toFixed(1)}%</span>
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }}
                         />
-                        <Bar dataKey="valor" name="Valor da Despesa">
-                          {analise_financeira?.despesas_detalhadas?.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS[index % COLORS.length]}
-                              className="cursor-pointer hover:opacity-80 transition-opacity"
-                            />
-                          ))}
-                        </Bar>
+                        <Bar
+                          yAxisId="left"
+                          dataKey="total"
+                          fill="#6366F1"
+                          radius={[8, 8, 0, 0]}
+                          name="Faturamento"
+                        />
+                        <Bar
+                          yAxisId="right"
+                          dataKey="quantidade"
+                          fill="#A855F7"
+                          radius={[8, 8, 0, 0]}
+                          name="Quantidade"
+                        />
                       </BarChart>
                     </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center">
-                        <DollarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-600 font-medium mb-2">Nenhuma despesa registrada no período</p>
-                        <p className="text-gray-500 text-sm">As despesas aparecerão aqui quando forem cadastradas no sistema</p>
-                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-blue-800">
-                            💡 <strong>Dica:</strong> Cadastre despesas para visualizar a distribuição e análise financeira completa
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-sm text-green-800 font-medium">Lucro Bruto</p>
-                    <p className="text-2xl font-bold text-green-700">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-sm text-green-600">Margem: {(mes?.margem_lucro || 0).toFixed(1)}%</p>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <p className="text-sm text-red-800 font-medium">Despesas Totais</p>
-                    <p className="text-2xl font-bold text-red-700">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-sm text-red-600">{(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% das vendas</p>
                   </div>
                 </div>
-              </div>
 
-              {/* MÉTRICAS DE MARGEM */}
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(analise_financeira?.margens || {}).map(([nome, valor]) => (
-                    <div key={nome} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
-                      <p className="text-sm text-gray-600 font-medium mb-2">
-                        {nome === 'bruta' ? 'Margem Bruta' :
-                          nome === 'operacional' ? 'Margem Operacional' :
-                            nome === 'liquida' ? 'Margem Líquida' : 'Margem Contribuição'}
-                      </p>
-                      <p className={`text-3xl font-bold ${valor >= 20 ? 'text-green-600' : valor >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
-                        {valor.toFixed(1)}%
-                      </p>
-                      <div className="mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${valor >= 20 ? 'bg-green-500' : valor >= 10 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                            style={{ width: `${Math.min(valor, 100)}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {/* Insights Inteligentes */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {(() => {
+                    // Calcular insights
+                    const vendasPorHora = analise_temporal.vendas_por_hora;
 
-                {/* INDICADORES AVANÇADOS */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
-                  <h4 className="font-bold text-gray-900 mb-4">📈 Indicadores Financeiros</h4>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Ponto de Equilíbrio</span>
-                      <span className="font-bold text-blue-600">{(analise_financeira?.indicadores?.ponto_equilibrio || 0).toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Margem de Segurança</span>
-                      <span className="font-bold text-green-600">{(analise_financeira?.indicadores?.margem_seguranca || 0).toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Alavancagem Operacional</span>
-                      <span className="font-bold text-purple-600">{(analise_financeira?.indicadores?.alavancagem_operacional || 0).toFixed(2)}x</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-700">EBITDA</span>
-                      <span className="font-bold text-green-700">R$ {(analise_financeira?.indicadores?.ebitda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      )}
+                    // 🔥 DEFENSIVE: Verificar se há dados
+                    if (!vendasPorHora || vendasPorHora.length === 0) {
+                      return <div className="col-span-3 text-center text-gray-500">Sem dados de vendas por hora</div>;
+                    }
 
-      {/* SEÇÃO: INSIGHTS CIENTÍFICOS */}
-      {viewMode === 'avancado' && (
-      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl overflow-hidden mb-8">
-        <div
-          className="p-6 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-800/50"
-          onClick={() => toggleCard('insights')}
-        >
-          <div className="flex items-center gap-3">
-            <Brain className="w-8 h-8 text-cyan-400" />
-            <div>
-              <h2 className="text-2xl font-bold text-white">🧠 Insights Científicos</h2>
-              <p className="text-gray-300">Correlações • Anomalias • Previsões • Recomendações de Otimização</p>
-            </div>
-          </div>
-          <ChevronDown className={`w-6 h-6 text-gray-400 transform transition-transform ${expandedCards['insights'] ? 'rotate-180' : ''}`} />
-        </div>
+                    const melhorHorario = vendasPorHora.reduce((max, h) => h.total > max.total ? h : max, vendasPorHora[0]);
+                    const piorHorario = vendasPorHora.reduce((min, h) => h.total < min.total ? h : min, vendasPorHora[0]);
+                    const totalVendas = vendasPorHora.reduce((sum, h) => sum + h.total, 0);
+                    const mediaHoraria = totalVendas / vendasPorHora.length;
+                    const horariosAcimaDaMedia = vendasPorHora.filter(h => h.total > mediaHoraria);
 
-        {expandedCards['insights'] && (
-          <div className="p-6 animate-fadeIn">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* CORRELAÇÕES */}
-              <div className="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm">
-                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                  <GitMerge className="w-5 h-5" />
-                  Correlações Estatísticas
-                </h3>
-                <div className="space-y-4">
-                  {(insights_cientificos?.correlações || []).map((corr, idx) => (
-                    <div 
-                      key={`corr-${corr.variavel1}-${corr.variavel2}-${idx}`} 
-                      className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-colors cursor-pointer"
-                      onClick={() => setSelectedCorrelation({
-                        variavel1: corr.variavel1,
-                        variavel2: corr.variavel2,
-                        forca: corr.correlacao,
-                        significancia: corr.significancia,
-                        implicacoes: corr.insight
-                      })}
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-gray-300 font-medium">{corr.variavel1} × {corr.variavel2}</span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${Math.abs(corr.correlacao) > 0.7 ? 'bg-red-500/20 text-red-300' :
-                            Math.abs(corr.correlacao) > 0.4 ? 'bg-yellow-500/20 text-yellow-300' :
-                              'bg-green-500/20 text-green-300'
-                          }`}>
-                          r = {corr.correlacao.toFixed(2)}
-                        </span>
-                      </div>
-                      <p className="text-gray-400 text-sm mb-2">{corr.insight}</p>
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>Significância: p = {corr.significancia.toFixed(3)}</span>
-                        <span>{Math.abs(corr.correlacao) > 0.7 ? '🔴 Forte' : Math.abs(corr.correlacao) > 0.4 ? '🟡 Moderada' : '🟢 Fraca'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                    // 🔥 DEFENSIVE: Garantir que melhorHorario e piorHorario têm valores válidos
+                    const melhorMargemSafe = melhorHorario?.margem ?? 0;
+                    const piorTotalSafe = piorHorario?.total ?? 0;
+                    const melhorTotalSafe = melhorHorario?.total ?? 1; // Evitar divisão por zero
 
-              {/* PREVISÕES E RECOMENDAÇÕES */}
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-6">🔮 Previsões (Próximos 30 dias)</h3>
-                  <div className="space-y-4">
-                    {(insights_cientificos?.previsoes || []).map((prev, idx) => (
-                      <div key={`prev-${prev.variavel}-${idx}`} className="bg-black/30 p-4 rounded-lg">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-gray-300 font-medium">{prev.variavel}</span>
-                          <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
-                            {prev.confianca.toFixed(1)}% confiança
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-center">
-                            <p className="text-sm text-gray-400">Atual</p>
-                            <p className="text-xl font-bold text-white">R$ {(prev?.valor_atual || 0).toLocaleString('pt-BR')}</p>
+                    return (
+                      <>
+                        {/* Melhor Horário */}
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                              <TrendingUp className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-green-700 font-medium">🏆 Melhor Horário</p>
+                              <p className="text-2xl font-bold text-green-900">{melhorHorario?.hora ?? 0}h</p>
+                            </div>
                           </div>
-                          <ArrowUpRight className="w-6 h-6 text-green-400" />
-                          <div className="text-center">
-                            <p className="text-sm text-gray-400">Previsão</p>
-                            <p className="text-xl font-bold text-green-400">R$ {(prev?.previsao_30d || 0).toLocaleString('pt-BR')}</p>
+                          <div className="space-y-1 text-sm">
+                            <p className="text-gray-700">💰 R$ {(melhorHorario?.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-gray-700">🛒 {melhorHorario?.quantidade ?? 0} vendas</p>
+                            <p className="text-gray-700">📈 {melhorMargemSafe.toFixed(1)}% margem</p>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-green-200">
+                            <p className="text-xs text-green-700">
+                              💡 <strong>Dica:</strong> Concentre promoções e equipe neste horário
+                            </p>
                           </div>
                         </div>
-                        <div className="mt-3 text-xs text-gray-400">
-                          Intervalo: R$ {prev.intervalo_confianca[0].toLocaleString('pt-BR')} - R$ {prev.intervalo_confianca[1].toLocaleString('pt-BR')}
+
+                        {/* Horário Crítico */}
+                        <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
+                              <AlertTriangle className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-red-700 font-medium">⚠️ Horário Crítico</p>
+                              <p className="text-2xl font-bold text-red-900">{piorHorario?.hora ?? 0}h</p>
+                            </div>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <p className="text-gray-700">💰 R$ {(piorHorario?.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-gray-700">🛒 {piorHorario?.quantidade ?? 0} vendas</p>
+                            <p className="text-gray-700">📉 {((piorTotalSafe / melhorTotalSafe) * 100).toFixed(0)}% do melhor</p>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-red-200">
+                            <p className="text-xs text-red-700">
+                              💡 <strong>Dica:</strong> Avalie necessidade de equipe reduzida
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+
+                        {/* Horários de Pico */}
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                              <TargetIcon className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-blue-700 font-medium">🎯 Horários de Pico</p>
+                              <p className="text-2xl font-bold text-blue-900">{horariosAcimaDaMedia.length}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <p className="text-gray-700">📊 Média: R$ {mediaHoraria.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-gray-700">⏰ Horários:</p>
+                            <p className="text-gray-700 font-mono text-xs">
+                              {horariosAcimaDaMedia.slice(0, 5).map(h => `${h.hora}h`).join(', ')}
+                              {horariosAcimaDaMedia.length > 5 && '...'}
+                            </p>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-blue-200">
+                            <p className="text-xs text-blue-700">
+                              💡 <strong>Dica:</strong> Foque recursos nos horários de pico
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Recomendações Estratégicas */}
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5 text-purple-600" />
+                    💡 Recomendações Estratégicas
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white/70 p-4 rounded-lg">
+                      <p className="font-semibold text-purple-900 mb-2">👥 Gestão de Equipe</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        <li>• Escale mais funcionários nos horários de pico</li>
+                        <li>• Reduza equipe nos horários de baixo movimento</li>
+                        <li>• Planeje intervalos fora dos horários críticos</li>
+                      </ul>
+                    </div>
+                    <div className="bg-white/70 p-4 rounded-lg">
+                      <p className="font-semibold text-purple-900 mb-2">🎯 Estratégias de Vendas</p>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        <li>• Lance promoções nos horários de maior movimento</li>
+                        <li>• Teste ofertas especiais em horários fracos</li>
+                        <li>• Monitore ticket médio por horário</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
 
-                {/* RECOMENDAÇÕES DE OTIMIZAÇÃO */}
-                <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-6">🚀 Recomendações de Otimização</h3>
-                  <div className="space-y-4">
-                    {(insights_cientificos?.recomendacoes_otimizacao || []).map((rec, idx) => (
-                      <div 
-                        key={`rec-${rec.area}-${idx}`} 
-                        className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-colors cursor-pointer"
-                        onClick={() => setSelectedRecommendation({
-                          tipo: 'oportunidade',
-                          mensagem: rec.acao,
-                          impacto_estimado: rec.impacto_esperado * 1000, // Converter % para valor estimado
-                          acao_sugerida: rec.acao,
-                          prazo_sugerido: rec.complexidade === 'baixa' ? '1-2 semanas' : rec.complexidade === 'media' ? '3-4 semanas' : '1-2 meses'
-                        })}
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-gray-300 font-medium">{rec.area}</span>
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${rec.complexidade === 'baixa' ? 'bg-green-500/30 text-green-300' :
-                              rec.complexidade === 'media' ? 'bg-yellow-500/30 text-yellow-300' :
-                                'bg-red-500/30 text-red-300'
-                            }`}>
-                            {rec.complexidade === 'baixa' ? '🟢 Fácil' : rec.complexidade === 'media' ? '🟡 Médio' : '🔴 Complexo'}
-                          </span>
-                        </div>
-                        <p className="text-gray-300 mb-3">{rec.acao}</p>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">Impacto Esperado:</span>
-                          <span className="text-green-400 font-bold">+{(typeof rec.impacto_esperado === 'number' ? rec.impacto_esperado.toFixed(1) : '0.0')}%</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* SEÇÃO: PRODUTOS ESTRATÉGICOS */}
-      {viewMode === 'avancado' && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* PRODUTOS ESTRELA */}
-        <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-6 border border-yellow-200">
-          <div className="flex items-center gap-3 mb-6">
-            <Star className="w-8 h-8 text-yellow-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">⭐ Produtos Estrela</h2>
-              <p className="text-gray-600">Alta margem + Alta participação + Alta rentabilidade</p>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {analise_produtos?.produtos_estrela?.map((produto, idx) => (
-              <div
-                key={produto.id}
-                className="bg-white/80 backdrop-blur-sm rounded-xl p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer border border-yellow-100"
-                onClick={() => setModalProdutoEstrela(produto)}
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center">
-                      <Star className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900">{produto.nome}</p>
-                      <p className="text-sm text-gray-600">Faturamento: <span className="font-bold text-green-600">R$ {produto.faturamento.toFixed(2)}</span></p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-yellow-600">{produto.quantidade_vendida}</p>
-                    <p className="text-sm text-gray-600">Vendas</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-sm text-gray-600">Faturamento</p>
-                    <p className="text-lg font-bold text-gray-900">R$ {produto.faturamento.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Quantidade</p>
-                    <p className="text-lg font-bold text-blue-600">{produto.quantidade_vendida}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Ticket Médio</p>
-                    <p className="text-lg font-bold text-purple-600">R$ {(produto.faturamento / produto.quantidade_vendida).toFixed(2)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* PRODUTOS LENTOS */}
-        <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl shadow-xl p-6 border border-red-200">
-          <div className="flex items-center gap-3 mb-6">
-            <AlertTriangle className="w-8 h-8 text-red-600" />
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">⚠️ Produtos Lentos</h2>
-              <p className="text-gray-600">Baixo giro + Alto custo de estoque + Oportunidade de melhoria</p>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {analise_produtos?.produtos_lentos?.length > 0 ? (
-              analise_produtos?.produtos_lentos?.map((produto, idx) => (
-                <div
-                  key={produto.id}
-                  className="bg-white/80 backdrop-blur-sm rounded-xl p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer border border-red-100"
-                  onClick={() => setModalProdutoLento(produto)}
-                >
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-900">{produto.nome}</p>
-                        <p className="text-sm text-gray-600">Vendeu apenas {produto.quantidade} unidades</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-red-600">{produto.giro_estoque?.toFixed(2) || '0.00'}x</p>
-                      <p className="text-sm text-gray-600">Giro</p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <div className="bg-red-50 p-3 rounded-lg">
-                      <p className="text-xs text-red-600 font-medium">Estoque Atual</p>
-                      <p className="text-lg font-bold text-red-700">{produto.estoque_atual || 0} un</p>
-                    </div>
-                    <div className="bg-orange-50 p-3 rounded-lg">
-                      <p className="text-xs text-orange-600 font-medium">Dias de Estoque</p>
-                      <p className="text-lg font-bold text-orange-700">{produto.dias_estoque < 999 ? `${produto.dias_estoque} dias` : '∞'}</p>
-                    </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg">
-                      <p className="text-xs text-yellow-600 font-medium">Capital Parado</p>
-                      <p className="text-lg font-bold text-yellow-700">R$ {(produto.custo_parado || 0).toFixed(2)}</p>
-                    </div>
-                    <div className="bg-pink-50 p-3 rounded-lg">
-                      <p className="text-xs text-pink-600 font-medium">Perda Mensal</p>
-                      <p className="text-lg font-bold text-pink-700">R$ {(produto.perda_mensal || 0).toFixed(2)}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-3 pt-3 border-t border-red-200">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Faturamento Total:</span>
-                      <span className="font-bold text-gray-900">R$ {(produto.total_vendido || 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-gray-600">Margem:</span>
-                      <span className="font-bold text-green-600">{(produto.margem || 0).toFixed(1)}%</span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-3 bg-red-50 p-3 rounded-lg">
-                    <p className="text-xs font-bold text-red-800 mb-1">💡 Recomendação:</p>
-                    <p className="text-xs text-red-700">
-                      {produto.giro_estoque < 0.5 
-                        ? 'Considere promoção agressiva ou descontinuar produto'
-                        : produto.giro_estoque < 1.0
-                        ? 'Faça promoção para acelerar vendas'
-                        : 'Reduza reposição e monitore de perto'}
+                {/* 🔥 NOVO: Produtos Mais Vendidos por Horário */}
+                {analise_temporal?.produtos_por_hora && Object.keys(analise_temporal.produtos_por_hora).length > 0 && (
+                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-6 border border-cyan-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <Package className="w-5 h-5 text-cyan-600" />
+                      🏆 Top Produtos por Horário
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Descubra quais produtos vendem melhor em cada período do dia
                     </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
+                      {Object.entries(analise_temporal.produtos_por_hora)
+                        .sort(([horaA], [horaB]) => Number(horaA) - Number(horaB))
+                        .filter(([hora, produtos]: [string, any]) => {
+                          // 🔥 FILTER: Remover entradas vazias antes do map
+                          const produtosArray = Array.isArray(produtos) ? produtos : [];
+                          return produtosArray.length > 0;
+                        })
+                        .map(([hora, produtos]: [string, any]) => {
+                          const produtosArray = Array.isArray(produtos) ? produtos : [];
+
+                          return (
+                            <div key={hora} className="bg-white/80 rounded-lg p-4 border border-cyan-100 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-bold text-cyan-900 flex items-center gap-2">
+                                  <Clock className="w-4 h-4" />
+                                  {hora}h - {Number(hora) + 1}h
+                                </h4>
+                                <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">
+                                  Top {produtosArray.length}
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                {produtosArray.map((produto, idx) => (
+                                  <div
+                                    key={produto.produto_id}
+                                    className="flex items-center justify-between p-2 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg hover:from-cyan-100 hover:to-blue-100 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-yellow-400 text-yellow-900' :
+                                        idx === 1 ? 'bg-gray-300 text-gray-700' :
+                                          idx === 2 ? 'bg-orange-400 text-orange-900' :
+                                            'bg-blue-100 text-blue-700'
+                                        }`}>
+                                        {idx + 1}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate" title={produto.produto_nome}>
+                                          {produto.produto_nome}
+                                        </p>
+                                        <p className="text-xs text-gray-600">
+                                          {produto.quantidade_vendida} un
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right ml-2">
+                                      <p className="text-sm font-bold text-cyan-700">
+                                        R$ {produto.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    {/* Insights sobre produtos por horário */}
+                    <div className="mt-6 bg-white/80 rounded-lg p-4 border border-cyan-100">
+                      <h4 className="font-semibold text-cyan-900 mb-3 flex items-center gap-2">
+                        <Lightbulb className="w-4 h-4" />
+                        💡 Insights de Produtos por Horário
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-600">•</span>
+                          <p>Use esses dados para planejar o estoque e garantir disponibilidade nos horários de pico</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-600">•</span>
+                          <p>Crie combos e promoções com os produtos mais vendidos em cada horário</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-600">•</span>
+                          <p>Posicione produtos estrategicamente conforme o horário de maior demanda</p>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-600">•</span>
+                          <p>Treine a equipe para sugerir os produtos certos no momento certo</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
+                )}
+              </div>
             ) : (
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 text-center border border-red-100">
-                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 font-medium">Nenhum produto lento identificado</p>
-                <p className="text-gray-500 text-sm">Todos os produtos estão com bom desempenho!</p>
+              <div className="text-center py-12">
+                <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">Dados de vendas por horário não disponíveis</p>
+                <p className="text-gray-400 text-sm mt-2">Necessário mais dados históricos para análise</p>
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* SEÇÃO: ANÁLISE FINANCEIRA DETALHADA */}
+      {viewMode === 'detalhado' && (
+        <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+          <div
+            className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+            onClick={() => toggleCard('analise-financeira')}
+          >
+            <div className="flex items-center gap-3">
+              <DollarIcon className="w-8 h-8 text-green-600" />
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Análise Financeira Científica</h2>
+                <p className="text-gray-600">Despesas vs Lucro • Margens • Indicadores de Performance</p>
+              </div>
+            </div>
+            <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-financeira'] ? 'rotate-180' : ''}`} />
+          </div>
+
+          {expandedCards['analise-financeira'] && (
+            <div className="p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
+                <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
+                  <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
+                  <div className="h-[300px]">
+                    {analise_financeira?.despesas_detalhadas && analise_financeira?.despesas_detalhadas.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analise_financeira?.despesas_detalhadas}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                          <XAxis
+                            dataKey="tipo"
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            content={({ payload }) => (
+                              <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
+                                <p className="font-bold text-gray-900">{payload?.[0]?.payload?.tipo}</p>
+                                <p className="text-gray-600">Valor: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-gray-600">Percentual: {payload?.[0]?.payload?.percentual?.toFixed(1)}%</p>
+                                <p className="text-gray-600">Impacto no Lucro: {payload?.[0]?.payload?.impacto_lucro?.toFixed(1)}%</p>
+                                <p className="text-sm text-gray-500 mt-2">
+                                  Tendência: {payload?.[0]?.payload?.tendencia === 'alta' ? '📈 Alta' : payload?.[0]?.payload?.tendencia === 'baixa' ? '📉 Baixa' : '➡️ Estável'}
+                                </p>
+                              </div>
+                            )}
+                          />
+                          <Bar dataKey="valor" name="Valor da Despesa">
+                            {analise_financeira?.despesas_detalhadas?.map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={COLORS[index % COLORS.length]}
+                                className="cursor-pointer hover:opacity-80 transition-opacity"
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <DollarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-600 font-medium mb-2">Nenhuma despesa registrada no período</p>
+                          <p className="text-gray-500 text-sm">As despesas aparecerão aqui quando forem cadastradas no sistema</p>
+                          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                              💡 <strong>Dica:</strong> Cadastre despesas para visualizar a distribuição e análise financeira completa
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-6">
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <p className="text-sm text-green-800 font-medium">Lucro Bruto</p>
+                      <p className="text-2xl font-bold text-green-700">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-sm text-green-600">Margem: {(mes?.margem_lucro || 0).toFixed(1)}%</p>
+                    </div>
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <p className="text-sm text-red-800 font-medium">Despesas Totais</p>
+                      <p className="text-2xl font-bold text-red-700">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-sm text-red-600">{(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% das vendas</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* MÉTRICAS DE MARGEM */}
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    {Object.entries(analise_financeira?.margens || {}).map(([nome, valor]) => (
+                      <div key={nome} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+                        <p className="text-sm text-gray-600 font-medium mb-2">
+                          {nome === 'bruta' ? 'Margem Bruta' :
+                            nome === 'operacional' ? 'Margem Operacional' :
+                              nome === 'liquida' ? 'Margem Líquida' : 'Margem Contribuição'}
+                        </p>
+                        <p className={`text-3xl font-bold ${valor >= 20 ? 'text-green-600' : valor >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          {valor.toFixed(1)}%
+                        </p>
+                        <div className="mt-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${valor >= 20 ? 'bg-green-500' : valor >= 10 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                              style={{ width: `${Math.min(valor, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* INDICADORES AVANÇADOS */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+                    <h4 className="font-bold text-gray-900 mb-4">📈 Indicadores Financeiros</h4>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Ponto de Equilíbrio</span>
+                        <span className="font-bold text-blue-600">{(analise_financeira?.indicadores?.ponto_equilibrio || 0).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Margem de Segurança</span>
+                        <span className="font-bold text-green-600">{(analise_financeira?.indicadores?.margem_seguranca || 0).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Alavancagem Operacional</span>
+                        <span className="font-bold text-purple-600">{(analise_financeira?.indicadores?.alavancagem_operacional || 0).toFixed(2)}x</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">EBITDA</span>
+                        <span className="font-bold text-green-700">R$ {(analise_financeira?.indicadores?.ebitda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SEÇÃO: INSIGHTS CIENTÍFICOS */}
+      {viewMode === 'avancado' && (
+        <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl overflow-hidden mb-8">
+          <div
+            className="p-6 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-800/50"
+            onClick={() => toggleCard('insights')}
+          >
+            <div className="flex items-center gap-3">
+              <Brain className="w-8 h-8 text-cyan-400" />
+              <div>
+                <h2 className="text-2xl font-bold text-white">🧠 Insights Científicos</h2>
+                <p className="text-gray-300">Correlações • Anomalias • Previsões • Recomendações de Otimização</p>
+              </div>
+            </div>
+            <ChevronDown className={`w-6 h-6 text-gray-400 transform transition-transform ${expandedCards['insights'] ? 'rotate-180' : ''}`} />
+          </div>
+
+          {expandedCards['insights'] && (
+            <div className="p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* CORRELAÇÕES */}
+                <div className="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <GitMerge className="w-5 h-5" />
+                    Correlações Estatísticas
+                  </h3>
+                  <div className="space-y-4">
+                    {(insights_cientificos?.correlações || []).map((corr, idx) => (
+                      <div
+                        key={`corr-${corr.variavel1}-${corr.variavel2}-${idx}`}
+                        className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-colors cursor-pointer"
+                        onClick={() => setSelectedCorrelation({
+                          variavel1: corr.variavel1,
+                          variavel2: corr.variavel2,
+                          forca: corr.correlacao,
+                          significancia: corr.significancia,
+                          implicacoes: corr.insight
+                        })}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-gray-300 font-medium">{corr.variavel1} × {corr.variavel2}</span>
+                          <span className={`px-3 py-1 rounded-full text-sm font-bold ${Math.abs(corr.correlacao) > 0.7 ? 'bg-red-500/20 text-red-300' :
+                            Math.abs(corr.correlacao) > 0.4 ? 'bg-yellow-500/20 text-yellow-300' :
+                              'bg-green-500/20 text-green-300'
+                            }`}>
+                            r = {corr.correlacao.toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-gray-400 text-sm mb-2">{corr.insight}</p>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>Significância: p = {corr.significancia.toFixed(3)}</span>
+                          <span>{Math.abs(corr.correlacao) > 0.7 ? '🔴 Forte' : Math.abs(corr.correlacao) > 0.4 ? '🟡 Moderada' : '🟢 Fraca'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* PREVISÕES E RECOMENDAÇÕES */}
+                <div className="space-y-6">
+                  <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-6">🔮 Previsões (Próximos 30 dias)</h3>
+                    <div className="space-y-4">
+                      {(insights_cientificos?.previsoes || []).map((prev, idx) => (
+                        <div key={`prev-${prev.variavel}-${idx}`} className="bg-black/30 p-4 rounded-lg">
+                          <div className="flex justify-between items-center mb-3">
+                            <span className="text-gray-300 font-medium">{prev.variavel}</span>
+                            <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
+                              {prev.confianca.toFixed(1)}% confiança
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-center">
+                              <p className="text-sm text-gray-400">Atual</p>
+                              <p className="text-xl font-bold text-white">R$ {(prev?.valor_atual || 0).toLocaleString('pt-BR')}</p>
+                            </div>
+                            <ArrowUpRight className="w-6 h-6 text-green-400" />
+                            <div className="text-center">
+                              <p className="text-sm text-gray-400">Previsão</p>
+                              <p className="text-xl font-bold text-green-400">R$ {(prev?.previsao_30d || 0).toLocaleString('pt-BR')}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 text-xs text-gray-400">
+                            Intervalo: R$ {prev.intervalo_confianca[0].toLocaleString('pt-BR')} - R$ {prev.intervalo_confianca[1].toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* RECOMENDAÇÕES DE OTIMIZAÇÃO */}
+                  <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-6">🚀 Recomendações de Otimização</h3>
+                    <div className="space-y-4">
+                      {(insights_cientificos?.recomendacoes_otimizacao || []).map((rec, idx) => (
+                        <div
+                          key={`rec-${rec.area}-${idx}`}
+                          className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-colors cursor-pointer"
+                          onClick={() => setSelectedRecommendation({
+                            tipo: 'oportunidade',
+                            mensagem: rec.acao,
+                            impacto_estimado: rec.impacto_esperado * 1000, // Converter % para valor estimado
+                            acao_sugerida: rec.acao,
+                            prazo_sugerido: rec.complexidade === 'baixa' ? '1-2 semanas' : rec.complexidade === 'media' ? '3-4 semanas' : '1-2 meses'
+                          })}
+                        >
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-gray-300 font-medium">{rec.area}</span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${rec.complexidade === 'baixa' ? 'bg-green-500/30 text-green-300' :
+                              rec.complexidade === 'media' ? 'bg-yellow-500/30 text-yellow-300' :
+                                'bg-red-500/30 text-red-300'
+                              }`}>
+                              {rec.complexidade === 'baixa' ? '🟢 Fácil' : rec.complexidade === 'media' ? '🟡 Médio' : '🔴 Complexo'}
+                            </span>
+                          </div>
+                          <p className="text-gray-300 mb-3">{rec.acao}</p>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Impacto Esperado:</span>
+                            <span className="text-green-400 font-bold">+{(typeof rec.impacto_esperado === 'number' ? rec.impacto_esperado.toFixed(1) : '0.0')}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SEÇÃO: PRODUTOS ESTRATÉGICOS */}
+      {viewMode === 'avancado' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* PRODUTOS ESTRELA */}
+          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-6 border border-yellow-200">
+            <div className="flex items-center gap-3 mb-6">
+              <Star className="w-8 h-8 text-yellow-600" />
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">⭐ Produtos Estrela</h2>
+                <p className="text-gray-600">Alta margem + Alta participação + Alta rentabilidade</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {analise_produtos?.produtos_estrela?.map((produto, idx) => (
+                <div
+                  key={produto.id}
+                  className="bg-white/80 backdrop-blur-sm rounded-xl p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer border border-yellow-100"
+                  onClick={() => setModalProdutoEstrela(produto)}
+                >
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center">
+                        <Star className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">{produto.nome}</p>
+                        <p className="text-sm text-gray-600">Faturamento: <span className="font-bold text-green-600">R$ {produto.faturamento.toFixed(2)}</span></p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-yellow-600">{produto.quantidade_vendida}</p>
+                      <p className="text-sm text-gray-600">Vendas</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-sm text-gray-600">Faturamento</p>
+                      <p className="text-lg font-bold text-gray-900">R$ {produto.faturamento.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Quantidade</p>
+                      <p className="text-lg font-bold text-blue-600">{produto.quantidade_vendida}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Ticket Médio</p>
+                      <p className="text-lg font-bold text-purple-600">R$ {(produto.faturamento / produto.quantidade_vendida).toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PRODUTOS LENTOS */}
+          <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl shadow-xl p-6 border border-red-200">
+            <div className="flex items-center gap-3 mb-6">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">⚠️ Produtos Lentos</h2>
+                <p className="text-gray-600">Baixo giro + Alto custo de estoque + Oportunidade de melhoria</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {analise_produtos?.produtos_lentos?.length > 0 ? (
+                analise_produtos?.produtos_lentos?.map((produto, idx) => (
+                  <div
+                    key={produto.id}
+                    className="bg-white/80 backdrop-blur-sm rounded-xl p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer border border-red-100"
+                    onClick={() => setModalProdutoLento(produto)}
+                  >
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
+                          <Package className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900">{produto.nome}</p>
+                          <p className="text-sm text-gray-600">Vendeu apenas {produto.quantidade} unidades</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-red-600">{produto.giro_estoque?.toFixed(2) || '0.00'}x</p>
+                        <p className="text-sm text-gray-600">Giro</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div className="bg-red-50 p-3 rounded-lg">
+                        <p className="text-xs text-red-600 font-medium">Estoque Atual</p>
+                        <p className="text-lg font-bold text-red-700">{produto.estoque_atual || 0} un</p>
+                      </div>
+                      <div className="bg-orange-50 p-3 rounded-lg">
+                        <p className="text-xs text-orange-600 font-medium">Dias de Estoque</p>
+                        <p className="text-lg font-bold text-orange-700">{produto.dias_estoque < 999 ? `${produto.dias_estoque} dias` : '∞'}</p>
+                      </div>
+                      <div className="bg-yellow-50 p-3 rounded-lg">
+                        <p className="text-xs text-yellow-600 font-medium">Capital Parado</p>
+                        <p className="text-lg font-bold text-yellow-700">R$ {(produto.custo_parado || 0).toFixed(2)}</p>
+                      </div>
+                      <div className="bg-pink-50 p-3 rounded-lg">
+                        <p className="text-xs text-pink-600 font-medium">Perda Mensal</p>
+                        <p className="text-lg font-bold text-pink-700">R$ {(produto.perda_mensal || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-red-200">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Faturamento Total:</span>
+                        <span className="font-bold text-gray-900">R$ {(produto.total_vendido || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm mt-1">
+                        <span className="text-gray-600">Margem:</span>
+                        <span className="font-bold text-green-600">{(produto.margem || 0).toFixed(1)}%</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 bg-red-50 p-3 rounded-lg">
+                      <p className="text-xs font-bold text-red-800 mb-1">💡 Recomendação:</p>
+                      <p className="text-xs text-red-700">
+                        {produto.giro_estoque < 0.5
+                          ? 'Considere promoção agressiva ou descontinuar produto'
+                          : produto.giro_estoque < 1.0
+                            ? 'Faça promoção para acelerar vendas'
+                            : 'Reduza reposição e monitore de perto'}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 text-center border border-red-100">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 font-medium">Nenhum produto lento identificado</p>
+                  <p className="text-gray-500 text-sm">Todos os produtos estão com bom desempenho!</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* SEÇÃO: PREVISÃO DE DEMANDA */}
       {viewMode === 'avancado' && (
-      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl shadow-xl p-6 mb-8 border border-purple-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-          <Target className="w-8 h-8 text-purple-600" />
-          📊 Previsão de Demanda Inteligente
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {analise_produtos?.previsao_demanda?.map((previsao, idx) => {
-            // Calcular dias até acabar o estoque
-            const estoqueAtual = previsao.estoque_atual || 0;
-            const demandaDiaria = previsao.demanda_diaria_prevista || 0;
-            const diasAteAcabar = demandaDiaria > 0 ? Math.floor(estoqueAtual / demandaDiaria) : 999;
-            const riscoRuptura = diasAteAcabar < 7;
-            
-            return (
-            <div key={idx} className={`bg-white/80 backdrop-blur-sm rounded-xl p-6 border ${riscoRuptura ? 'border-red-300 bg-red-50/50' : 'border-purple-100'}`}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900">{previsao.nome || previsao.produto_nome || previsao.variavel}</h3>
-                <div className="flex items-center gap-2">
-                  {riscoRuptura && (
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                      ⚠️ Risco Ruptura
-                    </span>
-                  )}
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${previsao.confianca > 80 ? 'bg-green-100 text-green-800' : previsao.confianca > 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                    {previsao.confianca?.toFixed(0) || 75}% confiança
-                  </span>
-                </div>
-              </div>
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl shadow-xl p-6 mb-8 border border-purple-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Target className="w-8 h-8 text-purple-600" />
+            📊 Previsão de Demanda Inteligente
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {analise_produtos?.previsao_demanda?.map((previsao, idx) => {
+              // Calcular dias até acabar o estoque
+              const estoqueAtual = previsao.estoque_atual || 0;
+              const demandaDiaria = previsao.demanda_diaria_prevista || 0;
+              const diasAteAcabar = demandaDiaria > 0 ? Math.floor(estoqueAtual / demandaDiaria) : 999;
+              const riscoRuptura = diasAteAcabar < 7;
 
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Estoque Atual</span>
-                  <span className={`font-bold ${riscoRuptura ? 'text-red-600' : 'text-gray-900'}`}>
-                    {estoqueAtual} unidades
-                  </span>
-                </div>
+              return (
+                <div key={idx} className={`bg-white/80 backdrop-blur-sm rounded-xl p-6 border ${riscoRuptura ? 'border-red-300 bg-red-50/50' : 'border-purple-100'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">{previsao.nome || previsao.produto_nome || previsao.variavel}</h3>
+                    <div className="flex items-center gap-2">
+                      {riscoRuptura && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                          ⚠️ Risco Ruptura
+                        </span>
+                      )}
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${previsao.confianca > 80 ? 'bg-green-100 text-green-800' : previsao.confianca > 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                        {previsao.confianca?.toFixed(0) || 75}% confiança
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Demanda Diária</span>
-                  <span className="font-bold text-purple-600">{demandaDiaria.toFixed(1)} un/dia</span>
-                </div>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Estoque Atual</span>
+                      <span className={`font-bold ${riscoRuptura ? 'text-red-600' : 'text-gray-900'}`}>
+                        {estoqueAtual} unidades
+                      </span>
+                    </div>
 
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Dias até Acabar</span>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-bold text-xl ${diasAteAcabar < 7 ? 'text-red-600' : diasAteAcabar < 14 ? 'text-yellow-600' : 'text-green-600'}`}>
-                      {diasAteAcabar < 999 ? `${diasAteAcabar} dias` : '∞'}
-                    </span>
-                    {diasAteAcabar < 7 && <AlertTriangle className="w-5 h-5 text-red-500" />}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Demanda Diária</span>
+                      <span className="font-bold text-purple-600">{demandaDiaria.toFixed(1)} un/dia</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Dias até Acabar</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold text-xl ${diasAteAcabar < 7 ? 'text-red-600' : diasAteAcabar < 14 ? 'text-yellow-600' : 'text-green-600'}`}>
+                          {diasAteAcabar < 999 ? `${diasAteAcabar} dias` : '∞'}
+                        </span>
+                        {diasAteAcabar < 7 && <AlertTriangle className="w-5 h-5 text-red-500" />}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Margem de Lucro</span>
+                      <span className="font-bold text-green-600">{(previsao.margem_lucro || 0).toFixed(1)}%</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Classificação ABC</span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${previsao.classificação_abc === 'A' ? 'bg-green-100 text-green-800' :
+                        previsao.classificação_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                        Classe {previsao.classificação_abc || 'C'}
+                      </span>
+                    </div>
+
+                    {riscoRuptura && (
+                      <div className="pt-4 border-t border-red-200 bg-red-50 p-3 rounded-lg">
+                        <p className="text-sm font-bold text-red-800 mb-1">🚨 Ação Urgente Necessária!</p>
+                        <p className="text-xs text-red-700">
+                          Estoque acabará em {diasAteAcabar} dias. Faça reposição imediatamente para evitar ruptura.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-purple-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Previsão Vendas 30d</span>
+                        <span className="font-bold text-purple-600">
+                          R$ {(previsao.previsao_30d || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Margem de Lucro</span>
-                  <span className="font-bold text-green-600">{(previsao.margem_lucro || 0).toFixed(1)}%</span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Classificação ABC</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                    previsao.classificação_abc === 'A' ? 'bg-green-100 text-green-800' :
-                    previsao.classificação_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    Classe {previsao.classificação_abc || 'C'}
-                  </span>
-                </div>
-
-                {riscoRuptura && (
-                  <div className="pt-4 border-t border-red-200 bg-red-50 p-3 rounded-lg">
-                    <p className="text-sm font-bold text-red-800 mb-1">🚨 Ação Urgente Necessária!</p>
-                    <p className="text-xs text-red-700">
-                      Estoque acabará em {diasAteAcabar} dias. Faça reposição imediatamente para evitar ruptura.
-                    </p>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-purple-200">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Previsão Vendas 30d</span>
-                    <span className="font-bold text-purple-600">
-                      R$ {(previsao.previsao_30d || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
       )}
 
       {/* 🔥 NOVO: ANÁLISE CIENTÍFICA DE PADRÕES TEMPORAIS */}
       {viewMode === 'avancado' && analise_temporal?.padroes_temporais_clientes && Object.keys(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).length > 0 && (
-      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-indigo-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-          <Clock className="w-8 h-8 text-indigo-600" />
-          🕐 Análise Científica: Padrões Temporais de Clientes
-        </h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Perfis Temporais */}
-          {Object.entries(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).map(([perfil, clientes]: [string, any[]]) => {
-            // 🔥 DEFENSIVE: Garantir que clientes é um array
-            const clientesArray = Array.isArray(clientes) ? clientes : [];
-            const totalGasto = clientesArray.reduce((sum, c) => sum + (c.total_gasto || 0), 0);
-            const ticketMedio = clientesArray.length > 0 ? totalGasto / clientesArray.length : 0;
-            
-            const perfilConfig = {
-              matutino: { icon: '🌅', color: 'from-yellow-50 to-orange-50', border: 'border-yellow-200', text: 'text-yellow-900', badge: 'bg-yellow-100 text-yellow-800' },
-              vespertino: { icon: '☀️', color: 'from-blue-50 to-cyan-50', border: 'border-blue-200', text: 'text-blue-900', badge: 'bg-blue-100 text-blue-800' },
-              noturno: { icon: '🌙', color: 'from-purple-50 to-indigo-50', border: 'border-purple-200', text: 'text-purple-900', badge: 'bg-purple-100 text-purple-800' }
-            }[perfil] || { icon: '⏰', color: 'from-gray-50 to-gray-100', border: 'border-gray-200', text: 'text-gray-900', badge: 'bg-gray-100 text-gray-800' };
-            
-            return (
-              <div key={perfil} className={`bg-gradient-to-br ${perfilConfig.color} rounded-xl p-6 border ${perfilConfig.border}`}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className={`text-lg font-bold ${perfilConfig.text} flex items-center gap-2`}>
-                    <span className="text-2xl">{perfilConfig.icon}</span>
-                    {perfil.charAt(0).toUpperCase() + perfil.slice(1)}
-                  </h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${perfilConfig.badge}`}>
-                    {clientes.length} clientes
-                  </span>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="bg-white/70 p-3 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Faturamento Total</p>
-                    <p className={`text-xl font-bold ${perfilConfig.text}`}>
-                      R$ {totalGasto.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </p>
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-indigo-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Clock className="w-8 h-8 text-indigo-600" />
+            🕐 Análise Científica: Padrões Temporais de Clientes
+          </h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Perfis Temporais */}
+            {Object.entries(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).map(([perfil, clientes]: [string, any[]]) => {
+              // 🔥 DEFENSIVE: Garantir que clientes é um array
+              const clientesArray = Array.isArray(clientes) ? clientes : [];
+              const totalGasto = clientesArray.reduce((sum, c) => sum + (c.total_gasto || 0), 0);
+              const ticketMedio = clientesArray.length > 0 ? totalGasto / clientesArray.length : 0;
+
+              const perfilConfig = {
+                matutino: { icon: '🌅', color: 'from-yellow-50 to-orange-50', border: 'border-yellow-200', text: 'text-yellow-900', badge: 'bg-yellow-100 text-yellow-800' },
+                vespertino: { icon: '☀️', color: 'from-blue-50 to-cyan-50', border: 'border-blue-200', text: 'text-blue-900', badge: 'bg-blue-100 text-blue-800' },
+                noturno: { icon: '🌙', color: 'from-purple-50 to-indigo-50', border: 'border-purple-200', text: 'text-purple-900', badge: 'bg-purple-100 text-purple-800' }
+              }[perfil] || { icon: '⏰', color: 'from-gray-50 to-gray-100', border: 'border-gray-200', text: 'text-gray-900', badge: 'bg-gray-100 text-gray-800' };
+
+              return (
+                <div key={perfil} className={`bg-gradient-to-br ${perfilConfig.color} rounded-xl p-6 border ${perfilConfig.border}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className={`text-lg font-bold ${perfilConfig.text} flex items-center gap-2`}>
+                      <span className="text-2xl">{perfilConfig.icon}</span>
+                      {perfil.charAt(0).toUpperCase() + perfil.slice(1)}
+                    </h3>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${perfilConfig.badge}`}>
+                      {clientes.length} clientes
+                    </span>
                   </div>
-                  
-                  <div className="bg-white/70 p-3 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Ticket Médio</p>
-                    <p className={`text-xl font-bold ${perfilConfig.text}`}>
-                      R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-white/70 p-3 rounded-lg">
-                    <p className="text-xs text-gray-600 mb-1">Top 3 Clientes</p>
-                    <div className="space-y-1 mt-2">
-                      {clientes
-                        .sort((a, b) => (b.total_gasto || 0) - (a.total_gasto || 0))
-                        .slice(0, 3)
-                        .map((cliente, idx) => (
-                          <div key={cliente.cliente_id} className="flex items-center justify-between text-xs">
-                            <span className="truncate flex-1 mr-2">{idx + 1}. {cliente.cliente_nome}</span>
-                            <span className="font-bold">R$ {(cliente.total_gasto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-                          </div>
-                        ))}
+
+                  <div className="space-y-3">
+                    <div className="bg-white/70 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Faturamento Total</p>
+                      <p className={`text-xl font-bold ${perfilConfig.text}`}>
+                        R$ {totalGasto.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+
+                    <div className="bg-white/70 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Ticket Médio</p>
+                      <p className={`text-xl font-bold ${perfilConfig.text}`}>
+                        R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+
+                    <div className="bg-white/70 p-3 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Top 3 Clientes</p>
+                      <div className="space-y-1 mt-2">
+                        {clientes
+                          .sort((a, b) => (b.total_gasto || 0) - (a.total_gasto || 0))
+                          .slice(0, 3)
+                          .map((cliente, idx) => (
+                            <div key={cliente.cliente_id} className="flex items-center justify-between text-xs">
+                              <span className="truncate flex-1 mr-2">{idx + 1}. {cliente.cliente_nome}</span>
+                              <span className="font-bold">R$ {(cliente.total_gasto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {/* Insights Científicos */}
+          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-indigo-200">
+            <h3 className="font-bold text-indigo-900 mb-4 flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              🧠 Insights Científicos sobre Comportamento Temporal
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
+                <span className="text-indigo-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Segmentação Temporal:</strong> Clientes têm preferências horárias distintas. Use isso para campanhas direcionadas.
+                </p>
               </div>
-            );
-          })}
-        </div>
-        
-        {/* Insights Científicos */}
-        <div className="mt-6 bg-white/80 rounded-xl p-6 border border-indigo-200">
-          <h3 className="font-bold text-indigo-900 mb-4 flex items-center gap-2">
-            <Brain className="w-5 h-5" />
-            🧠 Insights Científicos sobre Comportamento Temporal
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
-              <span className="text-indigo-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Segmentação Temporal:</strong> Clientes têm preferências horárias distintas. Use isso para campanhas direcionadas.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
-              <span className="text-purple-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Otimização de Estoque:</strong> Ajuste reposição baseado nos perfis temporais dominantes.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-              <span className="text-blue-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Personalização:</strong> Envie ofertas nos horários preferidos de cada segmento para maior conversão.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-cyan-50 rounded-lg">
-              <span className="text-cyan-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Lifetime Value:</strong> Clientes noturnos tendem a ter maior ticket médio. Priorize retenção desse segmento.
-              </p>
+              <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
+                <span className="text-purple-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Otimização de Estoque:</strong> Ajuste reposição baseado nos perfis temporais dominantes.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                <span className="text-blue-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Personalização:</strong> Envie ofertas nos horários preferidos de cada segmento para maior conversão.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-cyan-50 rounded-lg">
+                <span className="text-cyan-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Lifetime Value:</strong> Clientes noturnos tendem a ter maior ticket médio. Priorize retenção desse segmento.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* 🔥 NOVO: MATRIZ DE CORRELAÇÃO PRODUTO × HORÁRIO */}
       {viewMode === 'avancado' && analise_temporal?.matriz_produto_horario && analise_temporal.matriz_produto_horario.matrix && analise_temporal.matriz_produto_horario.matrix.length > 0 && (
-      <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl shadow-xl p-6 mb-8 border border-teal-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-          <GitMerge className="w-8 h-8 text-teal-600" />
-          🔬 Matriz de Correlação: Produto × Horário
-        </h2>
-        
-        <p className="text-gray-600 mb-6">
-          Heatmap mostrando a força da relação entre produtos e horários. Percentuais indicam quanto cada horário contribui para as vendas totais do produto.
-        </p>
+        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl shadow-xl p-6 mb-8 border border-teal-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <GitMerge className="w-8 h-8 text-teal-600" />
+            🔬 Matriz de Correlação: Produto × Horário
+          </h2>
 
-        {/* Heatmap */}
-        <div className="bg-white rounded-xl p-6 border border-teal-200 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr>
-                <th className="p-2 text-left font-bold text-gray-900 sticky left-0 bg-white z-10">Produto</th>
-                {analise_temporal.matriz_produto_horario.hours.map((hora: number) => (
-                  <th key={hora} className="p-2 text-center font-bold text-gray-700 min-w-[50px]">
-                    {hora}h
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {analise_temporal.matriz_produto_horario.matrix.map((produto: any) => (
-                <tr key={produto.produto_id} className="border-t border-gray-100 hover:bg-teal-50">
-                  <td className="p-2 font-semibold text-gray-900 sticky left-0 bg-white z-10 max-w-[200px] truncate" title={produto.produto_nome}>
-                    {produto.produto_nome}
-                  </td>
-                  {analise_temporal.matriz_produto_horario.hours.map((hora: number) => {
-                    const cell = produto.horas[hora];
-                    const percentual = cell?.percentual || 0;
-                    
-                    // Calcular cor baseada no percentual (0-100)
-                    const getColor = (pct: number) => {
-                      if (pct === 0) return 'bg-gray-50 text-gray-400';
-                      if (pct < 2) return 'bg-blue-100 text-blue-700';
-                      if (pct < 5) return 'bg-blue-200 text-blue-800';
-                      if (pct < 10) return 'bg-blue-300 text-blue-900';
-                      if (pct < 15) return 'bg-teal-400 text-teal-900';
-                      if (pct < 20) return 'bg-green-400 text-green-900';
-                      return 'bg-green-500 text-white font-bold';
-                    };
-                    
-                    return (
-                      <td 
-                        key={hora} 
-                        className={`p-2 text-center ${getColor(percentual)} transition-all hover:scale-110 cursor-pointer`}
-                        title={`${produto.produto_nome} às ${hora}h: ${percentual.toFixed(1)}% (${cell?.quantidade || 0} un, R$ ${(cell?.faturamento || 0).toFixed(0)})`}
-                      >
-                        {percentual > 0 ? percentual.toFixed(1) : '-'}
-                      </td>
-                    );
-                  })}
+          <p className="text-gray-600 mb-6">
+            Heatmap mostrando a força da relação entre produtos e horários. Percentuais indicam quanto cada horário contribui para as vendas totais do produto.
+          </p>
+
+          {/* Heatmap */}
+          <div className="bg-white rounded-xl p-6 border border-teal-200 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="p-2 text-left font-bold text-gray-900 sticky left-0 bg-white z-10">Produto</th>
+                  {analise_temporal.matriz_produto_horario.hours.map((hora: number) => (
+                    <th key={hora} className="p-2 text-center font-bold text-gray-700 min-w-[50px]">
+                      {hora}h
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {analise_temporal.matriz_produto_horario.matrix.map((produto: any) => (
+                  <tr key={produto.produto_id} className="border-t border-gray-100 hover:bg-teal-50">
+                    <td className="p-2 font-semibold text-gray-900 sticky left-0 bg-white z-10 max-w-[200px] truncate" title={produto.produto_nome}>
+                      {produto.produto_nome}
+                    </td>
+                    {analise_temporal.matriz_produto_horario.hours.map((hora: number) => {
+                      const cell = produto.horas[hora];
+                      const percentual = cell?.percentual || 0;
 
-        {/* Legenda */}
-        <div className="mt-6 bg-white rounded-xl p-4 border border-teal-200">
-          <h4 className="font-semibold text-teal-900 mb-3">📊 Legenda de Intensidade</h4>
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-gray-50 border border-gray-200 rounded"></div>
-              <span>0%</span>
+                      // Calcular cor baseada no percentual (0-100)
+                      const getColor = (pct: number) => {
+                        if (pct === 0) return 'bg-gray-50 text-gray-400';
+                        if (pct < 2) return 'bg-blue-100 text-blue-700';
+                        if (pct < 5) return 'bg-blue-200 text-blue-800';
+                        if (pct < 10) return 'bg-blue-300 text-blue-900';
+                        if (pct < 15) return 'bg-teal-400 text-teal-900';
+                        if (pct < 20) return 'bg-green-400 text-green-900';
+                        return 'bg-green-500 text-white font-bold';
+                      };
+
+                      return (
+                        <td
+                          key={hora}
+                          className={`p-2 text-center ${getColor(percentual)} transition-all hover:scale-110 cursor-pointer`}
+                          title={`${produto.produto_nome} às ${hora}h: ${percentual.toFixed(1)}% (${cell?.quantidade || 0} un, R$ ${(cell?.faturamento || 0).toFixed(0)})`}
+                        >
+                          {percentual > 0 ? percentual.toFixed(1) : '-'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Legenda */}
+          <div className="mt-6 bg-white rounded-xl p-4 border border-teal-200">
+            <h4 className="font-semibold text-teal-900 mb-3">📊 Legenda de Intensidade</h4>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-gray-50 border border-gray-200 rounded"></div>
+                <span>0%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-blue-100 rounded"></div>
+                <span>{'<'}2%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-blue-200 rounded"></div>
+                <span>2-5%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-blue-300 rounded"></div>
+                <span>5-10%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-teal-400 rounded"></div>
+                <span>10-15%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-green-400 rounded"></div>
+                <span>15-20%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-8 h-6 bg-green-500 rounded"></div>
+                <span>{'>'}20%</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-blue-100 rounded"></div>
-              <span>{'<'}2%</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-blue-200 rounded"></div>
-              <span>2-5%</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-blue-300 rounded"></div>
-              <span>5-10%</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-teal-400 rounded"></div>
-              <span>10-15%</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-green-400 rounded"></div>
-              <span>15-20%</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-8 h-6 bg-green-500 rounded"></div>
-              <span>{'>'}20%</span>
+          </div>
+
+          {/* Insights */}
+          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-teal-200">
+            <h3 className="font-bold text-teal-900 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" />
+              💡 Como Usar Esta Análise
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="flex items-start gap-3 p-3 bg-teal-50 rounded-lg">
+                <span className="text-teal-600 font-bold">1.</span>
+                <p className="text-gray-700">
+                  <strong>Gestão de Estoque:</strong> Produtos com alta concentração em horários específicos precisam de reposição estratégica.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-cyan-50 rounded-lg">
+                <span className="text-cyan-600 font-bold">2.</span>
+                <p className="text-gray-700">
+                  <strong>Promoções Direcionadas:</strong> Lance ofertas nos horários de maior demanda de cada produto.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                <span className="text-blue-600 font-bold">3.</span>
+                <p className="text-gray-700">
+                  <strong>Layout da Loja:</strong> Posicione produtos em destaque conforme o horário de pico.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                <span className="text-green-600 font-bold">4.</span>
+                <p className="text-gray-700">
+                  <strong>Cross-Selling:</strong> Identifique produtos complementares vendidos no mesmo horário.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Insights */}
-        <div className="mt-6 bg-white/80 rounded-xl p-6 border border-teal-200">
-          <h3 className="font-bold text-teal-900 mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5" />
-            💡 Como Usar Esta Análise
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-start gap-3 p-3 bg-teal-50 rounded-lg">
-              <span className="text-teal-600 font-bold">1.</span>
-              <p className="text-gray-700">
-                <strong>Gestão de Estoque:</strong> Produtos com alta concentração em horários específicos precisam de reposição estratégica.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-cyan-50 rounded-lg">
-              <span className="text-cyan-600 font-bold">2.</span>
-              <p className="text-gray-700">
-                <strong>Promoções Direcionadas:</strong> Lance ofertas nos horários de maior demanda de cada produto.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-              <span className="text-blue-600 font-bold">3.</span>
-              <p className="text-gray-700">
-                <strong>Layout da Loja:</strong> Posicione produtos em destaque conforme o horário de pico.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-              <span className="text-green-600 font-bold">4.</span>
-              <p className="text-gray-700">
-                <strong>Cross-Selling:</strong> Identifique produtos complementares vendidos no mesmo horário.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
       )}
 
       {/* 🔥 NOVO: AFINIDADE CLIENTE × PRODUTO */}
       {viewMode === 'avancado' && analise_temporal?.afinidade_cliente_produto && analise_temporal.afinidade_cliente_produto.length > 0 && (
-      <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl shadow-xl p-6 mb-8 border border-amber-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-          <Star className="w-8 h-8 text-amber-600" />
-          ⭐ Análise de Afinidade: Cliente × Produto
-        </h2>
-        
-        <p className="text-gray-600 mb-6">
-          Identifica padrões de compra recorrentes. Clientes com alta afinidade por produtos específicos são alvos ideais para campanhas personalizadas.
-        </p>
+        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl shadow-xl p-6 mb-8 border border-amber-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Star className="w-8 h-8 text-amber-600" />
+            ⭐ Análise de Afinidade: Cliente × Produto
+          </h2>
 
-        {/* Top 20 Afinidades */}
-        <div className="bg-white rounded-xl p-6 border border-amber-200">
-          <h3 className="font-bold text-amber-900 mb-4">🎯 Top 20 Afinidades Cliente-Produto</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto">
-            {analise_temporal.afinidade_cliente_produto.slice(0, 20).map((afinidade: any, idx: number) => (
-              <div key={`${afinidade.cliente_id}-${afinidade.produto_id}`} className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-4 border border-amber-100 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        idx < 3 ? 'bg-amber-400 text-amber-900' : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      <p className="font-bold text-gray-900 truncate" title={afinidade.cliente_nome}>
-                        {afinidade.cliente_nome}
+          <p className="text-gray-600 mb-6">
+            Identifica padrões de compra recorrentes. Clientes com alta afinidade por produtos específicos são alvos ideais para campanhas personalizadas.
+          </p>
+
+          {/* Top 20 Afinidades */}
+          <div className="bg-white rounded-xl p-6 border border-amber-200">
+            <h3 className="font-bold text-amber-900 mb-4">🎯 Top 20 Afinidades Cliente-Produto</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto">
+              {analise_temporal.afinidade_cliente_produto.slice(0, 20).map((afinidade: any, idx: number) => (
+                <div key={`${afinidade.cliente_id}-${afinidade.produto_id}`} className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-4 border border-amber-100 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx < 3 ? 'bg-amber-400 text-amber-900' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                          {idx + 1}
+                        </span>
+                        <p className="font-bold text-gray-900 truncate" title={afinidade.cliente_nome}>
+                          {afinidade.cliente_nome}
+                        </p>
+                      </div>
+                      <p className="text-sm text-gray-700 truncate ml-8" title={afinidade.produto_nome}>
+                        → {afinidade.produto_nome}
                       </p>
                     </div>
-                    <p className="text-sm text-gray-700 truncate ml-8" title={afinidade.produto_nome}>
-                      → {afinidade.produto_nome}
-                    </p>
+                    <div className="ml-2 text-right">
+                      <p className="text-xs text-amber-700 font-semibold">Score</p>
+                      <p className="text-lg font-bold text-amber-900">
+                        {(afinidade.score_afinidade / 1000).toFixed(1)}k
+                      </p>
+                    </div>
                   </div>
-                  <div className="ml-2 text-right">
-                    <p className="text-xs text-amber-700 font-semibold">Score</p>
-                    <p className="text-lg font-bold text-amber-900">
-                      {(afinidade.score_afinidade / 1000).toFixed(1)}k
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="bg-white/70 p-2 rounded">
-                    <p className="text-gray-600">Compras</p>
-                    <p className="font-bold text-gray-900">{afinidade.frequencia_compra}x</p>
-                  </div>
-                  <div className="bg-white/70 p-2 rounded">
-                    <p className="text-gray-600">Quantidade</p>
-                    <p className="font-bold text-gray-900">{afinidade.quantidade_total} un</p>
-                  </div>
-                  <div className="bg-white/70 p-2 rounded">
-                    <p className="text-gray-600">Total</p>
-                    <p className="font-bold text-gray-900">R$ {afinidade.faturamento_total.toFixed(0)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        {/* Insights */}
-        <div className="mt-6 bg-white/80 rounded-xl p-6 border border-amber-200">
-          <h3 className="font-bold text-amber-900 mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5" />
-            💡 Estratégias de Marketing Baseadas em Afinidade
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg">
-              <span className="text-amber-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Campanhas Personalizadas:</strong> Envie ofertas dos produtos favoritos de cada cliente via WhatsApp.
-              </p>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-white/70 p-2 rounded">
+                      <p className="text-gray-600">Compras</p>
+                      <p className="font-bold text-gray-900">{afinidade.frequencia_compra}x</p>
+                    </div>
+                    <div className="bg-white/70 p-2 rounded">
+                      <p className="text-gray-600">Quantidade</p>
+                      <p className="font-bold text-gray-900">{afinidade.quantidade_total} un</p>
+                    </div>
+                    <div className="bg-white/70 p-2 rounded">
+                      <p className="text-gray-600">Total</p>
+                      <p className="font-bold text-gray-900">R$ {afinidade.faturamento_total.toFixed(0)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg">
-              <span className="text-yellow-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Programa de Fidelidade:</strong> Recompense clientes com alta frequência de compra de produtos específicos.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
-              <span className="text-orange-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Recomendações Inteligentes:</strong> Sugira produtos complementares baseado no histórico de afinidade.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-              <span className="text-red-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Alerta de Ruptura:</strong> Notifique clientes VIP quando produtos favoritos estiverem em falta.
-              </p>
+          </div>
+
+          {/* Insights */}
+          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-amber-200">
+            <h3 className="font-bold text-amber-900 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" />
+              💡 Estratégias de Marketing Baseadas em Afinidade
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg">
+                <span className="text-amber-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Campanhas Personalizadas:</strong> Envie ofertas dos produtos favoritos de cada cliente via WhatsApp.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg">
+                <span className="text-yellow-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Programa de Fidelidade:</strong> Recompense clientes com alta frequência de compra de produtos específicos.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+                <span className="text-orange-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Recomendações Inteligentes:</strong> Sugira produtos complementares baseado no histórico de afinidade.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
+                <span className="text-red-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Alerta de Ruptura:</strong> Notifique clientes VIP quando produtos favoritos estiverem em falta.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* 🔥 NOVO: COMPORTAMENTO DE CLIENTES POR HORÁRIO */}
       {viewMode === 'avancado' && analise_temporal?.comportamento_clientes_horario && analise_temporal.comportamento_clientes_horario.comportamento_por_hora && analise_temporal.comportamento_clientes_horario.comportamento_por_hora.length > 0 && (
-      <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-violet-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-          <Clock className="w-8 h-8 text-violet-600" />
-          👥 Comportamento de Clientes por Horário
-        </h2>
-        
-        <p className="text-gray-600 mb-6">
-          Análise detalhada do comportamento de compra dos clientes ao longo do dia. Identifique horários com maior valor por cliente e frequência de compra.
-        </p>
+        <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-violet-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Clock className="w-8 h-8 text-violet-600" />
+            👥 Comportamento de Clientes por Horário
+          </h2>
 
-        {/* Gráfico de Comportamento */}
-        <div className="bg-white rounded-xl p-6 border border-violet-200 mb-6">
-          <h3 className="font-bold text-violet-900 mb-4">📊 Métricas por Horário</h3>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={analise_temporal.comportamento_clientes_horario.comportamento_por_hora}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                <XAxis 
-                  dataKey="hora" 
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `${value}h`}
-                />
-                <YAxis 
-                  yAxisId="left"
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `R$ ${value.toFixed(0)}`}
-                />
-                <YAxis 
-                  yAxisId="right"
-                  orientation="right"
-                  tick={{ fontSize: 12 }}
-                />
-                <Tooltip
-                  content={({ payload, label }) => {
-                    if (!payload || payload.length === 0) return null;
-                    const data = payload[0]?.payload;
-                    return (
-                      <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-lg border-2 border-violet-200">
-                        <p className="font-bold text-gray-900 dark:text-gray-100 mb-2">
-                          🕐 {label}:00 - {label}:59
-                        </p>
-                        <div className="space-y-1 text-sm">
-                          <p className="text-gray-700 dark:text-gray-300">
-                            👥 Clientes Únicos: <span className="font-bold text-violet-600">{data?.clientes_unicos}</span>
+          <p className="text-gray-600 mb-6">
+            Análise detalhada do comportamento de compra dos clientes ao longo do dia. Identifique horários com maior valor por cliente e frequência de compra.
+          </p>
+
+          {/* Gráfico de Comportamento */}
+          <div className="bg-white rounded-xl p-6 border border-violet-200 mb-6">
+            <h3 className="font-bold text-violet-900 mb-4">📊 Métricas por Horário</h3>
+            <div className="h-[400px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={analise_temporal.comportamento_clientes_horario.comportamento_por_hora}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis
+                    dataKey="hora"
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `${value}h`}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `R$ ${value.toFixed(0)}`}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip
+                    content={({ payload, label }) => {
+                      if (!payload || payload.length === 0) return null;
+                      const data = payload[0]?.payload;
+                      return (
+                        <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-lg border-2 border-violet-200">
+                          <p className="font-bold text-gray-900 dark:text-gray-100 mb-2">
+                            🕐 {label}:00 - {label}:59
                           </p>
-                          <p className="text-gray-700 dark:text-gray-300">
-                            💰 Ticket Médio: <span className="font-bold text-green-600">R$ {data?.ticket_medio?.toFixed(2)}</span>
-                          </p>
-                          <p className="text-gray-700 dark:text-gray-300">
-                            🛒 Total Vendas: <span className="font-bold text-blue-600">{data?.total_vendas}</span>
-                          </p>
-                          <p className="text-gray-700 dark:text-gray-300">
-                            📈 Frequência: <span className="font-bold text-purple-600">{data?.frequencia_media?.toFixed(2)} vendas/cliente</span>
-                          </p>
-                          <p className="text-gray-700 dark:text-gray-300">
-                            💵 Valor/Cliente: <span className="font-bold text-orange-600">R$ {data?.valor_por_cliente?.toFixed(2)}</span>
-                          </p>
+                          <div className="space-y-1 text-sm">
+                            <p className="text-gray-700 dark:text-gray-300">
+                              👥 Clientes Únicos: <span className="font-bold text-violet-600">{data?.clientes_unicos}</span>
+                            </p>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              💰 Ticket Médio: <span className="font-bold text-green-600">R$ {data?.ticket_medio?.toFixed(2)}</span>
+                            </p>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              🛒 Total Vendas: <span className="font-bold text-blue-600">{data?.total_vendas}</span>
+                            </p>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              📈 Frequência: <span className="font-bold text-purple-600">{data?.frequencia_media?.toFixed(2)} vendas/cliente</span>
+                            </p>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              💵 Valor/Cliente: <span className="font-bold text-orange-600">R$ {data?.valor_por_cliente?.toFixed(2)}</span>
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  }}
-                />
-                <Bar 
-                  yAxisId="left"
-                  dataKey="ticket_medio" 
-                  fill="#8B5CF6" 
-                  radius={[8, 8, 0, 0]}
-                  name="Ticket Médio"
-                />
-                <Bar 
-                  yAxisId="right"
-                  dataKey="clientes_unicos" 
-                  fill="#EC4899" 
-                  radius={[8, 8, 0, 0]}
-                  name="Clientes Únicos"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                      );
+                    }}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="ticket_medio"
+                    fill="#8B5CF6"
+                    radius={[8, 8, 0, 0]}
+                    name="Ticket Médio"
+                  />
+                  <Bar
+                    yAxisId="right"
+                    dataKey="clientes_unicos"
+                    fill="#EC4899"
+                    radius={[8, 8, 0, 0]}
+                    name="Clientes Únicos"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
 
-        {/* Tabela Detalhada */}
-        <div className="bg-white rounded-xl p-6 border border-violet-200 overflow-x-auto">
-          <h3 className="font-bold text-violet-900 mb-4">📋 Detalhamento por Horário</h3>
-          <table className="w-full text-sm">
-            <thead className="bg-violet-50">
-              <tr>
-                <th className="p-3 text-left font-bold text-violet-900">Horário</th>
-                <th className="p-3 text-center font-bold text-violet-900">Clientes</th>
-                <th className="p-3 text-center font-bold text-violet-900">Vendas</th>
-                <th className="p-3 text-center font-bold text-violet-900">Ticket Médio</th>
-                <th className="p-3 text-center font-bold text-violet-900">Frequência</th>
-                <th className="p-3 text-center font-bold text-violet-900">Valor/Cliente</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analise_temporal.comportamento_clientes_horario.comportamento_por_hora.map((hora: any) => (
-                <tr key={hora.hora} className="border-t border-violet-100 hover:bg-violet-50">
-                  <td className="p-3 font-semibold text-gray-900">{hora.hora}h - {hora.hora + 1}h</td>
-                  <td className="p-3 text-center text-violet-700 font-bold">{hora.clientes_unicos}</td>
-                  <td className="p-3 text-center text-blue-700">{hora.total_vendas}</td>
-                  <td className="p-3 text-center text-green-700 font-bold">R$ {hora.ticket_medio.toFixed(2)}</td>
-                  <td className="p-3 text-center text-purple-700">{hora.frequencia_media.toFixed(2)}x</td>
-                  <td className="p-3 text-center text-orange-700 font-bold">R$ {hora.valor_por_cliente.toFixed(2)}</td>
+          {/* Tabela Detalhada */}
+          <div className="bg-white rounded-xl p-6 border border-violet-200 overflow-x-auto">
+            <h3 className="font-bold text-violet-900 mb-4">📋 Detalhamento por Horário</h3>
+            <table className="w-full text-sm">
+              <thead className="bg-violet-50">
+                <tr>
+                  <th className="p-3 text-left font-bold text-violet-900">Horário</th>
+                  <th className="p-3 text-center font-bold text-violet-900">Clientes</th>
+                  <th className="p-3 text-center font-bold text-violet-900">Vendas</th>
+                  <th className="p-3 text-center font-bold text-violet-900">Ticket Médio</th>
+                  <th className="p-3 text-center font-bold text-violet-900">Frequência</th>
+                  <th className="p-3 text-center font-bold text-violet-900">Valor/Cliente</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {analise_temporal.comportamento_clientes_horario.comportamento_por_hora.map((hora: any) => (
+                  <tr key={hora.hora} className="border-t border-violet-100 hover:bg-violet-50">
+                    <td className="p-3 font-semibold text-gray-900">{hora.hora}h - {hora.hora + 1}h</td>
+                    <td className="p-3 text-center text-violet-700 font-bold">{hora.clientes_unicos}</td>
+                    <td className="p-3 text-center text-blue-700">{hora.total_vendas}</td>
+                    <td className="p-3 text-center text-green-700 font-bold">R$ {hora.ticket_medio.toFixed(2)}</td>
+                    <td className="p-3 text-center text-purple-700">{hora.frequencia_media.toFixed(2)}x</td>
+                    <td className="p-3 text-center text-orange-700 font-bold">R$ {hora.valor_por_cliente.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Insights */}
-        <div className="mt-6 bg-white/80 rounded-xl p-6 border border-violet-200">
-          <h3 className="font-bold text-violet-900 mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5" />
-            💡 Insights de Comportamento do Cliente
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-start gap-3 p-3 bg-violet-50 rounded-lg">
-              <span className="text-violet-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Horários VIP:</strong> Horários com maior ticket médio indicam clientes de maior valor. Priorize atendimento premium.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
-              <span className="text-purple-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Frequência de Compra:</strong> Alta frequência indica clientes fiéis. Crie programas de recompensa para esses horários.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg">
-              <span className="text-pink-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Valor por Cliente:</strong> Métrica chave para calcular ROI de campanhas por horário.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-fuchsia-50 rounded-lg">
-              <span className="text-fuchsia-600 font-bold">•</span>
-              <p className="text-gray-700">
-                <strong>Segmentação Temporal:</strong> Use esses dados para criar campanhas de marketing direcionadas por horário.
-              </p>
+          {/* Insights */}
+          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-violet-200">
+            <h3 className="font-bold text-violet-900 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" />
+              💡 Insights de Comportamento do Cliente
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="flex items-start gap-3 p-3 bg-violet-50 rounded-lg">
+                <span className="text-violet-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Horários VIP:</strong> Horários com maior ticket médio indicam clientes de maior valor. Priorize atendimento premium.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
+                <span className="text-purple-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Frequência de Compra:</strong> Alta frequência indica clientes fiéis. Crie programas de recompensa para esses horários.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg">
+                <span className="text-pink-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Valor por Cliente:</strong> Métrica chave para calcular ROI de campanhas por horário.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-fuchsia-50 rounded-lg">
+                <span className="text-fuchsia-600 font-bold">•</span>
+                <p className="text-gray-700">
+                  <strong>Segmentação Temporal:</strong> Use esses dados para criar campanhas de marketing direcionadas por horário.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* 🔥 NOVO: ANÁLISE DE CONCENTRAÇÃO DE FATURAMENTO */}
       {viewMode === 'avancado' && analise_temporal?.concentracao_horaria && (
-      <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl shadow-xl p-6 mb-8 border border-rose-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-          <TrendingUp className="w-8 h-8 text-rose-600" />
-          📊 Análise de Concentração: Índice de Gini & Diversificação
-        </h2>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Índice de Gini */}
+        <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl shadow-xl p-6 mb-8 border border-rose-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <TrendingUp className="w-8 h-8 text-rose-600" />
+            📊 Análise de Concentração: Índice de Gini & Diversificação
+          </h2>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* Índice de Gini */}
+            <div className="bg-white rounded-xl p-6 border border-rose-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-rose-900">Índice de Gini</h3>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${(analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'bg-red-100' :
+                  (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4 ? 'bg-yellow-100' :
+                    'bg-green-100'
+                  }`}>
+                  <span className={`text-2xl font-bold ${(analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'text-red-700' :
+                    (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4 ? 'text-yellow-700' :
+                      'text-green-700'
+                    }`}>
+                    {((analise_temporal.concentracao_horaria.gini_index || 0) * 100).toFixed(0)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                Mede a desigualdade na distribuição de vendas ao longo do dia
+              </p>
+              <div className="bg-rose-50 p-3 rounded-lg">
+                <p className="text-xs font-semibold text-rose-900 mb-1">Interpretação:</p>
+                <p className="text-xs text-rose-700">
+                  {(analise_temporal.concentracao_horaria.gini_index || 0) > 0.7
+                    ? '🔴 Alta concentração - Vendas muito concentradas em poucos horários'
+                    : (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4
+                      ? '🟡 Concentração moderada - Distribuição razoável'
+                      : '🟢 Baixa concentração - Vendas bem distribuídas'}
+                </p>
+              </div>
+            </div>
+
+            {/* Taxa de Concentração */}
+            <div className="bg-white rounded-xl p-6 border border-orange-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-orange-900">Concentração Top 3</h3>
+                <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-orange-700">
+                    {(analise_temporal.concentracao_horaria.concentration_top_3 || 0).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                Percentual do faturamento nos 3 melhores horários
+              </p>
+              <div className="bg-orange-50 p-3 rounded-lg">
+                <p className="text-xs font-semibold text-orange-900 mb-1">Análise:</p>
+                <p className="text-xs text-orange-700">
+                  {(analise_temporal.concentracao_horaria.concentration_top_3 || 0) > 60
+                    ? 'Risco alto - Dependência excessiva de poucos horários'
+                    : 'Distribuição saudável de vendas'}
+                </p>
+              </div>
+            </div>
+
+            {/* Score de Diversificação */}
+            <div className="bg-white rounded-xl p-6 border border-green-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-green-900">Diversificação</h3>
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-green-700">
+                    {(analise_temporal.concentracao_horaria.diversification || 0).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                Quão bem distribuídas estão as vendas ao longo do dia
+              </p>
+              <div className="bg-green-50 p-3 rounded-lg">
+                <p className="text-xs font-semibold text-green-900 mb-1">Status:</p>
+                <p className="text-xs text-green-700">
+                  {(analise_temporal.concentracao_horaria.diversification || 0) > 60
+                    ? '✅ Boa diversificação - Menor risco operacional'
+                    : '⚠️ Baixa diversificação - Considere estratégias para outros horários'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Horários */}
           <div className="bg-white rounded-xl p-6 border border-rose-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-rose-900">Índice de Gini</h3>
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                (analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'bg-red-100' :
-                (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4 ? 'bg-yellow-100' :
-                'bg-green-100'
-              }`}>
-                <span className={`text-2xl font-bold ${
-                  (analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'text-red-700' :
-                  (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4 ? 'text-yellow-700' :
-                  'text-green-700'
-                }`}>
-                  {((analise_temporal.concentracao_horaria.gini_index || 0) * 100).toFixed(0)}
-                </span>
-              </div>
-            </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Mede a desigualdade na distribuição de vendas ao longo do dia
-            </p>
-            <div className="bg-rose-50 p-3 rounded-lg">
-              <p className="text-xs font-semibold text-rose-900 mb-1">Interpretação:</p>
-              <p className="text-xs text-rose-700">
-                {(analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 
-                  ? '🔴 Alta concentração - Vendas muito concentradas em poucos horários'
-                  : (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4
-                  ? '🟡 Concentração moderada - Distribuição razoável'
-                  : '🟢 Baixa concentração - Vendas bem distribuídas'}
-              </p>
+            <h3 className="font-bold text-rose-900 mb-4">🏆 Top 5 Horários por Faturamento</h3>
+            <div className="space-y-3">
+              {(analise_temporal.concentracao_horaria.top_hours || []).map((hora, idx) => (
+                <div key={hora.hora} className="flex items-center gap-4 p-3 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${idx === 0 ? 'bg-yellow-400 text-yellow-900' :
+                    idx === 1 ? 'bg-gray-300 text-gray-700' :
+                      idx === 2 ? 'bg-orange-400 text-orange-900' :
+                        'bg-rose-100 text-rose-700'
+                    }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900">{hora.hora}h - {hora.hora + 1}h</p>
+                    <p className="text-sm text-gray-600">
+                      R$ {hora.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-rose-600">{hora.percentual.toFixed(1)}%</p>
+                    <p className="text-xs text-gray-500">do total</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Taxa de Concentração */}
-          <div className="bg-white rounded-xl p-6 border border-orange-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-orange-900">Concentração Top 3</h3>
-              <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
-                <span className="text-2xl font-bold text-orange-700">
-                  {(analise_temporal.concentracao_horaria.concentration_top_3 || 0).toFixed(0)}%
-                </span>
+          {/* Recomendações Estratégicas */}
+          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-rose-200">
+            <h3 className="font-bold text-rose-900 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" />
+              💡 Recomendações Estratégicas Baseadas em Dados
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="flex items-start gap-3 p-3 bg-rose-50 rounded-lg">
+                <span className="text-rose-600 font-bold">1.</span>
+                <p className="text-gray-700">
+                  <strong>Redução de Risco:</strong> Se concentração {'>'} 60%, crie promoções para horários fracos e diversifique receita.
+                </p>
               </div>
-            </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Percentual do faturamento nos 3 melhores horários
-            </p>
-            <div className="bg-orange-50 p-3 rounded-lg">
-              <p className="text-xs font-semibold text-orange-900 mb-1">Análise:</p>
-              <p className="text-xs text-orange-700">
-                {(analise_temporal.concentracao_horaria.concentration_top_3 || 0) > 60
-                  ? 'Risco alto - Dependência excessiva de poucos horários'
-                  : 'Distribuição saudável de vendas'}
-              </p>
-            </div>
-          </div>
-
-          {/* Score de Diversificação */}
-          <div className="bg-white rounded-xl p-6 border border-green-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-green-900">Diversificação</h3>
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-                <span className="text-2xl font-bold text-green-700">
-                  {(analise_temporal.concentracao_horaria.diversification || 0).toFixed(0)}%
-                </span>
+              <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg">
+                <span className="text-pink-600 font-bold">2.</span>
+                <p className="text-gray-700">
+                  <strong>Otimização de Recursos:</strong> Aloque equipe e estoque proporcionalmente à concentração de vendas.
+                </p>
               </div>
-            </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Quão bem distribuídas estão as vendas ao longo do dia
-            </p>
-            <div className="bg-green-50 p-3 rounded-lg">
-              <p className="text-xs font-semibold text-green-900 mb-1">Status:</p>
-              <p className="text-xs text-green-700">
-                {(analise_temporal.concentracao_horaria.diversification || 0) > 60
-                  ? '✅ Boa diversificação - Menor risco operacional'
-                  : '⚠️ Baixa diversificação - Considere estratégias para outros horários'}
-              </p>
+              <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
+                <span className="text-purple-600 font-bold">3.</span>
+                <p className="text-gray-700">
+                  <strong>Expansão de Horários:</strong> Teste novos produtos/serviços em horários de baixa concentração.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+                <span className="text-orange-600 font-bold">4.</span>
+                <p className="text-gray-700">
+                  <strong>Monitoramento Contínuo:</strong> Acompanhe o índice de Gini mensalmente para detectar mudanças de padrão.
+                </p>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Top Horários */}
-        <div className="bg-white rounded-xl p-6 border border-rose-200">
-          <h3 className="font-bold text-rose-900 mb-4">🏆 Top 5 Horários por Faturamento</h3>
-          <div className="space-y-3">
-            {(analise_temporal.concentracao_horaria.top_hours || []).map((hora, idx) => (
-              <div key={hora.hora} className="flex items-center gap-4 p-3 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                  idx === 0 ? 'bg-yellow-400 text-yellow-900' :
-                  idx === 1 ? 'bg-gray-300 text-gray-700' :
-                  idx === 2 ? 'bg-orange-400 text-orange-900' :
-                  'bg-rose-100 text-rose-700'
-                }`}>
-                  {idx + 1}
-                </div>
-                <div className="flex-1">
-                  <p className="font-bold text-gray-900">{hora.hora}h - {hora.hora + 1}h</p>
-                  <p className="text-sm text-gray-600">
-                    R$ {hora.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-rose-600">{hora.percentual.toFixed(1)}%</p>
-                  <p className="text-xs text-gray-500">do total</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recomendações Estratégicas */}
-        <div className="mt-6 bg-white/80 rounded-xl p-6 border border-rose-200">
-          <h3 className="font-bold text-rose-900 mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5" />
-            💡 Recomendações Estratégicas Baseadas em Dados
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="flex items-start gap-3 p-3 bg-rose-50 rounded-lg">
-              <span className="text-rose-600 font-bold">1.</span>
-              <p className="text-gray-700">
-                <strong>Redução de Risco:</strong> Se concentração {'>'} 60%, crie promoções para horários fracos e diversifique receita.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg">
-              <span className="text-pink-600 font-bold">2.</span>
-              <p className="text-gray-700">
-                <strong>Otimização de Recursos:</strong> Aloque equipe e estoque proporcionalmente à concentração de vendas.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
-              <span className="text-purple-600 font-bold">3.</span>
-              <p className="text-gray-700">
-                <strong>Expansão de Horários:</strong> Teste novos produtos/serviços em horários de baixa concentração.
-              </p>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
-              <span className="text-orange-600 font-bold">4.</span>
-              <p className="text-gray-700">
-                <strong>Monitoramento Contínuo:</strong> Acompanhe o índice de Gini mensalmente para detectar mudanças de padrão.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
       )}
 
       {/* 🔥 NOVO: ANÁLISE TEMPORAL AVANÇADA - PENSANDO COMO O DONO DO MERCADO */}
       {viewMode === 'avancado' && data?.data && (
-      <div className="space-y-8 mb-8">
-        {/* SEÇÃO 1: FATURAMENTO POR PERÍODO DO DIA */}
-        {data.data.period_analysis && Object.keys(data.data.period_analysis).length > 0 && (
-        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl shadow-xl p-6 border border-blue-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <Clock className="w-8 h-8 text-blue-600" />
-            ⏰ Análise por Período do Dia (Manhã/Tarde/Noite)
-          </h2>
-          <p className="text-gray-600 mb-6">Como varia o faturamento ao longo do dia? Qual período é mais lucrativo?</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Object.entries(data.data.period_analysis).map(([periodo, dados]: [string, any]) => {
-              const periodoNome = periodo === 'manha' ? '🌅 Manhã (6h-12h)' : 
-                                 periodo === 'tarde' ? '☀️ Tarde (12h-18h)' : 
-                                 '🌙 Noite (18h-24h)';
-              const percentualTotal = (dados.faturamento / Object.values(data.data.period_analysis as any).reduce((sum: number, p: any) => sum + p.faturamento, 0)) * 100;
-              
-              return (
-                <div key={periodo} className="bg-white rounded-xl p-6 border border-blue-100 hover:shadow-lg transition-shadow">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">{periodoNome}</h3>
-                  
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Faturamento:</span>
-                      <span className="text-2xl font-bold text-blue-600">R$ {dados.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">% do Total:</span>
-                      <span className="text-xl font-bold text-blue-500">{percentualTotal.toFixed(1)}%</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Vendas:</span>
-                      <span className="font-semibold text-gray-900">{dados.vendas}</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Ticket Médio:</span>
-                      <span className="font-semibold text-gray-900">R$ {dados.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Por Hora:</span>
-                      <span className="font-semibold text-gray-900">R$ {dados.faturamento_por_hora.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 pt-4 border-t border-blue-100">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${percentualTotal}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        )}
+        <div className="space-y-8 mb-8">
+          {/* SEÇÃO 1: FATURAMENTO POR PERÍODO DO DIA */}
+          {data.data.period_analysis && Object.keys(data.data.period_analysis).length > 0 && (
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl shadow-xl p-6 border border-blue-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <Clock className="w-8 h-8 text-blue-600" />
+                ⏰ Análise por Período do Dia (Manhã/Tarde/Noite)
+              </h2>
+              <p className="text-gray-600 mb-6">Como varia o faturamento ao longo do dia? Qual período é mais lucrativo?</p>
 
-        {/* SEÇÃO 2: ANÁLISE POR DIA DA SEMANA */}
-        {data.data.weekday_analysis && Object.keys(data.data.weekday_analysis).length > 0 && (
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-6 border border-green-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-green-600" />
-            📅 Análise por Dia da Semana
-          </h2>
-          <p className="text-gray-600 mb-6">Sexta e sábado vendem mais? Qual dia pedir mais estoque?</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.entries(data.data.weekday_analysis).map(([dia, dados]: [string, any]) => {
-              const totalFat = Object.values(data.data.weekday_analysis as any).reduce((sum: number, d: any) => sum + d.faturamento, 0);
-              const percentual = (dados.faturamento / totalFat) * 100;
-              const isWeekend = dia === 'Sexta' || dia === 'Sábado' || dia === 'Domingo';
-              
-              return (
-                <div key={dia} className={`rounded-xl p-4 border ${isWeekend ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-green-100'} hover:shadow-lg transition-shadow`}>
-                  <h4 className="font-bold text-gray-900 mb-3">{dia}</h4>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Faturamento:</span>
-                      <span className="font-semibold">R$ {dados.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {Object.entries(data.data.period_analysis).map(([periodo, dados]: [string, any]) => {
+                  const periodoNome = periodo === 'manha' ? '🌅 Manhã (6h-12h)' :
+                    periodo === 'tarde' ? '☀️ Tarde (12h-18h)' :
+                      '🌙 Noite (18h-24h)';
+                  const percentualTotal = (dados.faturamento / Object.values(data.data.period_analysis as any).reduce((sum: number, p: any) => sum + p.faturamento, 0)) * 100;
+
+                  return (
+                    <div key={periodo} className="bg-white rounded-xl p-6 border border-blue-100 hover:shadow-lg transition-shadow">
+                      <h3 className="text-lg font-bold text-gray-900 mb-4">{periodoNome}</h3>
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Faturamento:</span>
+                          <span className="text-2xl font-bold text-blue-600">R$ {dados.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">% do Total:</span>
+                          <span className="text-xl font-bold text-blue-500">{percentualTotal.toFixed(1)}%</span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Vendas:</span>
+                          <span className="font-semibold text-gray-900">{dados.vendas}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Ticket Médio:</span>
+                          <span className="font-semibold text-gray-900">R$ {dados.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Por Hora:</span>
+                          <span className="font-semibold text-gray-900">R$ {dados.faturamento_por_hora.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-blue-100">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${percentualTotal}%` }}
+                          ></div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Vendas:</span>
-                      <span className="font-semibold">{dados.vendas}</span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SEÇÃO 2: ANÁLISE POR DIA DA SEMANA */}
+          {data.data.weekday_analysis && Object.keys(data.data.weekday_analysis).length > 0 && (
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-6 border border-green-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <Calendar className="w-8 h-8 text-green-600" />
+                📅 Análise por Dia da Semana
+              </h2>
+              <p className="text-gray-600 mb-6">Sexta e sábado vendem mais? Qual dia pedir mais estoque?</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Object.entries(data.data.weekday_analysis).map(([dia, dados]: [string, any]) => {
+                  const totalFat = Object.values(data.data.weekday_analysis as any).reduce((sum: number, d: any) => sum + d.faturamento, 0);
+                  const percentual = (dados.faturamento / totalFat) * 100;
+                  const isWeekend = dia === 'Sexta' || dia === 'Sábado' || dia === 'Domingo';
+
+                  return (
+                    <div key={dia} className={`rounded-xl p-4 border ${isWeekend ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-green-100'} hover:shadow-lg transition-shadow`}>
+                      <h4 className="font-bold text-gray-900 mb-3">{dia}</h4>
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Faturamento:</span>
+                          <span className="font-semibold">R$ {dados.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                        </div>
+
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Vendas:</span>
+                          <span className="font-semibold">{dados.vendas}</span>
+                        </div>
+
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Ticket:</span>
+                          <span className="font-semibold">R$ {dados.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-500">% do total:</span>
+                            <span className="font-bold text-green-600">{percentual.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Ticket:</span>
-                      <span className="font-semibold">R$ {dados.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* SEÇÃO 3: RECOMENDAÇÕES DE ESTOQUE POR HORA */}
+          {data.data.product_hourly_recommendations && data.data.product_hourly_recommendations.length > 0 && (
+            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-xl p-6 border border-orange-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <Package className="w-8 h-8 text-orange-600" />
+                📦 Recomendações de Estoque por Hora
+              </h2>
+              <p className="text-gray-600 mb-6">Aumentar pão amanhã? Caprichar em cerveja sexta/sábado?</p>
+
+              <div className="space-y-4">
+                {data.data.product_hourly_recommendations.slice(0, 8).map((rec, idx) => (
+                  <div key={idx} className={`rounded-lg p-4 border-l-4 ${rec.prioridade === 'alta' ? 'bg-red-50 border-red-500' :
+                    rec.prioridade === 'media' ? 'bg-yellow-50 border-yellow-500' :
+                      'bg-green-50 border-green-500'
+                    }`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-bold text-gray-900">{rec.produto}</h4>
+                        <p className="text-sm text-gray-600">{rec.categoria} • {rec.periodo}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${rec.prioridade === 'alta' ? 'bg-red-200 text-red-800' :
+                        rec.prioridade === 'media' ? 'bg-yellow-200 text-yellow-800' :
+                          'bg-green-200 text-green-800'
+                        }`}>
+                        {rec.prioridade === 'alta' ? '🔴 Alta' : rec.prioridade === 'media' ? '🟡 Média' : '🟢 Baixa'}
+                      </span>
                     </div>
-                    
-                    <div className="mt-2 pt-2 border-t border-gray-200">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">% do total:</span>
-                        <span className="font-bold text-green-600">{percentual.toFixed(1)}%</span>
+
+                    <p className="text-sm text-gray-700 mb-3">{rec.recomendacao}</p>
+
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Qtd/Dia:</span>
+                        <p className="font-bold text-gray-900">{rec.quantidade_vendida} un</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Faturamento:</span>
+                        <p className="font-bold text-gray-900">R$ {rec.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Frequência:</span>
+                        <p className="font-bold text-gray-900">{rec.frequencia}x</p>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        )}
-
-        {/* SEÇÃO 3: RECOMENDAÇÕES DE ESTOQUE POR HORA */}
-        {data.data.product_hourly_recommendations && data.data.product_hourly_recommendations.length > 0 && (
-        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-xl p-6 border border-orange-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-            <Package className="w-8 h-8 text-orange-600" />
-            📦 Recomendações de Estoque por Hora
-          </h2>
-          <p className="text-gray-600 mb-6">Aumentar pão amanhã? Caprichar em cerveja sexta/sábado?</p>
-          
-          <div className="space-y-4">
-            {data.data.product_hourly_recommendations.slice(0, 8).map((rec, idx) => (
-              <div key={idx} className={`rounded-lg p-4 border-l-4 ${
-                rec.prioridade === 'alta' ? 'bg-red-50 border-red-500' :
-                rec.prioridade === 'media' ? 'bg-yellow-50 border-yellow-500' :
-                'bg-green-50 border-green-500'
-              }`}>
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h4 className="font-bold text-gray-900">{rec.produto}</h4>
-                    <p className="text-sm text-gray-600">{rec.categoria} • {rec.periodo}</p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                    rec.prioridade === 'alta' ? 'bg-red-200 text-red-800' :
-                    rec.prioridade === 'media' ? 'bg-yellow-200 text-yellow-800' :
-                    'bg-green-200 text-green-800'
-                  }`}>
-                    {rec.prioridade === 'alta' ? '🔴 Alta' : rec.prioridade === 'media' ? '🟡 Média' : '🟢 Baixa'}
-                  </span>
-                </div>
-                
-                <p className="text-sm text-gray-700 mb-3">{rec.recomendacao}</p>
-                
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Qtd/Dia:</span>
-                    <p className="font-bold text-gray-900">{rec.quantidade_vendida} un</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Faturamento:</span>
-                    <p className="font-bold text-gray-900">R$ {rec.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Frequência:</span>
-                    <p className="font-bold text-gray-900">{rec.frequencia}x</p>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
-        )}
-      </div>
       )}
 
       {/* 🔥 NOVO: PAINEL DE RH */}
@@ -3216,9 +3197,8 @@ const DashboardPage: React.FC = () => {
                 <div className="p-3 bg-green-100 rounded-lg">
                   <Clock className="w-6 h-6 text-green-600" />
                 </div>
-                <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                  rh.taxa_pontualidade > 90 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                }`}>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full ${rh.taxa_pontualidade > 90 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                  }`}>
                   {rh.taxa_pontualidade}%
                 </span>
               </div>
@@ -3250,9 +3230,8 @@ const DashboardPage: React.FC = () => {
                 <div className="p-3 bg-red-100 rounded-lg">
                   <TrendingUp className="w-6 h-6 text-red-600" />
                 </div>
-                <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                  (rh.turnover_rate || 0) > 5 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-                }`}>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full ${(rh.turnover_rate || 0) > 5 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                  }`}>
                   {(rh.turnover_rate || 0) > 5 ? 'Alto' : 'Normal'}
                 </span>
               </div>
@@ -3508,7 +3487,7 @@ const DashboardPage: React.FC = () => {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       />
                       <Legend />
@@ -3723,15 +3702,15 @@ const DashboardPage: React.FC = () => {
                   <p className="text-xs text-red-600 font-medium uppercase mt-1">Atrasos</p>
                 </div>
               </div>
-              
+
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="font-medium text-gray-700">Taxa de Pontualidade</span>
                   <span className="font-bold text-gray-900">{rh.taxa_pontualidade}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2.5">
-                  <div 
-                    className={`h-2.5 rounded-full ${rh.taxa_pontualidade > 90 ? 'bg-green-500' : rh.taxa_pontualidade > 80 ? 'bg-yellow-500' : 'bg-red-500'}`} 
+                  <div
+                    className={`h-2.5 rounded-full ${rh.taxa_pontualidade > 90 ? 'bg-green-500' : rh.taxa_pontualidade > 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
                     style={{ width: `${rh.taxa_pontualidade}%` }}
                   ></div>
                 </div>
@@ -3741,15 +3720,15 @@ const DashboardPage: React.FC = () => {
               </div>
 
               <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-100">
-                 <div className="flex gap-3">
-                   <Lightbulb className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                   <div>
-                     <h4 className="font-bold text-purple-900 text-sm">Dica de Gestão</h4>
-                     <p className="text-xs text-purple-800 mt-1">
-                       Acompanhe os atrasos recorrentes. O custo de horas extras pode ser reduzido ajustando escalas ou compensando horas.
-                     </p>
-                   </div>
-                 </div>
+                <div className="flex gap-3">
+                  <Lightbulb className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-purple-900 text-sm">Dica de Gestão</h4>
+                    <p className="text-xs text-purple-800 mt-1">
+                      Acompanhe os atrasos recorrentes. O custo de horas extras pode ser reduzido ajustando escalas ou compensando horas.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3777,12 +3756,11 @@ const DashboardPage: React.FC = () => {
                             <p className="text-xs text-gray-500">{func.cargo}</p>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                              func.status === 'Em Trabalho' ? 'bg-green-100 text-green-700' :
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${func.status === 'Em Trabalho' ? 'bg-green-100 text-green-700' :
                               func.status === 'Almoço' ? 'bg-yellow-100 text-yellow-700' :
-                              func.status === 'Saiu' ? 'bg-gray-100 text-gray-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
+                                func.status === 'Saiu' ? 'bg-gray-100 text-gray-700' :
+                                  'bg-red-100 text-red-700'
+                              }`}>
                               {func.status}
                             </span>
                           </td>
@@ -3828,15 +3806,14 @@ const DashboardPage: React.FC = () => {
                         <td className="px-4 py-3 text-gray-900">{ponto.hora}</td>
                         <td className="px-4 py-3 text-gray-900">{ponto.funcionario}</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                            ponto.tipo === 'entrada' ? 'bg-green-100 text-green-700' :
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${ponto.tipo === 'entrada' ? 'bg-green-100 text-green-700' :
                             ponto.tipo === 'saida' ? 'bg-red-100 text-red-700' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
                             {ponto.tipo === 'entrada' ? 'Entrada' :
-                             ponto.tipo === 'saida' ? 'Saída' :
-                             ponto.tipo === 'saida_almoco' ? 'Saída Almoço' :
-                             ponto.tipo === 'retorno_almoco' ? 'Retorno Almoço' : ponto.tipo}
+                              ponto.tipo === 'saida' ? 'Saída' :
+                                ponto.tipo === 'saida_almoco' ? 'Saída Almoço' :
+                                  ponto.tipo === 'retorno_almoco' ? 'Retorno Almoço' : ponto.tipo}
                           </span>
                         </td>
                       </tr>
@@ -3855,7 +3832,7 @@ const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* 🔥 NOVO: MODAL DE PRODUTO ESTRELA COM PLANO DE AÇÃO */ }
+      {/* 🔥 NOVO: MODAL DE PRODUTO ESTRELA COM PLANO DE AÇÃO */}
       {modalProdutoEstrela && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -3952,7 +3929,7 @@ const DashboardPage: React.FC = () => {
                       • <strong>Ponto de Reposição:</strong> {Math.ceil((modalProdutoEstrela.quantidade_vendida / periodoDias) * 7)} unidades (7 dias)
                     </p>
                   </div>
-                  
+
                   <div className="bg-white/70 p-4 rounded-lg">
                     <p className="font-semibold text-green-900 mb-2">2. Estratégia de Precificação</p>
                     <p className="text-sm text-gray-700 mb-2">
@@ -3965,7 +3942,7 @@ const DashboardPage: React.FC = () => {
                       • <strong>Combos Sugeridos:</strong> Crie kits com produtos complementares
                     </p>
                   </div>
-                  
+
                   <div className="bg-white/70 p-4 rounded-lg">
                     <p className="font-semibold text-purple-900 mb-2">3. Marketing e Exposição</p>
                     <p className="text-sm text-gray-700 mb-2">
@@ -3978,7 +3955,7 @@ const DashboardPage: React.FC = () => {
                       • <strong>Comunicação:</strong> Destaque como "Mais Vendido" ou "Favorito dos Clientes"
                     </p>
                   </div>
-                  
+
                   <div className="bg-white/70 p-4 rounded-lg">
                     <p className="font-semibold text-orange-900 mb-2">4. Análise de Fornecedor</p>
                     <p className="text-sm text-gray-700 mb-2">
@@ -4108,7 +4085,7 @@ const DashboardPage: React.FC = () => {
                 </div>
                 <div className="mt-4 bg-red-100 border border-red-300 rounded-lg p-4">
                   <p className="text-sm text-red-900">
-                    <strong>⚠️ Alerta:</strong> Este produto está consumindo capital que poderia ser investido em produtos mais rentáveis. 
+                    <strong>⚠️ Alerta:</strong> Este produto está consumindo capital que poderia ser investido em produtos mais rentáveis.
                     Tempo estimado para vender estoque atual: <strong>{modalProdutoLento.dias_estoque} dias</strong>
                   </p>
                 </div>
@@ -4133,7 +4110,7 @@ const DashboardPage: React.FC = () => {
                       • <strong>Meta:</strong> Vender pelo menos 50% do estoque em 1 semana
                     </p>
                   </div>
-                  
+
                   <div className="bg-white/70 p-4 rounded-lg border-l-4 border-orange-500">
                     <p className="font-semibold text-orange-900 mb-2">2. Combos Estratégicos</p>
                     <p className="text-sm text-gray-700 mb-2">
@@ -4146,7 +4123,7 @@ const DashboardPage: React.FC = () => {
                       • <strong>Posicionamento:</strong> Coloque ao lado de produtos de alta rotação
                     </p>
                   </div>
-                  
+
                   <div className="bg-white/70 p-4 rounded-lg border-l-4 border-yellow-500">
                     <p className="font-semibold text-yellow-900 mb-2">3. Programa de Fidelidade</p>
                     <p className="text-sm text-gray-700 mb-2">
@@ -4159,7 +4136,7 @@ const DashboardPage: React.FC = () => {
                       • <strong>Sorteio:</strong> Cada compra = 1 cupom para sorteio mensal
                     </p>
                   </div>
-                  
+
                   <div className="bg-white/70 p-4 rounded-lg border-l-4 border-green-500">
                     <p className="font-semibold text-green-900 mb-2">4. Venda para Clientes VIP</p>
                     <p className="text-sm text-gray-700 mb-2">
@@ -4343,21 +4320,19 @@ const DashboardPage: React.FC = () => {
               <div className="flex gap-3 mb-6">
                 <button
                   onClick={() => setVisualizacaoModal('dias')}
-                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${
-                    visualizacaoModal === 'dias'
-                      ? 'bg-blue-600 text-white shadow-lg scale-105'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${visualizacaoModal === 'dias'
+                    ? 'bg-blue-600 text-white shadow-lg scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   📅 Últimos 30 Dias
                 </button>
                 <button
                   onClick={() => setVisualizacaoModal('meses')}
-                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${
-                    visualizacaoModal === 'meses'
-                      ? 'bg-purple-600 text-white shadow-lg scale-105'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${visualizacaoModal === 'meses'
+                    ? 'bg-purple-600 text-white shadow-lg scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   📊 Últimos 12 Meses
                 </button>
@@ -4368,48 +4343,48 @@ const DashboardPage: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   {visualizacaoModal === 'dias' ? '📈 Evolução Diária (30 dias)' : '📊 Evolução Mensal (12 meses)'}
                 </h3>
-                
+
                 {analise_temporal?.tendencia_vendas && analise_temporal.tendencia_vendas.length > 0 ? (
                   <div className="h-[400px] bg-white dark:bg-slate-900 rounded-lg p-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart 
+                      <LineChart
                         data={
                           visualizacaoModal === 'dias'
                             ? analise_temporal.tendencia_vendas.slice(-30) // Últimos 30 dias
                             : (() => {
-                                // Agrupar por mês para visualização mensal
-                                const vendasPorMes: Record<string, { mes: string; total: number; count: number }> = {};
-                                
-                                analise_temporal.tendencia_vendas.forEach((item: any) => {
-                                  if (item.data) {
-                                    const mesAno = item.data.substring(0, 7); // "2026-02"
-                                    if (!vendasPorMes[mesAno]) {
-                                      vendasPorMes[mesAno] = { mes: mesAno, total: 0, count: 0 };
-                                    }
-                                    vendasPorMes[mesAno].total += item.vendas || 0;
-                                    vendasPorMes[mesAno].count += 1;
+                              // Agrupar por mês para visualização mensal
+                              const vendasPorMes: Record<string, { mes: string; total: number; count: number }> = {};
+
+                              analise_temporal.tendencia_vendas.forEach((item: any) => {
+                                if (item.data) {
+                                  const mesAno = item.data.substring(0, 7); // "2026-02"
+                                  if (!vendasPorMes[mesAno]) {
+                                    vendasPorMes[mesAno] = { mes: mesAno, total: 0, count: 0 };
                                   }
+                                  vendasPorMes[mesAno].total += item.vendas || 0;
+                                  vendasPorMes[mesAno].count += 1;
+                                }
+                              });
+
+                              const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+                              return Object.keys(vendasPorMes)
+                                .sort()
+                                .slice(-12) // Últimos 12 meses
+                                .map(mesAno => {
+                                  const [ano, mes] = mesAno.split('-');
+                                  const mesNumero = parseInt(mes);
+                                  return {
+                                    data: `${mesesNomes[mesNumero - 1]}/${ano.substring(2)}`,
+                                    vendas: vendasPorMes[mesAno].total
+                                  };
                                 });
-                                
-                                const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                                
-                                return Object.keys(vendasPorMes)
-                                  .sort()
-                                  .slice(-12) // Últimos 12 meses
-                                  .map(mesAno => {
-                                    const [ano, mes] = mesAno.split('-');
-                                    const mesNumero = parseInt(mes);
-                                    return {
-                                      data: `${mesesNomes[mesNumero - 1]}/${ano.substring(2)}`,
-                                      vendas: vendasPorMes[mesAno].total
-                                    };
-                                  });
-                              })()
+                            })()
                         }
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                        <XAxis 
-                          dataKey="data" 
+                        <XAxis
+                          dataKey="data"
                           tick={{ fontSize: 12, fill: '#6B7280' }}
                           tickFormatter={(value) => {
                             if (visualizacaoModal === 'dias') {
@@ -4419,7 +4394,7 @@ const DashboardPage: React.FC = () => {
                             return value; // Já formatado para meses
                           }}
                         />
-                        <YAxis 
+                        <YAxis
                           tick={{ fontSize: 12, fill: '#6B7280' }}
                           tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
                         />
@@ -4429,7 +4404,7 @@ const DashboardPage: React.FC = () => {
                             return (
                               <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-lg border-2 border-blue-200 dark:border-blue-700">
                                 <p className="font-bold text-gray-900 dark:text-gray-100 mb-1">
-                                  {visualizacaoModal === 'dias' 
+                                  {visualizacaoModal === 'dias'
                                     ? new Date(label).toLocaleDateString('pt-BR')
                                     : label
                                   }
@@ -4441,9 +4416,9 @@ const DashboardPage: React.FC = () => {
                             );
                           }}
                         />
-                        <Line 
-                          type="monotone" 
-                          dataKey="vendas" 
+                        <Line
+                          type="monotone"
+                          dataKey="vendas"
                           stroke={visualizacaoModal === 'dias' ? '#3B82F6' : '#9333EA'}
                           strokeWidth={3}
                           dot={{ fill: visualizacaoModal === 'dias' ? '#3B82F6' : '#9333EA', r: 4 }}
@@ -4473,21 +4448,21 @@ const DashboardPage: React.FC = () => {
                     {kpiModalAberto === 'Despesas' && `R$ ${(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                   </p>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
                   <p className="text-sm text-green-700 dark:text-green-400 mb-1 font-medium">📈 Crescimento</p>
                   <p className={`text-xl font-bold ${(mes?.crescimento_mensal || 0) >= 0 ? 'text-green-900 dark:text-green-300' : 'text-red-900 dark:text-red-300'}`}>
                     {(mes?.crescimento_mensal || 0) >= 0 ? '+' : ''}{(mes?.crescimento_mensal || 0).toFixed(1)}%
                   </p>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
                   <p className="text-sm text-purple-700 dark:text-purple-400 mb-1 font-medium">📅 Período</p>
                   <p className="text-xl font-bold text-purple-900 dark:text-purple-300">
                     {periodoDias} dias
                   </p>
                 </div>
-                
+
                 <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800">
                   <p className="text-sm text-orange-700 dark:text-orange-400 mb-1 font-medium">📊 Média Diária</p>
                   <p className="text-xl font-bold text-orange-900 dark:text-orange-300">

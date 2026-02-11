@@ -44,6 +44,42 @@ class DataLayer:
             return {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
 
     @staticmethod
+    def get_sales_financials(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+        """
+        Retorna dados financeiros agregados (Faturamento, CMV, Lucro Bruto)
+        Corrigido para usar VendaItem para calcular o custo real dos produtos vendidos.
+        """
+        try:
+            # Join Venda -> VendaItem para somar custo * quantidade
+            # Importante: VendaItem.custo_unitario armazena o custo no momento da venda (histórico)
+            
+            result = db.session.query(
+                func.sum(Venda.total).label('revenue'),
+                func.sum(VendaItem.custo_unitario * VendaItem.quantidade).label('cogs'),
+                func.sum(VendaItem.total_item).label('gross_sales')
+            ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= start_date,
+                Venda.data_venda <= end_date,
+                Venda.status == 'finalizada'
+            ).first()
+
+            revenue = float(result.revenue or 0)
+            cogs = float(result.cogs or 0)
+            
+            # Se COGS for zero (dados antigos sem custo histórico), tentar estimar?
+            # Por enquanto, assumimos que 0 é o valor real se não houver dados.
+            
+            return {
+                "revenue": revenue,
+                "cogs": cogs,
+                "gross_profit": revenue - cogs
+            }
+        except Exception as e:
+            logger.error(f"Erro em get_sales_financials: {e}")
+            return {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
+
+    @staticmethod
     def get_sales_timeseries(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """Série temporal de vendas diárias"""
         try:

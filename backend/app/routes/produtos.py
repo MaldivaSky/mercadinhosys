@@ -1415,7 +1415,8 @@ def listar_produtos_estoque():
             sql = text(
                 f"SELECT id, nome, codigo_barras, codigo_interno, descricao, marca, unidade_medida, "
                 f"preco_custo, preco_venda, quantidade, quantidade_minima, ativo, "
-                f"quantidade_vendida, total_vendido, ultima_venda, classificacao_abc, fornecedor_id "
+                f"quantidade_vendida, total_vendido, ultima_venda, classificacao_abc, fornecedor_id, "
+                f"lote, data_validade, controlar_validade "
                 f"FROM produtos "
                 f"WHERE estabelecimento_id = :estabelecimento_id "
                 f"ORDER BY {order_clause} {order_dir} "
@@ -1443,6 +1444,9 @@ def listar_produtos_estoque():
                 ultima_venda = r.get("ultima_venda", None) if hasattr(r, "get") else r[14]
                 classificacao_abc = r.get("classificacao_abc", "C") if hasattr(r, "get") else r[15]
                 fornecedor_id = r.get("fornecedor_id", None) if hasattr(r, "get") else r[16]
+                lote = r.get("lote", None) if hasattr(r, "get") else r[17]
+                data_validade = r.get("data_validade", None) if hasattr(r, "get") else r[18]
+                controlar_validade = r.get("controlar_validade", False) if hasattr(r, "get") else r[19]
                 
                 # Formatar ultima_venda se existir
                 ultima_venda_iso = None
@@ -1485,9 +1489,10 @@ def listar_produtos_estoque():
                     "fornecedor_id": fornecedor_id,
                     "fornecedor_nome": fornecedor_nome,
                     "ativo": bool(ativo),
-                    "lote": None,
+                    "lote": lote,
                     "data_fabricacao": None,
-                    "data_validade": None,
+                    "data_validade": str(data_validade) if data_validade else None,
+                    "controlar_validade": bool(controlar_validade),
                     "created_at": None,
                     "updated_at": None,
                     "quantidade_vendida": quantidade_vendida or 0,
