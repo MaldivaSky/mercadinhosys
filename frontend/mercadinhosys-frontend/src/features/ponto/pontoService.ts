@@ -118,4 +118,10 @@ export const pontoService = {
     const response = await apiClient.get(`/ponto/relatorio/detalhado/${funcionarioId}`, { params });
     return response.data;
   },
+
+  // Obter lista de funcionários (para filtros)
+  obterFuncionarios: async () => {
+    const response = await apiClient.get('/funcionarios');
+    return response.data;
+  },
 };

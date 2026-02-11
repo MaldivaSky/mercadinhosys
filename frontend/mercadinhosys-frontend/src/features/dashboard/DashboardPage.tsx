@@ -1,15 +1,16 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
   ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
   DollarSign as DollarIcon, Target as TargetIcon, AlertCircle,
   TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
-  LineChart as LineChartIcon, RefreshCw, X, Clock, Lightbulb
+  LineChart as LineChartIcon, RefreshCw, X, Clock, Lightbulb, Users
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line, Cell
+  Tooltip, ResponsiveContainer, LineChart, Line, Cell, AreaChart, Area, Legend
 } from 'recharts';
 
 // API Client
@@ -141,6 +142,36 @@ interface InsightsCientificos {
   }>;
 }
 
+// 🔥 NOVO: Interface para Métricas de RH
+interface RHMetrics {
+  total_beneficios_mensal: number;
+  total_salarios: number;
+  custo_folha_estimado: number;
+  funcionarios_ativos: number;
+  total_entradas_periodo: number;
+  total_atrasos_qtd: number;
+  taxa_pontualidade: number;
+  total_minutos_atraso: number;
+  minutos_extras_estimados: number;
+  custo_extras_estimado: number;
+  turnover_rate?: number;
+  admissoes_periodo?: number;
+  demissoes_periodo?: number;
+  evolution_turnover?: Array<{ mes: string; admissoes: number; demissoes: number; ausencias?: number; atrasos?: number; horas_extras?: number }>;
+  benefits_breakdown?: Array<{ name: string; value: number }>;
+  top_overtime_employees?: Array<{ nome: string; horas: number; custo_estimado: number }>;
+  team_status_today?: Array<{ nome: string; cargo: string; status: string; ultimo_registro: string }>;
+  recent_points?: Array<{ data: string; hora: string; tipo: string; funcionario: string }>;
+  daily_ponto_summary?: Array<{ data: string; funcionario: string; entrada: string; saida: string; minutos_atraso: number; minutos_extras: number }>;
+  overtime_trend?: Array<{ data: string; minutos_extras: number; custo_extras: number }>;
+  atrasos_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; atrasos_qtd: number; minutos_atraso: number }>;
+  horas_extras_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; minutos_extras: number; custo_extras: number }>;
+  faltas_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; faltas: number; dias_uteis: number; dias_presenca: number }>;
+  banco_horas_por_funcionario_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; saldo_minutos: number; valor_hora_extra: number; horas_trabalhadas_minutos: number; horas_esperadas_minutos: number }>;
+  espelho_pagamento_mes?: Array<{ funcionario_id: number; nome: string; cargo: string; salario_base: number; beneficios: number; horas_extras_horas: number; custo_horas_extras: number; atrasos_minutos: number; faltas: number; banco_horas_saldo_horas: number; total_estimado: number }>;
+  resumo_mes?: { inicio: string | null; fim: string | null; dias_uteis: number; total_atrasos_minutos: number; total_atrasos_qtd: number; total_extras_minutos: number; total_faltas: number };
+}
+
 interface DashboardData {
   success: boolean;
   usuario: {
@@ -227,12 +258,14 @@ interface DashboardData {
       variaveis_envolvidas: string[];
       acao_recomendada: string;
     }>;
+    rh?: RHMetrics; // 🔥 NOVO: Dados de RH
   };
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -243,7 +276,7 @@ const DashboardPage: React.FC = () => {
     'insights': true
   });
   const [selectedABC, setSelectedABC] = useState<'A' | 'B' | 'C' | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'avancado'>('visao-geral'); // 🔥 Inicia em Visão Geral
+  const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'avancado' | 'rh'>('visao-geral'); // 🔥 Inicia em Visão Geral
   const [hoveredKPI, setHoveredKPI] = useState<number | null>(null);
   const [expandedKPI, setExpandedKPI] = useState<number | null>(null);
   
@@ -271,9 +304,64 @@ const DashboardPage: React.FC = () => {
   const [modalMatrizHorario, setModalMatrizHorario] = useState<any>(null);
   const [modalComportamentoHora, setModalComportamentoHora] = useState<any>(null);
 
+  const [rhFuncionarios, setRhFuncionarios] = useState<any[]>([]);
+  const [rhPontoLoading, setRhPontoLoading] = useState(false);
+  const [rhPontoError, setRhPontoError] = useState<string | null>(null);
+  const [rhPontoFiltroFuncionarioId, setRhPontoFiltroFuncionarioId] = useState<string>('');
+  const [rhPontoFiltroInicio, setRhPontoFiltroInicio] = useState<string>('');
+  const [rhPontoFiltroFim, setRhPontoFiltroFim] = useState<string>('');
+  const [rhPontoPage, setRhPontoPage] = useState<number>(1);
+  const [rhPontoPerPage, setRhPontoPerPage] = useState<number>(25);
+  const [rhPontoTotal, setRhPontoTotal] = useState<number>(0);
+  const [rhPontoPages, setRhPontoPages] = useState<number>(1);
+  const [rhPontoItems, setRhPontoItems] = useState<any[]>([]);
+
   useEffect(() => {
     loadDashboard();
   }, [periodoDias]); // 🔥 Recarregar quando período mudar
+
+  const loadRhSupportData = async () => {
+    try {
+      setRhPontoError(null);
+      const resp = await apiClient.get('/funcionarios');
+      const items = resp?.data?.data || resp?.data?.funcionarios || resp?.data || [];
+      setRhFuncionarios(Array.isArray(items) ? items : []);
+    } catch (e: any) {
+      setRhFuncionarios([]);
+    }
+  };
+
+  const loadRhPontoHistorico = async (page = 1) => {
+    try {
+      setRhPontoLoading(true);
+      setRhPontoError(null);
+      const params: any = { page, per_page: rhPontoPerPage };
+      if (rhPontoFiltroInicio) params.data_inicio = rhPontoFiltroInicio;
+      if (rhPontoFiltroFim) params.data_fim = rhPontoFiltroFim;
+      if (rhPontoFiltroFuncionarioId) params.funcionario_id = Number(rhPontoFiltroFuncionarioId);
+      const resp = await apiClient.get('/dashboard/rh/ponto/historico', { params });
+      const d = resp?.data?.data;
+      setRhPontoItems(d?.items || []);
+      setRhPontoPage(d?.page || page);
+      setRhPontoPerPage(d?.per_page || rhPontoPerPage);
+      setRhPontoTotal(d?.total || 0);
+      setRhPontoPages(d?.pages || 1);
+    } catch (e: any) {
+      setRhPontoItems([]);
+      setRhPontoTotal(0);
+      setRhPontoPages(1);
+      setRhPontoError(e?.response?.data?.message || e?.message || 'Erro ao carregar histórico de ponto');
+    } finally {
+      setRhPontoLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'rh') {
+      loadRhSupportData();
+      loadRhPontoHistorico(1);
+    }
+  }, [viewMode]);
   
   // 🔥 NOVO: Aplicar filtro personalizado
   const aplicarFiltroPersonalizado = () => {
@@ -294,9 +382,19 @@ const DashboardPage: React.FC = () => {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      // 🔥 CORREÇÃO: Passar período como parâmetro
-      console.log(`🔍 Carregando dashboard com período de ${periodoDias} dias`);
-      const response = await apiClient.get(`/dashboard/cientifico?days=${periodoDias}`);
+      
+      // 🔥 NOVO: Se o usuário filtrou datas específicas, enviar essas datas
+      let url = `/dashboard/cientifico?days=${periodoDias}`;
+      
+      if (dataInicio && dataFim) {
+        // Enviar datas específicas para o backend respeitar o filtro
+        url = `/dashboard/cientifico?start_date=${dataInicio}T00:00:00&end_date=${dataFim}T23:59:59`;
+        console.log(`� Carregando dashboard com datas específicas: ${dataInicio} a ${dataFim}`);
+      } else {
+        console.log(`🔍 Carregando dashboard com período de ${periodoDias} dias`);
+      }
+      
+      const response = await apiClient.get(url);
       
       console.log('🔍 Backend Response:', response.data);
       console.log('📊 Período retornado pelo backend:', response.data?.metadata?.period_days);
@@ -304,21 +402,27 @@ const DashboardPage: React.FC = () => {
       // 🔥 MAPEAR ESTRUTURA DO BACKEND PARA O FORMATO ESPERADO PELO FRONTEND
       const backendData = response.data.data;
       
-      // Calcular despesas totais
-      const totalDespesas = Array.isArray(backendData?.expenses) 
-        ? backendData.expenses.reduce((sum: number, exp: any) => sum + (exp.valor || 0), 0) 
-        : 0;
+      // 🔥 CORREÇÃO: Usar total_despesas do backend (já filtrado por período)
+      const totalDespesas = backendData?.total_despesas || 
+        (Array.isArray(backendData?.expenses) 
+          ? backendData.expenses.reduce((sum: number, exp: any) => sum + (exp.total || exp.valor || 0), 0) 
+          : 0);
       
-      // Calcular lucro bruto
+      // 🔥 CORREÇÃO: Fórmula correta de lucro
       const totalVendas = backendData?.summary?.revenue?.value || 0;
       const custoEstoque = backendData?.inventory?.custo_total || 0;
-      const lucroBruto = totalVendas - totalDespesas;
       
-      // Calcular margem de lucro
-      const margemLucro = totalVendas > 0 ? (lucroBruto / totalVendas) * 100 : 0;
+      // Lucro Bruto = Vendas - Custo de Estoque (COGS)
+      const lucroBruto = totalVendas - custoEstoque;
       
-      // Calcular ROI
-      const roiMensal = custoEstoque > 0 ? (lucroBruto / custoEstoque) * 100 : 0;
+      // 🔥 NOVO: Lucro Líquido = Lucro Bruto - Despesas Operacionais
+      const lucroLiquido = lucroBruto - totalDespesas;
+      
+      // Calcular margem de lucro (sobre vendas)
+      const margemLucro = totalVendas > 0 ? (lucroLiquido / totalVendas) * 100 : 0;
+      
+      // Calcular ROI (sobre estoque)
+      const roiMensal = custoEstoque > 0 ? (lucroLiquido / custoEstoque) * 100 : 0;
       
       // Mapear produtos da curva ABC para produtos_estrela
       const produtosEstrela = backendData?.produtos_estrela || backendData?.abc?.produtos
@@ -469,13 +573,14 @@ const DashboardPage: React.FC = () => {
             meta_atingida: 0,
             vendas_por_forma_pagamento: {},
             custo_vendas: custoEstoque,
-            lucro_liquido: lucroBruto,
+            lucro_liquido: lucroLiquido,  // 🔥 CORRIGIDO: Usar lucroLiquido (não lucroBruto)
             margem_diaria: margemLucro
           },
           mes: {
             total_vendas: totalVendas,
             total_despesas: totalDespesas,
             lucro_bruto: lucroBruto,
+            lucro_liquido: lucroLiquido,  // 🔥 NOVO: Adicionar lucro_liquido
             margem_lucro: margemLucro,
             crescimento_mensal: backendData?.summary?.growth?.value || 0,
             despesas_por_tipo: {},
@@ -483,6 +588,7 @@ const DashboardPage: React.FC = () => {
             investimentos: custoEstoque,
             roi_mensal: roiMensal
           },
+          rh: backendData?.rh, // 🔥 NOVO: Dados de RH mapeados
           analise_produtos: {
             curva_abc: backendData?.abc || { produtos: [], resumo: { A: { quantidade: 0, faturamento_total: 0, percentual: 0 }, B: { quantidade: 0, faturamento_total: 0, percentual: 0 }, C: { quantidade: 0, faturamento_total: 0, percentual: 0 } }, pareto_80_20: false },
             produtos_estrela: produtosEstrela,
@@ -507,15 +613,43 @@ const DashboardPage: React.FC = () => {
             },
             indicadores: {
               ponto_equilibrio: totalDespesas,
-              margem_seguranca: totalVendas > 0 ? ((totalVendas - totalDespesas) / totalVendas) * 100 : 0,
+              margem_seguranca: totalVendas > 0 ? ((lucroLiquido / totalVendas) * 100) : 0,  // 🔥 CORRIGIDO: Usar lucroLiquido
               alavancagem_operacional: 1.5,
               ebitda: lucroBruto
             }
           },
           analise_temporal: {
-            vendas_por_hora: backendData?.sales_by_hour || [],  // 🔥 CORREÇÃO: Mapear corretamente
-            produtos_por_hora: backendData?.top_products_by_hour || {},  // 🔥 NOVO: Produtos por horário
-            padroes_temporais_clientes: backendData?.customer_temporal_patterns || {},  // 🔥 NOVO
+            vendas_por_hora: (backendData?.sales_by_hour || []).map((h: any) => ({
+              hora: h.hora || 0,
+              quantidade: h.qtd || h.quantidade || 0,
+              total: h.total || 0,
+              lucro: h.lucro || 0,
+              margem: h.margem || 0
+            })),  // 🔥 CORREÇÃO: Mapear corretamente com valores padrão
+            produtos_por_hora: (() => {
+              // 🔥 CORREÇÃO: Transformar lista em Record<hora, produtos[]>
+              const topProducts = backendData?.top_products_by_hour || [];
+              if (!Array.isArray(topProducts)) return {};
+              
+              // Se for array simples, agrupar por hora (ou retornar vazio se não tiver hora)
+              const grouped: Record<number, any[]> = {};
+              topProducts.forEach((p: any) => {
+                const hora = p.hora || 0;
+                if (!grouped[hora]) grouped[hora] = [];
+                grouped[hora].push(p);
+              });
+              return grouped;
+            })(),  // 🔥 NOVO: Produtos por horário
+            padroes_temporais_clientes: (() => {
+              // 🔥 CORREÇÃO: Backend retorna lista simples, frontend espera objeto com perfis_temporais
+              const patterns = backendData?.customer_temporal_patterns || [];
+              if (!Array.isArray(patterns)) return {};
+              
+              // Transformar lista em objeto com estrutura esperada
+              return {
+                perfis_temporais: {}  // Vazio por enquanto, já que backend não retorna perfis
+              };
+            })(),  // 🔥 NOVO
             concentracao_horaria: backendData?.hourly_concentration || {},  // 🔥 NOVO
             matriz_produto_horario: backendData?.product_hour_matrix || { matrix: [], products: [], hours: [] },  // 🔥 NOVO
             afinidade_cliente_produto: backendData?.customer_product_affinity || [],  // 🔥 NOVO
@@ -564,12 +698,18 @@ const DashboardPage: React.FC = () => {
       
       console.log('✅ Mapped Data:', mappedData);
       console.log('🔍 Backend Raw Data:', backendData);
+      console.log('🔍 Timeseries:', backendData?.timeseries);
+      console.log('🔍 Timeseries Formatted:', timeseriesFormatted);
+      console.log('🔍 Sales by Hour:', backendData?.sales_by_hour);
       console.log('🔍 Produtos Lentos (backend):', backendData?.produtos_lentos);
       console.log('🔍 Produtos Lentos (mapped):', produtosLentos);
       console.log('🔍 Recomendações (backend):', backendData?.recomendacoes);
       console.log('🔍 Sazonalidade:', sazonalidadeData);
       console.log('🔍 Comparação Mensal:', comparacaoMensal);
       console.log('🔍 ABC Analysis:', backendData?.abc);
+      console.log('🔍 Analise Temporal Mapeada:', mappedData.data.analise_temporal);
+      console.log('🔍 Correlações:', backendData?.correlations);
+      console.log('🔍 Insights Científicos:', mappedData.data.insights_cientificos);
       setData(mappedData);
     } catch (err) {
       console.error('❌ Dashboard Error:', err);
@@ -653,7 +793,7 @@ const DashboardPage: React.FC = () => {
     </div>
   );
 
-  const { hoje, mes, analise_produtos, analise_financeira, insights_cientificos = {
+  const { hoje, mes, rh, analise_produtos, analise_financeira, insights_cientificos = {
     correlações: [],
     anomalias: [],
     previsoes: [],
@@ -676,10 +816,16 @@ const DashboardPage: React.FC = () => {
               Análise completa do seu negócio • {new Date().toLocaleDateString('pt-BR')}
             </p>
           </div>
-          <button onClick={loadDashboard} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors">
-            <RefreshCw className="w-4 h-4" />
-            Atualizar
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            
+            <button
+              onClick={loadDashboard}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Atualizar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -804,11 +950,19 @@ const DashboardPage: React.FC = () => {
               <select
                 className="px-4 py-2 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
                 value={viewMode}
-                onChange={(e) => setViewMode(e.target.value as any)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'rh') {
+                    navigate('/rh');
+                  } else {
+                    setViewMode(val as any);
+                  }
+                }}
               >
                 <option value="visao-geral">📊 Visão Geral</option>
                 <option value="detalhado">📈 Análise Detalhada</option>
                 <option value="avancado">🔬 Análise Avançada</option>
+                <option value="rh">👥 Análise de RH</option>
               </select>
             </div>
           </div>
@@ -1348,7 +1502,7 @@ const DashboardPage: React.FC = () => {
                 <div className="space-y-3">
                   {analise_temporal?.comparacao_meses && analise_temporal?.comparacao_meses.length > 0 ? (
                     analise_temporal?.comparacao_meses.map((comp, idx) => (
-                      <div key={idx} className="bg-white/70 p-4 rounded-lg">
+                      <div key={`mes-${comp.mes || idx}`} className="bg-white/70 p-4 rounded-lg">
                         <div className="flex justify-between items-center mb-2">
                           <span className="font-medium text-gray-900">{comp.mes}</span>
                           <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -1465,11 +1619,22 @@ const DashboardPage: React.FC = () => {
                 {(() => {
                   // Calcular insights
                   const vendasPorHora = analise_temporal.vendas_por_hora;
+                  
+                  // 🔥 DEFENSIVE: Verificar se há dados
+                  if (!vendasPorHora || vendasPorHora.length === 0) {
+                    return <div className="col-span-3 text-center text-gray-500">Sem dados de vendas por hora</div>;
+                  }
+                  
                   const melhorHorario = vendasPorHora.reduce((max, h) => h.total > max.total ? h : max, vendasPorHora[0]);
                   const piorHorario = vendasPorHora.reduce((min, h) => h.total < min.total ? h : min, vendasPorHora[0]);
                   const totalVendas = vendasPorHora.reduce((sum, h) => sum + h.total, 0);
                   const mediaHoraria = totalVendas / vendasPorHora.length;
                   const horariosAcimaDaMedia = vendasPorHora.filter(h => h.total > mediaHoraria);
+                  
+                  // 🔥 DEFENSIVE: Garantir que melhorHorario e piorHorario têm valores válidos
+                  const melhorMargemSafe = melhorHorario?.margem ?? 0;
+                  const piorTotalSafe = piorHorario?.total ?? 0;
+                  const melhorTotalSafe = melhorHorario?.total ?? 1; // Evitar divisão por zero
                   
                   return (
                     <>
@@ -1481,13 +1646,13 @@ const DashboardPage: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-sm text-green-700 font-medium">🏆 Melhor Horário</p>
-                            <p className="text-2xl font-bold text-green-900">{melhorHorario.hora}h</p>
+                            <p className="text-2xl font-bold text-green-900">{melhorHorario?.hora ?? 0}h</p>
                           </div>
                         </div>
                         <div className="space-y-1 text-sm">
-                          <p className="text-gray-700">💰 R$ {melhorHorario.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <p className="text-gray-700">🛒 {melhorHorario.quantidade} vendas</p>
-                          <p className="text-gray-700">📈 {melhorHorario.margem.toFixed(1)}% margem</p>
+                          <p className="text-gray-700">💰 R$ {(melhorHorario?.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-gray-700">🛒 {melhorHorario?.quantidade ?? 0} vendas</p>
+                          <p className="text-gray-700">📈 {melhorMargemSafe.toFixed(1)}% margem</p>
                         </div>
                         <div className="mt-3 pt-3 border-t border-green-200">
                           <p className="text-xs text-green-700">
@@ -1504,13 +1669,13 @@ const DashboardPage: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-sm text-red-700 font-medium">⚠️ Horário Crítico</p>
-                            <p className="text-2xl font-bold text-red-900">{piorHorario.hora}h</p>
+                            <p className="text-2xl font-bold text-red-900">{piorHorario?.hora ?? 0}h</p>
                           </div>
                         </div>
                         <div className="space-y-1 text-sm">
-                          <p className="text-gray-700">💰 R$ {piorHorario.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <p className="text-gray-700">🛒 {piorHorario.quantidade} vendas</p>
-                          <p className="text-gray-700">📉 {((piorHorario.total / melhorHorario.total) * 100).toFixed(0)}% do melhor</p>
+                          <p className="text-gray-700">💰 R$ {(piorHorario?.total ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-gray-700">🛒 {piorHorario?.quantidade ?? 0} vendas</p>
+                          <p className="text-gray-700">📉 {((piorTotalSafe / melhorTotalSafe) * 100).toFixed(0)}% do melhor</p>
                         </div>
                         <div className="mt-3 pt-3 border-t border-red-200">
                           <p className="text-xs text-red-700">
@@ -1589,7 +1754,15 @@ const DashboardPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto">
                     {Object.entries(analise_temporal.produtos_por_hora)
                       .sort(([horaA], [horaB]) => Number(horaA) - Number(horaB))
-                      .map(([hora, produtos]: [string, any[]]) => (
+                      .filter(([hora, produtos]: [string, any]) => {
+                        // 🔥 FILTER: Remover entradas vazias antes do map
+                        const produtosArray = Array.isArray(produtos) ? produtos : [];
+                        return produtosArray.length > 0;
+                      })
+                      .map(([hora, produtos]: [string, any]) => {
+                        const produtosArray = Array.isArray(produtos) ? produtos : [];
+                        
+                        return (
                         <div key={hora} className="bg-white/80 rounded-lg p-4 border border-cyan-100 hover:shadow-md transition-shadow">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-bold text-cyan-900 flex items-center gap-2">
@@ -1597,12 +1770,12 @@ const DashboardPage: React.FC = () => {
                               {hora}h - {Number(hora) + 1}h
                             </h4>
                             <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">
-                              Top {produtos.length}
+                              Top {produtosArray.length}
                             </span>
                           </div>
                           
                           <div className="space-y-2">
-                            {produtos.map((produto, idx) => (
+                            {produtosArray.map((produto, idx) => (
                               <div 
                                 key={produto.produto_id} 
                                 className="flex items-center justify-between p-2 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg hover:from-cyan-100 hover:to-blue-100 transition-colors"
@@ -1634,7 +1807,8 @@ const DashboardPage: React.FC = () => {
                             ))}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                   </div>
 
                   {/* Insights sobre produtos por horário */}
@@ -1848,7 +2022,7 @@ const DashboardPage: React.FC = () => {
                 <div className="space-y-4">
                   {(insights_cientificos?.correlações || []).map((corr, idx) => (
                     <div 
-                      key={idx} 
+                      key={`corr-${corr.variavel1}-${corr.variavel2}-${idx}`} 
                       className="bg-gray-900/50 p-4 rounded-lg hover:bg-gray-900 transition-colors cursor-pointer"
                       onClick={() => setSelectedCorrelation({
                         variavel1: corr.variavel1,
@@ -1883,7 +2057,7 @@ const DashboardPage: React.FC = () => {
                   <h3 className="text-xl font-bold text-white mb-6">🔮 Previsões (Próximos 30 dias)</h3>
                   <div className="space-y-4">
                     {(insights_cientificos?.previsoes || []).map((prev, idx) => (
-                      <div key={idx} className="bg-black/30 p-4 rounded-lg">
+                      <div key={`prev-${prev.variavel}-${idx}`} className="bg-black/30 p-4 rounded-lg">
                         <div className="flex justify-between items-center mb-3">
                           <span className="text-gray-300 font-medium">{prev.variavel}</span>
                           <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
@@ -1915,7 +2089,7 @@ const DashboardPage: React.FC = () => {
                   <div className="space-y-4">
                     {(insights_cientificos?.recomendacoes_otimizacao || []).map((rec, idx) => (
                       <div 
-                        key={idx} 
+                        key={`rec-${rec.area}-${idx}`} 
                         className="bg-black/30 p-4 rounded-lg hover:bg-black/40 transition-colors cursor-pointer"
                         onClick={() => setSelectedRecommendation({
                           tipo: 'oportunidade',
@@ -2186,7 +2360,7 @@ const DashboardPage: React.FC = () => {
       )}
 
       {/* 🔥 NOVO: ANÁLISE CIENTÍFICA DE PADRÕES TEMPORAIS */}
-      {viewMode === 'avancado' && analise_temporal?.padroes_temporais_clientes && (
+      {viewMode === 'avancado' && analise_temporal?.padroes_temporais_clientes && Object.keys(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).length > 0 && (
       <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-indigo-200">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
           <Clock className="w-8 h-8 text-indigo-600" />
@@ -2196,8 +2370,10 @@ const DashboardPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Perfis Temporais */}
           {Object.entries(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).map(([perfil, clientes]: [string, any[]]) => {
-            const totalGasto = clientes.reduce((sum, c) => sum + (c.total_gasto || 0), 0);
-            const ticketMedio = clientes.length > 0 ? totalGasto / clientes.length : 0;
+            // 🔥 DEFENSIVE: Garantir que clientes é um array
+            const clientesArray = Array.isArray(clientes) ? clientes : [];
+            const totalGasto = clientesArray.reduce((sum, c) => sum + (c.total_gasto || 0), 0);
+            const ticketMedio = clientesArray.length > 0 ? totalGasto / clientesArray.length : 0;
             
             const perfilConfig = {
               matutino: { icon: '🌅', color: 'from-yellow-50 to-orange-50', border: 'border-yellow-200', text: 'text-yellow-900', badge: 'bg-yellow-100 text-yellow-800' },
@@ -2680,16 +2856,16 @@ const DashboardPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-rose-900">Índice de Gini</h3>
               <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                (analise_temporal.concentracao_horaria.gini_index || 0) > 50 ? 'bg-red-100' :
-                (analise_temporal.concentracao_horaria.gini_index || 0) > 30 ? 'bg-yellow-100' :
+                (analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'bg-red-100' :
+                (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4 ? 'bg-yellow-100' :
                 'bg-green-100'
               }`}>
                 <span className={`text-2xl font-bold ${
-                  (analise_temporal.concentracao_horaria.gini_index || 0) > 50 ? 'text-red-700' :
-                  (analise_temporal.concentracao_horaria.gini_index || 0) > 30 ? 'text-yellow-700' :
+                  (analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'text-red-700' :
+                  (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4 ? 'text-yellow-700' :
                   'text-green-700'
                 }`}>
-                  {(analise_temporal.concentracao_horaria.gini_index || 0).toFixed(0)}
+                  {((analise_temporal.concentracao_horaria.gini_index || 0) * 100).toFixed(0)}
                 </span>
               </div>
             </div>
@@ -2699,9 +2875,9 @@ const DashboardPage: React.FC = () => {
             <div className="bg-rose-50 p-3 rounded-lg">
               <p className="text-xs font-semibold text-rose-900 mb-1">Interpretação:</p>
               <p className="text-xs text-rose-700">
-                {(analise_temporal.concentracao_horaria.gini_index || 0) > 50 
+                {(analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 
                   ? '🔴 Alta concentração - Vendas muito concentradas em poucos horários'
-                  : (analise_temporal.concentracao_horaria.gini_index || 0) > 30
+                  : (analise_temporal.concentracao_horaria.gini_index || 0) > 0.4
                   ? '🟡 Concentração moderada - Distribuição razoável'
                   : '🟢 Baixa concentração - Vendas bem distribuídas'}
               </p>
@@ -2714,7 +2890,7 @@ const DashboardPage: React.FC = () => {
               <h3 className="font-bold text-orange-900">Concentração Top 3</h3>
               <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
                 <span className="text-2xl font-bold text-orange-700">
-                  {(analise_temporal.concentracao_horaria.concentration_ratio || 0).toFixed(0)}%
+                  {(analise_temporal.concentracao_horaria.concentration_top_3 || 0).toFixed(0)}%
                 </span>
               </div>
             </div>
@@ -2724,7 +2900,7 @@ const DashboardPage: React.FC = () => {
             <div className="bg-orange-50 p-3 rounded-lg">
               <p className="text-xs font-semibold text-orange-900 mb-1">Análise:</p>
               <p className="text-xs text-orange-700">
-                {(analise_temporal.concentracao_horaria.concentration_ratio || 0) > 60
+                {(analise_temporal.concentracao_horaria.concentration_top_3 || 0) > 60
                   ? 'Risco alto - Dependência excessiva de poucos horários'
                   : 'Distribuição saudável de vendas'}
               </p>
@@ -2737,7 +2913,7 @@ const DashboardPage: React.FC = () => {
               <h3 className="font-bold text-green-900">Diversificação</h3>
               <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
                 <span className="text-2xl font-bold text-green-700">
-                  {(analise_temporal.concentracao_horaria.diversification_score || 0).toFixed(0)}%
+                  {(analise_temporal.concentracao_horaria.diversification || 0).toFixed(0)}%
                 </span>
               </div>
             </div>
@@ -2747,7 +2923,7 @@ const DashboardPage: React.FC = () => {
             <div className="bg-green-50 p-3 rounded-lg">
               <p className="text-xs font-semibold text-green-900 mb-1">Status:</p>
               <p className="text-xs text-green-700">
-                {(analise_temporal.concentracao_horaria.diversification_score || 0) > 50
+                {(analise_temporal.concentracao_horaria.diversification || 0) > 60
                   ? '✅ Boa diversificação - Menor risco operacional'
                   : '⚠️ Baixa diversificação - Considere estratégias para outros horários'}
               </p>
@@ -2820,7 +2996,866 @@ const DashboardPage: React.FC = () => {
       </div>
       )}
 
-      {/* 🔥 NOVO: MODAL DE PRODUTO ESTRELA COM PLANO DE AÇÃO */}
+      {/* 🔥 NOVO: ANÁLISE TEMPORAL AVANÇADA - PENSANDO COMO O DONO DO MERCADO */}
+      {viewMode === 'avancado' && data?.data && (
+      <div className="space-y-8 mb-8">
+        {/* SEÇÃO 1: FATURAMENTO POR PERÍODO DO DIA */}
+        {data.data.period_analysis && Object.keys(data.data.period_analysis).length > 0 && (
+        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl shadow-xl p-6 border border-blue-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Clock className="w-8 h-8 text-blue-600" />
+            ⏰ Análise por Período do Dia (Manhã/Tarde/Noite)
+          </h2>
+          <p className="text-gray-600 mb-6">Como varia o faturamento ao longo do dia? Qual período é mais lucrativo?</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {Object.entries(data.data.period_analysis).map(([periodo, dados]: [string, any]) => {
+              const periodoNome = periodo === 'manha' ? '🌅 Manhã (6h-12h)' : 
+                                 periodo === 'tarde' ? '☀️ Tarde (12h-18h)' : 
+                                 '🌙 Noite (18h-24h)';
+              const percentualTotal = (dados.faturamento / Object.values(data.data.period_analysis as any).reduce((sum: number, p: any) => sum + p.faturamento, 0)) * 100;
+              
+              return (
+                <div key={periodo} className="bg-white rounded-xl p-6 border border-blue-100 hover:shadow-lg transition-shadow">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">{periodoNome}</h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Faturamento:</span>
+                      <span className="text-2xl font-bold text-blue-600">R$ {dados.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">% do Total:</span>
+                      <span className="text-xl font-bold text-blue-500">{percentualTotal.toFixed(1)}%</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Vendas:</span>
+                      <span className="font-semibold text-gray-900">{dados.vendas}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Ticket Médio:</span>
+                      <span className="font-semibold text-gray-900">R$ {dados.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Por Hora:</span>
+                      <span className="font-semibold text-gray-900">R$ {dados.faturamento_por_hora.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 pt-4 border-t border-blue-100">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${percentualTotal}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        )}
+
+        {/* SEÇÃO 2: ANÁLISE POR DIA DA SEMANA */}
+        {data.data.weekday_analysis && Object.keys(data.data.weekday_analysis).length > 0 && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-6 border border-green-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Calendar className="w-8 h-8 text-green-600" />
+            📅 Análise por Dia da Semana
+          </h2>
+          <p className="text-gray-600 mb-6">Sexta e sábado vendem mais? Qual dia pedir mais estoque?</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Object.entries(data.data.weekday_analysis).map(([dia, dados]: [string, any]) => {
+              const totalFat = Object.values(data.data.weekday_analysis as any).reduce((sum: number, d: any) => sum + d.faturamento, 0);
+              const percentual = (dados.faturamento / totalFat) * 100;
+              const isWeekend = dia === 'Sexta' || dia === 'Sábado' || dia === 'Domingo';
+              
+              return (
+                <div key={dia} className={`rounded-xl p-4 border ${isWeekend ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-green-100'} hover:shadow-lg transition-shadow`}>
+                  <h4 className="font-bold text-gray-900 mb-3">{dia}</h4>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Faturamento:</span>
+                      <span className="font-semibold">R$ {dados.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Vendas:</span>
+                      <span className="font-semibold">{dados.vendas}</span>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Ticket:</span>
+                      <span className="font-semibold">R$ {dados.ticket_medio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">% do total:</span>
+                        <span className="font-bold text-green-600">{percentual.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        )}
+
+        {/* SEÇÃO 3: RECOMENDAÇÕES DE ESTOQUE POR HORA */}
+        {data.data.product_hourly_recommendations && data.data.product_hourly_recommendations.length > 0 && (
+        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-xl p-6 border border-orange-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+            <Package className="w-8 h-8 text-orange-600" />
+            📦 Recomendações de Estoque por Hora
+          </h2>
+          <p className="text-gray-600 mb-6">Aumentar pão amanhã? Caprichar em cerveja sexta/sábado?</p>
+          
+          <div className="space-y-4">
+            {data.data.product_hourly_recommendations.slice(0, 8).map((rec, idx) => (
+              <div key={idx} className={`rounded-lg p-4 border-l-4 ${
+                rec.prioridade === 'alta' ? 'bg-red-50 border-red-500' :
+                rec.prioridade === 'media' ? 'bg-yellow-50 border-yellow-500' :
+                'bg-green-50 border-green-500'
+              }`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-bold text-gray-900">{rec.produto}</h4>
+                    <p className="text-sm text-gray-600">{rec.categoria} • {rec.periodo}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    rec.prioridade === 'alta' ? 'bg-red-200 text-red-800' :
+                    rec.prioridade === 'media' ? 'bg-yellow-200 text-yellow-800' :
+                    'bg-green-200 text-green-800'
+                  }`}>
+                    {rec.prioridade === 'alta' ? '🔴 Alta' : rec.prioridade === 'media' ? '🟡 Média' : '🟢 Baixa'}
+                  </span>
+                </div>
+                
+                <p className="text-sm text-gray-700 mb-3">{rec.recomendacao}</p>
+                
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Qtd/Dia:</span>
+                    <p className="font-bold text-gray-900">{rec.quantidade_vendida} un</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Faturamento:</span>
+                    <p className="font-bold text-gray-900">R$ {rec.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Frequência:</span>
+                    <p className="font-bold text-gray-900">{rec.frequencia}x</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )}
+      </div>
+      )}
+
+      {/* 🔥 NOVO: PAINEL DE RH */}
+      {viewMode === 'rh' && rh && (
+        <div className="space-y-6">
+          {/* Cabeçalho RH */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-purple-200">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+              <Users className="w-8 h-8 text-purple-600" />
+              Recursos Humanos & Departamento Pessoal
+            </h2>
+            <p className="text-gray-600">
+              Visão consolidada de custos de folha, benefícios, assiduidade e horas extras.
+            </p>
+          </div>
+
+          {/* Cards de KPI */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {/* Custo Total Estimado */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <DollarIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <span className="px-3 py-1 bg-purple-50 text-purple-700 text-xs font-bold rounded-full">Mensal</span>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Custo Total Folha (Est.)</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                R$ {rh.custo_folha_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-xs text-gray-400 mt-2">Salários + Benefícios + Extras</p>
+            </div>
+
+            {/* Funcionários Ativos */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Users className="w-6 h-6 text-blue-600" />
+                </div>
+                <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full">Ativos</span>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Colaboradores</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {rh.funcionarios_ativos}
+              </h3>
+              <p className="text-xs text-gray-400 mt-2">Registrados no sistema</p>
+            </div>
+
+            {/* Pontualidade */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <Clock className="w-6 h-6 text-green-600" />
+                </div>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                  rh.taxa_pontualidade > 90 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                }`}>
+                  {rh.taxa_pontualidade}%
+                </span>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Taxa de Pontualidade</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {rh.taxa_pontualidade}%
+              </h3>
+              <p className="text-xs text-gray-400 mt-2">{rh.total_atrasos_qtd} atrasos registrados</p>
+            </div>
+
+            {/* Horas Extras */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <AlertCircle className="w-6 h-6 text-orange-600" />
+                </div>
+                <span className="px-3 py-1 bg-orange-50 text-orange-700 text-xs font-bold rounded-full">Estimado</span>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Horas Extras (Custo)</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                R$ {rh.custo_extras_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </h3>
+              <p className="text-xs text-gray-400 mt-2">~{(rh.minutos_extras_estimados / 60).toFixed(1)} horas adicionais</p>
+            </div>
+
+            {/* Rotatividade (Turnover) */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <TrendingUp className="w-6 h-6 text-red-600" />
+                </div>
+                <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                  (rh.turnover_rate || 0) > 5 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                }`}>
+                  {(rh.turnover_rate || 0) > 5 ? 'Alto' : 'Normal'}
+                </span>
+              </div>
+              <p className="text-gray-500 text-sm font-medium">Rotatividade (Turnover)</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {(rh.turnover_rate || 0).toFixed(1)}%
+              </h3>
+              <p className="text-xs text-gray-400 mt-2">
+                +{rh.admissoes_periodo || 0} Adm. / -{rh.demissoes_periodo || 0} Dem.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <ChartBar className="w-5 h-5 text-gray-500" />
+              Resumo Mensal (RH)
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 font-medium uppercase">Atrasos (min)</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{rh.resumo_mes?.total_atrasos_minutos || 0}</p>
+                <p className="text-xs text-gray-400 mt-1">{rh.resumo_mes?.total_atrasos_qtd || 0} ocorrências</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 font-medium uppercase">Horas Extras (h)</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{(((rh.resumo_mes?.total_extras_minutos || 0) / 60)).toFixed(1)}</p>
+                <p className="text-xs text-gray-400 mt-1">{rh.resumo_mes?.total_extras_minutos || 0} min</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 font-medium uppercase">Faltas (qtd)</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{rh.resumo_mes?.total_faltas || 0}</p>
+                <p className="text-xs text-gray-400 mt-1">{rh.resumo_mes?.dias_uteis || 0} dias úteis (base)</p>
+              </div>
+              <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                <p className="text-xs text-purple-600 font-medium uppercase">Período</p>
+                <p className="text-sm font-bold text-purple-900 mt-2">
+                  {rh.resumo_mes?.inicio ? new Date(rh.resumo_mes.inicio).toLocaleDateString('pt-BR') : '-'} — {rh.resumo_mes?.fim ? new Date(rh.resumo_mes.fim).toLocaleDateString('pt-BR') : '-'}
+                </p>
+                <p className="text-xs text-purple-700 mt-2">Mês corrente (acumulado)</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                Atrasos por Funcionário (Mês)
+              </h3>
+              <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Funcionário</th>
+                      <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3">Ocorrências</th>
+                      <th className="px-4 py-3 rounded-r-lg text-right">Minutos</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.atrasos_por_funcionario_mes && rh.atrasos_por_funcionario_mes.length > 0 ? (
+                      rh.atrasos_por_funcionario_mes.map((row, idx) => (
+                        <tr key={`atraso-${row.funcionario_id}-${idx}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{row.nome}</td>
+                          <td className="px-4 py-3 text-gray-600">{row.cargo}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${row.atrasos_qtd > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              {row.atrasos_qtd}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">{row.minutos_atraso}m</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400">Sem dados de atrasos no mês</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-orange-500" />
+                Horas Extras por Funcionário (Mês)
+              </h3>
+              <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Funcionário</th>
+                      <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3">Horas</th>
+                      <th className="px-4 py-3 rounded-r-lg text-right">Custo Est.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.horas_extras_por_funcionario_mes && rh.horas_extras_por_funcionario_mes.length > 0 ? (
+                      rh.horas_extras_por_funcionario_mes.map((row, idx) => (
+                        <tr key={`extras-${row.funcionario_id}-${idx}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{row.nome}</td>
+                          <td className="px-4 py-3 text-gray-600">{row.cargo}</td>
+                          <td className="px-4 py-3 font-bold text-orange-600">{(row.minutos_extras / 60).toFixed(1)}h</td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">R$ {row.custo_extras.toFixed(2)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400">Sem horas extras no mês</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                Faltas por Funcionário (Mês)
+              </h3>
+              <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Funcionário</th>
+                      <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3">Presença</th>
+                      <th className="px-4 py-3 rounded-r-lg text-right">Faltas</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.faltas_por_funcionario_mes && rh.faltas_por_funcionario_mes.length > 0 ? (
+                      rh.faltas_por_funcionario_mes.map((row, idx) => (
+                        <tr key={`faltas-${row.funcionario_id}-${idx}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{row.nome}</td>
+                          <td className="px-4 py-3 text-gray-600">{row.cargo}</td>
+                          <td className="px-4 py-3 text-gray-900">{row.dias_presenca}/{row.dias_uteis}</td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">{row.faltas}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400">Sem dados de faltas</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <GitMerge className="w-5 h-5 text-blue-600" />
+                Banco de Horas (Mês)
+              </h3>
+              <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Funcionário</th>
+                      <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3">Saldo</th>
+                      <th className="px-4 py-3 rounded-r-lg text-right">Valor Acum.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.banco_horas_por_funcionario_mes && rh.banco_horas_por_funcionario_mes.length > 0 ? (
+                      rh.banco_horas_por_funcionario_mes.map((row, idx) => (
+                        <tr key={`banco-${row.funcionario_id}-${idx}`} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{row.nome}</td>
+                          <td className="px-4 py-3 text-gray-600">{row.cargo}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${row.saldo_minutos > 0 ? 'bg-green-100 text-green-700' : row.saldo_minutos < 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                              {(row.saldo_minutos / 60).toFixed(1)}h
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">R$ {row.valor_hora_extra.toFixed(2)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400">Banco de horas não calculado/registrado</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <DollarIcon className="w-5 h-5 text-purple-600" />
+              Espelho de Pagamento (Estimado - Mês)
+            </h3>
+            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 rounded-l-lg">Funcionário</th>
+                    <th className="px-4 py-3">Salário</th>
+                    <th className="px-4 py-3">Benefícios</th>
+                    <th className="px-4 py-3">Extras</th>
+                    <th className="px-4 py-3">Faltas</th>
+                    <th className="px-4 py-3">Atraso</th>
+                    <th className="px-4 py-3 rounded-r-lg text-right">Total Est.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rh.espelho_pagamento_mes && rh.espelho_pagamento_mes.length > 0 ? (
+                    rh.espelho_pagamento_mes.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900">{row.nome}</p>
+                          <p className="text-xs text-gray-500">{row.cargo}</p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-900">R$ {row.salario_base.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-gray-900">R$ {row.beneficios.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-gray-900">{row.horas_extras_horas.toFixed(1)}h / R$ {row.custo_horas_extras.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-gray-900">{row.faltas}</td>
+                        <td className="px-4 py-3 text-gray-900">{row.atrasos_minutos}m</td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-900">R$ {row.total_estimado.toFixed(2)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-gray-400">Sem dados para espelho de pagamento</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Detalhamento Avançado RH */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Gráfico de Evolução de Turnover */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-gray-500" />
+                Histórico de Admissões, Demissões, Ausências, Atrasos e Horas Extras
+              </h3>
+              <div className="h-[400px]">
+                {rh.evolution_turnover && rh.evolution_turnover.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={rh.evolution_turnover}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
+                      <Legend />
+                      <Bar dataKey="admissoes" name="Admissões" fill="#10B981" />
+                      <Bar dataKey="demissoes" name="Demissões" fill="#EF4444" />
+                      <Bar dataKey="ausencias" name="Ausências" fill="#F59E0B" />
+                      <Bar dataKey="atrasos" name="Atrasos" fill="#8B5CF6" />
+                      <Bar dataKey="horas_extras" name="H. Extras" fill="#06B6D4" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400">
+                    Sem dados históricos suficientes
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Top Funcionários com Horas Extras */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-orange-500" />
+                Top Horas Extras (Custo Estimado)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Colaborador</th>
+                      <th className="px-4 py-3">Horas Extras</th>
+                      <th className="px-4 py-3 rounded-r-lg text-right">Custo Est.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.top_overtime_employees && rh.top_overtime_employees.length > 0 ? (
+                      rh.top_overtime_employees.map((func, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{func.nome}</td>
+                          <td className="px-4 py-3 text-orange-600 font-bold">{func.horas}h</td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">
+                            R$ {func.custo_estimado.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
+                          Nenhum registro de hora extra no período
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Gráficos de Composição Financeira RH */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Composição de Custos */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 lg:col-span-1">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <DollarIcon className="w-5 h-5 text-gray-500" />
+                Composição de Custos
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700 font-medium">Salários Base</span>
+                  <span className="font-bold text-gray-900">R$ {rh.total_salarios.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700 font-medium">Benefícios (VR/VA/VT)</span>
+                  <span className="font-bold text-gray-900">R$ {rh.total_beneficios_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100">
+                  <span className="text-orange-800 font-medium">Horas Extras (Est.)</span>
+                  <span className="font-bold text-orange-900">R$ {rh.custo_extras_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="pt-4 border-t border-gray-200 flex justify-between items-center">
+                  <span className="text-lg font-bold text-gray-900">Total</span>
+                  <span className="text-xl font-bold text-purple-700">R$ {rh.custo_folha_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Distribuição de Benefícios */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 lg:col-span-2">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Target className="w-5 h-5 text-gray-500" />
+                Distribuição de Benefícios
+              </h3>
+              <div className="h-[250px]">
+                {rh.benefits_breakdown && rh.benefits_breakdown.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={rh.benefits_breakdown} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                      <XAxis type="number" tickFormatter={(value) => `R$${value}`} />
+                      <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
+                      <Tooltip cursor={{ fill: 'transparent' }} formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Custo']} />
+                      <Bar dataKey="value" fill="#8884d8" radius={[0, 4, 4, 0]}>
+                        {rh.benefits_breakdown.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400">
+                    Sem dados de benefícios detalhados
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <LineChartIcon className="w-5 h-5 text-gray-500" />
+                Tendência de Horas Extras (14 dias)
+              </h3>
+              <div className="h-[280px]">
+                {rh.overtime_trend && rh.overtime_trend.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={rh.overtime_trend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="data" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(value: number, name: string) => {
+                        if (name === 'custo_extras') return [`R$ ${value.toFixed(2)}`, 'Custo'];
+                        if (name === 'minutos_extras') return [`${(value / 60).toFixed(1)}h`, 'Horas'];
+                        return [value, name];
+                      }} />
+                      <Line type="monotone" dataKey="minutos_extras" stroke="#F97316" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="custo_extras" stroke="#8B5CF6" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400">
+                    Sem dados de horas extras no período
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-gray-500" />
+                Resumo Diário de Ponto (7 dias)
+              </h3>
+              <div className="overflow-x-auto max-h-[280px] overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Data</th>
+                      <th className="px-4 py-3">Funcionário</th>
+                      <th className="px-4 py-3">Entrada</th>
+                      <th className="px-4 py-3">Saída</th>
+                      <th className="px-4 py-3">Atraso</th>
+                      <th className="px-4 py-3 rounded-r-lg">Extras</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.daily_ponto_summary && rh.daily_ponto_summary.length > 0 ? (
+                      rh.daily_ponto_summary.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">
+                            {new Date(row.data).toLocaleDateString('pt-BR')}
+                          </td>
+                          <td className="px-4 py-3 text-gray-900">{row.funcionario}</td>
+                          <td className="px-4 py-3 text-gray-900">{row.entrada}</td>
+                          <td className="px-4 py-3 text-gray-900">{row.saida}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${row.minutos_atraso > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                              {row.minutos_atraso > 0 ? `${row.minutos_atraso}m` : '0m'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${row.minutos_extras > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-700'}`}>
+                              {row.minutos_extras > 0 ? `${(row.minutos_extras / 60).toFixed(1)}h` : '0h'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                          Sem registros suficientes para o resumo diário
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Indicadores de Assiduidade */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-gray-500" />
+                Assiduidade e Pontualidade
+              </h3>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="p-4 bg-blue-50 rounded-lg text-center">
+                  <p className="text-2xl font-bold text-blue-700">{rh.total_entradas_periodo}</p>
+                  <p className="text-xs text-blue-600 font-medium uppercase mt-1">Registros de Entrada</p>
+                </div>
+                <div className="p-4 bg-red-50 rounded-lg text-center">
+                  <p className="text-2xl font-bold text-red-700">{rh.total_atrasos_qtd}</p>
+                  <p className="text-xs text-red-600 font-medium uppercase mt-1">Atrasos</p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="font-medium text-gray-700">Taxa de Pontualidade</span>
+                  <span className="font-bold text-gray-900">{rh.taxa_pontualidade}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div 
+                    className={`h-2.5 rounded-full ${rh.taxa_pontualidade > 90 ? 'bg-green-500' : rh.taxa_pontualidade > 80 ? 'bg-yellow-500' : 'bg-red-500'}`} 
+                    style={{ width: `${rh.taxa_pontualidade}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Total acumulado de atrasos: <strong>{rh.total_minutos_atraso} minutos</strong> neste período.
+                </p>
+              </div>
+
+              <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-100">
+                 <div className="flex gap-3">
+                   <Lightbulb className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                   <div>
+                     <h4 className="font-bold text-purple-900 text-sm">Dica de Gestão</h4>
+                     <p className="text-xs text-purple-800 mt-1">
+                       Acompanhe os atrasos recorrentes. O custo de horas extras pode ser reduzido ajustando escalas ou compensando horas.
+                     </p>
+                   </div>
+                 </div>
+              </div>
+            </div>
+
+            {/* Status da Equipe (Hoje) */}
+            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-500" />
+                Status da Equipe (Hoje)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 font-medium">
+                    <tr>
+                      <th className="px-4 py-3 rounded-l-lg">Colaborador</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 rounded-r-lg text-right">Último Registro</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rh.team_status_today && rh.team_status_today.length > 0 ? (
+                      rh.team_status_today.map((func, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{func.nome}</p>
+                            <p className="text-xs text-gray-500">{func.cargo}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                              func.status === 'Em Trabalho' ? 'bg-green-100 text-green-700' :
+                              func.status === 'Almoço' ? 'bg-yellow-100 text-yellow-700' :
+                              func.status === 'Saiu' ? 'bg-gray-100 text-gray-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {func.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-gray-900">
+                            {func.ultimo_registro}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
+                          Nenhuma atividade registrada hoje
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Últimos Registros de Ponto */}
+          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-gray-500" />
+              Últimos Registros de Ponto (Listagem)
+            </h3>
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-600 font-medium sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 rounded-l-lg">Data</th>
+                    <th className="px-4 py-3">Hora</th>
+                    <th className="px-4 py-3">Funcionário</th>
+                    <th className="px-4 py-3 rounded-r-lg">Tipo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rh.recent_points && rh.recent_points.length > 0 ? (
+                    rh.recent_points.map((ponto, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900">{ponto.data}</td>
+                        <td className="px-4 py-3 text-gray-900">{ponto.hora}</td>
+                        <td className="px-4 py-3 text-gray-900">{ponto.funcionario}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                            ponto.tipo === 'entrada' ? 'bg-green-100 text-green-700' :
+                            ponto.tipo === 'saida' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {ponto.tipo === 'entrada' ? 'Entrada' :
+                             ponto.tipo === 'saida' ? 'Saída' :
+                             ponto.tipo === 'saida_almoco' ? 'Saída Almoço' :
+                             ponto.tipo === 'retorno_almoco' ? 'Retorno Almoço' : ponto.tipo}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                        Nenhum registro de ponto encontrado
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 NOVO: MODAL DE PRODUTO ESTRELA COM PLANO DE AÇÃO */ }
       {modalProdutoEstrela && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">

@@ -6,6 +6,7 @@ import {
   User, AlertCircle, CheckCircle, Navigation, ArrowLeft
 } from 'lucide-react';
 import { pontoService, RegistroPonto } from './pontoService';
+import { authService } from '../../features/auth/authService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Função auxiliar para construir URL completa da foto
@@ -32,20 +33,39 @@ const PontoHistoricoPage: React.FC = () => {
   const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
   const [tipoFiltro, setTipoFiltro] = useState<string | null>(null);
   const [statusFiltro, setStatusFiltro] = useState<string | null>(null);
+  const [funcionarioFiltro, setFuncionarioFiltro] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [registroSelecionado, setRegistroSelecionado] = useState<RegistroPonto | null>(null);
   const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
-  const [funcionarios] = useState<any[]>([
-    { id: 1, nome: 'João Silva', funcao: 'Vendedor' },
-    { id: 2, nome: 'Maria Santos', funcao: 'Gerente' },
-    { id: 3, nome: 'Pedro Costa', funcao: 'Operacional' }
-  ]);
+  const [funcionarios, setFuncionarios] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const perPage = 15;
 
   useEffect(() => {
+    const user = authService.getCurrentUser();
+    const isUserAdmin = user?.role === 'ADMIN' || user?.role === 'GERENTE';
+    setIsAdmin(isUserAdmin);
+
+    if (isUserAdmin) {
+      carregarFuncionarios();
+    }
+  }, []);
+
+  useEffect(() => {
     carregarHistorico();
-  }, [dataInicio, dataFim, page, tipoFiltro, statusFiltro]);
+  }, [dataInicio, dataFim, page, tipoFiltro, statusFiltro, funcionarioFiltro]);
+
+  const carregarFuncionarios = async () => {
+    try {
+      const response = await pontoService.obterFuncionarios();
+      if (response.success) {
+        setFuncionarios(response.data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar funcionários:', error);
+    }
+  };
 
   const carregarHistorico = async () => {
     try {
@@ -54,12 +74,14 @@ const PontoHistoricoPage: React.FC = () => {
         data_inicio: dataInicio,
         data_fim: dataFim,
         page,
-        per_page: perPage
+        per_page: perPage,
+        funcionario_id: funcionarioFiltro || undefined
       });
 
       if (response.success) {
         let registrosFiltrados = response.data.registros;
 
+        // Filtros locais (caso o backend não filtre tudo, mas o endpoint historico já filtra data/func)
         if (tipoFiltro) {
           registrosFiltrados = registrosFiltrados.filter(
             (r: RegistroPonto) => r.tipo_registro === tipoFiltro
@@ -77,13 +99,13 @@ const PontoHistoricoPage: React.FC = () => {
           registros: registrosFiltrados.map(r => ({
             id: r.id,
             tipo: r.tipo_registro,
-            foto_url: r.foto_url,
-            foto_url_completa: construirUrlFoto(r.foto_url)
+            funcionario: r.funcionario_nome,
+            foto_url: r.foto_url
           }))
         });
 
         setRegistros(registrosFiltrados);
-        setTotalPages(Math.ceil(registrosFiltrados.length / perPage));
+        setTotalPages(Math.ceil(response.data.total / perPage) || 1); // Usa total do backend se disponível
       }
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
@@ -93,10 +115,11 @@ const PontoHistoricoPage: React.FC = () => {
   };
 
   const exportarCSV = () => {
-    const headers = ['Data', 'Hora', 'Tipo', 'Status', 'Atraso (min)'];
+    const headers = ['Data', 'Hora', 'Funcionário', 'Tipo', 'Status', 'Atraso (min)'];
     const rows = registros.map(r => [
       r.data,
       r.hora,
+      r.funcionario_nome || '-',
       r.tipo_registro,
       r.status,
       r.minutos_atraso || 0
@@ -198,6 +221,25 @@ const PontoHistoricoPage: React.FC = () => {
             />
           </div>
 
+          {isAdmin && (
+            <div>
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">Funcionário</label>
+              <select
+                value={funcionarioFiltro || ''}
+                onChange={(e) => {
+                  setFuncionarioFiltro(e.target.value || null);
+                  setPage(1);
+                }}
+                className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+              >
+                <option value="">Todos</option>
+                {funcionarios.map(f => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">Tipo</label>
             <select
@@ -285,6 +327,7 @@ const PontoHistoricoPage: React.FC = () => {
                   <tr>
                     <th className="px-4 py-3 text-left font-bold">Data</th>
                     <th className="px-4 py-3 text-left font-bold">Hora</th>
+                    {isAdmin && <th className="px-4 py-3 text-left font-bold">Funcionário</th>}
                     <th className="px-4 py-3 text-left font-bold">Tipo</th>
                     <th className="px-4 py-3 text-left font-bold">Status</th>
                     <th className="px-4 py-3 text-left font-bold">Atraso</th>
@@ -296,6 +339,16 @@ const PontoHistoricoPage: React.FC = () => {
                     <tr key={r.id} className="border-b border-gray-200 hover:bg-gray-50">
                       <td className="px-4 py-3">{r.data}</td>
                       <td className="px-4 py-3 font-semibold">{r.hora}</td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
+                              {r.funcionario_nome ? r.funcionario_nome.charAt(0) : '?'}
+                            </div>
+                            <span className="font-medium text-gray-700">{r.funcionario_nome || 'Desconhecido'}</span>
+                          </div>
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
                           {getTipoLabel(r.tipo_registro)}
@@ -406,6 +459,16 @@ const PontoHistoricoPage: React.FC = () => {
                     <AlertCircle className="w-5 h-5" />
                     Atraso de {registroSelecionado.minutos_atraso} minutos
                   </p>
+                </div>
+              )}
+              
+              {registroSelecionado.funcionario_nome && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-500" />
+                    Funcionário
+                  </p>
+                  <p className="text-lg font-bold text-gray-900">{registroSelecionado.funcionario_nome}</p>
                 </div>
               )}
 

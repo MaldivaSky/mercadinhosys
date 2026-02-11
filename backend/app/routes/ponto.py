@@ -331,8 +331,8 @@ def pontos_hoje():
 def historico_pontos():
     """Retorna histórico de pontos do funcionário"""
     try:
-        funcionario = get_funcionario_logado()
-        if not funcionario:
+        current_user = get_funcionario_logado()
+        if not current_user:
             return jsonify({'success': False, 'message': 'Funcionário não encontrado'}), 404
         
         # Parâmetros de filtro
@@ -340,8 +340,22 @@ def historico_pontos():
         data_fim = request.args.get('data_fim')
         page = int(request.args.get('page', 1))
         per_page = int(request.args.get('per_page', 30))
-        
-        query = RegistroPonto.query.filter_by(funcionario_id=funcionario.id)
+        target_funcionario_id = request.args.get('funcionario_id')
+
+        # Normalizar role para comparação
+        user_role = current_user.role.lower() if current_user.role else ''
+
+        # Se for admin/gerente
+        if user_role in ['admin', 'gerente']:
+            if target_funcionario_id:
+                # Admin vendo funcionário específico
+                query = RegistroPonto.query.filter_by(funcionario_id=int(target_funcionario_id))
+            else:
+                # Admin vê TODOS (Visão Geral)
+                query = RegistroPonto.query
+        else:
+            # Padrão: ver os próprios pontos
+            query = RegistroPonto.query.filter_by(funcionario_id=current_user.id)
         
         if data_inicio:
             query = query.filter(RegistroPonto.data >= datetime.strptime(data_inicio, '%Y-%m-%d').date())
@@ -378,6 +392,62 @@ def historico_pontos():
         logger.error(f"Erro ao buscar histórico: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ponto_bp.route('/admin/todos', methods=['GET'])
+@jwt_required()
+def admin_todos_pontos():
+    """
+    Retorna histórico de TODOS os funcionários (Apenas Admin/Gerente)
+    Permite filtrar por data, funcionário, etc.
+    """
+    try:
+        current_user = get_funcionario_logado()
+        if not current_user or current_user.role not in ['admin', 'gerente']:
+            return jsonify({'success': False, 'message': 'Acesso não autorizado'}), 403
+            
+        # Parâmetros
+        data_inicio = request.args.get('data_inicio')
+        data_fim = request.args.get('data_fim')
+        funcionario_id = request.args.get('funcionario_id')
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        query = RegistroPonto.query
+        
+        if funcionario_id:
+            query = query.filter(RegistroPonto.funcionario_id == int(funcionario_id))
+            
+        if data_inicio:
+            query = query.filter(RegistroPonto.data >= datetime.strptime(data_inicio, '%Y-%m-%d').date())
+        if data_fim:
+            query = query.filter(RegistroPonto.data <= datetime.strptime(data_fim, '%Y-%m-%d').date())
+            
+        # Join com Funcionario para ordenar por nome e data
+        query = query.join(Funcionario).order_by(RegistroPonto.data.desc(), Funcionario.nome.asc(), RegistroPonto.hora.asc())
+        
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        registros_dict = []
+        for r in pagination.items:
+            data = r.to_dict()
+            # Adicionar info extra do funcionário se não vier no to_dict
+            if not data.get('funcionario_nome'):
+                data['funcionario_nome'] = r.funcionario.nome if r.funcionario else 'N/A'
+            registros_dict.append(data)
+            
+        return jsonify({
+            'success': True,
+            'data': {
+                'registros': registros_dict,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'current_page': page
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Erro ao buscar histórico admin: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

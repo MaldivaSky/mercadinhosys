@@ -24,6 +24,8 @@ interface ProductAnalyticsDashboardProps {
         produtos_normal: number;
         valor_total_estoque: number;
         margem_media: number;
+        classificacao_abc?: { A: number; B: number; C: number };
+        giro_estoque?: { rapido: number; normal: number; lento: number };
     };
     onCardClick: (filterType: string) => void;
 }
@@ -59,62 +61,66 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             return;
         }
 
-        // ==================== CLASSIFICAÇÃO ABC POR FATURAMENTO (PARETO 80/15/5) ====================
-        const faturamentoTotal = produtos.reduce((sum, p) => sum + (p.total_vendido || 0), 0);
-        
-        const abc = { A: 0, B: 0, C: 0 };
-        
-        if (faturamentoTotal === 0) {
-            // Sem faturamento, todos são classe C
-            abc.C = produtos.length;
+        // ==================== USAR ESTATÍSTICAS DO BACKEND ====================
+        // Se o backend forneceu as estatísticas, usar elas (já calculadas para TODOS os produtos)
+        if (stats.classificacao_abc) {
+            setClassificacaoABC(stats.classificacao_abc);
         } else {
-            // Ordenar por faturamento (total_vendido)
-            const produtosComFaturamento = produtos.map(p => ({
-                ...p,
-                faturamento: p.total_vendido || 0
-            })).sort((a, b) => b.faturamento - a.faturamento);
-
-            let acumulado = 0;
-            produtosComFaturamento.forEach(p => {
-                acumulado += p.faturamento;
-                const percentualAcumulado = acumulado / faturamentoTotal;
-                
-                // Pareto: 80% do faturamento = Classe A, 15% = Classe B, 5% = Classe C
-                if (percentualAcumulado <= 0.80) abc.A++;
-                else if (percentualAcumulado <= 0.95) abc.B++;
-                else abc.C++;
-            });
-        }
-        
-        setClassificacaoABC(abc);
-
-        // ==================== STATUS DE GIRO CORRETO ====================
-        const hoje = new Date();
-        const giro = { rapido: 0, normal: 0, lento: 0 };
-        
-        produtos.forEach(p => {
-            if (!p.ultima_venda) {
-                // Sem histórico de venda = giro lento
-                giro.lento++;
+            // Fallback: calcular localmente (apenas para os produtos da página)
+            const faturamentoTotal = produtos.reduce((sum, p) => sum + (p.total_vendido || 0), 0);
+            const abc = { A: 0, B: 0, C: 0 };
+            
+            if (faturamentoTotal === 0) {
+                abc.C = produtos.length;
             } else {
-                const dataUltimaVenda = new Date(p.ultima_venda);
-                const diasDesdeVenda = Math.floor((hoje.getTime() - dataUltimaVenda.getTime()) / (1000 * 60 * 60 * 24));
-                
-                if (diasDesdeVenda <= 7) {
-                    giro.rapido++;
-                } else if (diasDesdeVenda <= 30) {
-                    giro.normal++;
-                } else {
-                    giro.lento++;
-                }
+                const produtosComFaturamento = produtos.map(p => ({
+                    ...p,
+                    faturamento: p.total_vendido || 0
+                })).sort((a, b) => b.faturamento - a.faturamento);
+
+                let acumulado = 0;
+                produtosComFaturamento.forEach(p => {
+                    acumulado += p.faturamento;
+                    const percentualAcumulado = acumulado / faturamentoTotal;
+                    
+                    if (percentualAcumulado <= 0.80) abc.A++;
+                    else if (percentualAcumulado <= 0.95) abc.B++;
+                    else abc.C++;
+                });
             }
-        });
-        
-        setStatusGiro(giro);
+            setClassificacaoABC(abc);
+        }
+
+        // ==================== USAR GIRO DO BACKEND ====================
+        if (stats.giro_estoque) {
+            setStatusGiro(stats.giro_estoque);
+        } else {
+            // Fallback: calcular localmente
+            const hoje = new Date();
+            const giro = { rapido: 0, normal: 0, lento: 0 };
+            
+            produtos.forEach(p => {
+                if (!p.ultima_venda) {
+                    giro.lento++;
+                } else {
+                    const dataUltimaVenda = new Date(p.ultima_venda);
+                    const diasDesdeVenda = Math.floor((hoje.getTime() - dataUltimaVenda.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    if (diasDesdeVenda <= 7) {
+                        giro.rapido++;
+                    } else if (diasDesdeVenda <= 30) {
+                        giro.normal++;
+                    } else {
+                        giro.lento++;
+                    }
+                }
+            });
+            setStatusGiro(giro);
+        }
 
         // ==================== TOP 5 PRODUTOS POR MARGEM ====================
         const top = [...produtos]
-            .filter(p => p.margem_lucro && p.margem_lucro > 0)
+            .filter(p => p.margem_lucro !== undefined && p.margem_lucro !== null)
             .sort((a, b) => (b.margem_lucro || 0) - (a.margem_lucro || 0))
             .slice(0, 5);
         setTopProdutos(top);
@@ -122,37 +128,37 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         // ==================== PRODUTOS CRÍTICOS (ESGOTADOS + BAIXO ESTOQUE) ====================
         const criticos = produtos
             .filter(p => {
-                // Incluir produtos esgotados (quantidade = 0)
-                if (p.quantidade === 0 || p.estoque_status === 'esgotado') {
-                    return true;
-                }
-                // Incluir produtos com baixo estoque
-                if (p.estoque_status === 'baixo') {
-                    return true;
-                }
+                // Esgotado
+                if (p.quantidade === 0) return true;
+                if (p.estoque_status === 'esgotado') return true;
+                
+                // Baixo estoque
+                if (p.estoque_status === 'baixo') return true;
+                if (p.quantidade <= (p.quantidade_minima || 0)) return true;
+                
                 return false;
             })
             .sort((a, b) => {
-                // Esgotados primeiro, depois baixo estoque
+                // Ordenar: esgotados primeiro, depois por quantidade
                 if (a.quantidade === 0 && b.quantidade > 0) return -1;
                 if (a.quantidade > 0 && b.quantidade === 0) return 1;
-                return a.quantidade - b.quantidade;
+                return (a.quantidade || 0) - (b.quantidade || 0);
             })
-            .slice(0, 10); // Mostrar até 10 produtos críticos
+            .slice(0, 10);
         
         setProdutosCriticos(criticos);
-    }, [produtos]);
+    }, [produtos, stats]);
 
     const percentualABC = {
-        A: produtos.length > 0 ? (classificacaoABC.A / produtos.length * 100).toFixed(1) : '0',
-        B: produtos.length > 0 ? (classificacaoABC.B / produtos.length * 100).toFixed(1) : '0',
-        C: produtos.length > 0 ? (classificacaoABC.C / produtos.length * 100).toFixed(1) : '0',
+        A: stats.total_produtos > 0 ? (classificacaoABC.A / stats.total_produtos * 100).toFixed(1) : '0',
+        B: stats.total_produtos > 0 ? (classificacaoABC.B / stats.total_produtos * 100).toFixed(1) : '0',
+        C: stats.total_produtos > 0 ? (classificacaoABC.C / stats.total_produtos * 100).toFixed(1) : '0',
     };
 
     const percentualGiro = {
-        rapido: produtos.length > 0 ? (statusGiro.rapido / produtos.length * 100).toFixed(1) : '0',
-        normal: produtos.length > 0 ? (statusGiro.normal / produtos.length * 100).toFixed(1) : '0',
-        lento: produtos.length > 0 ? (statusGiro.lento / produtos.length * 100).toFixed(1) : '0',
+        rapido: stats.total_produtos > 0 ? (statusGiro.rapido / stats.total_produtos * 100).toFixed(1) : '0',
+        normal: stats.total_produtos > 0 ? (statusGiro.normal / stats.total_produtos * 100).toFixed(1) : '0',
+        lento: stats.total_produtos > 0 ? (statusGiro.lento / stats.total_produtos * 100).toFixed(1) : '0',
     };
 
     return (
