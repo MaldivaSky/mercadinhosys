@@ -474,22 +474,23 @@ def seed_fornecedores(
         ("Qboa", "Qboa Produtos", "07526847000172", "São Paulo", 20, "30 DIAS", "REGULAR"),
         ("Pullman", "Pullman Pão", "07526847000173", "São Paulo", 3, "À VISTA", "REGULAR"),
         ("Bimbo", "Bimbo Brasil", "07526847000174", "São Paulo", 3, "À VISTA", "PREFERENCIAL"),
-        ("Pão de Queijo", "Pão de Queijo Artesanal", "07526847000175", "Minas Gerais", 2, "À VISTA", "NOVO"),
-        ("Distribuidor Local 1", "Distribuidor Local 1 LTDA", "12345678000190", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 2", "Distribuidor Local 2 LTDA", "12345678000191", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 3", "Distribuidor Local 3 LTDA", "12345678000192", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 4", "Distribuidor Local 4 LTDA", "12345678000193", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 5", "Distribuidor Local 5 LTDA", "12345678000194", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 6", "Distribuidor Local 6 LTDA", "12345678000195", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 7", "Distribuidor Local 7 LTDA", "12345678000196", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 8", "Distribuidor Local 8 LTDA", "12345678000197", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 9", "Distribuidor Local 9 LTDA", "12345678000198", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 10", "Distribuidor Local 10 LTDA", "12345678000199", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 11", "Distribuidor Local 11 LTDA", "12345678000200", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 12", "Distribuidor Local 12 LTDA", "12345678000201", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 13", "Distribuidor Local 13 LTDA", "12345678000202", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 14", "Distribuidor Local 14 LTDA", "12345678000203", "São Paulo", 1, "À VISTA", "REGULAR"),
-        ("Distribuidor Local 15", "Distribuidor Local 15 LTDA", "12345678000204", "São Paulo", 1, "À VISTA", "REGULAR"),
+        ("Heineken", "Heineken Brasil", "07526847000176", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("PepsiCo", "PepsiCo do Brasil", "07526847000177", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("Unilever", "Unilever Brasil", "07526847000178", "São Paulo", 10, "30 DIAS", "PREFERENCIAL"),
+        ("P&G", "Procter & Gamble Brasil", "07526847000179", "São Paulo", 10, "30 DIAS", "PREFERENCIAL"),
+        ("Johnson & Johnson", "J&J Brasil", "07526847000180", "São Paulo", 10, "30 DIAS", "REGULAR"),
+        ("Bauducco", "Pandurata Alimentos", "07526847000181", "São Paulo", 7, "30 DIAS", "PREFERENCIAL"),
+        ("Lactalis", "Lactalis do Brasil", "07526847000182", "Rio Grande do Sul", 7, "30 DIAS", "REGULAR"),
+        ("Minerva Foods", "Minerva S/A", "07526847000183", "São Paulo", 5, "15 DIAS", "REGULAR"),
+        ("Aurora Alimentos", "Aurora Coop", "07526847000184", "Santa Catarina", 5, "15 DIAS", "REGULAR"),
+        ("BRF", "BRF S/A", "07526847000185", "Santa Catarina", 5, "15 DIAS", "PREFERENCIAL"),
+        ("Copersucar", "Copersucar S/A", "07526847000186", "São Paulo", 10, "30 DIAS", "REGULAR"),
+        ("Raízen", "Raízen Combustíveis", "07526847000187", "São Paulo", 7, "30 DIAS", "REGULAR"),
+        ("Cargill", "Cargill Agrícola", "07526847000189", "São Paulo", 10, "30 DIAS", "REGULAR"),
+        ("Bunge", "Bunge Alimentos", "07526847000190", "Santa Catarina", 10, "30 DIAS", "REGULAR"),
+        ("ADM", "ADM do Brasil", "07526847000191", "São Paulo", 10, "30 DIAS", "REGULAR"),
+        ("M. Dias Branco", "M. Dias Branco", "07526847000192", "Ceará", 10, "30 DIAS", "REGULAR"),
+        ("Piracanjuba", "Laticínios Bela Vista", "07526847000193", "Goiás", 7, "30 DIAS", "REGULAR"),
     ]
 
     fornecedores = []
@@ -763,11 +764,15 @@ def seed_produtos(
     marca_fornecedor_map = {}
     for fornecedor in fornecedores:
         # Mapear nomes de marcas conhecidas para fornecedores
-        if fornecedor.nome_fantasia.lower() in ["coca-cola", "ambev", "heineken", "crystal", "del valle", 
-                                                   "tio joão", "camil", "kicaldo", "renata", "liza", "união", 
-                                                   "pilão", "italac", "itambé", "sadia", "aviação", "vigor", 
-                                                   "nestlé", "dove", "colgate", "neve", "omo", "confort", "qboa",
-                                                   "friboi", "seara", "perdigão", "pullman", "mondelez", "pepsico"]:
+        if fornecedor.nome_fantasia.lower() in [
+            "coca-cola", "ambev", "heineken", "crystal", "del valle", 
+            "tio joão", "camil", "kicaldo", "renata", "liza", "união", 
+            "pilão", "italac", "itambé", "sadia", "aviação", "vigor", 
+            "nestlé", "dove", "colgate", "neve", "omo", "confort", "qboa",
+            "friboi", "seara", "perdigão", "pullman", "mondelez", "pepsico",
+            "unilever", "brf", "danone", "m. dias branco", "minerva foods",
+            "aurora alimentos", "p&g", "yoki", "heinz"
+        ]:
             marca_fornecedor_map[fornecedor.nome_fantasia.lower()] = fornecedor.id
     
     # Lista de produtos reais conhecidos no Brasil
@@ -775,12 +780,22 @@ def seed_produtos(
         # Bebidas
         ("Coca-Cola 2L", "Bebidas", "COC-001", "7894900010015", "Coca-Cola", 7.50, 11.90),
         ("Guaraná Antarctica 2L", "Bebidas", "GUA-001", "7891991000853", "Ambev", 6.80, 10.90),
-        ("Pepsi 2L", "Bebidas", "PEP-001", "7892840800000", "Pepsico", 6.50, 9.90),
+        ("Pepsi 2L", "Bebidas", "PEP-001", "7892840800000", "PepsiCo", 6.50, 9.90),
         ("Cerveja Skol 350ml", "Bebidas", "SKO-001", "7891149103100", "Ambev", 2.80, 4.50),
         ("Cerveja Heineken 330ml", "Bebidas", "HEI-001", "7896045500000", "Heineken", 4.50, 7.90),
         ("Água Mineral Crystal 500ml", "Bebidas", "AGU-001", "7892840822941", "Crystal", 1.20, 3.00),
         ("Suco Del Valle Uva 1L", "Bebidas", "SCO-001", "7891098000251", "Del Valle", 4.50, 8.90),
-        
+        ("Cerveja Brahma 350ml", "Bebidas", "BRA-001", "7891149103105", "Ambev", 2.70, 4.40),
+        ("Energético Red Bull 250ml", "Bebidas", "RED-001", "9002490100070", "Ambev", 6.50, 10.50),
+        ("Vinho Tinto Concha y Toro 750ml", "Bebidas", "VIN-001", "7804300101416", "Distribuidor Local 1", 25.00, 42.00),
+        ("Vinho Cabernet Sauvignon Tinto Concha y Toro 750ml", "Bebidas", "VIN-002", "7804300101417", "Distribuidor Local 1", 25.00, 42.00),
+        ("Vinho Merlot Tinto Concha y Toro 750ml", "Bebidas", "VIN-003", "7804350101418", "Distribuidor Local 1", 25.00, 42.00),
+        ("Vinho Pinot Noir Tinto Concha y Toro 750ml", "Bebidas", "VIN-004", "7804800101419", "Distribuidor Local 2", 25.00, 42.00),
+        ("Vinho Camernere Tinto Concha y Toro 750ml", "Bebidas", "VIN-005", "7804900101330", "Distribuidor Local 3", 25.00, 42.00),
+        ("Vinho Cabernet Branco Concha y Toro 750ml", "Bebidas", "VIN-006", "7804700101410", "Distribuidor Local 4", 25.00, 42.00),
+        ("Vinho Sauvignon Branco Concha y Toro 750ml", "Bebidas", "VIN-007", "7804500101411", "Distribuidor Local 1", 25.00, 42.00),
+
+
         # Mercearia
         ("Arroz Tio João 5kg", "Mercearia", "ARR-001", "7896006741025", "Tio João", 24.00, 32.90),
         ("Arroz Camil 5kg", "Mercearia", "ARR-002", "7896006700000", "Camil", 23.50, 31.90),
@@ -790,7 +805,16 @@ def seed_produtos(
         ("Óleo de Soja Liza 900ml", "Mercearia", "OLE-001", "7898909987042", "Liza", 6.50, 9.90),
         ("Açúcar União 1kg", "Mercearia", "ACU-001", "7891000053508", "União", 4.50, 6.90),
         ("Café Pilão 500g", "Mercearia", "CAF-001", "7896005800000", "Pilão", 14.50, 22.90),
-        
+        ("Sal Refinado Lebre 1kg", "Mercearia", "SAL-001", "7896000000000", "Distribuidor Local 2", 2.50, 4.20),
+        ("Milho Pipoca Yoki 500g", "Mercearia", "PIPO-001", "7891000000000", "Yoki", 4.50, 7.80),
+        ("Maionese Hellmann's 500g", "Mercearia", "MAIO-001", "7891000000001", "Unilever", 8.50, 13.90),
+        ("Ketchup Heinz 397g", "Mercearia", "KET-001", "7891000000002", "Heinz", 10.50, 16.90),
+        ("Leite Condensado Moça 395g", "Mercearia", "LEIT-001", "7891000000003", "Nestlé", 5.50, 8.90),
+        ("Creme de Leite Nestlé 200g", "Mercearia", "CREM-001", "7891000000004", "Nestlé", 3.50, 5.90),
+        ("Chocolate em Pó Nescau 400g", "Mercearia", "CHOC-001", "7891000000005", "Nestlé", 7.50, 11.90),
+        ("Biscoito Cream Cracker Vitarella", "Mercearia", "BIS-002", "7891000000006", "M. Dias Branco", 3.50, 5.80),
+        ("Macarrão Instantâneo Nissin", "Mercearia", "MIO-001", "7891000000007", "Distribuidor Local 5", 1.50, 2.90),
+
         # Frios e Laticínios
         ("Leite Integral Italac 1L", "Frios e Laticínios", "LEI-001", "7898080640000", "Italac", 4.20, 6.50),
         ("Queijo Mussarela Fatiado kg", "Frios e Laticínios", "QUE-001", "7891000055502", "Itambé", 35.00, 59.90),
@@ -798,16 +822,26 @@ def seed_produtos(
         ("Manteiga Aviação 200g", "Frios e Laticínios", "MAN-001", "7896051130000", "Aviação", 12.00, 19.90),
         ("Requeijão Vigor 200g", "Frios e Laticínios", "REQ-001", "7891000100000", "Vigor", 7.50, 12.90),
         ("Iogurte Nestlé Morango 1L", "Frios e Laticínios", "IOG-001", "7891072001308", "Nestlé", 9.90, 16.90),
-        
-        # Higiene e Limpeza
+        ("Iogurte Danone Natural 170g", "Frios e Laticínios", "IOG-002", "7891000000008", "Danone", 2.20, 3.80),
+        ("Margarina Qualy 500g", "Frios e Laticínios", "MAR-001", "7891000000009", "BRF", 6.50, 10.90),
+        ("Mortadela Perdigão 1kg", "Frios e Laticínios", "MOR-001", "7891000000010", "Perdigão", 15.50, 24.90),
+        ("Queijo Prato Itambé kg", "Frios e Laticínios", "QUE-002", "7891000000011", "Itambé", 38.50, 62.00),
+
+        # Higiene Pessoal
         ("Sabonete Dove Original 90g", "Higiene Pessoal", "SAB-001", "7891150037605", "Dove", 3.50, 5.90),
         ("Pasta de Dente Colgate Total 12", "Higiene Pessoal", "PAS-001", "7891024035000", "Colgate", 6.50, 12.90),
         ("Papel Higiênico Neve 12un", "Higiene Pessoal", "PAP-001", "7891150000000", "Neve", 18.00, 29.90),
+        ("Shampoo Pantene 400ml", "Higiene Pessoal", "SHA-002", "7891000000012", "P&G", 15.50, 25.90),
+        ("Desodorante Rexona Aerosol", "Higiene Pessoal", "DESO-001", "7891000000013", "Unilever", 12.50, 18.90),
+        ("Escova de Dente Oral-B", "Higiene Pessoal", "ESC-001", "7891000000014", "P&G", 8.50, 14.90),
+        ("Fio Dental Colgate", "Higiene Pessoal", "FIO-001", "7891000000015", "Colgate", 5.50, 9.90),
+        ("Absorvente Always", "Higiene Pessoal", "ABS-001", "7891000000016", "P&G", 7.50, 12.90),
+
+        # Limpeza
         ("Detergente Ypê Neutro 500ml", "Limpeza", "DET-001", "7891024113405", "Ypê", 2.20, 3.90),
         ("Sabão em Pó Omo 800g", "Limpeza", "OMO-001", "7891150000001", "Omo", 12.50, 19.90),
         ("Amaciante Confort 1L", "Limpeza", "AMA-001", "7891150000002", "Confort", 14.50, 22.90),
         ("Água Sanitária Qboa 1L", "Limpeza", "SAN-001", "7896094908015", "Qboa", 5.50, 8.90),
-        
         # Carnes e Hortifrúti
         ("Contra Filé Bovino kg", "Carnes", "CAR-001", None, "Friboi", 45.00, 69.90),
         ("Filé de Peito Frango kg", "Carnes", "FRA-001", None, "Seara", 18.00, 28.90),
@@ -818,11 +852,51 @@ def seed_produtos(
         ("Cebola kg", "Hortifrúti", "CEB-001", None, "Distribuidor Local 4", 3.50, 6.90),
         ("Ovos Brancos Dúzia", "Hortifrúti", "OVO-001", None, "Distribuidor Local 5", 8.00, 14.90),
         
+        # Pet Shop
+        ("Ração Canina", "Pet Shop", "RAO-001", None, "Distribuidor Local 6", 12.00, 18.90),
+        ("Ração Felina", "Pet Shop", "RAF-001", None, "Distribuidor Local 7", 15.00, 22.90),
+        ("Cama de Pet", "Pet Shop", "CAM-001", None, "Distribuidor Local 8", 25.00, 38.90),
+        ("Brinquedo de Pet", "Pet Shop", "BRE-001", None, "Distribuidor Local 9", 10.00, 16.90),
+        ("Collar de Pet", "Pet Shop", "COL-001", None, "Distribuidor Local 10", 5.00, 8.90),
+        ("Fita Dental de Pet", "Pet Shop", "FIT-001", None, "Distribuidor Local 11", 8.00, 14.90),
+        ("Escova de Dente de Pet", "Pet Shop", "ESC-PET-001", None, "Distribuidor Local 12", 12.00, 18.90),
+        ("Fio Dental de Pet", "Pet Shop", "FIO-PET-001", None, "Distribuidor Local 13", 15.00, 22.90),
+        ("Absorvente de Pet", "Pet Shop", "ABS-PET-001", None, "Distribuidor Local 14", 25.00, 38.90),
+        ("Biscoito de Pet", "Pet Shop", "BIS-PET-001", None, "Distribuidor Local 15", 10.00, 16.90),
+
+        # Beleza e Saúde
+        ("Shampoo para Cabelo", "Beleza e Saúde", "SHA-001", None, "Distribuidor Local 16", 12.00, 18.90),
+        ("Creme para Pele", "Beleza e Saúde", "CRE-001", None, "Distribuidor Local 17", 15.00, 22.90),
+        ("Escova de Dente", "Beleza e Saúde", "ESC-BEZ-001", None, "Distribuidor Local 18", 25.00, 38.90),
+        ("Fio Dental", "Beleza e Saúde", "FIO-BEZ-001", None, "Distribuidor Local 19", 10.00, 16.90),
+        ("Absorvente", "Beleza e Saúde", "ABS-BEZ-001", None, "Distribuidor Local 20", 25.00, 38.90),
+        ("Biscoito", "Beleza e Saúde", "BIS-BEZ-001", None, "Distribuidor Local 21", 10.00, 16.90),
+
+
         # Padaria
         ("Pão Francês kg", "Padaria", "PAO-001", None, "Distribuidor Local 6", 12.00, 18.90),
-        ("Pão de Forma Pullman", "Padaria", "FOR-001", "7896000000000", "Pullman", 6.50, 10.90),
         ("Biscoito Trakinas", "Padaria", "BIS-001", "7896000000001", "Mondelez", 3.50, 5.90),
     ]
+
+    used_codes = set()
+    for p in produtos_reais:
+        if p[2]: used_codes.add(p[2])
+
+    # Gerar mais produtos até chegar a n=200
+    while len(produtos_reais) < n:
+        cat = random.choice(categorias)
+        nome_gen = f"{fake.word().capitalize()} {fake.word().capitalize()} {random.choice(['Premium', 'Tradicional', 'Plus', 'Eco'])}"
+        
+        while True:
+            codigo_gen = f"{cat.nome[:3].upper()}-{random.randint(1000, 9999)}"
+            if codigo_gen not in used_codes:
+                used_codes.add(codigo_gen)
+                break
+                
+        marca_gen = random.choice([f.nome_fantasia for f in fornecedores])
+        custo_gen = round(random.uniform(2.0, 50.0), 2)
+        venda_gen = round(custo_gen * random.uniform(1.3, 1.8), 2)
+        produtos_reais.append((nome_gen, cat.nome, codigo_gen, fake.ean13(), marca_gen, custo_gen, venda_gen))
 
     for i, (
         nome,
@@ -861,7 +935,13 @@ def seed_produtos(
         # Gerar dados variados
         quantidade = random.randint(500, 1000)  # Aumentado de 20-200 para 500-1000
         quantidade_minima = max(10, quantidade // 10)  # Reduzido para 10% em vez de 25%
-        margem = ((preco_venda - preco_custo) / preco_custo) * 100
+        # Garantir custo positivo para evitar divisão por zero
+        preco_custo_val = float(preco_custo) if preco_custo and float(preco_custo) > 0 else 1.0
+        preco_venda_val = float(preco_venda)
+        
+        margem = ((preco_venda_val - preco_custo_val) / preco_custo_val) * 100
+        # Limitar margem para caber no Numeric(5, 2) das models (max 999.99)
+        margem = max(0, min(999.99, margem))
 
         # DATA DE VALIDADE - Focar em 2025 e 2026
         ano_validade = random.choice([2025, 2026])
@@ -882,11 +962,13 @@ def seed_produtos(
             nome=nome,
             descricao=f"{nome} - {marca if marca else 'Produto fresco'}",
             marca=marca if marca else None,
+            fabricante=marca if marca else "Fabricante Próprio",
+            tipo=categoria.nome,
             unidade_medida=random.choice(["UN", "KG", "L", "CX"]),
             quantidade=0,  # IMPORTANTE: Estoque vem de pedidos de compra
             quantidade_minima=random.randint(20, 50),
-            preco_custo=Decimal(str(preco_custo)),
-            preco_venda=Decimal(str(preco_venda)),
+            preco_custo=Decimal(str(round(preco_custo_val, 2))),
+            preco_venda=Decimal(str(round(preco_venda_val, 2))),
             margem_lucro=Decimal(str(round(margem, 2))),
             ncm="".join([str(random.randint(0, 9)) for _ in range(8)]),
             origem=0,
@@ -1251,18 +1333,28 @@ def seed_pedidos_compra(
     fornecedores: List[Fornecedor],
     produtos: List[Produto],
 ):
-    """Cria pedidos de compra realistas com boletos."""
-    print("Criando pedidos de compra com boletos...")
-
+    # Garantir que TODOS os produtos tenham pelo menos um pedido de compra
+    print("📦 Garantindo pedidos de compra para todos os produtos...")
+    
+    hoje = date.today()
     pedidos_criados = 0
     lotes_criados = 0
-    hoje = date.today()
-
-    for _ in range(random.randint(20, 35)):
-        funcionario = random.choice([f for f in funcionarios if f.cargo != "Caixa"])
-        fornecedor = random.choice(fornecedores)
-
-        data_pedido = hoje - timedelta(days=random.randint(1, 60))
+    boletos_criados = 0
+    
+    # Agrupar produtos por fornecedor
+    produtos_por_fornecedor = {}
+    for p in produtos:
+        if p.fornecedor_id not in produtos_por_fornecedor:
+            produtos_por_fornecedor[p.fornecedor_id] = []
+        produtos_por_fornecedor[p.fornecedor_id].append(p)
+    
+    for forn_id, produtos_forn in produtos_por_fornecedor.items():
+        fornecedor = db.session.get(Fornecedor, forn_id)
+        if not fornecedor:
+            continue
+            
+        funcionario = random.choice([f for f in funcionarios if f.cargo != "Operador de Caixa"])
+        data_pedido = hoje - timedelta(days=random.randint(60, 120))
         data_previsao = data_pedido + timedelta(days=fornecedor.prazo_entrega)
 
         pedido = PedidoCompra(
@@ -1271,160 +1363,98 @@ def seed_pedidos_compra(
             funcionario_id=funcionario.id,
             numero_pedido=f"PC{data_pedido.strftime('%Y%m%d')}{pedidos_criados+1:03d}",
             data_pedido=data_pedido,
-            data_previsao_entrega=data_previsao,
-            data_recebimento=data_previsao,  # SEMPRE recebido para seed de teste
-            status="recebido",  # SEMPRE recebido para seed de teste
+            status="recebido",
+            data_recebimento=data_previsao,
             subtotal=Decimal("0.00"),
-            desconto=Decimal("0.00"),
-            frete=Decimal(str(round(random.uniform(20, 100), 2))),
             total=Decimal("0.00"),
             condicao_pagamento=fornecedor.forma_pagamento,
-            numero_nota_fiscal=fake.ean13() if random.random() > 0.5 else None,
-            serie_nota_fiscal=(
-                str(random.randint(1, 9)) if random.random() > 0.5 else None
-            ),
-            observacoes=fake.text(max_nb_chars=100) if random.random() > 0.7 else None,
+            numero_nota_fiscal=fake.ean13(),
         )
-
         db.session.add(pedido)
         db.session.flush()
-
-        # Adicionar itens
-        produtos_pedido = random.sample(produtos, random.randint(3, 10))
+        
         subtotal_pedido = Decimal("0.00")
-
-        for produto in produtos_pedido:
-            quantidade = random.randint(10, 50)
-            preco_unitario = produto.preco_custo * Decimal(
-                str(random.uniform(0.8, 0.95))
-            )  # Compra com desconto
-            desconto_percentual = Decimal(
-                str(random.uniform(0, 0.1))
-            )  # 0-10% de desconto
-            total_item = (
-                preco_unitario
-                * Decimal(str(quantidade))
-                * (Decimal("1.00") - desconto_percentual)
-            )
-
+        for produto in produtos_forn:
+            quantidade = random.randint(100, 200)
+            preco_compra = produto.preco_custo * Decimal("0.9")
+            total_item = preco_compra * Decimal(str(quantidade))
+            
             item = PedidoCompraItem(
                 pedido_id=pedido.id,
                 produto_id=produto.id,
                 produto_nome=produto.nome,
-                produto_unidade=produto.unidade_medida,
                 quantidade_solicitada=quantidade,
-                quantidade_recebida=quantidade if pedido.data_recebimento else 0,
-                preco_unitario=preco_unitario,
-                desconto_percentual=desconto_percentual,
+                quantidade_recebida=quantidade,
+                preco_unitario=preco_compra,
                 total_item=total_item,
-                status="recebido" if pedido.data_recebimento else "pendente",
+                status="recebido",
             )
-
             db.session.add(item)
             subtotal_pedido += total_item
-
-            # Se recebido, criar movimentacao de estoque
-            if pedido.data_recebimento:
-                produto.quantidade += quantidade
-
-                mov = MovimentacaoEstoque(
-                    estabelecimento_id=estabelecimento_id,
-                    produto_id=produto.id,
-                    pedido_compra_id=pedido.id,
-                    funcionario_id=funcionario.id,
-                    tipo="entrada",
-                    quantidade=quantidade,
-                    quantidade_anterior=produto.quantidade - quantidade,
-                    quantidade_atual=produto.quantidade,
-                    custo_unitario=preco_unitario,
-                    valor_total=total_item,
-                    motivo="Compra",
-                    observacoes=f"Pedido {pedido.numero_pedido}",
-                    created_at=pedido.data_pedido,
-                )
-                db.session.add(mov)
-                
-                # CRIAR LOTE DO PRODUTO
-                meses_validade = random.randint(6, 24)
-                data_validade = data_previsao + timedelta(days=meses_validade * 30)
-                
-                lote = ProdutoLote(
-                    estabelecimento_id=estabelecimento_id,
-                    produto_id=produto.id,
-                    pedido_compra_id=pedido.id,
-                    fornecedor_id=fornecedor.id,
-                    numero_lote=f"L{data_pedido.strftime('%Y%m%d')}{random.randint(1000, 9999)}",
-                    quantidade_inicial=quantidade,
-                    quantidade=quantidade,
-                    data_validade=data_validade,
-                    data_entrada=data_pedido,
-                    preco_custo_unitario=preco_unitario,
-                    ativo=True,
-                )
-                db.session.add(lote)
-                lotes_criados += 1
-
-        # Calcular totais do pedido
-        pedido.subtotal = subtotal_pedido
-        pedido.desconto = (
-            subtotal_pedido * Decimal("0.05")
-            if random.random() > 0.7
-            else Decimal("0.00")
-        )
-        pedido.total = pedido.subtotal - pedido.desconto + pedido.frete
-
-        # Atualizar fornecedor
-        fornecedor.total_compras += 1
-        fornecedor.valor_total_comprado += pedido.total
-
-        pedidos_criados += 1
-
-    db.session.commit()
-    
-    # Criar boletos (contas a pagar) para os pedidos
-    print("Criando boletos (contas a pagar)...")
-    boletos_criados = 0
-    
-    pedidos = PedidoCompra.query.filter_by(estabelecimento_id=estabelecimento_id).all()
-    for pedido in pedidos:
-        if random.random() > 0.2:  # 80% dos pedidos geram boleto
-            # Gerar data de vencimento (7-30 dias após o pedido)
-            dias_vencimento = random.randint(7, 30)
-            # data_pedido é datetime, converter para date
-            data_pedido_date = pedido.data_pedido.date() if isinstance(pedido.data_pedido, datetime) else pedido.data_pedido
-            data_vencimento = data_pedido_date + timedelta(days=dias_vencimento)
             
-            # 60% dos boletos já foram pagos
-            foi_pago = random.random() > 0.4
-            data_pagamento = None
-            if foi_pago:
-                # Pago entre 1 dia antes e 15 dias depois do vencimento
-                dias_atraso = random.randint(-1, 15)
-                data_pagamento = data_vencimento + timedelta(days=dias_atraso)
-            
-            boleto = ContaPagar(
+            # Movimentação e estoque
+            produto.quantidade += quantidade
+            mov = MovimentacaoEstoque(
                 estabelecimento_id=estabelecimento_id,
-                fornecedor_id=pedido.fornecedor_id,
+                produto_id=produto.id,
                 pedido_compra_id=pedido.id,
-                numero_documento=f"BOL{pedido.numero_pedido}",
-                tipo_documento="boleto",
-                valor_original=pedido.total,
-                valor_pago=pedido.total if foi_pago else Decimal("0.00"),
-                valor_atual=Decimal("0.00") if foi_pago else pedido.total,
-                data_emissao=data_pedido_date,
-                data_vencimento=data_vencimento,
-                data_pagamento=data_pagamento,
-                status="pago" if foi_pago else ("vencido" if data_vencimento < hoje else "aberto"),
-                forma_pagamento="transferencia" if foi_pago else None,
-                observacoes=f"Boleto referente ao pedido {pedido.numero_pedido}",
+                funcionario_id=funcionario.id,
+                tipo="entrada",
+                quantidade=quantidade,
+                quantidade_anterior=0,
+                quantidade_atual=quantidade,
+                custo_unitario=preco_compra,
+                valor_total=total_item,
+                motivo="Entrada Inicial",
+                created_at=data_pedido,
             )
-            db.session.add(boleto)
-            boletos_criados += 1
+            db.session.add(mov)
+            
+            # Lotes
+            lote = ProdutoLote(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=produto.id,
+                pedido_compra_id=pedido.id,
+                fornecedor_id=fornecedor.id,
+                numero_lote=f"L{data_pedido.strftime('%Y%m')}{lotes_criados+1:04d}",
+                quantidade_inicial=quantidade,
+                quantidade=quantidade,
+                data_validade=hoje + timedelta(days=random.randint(200, 500)),
+                data_entrada=data_pedido,
+                preco_custo_unitario=preco_compra,
+                ativo=True,
+            )
+            db.session.add(lote)
+            lotes_criados += 1
+
+        pedido.subtotal = subtotal_pedido
+        pedido.total = subtotal_pedido
+        fornecedor.total_compras += 1
+        fornecedor.valor_total_comprado += subtotal_pedido
+        pedidos_criados += 1
+        
+        # Gerar conta a pagar para este pedido
+        data_vencimento = data_pedido + timedelta(days=30)
+        boleto = ContaPagar(
+            estabelecimento_id=estabelecimento_id,
+            fornecedor_id=fornecedor.id,
+            pedido_compra_id=pedido.id,
+            numero_documento=f"FAT{pedido.numero_pedido}",
+            tipo_documento="duplicata",
+            valor_original=pedido.total,
+            valor_pago=pedido.total,
+            valor_atual=0,
+            data_emissao=data_pedido,
+            data_vencimento=data_vencimento,
+            data_pagamento=data_vencimento,
+            status="pago",
+            forma_pagamento="transferencia",
+        )
+        db.session.add(boleto)
+        boletos_criados += 1
     
     db.session.commit()
-    print(f"OK {pedidos_criados} pedidos de compra criados")
-    print(f"OK {lotes_criados} lotes de produtos criados")
-    print(f"OK {boletos_criados} boletos (contas a pagar) criados")
+    print(f"✅ Pedidos de compra, lotes e boletos criados para TODOS os {len(produtos)} produtos")
 
 
 def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Fornecedor]):
@@ -2046,10 +2076,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--estabelecimento-id", type=int, default=DEFAULT_ESTABELECIMENTO_ID
     )
-    parser.add_argument("--clientes", type=int, default=50)
-    parser.add_argument("--fornecedores", type=int, default=15)
-    parser.add_argument("--produtos", type=int, default=100)
-    parser.add_argument("--dias", type=int, default=90)
+    parser.add_argument("--clientes", type=int, default=100)
+    parser.add_argument("--fornecedores", type=int, default=50)
+    parser.add_argument("--produtos", type=int, default=200)
+    parser.add_argument("--dias", type=int, default=180)
     parser.add_argument("--test-login", action="store_true", help="Apenas testa login")
     parser.add_argument("--local", action="store_true", help="Popula APENAS banco local (SQLite)")
 
@@ -2097,6 +2127,14 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         if deve_resetar:
             reset_database()
+
+        # Debug: Verificar colunas da tabela produtos
+        from app.models import Produto
+        print(f"DEBUG: Colunas em Produto model: {[c.name for c in Produto.__table__.columns]}")
+        
+        # Ativar log do SQLAlchemy para debugar o IntegrityError
+        import logging
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
         try:
             # 2. Criar estabelecimento e configuração
