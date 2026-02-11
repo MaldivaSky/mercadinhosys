@@ -2,14 +2,14 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus, Search, Filter, Download,
   X, ChevronDown, RefreshCw, Calculator,
-  ShoppingCart, AlertTriangle,
+  ShoppingCart,
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
 import { formatCurrency } from '../../utils/formatters';
 import { apiClient } from '../../api/apiClient';
 import { Toaster, toast } from 'react-hot-toast';
-import { useConfig } from '../../contexts/ConfigContext';
+
 import ProductAnalyticsDashboard from './components/ProductAnalyticsDashboard';
 import QuickFiltersPanel from './components/QuickFiltersPanel';
 import ProductHistoryModal from './components/ProductHistoryModal';
@@ -28,7 +28,8 @@ const ProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
-  const { config } = useConfig();
+  // const { config } = useConfig();
+
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -76,28 +77,11 @@ const ProductsPage: React.FC = () => {
     preco_venda: 0,
   });
 
-  const [showExpiringProducts, setShowExpiringProducts] = useState(true);
-
   // Calcular produtos com validade próxima
-  const diasAlertaValidade = config?.dias_alerta_validade ?? 30;
+  // const diasAlertaValidade = config?.dias_alerta_validade ?? 30; // Unused
 
-  const produtosProximosValidade = useMemo(() => {
-    if (!config?.controlar_validade) return [];
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
 
-    return todosProdutos
-      .filter(p => p.quantidade > 0 && p.data_validade)
-      .map(p => {
-        const validade = new Date(p.data_validade!);
-        validade.setHours(0, 0, 0, 0);
-        const diasRestantes = Math.floor((validade.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-        return { produto: p, diasRestantes };
-      })
-      .filter(item => item.diasRestantes >= 0 && item.diasRestantes <= diasAlertaValidade)
-      .sort((a, b) => a.diasRestantes - b.diasRestantes)
-      .slice(0, 10);
-  }, [todosProdutos, diasAlertaValidade, config]);
+  // Removido lógica duplicada de validade, agora gerenciada pelos filtros rápidos
 
   // Data Loading
   const loadProdutos = useCallback(async () => {
@@ -238,6 +222,7 @@ const ProductsPage: React.FC = () => {
   };
 
   const handleCardClick = (filterType: string) => {
+    setFiltroRapido(null); // Limpa filtro rápido ao clicar no dashboard
     if (filterType === 'esgotado') setFiltros(prev => ({ ...prev, estoque_status: 'esgotado' }));
     else if (filterType === 'baixo') setFiltros(prev => ({ ...prev, estoque_status: 'baixo' }));
     else if (filterType === 'normal') setFiltros(prev => ({ ...prev, estoque_status: 'normal' }));
@@ -245,15 +230,76 @@ const ProductsPage: React.FC = () => {
     setPage(1);
   };
 
-  const produtosFiltrados = useMemo(() => {
-    // BUG FIX: When filtering, source from ALL products (todosProdutos) to find items across all pages
-    // The table will display the filtered result. Note: Pagination UI might show "Page 1 of 1" correctly if updated,
-    // or we might need to handle pagination for the filtered result if it's too large.
-    // For now, determining that if a filter is active, we show all matches.
-    if (!filtroRapido) return produtos;
-    // When filtering, we use valid todosProdutos to ensure we catch everything
-    return aplicarFiltroRapido(todosProdutos, filtroRapido, todosProdutos);
-  }, [produtos, filtroRapido, todosProdutos]);
+  const handleQuickFilterChange = (filter: string | null) => {
+    setFiltroRapido(filter);
+    if (filter) {
+      // Se ativar um filtro rápido, limpa os filtros de servidor para evitar confusão
+      setFiltros({ busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' });
+      setPage(1);
+    }
+  };
+
+  const handleSort = (key: string) => {
+    setFiltros(prev => ({
+      ...prev,
+      ordenar_por: key,
+      direcao: prev.ordenar_por === key && prev.direcao === 'asc' ? 'desc' : 'asc'
+    }));
+    setPage(1);
+  };
+
+  const currentTableData = useMemo(() => {
+    if (filtroRapido) {
+      // Modo Filtro Rápido (Client-Side)
+      let filtered = aplicarFiltroRapido(todosProdutos, filtroRapido, todosProdutos);
+
+      // Client-side Sorting
+      if (filtros.ordenar_por) {
+        filtered = [...filtered].sort((a, b) => {
+          let valA = a[filtros.ordenar_por as keyof Produto];
+          let valB = b[filtros.ordenar_por as keyof Produto];
+
+          // Handle special cases / nulls
+          if (valA === undefined || valA === null) valA = '';
+          if (valB === undefined || valB === null) valB = '';
+
+          // String comparison
+          if (typeof valA === 'string' && typeof valB === 'string') {
+            return filtros.direcao === 'asc'
+              ? valA.localeCompare(valB)
+              : valB.localeCompare(valA);
+          }
+
+          // Numeric comparison
+          if (valA < valB) return filtros.direcao === 'asc' ? -1 : 1;
+          if (valA > valB) return filtros.direcao === 'asc' ? 1 : -1;
+          return 0;
+        });
+      }
+
+      const itemsPerPage = 50;
+      const totalItems = filtered.length;
+      const totalPages = Math.ceil(totalItems / itemsPerPage);
+      const startIndex = (page - 1) * itemsPerPage;
+      const paginatedItems = filtered.slice(startIndex, startIndex + itemsPerPage);
+
+      return {
+        produtos: paginatedItems,
+        totalItems,
+        totalPages,
+        isClientSide: true
+      };
+    } else {
+      // Modo Normal (Server-Side)
+      return {
+        produtos: produtos,
+        totalItems: totalItems,
+        totalPages: totalPages,
+        isClientSide: false
+      };
+    }
+  }, [produtos, filtroRapido, todosProdutos, page, totalItems, totalPages, filtros.ordenar_por, filtros.direcao]);
+
 
   const contadoresFiltros = useMemo(() => calcularContadoresFiltros(todosProdutos, todosProdutos), [todosProdutos]);
 
@@ -286,40 +332,9 @@ const ProductsPage: React.FC = () => {
       </div>
 
       {/* Quick Filters */}
-      <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={setFiltroRapido} counts={contadoresFiltros} />
+      <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
-      {/* Produtos com Validade Próxima */}
-      {config?.controlar_validade && produtosProximosValidade.length > 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-600" />
-              <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">
-                Produtos Próximos da Validade ({produtosProximosValidade.length})
-              </h3>
-            </div>
-            <button onClick={() => setShowExpiringProducts(!showExpiringProducts)} className="text-sm text-yellow-700 dark:text-yellow-300 hover:underline">
-              {showExpiringProducts ? 'Ocultar' : 'Mostrar'}
-            </button>
-          </div>
-          {showExpiringProducts && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-              {produtosProximosValidade.map(({ produto, diasRestantes }) => (
-                <div key={produto.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
-                  <p className="font-medium text-gray-900 dark:text-white truncate text-sm">{produto.nome}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-gray-500">Qtd: {produto.quantidade}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diasRestantes <= 7 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                      {diasRestantes === 0 ? 'Vence hoje' : diasRestantes === 1 ? '1 dia' : `${diasRestantes} dias`}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Seção de expiração removida em favor dos novos cards de filtro */}
 
       {/* Dashboard */}
       <ProductAnalyticsDashboard produtos={todosProdutos} stats={stats} onCardClick={handleCardClick} />
@@ -397,19 +412,20 @@ const ProductsPage: React.FC = () => {
       </div>
 
       {/* Products Table */}
-      {/* Products Table */}
       <ProductsTable
-        produtos={produtosFiltrados}
+        produtos={currentTableData.produtos}
         loading={loading}
-        totalItems={totalItems}
+        totalItems={currentTableData.totalItems}
         page={page}
-        totalPages={totalPages}
+        totalPages={currentTableData.totalPages}
         onPageChange={setPage}
         onEdit={openEditModal}
         onDelete={handleDelete}
         onStockAdjust={openStockModal}
         onHistory={(p) => { setSelectedProduct(p); setShowProductHistory(true); }}
         onMakeOrder={openOrderModal}
+        onSort={handleSort}
+        sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
       />
 
       {/* Product Modal */}
