@@ -12,6 +12,8 @@ interface PurchaseOrderModalProps {
   onClose: () => void;
   onSuccess: () => void;
   fornecedores: Fornecedor[];
+  initialProduct?: Produto | null;
+  initialSupplierId?: number;
 }
 
 interface ItemPedido {
@@ -27,12 +29,14 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  fornecedores
+  fornecedores,
+  initialProduct,
+  initialSupplierId
 }) => {
   const [loading, setLoading] = useState(false);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [searchProduto, setSearchProduto] = useState('');
-  
+
   // Form data
   const [formData, setFormData] = useState({
     fornecedor_id: 0,
@@ -41,9 +45,38 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
     desconto: 0,
     frete: 0
   });
-  
+
   const [itens, setItens] = useState<ItemPedido[]>([]);
-  
+
+  // Initialize with initial data if provided
+  useEffect(() => {
+    if (isOpen) {
+      if (initialSupplierId) {
+        setFormData(prev => ({ ...prev, fornecedor_id: initialSupplierId }));
+      }
+
+      if (initialProduct) {
+        const novoItem: ItemPedido = {
+          produto_id: initialProduct.id,
+          produto_nome: initialProduct.nome,
+          quantidade: initialProduct.quantidade_minima > initialProduct.quantidade
+            ? (initialProduct.quantidade_minima - initialProduct.quantidade) + 10 // Suggest buying enough to exceed min + buffer
+            : 10, // Default quantity
+          preco_unitario: initialProduct.preco_custo,
+          desconto_percentual: 0,
+          total_item: initialProduct.preco_custo * (initialProduct.quantidade_minima > initialProduct.quantidade
+            ? (initialProduct.quantidade_minima - initialProduct.quantidade) + 10
+            : 10)
+        };
+        setItens([novoItem]);
+      } else {
+        // Reset if no initial product
+        setItens([]);
+        setFormData(prev => ({ ...prev, fornecedor_id: 0 }));
+      }
+    }
+  }, [isOpen, initialProduct, initialSupplierId]);
+
   // Buscar produtos
   useEffect(() => {
     if (searchProduto.length >= 2) {
@@ -61,23 +94,23 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
           console.error('Erro ao buscar produtos:', error);
         }
       }, 300);
-      
+
       return () => clearTimeout(timer);
     } else {
       setProdutos([]);
     }
   }, [searchProduto]);
-  
+
   // Calcular totais
   const subtotal = itens.reduce((sum, item) => sum + item.total_item, 0);
   const total = subtotal - formData.desconto + formData.frete;
-  
+
   const handleAddItem = (produto: Produto) => {
     const itemExistente = itens.find(item => item.produto_id === produto.id);
-    
+
     if (itemExistente) {
-      setItens(itens.map(item => 
-        item.produto_id === produto.id 
+      setItens(itens.map(item =>
+        item.produto_id === produto.id
           ? { ...item, quantidade: item.quantidade + 1, total_item: (item.quantidade + 1) * item.preco_unitario * (1 - item.desconto_percentual / 100) }
           : item
       ));
@@ -92,43 +125,43 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
       };
       setItens([...itens, novoItem]);
     }
-    
+
     setSearchProduto('');
     setProdutos([]);
   };
-  
+
   const handleUpdateItem = (index: number, field: keyof ItemPedido, value: number) => {
     const novosItens = [...itens];
     novosItens[index] = { ...novosItens[index], [field]: value };
-    
+
     // Recalcular total do item
     if (field === 'quantidade' || field === 'preco_unitario' || field === 'desconto_percentual') {
       const item = novosItens[index];
       item.total_item = item.quantidade * item.preco_unitario * (1 - item.desconto_percentual / 100);
     }
-    
+
     setItens(novosItens);
   };
-  
+
   const handleRemoveItem = (index: number) => {
     setItens(itens.filter((_, i) => i !== index));
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.fornecedor_id) {
       toast.error('Selecione um fornecedor');
       return;
     }
-    
+
     if (itens.length === 0) {
       toast.error('Adicione pelo menos um item ao pedido');
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
       const pedidoData: CreatePedidoData = {
         fornecedor_id: formData.fornecedor_id,
@@ -143,7 +176,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
           desconto_percentual: item.desconto_percentual
         }))
       };
-      
+
       await purchaseOrderService.criarPedido(pedidoData);
       toast.success('Pedido de compra criado com sucesso!');
       onSuccess();
@@ -155,7 +188,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
       setLoading(false);
     }
   };
-  
+
   const handleClose = () => {
     setFormData({
       fornecedor_id: 0,
@@ -169,9 +202,9 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
     setProdutos([]);
     onClose();
   };
-  
+
   if (!isOpen) return null;
-  
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
@@ -190,7 +223,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="flex flex-col h-full">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Informações do Pedido */}
@@ -213,7 +246,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                   ))}
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Condição de Pagamento
@@ -227,7 +260,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                 />
               </div>
             </div>
-            
+
             {/* Busca de Produtos */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -241,7 +274,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                   placeholder="Digite o nome do produto para buscar..."
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
-                
+
                 {produtos.length > 0 && (
                   <div className="absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mt-1 max-h-60 overflow-y-auto z-10">
                     {produtos.map(produto => (
@@ -261,14 +294,14 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                 )}
               </div>
             </div>
-            
+
             {/* Lista de Itens */}
             {itens.length > 0 && (
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
                   Itens do Pedido ({itens.length})
                 </h3>
-                
+
                 <div className="overflow-x-auto">
                   <table className="w-full border border-gray-200 dark:border-gray-700 rounded-lg">
                     <thead className="bg-gray-50 dark:bg-gray-700">
@@ -336,7 +369,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                 </div>
               </div>
             )}
-            
+
             {/* Totais e Observações */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -351,7 +384,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                   placeholder="Observações sobre o pedido..."
                 />
               </div>
-              
+
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Subtotal:</span>
@@ -359,7 +392,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                     {formatCurrency(subtotal)}
                   </span>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Desconto:</label>
                   <input
@@ -371,7 +404,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                     className="w-24 px-2 py-1 text-right border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Frete:</label>
                   <input
@@ -383,7 +416,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                     className="w-24 px-2 py-1 text-right border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
                 </div>
-                
+
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold text-gray-800 dark:text-white">Total:</span>
@@ -395,7 +428,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
               </div>
             </div>
           </div>
-          
+
           {/* Footer */}
           <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
             <button
