@@ -182,6 +182,41 @@ class DashboardOrchestrator:
         # 🔥 ADICIONADO: Detalhes de despesas
         expense_details = DataLayer.get_expense_details(self.establishment_id, days)
         
+        # 🔥 NOVO: Dados Financeiros Reais (Faturamento, CMV, Lucro Bruto)
+        financials_data = DataLayer.get_sales_financials(
+            self.establishment_id, start_current, end_date
+        )
+        
+        revenue = financials_data.get("revenue", 0.0)
+        cogs = financials_data.get("cogs", 0.0)
+        gross_profit = financials_data.get("gross_profit", 0.0)
+        
+        # 🔥 CORREÇÃO: Calcular total de despesas para o período
+        total_despesas_periodo = sum([float(exp.get("valor", 0)) for exp in expense_details])
+        
+        # Lucro Líquido = Lucro Bruto - Despesas
+        net_profit = gross_profit - total_despesas_periodo
+        
+        # Margens
+        gross_margin = (gross_profit / revenue * 100) if revenue > 0 else 0.0
+        net_margin = (net_profit / revenue * 100) if revenue > 0 else 0.0
+        
+        # ROI (Baseado no custo do estoque médio ou CMV?) 
+        # GMROI (Gross Margin Return on Inventory) = Gross Profit / Avg Inventory Cost
+        avg_inventory_cost = inventory_summary.get("valor_total", 0.0) # Simplificação: Usar valor atual como média
+        roi = (gross_profit / avg_inventory_cost * 100) if avg_inventory_cost > 0 else 0.0
+        
+        financials_consolidated = {
+            "revenue": revenue,
+            "cogs": cogs,
+            "gross_profit": gross_profit,
+            "expenses": total_despesas_periodo,
+            "net_profit": net_profit,
+            "gross_margin": round(gross_margin, 2),
+            "net_margin": round(net_margin, 2),
+            "roi": round(roi, 2)
+        }
+
         # 🔥 NOVO: Vendas por hora
         sales_by_hour = DataLayer.get_sales_by_hour(self.establishment_id, days)
         
@@ -234,7 +269,7 @@ class DashboardOrchestrator:
         forecast = PracticalModels.generate_forecast(sales_timeseries)
 
         sales_current_metric = {
-            "value": sales_current_summary.get("total_faturado", 0),
+            "value": revenue, # Usar revenue consolidado
             "confidence": _confidence_from_samples(
                 sales_current_summary.get("total_vendas", 0)
             ),
@@ -538,6 +573,7 @@ class DashboardOrchestrator:
             "trend": sales_trend,
             "timeseries": sales_timeseries,
             "forecast": forecast,
+            "financials": financials_consolidated, # 🔥 NOVO: Dados financeiros consolidados
             "inventory": inventory_summary,
             "expenses": expense_details,
             "total_despesas": total_despesas_periodo,  # 🔥 NOVO: Total de despesas do período

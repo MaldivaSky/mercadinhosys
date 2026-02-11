@@ -1,5 +1,4 @@
-import React from 'react';
-import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 
@@ -15,6 +14,8 @@ interface ProductsTableProps {
     onStockAdjust: (produto: Produto) => void;
     onHistory: (produto: Produto) => void;
     onMakeOrder: (produto: Produto) => void;
+    onSort?: (key: string) => void;
+    sortConfig?: { key: string; direction: 'asc' | 'desc' };
 }
 
 export const ProductsTable: React.FC<ProductsTableProps> = ({
@@ -29,7 +30,22 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
     onStockAdjust,
     onHistory,
     onMakeOrder,
+    onSort,
+    sortConfig,
 }) => {
+
+    const SortIcon = ({ columnKey }: { columnKey: string }) => {
+        if (!sortConfig || sortConfig.key !== columnKey) {
+            return <ArrowUpDown className="w-4 h-4 ml-1 text-gray-400 opacity-50" />;
+        }
+        return sortConfig.direction === 'asc' ?
+            <ArrowUp className="w-4 h-4 ml-1 text-blue-600" /> :
+            <ArrowDown className="w-4 h-4 ml-1 text-blue-600" />;
+    };
+
+    const handleSort = (key: string) => {
+        if (onSort) onSort(key);
+    };
 
     const getStockBadge = (produto: Produto) => {
         if (produto.quantidade <= 0) return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
@@ -57,14 +73,62 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                 <table className="w-full">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                            <th className="px-4 py-3 text-left text-sm font-medium">Produto</th>
-                            <th className="px-4 py-3 text-center text-sm font-medium">Estoque</th>
+                            <th
+                                className="px-4 py-3 text-left text-sm font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                                onClick={() => handleSort('nome')}
+                            >
+                                <div className="flex items-center">
+                                    Produto
+                                    <SortIcon columnKey="nome" />
+                                </div>
+                            </th>
+                            <th
+                                className="px-4 py-3 text-center text-sm font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                                onClick={() => handleSort('quantidade')}
+                            >
+                                <div className="flex items-center justify-center">
+                                    Estoque
+                                    <SortIcon columnKey="quantidade" />
+                                </div>
+                            </th>
                             <th className="px-4 py-3 text-center text-sm font-medium">Status</th>
                             <th className="px-4 py-3 text-center text-sm font-medium">Lote</th>
-                            <th className="px-4 py-3 text-center text-sm font-medium">Validade</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">Custo</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">Venda</th>
-                            <th className="px-4 py-3 text-center text-sm font-medium">Margem</th>
+                            <th
+                                className="px-4 py-3 text-center text-sm font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                                onClick={() => handleSort('data_validade')}
+                            >
+                                <div className="flex items-center justify-center">
+                                    Validade
+                                    <SortIcon columnKey="data_validade" />
+                                </div>
+                            </th>
+                            <th
+                                className="px-4 py-3 text-right text-sm font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                                onClick={() => handleSort('preco_custo')}
+                            >
+                                <div className="flex items-center justify-end">
+                                    Custo
+                                    <SortIcon columnKey="preco_custo" />
+                                </div>
+                            </th>
+                            <th
+                                className="px-4 py-3 text-right text-sm font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                                onClick={() => handleSort('preco_venda')}
+                            >
+                                <div className="flex items-center justify-end">
+                                    Venda
+                                    <SortIcon columnKey="preco_venda" />
+                                </div>
+                            </th>
+                            <th
+                                className="px-4 py-3 text-center text-sm font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors group"
+                                onClick={() => handleSort('margem_lucro')}
+                            >
+                                <div className="flex items-center justify-center">
+                                    Margem
+                                    <SortIcon columnKey="margem_lucro" />
+                                </div>
+                            </th>
                             <th className="px-4 py-3 text-center text-sm font-medium">Ações</th>
                         </tr>
                     </thead>
