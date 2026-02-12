@@ -414,7 +414,6 @@ def create_app(config_name=None):
 
     # ==================== ROTA PARA SERVIR UPLOADS ====================
     from flask import send_from_directory, abort
-    import os
 
     @app.route("/uploads/<path:filename>")
     def serve_uploads(filename):

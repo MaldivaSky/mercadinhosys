@@ -45,11 +45,6 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
     # Aplicar filtros definidos em FILTROS_PERMITIDOS_VENDAS
     for chave, valor in filtros.items():
         if chave in FILTROS_PERMITIDOS_VENDAS:
-            try:
-                with open("debug_vendas.txt", "a", encoding="utf-8") as f:
-                     f.write(f"DEBUG APPLY: Applying filter {chave}={valor}\n")
-            except:
-                pass
             query = query.filter(FILTROS_PERMITIDOS_VENDAS[chave](valor))
 
     # Filtro por data
@@ -192,34 +187,42 @@ def aplicar_ordenacao_vendas(query, ordenar_por, direcao):
 
 
 def calcular_estatisticas_vendas(query):
-    """Calcula estatísticas agregadas das vendas filtradas"""
+    """Calcula estatísticas agregadas das vendas filtradas usando SQL"""
+    # 1. Estatísticas básicas
+    stats = query.with_entities(
+        func.count(Venda.id).label("quantidade"),
+        func.sum(Venda.total).label("total"),
+        func.sum(Venda.desconto).label("descontos"),
+        func.sum(Venda.valor_recebido).label("valor_recebido")
+    ).first()
+
+    quantidade = stats.quantidade or 0
+    total = float(stats.total or 0)
+    descontos = float(stats.descontos or 0)
+    valor_recebido = float(stats.valor_recebido or 0)
+    ticket_medio = total / quantidade if quantidade > 0 else 0
+
     estatisticas = {
-        "total_vendas": 0,
-        "quantidade_vendas": 0,
-        "ticket_medio": 0,
-        "total_descontos": 0,
-        "total_valor_recebido": 0,
-        "formas_pagamento": defaultdict(lambda: {"quantidade": 0, "total": 0}),
+        "total_vendas": total,
+        "quantidade_vendas": quantidade,
+        "ticket_medio": ticket_medio,
+        "total_descontos": descontos,
+        "total_valor_recebido": valor_recebido,
+        "formas_pagamento": {},
     }
 
-    vendas = query.all()
+    # 2. Formas de pagamento (GROUP BY)
+    formas = query.with_entities(
+        Venda.forma_pagamento,
+        func.count(Venda.id).label("quantidade"),
+        func.sum(Venda.total).label("total")
+    ).group_by(Venda.forma_pagamento).all()
 
-    if vendas:
-        estatisticas["total_vendas"] = sum(v.total for v in vendas)
-        estatisticas["quantidade_vendas"] = len(vendas)
-        estatisticas["ticket_medio"] = (
-            estatisticas["total_vendas"] / estatisticas["quantidade_vendas"]
-            if estatisticas["quantidade_vendas"] > 0
-            else 0
-        )
-        estatisticas["total_descontos"] = sum(v.desconto for v in vendas)
-        estatisticas["total_valor_recebido"] = sum(v.valor_recebido for v in vendas)
-
-        # Agrupar por forma de pagamento
-        for venda in vendas:
-            forma = venda.forma_pagamento
-            estatisticas["formas_pagamento"][forma]["quantidade"] += 1
-            estatisticas["formas_pagamento"][forma]["total"] += venda.total
+    for f in formas:
+        estatisticas["formas_pagamento"][f.forma_pagamento] = {
+            "quantidade": f.quantidade,
+            "total": float(f.total or 0)
+        }
 
     return estatisticas
 
@@ -236,11 +239,8 @@ def gerar_codigo_venda():
 
 @vendas_bp.route("/", methods=["GET"], strict_slashes=False)
 def listar_vendas():
-    """Lista vendas com filtros avançados"""
+    """Lista vendas com filtros avançados otimizada"""
     try:
-        with open("debug_vendas.txt", "a", encoding="utf-8") as f:
-            f.write(f"DEBUG LISTAR: request.args={request.args}\n")
-        
         # Configuração de paginação
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
@@ -250,17 +250,35 @@ def listar_vendas():
         ordenar_por = request.args.get("ordenar_por", "data")
         direcao = request.args.get("direcao", "desc")
 
-        # Iniciar query com joins para otimização
-        query = Venda.query.options(
-            db.joinedload(Venda.funcionario),
-            db.joinedload(Venda.cliente),
-            db.joinedload(Venda.itens),
-        )
-
-        # Aplicar filtro de busca global (mantido para compatibilidade)
+        # Coletar filtros e busca
         search = request.args.get("search", "").strip()
+        filtros_avancados = {}
+        
+        # Filtros básicos mapeados
+        for filtro in FILTROS_PERMITIDOS_VENDAS.keys():
+            valor = request.args.get(filtro, "").strip()
+            if valor:
+                filtros_avancados[filtro] = valor
+
+        # Filtros especiais
+        filtros_especiais = [
+            "data_inicio", "data_fim", "min_total", "max_total",
+            "min_valor_recebido", "max_valor_recebido",
+            "cliente_id", "funcionario_id", "produto_nome",
+            "tipo_venda", "dia_semana",
+        ]
+
+        for filtro_especial in filtros_especiais:
+            valor = request.args.get(filtro_especial, "").strip()
+            if valor:
+                filtros_avancados[filtro_especial] = valor
+
+        # Iniciar query BASE sem joins pesados (joins apenas para filtros)
+        query_base = Venda.query
+
+        # Aplicar busca global na query base (se houver) para as estatísticas considerarem a busca
         if search:
-            query = query.filter(
+            query_base = query_base.filter(
                 or_(
                     Venda.codigo.ilike(f"%{search}%"),
                     Venda.observacoes.ilike(f"%{search}%"),
@@ -270,48 +288,25 @@ def listar_vendas():
                 )
             )
 
-        # Coletar filtros avançados
-        filtros_avancados = {}
-        for filtro in FILTROS_PERMITIDOS_VENDAS.keys():
-            valor = request.args.get(filtro, "").strip()
-            if valor:
-                filtros_avancados[filtro] = valor
+        # Aplicar todos os filtros avançados na query base
+        query_base = aplicar_filtros_avancados_vendas(query_base, filtros_avancados)
 
-        # Filtros especiais de data e valor
-        filtros_especiais = [
-            "data_inicio",
-            "data_fim",
-            "min_total",
-            "max_total",
-            "min_valor_recebido",
-            "max_valor_recebido",
-            "cliente_id",
-            "funcionario_id",
-            "produto_nome",
-            "tipo_venda",
-            "dia_semana",
-        ]
+        # 1. Calcular estatísticas ANTES da ordenação e paginação (usando query_base filtrada)
+        estatisticas = calcular_estatisticas_vendas(query_base)
 
-        for filtro_especial in filtros_especiais:
-            valor = request.args.get(filtro_especial, "").strip()
-            if valor:
-                filtros_avancados[filtro_especial] = valor
-
-        with open("debug_vendas.txt", "a", encoding="utf-8") as f:
-            f.write(f"DEBUG LISTAR: search='{search}', filtros_avancados={filtros_avancados}\n")
-
-        # Aplicar todos os filtros
-        query = aplicar_filtros_avancados_vendas(query, filtros_avancados)
+        # 2. Preparar query para resultados com joins necessários para a exibição
+        query_resultados = query_base.options(
+            db.joinedload(Venda.funcionario),
+            db.joinedload(Venda.cliente),
+            db.selectinload(Venda.itens), 
+        )
 
         # Aplicar ordenação
-        query = aplicar_ordenacao_vendas(query, ordenar_por, direcao)
+        query_resultados = aplicar_ordenacao_vendas(query_resultados, ordenar_por, direcao)
 
         # Executar paginação
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        pagination = query_resultados.paginate(page=page, per_page=per_page, error_out=False)
         vendas = pagination.items
-
-        # Calcular estatísticas para o conjunto filtrado
-        estatisticas = calcular_estatisticas_vendas(query)
 
         # Construir resposta
         resultado = []
@@ -398,276 +393,222 @@ def listar_vendas():
 
 @vendas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
 def estatisticas_vendas():
-    """Estatísticas gerais de vendas com filtros avançados"""
+    """Estatísticas gerais de vendas com filtros avançados otimizada"""
     try:
-        with open("debug_vendas.txt", "a", encoding="utf-8") as f:
-            f.write(f"DEBUG ESTATISTICAS: args={request.args}\n")
-            
         # Coletar filtros
         filtros = {k: v for k, v in request.args.items() if v}
+        data_inicio = filtros.get("data_inicio")
+        data_fim = filtros.get("data_fim")
         
-        # 1. Query Base (Com todos os filtros aplicados)
+        # 1. Query Base
         query_base = Venda.query
-        
-        # REMOVIDO: Filtro padrão de "finalizada". Agora mostra tudo se não especificado.
-        # if "status" not in filtros:
-        #    query_base = query_base.filter(Venda.status == "finalizada")
-            
-        # Aplicar todos os filtros (datas, cliente, func, pgto, valor, etc.)
         query_base = aplicar_filtros_avancados_vendas(query_base, filtros)
 
-        # Clonar queries para diferentes agregações
-        # (SQLAlchemy é preguiçoso, então isso só constrói a query, não executa ainda)
-        
         # --- ESTATÍSTICAS GERAIS ---
-        total_vendas = query_base.count()
+        # Usamos uma subquery para garantir que filtros complexos (como join com VendaItem) não dupliquem contagem
+        # Mas se não houver joins complexos na base, podemos simplificar. 
+        # O aplicar_filtros_avancados_vendas pode fazer join com VendaItem se produto_nome estiver presente.
         
-        total_valor = (
-            db.session.query(func.sum(Venda.total))
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .scalar()
-            or 0
-        )
+        # SQL centralizado para eficiência
+        has_item_filter = "produto_nome" in filtros
         
-        # Calcular Lucro Total (Baseado na margem real dos itens)
-        total_lucro = (
-            db.session.query(func.sum(VendaItem.margem_lucro_real))
-            .join(Venda, Venda.id == VendaItem.venda_id)
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .scalar()
-            or 0
-        )
+        if has_item_filter:
+            # Se tem filtro de item, precisamos de distinct
+            venda_ids_query = query_base.with_entities(Venda.id).distinct()
+            v_ids = venda_ids_query.subquery()
+            
+            stats_gerais = db.session.query(
+                func.count(Venda.id).label("total_vendas"),
+                func.sum(Venda.total).label("total_valor")
+            ).filter(Venda.id.in_(v_ids)).first()
+            
+            total_vendas = stats_gerais.total_vendas or 0
+            total_valor = float(stats_gerais.total_valor or 0)
+            
+            total_lucro = (
+                db.session.query(func.sum(VendaItem.margem_lucro_real))
+                .filter(VendaItem.venda_id.in_(v_ids))
+                .scalar() or 0
+            )
+        else:
+            # Sem joins complexos, query direta é mais rápida
+            stats_gerais = query_base.with_entities(
+                func.count(Venda.id).label("total_vendas"),
+                func.sum(Venda.total).label("total_valor")
+            ).first()
+            
+            total_vendas = stats_gerais.total_vendas or 0
+            total_valor = float(stats_gerais.total_valor or 0)
+            
+            total_lucro = (
+                query_base.join(VendaItem)
+                .with_entities(func.sum(VendaItem.margem_lucro_real))
+                .scalar() or 0
+            )
 
         ticket_medio = total_valor / total_vendas if total_vendas > 0 else 0
 
-        # --- VENDAS POR DIA (Gráfico Principal) ---
-        # Usamos coalesce para garantir uma data válida
+        # --- VENDAS POR DIA ---
         campo_data = func.coalesce(Venda.data_venda, Venda.created_at)
         campo_data_dia = func.date(campo_data)
         
-        vendas_por_dia = (
-            db.session.query(
-                campo_data_dia.label("data"),
-                func.count(Venda.id).label("quantidade"),
-                func.sum(Venda.total).label("total"),
+        if has_item_filter:
+            v_ids = query_base.with_entities(Venda.id).distinct().subquery()
+            vendas_por_dia_query = (
+                db.session.query(
+                    campo_data_dia.label("data"),
+                    func.count(Venda.id).label("quantidade"),
+                    func.sum(Venda.total).label("total"),
+                )
+                .filter(Venda.id.in_(v_ids))
+                .group_by(campo_data_dia)
+                .order_by(campo_data_dia.asc())
             )
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .group_by(campo_data_dia)
-            .order_by(campo_data_dia.asc())
-            .all()
-        )
+        else:
+            vendas_por_dia_query = (
+                query_base.with_entities(
+                    campo_data_dia.label("data"),
+                    func.count(Venda.id).label("quantidade"),
+                    func.sum(Venda.total).label("total"),
+                )
+                .group_by(campo_data_dia)
+                .order_by(campo_data_dia.asc())
+            )
         
-        # ==================== PREVISÃO DE VENDAS (7 DIAS) ====================
+        vendas_por_dia_res = vendas_por_dia_query.all()
+        
+        # Previsão
         previsao_vendas = []
-        if len(vendas_por_dia) >= 7:
-            valores_y = [float(vpd.total) if vpd.total else 0 for vpd in vendas_por_dia]
+        if len(vendas_por_dia_res) >= 7:
+            valores_y = [float(vpd.total) if vpd.total else 0 for vpd in vendas_por_dia_res]
             n = len(valores_y)
             valores_x = list(range(n))
-            
             media_x = sum(valores_x) / n
             media_y = sum(valores_y) / n
-            
             numerador = sum((valores_x[i] - media_x) * (valores_y[i] - media_y) for i in range(n))
             denominador = sum((valores_x[i] - media_x) ** 2 for i in range(n))
-            
             if denominador != 0:
                 b = numerador / denominador
                 a = media_y - b * media_x
-                
-                ultima_data_str = str(vendas_por_dia[-1].data)
+                ultima_data_str = str(vendas_por_dia_res[-1].data)
                 ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d').date()
-                
                 for i in range(1, 8):
                     proxima_data = ultima_data + timedelta(days=i)
                     x_futuro = n + i - 1
                     valor_previsto = max(0, a + b * x_futuro)
-                    
-                    previsao_vendas.append({
-                        "data": proxima_data.isoformat(),
-                        "total": round(valor_previsto, 2),
-                        "tipo": "previsao"
-                    })
+                    previsao_vendas.append({"data": proxima_data.isoformat(), "total": round(valor_previsto, 2), "tipo": "previsao"})
+
+        vendas_historicas = [{"data": str(vpd.data), "quantidade": vpd.quantidade, "total": float(vpd.total or 0), "tipo": "historico"} for vpd in vendas_por_dia_res]
+
+        # --- GRUPOS (Pagamento, Funcionario, Cliente, Hora) ---
+        # Helper para evitar repetição
+        def get_grouped_stats(q, group_by_col):
+            if has_item_filter:
+                v_ids = q.with_entities(Venda.id).distinct().subquery()
+                return db.session.query(
+                    group_by_col,
+                    func.count(Venda.id).label("quantidade"),
+                    func.sum(Venda.total).label("total")
+                ).filter(Venda.id.in_(v_ids)).group_by(group_by_col).all()
+            else:
+                return q.with_entities(
+                    group_by_col,
+                    func.count(Venda.id).label("quantidade"),
+                    func.sum(Venda.total).label("total")
+                ).group_by(group_by_col).all()
+
+        formas_pgto_res = get_grouped_stats(query_base, Venda.forma_pagamento)
         
-        vendas_historicas = [
-            {
-                "data": str(vpd.data),
-                "quantidade": vpd.quantidade,
-                "total": float(vpd.total) if vpd.total else 0,
-                "tipo": "historico"
-            }
-            for vpd in vendas_por_dia
-        ]
+        # Funcionarios/Clientes precisam de Join na base se não estiverem lá
+        vendas_func_res = query_base.join(Funcionario).with_entities(
+            Funcionario.nome,
+            func.count(Venda.id).label("quantidade"),
+            func.sum(Venda.total).label("total")
+        ).group_by(Funcionario.id, Funcionario.nome).order_by(func.sum(Venda.total).desc()).limit(10).all()
 
-        # --- FORMAS DE PAGAMENTO ---
-        formas_pagamento = (
-            db.session.query(
-                Venda.forma_pagamento,
-                func.count(Venda.id).label("quantidade"),
-                func.sum(Venda.total).label("total"),
-            )
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .group_by(Venda.forma_pagamento)
-            .all()
-        )
+        vendas_cliente_res = query_base.join(Cliente).with_entities(
+            Cliente.nome,
+            func.count(Venda.id).label("quantidade"),
+            func.sum(Venda.total).label("total")
+        ).group_by(Cliente.id, Cliente.nome).order_by(func.sum(Venda.total).desc()).limit(10).all()
 
-        # --- TOP FUNCIONÁRIOS ---
-        vendas_por_funcionario = (
-            db.session.query(
-                Funcionario.nome,
-                func.count(Venda.id).label("quantidade"),
-                func.sum(Venda.total).label("total"),
-            )
-            .join(Venda, Venda.funcionario_id == Funcionario.id)
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .group_by(Funcionario.id, Funcionario.nome)
-            .order_by(func.sum(Venda.total).desc())
-            .limit(10)
-            .all()
-        )
-
-        # --- TOP CLIENTES ---
-        vendas_por_cliente = (
-            db.session.query(
-                Cliente.nome,
-                func.count(Venda.id).label("quantidade"),
-                func.sum(Venda.total).label("total"),
-            )
-            .join(Venda, Venda.cliente_id == Cliente.id)
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .group_by(Cliente.id, Cliente.nome)
-            .order_by(func.sum(Venda.total).desc())
-            .limit(10)
-            .all()
-        )
-
-        # --- VENDAS POR HORA ---
         from app.utils.query_helpers import get_hour_extract
-        # Usar coalescencia também para hora
         campo_hora = get_hour_extract(func.coalesce(Venda.data_venda, Venda.created_at))
-        
-        vendas_por_hora = (
-            db.session.query(
-                campo_hora.label("hora"),
-                func.count(Venda.id).label("quantidade"),
-                func.sum(Venda.total).label("total"),
-            )
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .group_by(campo_hora)
-            .order_by("hora")
-            .all()
-        )
+        vendas_hora_res = get_grouped_stats(query_base, campo_hora)
 
-        # --- PRODUTOS MAIS VENDIDOS ---
-        # Note: This involves joining VendaItem, need to be careful with filtering
-        produtos_mais_vendidos = (
+        # --- PRODUTOS E FORNECEDORES (Sempre join com VendaItem) ---
+        v_ids_sub = query_base.with_entities(Venda.id).distinct().subquery()
+        
+        produtos_res = (
             db.session.query(
                 Produto.nome,
-                Produto.fornecedor_id,
                 Fornecedor.nome_fantasia.label("fornecedor_nome"),
                 func.sum(VendaItem.quantidade).label("quantidade"),
                 func.sum(VendaItem.total_item).label("total"),
             )
             .join(VendaItem, VendaItem.produto_id == Produto.id)
-            .join(Venda, Venda.id == VendaItem.venda_id)
             .outerjoin(Fornecedor, Fornecedor.id == Produto.fornecedor_id)
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
-            .group_by(Produto.id, Produto.nome, Produto.fornecedor_id, Fornecedor.nome_fantasia)
+            .filter(VendaItem.venda_id.in_(v_ids_sub))
+            .group_by(Produto.id, Produto.nome, Fornecedor.nome_fantasia)
             .order_by(func.sum(VendaItem.quantidade).desc())
             .limit(10)
             .all()
         )
 
-        # --- FORNECEDORES (Baseado em produtos vendidos) ---
-        vendas_por_fornecedor = (
+        fornecedores_res = (
             db.session.query(
                 Fornecedor.nome_fantasia,
-                func.count(distinct(Venda.id)).label("quantidade_vendas"),
+                func.count(distinct(VendaItem.venda_id)).label("quantidade_vendas"),
                 func.sum(VendaItem.total_item).label("total"),
             )
             .join(Produto, Produto.fornecedor_id == Fornecedor.id)
             .join(VendaItem, VendaItem.produto_id == Produto.id)
-            .join(Venda, Venda.id == VendaItem.venda_id)
-            .filter(Venda.id.in_(query_base.with_entities(Venda.id)))
+            .filter(VendaItem.venda_id.in_(v_ids_sub))
             .group_by(Fornecedor.id, Fornecedor.nome_fantasia)
             .order_by(func.sum(VendaItem.total_item).desc())
             .limit(10)
             .all()
         )
 
-        return (
-            jsonify(
+        return jsonify({
+            "estatisticas_gerais": {
+                "total_vendas": total_vendas,
+                "total_valor": float(total_valor),
+                "total_lucro": float(total_lucro),
+                "ticket_medio": float(ticket_medio),
+                "periodo": {"data_inicio": data_inicio, "data_fim": data_fim},
+            },
+            "vendas_por_dia": vendas_historicas,
+            "previsao_vendas": previsao_vendas,
+            "formas_pagamento": [
                 {
-                    "estatisticas_gerais": {
-                        "total_vendas": total_vendas,
-                        "total_valor": float(total_valor),
-                        "total_lucro": float(total_lucro),
-                        "ticket_medio": float(ticket_medio),
-                        "periodo": {
-                            "data_inicio": data_inicio,
-                            "data_fim": data_fim,
-                        },
-                    },
-                    "vendas_por_dia": vendas_historicas,
-                    "previsao_vendas": previsao_vendas,
-                    "formas_pagamento": [
-                        {
-                            "forma": fp.forma_pagamento,
-                            "quantidade": fp.quantidade,
-                            "total": float(fp.total) if fp.total else 0,
-                            "percentual": float(
-                                (fp.total / total_valor * 100) if total_valor > 0 else 0
-                            ),
-                        }
-                        for fp in formas_pagamento
-                    ],
-                    "vendas_por_funcionario": [
-                        {
-                            "funcionario": vpf.nome,
-                            "quantidade": vpf.quantidade,
-                            "total": float(vpf.total) if vpf.total else 0,
-                        }
-                        for vpf in vendas_por_funcionario
-                    ],
-                    "vendas_por_cliente": [
-                        {
-                            "cliente": vpc.nome,
-                            "quantidade": vpc.quantidade,
-                            "total": float(vpc.total) if vpc.total else 0,
-                        }
-                        for vpc in vendas_por_cliente
-                    ],
-                    "vendas_por_hora": [
-                        {
-                            "hora": int(vph.hora),
-                            "quantidade": vph.quantidade,
-                            "total": float(vph.total) if vph.total else 0,
-                        }
-                        for vph in vendas_por_hora
-                    ],
-                    "produtos_mais_vendidos": [
-                        {
-                            "nome": pmv.nome,
-                            "fornecedor": pmv.fornecedor_nome or "Sem Fornecedor",
-                            "quantidade": pmv.quantidade,
-                            "total": float(pmv.total) if pmv.total else 0,
-                        }
-                        for pmv in produtos_mais_vendidos
-                    ],
-                    "vendas_por_fornecedor": [
-                        {
-                            "fornecedor": vpf.nome_fantasia,
-                            "quantidade_vendas": vpf.quantidade_vendas,
-                            "total": float(vpf.total) if vpf.total else 0,
-                        }
-                        for vpf in vendas_por_fornecedor
-                    ],
-                }
-            ),
-            200,
-        )
+                    "forma": fp[0],
+                    "quantidade": fp[1],
+                    "total": float(fp[2] or 0),
+                    "percentual": float((fp[2] / total_valor * 100) if total_valor > 0 else 0),
+                } for fp in formas_pgto_res
+            ],
+            "vendas_por_funcionario": [
+                {"funcionario": vpf[0], "quantidade": vpf[1], "total": float(vpf[2] or 0)} for vpf in vendas_func_res
+            ],
+            "vendas_por_cliente": [
+                {"cliente": vpc[0], "quantidade": vpc[1], "total": float(vpc[2] or 0)} for vpc in vendas_cliente_res
+            ],
+            "vendas_por_hora": [
+                {"hora": int(vph[0] or 0), "quantidade": vph[1], "total": float(vph[2] or 0)} for vph in vendas_hora_res
+            ],
+            "produtos_mais_vendidos": [
+                {"nome": p[0], "fornecedor": p[1] or "Sem Fornecedor", "quantidade": p[2], "total": float(p[3] or 0)} for p in produtos_res
+            ],
+            "vendas_por_fornecedor": [
+                {"fornecedor": f[0], "quantidade_vendas": f[1], "total": float(f[2] or 0)} for f in fornecedores_res
+            ],
+        }), 200
 
     except Exception as e:
         print(f"❌ Erro ao obter estatísticas: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Erro ao obter estatísticas: {str(e)}"}), 500
 
 
