@@ -14,9 +14,45 @@ from app.models import (
     FuncionarioBeneficio,
     JustificativaPonto,
 )
-from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.decorator_jwt import funcionario_required, gerente_ou_admin_required
+from app.dashboard_cientifico.data_layer import DataLayer
 
 rh_bp = Blueprint("rh", __name__)
+
+
+# ============================================
+# DASHBOARD RH
+# ============================================
+
+
+@rh_bp.route("/dashboard", methods=["GET"])
+@gerente_ou_admin_required
+def rh_dashboard():
+    """
+    Retorna métricas específicas para o Dashboard de RH.
+    Isolado do dashboard científico para performance.
+    """
+    try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        days = request.args.get("days", default=30, type=int)
+
+        # Validar days
+        if days < 1: days = 1
+        if days > 365: days = 365
+
+        # Obter métricas usando a camada de dados existente
+        metrics = DataLayer.get_rh_metrics(estabelecimento_id, days)
+
+        return jsonify({
+            "success": True,
+            "data": metrics,
+            "period_days": days
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro no dashboard de RH: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # ============================================

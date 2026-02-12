@@ -63,8 +63,8 @@ export default function RHDashboard() {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.get(`/dashboard/cientifico?days=${periodoDias}`);
-      const rhMetrics = response.data?.data?.rh;
+      const response = await apiClient.get(`/rh/dashboard?days=${periodoDias}`);
+      const rhMetrics = response.data?.data;
 
       if (rhMetrics) {
         setRhData(rhMetrics);
