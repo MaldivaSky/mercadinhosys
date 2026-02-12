@@ -1430,7 +1430,180 @@ def cancelar_venda(venda_id):
         print(f"❌ Erro no processo de cancelamento: {str(e)}")
         return jsonify({"error": f"Erro no processo de cancelamento: {str(e)}"}), 500
 
-# ADICIONE ESTAS ROTAS NO FINAL DO SEU vendas.py
+# ==================== EXPORTAÇÃO DE VENDAS ====================
+
+
+@vendas_bp.route("/exportar", methods=["GET"], strict_slashes=False)
+def exportar_vendas():
+    """Exporta vendas em formato CSV (compatível com Excel).
+    
+    Query params:
+    - formato: 'excel' ou 'csv' (padrão: csv)
+    - data_inicio: YYYY-MM-DD
+    - data_fim: YYYY-MM-DD
+    - status: filtrar por status
+    """
+    try:
+        import io
+        import csv
+
+        formato = request.args.get("formato", "csv")
+        data_inicio = request.args.get("data_inicio")
+        data_fim = request.args.get("data_fim")
+        status = request.args.get("status")
+
+        query = db.session.query(Venda).outerjoin(Cliente).outerjoin(
+            Funcionario, Venda.funcionario_id == Funcionario.id
+        )
+
+        if data_inicio:
+            query = query.filter(Venda.data_venda >= datetime.strptime(data_inicio, "%Y-%m-%d"))
+        if data_fim:
+            query = query.filter(Venda.data_venda <= datetime.strptime(data_fim, "%Y-%m-%d") + timedelta(days=1))
+        if status:
+            query = query.filter(Venda.status == status)
+
+        query = query.order_by(Venda.data_venda.desc())
+        vendas = query.limit(5000).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=";")
+
+        # Header
+        writer.writerow([
+            "Código", "Data", "Cliente", "Funcionário", "Subtotal",
+            "Desconto", "Total", "Forma Pagamento", "Status", "Itens"
+        ])
+
+        for v in vendas:
+            cliente_nome = ""
+            if v.cliente_id:
+                cli = Cliente.query.get(v.cliente_id)
+                cliente_nome = cli.nome if cli else ""
+            func_nome = ""
+            if v.funcionario_id:
+                func_obj = Funcionario.query.get(v.funcionario_id)
+                func_nome = func_obj.nome if func_obj else ""
+
+            itens_count = db.session.query(func.count(VendaItem.id)).filter(
+                VendaItem.venda_id == v.id
+            ).scalar() or 0
+
+            writer.writerow([
+                v.codigo or f"V-{v.id}",
+                v.data_venda.strftime("%d/%m/%Y %H:%M") if v.data_venda else "",
+                cliente_nome,
+                func_nome,
+                f"{float(v.subtotal or 0):.2f}",
+                f"{float(v.desconto or 0):.2f}",
+                f"{float(v.total or 0):.2f}",
+                v.forma_pagamento or "",
+                v.status or "",
+                itens_count,
+            ])
+
+        content = output.getvalue()
+        output.close()
+
+        if formato == "excel":
+            mimetype = "application/vnd.ms-excel"
+            ext = "xls"
+        else:
+            mimetype = "text/csv"
+            ext = "csv"
+
+        from flask import Response
+        resp = Response(
+            "\ufeff" + content,
+            mimetype=f"{mimetype}; charset=utf-8",
+        )
+        resp.headers["Content-Disposition"] = f'attachment; filename="vendas-{datetime.now().strftime("%Y%m%d")}.{ext}"'
+        return resp
+
+    except Exception as e:
+        print(f"❌ Erro ao exportar vendas: {str(e)}")
+        return jsonify({"error": f"Erro ao exportar: {str(e)}"}), 500
+
+
+# ==================== COMPROVANTE DE VENDA ====================
+
+
+@vendas_bp.route("/<int:venda_id>/comprovante", methods=["GET"], strict_slashes=False)
+def comprovante_venda(venda_id):
+    """Gera comprovante de venda em formato texto (para impressão térmica ou PDF).
+    
+    Retorna um arquivo de texto formatado como cupom fiscal simplificado.
+    """
+    try:
+        venda = Venda.query.get(venda_id)
+        if not venda:
+            return jsonify({"error": "Venda não encontrada"}), 404
+
+        itens = VendaItem.query.filter_by(venda_id=venda.id).all()
+
+        cliente_nome = "Consumidor Final"
+        if venda.cliente_id:
+            cli = Cliente.query.get(venda.cliente_id)
+            if cli:
+                cliente_nome = cli.nome
+
+        func_nome = "N/A"
+        if venda.funcionario_id:
+            func_obj = Funcionario.query.get(venda.funcionario_id)
+            if func_obj:
+                func_nome = func_obj.nome
+
+        # Gerar cupom em texto
+        largura = 48
+        sep = "=" * largura
+        sep_fino = "-" * largura
+
+        linhas = []
+        linhas.append(sep)
+        linhas.append("MERCADINHO SYS".center(largura))
+        linhas.append("CUPOM NÃO FISCAL".center(largura))
+        linhas.append(sep)
+        linhas.append(f"Venda: {venda.codigo or f'V-{venda.id}'}")
+        linhas.append(f"Data: {venda.data_venda.strftime('%d/%m/%Y %H:%M') if venda.data_venda else 'N/A'}")
+        linhas.append(f"Cliente: {cliente_nome}")
+        linhas.append(f"Operador: {func_nome}")
+        linhas.append(sep_fino)
+        linhas.append(f"{'ITEM':<22} {'QTD':>4} {'UNIT':>9} {'TOTAL':>9}")
+        linhas.append(sep_fino)
+
+        for item in itens:
+            prod_nome = "Produto"
+            if item.produto_id:
+                prod = Produto.query.get(item.produto_id)
+                if prod:
+                    prod_nome = prod.nome[:22]
+            qtd = int(item.quantidade or 0)
+            preco_unit = float(item.preco_unitario or 0)
+            total_item = float(item.total or 0)
+            linhas.append(f"{prod_nome:<22} {qtd:>4} {preco_unit:>9.2f} {total_item:>9.2f}")
+
+        linhas.append(sep_fino)
+        linhas.append(f"{'Subtotal:':<30} R$ {float(venda.subtotal or 0):>10.2f}")
+        if venda.desconto and float(venda.desconto) > 0:
+            linhas.append(f"{'Desconto:':<30} R$ {float(venda.desconto):>10.2f}")
+        linhas.append(f"{'TOTAL:':<30} R$ {float(venda.total or 0):>10.2f}")
+        linhas.append(sep_fino)
+        linhas.append(f"Forma de Pagamento: {venda.forma_pagamento or 'N/A'}")
+        linhas.append(sep)
+        linhas.append("Obrigado pela preferência!".center(largura))
+        linhas.append(sep)
+
+        conteudo = "\n".join(linhas)
+
+        from flask import Response
+        resp = Response(conteudo, mimetype="text/plain; charset=utf-8")
+        resp.headers["Content-Disposition"] = f'attachment; filename="comprovante-{venda.codigo or venda.id}.txt"'
+        return resp
+
+    except Exception as e:
+        print(f"❌ Erro ao gerar comprovante: {str(e)}")
+        return jsonify({"error": f"Erro ao gerar comprovante: {str(e)}"}), 500
+
 
 # ==================== ROTAS PARA PDV ATIVO (CARRINHO EM ANDAMENTO) ====================
 

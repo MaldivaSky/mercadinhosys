@@ -442,43 +442,96 @@ class PracticalModels:
 
     @staticmethod
     def generate_forecast(
-        daily_sales: List[Dict[str, Any]],
-        period: int = 7,
-        forecast_periods: int = 7,
-    ) -> List[Dict[str, Any]]:
-        from app.utils.utils import prever_demanda_holt_winters
-
-        series: List[float] = []
-        for day in daily_sales:
-            try:
-                total = day.get("total")
-                if total is None:
-                    continue
-                series.append(float(total))
-            except (TypeError, ValueError):
-                continue
-
-        if not series:
-            return []
-
-        forecasts = prever_demanda_holt_winters(
-            series, period=period, forecast_periods=forecast_periods
-        )
-
-        out: List[Dict[str, Any]] = []
-        for idx, value in enumerate(forecasts):
-            out.append(
-                {
-                    "data": None,
-                    "valor_previsto": float(value),
-                    "previsao": float(value),
-                    "value": float(value),
-                    "dia": f"Dia {idx + 1}",
-                    "confianca": "media",
+        sales_timeseries: List[Dict[str, Any]], days_ahead: int = 7
+    ) -> Dict[str, Any]:
+        """
+        Gera previsão simples de vendas (Média Móvel ou Regressão Linear Simples)
+        """
+        try:
+            if not sales_timeseries or len(sales_timeseries) < 7:
+                return {
+                    "forecast": [],
+                    "confidence": "low",
+                    "method": "insufficient_data",
                 }
-            )
 
-        return out
+            # Extrair valores
+            values = []
+            dates = []
+            for day in sales_timeseries:
+                if day.get("total") is not None:
+                    values.append(float(day["total"]))
+                    dates.append(day.get("data"))
+
+            if not values:
+                return {"forecast": [], "confidence": "low", "method": "no_data"}
+
+            # Método simples: Média dos últimos dias com peso
+            # Peso maior para dias mais recentes
+            recent_values = values[-14:]  # Últimas 2 semanas
+            
+            # Previsão linear simples (tendência)
+            n = len(recent_values)
+            if n < 2:
+                avg = sum(recent_values) / n if n > 0 else 0
+                return {
+                    "forecast": [{"day": i + 1, "value": avg} for i in range(days_ahead)],
+                    "confidence": "low",
+                    "method": "simple_average"
+                }
+            
+            x = list(range(n))
+            y = recent_values
+            
+            # Regressão linear simples: y = mx + c
+            # Evitar numpy para manter dependências leves se possível, mas statistics é stdlib
+            x_mean = statistics.mean(x)
+            y_mean = statistics.mean(y)
+            
+            numerator = sum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, y))
+            denominator = sum((xi - x_mean) ** 2 for xi in x)
+            
+            slope = numerator / denominator if denominator != 0 else 0
+            intercept = y_mean - slope * x_mean
+            
+            # Gerar previsões
+            forecast = []
+            last_date_str = dates[-1]
+            try:
+                from datetime import datetime, timedelta
+                last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
+            except:
+                from datetime import datetime
+                last_date = datetime.now()
+
+            for i in range(days_ahead):
+                # Prever dia n + 1 + i
+                # x futuro começa em n
+                future_x = n + i
+                predicted_value = slope * future_x + intercept
+                
+                # Não prever vendas negativas
+                predicted_value = max(0, predicted_value)
+                
+                future_date = last_date + timedelta(days=i + 1)
+                
+                forecast.append({
+                    "data": future_date.strftime("%Y-%m-%d"),
+                    "valor_previsto": round(predicted_value, 2),
+                    "lower_bound": round(max(0, predicted_value * 0.8), 2),
+                    "upper_bound": round(predicted_value * 1.2, 2)
+                })
+
+            return {
+                "forecast": forecast,
+                "confidence": "medium",
+                "method": "linear_regression_simple",
+                "trend": "up" if slope > 0 else "down" if slope < 0 else "flat"
+            }
+
+        except Exception as e:
+            logger.error(f"Erro ao gerar previsão: {e}")
+            return {"forecast": [], "confidence": "low", "error": str(e)}
 
     @staticmethod
     def calculate_correlations(
@@ -489,10 +542,10 @@ class PracticalModels:
         Calcula correlações REAIS baseadas em dados do banco de dados.
         Sem simulações, sem dados fake.
         """
-        from app.models import db, Venda, VendaItem, Produto, Cliente
-        from sqlalchemy import func
+        from app.models import db, Venda, VendaItem, Produto
         from datetime import datetime, timedelta
         import numpy as np
+        from sqlalchemy import func
         
         correlations: List[Dict[str, Any]] = []
         
@@ -504,6 +557,7 @@ class PracticalModels:
                 try:
                     # Extrair valores de vendas por dia
                     vendas_valores = []
+
                     datas_vendas = []
                     for day in sales_timeseries:
                         if day.get('total') is not None:
@@ -571,6 +625,7 @@ class PracticalModels:
                                 "insight": f"Dias com mais vendas têm tickets {'maiores' if corr > 0 else 'menores'} (correlação {abs(corr):.2f})"
                             })
             except Exception as e:
+                db.session.rollback()
                 logger.warning(f"Erro ao calcular correlação qtd-ticket: {e}")
             
             # 3️⃣ CORRELAÇÃO REAL: Estoque vs Vendas (Produtos)
@@ -579,16 +634,12 @@ class PracticalModels:
                     Produto.id,
                     Produto.quantidade,
                     func.sum(VendaItem.quantidade).label('vendido')
-                ).outerjoin(
-                    VendaItem, VendaItem.produto_id == Produto.id
-                ).filter(
+                ).join(VendaItem, VendaItem.produto_id == Produto.id)\
+                .join(Venda, Venda.id == VendaItem.venda_id)\
+                .filter(
                     Produto.ativo == True,
-                    VendaItem.venda_id.in_(
-                        db.session.query(Venda.id).filter(
-                            Venda.data_venda >= start_date,
-                            Venda.status == 'finalizada'
-                        )
-                    )
+                    Venda.data_venda >= start_date,
+                    Venda.status == 'finalizada'
                 ).group_by(Produto.id).all()
                 
                 if len(produtos_stats) >= 5:
@@ -608,6 +659,7 @@ class PracticalModels:
                                 "insight": f"Produtos com mais estoque {'vendem mais' if corr > 0 else 'vendem menos'} (possível efeito de disponibilidade)"
                             })
             except Exception as e:
+                db.session.rollback()
                 logger.warning(f"Erro ao calcular correlação estoque-vendas: {e}")
             
             # 4️⃣ CORRELAÇÃO REAL: Margem de Lucro vs Quantidade Vendida
@@ -616,17 +668,13 @@ class PracticalModels:
                     Produto.id,
                     Produto.margem_lucro,
                     func.sum(VendaItem.quantidade).label('vendido')
-                ).outerjoin(
-                    VendaItem, VendaItem.produto_id == Produto.id
-                ).filter(
+                ).join(VendaItem, VendaItem.produto_id == Produto.id)\
+                .join(Venda, Venda.id == VendaItem.venda_id)\
+                .filter(
                     Produto.ativo == True,
                     Produto.margem_lucro > 0,
-                    VendaItem.venda_id.in_(
-                        db.session.query(Venda.id).filter(
-                            Venda.data_venda >= start_date,
-                            Venda.status == 'finalizada'
-                        )
-                    )
+                    Venda.data_venda >= start_date,
+                    Venda.status == 'finalizada'
                 ).group_by(Produto.id).all()
                 
                 if len(produtos_margem) >= 5:
@@ -646,6 +694,7 @@ class PracticalModels:
                                 "insight": f"Produtos com {'maior' if corr > 0 else 'menor'} margem vendem {'mais' if corr > 0 else 'menos'} unidades"
                             })
             except Exception as e:
+                db.session.rollback()
                 logger.warning(f"Erro ao calcular correlação margem-vendas: {e}")
             
             # Ordenar por valor absoluto de correlação
@@ -682,7 +731,12 @@ class PracticalModels:
         if len(sales_series) < 3:
             return []
 
-        anomaly_indices = detectar_anomalias(sales_series)
+        # Try/Except para proteção contra erros na função utilitária
+        try:
+            anomaly_indices = detectar_anomalias(sales_series)
+        except Exception as e:
+            logger.error(f"Erro ao detectar anomalias: {e}")
+            return []
 
         anomalies: List[Dict[str, Any]] = []
         for idx in anomaly_indices:
@@ -708,136 +762,22 @@ class PracticalModels:
         return anomalies
 
     @staticmethod
-    def calculate_health_score(
-        sales_data: Dict[str, Any],
-        inventory_data: Dict[str, Any],
-        customer_data: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """
-        Calcula score de saúde do negócio (0-100)
-        Simples mas efetivo
-        """
-        score = 50  # Score base
-
-        factors = []
-
-        # Fator 1: Vendas (0-30 pontos)
-        if sales_data.get("total_vendas", 0) > 0:
-            # Vendas consistentes (dias com venda / total dias)
-            consistency = sales_data.get("dias_com_venda", 0) / sales_data.get(
-                "periodo_dias", 1
-            )
-            if consistency >= 0.9:
-                score += 25
-                factors.append("Vendas consistentes (+25)")
-            elif consistency >= 0.7:
-                score += 15
-                factors.append("Vendas razoavelmente consistentes (+15)")
-            elif consistency >= 0.5:
-                score += 5
-                factors.append("Vendas moderadas (+5)")
-
-        # Fator 2: Estoque (0-20 pontos)
-        baixo_estoque = inventory_data.get("baixo_estoque", 0)
-        total_produtos = inventory_data.get("total_produtos", 1)
-        percent_baixo = baixo_estoque / total_produtos if total_produtos > 0 else 0
-
-        if percent_baixo < 0.1:  # Menos de 10% com estoque baixo
-            score += 20
-            factors.append("Estoque bem gerenciado (+20)")
-        elif percent_baixo < 0.3:  # Menos de 30%
-            score += 10
-            factors.append("Estoque razoável (+10)")
-        elif percent_baixo < 0.5:  # Menos de 50%
-            score += 5
-            factors.append("Estoque precisa atenção (+5)")
-        else:
-            factors.append("Estoque crítico (0)")
-
-        # Fator 3: Rentabilidade (0-20 pontos)
-        lucro_potencial = inventory_data.get("lucro_potencial", 0)
-        valor_total = inventory_data.get("valor_total", 1)
-        margem = lucro_potencial / valor_total if valor_total > 0 else 0
-
-        if margem > 0.3:  # Mais de 30% de margem
-            score += 20
-            factors.append("Boa margem de lucro (+20)")
-        elif margem > 0.2:  # Mais de 20%
-            score += 15
-            factors.append("Margem razoável (+15)")
-        elif margem > 0.1:  # Mais de 10%
-            score += 10
-            factors.append("Margem moderada (+10)")
-        elif margem > 0:
-            score += 5
-            factors.append("Margem baixa (+5)")
-        else:
-            factors.append("Sem margem (0)")
-
-        # Fator 4: Clientes (0-10 pontos)
-        clientes_unicos = customer_data.get("clientes_unicos", 0)
-        if clientes_unicos > 50:
-            score += 10
-            factors.append("Base de clientes sólida (+10)")
-        elif clientes_unicos > 20:
-            score += 7
-            factors.append("Base de clientes razoável (+7)")
-        elif clientes_unicos > 10:
-            score += 5
-            factors.append("Base de clientes pequena (+5)")
-        else:
-            factors.append("Base de clientes muito pequena (0)")
-
-        # Fator 5: Ticket médio (0-10 pontos)
-        ticket_medio = sales_data.get("ticket_medio", 0)
-        if ticket_medio > 100:
-            score += 10
-            factors.append("Ticket médio alto (+10)")
-        elif ticket_medio > 50:
-            score += 7
-            factors.append("Ticket médio razoável (+7)")
-        elif ticket_medio > 20:
-            score += 5
-            factors.append("Ticket médio baixo (+5)")
-        else:
-            factors.append("Ticket médio muito baixo (0)")
-
-        # Garantir score entre 0-100
-        score = max(0, min(100, score))
-
-        # Classificar saúde
-        if score >= 80:
-            health = "EXCELENTE"
-            color = "green"
-        elif score >= 60:
-            health = "BOA"
-            color = "blue"
-        elif score >= 40:
-            health = "REGULAR"
-            color = "yellow"
-        elif score >= 20:
-            health = "FRACA"
-            color = "orange"
-        else:
-            health = "CRÍTICA"
-            color = "red"
-
-        # Principais recomendações
-        recommendations = []
-        if score < 60:
-            recommendations.append("Focar em aumentar consistência das vendas")
-        if percent_baixo > 0.3:
-            recommendations.append("Repor produtos com estoque baixo")
-        if clientes_unicos < 20:
-            recommendations.append("Investir em captação de novos clientes")
-        if ticket_medio < 30:
-            recommendations.append("Treinar equipe em vendas adicionais")
-
-        return {
-            "score": int(score),
-            "health": health,
-            "color": color,
-            "factors": factors,
-            "recommendations": recommendations[:3],  # Top 3 recomendações
-            "summary": f"Saúde {health.lower()} ({score}/100)",
-        }
+    def calculate_health_score(financas: Any) -> float:
+        """Score de saúde do negócio (simples)"""
+        try:
+            score = 70.0  # Base
+            
+            # Margem positiva aumenta score
+            if financas and hasattr(financas, 'get'):
+                gross_profit = float(financas.get('gross_profit', 0) or 0)
+                revenue = float(financas.get('revenue', 0) or 0)
+                if revenue > 0:
+                    margin = gross_profit / revenue
+                    if margin > 0.3: score += 10
+                    elif margin > 0.1: score += 5
+                    elif margin < 0: score -= 20
+            
+            return min(100.0, max(0.0, score))
+        except Exception as e:
+            logger.error(f"Erro ao calcular score: {e}")
+            return 50.0

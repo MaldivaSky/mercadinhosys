@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Users, TrendingUp, DollarSign, Clock, AlertCircle,
-  Download, Calendar, Filter, ChevronDown, ChevronUp,
-  UserCheck, UserX, Award
+  Users, TrendingUp, DollarSign, AlertCircle,
+  Download, ChevronDown, ChevronUp
 } from 'lucide-react';
 import {
   BarChart as RechartsBarChart, Bar,

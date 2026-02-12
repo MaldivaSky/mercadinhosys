@@ -26,6 +26,8 @@ interface ProductAnalyticsDashboardProps {
         margem_media: number;
         classificacao_abc?: { A: number; B: number; C: number };
         giro_estoque?: { rapido: number; normal: number; lento: number };
+        top_produtos_margem?: any[];
+        produtos_criticos?: any[];
     };
     onCardClick: (filterType: string) => void;
 }
@@ -53,12 +55,13 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
     const [produtosCriticos, setProdutosCriticos] = useState<Produto[]>([]);
 
     useEffect(() => {
-        if (!produtos || produtos.length === 0) {
+        // Se não tiver produtos E não tiver stats do backend, limpa tudo
+        if ((!produtos || produtos.length === 0) && !stats.classificacao_abc) {
             setClassificacaoABC({ A: 0, B: 0, C: 0 });
             setStatusGiro({ rapido: 0, normal: 0, lento: 0 });
             setTopProdutos([]);
             setProdutosCriticos([]);
-            return;
+            // Continuar execução para pegar stats se existirem
         }
 
         // ==================== USAR ESTATÍSTICAS DO BACKEND ====================
@@ -119,34 +122,48 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         }
 
         // ==================== TOP 5 PRODUTOS POR MARGEM ====================
-        const top = [...produtos]
-            .filter(p => p.margem_lucro !== undefined && p.margem_lucro !== null)
-            .sort((a, b) => (b.margem_lucro || 0) - (a.margem_lucro || 0))
-            .slice(0, 5);
-        setTopProdutos(top);
+        if (stats.top_produtos_margem && stats.top_produtos_margem.length > 0) {
+            setTopProdutos(stats.top_produtos_margem);
+        } else if (produtos && produtos.length > 0) {
+            // Fallback: calcular localmente
+            const top = [...produtos]
+                .filter(p => p.margem_lucro !== undefined && p.margem_lucro !== null)
+                .sort((a, b) => (b.margem_lucro || 0) - (a.margem_lucro || 0))
+                .slice(0, 5);
+            setTopProdutos(top);
+        } else {
+            setTopProdutos([]);
+        }
 
         // ==================== PRODUTOS CRÍTICOS (ESGOTADOS + BAIXO ESTOQUE) ====================
-        const criticos = produtos
-            .filter(p => {
-                // Esgotado
-                if (p.quantidade === 0) return true;
-                if (p.estoque_status === 'esgotado') return true;
+        if (stats.produtos_criticos && stats.produtos_criticos.length > 0) {
+            setProdutosCriticos(stats.produtos_criticos);
+        } else if (produtos && produtos.length > 0) {
+            // Fallback: calcular localmente
+            const criticos = produtos
+                .filter(p => {
+                    // Esgotado
+                    if (p.quantidade === 0) return true;
+                    if (p.estoque_status === 'esgotado') return true;
 
-                // Baixo estoque
-                if (p.estoque_status === 'baixo') return true;
-                if (p.quantidade <= (p.quantidade_minima || 0)) return true;
+                    // Baixo estoque
+                    if (p.estoque_status === 'baixo') return true;
+                    if (p.quantidade <= (p.quantidade_minima || 0)) return true;
 
-                return false;
-            })
-            .sort((a, b) => {
-                // Ordenar: esgotados primeiro, depois por quantidade
-                if (a.quantidade === 0 && b.quantidade > 0) return -1;
-                if (a.quantidade > 0 && b.quantidade === 0) return 1;
-                return (a.quantidade || 0) - (b.quantidade || 0);
-            })
-            .slice(0, 10);
+                    return false;
+                })
+                .sort((a, b) => {
+                    // Ordenar: esgotados primeiro, depois por quantidade
+                    if (a.quantidade === 0 && b.quantidade > 0) return -1;
+                    if (a.quantidade > 0 && b.quantidade === 0) return 1;
+                    return (a.quantidade || 0) - (b.quantidade || 0);
+                })
+                .slice(0, 10);
 
-        setProdutosCriticos(criticos);
+            setProdutosCriticos(criticos);
+        } else {
+            setProdutosCriticos([]);
+        }
     }, [produtos, stats]);
 
     const percentualABC = {

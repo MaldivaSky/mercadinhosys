@@ -1,0 +1,19 @@
+
+> mercadinhosys-frontend@0.0.0 build
+> tsc -b && vite build
+
+src/features/employees/components/EspelhoPonto.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/features/employees/components/JustificativasRH.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/features/employees/components/JustificativasRH.tsx(2,10): error TS6133: 'FileText' is declared but its value is never read.
+src/features/employees/components/JustificativasRH.tsx(28,10): error TS6133: 'error' is declared but its value is never read.
+src/features/employees/components/PontoHistoricoRH.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/features/employees/components/PontoHistoricoRH.tsx(2,17): error TS6133: 'Calendar' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(3,34): error TS6133: 'Clock' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(4,13): error TS6133: 'Calendar' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(4,23): error TS6133: 'Filter' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(5,3): error TS6133: 'UserCheck' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(5,14): error TS6133: 'UserX' is declared but its value is never read.
+src/features/employees/components/RHDashboard.tsx(5,21): error TS6133: 'Award' is declared but its value is never read.
+src/features/employees/RHPage.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/features/employees/RHPage.tsx(2,44): error TS6133: 'TrendingUp' is declared but its value is never read.

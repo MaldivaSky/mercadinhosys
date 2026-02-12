@@ -13,8 +13,9 @@ import {
     Filler,
 } from "chart.js";
 import { apiClient } from "../../api/apiClient";
-import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle, CheckCircle } from "lucide-react";
+import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle, CheckCircle, Wallet } from "lucide-react";
 import BoletosAVencerPanel from "./components/BoletosAVencerPanel";
+import ResumoFinanceiroPanel from "./components/ResumoFinanceiroPanel";
 
 ChartJS.register(
     BarElement,
@@ -423,15 +424,15 @@ export default function ExpensesPage() {
             <div className="mb-8">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg">
-                            <FileText className="w-8 h-8 text-white" />
+                        <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
+                            <Wallet className="w-8 h-8 text-white" />
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                                Gestão de Despesas
+                                Financeiro
                             </h1>
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                Controle completo de custos e despesas do estabelecimento
+                                Despesas, boletos, contas a pagar e receber — visao completa ERP
                             </p>
                         </div>
                     </div>
@@ -503,6 +504,9 @@ export default function ExpensesPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Painel Financeiro ERP (Resumo Consolidado) */}
+            <ResumoFinanceiroPanel className="mb-6" />
 
             {/* Métricas KPI */}
             {estatisticas && (

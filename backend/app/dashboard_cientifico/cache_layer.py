@@ -95,19 +95,36 @@ def cache_response(ttl_seconds: int = 300, require_db_check: bool = False):
     Decorator para cache automático de respostas
     """
 
+    """
+    Decorator para cache automático de respostas
+    """
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             # Criar chave única baseada nos argumentos
             import hashlib
             import pickle
 
-            # Serializar argumentos para criar chave
+            # Serializar argumentos para criar chave (Excluindo 'self' se for método de classe)
             try:
-                key_data = pickle.dumps((func.__name__, args, kwargs))
+                # Se for um método de instância, o primeiro argumento é 'self'
+                # Precisamos de algo estável. Se 'self' tem 'establishment_id', usamos isso.
+                stable_args = list(args)
+                if len(stable_args) > 0 and hasattr(stable_args[0], 'establishment_id'):
+                    # Substitui a instância pelo ID do estabelecimento para uma chave estável
+                    stable_args[0] = f"Est:{stable_args[0].establishment_id}"
+                elif len(stable_args) > 0:
+                    # Se não tem o ID, apenas remove a instância da chave de cache
+                    # para evitar que o endereço de memória mude a chave
+                    stable_args[0] = "instance_method"
+                
+                key_data = pickle.dumps((func.__name__, stable_args, kwargs))
                 key = hashlib.md5(key_data).hexdigest()
                 cache_key = f"{func.__module__}.{func.__name__}:{key}"
-            except:
+            except Exception as e:
                 # Se não puder serializar, não usa cache
+                import logging
+                logging.getLogger(__name__).warning(f"Falha ao gerar chave de cache: {e}")
                 return func(*args, **kwargs)
 
             use_flask_cache = False

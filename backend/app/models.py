@@ -388,6 +388,86 @@ class BancoHoras(db.Model):
     )
 
 
+class JustificativaPonto(db.Model):
+    """
+    Justificativas de atraso, falta ou saída antecipada.
+    Permite que funcionários enviem justificativas com documentos (atestados etc)
+    e gerentes/RH aprovem ou rejeitem.
+    """
+    __tablename__ = "justificativas_ponto"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer,
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    funcionario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("funcionarios.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    aprovador_id = db.Column(
+        db.Integer,
+        db.ForeignKey("funcionarios.id"),
+        nullable=True,
+    )
+
+    tipo = db.Column(db.String(30), nullable=False)  # 'atraso', 'falta', 'saida_antecipada', 'hora_extra'
+    data = db.Column(db.Date, nullable=False)
+    motivo = db.Column(db.Text, nullable=False)
+    observacao = db.Column(db.Text)
+    documento_url = db.Column(db.String(500))  # Atestado, comprovante, etc.
+
+    status = db.Column(db.String(20), default="pendente")  # 'pendente', 'aprovado', 'rejeitado'
+    data_resposta = db.Column(db.DateTime)
+    motivo_rejeicao = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    funcionario = db.relationship(
+        "Funcionario",
+        foreign_keys=[funcionario_id],
+        backref=db.backref("justificativas", lazy=True, cascade="all, delete-orphan"),
+    )
+    aprovador = db.relationship(
+        "Funcionario",
+        foreign_keys=[aprovador_id],
+        backref=db.backref("justificativas_aprovadas", lazy=True),
+    )
+    estabelecimento = db.relationship(
+        "Estabelecimento",
+        backref=db.backref("justificativas_ponto", lazy=True),
+    )
+
+    __table_args__ = (
+        db.Index("idx_justificativa_funcionario", "funcionario_id"),
+        db.Index("idx_justificativa_data", "data"),
+        db.Index("idx_justificativa_status", "status"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "funcionario_id": self.funcionario_id,
+            "funcionario_nome": self.funcionario.nome if self.funcionario else None,
+            "funcionario_cargo": self.funcionario.cargo if self.funcionario else None,
+            "aprovador_id": self.aprovador_id,
+            "aprovador_nome": self.aprovador.nome if self.aprovador else None,
+            "tipo": self.tipo,
+            "data": self.data.isoformat() if self.data else None,
+            "motivo": self.motivo,
+            "observacao": self.observacao,
+            "documento_url": self.documento_url,
+            "status": self.status,
+            "data_resposta": self.data_resposta.isoformat() if self.data_resposta else None,
+            "motivo_rejeicao": self.motivo_rejeicao,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 # ============================================
 # 4. CLIENTE
 # ============================================
@@ -483,22 +563,42 @@ class Cliente(db.Model, EnderecoMixin):
 
         data_inicio = datetime.utcnow() - timedelta(days=days)
 
-        rows = (
-            db.session.query(
-                Venda.cliente_id.label("cliente_id"),
-                func.count(Venda.id).label("frequencia"),
-                func.coalesce(func.sum(Venda.total), 0).label("monetario"),
-                func.max(Venda.data_venda).label("ultima_compra"),
+        try:
+            rows = (
+                db.session.query(
+                    Venda.cliente_id.label("cliente_id"),
+                    func.count(Venda.id).label("frequencia"),
+                    func.coalesce(func.sum(Venda.total), 0).label("monetario"),
+                    func.max(Venda.data_venda).label("ultima_compra"),
+                )
+                .filter(
+                    Venda.estabelecimento_id == estabelecimento_id,
+                    Venda.data_venda >= data_inicio,
+                    Venda.status == "finalizada",
+                    Venda.cliente_id.isnot(None),
+                )
+                .group_by(Venda.cliente_id)
+                .all()
             )
-            .filter(
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= data_inicio,
-                Venda.status == "finalizada",
-                Venda.cliente_id.isnot(None),
+        except Exception:
+            db.session.rollback()
+            # Tentar novamente após rollback
+            rows = (
+                db.session.query(
+                    Venda.cliente_id.label("cliente_id"),
+                    func.count(Venda.id).label("frequencia"),
+                    func.coalesce(func.sum(Venda.total), 0).label("monetario"),
+                    func.max(Venda.data_venda).label("ultima_compra"),
+                )
+                .filter(
+                    Venda.estabelecimento_id == estabelecimento_id,
+                    Venda.data_venda >= data_inicio,
+                    Venda.status == "finalizada",
+                    Venda.cliente_id.isnot(None),
+                )
+                .group_by(Venda.cliente_id)
+                .all()
             )
-            .group_by(Venda.cliente_id)
-            .all()
-        )
 
         now = datetime.utcnow()
         metrics = []
@@ -747,6 +847,14 @@ class Produto(db.Model):
     ultima_venda = db.Column(db.DateTime)
 
     classificacao_abc = db.Column(db.String(1))
+    
+    @property
+    def estoque_status(self):
+        if self.quantidade <= 0:
+            return 'esgotado'
+        if self.quantidade <= (self.quantidade_minima or 10):
+            return 'baixo'
+        return 'normal'
 
     controlar_validade = db.Column(db.Boolean, default=False)
     data_validade = db.Column(db.Date)
@@ -1173,7 +1281,8 @@ class Produto(db.Model):
             "total_vendido": float(self.total_vendido) if self.total_vendido else 0.0,
             "quantidade_vendida": int(self.quantidade_vendida) if self.quantidade_vendida else 0,
             "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
-            "classificação_abc": self.classificacao_abc,
+            "classificacao_abc": self.classificacao_abc,
+            "estoque_status": self.estoque_status,
         }
 
     def get_lotes_disponiveis(self):

@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { Users, Clock, FileText, BarChart, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Users, Clock, FileText, BarChart, Timer, AlertTriangle } from 'lucide-react';
 import RHDashboard from './components/RHDashboard';
 import PontoHistoricoRH from './components/PontoHistoricoRH';
 import EspelhoPonto from './components/EspelhoPonto';
+import BancoHorasRH from './components/BancoHorasRH';
+import JustificativasRH from './components/JustificativasRH';
 
-type TabType = 'dashboard' | 'historico' | 'espelho';
+type TabType = 'dashboard' | 'historico' | 'espelho' | 'banco-horas' | 'justificativas';
 
 export default function RHPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -12,7 +14,9 @@ export default function RHPage() {
   const tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard RH', icon: BarChart, description: 'Métricas e análises' },
     { id: 'historico' as TabType, label: 'Histórico de Registros', icon: Clock, description: 'Todos os registros de ponto' },
-    { id: 'espelho' as TabType, label: 'Espelho de Ponto', icon: FileText, description: 'Relatório individual' }
+    { id: 'espelho' as TabType, label: 'Espelho de Ponto', icon: FileText, description: 'Relatório individual' },
+    { id: 'banco-horas' as TabType, label: 'Banco de Horas', icon: Timer, description: 'Saldos e créditos' },
+    { id: 'justificativas' as TabType, label: 'Justificativas', icon: AlertTriangle, description: 'Atrasos e ausências' },
   ];
 
   return (
@@ -41,11 +45,10 @@ export default function RHPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 px-4 py-3 rounded-lg transition-all flex items-center justify-center gap-3 ${
-                  activeTab === tab.id
+                className={`flex-1 px-4 py-3 rounded-lg transition-all flex items-center justify-center gap-3 ${activeTab === tab.id
                     ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 <Icon className="w-5 h-5" />
                 <div className="text-left">
@@ -63,6 +66,8 @@ export default function RHPage() {
         {activeTab === 'dashboard' && <RHDashboard />}
         {activeTab === 'historico' && <PontoHistoricoRH />}
         {activeTab === 'espelho' && <EspelhoPonto />}
+        {activeTab === 'banco-horas' && <BancoHorasRH />}
+        {activeTab === 'justificativas' && <JustificativasRH />}
       </div>
     </div>
   );

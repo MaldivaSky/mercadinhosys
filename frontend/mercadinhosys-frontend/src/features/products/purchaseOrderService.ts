@@ -174,7 +174,7 @@ class PurchaseOrderService {
     const response = await apiClient.post<{
       message: string;
       conta: BoletoFornecedor;
-    }>(`/boletos-fornecedores/${id}/pagar`, data);
+    }>(`/boletos/${id}/pagar`, data);
     return response.data;
   }
 
