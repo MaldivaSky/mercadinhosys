@@ -3,7 +3,7 @@ from app import db
 from app.models import Funcionario, Venda, Estabelecimento
 from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import or_, and_, func
+from sqlalchemy import or_, and_, func, case
 from flask_jwt_extended import get_jwt
 from app.decorators.decorator_jwt import funcionario_required
 
@@ -47,6 +47,9 @@ def listar_funcionarios():
         nivel_acesso = request.args.get("nivel_acesso")
         ativos_str = request.args.get("ativos", "true").lower()
         apenas_ativos = ativos_str in ["true", "1", "yes"]
+        incluir_estatisticas_str = request.args.get("incluir_estatisticas", "true").lower()
+        incluir_estatisticas = incluir_estatisticas_str in ["true", "1", "yes"]
+        modo_simples = request.args.get("simples", "false").lower() in ["true", "1", "yes"]
 
         # Filtros avançados
         data_admissao_inicio = request.args.get("data_admissao_inicio")
@@ -137,22 +140,80 @@ def listar_funcionarios():
         pagination = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
         funcionarios = pagination.items
 
+        # Modo simples para combos/dropdowns: evita payload e cálculos pesados
+        if modo_simples:
+            resultado_simples = [
+                {
+                    "id": f.id,
+                    "nome": f.nome,
+                    "cargo": f.cargo,
+                    "ativo": f.ativo,
+                }
+                for f in funcionarios
+            ]
+            return jsonify(
+                {
+                    "success": True,
+                    "data": resultado_simples,
+                    "paginacao": {
+                        "pagina_atual": pagination.page,
+                        "por_pagina": pagination.per_page,
+                        "total_itens": pagination.total,
+                        "total_paginas": pagination.pages,
+                        "tem_proxima": pagination.has_next,
+                        "tem_anterior": pagination.has_prev,
+                        "proxima_pagina": pagination.next_num,
+                        "pagina_anterior": pagination.prev_num,
+                    },
+                    "filtros_aplicados": {
+                        "busca": busca,
+                        "cargo": cargo,
+                        "nivel_acesso": nivel_acesso,
+                        "ativos": apenas_ativos,
+                        "simples": True,
+                    },
+                }
+            )
+
         # Preparar resposta
         resultado = []
-        for f in funcionarios:
-            # Calcular estatísticas básicas para cada funcionário
-            total_vendas = Venda.query.filter_by(
-                funcionario_id=f.id, 
-                estabelecimento_id=estabelecimento_id
-            ).count()
-
-            # Vendas dos últimos 30 dias
+        funcionario_ids = [f.id for f in funcionarios]
+        stats_map = {}
+        if incluir_estatisticas and funcionario_ids:
             data_30_dias_atras = datetime.utcnow() - timedelta(days=30)
-            vendas_30_dias = Venda.query.filter(
-                Venda.funcionario_id == f.id, 
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.created_at >= data_30_dias_atras
-            ).count()
+            stats_rows = (
+                db.session.query(
+                    Venda.funcionario_id.label("funcionario_id"),
+                    func.count(Venda.id).label("total_vendas"),
+                    func.sum(
+                        case(
+                            (Venda.created_at >= data_30_dias_atras, 1),
+                            else_=0,
+                        )
+                    ).label("vendas_30_dias"),
+                )
+                .filter(
+                    Venda.estabelecimento_id == estabelecimento_id,
+                    Venda.funcionario_id.in_(funcionario_ids),
+                )
+                .group_by(Venda.funcionario_id)
+                .all()
+            )
+            stats_map = {
+                row.funcionario_id: {
+                    "total_vendas": int(row.total_vendas or 0),
+                    "vendas_30_dias": int(row.vendas_30_dias or 0),
+                }
+                for row in stats_rows
+            }
+        for f in funcionarios:
+            stats = stats_map.get(
+                f.id,
+                {
+                    "total_vendas": 0,
+                    "vendas_30_dias": 0,
+                },
+            )
 
             funcionario_dict = {
                 "id": f.id,
@@ -172,16 +233,17 @@ def listar_funcionarios():
                 "ativo": f.ativo,
                 "created_at": f.data_cadastro.isoformat() if f.data_cadastro else None,
                 # "updated_at": None, # Campo removido do modelo
-                "estatisticas": {
-                    "total_vendas": total_vendas,
-                    "vendas_30_dias": vendas_30_dias,
-                },
                 "permissoes": f.permissoes
             }
+            if incluir_estatisticas:
+                funcionario_dict["estatisticas"] = {
+                    "total_vendas": stats["total_vendas"],
+                    "vendas_30_dias": stats["vendas_30_dias"],
+                }
             resultado.append(funcionario_dict)
 
         # Obter métricas agregadas para dashboard (apenas para o estabelecimento)
-        total_funcionarios = query.count() # Query já filtrada por estabelecimento
+        total_funcionarios = pagination.total
         
         # Consultas separadas para totais gerais (ignorando paginação mas mantendo filtro de estabelecimento)
         base_query = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id)

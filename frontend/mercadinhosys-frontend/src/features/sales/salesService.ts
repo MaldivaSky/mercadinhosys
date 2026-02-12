@@ -35,8 +35,10 @@ export const salesService = {
 
     async getFuncionarios(): Promise<Array<{ id: number; nome: string }>> {
         try {
-            const response = await apiClient.get("/funcionarios");
-            return response.data.funcionarios || [];
+            const response = await apiClient.get("/funcionarios", {
+                params: { simples: true, por_pagina: 200, incluir_estatisticas: false },
+            });
+            return response.data?.data || response.data?.funcionarios || [];
         } catch (error) {
             console.error("Erro ao buscar funcionários:", error);
             return [];
