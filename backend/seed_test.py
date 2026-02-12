@@ -977,6 +977,7 @@ def seed_vendas(
 
     vendas_criadas = 0
     hoje = date.today()
+    BATCH_SIZE = 20  # Commit a cada N vendas (evita timeout no Neon free tier)
 
     # Distribuição horária de vendas (8h às 21h - horário comercial estendido)
     horarios_pico = [
@@ -1173,6 +1174,11 @@ def seed_vendas(
 
             vendas_criadas += 1
 
+            # 🔥 Commit em lotes para evitar timeout de conexão (Neon free tier)
+            if vendas_criadas % BATCH_SIZE == 0:
+                db.session.commit()
+
+    # Commit final do que restou
     db.session.commit()
     print(f"✅ {vendas_criadas} vendas criadas")
     return vendas_criadas
@@ -1199,7 +1205,9 @@ def seed_garantir_vendas_todos_produtos(
 
     hoje = date.today()
     funcionario = random.choice([f for f in funcionarios if f.ativo])
-    
+    vendas_batch = 0
+    BATCH_SIZE = 20
+
     # Dividir produtos em grupos para distribuição de Pareto
     num_produtos_populares = max(1, len(produtos) // 5)  # 20% dos produtos
     
@@ -1305,6 +1313,10 @@ def seed_garantir_vendas_todos_produtos(
             venda.subtotal = total_item
             venda.total = total_item
             venda.valor_recebido = total_item
+
+            vendas_batch += 1
+            if vendas_batch % BATCH_SIZE == 0:
+                db.session.commit()
     
     db.session.commit()
     print(f"✅ {len(produtos_sem_venda)} produtos agora têm vendas registradas com distribuição de Pareto")
@@ -2016,20 +2028,20 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
             valor = Decimal(str(round(desp_data["valor"] * random.uniform(0.90, 1.10), 2)))
             
             # Criar despesa
-                d = Despesa(
-                    estabelecimento_id=estabelecimento_id,
+            d = Despesa(
+                estabelecimento_id=estabelecimento_id,
                 fornecedor_id=forn.id if forn else None,
                 descricao=desp_data["descricao"],
                 categoria=desp_data["categoria"],
                 tipo="fixa",
                 valor=valor,
-                    data_despesa=data_despesa,
+                data_despesa=data_despesa,
                 forma_pagamento="boleto",
-                    recorrente=True,
+                recorrente=True,
                 observacoes=f"Ref. {mes:02d}/{ano} - Venc. {data_vencimento.isoformat()}",
-                )
-                db.session.add(d)
-                despesas.append(d)
+            )
+            db.session.add(d)
+            despesas.append(d)
             
             # 🔥 GERAR ContaPagar (BOLETO) para esta despesa fixa
             # Status baseado na idade:
@@ -2050,7 +2062,7 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
                     data_pgto = data_vencimento + timedelta(days=random.randint(1, 15))
                     valor_pago = valor
                     valor_atual = Decimal("0")
-        else:
+                else:
                     status = "aberto"  # Boleto esquecido!
                     data_pgto = None
                     valor_pago = Decimal("0")
@@ -2534,6 +2546,10 @@ def seed_ponto(
             )
             db.session.add(saida)
             pontos_criados += 1
+
+            # 🔥 Commit em lotes para evitar timeout no Neon
+            if pontos_criados % 100 == 0:
+                db.session.commit()
     
     db.session.commit()
     print(f"✅ {pontos_criados} registros de ponto criados ({dias_passados} dias)")

@@ -54,10 +54,18 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,  # Verifica conexão antes de usar
-        "pool_recycle": 300,    # Recicla conexões a cada 5 minutos
-        "pool_size": 10,        # Pool de 10 conexões
-        "max_overflow": 20,     # Até 20 conexões extras
+        "pool_pre_ping": True,   # Verifica conexão antes de usar
+        "pool_recycle": 120,     # Recicla conexões a cada 2 minutos (Neon fecha idle rápido)
+        "pool_size": 5,          # Pool menor para free tier
+        "max_overflow": 10,      # Até 10 conexões extras
+        "connect_args": {
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+            "connect_timeout": 10,
+            "options": "-c statement_timeout=60000",  # 60s de timeout por statement
+        },
     } if USING_POSTGRES else {}
 
     # ==================== CORS ====================
