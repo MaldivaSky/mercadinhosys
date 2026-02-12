@@ -26,6 +26,7 @@ interface ProductAnalyticsDashboardProps {
         margem_media: number;
         classificacao_abc?: { A: number; B: number; C: number };
         giro_estoque?: { rapido: number; normal: number; lento: number };
+        validade?: { vencidos: number; vence_15: number; vence_30: number; vence_90: number };
         top_produtos_margem?: any[];
         produtos_criticos?: any[];
     };
@@ -178,6 +179,8 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         lento: stats.total_produtos > 0 ? (statusGiro.lento / stats.total_produtos * 100).toFixed(1) : '0',
     };
 
+    const validade = stats.validade || { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 };
+
     return (
         <div className="space-y-6">
             {/* Cards Principais - Grid Responsivo */}
@@ -267,8 +270,8 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
             </div>
 
-            {/* Análises Avançadas - Grid 2 Colunas */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Análises Avançadas - Grid 3 Colunas */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Classificação ABC */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                     <div className="flex items-center gap-3 mb-4">
@@ -456,6 +459,104 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 Mais de 30 dias sem venda
                             </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Monitor de Validade */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                            <Clock className="w-6 h-6 text-orange-600 dark:text-orange-300" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                                Monitor de Validade
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Prevenção de perdas
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="mb-4 bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg border border-orange-100 dark:border-orange-800">
+                        <p className="text-xs text-orange-800 dark:text-orange-200">
+                            <strong>Dica:</strong> Produtos vencendo devem ser colocados em oferta
+                            ou movidos para frente nas prateleiras (FEFO).
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Já Vencidos */}
+                        <div onClick={() => onCardClick('vencido')} className="cursor-pointer group">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-semibold text-red-600 dark:text-red-400 group-hover:underline">
+                                    Já Vencidos
+                                </span>
+                                <span className="text-sm font-bold text-red-600">
+                                    {validade.vencidos}
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                                <div
+                                    className="bg-red-600 h-3 rounded-full transition-all duration-500"
+                                    style={{ width: `${stats.total_produtos > 0 ? (validade.vencidos / stats.total_produtos) * 100 : 0}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Vence em 15 dias */}
+                        <div onClick={() => onCardClick('vence_15')} className="cursor-pointer group">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
+                                    Vence em 15 dias
+                                </span>
+                                <span className="text-sm font-bold text-orange-600">
+                                    {validade.vence_15}
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                                <div
+                                    className="bg-orange-500 h-3 rounded-full transition-all duration-500"
+                                    style={{ width: `${validade.vence_90 > 0 ? (validade.vence_15 / validade.vence_90) * 100 : 0}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Vence em 30 dias */}
+                        <div onClick={() => onCardClick('vence_30')} className="cursor-pointer group">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
+                                    Vence em 30 dias
+                                </span>
+                                <span className="text-sm font-bold text-yellow-600">
+                                    {validade.vence_30}
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                                <div
+                                    className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
+                                    style={{ width: `${validade.vence_90 > 0 ? (validade.vence_30 / validade.vence_90) * 100 : 0}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Vence em 90 dias */}
+                        <div onClick={() => onCardClick('vence_90')} className="cursor-pointer group">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
+                                    Vence em 90 dias
+                                </span>
+                                <span className="text-sm font-bold text-blue-600">
+                                    {validade.vence_90}
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                                <div
+                                    className="bg-blue-500 h-3 rounded-full transition-all duration-500"
+                                    style={{ width: `${validade.vence_90 > 0 ? 100 : 0}%` }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
