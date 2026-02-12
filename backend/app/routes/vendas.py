@@ -45,6 +45,11 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
     # Aplicar filtros definidos em FILTROS_PERMITIDOS_VENDAS
     for chave, valor in filtros.items():
         if chave in FILTROS_PERMITIDOS_VENDAS:
+            try:
+                with open("debug_vendas.txt", "a", encoding="utf-8") as f:
+                     f.write(f"DEBUG APPLY: Applying filter {chave}={valor}\n")
+            except:
+                pass
             query = query.filter(FILTROS_PERMITIDOS_VENDAS[chave](valor))
 
     # Filtro por data
