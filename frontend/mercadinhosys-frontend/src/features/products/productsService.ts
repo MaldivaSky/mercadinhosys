@@ -35,25 +35,16 @@ export const productsService = {
             if (filtros.preco_min) params.preco_min = filtros.preco_min;
             if (filtros.preco_max) params.preco_max = filtros.preco_max;
             if (filtros.estoque_status) params.estoque_status = filtros.estoque_status;
+            if (filtros.validade_proxima) params.validade_proxima = filtros.validade_proxima;
             if (filtros.tipo) params.tipo = filtros.tipo;
             if (filtros.ordenar_por) params.ordenar_por = filtros.ordenar_por;
             if (filtros.direcao) params.direcao = filtros.direcao;
         }
 
-        const response = await apiClient.get<ProdutosResponse>('/produtos/estoque', { params });
-        
-        // DEBUG: Log do primeiro produto
-        if (response.data.produtos && response.data.produtos.length > 0) {
-            const primeiro = response.data.produtos[0];
-            console.log('🌐 API RESPONSE - Primeiro produto:', {
-                nome: primeiro.nome,
-                total_vendido: primeiro.total_vendido,
-                quantidade_vendida: primeiro.quantidade_vendida,
-                ultima_venda: primeiro.ultima_venda,
-                margem_lucro: primeiro.margem_lucro,
-            });
-        }
-        
+        const response = await apiClient.get<ProdutosResponse>('/produtos/', { params });
+
+
+
         return response.data;
     },
 
@@ -170,6 +161,8 @@ export const productsService = {
             margem_media: number;
             classificacao_abc: { A: number; B: number; C: number };
             giro_estoque: { rapido: number; normal: number; lento: number };
+            top_produtos_margem: any[];
+            produtos_criticos: any[];
             filtros_aplicados: any;
         };
     }> => {
@@ -188,9 +181,9 @@ export const productsService = {
         }
 
         const response = await apiClient.get<any>('/produtos/estatisticas', { params });
-        
+
         console.log('📊 ESTATÍSTICAS RECEBIDAS:', response.data.estatisticas);
-        
+
         return response.data;
     },
 };

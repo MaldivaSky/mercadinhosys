@@ -736,3 +736,216 @@ def boletos_a_vencer():
     except Exception as e:
         current_app.logger.error(f"Erro ao buscar boletos a vencer: {str(e)}")
         return jsonify({"error": "Erro interno do servidor"}), 500
+
+
+@despesas_bp.route("/resumo-financeiro/", methods=["GET"], strict_slashes=False)
+@funcionario_required
+def resumo_financeiro():
+    """
+    Resumo financeiro consolidado (visão ERP).
+    
+    Retorna:
+    - Contas a pagar: total aberto, vencido, vence em 7/30 dias
+    - Contas a receber: total aberto, vencido, a receber 7/30 dias
+    - Despesas: total mês, recorrentes, variáveis
+    - Fluxo de caixa previsto: entradas vs saídas nos próximos 30 dias
+    - Alertas financeiros
+    """
+    try:
+        from app.models import ContaPagar, ContaReceber, Fornecedor, Cliente
+        from sqlalchemy import func
+        from datetime import date, timedelta
+
+        current_user_id = get_jwt_identity()
+        funcionario = Funcionario.query.get(current_user_id)
+        if funcionario and funcionario.estabelecimento_id:
+            estabelecimento_id = funcionario.estabelecimento_id
+        else:
+            claims = get_jwt()
+            estabelecimento_id = claims.get("estabelecimento_id")
+
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
+
+        hoje = date.today()
+        inicio_mes = hoje.replace(day=1)
+        limite_7d = hoje + timedelta(days=7)
+        limite_30d = hoje + timedelta(days=30)
+
+        # ═══════ CONTAS A PAGAR ═══════
+        cp_base = ContaPagar.query.filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == "aberto",
+        )
+
+        cp_total_aberto = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == "aberto",
+        ).scalar() or Decimal("0")
+
+        cp_total_vencido = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == "aberto",
+            ContaPagar.data_vencimento < hoje,
+        ).scalar() or Decimal("0")
+
+        cp_vence_7d = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == "aberto",
+            ContaPagar.data_vencimento >= hoje,
+            ContaPagar.data_vencimento <= limite_7d,
+        ).scalar() or Decimal("0")
+
+        cp_vence_30d = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == "aberto",
+            ContaPagar.data_vencimento >= hoje,
+            ContaPagar.data_vencimento <= limite_30d,
+        ).scalar() or Decimal("0")
+
+        cp_qtd_vencidos = cp_base.filter(ContaPagar.data_vencimento < hoje).count()
+        cp_qtd_vence_7d = cp_base.filter(
+            ContaPagar.data_vencimento >= hoje,
+            ContaPagar.data_vencimento <= limite_7d,
+        ).count()
+
+        cp_pago_mes = db.session.query(func.sum(ContaPagar.valor_pago)).filter(
+            ContaPagar.estabelecimento_id == estabelecimento_id,
+            ContaPagar.status == "pago",
+            ContaPagar.data_pagamento >= inicio_mes,
+        ).scalar() or Decimal("0")
+
+        # ═══════ CONTAS A RECEBER ═══════
+        cr_total_aberto = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
+            ContaReceber.estabelecimento_id == estabelecimento_id,
+            ContaReceber.status == "aberto",
+        ).scalar() or Decimal("0")
+
+        cr_total_vencido = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
+            ContaReceber.estabelecimento_id == estabelecimento_id,
+            ContaReceber.status == "aberto",
+            ContaReceber.data_vencimento < hoje,
+        ).scalar() or Decimal("0")
+
+        cr_vence_30d = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
+            ContaReceber.estabelecimento_id == estabelecimento_id,
+            ContaReceber.status == "aberto",
+            ContaReceber.data_vencimento >= hoje,
+            ContaReceber.data_vencimento <= limite_30d,
+        ).scalar() or Decimal("0")
+
+        cr_qtd_inadimplentes = ContaReceber.query.filter(
+            ContaReceber.estabelecimento_id == estabelecimento_id,
+            ContaReceber.status == "aberto",
+            ContaReceber.data_vencimento < hoje,
+        ).count()
+
+        cr_recebido_mes = db.session.query(func.sum(ContaReceber.valor_recebido)).filter(
+            ContaReceber.estabelecimento_id == estabelecimento_id,
+            ContaReceber.status == "recebido",
+            ContaReceber.data_recebimento >= inicio_mes,
+        ).scalar() or Decimal("0")
+
+        # ═══════ DESPESAS DO MÊS ═══════
+        desp_mes_total = db.session.query(func.sum(Despesa.valor)).filter(
+            Despesa.estabelecimento_id == estabelecimento_id,
+            Despesa.data_despesa >= inicio_mes,
+        ).scalar() or Decimal("0")
+
+        desp_mes_recorrentes = db.session.query(func.sum(Despesa.valor)).filter(
+            Despesa.estabelecimento_id == estabelecimento_id,
+            Despesa.data_despesa >= inicio_mes,
+            Despesa.recorrente == True,
+        ).scalar() or Decimal("0")
+
+        # ═══════ FLUXO DE CAIXA PREVISTO (30 dias) ═══════
+        entradas_previstas = float(cr_vence_30d)
+        saidas_previstas = float(cp_vence_30d)
+        saldo_previsto = entradas_previstas - saidas_previstas
+
+        # ═══════ ALERTAS FINANCEIROS ═══════
+        alertas = []
+
+        if cp_qtd_vencidos > 0:
+            alertas.append({
+                "tipo": "boleto_vencido",
+                "severidade": "critica",
+                "titulo": f"{cp_qtd_vencidos} boleto(s) vencido(s)",
+                "descricao": f"Total de R$ {float(cp_total_vencido):,.2f} em boletos vencidos não pagos",
+                "acao": "Regularizar pagamento imediatamente para evitar juros e multas",
+            })
+
+        if cp_qtd_vence_7d > 0:
+            alertas.append({
+                "tipo": "boleto_vencendo",
+                "severidade": "alta",
+                "titulo": f"{cp_qtd_vence_7d} boleto(s) vencem nos próximos 7 dias",
+                "descricao": f"Total de R$ {float(cp_vence_7d):,.2f} a pagar até {limite_7d.isoformat()}",
+                "acao": "Providenciar pagamento ou negociar prazo com fornecedor",
+            })
+
+        if cr_qtd_inadimplentes > 0:
+            alertas.append({
+                "tipo": "cliente_inadimplente",
+                "severidade": "alta",
+                "titulo": f"{cr_qtd_inadimplentes} recebível(eis) vencido(s)",
+                "descricao": f"Total de R$ {float(cr_total_vencido):,.2f} em cobranças atrasadas",
+                "acao": "Entrar em contato com clientes para regularizar pagamento",
+            })
+
+        if saldo_previsto < 0:
+            alertas.append({
+                "tipo": "fluxo_caixa_negativo",
+                "severidade": "critica",
+                "titulo": "Fluxo de caixa negativo previsto",
+                "descricao": f"Saídas (R$ {saidas_previstas:,.2f}) superam entradas (R$ {entradas_previstas:,.2f}) nos próximos 30 dias",
+                "acao": "Renegociar prazos de pagamento ou antecipar recebíveis",
+            })
+
+        # Detectar despesas recorrentes pesadas
+        if float(desp_mes_recorrentes) > 0 and float(desp_mes_total) > 0:
+            pct_recorrente = float(desp_mes_recorrentes) / float(desp_mes_total) * 100
+            if pct_recorrente > 70:
+                alertas.append({
+                    "tipo": "despesas_fixas_altas",
+                    "severidade": "media",
+                    "titulo": f"{pct_recorrente:.0f}% das despesas são recorrentes",
+                    "descricao": f"R$ {float(desp_mes_recorrentes):,.2f} em despesas fixas de R$ {float(desp_mes_total):,.2f} total",
+                    "acao": "Revisar contratos e renegociar valores fixos",
+                })
+
+        return jsonify({
+            "success": True,
+            "contas_pagar": {
+                "total_aberto": float(cp_total_aberto),
+                "total_vencido": float(cp_total_vencido),
+                "vence_7_dias": float(cp_vence_7d),
+                "vence_30_dias": float(cp_vence_30d),
+                "qtd_vencidos": cp_qtd_vencidos,
+                "qtd_vence_7d": cp_qtd_vence_7d,
+                "pago_no_mes": float(cp_pago_mes),
+            },
+            "contas_receber": {
+                "total_aberto": float(cr_total_aberto),
+                "total_vencido": float(cr_total_vencido),
+                "a_receber_30_dias": float(cr_vence_30d),
+                "qtd_inadimplentes": cr_qtd_inadimplentes,
+                "recebido_no_mes": float(cr_recebido_mes),
+            },
+            "despesas_mes": {
+                "total": float(desp_mes_total),
+                "recorrentes": float(desp_mes_recorrentes),
+                "variaveis": float(desp_mes_total - desp_mes_recorrentes),
+            },
+            "fluxo_caixa_30d": {
+                "entradas_previstas": entradas_previstas,
+                "saidas_previstas": saidas_previstas,
+                "saldo_previsto": saldo_previsto,
+            },
+            "alertas": alertas,
+            "total_alertas": len(alertas),
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar resumo financeiro: {str(e)}")
+        return jsonify({"error": "Erro interno do servidor", "message": str(e)}), 500

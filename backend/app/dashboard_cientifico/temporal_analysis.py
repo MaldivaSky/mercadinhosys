@@ -29,6 +29,7 @@ class TemporalAnalysis:
             return {}
             
         except Exception as e:
+            db.session.rollback()
             logger.error(f"Erro em get_hourly_sales_by_category: {e}")
             return {}
 
@@ -41,6 +42,7 @@ class TemporalAnalysis:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
+            # Compatibilidade cross-database para extração de hora
             # Compatibilidade cross-database para extração de hora
             from app.utils.query_helpers import get_hour_extract
             hour_extract = get_hour_extract(Venda.data_venda)
@@ -67,7 +69,12 @@ class TemporalAnalysis:
             }
             
             for r in results:
-                hora = int(r.hora)
+                if r.hora is None:
+                    continue
+                try:
+                    hora = int(r.hora)
+                except (ValueError, TypeError):
+                    continue
                 qtd = r.qtd_vendas or 0
                 fat = float(r.faturamento or 0)
                 ticket = float(r.ticket_medio or 0)
@@ -98,6 +105,7 @@ class TemporalAnalysis:
             return periodos
             
         except Exception as e:
+            db.session.rollback()
             logger.error(f"Erro em get_period_analysis: {e}")
             return {}
 
@@ -110,8 +118,12 @@ class TemporalAnalysis:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
+            # Compatibilidade cross-database para extração de dia da semana
+            from app.utils.query_helpers import get_dow_extract
+            dow_extract = get_dow_extract(Venda.data_venda)
+
             results = db.session.query(
-                func.strftime('%w', Venda.data_venda).label('dia_semana'),
+                dow_extract.label('dia_semana'),
                 func.count(Venda.id).label('qtd_vendas'),
                 func.sum(Venda.total).label('faturamento'),
                 func.avg(Venda.total).label('ticket_medio')
@@ -120,7 +132,7 @@ class TemporalAnalysis:
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
             ).group_by(
-                func.strftime('%w', Venda.data_venda)
+                dow_extract
             ).all()
             
             dias_map = {
@@ -140,6 +152,7 @@ class TemporalAnalysis:
             return por_dia
             
         except Exception as e:
+            db.session.rollback()
             logger.error(f"Erro em get_weekday_analysis: {e}")
             return {}
 
@@ -178,6 +191,7 @@ class TemporalAnalysis:
             ]
             
         except Exception as e:
+            db.session.rollback()
             logger.error(f"Erro em get_product_hourly_recommendations: {e}")
             return []
 
@@ -193,5 +207,6 @@ class TemporalAnalysis:
             return {}
             
         except Exception as e:
+            db.session.rollback()
             logger.error(f"Erro em get_category_performance_by_time: {e}")
             return {}

@@ -252,6 +252,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar ponto: {e}")
 
+    # RH (Justificativas + Benefícios + Banco de Horas)
+    try:
+        from app.routes.rh import rh_bp
+        app.register_blueprint(rh_bp, url_prefix="/api/rh")
+        logger.info("✅ Blueprint rh registrado em /api/rh")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar rh: {e}")
+
     # Pedidos de Compra
     try:
         from app.routes.pedidos_compra import pedidos_compra_bp

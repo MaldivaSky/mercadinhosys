@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Download, Filter, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../../api/apiClient';
 import jsPDF from 'jspdf';
@@ -40,7 +40,7 @@ export default function EspelhoPonto() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [funcionarioId, setFuncionarioId] = useState<string>('');
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
@@ -48,7 +48,7 @@ export default function EspelhoPonto() {
 
   useEffect(() => {
     loadFuncionarios();
-    
+
     const hoje = new Date();
     const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
     setDataInicio(primeiroDia.toISOString().split('T')[0]);
@@ -75,7 +75,7 @@ export default function EspelhoPonto() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await apiClient.get('/dashboard/rh/ponto/espelho', {
         params: {
           funcionario_id: Number(funcionarioId),
@@ -83,7 +83,7 @@ export default function EspelhoPonto() {
           data_fim: dataFim
         }
       });
-      
+
       setEspelhoData(response.data?.data);
     } catch (err: any) {
       console.error('Erro ao carregar espelho de ponto:', err);
@@ -105,7 +105,7 @@ export default function EspelhoPonto() {
     if (!espelhoData) return;
 
     const doc = new jsPDF();
-    
+
     doc.setFillColor(99, 102, 241);
     doc.rect(0, 0, 210, 50, 'F');
     doc.setTextColor(255, 255, 255);
@@ -143,7 +143,7 @@ export default function EspelhoPonto() {
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
     doc.text('Resumo do Período', 14, finalY);
-    
+
     doc.setFontSize(10);
     doc.text(`Dias Trabalhados: ${espelhoData.resumo.total_dias_trabalhados}`, 14, finalY + 8);
     doc.text(`Total de Atrasos: ${espelhoData.resumo.total_atrasos} (${espelhoData.resumo.total_minutos_atraso} minutos)`, 14, finalY + 15);
@@ -177,7 +177,7 @@ export default function EspelhoPonto() {
           <Filter className="w-5 h-5 text-gray-500" />
           <h3 className="font-bold text-gray-900">Selecionar Funcionário e Período</h3>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Funcionário *</label>
@@ -275,7 +275,7 @@ export default function EspelhoPonto() {
             <div className="divide-y divide-gray-100">
               {espelhoData.registros_diarios.map((registro, idx) => (
                 <div key={idx} className="p-4 hover:bg-gray-50 transition-colors">
-                  <div 
+                  <div
                     className="flex items-center justify-between cursor-pointer"
                     onClick={() => toggleDay(registro.data)}
                   >

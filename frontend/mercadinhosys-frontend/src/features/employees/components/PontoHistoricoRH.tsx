@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, Filter, Download, ChevronLeft, ChevronRight, User, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Clock, Filter, Download, ChevronLeft, ChevronRight, User, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../../api/apiClient';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -29,12 +29,12 @@ export default function PontoHistoricoRH() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [filtroFuncionarioId, setFiltroFuncionarioId] = useState<string>('');
   const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
   const [filtroDataFim, setFiltroDataFim] = useState<string>('');
   const [filtroTipo, setFiltroTipo] = useState<string>('');
-  
+
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
   const [total, setTotal] = useState(0);
@@ -63,16 +63,16 @@ export default function PontoHistoricoRH() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const params: any = { page, per_page: perPage };
       if (filtroDataInicio) params.data_inicio = filtroDataInicio;
       if (filtroDataFim) params.data_fim = filtroDataFim;
       if (filtroFuncionarioId) params.funcionario_id = Number(filtroFuncionarioId);
       if (filtroTipo) params.tipo = filtroTipo;
-      
+
       const response = await apiClient.get('/dashboard/rh/ponto/historico', { params });
       const data = response?.data?.data;
-      
+
       setRegistros(data?.items || []);
       setPage(data?.page || page);
       setPerPage(data?.per_page || perPage);
@@ -99,7 +99,7 @@ export default function PontoHistoricoRH() {
 
   const exportarPDF = () => {
     const doc = new jsPDF();
-    
+
     doc.setFillColor(99, 102, 241);
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(255, 255, 255);
@@ -173,7 +173,7 @@ export default function PontoHistoricoRH() {
           <Filter className="w-5 h-5 text-gray-500" />
           <h3 className="font-bold text-gray-900">Filtros</h3>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Funcionário</label>
@@ -341,7 +341,7 @@ export default function PontoHistoricoRH() {
                 <div className="text-sm text-gray-600">
                   Mostrando {((page - 1) * perPage) + 1} a {Math.min(page * perPage, total)} de {total} registros
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPage(Math.max(1, page - 1))}
@@ -350,11 +350,11 @@ export default function PontoHistoricoRH() {
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  
+
                   <span className="px-4 py-2 text-sm font-medium text-gray-700">
                     Página {page} de {pages}
                   </span>
-                  
+
                   <button
                     onClick={() => setPage(Math.min(pages, page + 1))}
                     disabled={page === pages}

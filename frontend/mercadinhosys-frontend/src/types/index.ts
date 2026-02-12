@@ -187,6 +187,7 @@ export interface ProdutoFiltros {
     preco_min?: number;
     preco_max?: number;
     estoque_status?: 'baixo' | 'esgotado' | 'normal';
+    validade_proxima?: boolean;
     tipo?: string;
     ordenar_por?: string;
     direcao?: 'asc' | 'desc';

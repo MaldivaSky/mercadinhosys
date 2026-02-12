@@ -11,6 +11,7 @@ import re
 from app.models import (
     db,
     Produto,
+    ProdutoLote,
     Estabelecimento,
     Fornecedor,
     CategoriaProduto,
@@ -22,7 +23,7 @@ from app.models import (
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
-from sqlalchemy import text, func, or_
+from sqlalchemy import text, func, or_, case, and_
 
 produtos_bp = Blueprint("produtos", __name__)
 
@@ -140,10 +141,10 @@ def verificar_estoque_baixo(produto):
 
 
 def verificar_validade_proxima(produto):
-    """Verifica se o produto está próximo da validade"""
+    """Verifica se o produto está próximo da validade ou já vencido (baseado no lote FIFO)"""
     if produto.controlar_validade and produto.data_validade:
         dias_para_validade = (produto.data_validade - date.today()).days
-        if 0 <= dias_para_validade <= 30:  # 30 dias para expirar
+        if dias_para_validade <= 30:  # Inclui vencidos (negativo) e próximos (0-30)
             return True
     return False
 
@@ -153,50 +154,225 @@ def verificar_validade_proxima(produto):
 # ============================================
 
 
-@produtos_bp.route("/", methods=["GET"])
+@produtos_bp.route("/estatisticas", methods=["GET"])
 @funcionario_required
-def listar_produtos():
-    """Lista todos os produtos com filtros e paginação"""
+def obter_estatisticas_gerais():
+    """Retorna estatísticas gerais e KPIs de estoque para o dashboard de produtos"""
     try:
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
         
+        # Filtros básicos da query string
+        categoria = request.args.get("categoria")
+        ativo_param = request.args.get("ativo", "true")
+        ativo = ativo_param.lower() == "true"
+        
+        # Query base para agregação
+        query = db.session.query(
+            func.count(Produto.id).label("total"),
+            func.sum(case((Produto.quantidade <= 0, 1), else_=0)).label("esgotados"),
+            func.sum(case((and_(Produto.quantidade > 0, Produto.quantidade <= Produto.quantidade_minima), 1), else_=0)).label("baixo"),
+            func.sum(Produto.quantidade * Produto.preco_custo).label("valor_total"),
+            func.avg(Produto.margem_lucro).label("margem_media")
+        ).filter(Produto.estabelecimento_id == estabelecimento_id)
+        
+        if ativo:
+            query = query.filter(Produto.ativo == True)
+            
+        if categoria:
+            # Assumindo que o filtro vem como nome da categoria
+            cat_obj = CategoriaProduto.query.filter_by(nome=categoria, estabelecimento_id=estabelecimento_id).first()
+            if cat_obj:
+                query = query.filter(Produto.categoria_id == cat_obj.id)
+        
+        # Executar query de agregação
+        stats = query.one()
+        
+        # Classificação ABC (se houver campo)
+        abc_query = db.session.query(
+            Produto.classificacao_abc, func.count(Produto.id)
+        ).filter(
+            Produto.estabelecimento_id == estabelecimento_id, 
+            Produto.ativo == True
+        )
+        
+        if ativo:
+            abc_query = abc_query.filter(Produto.ativo == True)
+            
+        abc_counts = abc_query.group_by(Produto.classificacao_abc).all()
+        
+        abc_dict = {row[0]: row[1] for row in abc_counts if row[0]}
+        
+        # Calcular "normal"
+        total = stats.total or 0
+        esgotados = int(stats.esgotados or 0)
+        baixo = int(stats.baixo or 0)
+        normal = total - esgotados - baixo
+        if normal < 0: normal = 0
+
+        # --- NOVAS ESTATÍSTICAS PARA DASHBOARD ---
+        
+        # 1. Top 5 Maior Margem
+        top_margem = db.session.query(
+            Produto
+        ).filter(
+            Produto.estabelecimento_id == estabelecimento_id,
+            Produto.ativo == True,
+            Produto.margem_lucro != None
+        ).order_by(
+            Produto.margem_lucro.desc()
+        ).limit(5).all()
+        
+        top_margem_data = [{
+            "id": p.id, 
+            "nome": p.nome, 
+            "margem_lucro": float(p.margem_lucro or 0), 
+            "preco_venda": float(p.preco_venda or 0)
+        } for p in top_margem]
+
+        # 2. Produtos Críticos (Esgotado ou Baixo Estoque)
+        # Prioridade para Esgotados (quantidade <= 0) depois Baixo Estoque
+        criticos = db.session.query(
+            Produto
+        ).filter(
+            Produto.estabelecimento_id == estabelecimento_id,
+            Produto.ativo == True,
+            or_(
+                Produto.quantidade <= 0,
+                Produto.quantidade <= Produto.quantidade_minima
+            )
+        ).order_by(
+            Produto.quantidade.asc()
+        ).limit(10).all()
+        
+        criticos_data = [{
+            "id": p.id,
+            "nome": p.nome,
+            "quantidade": p.quantidade,
+            "estoque_status": "esgotado" if p.quantidade <= 0 else "baixo",
+            "categoria": p.categoria.nome if p.categoria else "Sem Categoria"
+        } for p in criticos]
+        
+        # 3. Giro de Estoque (baseado em ultima_venda)
+        hoje = datetime.now()
+        data_7 = hoje - timedelta(days=7)
+        data_30 = hoje - timedelta(days=30)
+        
+        # Assumindo que ultima_venda existe e é datetime
+        # Se não existir, retorna 0 (tratado no try/except geral se falhar query)
+        try:
+            giro_stats = db.session.query(
+                func.sum(case((Produto.ultima_venda >= data_7, 1), else_=0)).label("rapido"),
+                func.sum(case((and_(Produto.ultima_venda < data_7, Produto.ultima_venda >= data_30), 1), else_=0)).label("normal"),
+                func.sum(case((or_(Produto.ultima_venda < data_30, Produto.ultima_venda == None), 1), else_=0)).label("lento")
+            ).filter(
+                Produto.estabelecimento_id == estabelecimento_id, 
+                Produto.ativo == True
+            ).one()
+            
+            giro_data = {
+                "rapido": int(giro_stats.rapido or 0),
+                "normal": int(giro_stats.normal or 0),
+                "lento": int(giro_stats.lento or 0)
+            }
+        except Exception:
+            # Fallback se ultima_venda não existir ou erro de data
+            giro_data = {"rapido": 0, "normal": 0, "lento": 0}
+
+        return jsonify({
+            "success": True,
+            "estatisticas": {
+                "total_produtos": total,
+                "produtos_esgotados": esgotados,
+                "produtos_baixo_estoque": baixo,
+                "produtos_normal": normal,
+                "valor_total_estoque": float(stats.valor_total or 0),
+                "margem_media": float(stats.margem_media or 0),
+                "classificacao_abc": {
+                    "A": abc_dict.get("A", 0),
+                    "B": abc_dict.get("B", 0),
+                    "C": abc_dict.get("C", 0)
+                },
+                "giro_estoque": giro_data,
+                "top_produtos_margem": top_margem_data,
+                "produtos_criticos": criticos_data,
+                "filtros_aplicados": {"categoria": categoria}
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter estatisticas: {str(e)}")
+        return jsonify({"success": False, "message": "Erro ao obter estatisticas", "error": str(e)}), 500
+
+
+@produtos_bp.route("/", methods=["GET"])
+@funcionario_required
+def listar_produtos():
+    """Lista todos os produtos com filtros avançados e paginação"""
+    current_app.logger.info(f"[DEBUG] listar_produtos chamado por identity: {get_jwt_identity()}")
+    try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        # Parâmetros de paginação
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
-        ativo = request.args.get("ativo", None, type=str)
-        categoria = request.args.get("categoria", None, type=str)
-        estoque_baixo = request.args.get("estoque_baixo", None, type=str)
-        validade_proxima = request.args.get("validade_proxima", None, type=str)
-        status_giro = request.args.get("status_giro", None, type=str)  # Novo filtro
+        
+        # Parâmetros de filtro
+        ativo = request.args.get("ativo")
+        categoria = request.args.get("categoria")
+        fornecedor_id = request.args.get("fornecedor_id", type=int)
+        estoque_status = request.args.get("estoque_status") # baixo, esgotado, normal
+        tipo = request.args.get("tipo")
+        preco_min = request.args.get("preco_min", type=float)
+        preco_max = request.args.get("preco_max", type=float)
         busca = request.args.get("busca", "", type=str).strip()
+        
+        # Parâmetros de ordenação
+        ordenar_por = request.args.get("ordenar_por", "nome")
+        direcao = request.args.get("direcao", "asc")
 
         # Query base
-        query = Produto.query.filter_by(
-            estabelecimento_id=estabelecimento_id
-        )
+        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
 
-        # Filtros
+        # 1. Filtro de Ativo/Inativo
         if ativo is not None:
-            query = query.filter_by(ativo=ativo.lower() == "true")
+            is_ativo = ativo.lower() == "true"
+            query = query.filter(Produto.ativo == is_ativo)
 
+        # 2. Filtro de Categoria
         if categoria:
-            query = query.filter_by(categoria=categoria)
+            query = query.join(CategoriaProduto).filter(CategoriaProduto.nome == categoria)
 
-        if estoque_baixo and estoque_baixo.lower() == "true":
-            query = query.filter(Produto.quantidade <= Produto.quantidade_minima)
+        # 3. Filtro de Fornecedor
+        if fornecedor_id:
+            query = query.filter(Produto.fornecedor_id == fornecedor_id)
 
-        if validade_proxima and validade_proxima.lower() == "true":
-            hoje = date.today()
-            query = query.filter(
-                Produto.controlar_validade == True,
-                Produto.data_validade != None,
-                Produto.data_validade.between(hoje, hoje + timedelta(days=30)),
-            )
+        # 4. Filtro de Tipo (se existir no modelo, assumindo que sim ou usando categoria como proxy se necessário)
+        if tipo:
+            # Se houver campo 'tipo' ou usar categoria/subcategoria
+             query = query.filter(Produto.tipo == tipo)
 
+        # 5. Filtro de Preço
+        if preco_min is not None:
+            query = query.filter(Produto.preco_venda >= preco_min)
+        if preco_max is not None:
+            query = query.filter(Produto.preco_venda <= preco_max)
+
+        # 6. Filtro de Status de Estoque
+        if estoque_status:
+            if estoque_status == "esgotado":
+                query = query.filter(Produto.quantidade <= 0)
+            elif estoque_status == "baixo":
+                query = query.filter(and_(Produto.quantidade > 0, Produto.quantidade <= Produto.quantidade_minima))
+            elif estoque_status == "normal":
+                query = query.filter(Produto.quantidade > Produto.quantidade_minima)
+
+        # 7. Busca Textual
         if busca:
             busca_termo = f"%{busca}%"
             query = query.filter(
-                db.or_(
+                or_(
                     Produto.nome.ilike(busca_termo),
                     Produto.codigo_barras.ilike(busca_termo),
                     Produto.codigo_interno.ilike(busca_termo),
@@ -205,8 +381,21 @@ def listar_produtos():
                 )
             )
 
-        # Ordenação padrão: por nome
-        query = query.order_by(Produto.nome.asc())
+        # 8. Filtro Validade Próxima (30 dias)
+        validade_proxima = request.args.get("validade_proxima")
+        if validade_proxima and validade_proxima.lower() == 'true':
+            hoje = date.today()
+            limite = hoje + timedelta(days=30)
+            query = query.filter(Produto.data_validade.isnot(None))
+            query = query.filter(Produto.data_validade >= hoje)
+            query = query.filter(Produto.data_validade <= limite)
+
+        # 8. Ordenação
+        coluna_ordenacao = getattr(Produto, ordenar_por, Produto.nome)
+        if direcao == "desc":
+            query = query.order_by(coluna_ordenacao.desc())
+        else:
+            query = query.order_by(coluna_ordenacao.asc())
 
         # Paginação
         paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
@@ -225,10 +414,10 @@ def listar_produtos():
                 produto.quantidade * produto.preco_custo
             )
             produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
-            produto_dict["status_giro"] = produto.calcular_status_giro()  # Novo campo
+            produto_dict["status_giro"] = produto.calcular_status_giro()
             
-            # 🔥 NOVO: Adicionar estoque_status para o frontend
-            if produto.quantidade == 0:
+            # Definir status de estoque para frontend
+            if produto.quantidade <= 0:
                 produto_dict["estoque_status"] = "esgotado"
             elif produto.quantidade <= produto.quantidade_minima:
                 produto_dict["estoque_status"] = "baixo"
@@ -238,85 +427,51 @@ def listar_produtos():
             # Verificar alertas
             if verificar_estoque_baixo(produto):
                 produto_dict["alerta_estoque"] = True
-                alertas.append(
-                    {
-                        "produto_id": produto.id,
-                        "tipo": "estoque_baixo",
-                        "mensagem": f"Estoque baixo: {produto.quantidade} unidades (mínimo: {produto.quantidade_minima})",
-                    }
-                )
+                alertas.append({
+                    "produto_id": produto.id,
+                    "tipo": "estoque_baixo",
+                    "mensagem": f"Estoque baixo: {produto.quantidade} (mín: {produto.quantidade_minima})",
+                })
             else:
                 produto_dict["alerta_estoque"] = False
 
             if verificar_validade_proxima(produto):
                 produto_dict["alerta_validade"] = True
-                dias = (produto.data_validade - date.today()).days
-                alertas.append(
-                    {
-                        "produto_id": produto.id,
-                        "tipo": "validade_proxima",
-                        "mensagem": f"Validade próxima: {produto.data_validade} ({dias} dias)",
-                    }
-                )
+                dias = (produto.data_validade - date.today()).days if produto.data_validade else 0
+                alertas.append({
+                    "produto_id": produto.id,
+                    "tipo": "validade_proxima",
+                    "mensagem": f"Validade próxima: {produto.data_validade} ({dias} dias)",
+                })
             else:
                 produto_dict["alerta_validade"] = False
 
-            # Aplicar filtro de status_giro se especificado
-            if status_giro and produto_dict["status_giro"] != status_giro.lower():
-                continue
-
             produtos.append(produto_dict)
 
-        # Estatísticas
+        # Estatísticas Rápidas (cálculo otimizado)
         total_produtos = paginacao.total
-        produtos_ativos = (
-            query.filter_by(ativo=True).count() if ativo is None else paginacao.total
-        )
-        produtos_inativos = total_produtos - produtos_ativos
-
-        # Valor total em estoque
-        valor_total_estoque = (
-            db.session.query(db.func.sum(Produto.quantidade * Produto.preco_custo))
-            .filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
-            .scalar()
-            or 0
-        )
-
-        # Produtos com estoque baixo
-        produtos_estoque_baixo = Produto.query.filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.ativo == True,
-            Produto.quantidade <= Produto.quantidade_minima,
-        ).count()
-
-        return jsonify(
-            {
-                "success": True,
-                "produtos": produtos,
-                "total": total_produtos,
-                "pagina": pagina,
-                "por_pagina": por_pagina,
+        
+        return jsonify({
+            "success": True,
+            "produtos": produtos,
+            "paginacao": {
+                "pagina_atual": pagina,
+                "itens_por_pagina": por_pagina,
+                "total_itens": total_produtos,
                 "total_paginas": paginacao.pages,
-                "estatisticas": {
-                    "total": total_produtos,
-                    "ativos": produtos_ativos,
-                    "inativos": produtos_inativos,
-                    "valor_total_estoque": float(valor_total_estoque),
-                    "produtos_estoque_baixo": produtos_estoque_baixo,
-                    "produtos_validade_proxima": len(
-                        [p for p in produtos if p.get("alerta_validade")]
-                    ),
-                },
-                "alertas": alertas[:10],  # Limitar a 10 alertas
-            }
-        )
+                "tem_proxima": paginacao.has_next,
+                "tem_anterior": paginacao.has_prev,
+                "primeira_pagina": 1,
+                "ultima_pagina": paginacao.pages
+            },
+            "alertas": alertas[:10]
+        })
 
     except Exception as e:
         current_app.logger.error(f"Erro ao listar produtos: {str(e)}")
-        return (
-            jsonify({"success": False, "message": "Erro interno ao listar produtos"}),
-            500,
-        )
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": "Erro interno ao listar produtos", "error": str(e)}), 500
 
 
 @produtos_bp.route("/<int:id>", methods=["GET"])
@@ -1916,110 +2071,192 @@ def listar_categorias():
 @produtos_bp.route("/alertas", methods=["GET"])
 @funcionario_required
 def alertas_produtos():
-    """Lista alertas de produtos (estoque baixo, validade próxima)"""
+    """
+    Lista alertas de produtos com detalhamento FIFO por lote.
+    
+    Tipos de alerta:
+    - lote_vencido: Lote com data de validade expirada (AÇÃO IMEDIATA)
+    - lote_vencendo_critico: Lote vencendo em 1-7 dias (CRÍTICO)
+    - lote_vencendo_medio: Lote vencendo em 8-30 dias (ATENÇÃO)
+    - estoque_baixo: Produto com estoque abaixo do mínimo
+    - sem_movimento: Produto sem vendas há mais de 180 dias
+    
+    Query params:
+    - tipo: Filtrar por tipo de alerta (ex: ?tipo=lote_vencido)
+    - dias: Dias para considerar validade próxima (default: 30)
+    """
     try:
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
         
+        # Parâmetros opcionais
+        filtro_tipo = request.args.get("tipo")
+        dias_alerta = int(request.args.get("dias", 30))
+        
         alertas = []
+        hoje = date.today()
 
-        # Produtos com estoque baixo
-        produtos_estoque_baixo = Produto.query.filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.ativo == True,
-            Produto.quantidade_minima > 0,
-            Produto.quantidade <= Produto.quantidade_minima,
-        ).all()
+        # ═══════════════════════════════════════════════════════════
+        # 🔴 LOTES JÁ VENCIDOS (AÇÃO IMEDIATA - retirar da gôndola)
+        # ═══════════════════════════════════════════════════════════
+        if not filtro_tipo or filtro_tipo == "lote_vencido":
+            lotes_vencidos = ProdutoLote.query.filter(
+                ProdutoLote.estabelecimento_id == estabelecimento_id,
+                ProdutoLote.ativo == True,
+                ProdutoLote.quantidade > 0,
+                ProdutoLote.data_validade < hoje,
+            ).order_by(ProdutoLote.data_validade.asc()).all()
 
-        for produto in produtos_estoque_baixo:
-            alertas.append(
-                {
+            for lote in lotes_vencidos:
+                dias_vencido = (hoje - lote.data_validade).days
+                alertas.append({
+                    "tipo": "lote_vencido",
+                    "nivel": "critico",
+                    "produto_id": lote.produto_id,
+                    "produto_nome": lote.produto.nome if lote.produto else None,
+                    "lote_id": lote.id,
+                    "numero_lote": lote.numero_lote,
+                    "quantidade_no_lote": lote.quantidade,
+                    "data_validade": lote.data_validade.isoformat(),
+                    "dias_vencido": dias_vencido,
+                    "mensagem": f"VENCIDO há {dias_vencido} dia(s)! Lote {lote.numero_lote} com {lote.quantidade} un. Retirar imediatamente.",
+                    "acao_sugerida": "Retirar da gôndola e registrar perda/descarte",
+                })
+
+        # ═══════════════════════════════════════════════════════════
+        # 🟠 LOTES VENCENDO EM 1-7 DIAS (CRÍTICO - promover venda)
+        # ═══════════════════════════════════════════════════════════
+        if not filtro_tipo or filtro_tipo == "lote_vencendo_critico":
+            lotes_criticos = ProdutoLote.query.filter(
+                ProdutoLote.estabelecimento_id == estabelecimento_id,
+                ProdutoLote.ativo == True,
+                ProdutoLote.quantidade > 0,
+                ProdutoLote.data_validade.between(hoje, hoje + timedelta(days=7)),
+            ).order_by(ProdutoLote.data_validade.asc()).all()
+
+            for lote in lotes_criticos:
+                dias_restantes = (lote.data_validade - hoje).days
+                alertas.append({
+                    "tipo": "lote_vencendo_critico",
+                    "nivel": "critico",
+                    "produto_id": lote.produto_id,
+                    "produto_nome": lote.produto.nome if lote.produto else None,
+                    "lote_id": lote.id,
+                    "numero_lote": lote.numero_lote,
+                    "quantidade_no_lote": lote.quantidade,
+                    "data_validade": lote.data_validade.isoformat(),
+                    "dias_restantes": dias_restantes,
+                    "mensagem": f"Vence em {dias_restantes} dia(s)! Lote {lote.numero_lote} com {lote.quantidade} un.",
+                    "acao_sugerida": "Colocar em promoção ou posicionar na frente da gôndola (FIFO)",
+                })
+
+        # ═══════════════════════════════════════════════════════════
+        # 🟡 LOTES VENCENDO EM 8-30 DIAS (ATENÇÃO - monitorar)
+        # ═══════════════════════════════════════════════════════════
+        if not filtro_tipo or filtro_tipo == "lote_vencendo_medio":
+            lotes_medios = ProdutoLote.query.filter(
+                ProdutoLote.estabelecimento_id == estabelecimento_id,
+                ProdutoLote.ativo == True,
+                ProdutoLote.quantidade > 0,
+                ProdutoLote.data_validade.between(
+                    hoje + timedelta(days=8), 
+                    hoje + timedelta(days=dias_alerta)
+                ),
+            ).order_by(ProdutoLote.data_validade.asc()).all()
+
+            for lote in lotes_medios:
+                dias_restantes = (lote.data_validade - hoje).days
+                alertas.append({
+                    "tipo": "lote_vencendo_medio",
+                    "nivel": "medio",
+                    "produto_id": lote.produto_id,
+                    "produto_nome": lote.produto.nome if lote.produto else None,
+                    "lote_id": lote.id,
+                    "numero_lote": lote.numero_lote,
+                    "quantidade_no_lote": lote.quantidade,
+                    "data_validade": lote.data_validade.isoformat(),
+                    "dias_restantes": dias_restantes,
+                    "mensagem": f"Vence em {dias_restantes} dia(s). Lote {lote.numero_lote} com {lote.quantidade} un.",
+                    "acao_sugerida": "Monitorar e priorizar venda via FIFO",
+                })
+
+        # ═══════════════════════════════════════════════════════════
+        # 📦 ESTOQUE BAIXO
+        # ═══════════════════════════════════════════════════════════
+        if not filtro_tipo or filtro_tipo == "estoque_baixo":
+            produtos_estoque_baixo = Produto.query.filter(
+                Produto.estabelecimento_id == estabelecimento_id,
+                Produto.ativo == True,
+                Produto.quantidade_minima > 0,
+                Produto.quantidade <= Produto.quantidade_minima,
+            ).all()
+
+            for produto in produtos_estoque_baixo:
+                alertas.append({
                     "tipo": "estoque_baixo",
                     "nivel": "alto" if produto.quantidade == 0 else "medio",
                     "produto_id": produto.id,
                     "produto_nome": produto.nome,
-                    "mensagem": f"Estoque baixo: {produto.quantidade} unidades (mínimo: {produto.quantidade_minima})",
+                    "mensagem": f"Estoque baixo: {produto.quantidade} un. (mín: {produto.quantidade_minima})",
                     "quantidade": produto.quantidade,
                     "quantidade_minima": produto.quantidade_minima,
-                }
-            )
+                    "acao_sugerida": "Criar pedido de compra para reposição",
+                })
 
-        # Produtos com validade próxima
-        hoje = date.today()
-        produtos_validade_proxima = Produto.query.filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.ativo == True,
-            Produto.controlar_validade == True,
-            Produto.data_validade != None,
-            Produto.data_validade.between(hoje, hoje + timedelta(days=30)),
-        ).all()
+        # ═══════════════════════════════════════════════════════════
+        # 💤 SEM MOVIMENTAÇÃO
+        # ═══════════════════════════════════════════════════════════
+        if not filtro_tipo or filtro_tipo == "sem_movimento":
+            data_limite = datetime.utcnow() - timedelta(days=180)
+            produtos_sem_movimento = Produto.query.filter(
+                Produto.estabelecimento_id == estabelecimento_id,
+                Produto.ativo == True,
+                Produto.quantidade > 0,
+                db.or_(Produto.ultima_venda == None, Produto.ultima_venda < data_limite),
+            ).all()
 
-        for produto in produtos_validade_proxima:
-            dias_para_validade = (produto.data_validade - hoje).days
-            nivel = "critico" if dias_para_validade <= 7 else "medio"
-
-            alertas.append(
-                {
-                    "tipo": "validade_proxima",
-                    "nivel": nivel,
-                    "produto_id": produto.id,
-                    "produto_nome": produto.nome,
-                    "mensagem": f"Validade próxima: {produto.data_validade} ({dias_para_validade} dias)",
-                    "data_validade": produto.data_validade.isoformat(),
-                    "dias_restantes": dias_para_validade,
-                }
-            )
-
-        # Produtos sem movimentação há muito tempo
-        data_limite = datetime.utcnow() - timedelta(days=180)  # 6 meses
-        produtos_sem_movimento = Produto.query.filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.ativo == True,
-            Produto.quantidade > 0,
-            db.or_(Produto.ultima_venda == None, Produto.ultima_venda < data_limite),
-        ).all()
-
-        for produto in produtos_sem_movimento:
-            if produto.ultima_venda:
-                dias_sem_venda = (datetime.utcnow() - produto.ultima_venda).days
-                alertas.append(
-                    {
+            for produto in produtos_sem_movimento:
+                if produto.ultima_venda:
+                    dias_sem_venda = (datetime.utcnow() - produto.ultima_venda).days
+                    alertas.append({
                         "tipo": "sem_movimento",
                         "nivel": "baixo",
                         "produto_id": produto.id,
                         "produto_nome": produto.nome,
                         "mensagem": f"Sem vendas há {dias_sem_venda} dias",
                         "dias_sem_venda": dias_sem_venda,
-                        "ultima_venda": (
-                            produto.ultima_venda.isoformat()
-                            if produto.ultima_venda
-                            else None
-                        ),
-                    }
-                )
+                        "ultima_venda": produto.ultima_venda.isoformat() if produto.ultima_venda else None,
+                        "acao_sugerida": "Avaliar promoção ou remoção do mix de produtos",
+                    })
 
         # Ordenar por nível de criticidade
         nivel_prioridade = {"critico": 1, "alto": 2, "medio": 3, "baixo": 4}
         alertas.sort(key=lambda x: nivel_prioridade.get(x["nivel"], 5))
 
-        return jsonify(
-            {
-                "success": True,
-                "alertas": alertas,
-                "total": len(alertas),
-                "resumo": {
-                    "estoque_baixo": len(
-                        [a for a in alertas if a["tipo"] == "estoque_baixo"]
-                    ),
-                    "validade_proxima": len(
-                        [a for a in alertas if a["tipo"] == "validade_proxima"]
-                    ),
-                    "sem_movimento": len(
-                        [a for a in alertas if a["tipo"] == "sem_movimento"]
-                    ),
-                },
-            }
-        )
+        # Resumo por tipo
+        resumo = {
+            "lote_vencido": len([a for a in alertas if a["tipo"] == "lote_vencido"]),
+            "lote_vencendo_critico": len([a for a in alertas if a["tipo"] == "lote_vencendo_critico"]),
+            "lote_vencendo_medio": len([a for a in alertas if a["tipo"] == "lote_vencendo_medio"]),
+            "estoque_baixo": len([a for a in alertas if a["tipo"] == "estoque_baixo"]),
+            "sem_movimento": len([a for a in alertas if a["tipo"] == "sem_movimento"]),
+        }
+        
+        # Contagem de produtos únicos afetados por lotes
+        produtos_com_lote_problema = set()
+        for a in alertas:
+            if a["tipo"].startswith("lote_"):
+                produtos_com_lote_problema.add(a["produto_id"])
+
+        return jsonify({
+            "success": True,
+            "alertas": alertas,
+            "total": len(alertas),
+            "resumo": resumo,
+            "produtos_afetados_validade": len(produtos_com_lote_problema),
+            "filtro_aplicado": filtro_tipo,
+            "dias_alerta": dias_alerta,
+        })
 
     except Exception as e:
         current_app.logger.error(f"Erro ao listar alertas de produtos: {str(e)}")

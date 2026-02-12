@@ -87,7 +87,10 @@ class StatsValidator:
         elif n < 30:
             # Verificar variabilidade
             if len(values) > 1:
-                cv = statistics.stdev(values) / statistics.mean(values) * 100
+                mean_val = statistics.mean(values)
+                if mean_val == 0:
+                    return ConfidenceLevel.LOW
+                cv = statistics.stdev(values) / mean_val * 100
                 if cv > 100:  # Alta variabilidade
                     return ConfidenceLevel.LOW
             return ConfidenceLevel.MEDIUM
@@ -122,8 +125,8 @@ class StatsValidator:
         """
         Calcula crescimento de forma segura e prática
         """
-        # Verificar amostras mínimas
-        if current_samples < 5 or previous_samples < 5:
+        # Verificar amostras mínimas (reduzido para 2 - prático para pequenos negócios)
+        if current_samples < 2 or previous_samples < 2:
             return {
                 "growth": None,
                 "confidence": ConfidenceLevel.INSUFICIENT.name,

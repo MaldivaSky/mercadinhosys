@@ -90,6 +90,11 @@ def dashboard_cientifico():
         # 3. Execução Direta (Contrato Definido) - 🔥 PASSANDO O PARÂMETRO DAYS
         logger.info(f"🔥 Chamando get_scientific_dashboard com days={days}")
         data = orchestrator.get_scientific_dashboard(days=days)
+        
+        if not data.get("success", True):
+            logger.error(f"❌ Orchestrator returned success=False: {data.get('error')}")
+            return jsonify(data), 500
+
         logger.info(f"✅ Dashboard retornou com sucesso")
 
         # 4. Resposta Padronizada
@@ -99,7 +104,7 @@ def dashboard_cientifico():
                 "timestamp": datetime.utcnow().isoformat(),
                 "version": "2.0",
                 "cache_strategy": "smartcache",
-                "period_days": days  # 🔥 NOVO: Retornar período usado
+                "period_days": days
             },
             "data": data
         }), 200

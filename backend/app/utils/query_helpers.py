@@ -3,12 +3,13 @@ from app.models import db
 
 def get_hour_extract(column):
     """
-    Returns the dialect-specific expression to extract the hour from a timestamp column.
+    Returns the dialect-specific expression to extract the hour.
+    Casts to Integer for cross-database consistency.
     """
     engine_name = db.engine.name
     if engine_name == 'sqlite':
-        return func.strftime('%H', column)
-    return extract('hour', column)
+        return func.cast(func.strftime('%H', column), db.Integer)
+    return func.cast(extract('hour', column), db.Integer)
 
 def get_dow_extract(column):
     """
@@ -18,8 +19,8 @@ def get_dow_extract(column):
     """
     engine_name = db.engine.name
     if engine_name == 'sqlite':
-        return func.strftime('%w', column)
-    return extract('dow', column)
+        return func.cast(func.strftime('%w', column), db.Integer)
+    return func.cast(extract('dow', column), db.Integer)
 
 def get_year_extract(column):
     """
@@ -27,8 +28,8 @@ def get_year_extract(column):
     """
     engine_name = db.engine.name
     if engine_name == 'sqlite':
-        return func.strftime('%Y', column)
-    return extract('year', column)
+        return func.cast(func.strftime('%Y', column), db.Integer)
+    return func.cast(extract('year', column), db.Integer)
 
 def get_month_extract(column):
     """
@@ -36,5 +37,5 @@ def get_month_extract(column):
     """
     engine_name = db.engine.name
     if engine_name == 'sqlite':
-        return func.strftime('%m', column)
-    return extract('month', column)
+        return func.cast(func.strftime('%m', column), db.Integer)
+    return func.cast(extract('month', column), db.Integer)

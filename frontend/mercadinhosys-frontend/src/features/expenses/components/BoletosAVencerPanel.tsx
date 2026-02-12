@@ -551,51 +551,197 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
         </div>
       )}
 
-      {/* Modal de Pagamento - Implementação básica */}
+      {/* Modal de Pagamento Funcional */}
       {showPayModal && selectedBoleto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
+        <ModalPagamentoBoleto
+          boleto={selectedBoleto}
+          onClose={() => { setShowPayModal(false); setSelectedBoleto(null); }}
+          onPago={() => {
+            setShowPayModal(false);
+            setSelectedBoleto(null);
+            loadBoletos();
+            toast.success('Boleto pago com sucesso!');
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ===============================================
+// Componente Modal de Pagamento de Boleto
+// ===============================================
+
+interface ModalPagamentoBoletoProps {
+  boleto: BoletoFornecedor;
+  onClose: () => void;
+  onPago: () => void;
+}
+
+const ModalPagamentoBoleto: React.FC<ModalPagamentoBoletoProps> = ({ boleto, onClose, onPago }) => {
+  const [formaPagamento, setFormaPagamento] = useState('pix');
+  const [valorPago, setValorPago] = useState(boleto.valor_atual.toString());
+  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().split('T')[0]);
+  const [observacoes, setObservacoes] = useState('');
+  const [processando, setProcessando] = useState(false);
+
+  const handlePagar = async () => {
+    setProcessando(true);
+    try {
+      await purchaseOrderService.pagarBoleto(boleto.id, {
+        valor_pago: parseFloat(valorPago),
+        data_pagamento: dataPagamento,
+        forma_pagamento: formaPagamento,
+        observacoes: observacoes || undefined,
+      });
+      onPago();
+    } catch (error: any) {
+      console.error('Erro ao pagar boleto:', error);
+      toast.error(error.response?.data?.error || 'Erro ao registrar pagamento');
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                <CreditCard className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white">
                 Registrar Pagamento
               </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Boleto: {selectedBoleto.numero_documento}
-                  </label>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Fornecedor: {selectedBoleto.fornecedor_nome}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Valor: {formatCurrency(selectedBoleto.valor_atual)}
-                  </div>
-                </div>
-
-                <div className="bg-yellow-50 dark:bg-yellow-900 p-3 rounded-lg">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    Funcionalidade de pagamento será implementada em breve.
-                    Por enquanto, registre o pagamento manualmente nas despesas.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowPayModal(false);
-                    setSelectedBoleto(null);
-                  }}
-                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  Fechar
-                </button>
-              </div>
             </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <span className="text-xl">&times;</span>
+            </button>
           </div>
         </div>
-      )}
+
+        <div className="p-6 space-y-5">
+          {/* Resumo do boleto */}
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Documento</span>
+              <span className="font-medium text-gray-800 dark:text-white">{boleto.numero_documento}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Fornecedor</span>
+              <span className="font-medium text-gray-800 dark:text-white">{boleto.fornecedor_nome}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Vencimento</span>
+              <span className={`font-medium ${boleto.dias_vencimento < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-white'}`}>
+                {formatDate(boleto.data_vencimento)}
+                {boleto.dias_vencimento < 0 && ` (${Math.abs(boleto.dias_vencimento)}d atrasado)`}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+              <span className="text-gray-500 dark:text-gray-400 font-medium">Valor</span>
+              <span className="font-bold text-lg text-blue-600 dark:text-blue-400">{formatCurrency(boleto.valor_atual)}</span>
+            </div>
+          </div>
+
+          {/* Formulario de pagamento */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Valor Pago (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={valorPago}
+                onChange={(e) => setValorPago(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Data do Pagamento
+              </label>
+              <input
+                type="date"
+                value={dataPagamento}
+                onChange={(e) => setDataPagamento(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Forma de Pagamento
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: 'pix', label: 'PIX' },
+                { value: 'transferencia', label: 'Transf.' },
+                { value: 'boleto', label: 'Boleto' },
+                { value: 'dinheiro', label: 'Dinheiro' },
+                { value: 'cartao_debito', label: 'Debito' },
+                { value: 'cheque', label: 'Cheque' },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setFormaPagamento(value)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                    formaPagamento === value
+                      ? 'bg-green-600 text-white border-green-600 shadow-md'
+                      : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Observacoes (opcional)
+            </label>
+            <textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white text-sm resize-none"
+              placeholder="Comprovante, numero da transacao..."
+            />
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={processando}
+            className="px-5 py-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handlePagar}
+            disabled={processando || !valorPago || parseFloat(valorPago) <= 0}
+            className="px-5 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+          >
+            {processando ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Processando...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                Confirmar Pagamento
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
