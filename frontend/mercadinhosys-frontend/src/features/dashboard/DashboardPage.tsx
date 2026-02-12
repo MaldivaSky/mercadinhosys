@@ -323,7 +323,9 @@ const DashboardPage: React.FC = () => {
   const loadRhSupportData = async () => {
     try {
       setRhPontoError(null);
-      const resp = await apiClient.get('/funcionarios');
+      const resp = await apiClient.get('/funcionarios', {
+        params: { simples: true, por_pagina: 200, incluir_estatisticas: false },
+      });
       const items = resp?.data?.data || resp?.data?.funcionarios || resp?.data || [];
       setRhFuncionarios(Array.isArray(items) ? items : []);
     } catch (e: any) {

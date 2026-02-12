@@ -47,7 +47,9 @@ export default function BeneficiosFuncionario() {
 
   const loadFuncionarios = async () => {
     try {
-      const response = await apiClient.get('/funcionarios');
+      const response = await apiClient.get('/funcionarios', {
+        params: { simples: true, por_pagina: 200, incluir_estatisticas: false },
+      });
       const items = response?.data?.data || response?.data?.funcionarios || [];
       setFuncionarios(Array.isArray(items) ? items : []);
     } catch (err) {

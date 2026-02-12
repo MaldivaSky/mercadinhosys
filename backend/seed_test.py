@@ -2016,20 +2016,20 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
             valor = Decimal(str(round(desp_data["valor"] * random.uniform(0.90, 1.10), 2)))
             
             # Criar despesa
-            d = Despesa(
-                estabelecimento_id=estabelecimento_id,
+                d = Despesa(
+                    estabelecimento_id=estabelecimento_id,
                 fornecedor_id=forn.id if forn else None,
                 descricao=desp_data["descricao"],
                 categoria=desp_data["categoria"],
                 tipo="fixa",
                 valor=valor,
-                data_despesa=data_despesa,
+                    data_despesa=data_despesa,
                 forma_pagamento="boleto",
-                recorrente=True,
+                    recorrente=True,
                 observacoes=f"Ref. {mes:02d}/{ano} - Venc. {data_vencimento.isoformat()}",
-            )
-            db.session.add(d)
-            despesas.append(d)
+                )
+                db.session.add(d)
+                despesas.append(d)
             
             # 🔥 GERAR ContaPagar (BOLETO) para esta despesa fixa
             # Status baseado na idade:
@@ -2050,7 +2050,7 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
                     data_pgto = data_vencimento + timedelta(days=random.randint(1, 15))
                     valor_pago = valor
                     valor_atual = Decimal("0")
-                else:
+        else:
                     status = "aberto"  # Boleto esquecido!
                     data_pgto = None
                     valor_pago = Decimal("0")
@@ -2158,7 +2158,7 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
             )
             db.session.add(d)
             despesas.append(d)
-    
+
     # ═══════════════════════════════════════════════════════════
     # DESPESAS VARIÁVEIS OPERACIONAIS
     # ═══════════════════════════════════════════════════════════
@@ -2189,7 +2189,7 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
         data_despesa = hoje - timedelta(days=random.randint(1, 180))
         forn = random.choice(fornecedores) if fornecedores and random.random() > 0.3 else None
         valor = Decimal(str(round(valor_base * random.uniform(0.85, 1.15), 2)))
-        
+
         d = Despesa(
             estabelecimento_id=estabelecimento_id,
             fornecedor_id=forn.id if forn else None,
@@ -2233,7 +2233,7 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
                 boletos_vencidos += 1
             else:
                 boletos_abertos += 1
-    
+
     db.session.commit()
     print(f"✅ {len(despesas)} despesas criadas (fixas + variáveis + problemáticas)")
     print(f"✅ {boletos_criados} boletos (ContaPagar) gerados:")
@@ -3594,7 +3594,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"  ✅ FINANCEIRO: {despesas_boleto} despesas com pagamento via boleto")
             
             print("=" * 60)
-            
+
             # 🔥 TESTE FINAL DE LOGIN
             if test_admin_login():
                 print("\n" + "=" * 60)
