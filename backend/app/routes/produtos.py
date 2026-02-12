@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
-from sqlalchemy import text, func, or_, case, and_
+from sqlalchemy import text, func, or_, case, and_, Date, Integer
 
 produtos_bp = Blueprint("produtos", __name__)
 
@@ -154,17 +154,87 @@ def verificar_validade_proxima(produto):
 # ============================================
 
 
+@produtos_bp.route("/debug-counts", methods=["GET"])
+def debug_counts():
+    claims = get_jwt()
+    return jsonify({
+        "est_id_claim": claims.get("estabelecimento_id"),
+        "total_db": Produto.query.count(),
+        "est_counts": db.session.query(Produto.estabelecimento_id, func.count(Produto.id)).group_by(Produto.estabelecimento_id).all(),
+        "claims_all": {k: v for k, v in claims.items()}
+    })
+
+@produtos_bp.route("/ping", methods=["GET"])
+def ping_produtos():
+    return jsonify({"status": "ok", "message": "Blueprint Produtos Ativo"})
+
+@produtos_bp.route("/bulk-update-prices", methods=["POST"], strict_slashes=False)
+@produtos_bp.route("/bulk-update-prices/", methods=["POST"])
+@funcionario_required
+def bulk_update_prices():
+    """Atualiza preços de múltiplos produtos em massa"""
+    try:
+        claims = get_jwt()
+        raw_est_id = claims.get("estabelecimento_id")
+        estabelecimento_id = int(raw_est_id) if raw_est_id is not None else 1
+        
+        data = request.get_json() or {}
+        atualizacoes = data.get("atualizacoes", [])
+        
+        if not atualizacoes:
+            return jsonify({"success": False, "message": "Nenhuma atualização fornecida"}), 400
+            
+        cont_sucesso = 0
+        for item in atualizacoes:
+            prod_id = item.get("id")
+            novo_preco = item.get("novo_preco")
+            
+            if prod_id and novo_preco is not None:
+                produto = Produto.query.filter_by(
+                    id=prod_id, 
+                    estabelecimento_id=estabelecimento_id
+                ).first()
+                
+                if produto:
+                    historico = HistoricoPrecos(
+                        produto_id=produto.id,
+                        estabelecimento_id=estabelecimento_id,
+                        preco_antigo=produto.preco_venda,
+                        preco_novo=Decimal(str(novo_preco)),
+                        motivo="Promoção via Monitor de Validade"
+                    )
+                    db.session.add(historico)
+                    produto.preco_venda = Decimal(str(novo_preco))
+                    if produto.preco_custo and produto.preco_custo > 0:
+                        produto.margem_lucro = ((produto.preco_venda - produto.preco_custo) / produto.preco_custo) * 100
+                    cont_sucesso += 1
+        
+        db.session.commit()
+        return jsonify({"success": True, "message": f"{cont_sucesso} preços atualizados!", "atualizados": cont_sucesso})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
 @produtos_bp.route("/estatisticas", methods=["GET"])
 @funcionario_required
 def obter_estatisticas_gerais():
     """Retorna estatísticas gerais e KPIs de estoque para o dashboard de produtos"""
     try:
         claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        raw_est_id = claims.get("estabelecimento_id")
+        
+        # Log para depuração
+        current_app.logger.info(f"[DEBUG_STATS] Claims: {claims}")
+        
+        if raw_est_id is None:
+            est_first = Estabelecimento.query.first()
+            estabelecimento_id = est_first.id if est_first else 1
+        else:
+            estabelecimento_id = int(raw_est_id)
         
         # Filtros básicos da query string
         categoria = request.args.get("categoria")
-        ativo_param = request.args.get("ativo", "true")
+        # Aceitar tanto 'ativo' quanto 'ativos' para compatibilidade
+        ativo_param = request.args.get("ativo") or request.args.get("ativos") or "true"
         ativo = ativo_param.lower() == "true"
         
         # Query base para agregação
@@ -209,6 +279,42 @@ def obter_estatisticas_gerais():
         baixo = int(stats.baixo or 0)
         normal = total - esgotados - baixo
         if normal < 0: normal = 0
+
+        # Melhoria na contagem de validade: Abordagem ANSI SQL compatível com strings ISO (mais seguro para SQLite/PG)
+        hoje_iso = date.today().isoformat()
+        val_15_iso = (date.today() + timedelta(days=15)).isoformat()
+        val_30_iso = (date.today() + timedelta(days=30)).isoformat()
+        val_90_iso = (date.today() + timedelta(days=90)).isoformat()
+        
+        # Filtro base para SQL textual
+        base_where = "estabelecimento_id = :est_id AND ativo = 1 AND controlar_validade = 1 AND data_validade IS NOT NULL"
+        
+        vencidos_count = db.session.query(func.count(Produto.id)).filter(
+            text(f"{base_where} AND data_validade < :hoje")
+        ).params(est_id=estabelecimento_id, hoje=hoje_iso).scalar() or 0
+        
+        vence_15_count = db.session.query(func.count(Produto.id)).filter(
+            text(f"{base_where} AND data_validade >= :hoje AND data_validade <= :val_15")
+        ).params(est_id=estabelecimento_id, hoje=hoje_iso, val_15=val_15_iso).scalar() or 0
+
+        vence_30_count = db.session.query(func.count(Produto.id)).filter(
+            text(f"{base_where} AND data_validade >= :hoje AND data_validade <= :val_30")
+        ).params(est_id=estabelecimento_id, hoje=hoje_iso, val_30=val_30_iso).scalar() or 0
+
+        vence_90_count = db.session.query(func.count(Produto.id)).filter(
+            text(f"{base_where} AND data_validade >= :hoje AND data_validade <= :val_90")
+        ).params(est_id=estabelecimento_id, hoje=hoje_iso, val_90=val_90_iso).scalar() or 0
+
+        validade_data = {
+            "vencidos": int(vencidos_count),
+            "vence_15": int(vence_15_count),
+            "vence_30": int(vence_30_count),
+            "vence_90": int(vence_90_count)
+        }
+        
+        current_app.logger.info(f"[STATS] Validade Result (RAW SQL): {validade_data}")
+        
+        current_app.logger.info(f"[STATS] Validade para est {estabelecimento_id}: {validade_data}")
 
         # --- NOVAS ESTATÍSTICAS PARA DASHBOARD ---
         
@@ -294,6 +400,7 @@ def obter_estatisticas_gerais():
                     "C": abc_dict.get("C", 0)
                 },
                 "giro_estoque": giro_data,
+                "validade": validade_data,
                 "top_produtos_margem": top_margem_data,
                 "produtos_criticos": criticos_data,
                 "filtros_aplicados": {"categoria": categoria}
@@ -332,8 +439,11 @@ def listar_produtos():
         ordenar_por = request.args.get("ordenar_por", "nome")
         direcao = request.args.get("direcao", "asc")
 
-        # Query base
-        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
+        # Query base com Eager Loading para evitar N+1
+        query = Produto.query.options(
+            db.joinedload(Produto.categoria),
+            db.joinedload(Produto.fornecedor)
+        ).filter_by(estabelecimento_id=estabelecimento_id)
 
         # 1. Filtro de Ativo/Inativo
         if ativo is not None:
@@ -381,14 +491,22 @@ def listar_produtos():
                 )
             )
 
-        # 8. Filtro Validade Próxima (30 dias)
+        # 8. Filtros de Validade
         validade_proxima = request.args.get("validade_proxima")
+        dias_validade = request.args.get("dias_validade", 30, type=int)
+        vencidos = request.args.get("vencidos")
+
+        hoje = date.today()
+        
         if validade_proxima and validade_proxima.lower() == 'true':
-            hoje = date.today()
-            limite = hoje + timedelta(days=30)
+            limite = hoje + timedelta(days=dias_validade)
             query = query.filter(Produto.data_validade.isnot(None))
             query = query.filter(Produto.data_validade >= hoje)
             query = query.filter(Produto.data_validade <= limite)
+        
+        if vencidos and vencidos.lower() == 'true':
+            query = query.filter(Produto.data_validade.isnot(None))
+            query = query.filter(Produto.data_validade < hoje)
 
         # 8. Ordenação
         coluna_ordenacao = getattr(Produto, ordenar_por, Produto.nome)
