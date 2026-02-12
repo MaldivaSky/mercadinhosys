@@ -5,11 +5,15 @@ Foco: Simplicidade e clareza
 
 from typing import Dict, Any
 from datetime import datetime
+import logging
 from .data_layer import DataLayer
 from .stats_layer import StatsValidator
 from .models_layer import PracticalModels
 from .serializers import DashboardSerializer
 from .cache_layer import cache_response
+
+# Logger global - DEVE estar no nível do módulo
+logger = logging.getLogger(__name__)
 
 
 class DashboardOrchestrator:
@@ -147,16 +151,34 @@ class DashboardOrchestrator:
             },
         }
 
-    @cache_response(ttl_seconds=60, require_db_check=True)
+    @cache_response(ttl_seconds=300, require_db_check=True)  # 5 minutos de cache (otimizado)
     def get_scientific_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
         Dashboard científico - Análise avançada com insights
         """
-        from datetime import timedelta
-        from app.models import Cliente
-        from app.dashboard_cientifico.models_layer import PracticalModels as _PM
+        from app.models import db
+        import logging
+        _logger = logging.getLogger(__name__)
+        try:
+            # 🔥 RESET TRANSACTION: Garante que erros de requests anteriores não envenenem este dashboard
+            db.session.rollback()
+            return self._get_scientific_dashboard_logic(days)
+        except Exception as e:
+            db.session.rollback()
+            _logger.error(f"Erro CRÍTICO no dashboard científico: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
 
+    def _get_scientific_dashboard_logic(self, days: int = 30) -> Dict[str, Any]:
+        # Garantir que logger está disponível - sempre criar novo para evitar problemas
+        import logging
+        _logger = logging.getLogger(__name__)
+        
         def _confidence_from_samples(samples: int) -> str:
+            """Função auxiliar para calcular confiança baseada em amostras"""
             if samples < 5:
                 return "INSUFICIENT"
             if samples < 15:
@@ -164,35 +186,88 @@ class DashboardOrchestrator:
             if samples < 30:
                 return "MEDIUM"
             return "HIGH"
-
+        
+        from datetime import timedelta
+        from app.models import Cliente
+        from app.dashboard_cientifico.models_layer import PracticalModels as _PM
         end_date = datetime.utcnow()
         start_current = end_date - timedelta(days=days)
         start_previous = end_date - timedelta(days=days * 2)
         end_previous = end_date - timedelta(days=days)
 
-        sales_current_summary = DataLayer.get_sales_summary_range(
-            self.establishment_id, start_current, end_date
-        )
-        sales_previous_summary = DataLayer.get_sales_summary_range(
-            self.establishment_id, start_previous, end_previous
-        )
+        import time
+        start_exec = time.time()
+        # 1. Obter resumos básicos
+        try:
+            t0 = time.time()
+            sales_current_summary = DataLayer.get_sales_summary_range(
+                self.establishment_id, start_current, end_date
+            )
+            _logger.info(f"⏱️ get_sales_summary_range: {time.time()-t0:.2f}s")
+            
+            t0 = time.time()
+            financials = DataLayer.get_sales_financials(self.establishment_id, start_current, end_date)
+            _logger.info(f"⏱️ get_sales_financials: {time.time()-t0:.2f}s")
+            
+            t0 = time.time()
+            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
+            _logger.info(f"⏱️ get_inventory_summary: {time.time()-t0:.2f}s")
+            
+            t0 = time.time()
+            # Obter séries temporais para modelos preditivos e correlações
+            timeseries_days = max(90, days * 2) # Pegar mais dados para tendências melhores
+            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
+            _logger.info(f"⏱️ get_sales_timeseries: {time.time()-t0:.2f}s")
+            
+            t0 = time.time()
+            expense_details = DataLayer.get_expense_details(self.establishment_id, timeseries_days)
+            _logger.info(f"⏱️ get_expense_details: {time.time()-t0:.2f}s")
+        except Exception as e:
+            _logger.error(f"Erro ao obter dados base do dashboard: {e}")
+            # Fallbacks já tratados nas chamadas individuais, mas garante fluxo
+            pass
 
-        inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
+        try:
+            t0 = time.time()
+            sales_previous_summary = DataLayer.get_sales_summary_range(
+                self.establishment_id, start_previous, end_previous
+            )
+            _logger.info(f"⏱️ get_sales_summary_range (prev): {time.time()-t0:.2f}s")
+        except Exception as e:
+            _logger.error(f"Erro ao obter resumo de vendas anterior: {e}")
+            sales_previous_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+
+        try:
+            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
+        except Exception as e:
+            _logger.error(f"Erro ao obter resumo de estoque: {e}")
+            inventory_summary = {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "itens_baixo_estoque": 0}
         
         # 🔥 ADICIONADO: Detalhes de despesas
-        expense_details = DataLayer.get_expense_details(self.establishment_id, days)
+        try:
+            expense_details = DataLayer.get_expense_details(self.establishment_id, days)
+        except Exception as e:
+            _logger.error(f"Erro ao obter detalhes de despesas: {e}")
+            expense_details = []
         
         # 🔥 NOVO: Dados Financeiros Reais (Faturamento, CMV, Lucro Bruto)
-        financials_data = DataLayer.get_sales_financials(
-            self.establishment_id, start_current, end_date
-        )
+        try:
+            financials_data = DataLayer.get_sales_financials(
+                self.establishment_id, start_current, end_date
+            )
+        except Exception as e:
+            _logger.error(f"Erro ao obter dados financeiros: {e}")
+            financials_data = {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
         
-        revenue = financials_data.get("revenue", 0.0)
-        cogs = financials_data.get("cogs", 0.0)
-        gross_profit = financials_data.get("gross_profit", 0.0)
+        revenue = float(financials_data.get("revenue", 0.0))
+        cogs = float(financials_data.get("cogs", 0.0))
+        gross_profit = float(financials_data.get("gross_profit", 0.0))
         
         # 🔥 CORREÇÃO: Calcular total de despesas para o período
-        total_despesas_periodo = sum([float(exp.get("valor", 0)) for exp in expense_details])
+        try:
+            total_despesas_periodo = sum([float(exp.get("total", 0) if "total" in exp else exp.get("valor", 0)) for exp in expense_details])
+        except Exception:
+            total_despesas_periodo = 0.0
         
         # Lucro Líquido = Lucro Bruto - Despesas
         net_profit = gross_profit - total_despesas_periodo
@@ -202,8 +277,7 @@ class DashboardOrchestrator:
         net_margin = (net_profit / revenue * 100) if revenue > 0 else 0.0
         
         # ROI (Baseado no custo do estoque médio ou CMV?) 
-        # GMROI (Gross Margin Return on Inventory) = Gross Profit / Avg Inventory Cost
-        avg_inventory_cost = inventory_summary.get("valor_total", 0.0) # Simplificação: Usar valor atual como média
+        avg_inventory_cost = float(inventory_summary.get("valor_total", 0.0))
         roi = (gross_profit / avg_inventory_cost * 100) if avg_inventory_cost > 0 else 0.0
         
         financials_consolidated = {
@@ -217,59 +291,113 @@ class DashboardOrchestrator:
             "roi": round(roi, 2)
         }
 
-        # 🔥 NOVO: Vendas por hora
-        sales_by_hour = DataLayer.get_sales_by_hour(self.establishment_id, days)
-        
-        # 🔥 NOVO: Top produtos por hora
-        top_products_by_hour = DataLayer.get_top_products_by_hour(self.establishment_id, days, top_n=5)
-        
-        # 🔥 NOVO: Padrões temporais de clientes
-        customer_temporal_patterns = DataLayer.get_customer_temporal_patterns(self.establishment_id, days=90)
-        
-        # 🔥 NOVO: Métricas de concentração por horário
-        hourly_concentration = DataLayer.get_hourly_concentration_metrics(self.establishment_id, days)
-        
-        # 🔥 NOVO: Matriz de correlação Produto x Horário
-        product_hour_matrix = DataLayer.get_product_hour_correlation_matrix(self.establishment_id, days, top_products=10)
-        
-        # 🔥 NOVO: Afinidade Cliente x Produto
-        customer_product_affinity = DataLayer.get_customer_product_affinity(self.establishment_id, days=90, min_support=3)
-        
-        # 🔥 NOVO: Comportamento de clientes por horário
-        hourly_customer_behavior = DataLayer.get_hourly_customer_behavior(self.establishment_id, days=60)
+        # 2. Obter dados analíticos (horários, clientes)
+        try:
+            sales_by_hour = DataLayer.get_sales_by_hour(self.establishment_id, days)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter vendas por hora: {e}")
+            sales_by_hour = []
 
-        # 🔥 NOVO: Análises Temporais Avançadas (Pensando como o dono do mercado)
+        try:
+            top_products_by_hour = DataLayer.get_top_products_by_hour(self.establishment_id, days, top_n=5)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter top produtos por hora: {e}")
+            top_products_by_hour = []
+
+        try:
+            customer_temporal_patterns = DataLayer.get_customer_temporal_patterns(self.establishment_id, days=90)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter padrões de clientes: {e}")
+            customer_temporal_patterns = []
+
+        try:
+            hourly_concentration = DataLayer.get_hourly_concentration_metrics(self.establishment_id, days)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter concentração horária: {e}")
+            hourly_concentration = {}
+
+        try:
+            product_hour_matrix = DataLayer.get_product_hour_correlation_matrix(self.establishment_id, days, top_products=10)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter matriz de correlação: {e}")
+            product_hour_matrix = []
+
+        try:
+            customer_product_affinity = DataLayer.get_customer_product_affinity(self.establishment_id, days=90, min_support=3)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter afinidade de clientes: {e}")
+            customer_product_affinity = []
+
+        try:
+            hourly_customer_behavior = DataLayer.get_hourly_customer_behavior(self.establishment_id, days=60)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter comportamento de clientes: {e}")
+            hourly_customer_behavior = []
+
+        # 🔥 NOVO: Análises Temporais Avançadas
         from .temporal_analysis import TemporalAnalysis
+        try:
+            hourly_sales_by_category = TemporalAnalysis.get_hourly_sales_by_category(self.establishment_id, days)
+        except Exception: hourly_sales_by_category = {}
         
-        hourly_sales_by_category = TemporalAnalysis.get_hourly_sales_by_category(self.establishment_id, days)
-        period_analysis = TemporalAnalysis.get_period_analysis(self.establishment_id, days)
-        weekday_analysis = TemporalAnalysis.get_weekday_analysis(self.establishment_id, days)
-        product_hourly_recommendations = TemporalAnalysis.get_product_hourly_recommendations(self.establishment_id, days)
-        category_performance_by_time = TemporalAnalysis.get_category_performance_by_time(self.establishment_id, days)
+        try:
+            period_analysis = TemporalAnalysis.get_period_analysis(self.establishment_id, days)
+        except Exception: period_analysis = {}
+        
+        try:
+            weekday_analysis = TemporalAnalysis.get_weekday_analysis(self.establishment_id, days)
+        except Exception: weekday_analysis = {}
+        
+        try:
+            product_hourly_recommendations = TemporalAnalysis.get_product_hourly_recommendations(self.establishment_id, days)
+        except Exception: product_hourly_recommendations = []
+        
+        try:
+            category_performance_by_time = TemporalAnalysis.get_category_performance_by_time(self.establishment_id, days)
+        except Exception: category_performance_by_time = {}
 
-        # 4. Análise ABC (cálculo on-the-fly se não cacheado)
-        abc_analysis = self.get_abc_analysis(days)
-        
-        customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
+        # 3. Análise ABC e RFM
+        try:
+            abc_analysis = self.get_abc_analysis(days=days, limit=500)
+        except Exception as e:
+            _logger.error(f"Erro na análise ABC: {e}")
+            abc_analysis = {"produtos": [], "resumo": {}, "total_value": 0}
+            
+        try:
+            customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
+        except Exception:
+            customer_metrics = {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}
 
-        # 🔥 NOVO: Métricas de RH para o dashboard científico
-        rh_metrics = DataLayer.get_rh_metrics(self.establishment_id, days)
+        try:
+            rh_metrics = DataLayer.get_rh_metrics(self.establishment_id, days)
+        except Exception as e:
+            _logger.warning(f"Erro ao obter métricas de RH: {e}")
+            rh_metrics = {}
         
-        # 🔥 CORREÇÃO: Buscar timeseries com período maior para garantir comparação mensal
-        # Para comparação mensal funcionar, precisamos de pelo menos 60 dias de dados
-        timeseries_days = max(days, 90)  # Garantir pelo menos 90 dias para análise mensal
-        sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
+        # 4. Timeseries e Forecast
+        try:
+            timeseries_days = max(days, 90)
+            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
+            _logger.info(f"📊 Timeseries retornado: {len(sales_timeseries)} dias de dados")
+        except Exception as e:
+            _logger.error(f"Erro ao carregar timeseries: {e}")
+            sales_timeseries = []
         
-        # Log para debug
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"📊 Timeseries retornado: {len(sales_timeseries)} dias de dados")
-        
-        # 🔥 ADICIONADO: Previsão de demanda (Movido para DEPOIS de sales_timeseries ser definido)
-        forecast = PracticalModels.generate_forecast(sales_timeseries)
+        try:
+            forecast = PracticalModels.generate_forecast(sales_timeseries) if sales_timeseries else []
+        except Exception as e:
+            _logger.warning(f"Erro ao gerar forecast: {e}")
+            forecast = []
 
+        # 5. Métricas de Comparação
+        # 🔥 CORREÇÃO: Usar a MESMA fonte de dados (get_sales_summary_range) para ambos os períodos
+        # Anteriormente, current usava get_sales_financials (JOIN inflado) e previous usava get_sales_summary_range
+        # Isso causava comparações assimétricas e crescimento incorreto
+        current_faturado = float(sales_current_summary.get("total_faturado", 0))
+        previous_faturado = float(sales_previous_summary.get("total_faturado", 0))
+        
         sales_current_metric = {
-            "value": revenue, # Usar revenue consolidado
+            "value": current_faturado,
             "confidence": _confidence_from_samples(
                 sales_current_summary.get("total_vendas", 0)
             ),
@@ -277,7 +405,7 @@ class DashboardOrchestrator:
             "warnings": [],
         }
         sales_previous_metric = {
-            "value": sales_previous_summary.get("total_faturado", 0),
+            "value": previous_faturado,
             "confidence": _confidence_from_samples(
                 sales_previous_summary.get("total_vendas", 0)
             ),
@@ -285,12 +413,16 @@ class DashboardOrchestrator:
             "warnings": [],
         }
 
-        growth_period = StatsValidator.calculate_growth(
-            current_value=sales_current_metric.get("value", 0),
-            previous_value=sales_previous_metric.get("value", 0),
-            current_samples=sales_current_metric.get("sample_size", 0),
-            previous_samples=sales_previous_metric.get("sample_size", 0),
-        )
+        try:
+            growth_period = StatsValidator.calculate_growth(
+                current_value=sales_current_metric.get("value", 0),
+                previous_value=sales_previous_metric.get("value", 0),
+                current_samples=sales_current_metric.get("sample_size", 0),
+                previous_samples=sales_previous_metric.get("sample_size", 0),
+            )
+        except Exception:
+            growth_period = {"value": 0.0, "display": "0%", "status": "no_data", "is_positive": False, "icon": "minus"}
+
 
         growth_homologo_week = None
         if days >= 14:
@@ -310,15 +442,27 @@ class DashboardOrchestrator:
                 previous_samples=week_previous.get("total_vendas", 0),
             )
 
-        sales_trend = _PM.detect_sales_trend(sales_timeseries)
+        try:
+            sales_trend = _PM.detect_sales_trend(sales_timeseries)
+        except Exception as e:
+            _logger.warning(f"Erro ao detectar tendência de vendas: {e}")
+            sales_trend = {"direction": "neutral", "slope": 0, "is_statistically_significant": False}
         
         # 🔥 NOVO: Calcular correlações estatísticas
-        correlations = _PM.calculate_correlations(sales_timeseries, expense_details)
+        try:
+            correlations = _PM.calculate_correlations(sales_timeseries, expense_details)
+        except Exception as e:
+            _logger.warning(f"Erro ao calcular correlações: {e}")
+            correlations = []
         
         # 🔥 NOVO: Detectar anomalias
-        anomalies = _PM.detect_anomalies(sales_timeseries, expense_details)
+        try:
+            anomalies = _PM.detect_anomalies(sales_timeseries, expense_details)
+        except Exception as e:
+            _logger.warning(f"Erro ao detectar anomalias: {e}")
+            anomalies = []
 
-        abc_analysis = self.get_abc_analysis(days=days, limit=500)
+        # abc_analysis já foi calculado acima
         rfm_analysis = self.get_rfm_analysis(window_days=180)
         
         # 🔥 NOVO: Produtos Estrela (Top 10 da Classe A com melhor margem)
@@ -405,9 +549,16 @@ class DashboardOrchestrator:
                 # Para produtos lentos, o giro será baixo
                 giro_estoque = (qtd_vendida / estoque_atual) if estoque_atual > 0 else 0
                 
-                # Calcular dias de estoque parado
                 demanda_diaria = qtd_vendida / days if days > 0 else 0
-                dias_estoque = (estoque_atual / demanda_diaria) if demanda_diaria > 0 else 999
+
+                # Calcular dias de estoque parado
+                # Se estoque <= 0, dias de estoque é 0 (esgotado, não encalhado)
+                if estoque_atual <= 0:
+                    dias_estoque = 0
+                elif demanda_diaria > 0:
+                    dias_estoque = estoque_atual / demanda_diaria
+                else:
+                    dias_estoque = 999 # Infinito (tem estoque mas não tem saída)
                 
                 # 🔥 CORREÇÃO: Custo do capital parado = preço de custo × estoque atual
                 custo_parado = preco_custo * estoque_atual
@@ -455,6 +606,7 @@ class DashboardOrchestrator:
                 giro_estoque = (qtd_vendida / estoque_atual) if estoque_atual > 0 else 0
                 
                 previsao_demanda.append({
+                    "id": produto_id,
                     "produto_nome": p.get("nome", ""),
                     "nome": p.get("nome", ""),
                     "estoque_atual": estoque_atual,
@@ -551,75 +703,121 @@ class DashboardOrchestrator:
         # 🔥 CORREÇÃO: Calcular total de despesas para o período
         total_despesas_periodo = sum([float(exp.get("valor", 0)) for exp in expense_details])
         
-        return {
+        # 🔥 NOVO: "LINK EACH PRODUCT TO AN ORDER"
+        # Coletar todos os IDs de produtos em destaque para buscar última compra de forma eficiente (1 única query)
+        todos_mais_vendidos_ids = set()
+        for p in produtos_estrela: 
+            if p.get('id'): todos_mais_vendidos_ids.add(p['id'])
+        for p in produtos_lentos: 
+            if p.get('id'): todos_mais_vendidos_ids.add(p['id'])
+        for p in previsao_demanda: 
+            if p.get('id'): todos_mais_vendidos_ids.add(p['id'])
+        
+        last_orders = DataLayer.get_last_purchase_orders(self.establishment_id, list(todos_mais_vendidos_ids))
+        
+        # Injetar dados de última compra nos produtos para o dashboard
+        for p in produtos_estrela:
+            pid = p.get("id")
+            p["ultima_compra"] = last_orders.get(pid) if pid else None
+        for p in produtos_lentos:
+            pid = p.get("id")
+            p["ultima_compra"] = last_orders.get(pid) if pid else None
+        for p in previsao_demanda:
+            pid = p.get("id")
+            p["ultima_compra"] = last_orders.get(pid) if pid else None
+        
+        # 11. Montar objeto final
+        res = {
             "success": True,
             "timestamp": datetime.utcnow().isoformat(),
             "period_days": int(days),
             "summary": {
-                "revenue": DashboardSerializer.serialize_metric(sales_current_metric),
-                "growth": DashboardSerializer.serialize_growth(growth_period),
-                "growth_homologo_semana": (
+                "sales_current": DashboardSerializer.serialize_metric(sales_current_metric),
+                "sales_previous": DashboardSerializer.serialize_metric(sales_previous_metric),
+                "growth_period": DashboardSerializer.serialize_growth(growth_period),
+                "growth": DashboardSerializer.serialize_growth(growth_period),  # 🔥 ALIAS para compatibilidade frontend
+                "growth_homologo_week": (
                     DashboardSerializer.serialize_growth(growth_homologo_week)
                     if growth_homologo_week
                     else {"value": None, "display": "--", "status": "no_data", "is_positive": False, "icon": "minus"}
                 ),
+                "revenue": revenue,
+                "expenses": total_despesas_periodo,
+                "gross_profit": gross_profit,
+                "net_profit": net_profit,
+                "inventory_value": inventory_summary.get("valor_total", 0),
+                "low_stock_count": inventory_summary.get("baixo_estoque", 0),
                 "avg_ticket": {
                     "value": sales_current_summary.get("ticket_medio", 0),
-                    "display": f"{sales_current_summary.get('ticket_medio', 0):,.0f}",
+                    "display": f"R$ {sales_current_summary.get('ticket_medio', 0):,.2f}",
                     "status": "high_confidence",
                 },
                 "unique_customers": customer_metrics.get("clientes_unicos", 0),
             },
-            "trend": sales_trend,
+            "financials": financials_consolidated,
             "timeseries": sales_timeseries,
             "forecast": forecast,
-            "financials": financials_consolidated, # 🔥 NOVO: Dados financeiros consolidados
-            "inventory": inventory_summary,
             "expenses": expense_details,
-            "total_despesas": total_despesas_periodo,  # 🔥 NOVO: Total de despesas do período
-            "sales_by_hour": sales_by_hour,  # 🔥 NOVO
-            "top_products_by_hour": top_products_by_hour,  # 🔥 NOVO
-            "customer_temporal_patterns": customer_temporal_patterns,  # 🔥 NOVO
-            "hourly_concentration": hourly_concentration,  # 🔥 NOVO
-            "product_hour_matrix": product_hour_matrix,  # 🔥 NOVO: Matriz de correlação
-            "customer_product_affinity": customer_product_affinity,  # 🔥 NOVO: Afinidade
-            "hourly_customer_behavior": hourly_customer_behavior,  # 🔥 NOVO: Comportamento por hora
-            "hourly_sales_by_category": hourly_sales_by_category,  # 🔥 NOVO: Qual categoria vende em cada hora
-            "period_analysis": period_analysis,  # 🔥 NOVO: Análise por período (Manhã/Tarde/Noite)
-            "weekday_analysis": weekday_analysis,  # 🔥 NOVO: Análise por dia da semana
-            "product_hourly_recommendations": product_hourly_recommendations,  # 🔥 NOVO: Recomendações de estoque
-            "category_performance_by_time": category_performance_by_time,  # 🔥 NOVO: Performance de categorias
+            "total_despesas": total_despesas_periodo,
+            "sales_by_hour": sales_by_hour,
+            "top_products_by_hour": top_products_by_hour,
+            "customer_temporal_patterns": customer_temporal_patterns,
+            "hourly_concentration": hourly_concentration,
+            "product_hour_matrix": product_hour_matrix,
+            "customer_product_affinity": customer_product_affinity,
+            "hourly_customer_behavior": hourly_customer_behavior,
+            "hourly_sales_by_category": hourly_sales_by_category,
+            "period_analysis": period_analysis,
+            "weekday_analysis": weekday_analysis,
+            "product_hourly_recommendations": product_hourly_recommendations,
+            "category_performance_by_time": category_performance_by_time,
             "abc": abc_analysis,
             "rfm": {"segments": segments, "window_days": rfm_analysis.get("window_days", 180)},
             "recomendacoes": recomendacoes,
             "correlations": correlations,
             "anomalies": anomalies,
-            "produtos_estrela": produtos_estrela,  # 🔥 NOVO
-            "produtos_lentos": produtos_lentos,    # 🔥 NOVO
-            "previsao_demanda": previsao_demanda,  # 🔥 NOVO
-            "rh": rh_metrics,                      # 🔥 NOVO: Métricas de RH
+            "produtos_estrela": produtos_estrela,
+            "produtos_lentos": produtos_lentos,
+            "previsao_demanda": previsao_demanda,
+            "rh": rh_metrics,
+            "inventory": inventory_summary,
+            "trend": sales_trend,
+            "_performance": {
+                "total_time": time.time() - start_exec
+            }
         }
+        return res
 
     @cache_response(ttl_seconds=900, require_db_check=True)
     def get_abc_analysis(self, days: int = 30, limit: int = 500) -> Dict[str, Any]:
-        top_products = DataLayer.get_top_products(self.establishment_id, days, int(limit))
-        return PracticalModels.analyze_inventory_abc(
-            [
-                {
-                    "id": p.get("id", 0),
-                    "nome": p.get("nome", ""),
-                    "valor_total": p.get("faturamento", 0),
-                    "quantidade": p.get("quantidade_vendida", 0),
-                    "preco_custo": p.get("preco_custo", 0),
-                }
-                for p in top_products
-            ],
-            top_n=None,  # Retornar TODOS os produtos, não limitar
-            return_all_products=True,  # Forçar retorno de todos
-        )
+        from app.models import db
+        try:
+            top_products = DataLayer.get_top_products(self.establishment_id, days, int(limit))
+            return PracticalModels.analyze_inventory_abc(
+                [
+                    {
+                        "id": p.get("id", 0),
+                        "nome": p.get("nome", ""),
+                        "valor_total": p.get("faturamento", 0),
+                        "quantidade": p.get("quantidade_vendida", 0),
+                        "preco_custo": p.get("preco_custo", 0),
+                    }
+                    for p in top_products
+                ],
+                top_n=None,  # Retornar TODOS os produtos, não limitar
+                return_all_products=True,  # Forçar retorno de todos
+            )
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro na análise ABC: {e}")
+            return {"produtos": [], "resumo": {}, "total_value": 0}
 
     @cache_response(ttl_seconds=900, require_db_check=True)
     def get_rfm_analysis(self, window_days: int = 180) -> Dict[str, Any]:
-        from app.models import Cliente
-
-        return Cliente.calcular_rfm(self.establishment_id, days=int(window_days))
+        from app.models import Cliente, db
+        try:
+            return Cliente.calcular_rfm(self.establishment_id, days=int(window_days))
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro na análise RFM: {e}")
+            return {"customers": [], "segments": {}}

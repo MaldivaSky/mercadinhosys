@@ -5,11 +5,15 @@ Objetivos:
 - Gerar dados realistas e completos para testar todas as funcionalidades do sistema
 - Compativel com SQLite (localhost) e PostgreSQL (nuvem)
 - Credenciais de teste: admin / admin123
+- Todo produto DEVE ser oriundo de um pedido de compra (regra de negócio)
+- Histórico de preços com tendências de alta e baixa para análise temporal
 
 Uso:
-  - `python seed_test.py --reset --local` (apaga e recria todos os dados localmente)
-  - `python seed_test.py --reset` (apaga e recria todos os dados no banco configurado)
-  - `python seed_test.py` (apenas preenche se estiver vazio)
+  - `python seed_test.py --reset --local`   → Semear APENAS banco local (SQLite)
+  - `python seed_test.py --reset --cloud`   → Semear APENAS banco nuvem (Neon/Postgres)
+  - `python seed_test.py --reset --both`    → Semear AMBOS (local + nuvem)
+  - `python seed_test.py --reset`           → Semear banco configurado (env vars)
+  - `python seed_test.py`                   → Apenas preenche se estiver vazio
 
 Automaticamente executado no Render pelo Start Command.
 """
@@ -32,7 +36,7 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-from sqlalchemy import text
+from sqlalchemy import text, exists
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -64,6 +68,13 @@ from app.models import (
     MovimentacaoCaixa,
     DashboardMetrica,
     RelatorioAgendado,
+    HistoricoPrecos,
+    RegistroPonto,
+    ConfiguracaoHorario,
+    Beneficio,
+    FuncionarioBeneficio,
+    BancoHoras,
+    JustificativaPonto,
 )
 
 DEFAULT_ESTABELECIMENTO_ID = 1
@@ -526,6 +537,7 @@ def seed_categorias_produto(
         {"nome": "Limpeza", "descricao": "Detergentes, desinfetantes, água sanitária"},
         {"nome": "Padaria", "descricao": "Pães, bolos, biscoitos"},
         {"nome": "Hortifrúti", "descricao": "Frutas, verduras, legumes"},
+        {"nome": "Pet Shop", "descricao": "Rações, acessórios, higiene animal"},
     ]
 
     categorias = []
@@ -862,6 +874,7 @@ def seed_produtos(
             continue
 
         # Determinar fornecedor_id baseado na marca
+        # 🔥 REGRA: Todo produto DEVE ter um fornecedor (obrigatório para pedidos de compra)
         fornecedor_id = None
         if marca:
             # Tentar encontrar o fornecedor pela marca
@@ -881,6 +894,15 @@ def seed_produtos(
             # Se não tem marca, usar um fornecedor aleatório
             if fornecedores:
                 fornecedor_id = random.choice(fornecedores).id
+        
+        # 🔥 SAFETY NET: Se AINDA não tem fornecedor, atribuir o primeiro da lista
+        # Isso garante que NENHUM produto fique sem fornecedor (requisito para pedidos de compra)
+        if not fornecedor_id and fornecedores:
+            fornecedor_id = fornecedores[0].id
+        
+        if not fornecedor_id:
+            print(f"  ⚠️ ERRO CRÍTICO: Produto '{nome}' sem fornecedor disponível! Ignorando.")
+            continue
 
         # Gerar dados variados
         quantidade = random.randint(500, 1000)  # Aumentado de 20-200 para 500-1000
@@ -893,15 +915,10 @@ def seed_produtos(
         # Limitar margem para caber no Numeric(5, 2) das models (max 999.99)
         margem = max(0, min(999.99, margem))
 
-        # DATA DE VALIDADE - Focar em 2025 e 2026
-        ano_validade = random.choice([2025, 2026])
-        mes_validade = random.randint(1, 12)
-        dia_validade = random.randint(1, 28)
-        data_validade = date(ano_validade, mes_validade, dia_validade)
-        
-        # Alguns produtos vencidos ou quase vencendo (2025 já passou ou está perto)
-        if random.random() < 0.2:
-            data_validade = date.today() + timedelta(days=random.randint(-30, 60))
+        # 🔥 DATA DE VALIDADE e LOTE: Serão definidos pelos ProdutoLote (pedidos de compra)
+        # O Produto.data_validade reflete a validade do lote MAIS PRÓXIMO de vencer (FIFO)
+        # O Produto.lote reflete o numero_lote correspondente
+        # Inicialmente None → preenchidos em seed_pedidos_compra e seed_lotes_reabastecimento
 
         p = Produto(
             estabelecimento_id=estabelecimento_id,
@@ -926,8 +943,8 @@ def seed_produtos(
             quantidade_vendida=0,
             classificacao_abc=random.choice(["A", "B", "C"]),
             controlar_validade=True,
-            data_validade=data_validade,
-            lote=f"L{random.randint(1000, 9999)}",  # OBRIGATÓRIO
+            data_validade=None,  # 🔥 Será definido pelo ProdutoLote (FIFO)
+            lote=None,           # 🔥 Será definido pelo ProdutoLote (pedido de compra)
             imagem_url=None,
             ativo=True,
         )
@@ -949,8 +966,14 @@ def seed_vendas(
     dias_passados: int = 90,  # Reduzido de 180 para 90 dias
     vendas_por_dia: tuple = (2, 5),  # Reduzido de (3, 8) para (2, 5)
 ):
-    """Cria vendas realistas com itens e pagamentos."""
-    print("🧾 Criando vendas...")
+    """Cria vendas realistas com itens e pagamentos.
+    
+    🔥 INCLUI TENDÊNCIA DE CRESCIMENTO:
+    - Dias mais antigos têm MENOS vendas (multiplicador menor)
+    - Dias mais recentes têm MAIS vendas (multiplicador maior)
+    - Isso garante que a métrica de crescimento no dashboard seja realista (~15-25%)
+    """
+    print("🧾 Criando vendas (com tendência de crescimento)...")
 
     vendas_criadas = 0
     hoje = date.today()
@@ -976,6 +999,12 @@ def seed_vendas(
     for dia_offset in range(dias_passados, -1, -1):
         data_venda = hoje - timedelta(days=dia_offset)
 
+        # 🔥 TENDÊNCIA DE CRESCIMENTO: Multiplicador que aumenta ao longo do tempo
+        # Fator de 0.6 (passado distante) a 1.4 (dias recentes) = ~130% de variação
+        # Isso gera ~20% de crescimento entre períodos adjacentes de 30 dias
+        progresso = 1.0 - (dia_offset / max(dias_passados, 1))  # 0.0 (passado) → 1.0 (hoje)
+        multiplicador_tendencia = 0.6 + (progresso * 0.8)  # 0.6 → 1.4
+
         # Menos vendas em finais de semana
         if data_venda.weekday() >= 5:  # Sábado ou domingo
             min_vendas, max_vendas = max(1, vendas_por_dia[0] - 2), max(
@@ -984,7 +1013,9 @@ def seed_vendas(
         else:
             min_vendas, max_vendas = vendas_por_dia
 
-        num_vendas = random.randint(min_vendas, max_vendas)
+        # 🔥 Aplicar tendência ao número de vendas do dia
+        base_vendas = random.randint(min_vendas, max_vendas)
+        num_vendas = max(1, round(base_vendas * multiplicador_tendencia))
 
         for venda_num in range(num_vendas):
             # Escolher horário baseado na distribuição
@@ -1027,8 +1058,9 @@ def seed_vendas(
             db.session.add(venda)
             db.session.flush()
 
-            # Criar itens da venda
-            num_itens = random.randint(1, 8)
+            # Criar itens da venda - 🔥 Mais itens em dias recentes (tendência de ticket médio crescente)
+            base_itens = random.randint(1, 8)
+            num_itens = max(1, round(base_itens * multiplicador_tendencia))
             subtotal = Decimal("0.00")
 
             # DISTRIBUIÇÃO DE PARETO: 80% das vendas vêm de 20% dos produtos
@@ -1229,12 +1261,14 @@ def seed_garantir_vendas_todos_produtos(
             
             db.session.add(item)
             
-            # Atualizar produto - usar Decimal e depois converter para float para o banco
+            # Atualizar estoque e métricas do produto
+            # 🔥 CORREÇÃO: Decrementar estoque (estava faltando, causando inconsistência)
+            produto.quantidade -= quantidade
             produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
             produto.total_vendido = float(Decimal(str(produto.total_vendido or 0)) + total_item)
             produto.ultima_venda = data_hora_venda
             
-            # Criar movimentação
+            # Criar movimentação (vinculada à venda, NÃO a pedido de compra)
             mov = MovimentacaoEstoque(
                 estabelecimento_id=estabelecimento_id,
                 produto_id=produto.id,
@@ -1283,27 +1317,59 @@ def seed_pedidos_compra(
     fornecedores: List[Fornecedor],
     produtos: List[Produto],
 ):
-    # Garantir que TODOS os produtos tenham pelo menos um pedido de compra
-    print("📦 Garantindo pedidos de compra para todos os produtos...")
+    """
+    🔥 REGRA DE NEGÓCIO: TODO produto só pode ter estoque se vier de um pedido de compra.
+    Nenhum produto pode existir no sistema sem pelo menos 1 pedido de compra associado.
+    """
+    print("📦 Criando pedidos de compra para TODOS os produtos...")
     
     hoje = date.today()
     pedidos_criados = 0
     lotes_criados = 0
     boletos_criados = 0
+    produtos_com_pedido = set()  # Rastrear quais produtos receberam pedido
     
-    # Agrupar produtos por fornecedor
+    # 🔥 SAFETY NET: Corrigir produtos órfãos (sem fornecedor ou fornecedor inválido)
+    fornecedor_fallback = fornecedores[0] if fornecedores else None
+    if not fornecedor_fallback:
+        print("  ❌ ERRO CRÍTICO: Nenhum fornecedor disponível! Impossível criar pedidos de compra.")
+        return
+    
+    produtos_orfaos = 0
+    for p in produtos:
+        if not p.fornecedor_id:
+            p.fornecedor_id = fornecedor_fallback.id
+            produtos_orfaos += 1
+        else:
+            # Verificar se o fornecedor_id realmente existe
+            forn_existe = db.session.get(Fornecedor, p.fornecedor_id)
+            if not forn_existe:
+                p.fornecedor_id = fornecedor_fallback.id
+                produtos_orfaos += 1
+    
+    if produtos_orfaos > 0:
+        db.session.commit()
+        print(f"  ⚠️ {produtos_orfaos} produtos estavam sem fornecedor válido → atribuídos ao fornecedor '{fornecedor_fallback.nome_fantasia}'")
+    
+    # Agrupar produtos por fornecedor (agora TODOS têm fornecedor válido)
     produtos_por_fornecedor = {}
     for p in produtos:
         if p.fornecedor_id not in produtos_por_fornecedor:
             produtos_por_fornecedor[p.fornecedor_id] = []
         produtos_por_fornecedor[p.fornecedor_id].append(p)
     
+    funcionarios_validos = [f for f in funcionarios if f.cargo != "Operador de Caixa"]
+    if not funcionarios_validos:
+        funcionarios_validos = funcionarios  # Fallback: qualquer funcionário
+    
     for forn_id, produtos_forn in produtos_por_fornecedor.items():
         fornecedor = db.session.get(Fornecedor, forn_id)
         if not fornecedor:
+            # Isso NÃO deveria acontecer após o safety net acima, mas por segurança:
+            print(f"  ❌ Fornecedor ID={forn_id} não encontrado mesmo após correção! {len(produtos_forn)} produtos afetados.")
             continue
             
-        funcionario = random.choice([f for f in funcionarios if f.cargo != "Operador de Caixa"])
+        funcionario = random.choice(funcionarios_validos)
         data_pedido = hoje - timedelta(days=random.randint(60, 120))
         data_previsao = data_pedido + timedelta(days=fornecedor.prazo_entrega)
 
@@ -1342,7 +1408,8 @@ def seed_pedidos_compra(
             db.session.add(item)
             subtotal_pedido += total_item
             
-            # Movimentação e estoque
+            # Movimentação de estoque vinculada ao pedido de compra
+            quantidade_anterior = produto.quantidade
             produto.quantidade += quantidade
             mov = MovimentacaoEstoque(
                 estabelecimento_id=estabelecimento_id,
@@ -1351,16 +1418,37 @@ def seed_pedidos_compra(
                 funcionario_id=funcionario.id,
                 tipo="entrada",
                 quantidade=quantidade,
-                quantidade_anterior=0,
-                quantidade_atual=quantidade,
+                quantidade_anterior=quantidade_anterior,
+                quantidade_atual=produto.quantidade,
                 custo_unitario=preco_compra,
                 valor_total=total_item,
-                motivo="Entrada Inicial",
+                motivo="Entrada via Pedido de Compra",
                 created_at=data_pedido,
             )
             db.session.add(mov)
             
-            # Lotes
+            # 🔥 Lote vinculado ao pedido de compra com validade REALISTA para FIFO e alertas
+            # Distribuição de validade:
+            #   ~8% já vencidos (testes de alerta de vencido)
+            #   ~10% vencendo em até 7 dias (alerta CRÍTICO)
+            #   ~15% vencendo em 8-30 dias (alerta MÉDIO)
+            #   ~67% validade normal (60-365 dias)
+            sorteio_validade = random.random()
+            if sorteio_validade < 0.08:
+                # JÁ VENCIDO: entre 1 e 30 dias atrás
+                dias_validade = random.randint(-30, -1)
+            elif sorteio_validade < 0.18:
+                # CRÍTICO: vence em 1-7 dias
+                dias_validade = random.randint(1, 7)
+            elif sorteio_validade < 0.33:
+                # MÉDIO: vence em 8-30 dias
+                dias_validade = random.randint(8, 30)
+            else:
+                # NORMAL: validade de 60-365 dias
+                dias_validade = random.randint(60, 365)
+            
+            data_validade_lote = hoje + timedelta(days=dias_validade)
+            
             lote = ProdutoLote(
                 estabelecimento_id=estabelecimento_id,
                 produto_id=produto.id,
@@ -1369,13 +1457,21 @@ def seed_pedidos_compra(
                 numero_lote=f"L{data_pedido.strftime('%Y%m')}{lotes_criados+1:04d}",
                 quantidade_inicial=quantidade,
                 quantidade=quantidade,
-                data_validade=hoje + timedelta(days=random.randint(200, 500)),
+                data_validade=data_validade_lote,
                 data_entrada=data_pedido,
                 preco_custo_unitario=preco_compra,
                 ativo=True,
             )
             db.session.add(lote)
             lotes_criados += 1
+            
+            # 🔥 Sincronizar Produto.data_validade com o lote mais próximo de vencer (FIFO)
+            if not produto.data_validade or data_validade_lote < produto.data_validade:
+                produto.data_validade = data_validade_lote
+                produto.lote = lote.numero_lote
+            
+            # Registrar que este produto recebeu pedido de compra
+            produtos_com_pedido.add(produto.id)
 
         pedido.subtotal = subtotal_pedido
         pedido.total = subtotal_pedido
@@ -1383,8 +1479,41 @@ def seed_pedidos_compra(
         fornecedor.valor_total_comprado += subtotal_pedido
         pedidos_criados += 1
         
-        # Gerar conta a pagar para este pedido
-        data_vencimento = data_pedido + timedelta(days=30)
+        # 🔥 Gerar conta a pagar com STATUS VARIADO (não tudo como "pago")
+        prazo_dias = random.choice([15, 21, 28, 30, 45, 60])
+        data_vencimento = data_pedido + timedelta(days=prazo_dias)
+        dias_ate_vencimento = (data_vencimento - hoje).days
+        
+        # Status baseado na idade do boleto:
+        # - Vencimento já passou: 70% pago, 20% pago com atraso, 10% vencido (aberto)
+        # - Vencimento futuro: 100% aberto (ainda não venceu)
+        if dias_ate_vencimento < -30:
+            # Bem antigo
+            sorteio = random.random()
+            if sorteio < 0.90:
+                status_bol = "pago"
+                data_pgto = data_vencimento + timedelta(days=random.randint(0, 10))
+            else:
+                status_bol = "aberto"  # Esquecido!
+                data_pgto = None
+        elif dias_ate_vencimento < 0:
+            # Venceu recentemente
+            sorteio = random.random()
+            if sorteio < 0.60:
+                status_bol = "pago"
+                data_pgto = data_vencimento + timedelta(days=random.randint(0, 5))
+            else:
+                status_bol = "aberto"  # Vencido
+                data_pgto = None
+        elif dias_ate_vencimento <= 7:
+            # Vence em breve (0-7 dias)
+            status_bol = "aberto"
+            data_pgto = None
+        else:
+            # Vence daqui a mais de 7 dias
+            status_bol = "aberto"
+            data_pgto = None
+        
         boleto = ContaPagar(
             estabelecimento_id=estabelecimento_id,
             fornecedor_id=fornecedor.id,
@@ -1392,237 +1521,852 @@ def seed_pedidos_compra(
             numero_documento=f"FAT{pedido.numero_pedido}",
             tipo_documento="duplicata",
             valor_original=pedido.total,
-            valor_pago=pedido.total,
-            valor_atual=0,
+            valor_pago=pedido.total if status_bol == "pago" else Decimal("0"),
+            valor_atual=Decimal("0") if status_bol == "pago" else pedido.total,
             data_emissao=data_pedido,
             data_vencimento=data_vencimento,
-            data_pagamento=data_vencimento,
-            status="pago",
-            forma_pagamento="transferencia",
+            data_pagamento=data_pgto,
+            status=status_bol,
+            forma_pagamento=random.choice(["transferencia", "boleto", "pix"]),
+            observacoes=f"Pedido {pedido.numero_pedido} - {fornecedor.nome_fantasia}",
         )
         db.session.add(boleto)
         boletos_criados += 1
     
     db.session.commit()
-    print(f"✅ Pedidos de compra, lotes e boletos criados para TODOS os {len(produtos)} produtos")
+    
+    # 🔥 VERIFICAÇÃO FINAL: Garantir que NENHUM produto ficou sem pedido de compra
+    produtos_sem_pedido = [p for p in produtos if p.id not in produtos_com_pedido]
+    if produtos_sem_pedido:
+        print(f"  ❌ ALERTA: {len(produtos_sem_pedido)} produtos ficaram sem pedido de compra!")
+        for p in produtos_sem_pedido[:10]:
+            print(f"     - [{p.id}] {p.nome} (fornecedor_id={p.fornecedor_id})")
+        raise RuntimeError(
+            f"VIOLAÇÃO DE REGRA DE NEGÓCIO: {len(produtos_sem_pedido)} produtos sem pedido de compra! "
+            "Todo produto DEVE ser oriundo de um pedido de compra."
+        )
+    
+    # Verificar que nenhum produto tem estoque sem movimentação
+    produtos_estoque_zero = [p for p in produtos if p.quantidade <= 0]
+    if produtos_estoque_zero:
+        print(f"  ⚠️ {len(produtos_estoque_zero)} produtos com estoque zerado após pedidos de compra")
+    
+    print(f"✅ {pedidos_criados} pedidos de compra criados | {lotes_criados} lotes | {boletos_criados} boletos")
+    print(f"✅ VERIFICADO: {len(produtos_com_pedido)}/{len(produtos)} produtos têm pedido de compra (100%)")
+
+
+def seed_lotes_reabastecimento(
+    fake: Faker,
+    estabelecimento_id: int,
+    funcionarios: List[Funcionario],
+    fornecedores: List[Fornecedor],
+    produtos: List[Produto],
+):
+    """
+    🔥 Simula reabastecimentos ao longo do tempo (múltiplos lotes por produto).
+    
+    Essencial para testar:
+    - FIFO real (qual lote vender primeiro?)
+    - Alertas granulares por lote (um lote vencendo, outro OK)
+    - Rastreabilidade de lotes diferentes do mesmo produto
+    
+    ~40% dos produtos recebem 1-3 lotes adicionais com datas de validade variadas.
+    """
+    print("📦 Criando lotes de reabastecimento (FIFO com múltiplos lotes por produto)...")
+    
+    hoje = date.today()
+    lotes_criados = 0
+    produtos_reabastecidos = 0
+    pedidos_criados = 0
+    
+    funcionarios_validos = [f for f in funcionarios if f.cargo != "Operador de Caixa"]
+    if not funcionarios_validos:
+        funcionarios_validos = funcionarios
+    
+    # ~40% dos produtos recebem reabastecimento
+    produtos_para_reabastecer = random.sample(
+        produtos,
+        k=min(len(produtos), max(1, int(len(produtos) * 0.40)))
+    )
+    
+    # Agrupar por fornecedor para criar pedidos de compra realistas
+    produtos_por_fornecedor = {}
+    for p in produtos_para_reabastecer:
+        if p.fornecedor_id not in produtos_por_fornecedor:
+            produtos_por_fornecedor[p.fornecedor_id] = []
+        produtos_por_fornecedor[p.fornecedor_id].append(p)
+    
+    for forn_id, produtos_forn in produtos_por_fornecedor.items():
+        fornecedor = db.session.get(Fornecedor, forn_id)
+        if not fornecedor:
+            continue
+        
+        funcionario = random.choice(funcionarios_validos)
+        
+        # 1-3 pedidos de reabastecimento por fornecedor, espaçados no tempo
+        num_pedidos_reab = random.randint(1, 3)
+        
+        for pedido_num in range(num_pedidos_reab):
+            # Datas de pedido distribuídas: 10-50 dias atrás
+            data_pedido = hoje - timedelta(days=random.randint(10, 50))
+            data_previsao = data_pedido + timedelta(days=fornecedor.prazo_entrega)
+            
+            pedido = PedidoCompra(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=fornecedor.id,
+                funcionario_id=funcionario.id,
+                numero_pedido=f"PCREAB{data_pedido.strftime('%Y%m%d')}{pedidos_criados+1:03d}",
+                data_pedido=data_pedido,
+                status="recebido",
+                data_recebimento=data_previsao,
+                subtotal=Decimal("0.00"),
+                total=Decimal("0.00"),
+                condicao_pagamento=fornecedor.forma_pagamento,
+                numero_nota_fiscal=fake.ean13(),
+            )
+            db.session.add(pedido)
+            db.session.flush()
+            
+            subtotal_pedido = Decimal("0.00")
+            
+            # Selecionar um subconjunto dos produtos deste fornecedor
+            produtos_pedido = random.sample(
+                produtos_forn,
+                k=min(len(produtos_forn), random.randint(1, max(1, len(produtos_forn) // 2)))
+            )
+            
+            for produto in produtos_pedido:
+                quantidade = random.randint(30, 80)
+                preco_compra = produto.preco_custo * Decimal("0.9")
+                total_item = preco_compra * Decimal(str(quantidade))
+                
+                item = PedidoCompraItem(
+                    pedido_id=pedido.id,
+                    produto_id=produto.id,
+                    produto_nome=produto.nome,
+                    quantidade_solicitada=quantidade,
+                    quantidade_recebida=quantidade,
+                    preco_unitario=preco_compra,
+                    total_item=total_item,
+                    status="recebido",
+                )
+                db.session.add(item)
+                subtotal_pedido += total_item
+                
+                # Movimentação de estoque
+                quantidade_anterior = produto.quantidade
+                produto.quantidade += quantidade
+                mov = MovimentacaoEstoque(
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=produto.id,
+                    pedido_compra_id=pedido.id,
+                    funcionario_id=funcionario.id,
+                    tipo="entrada",
+                    quantidade=quantidade,
+                    quantidade_anterior=quantidade_anterior,
+                    quantidade_atual=produto.quantidade,
+                    custo_unitario=preco_compra,
+                    valor_total=total_item,
+                    motivo="Reabastecimento via Pedido de Compra",
+                    created_at=data_pedido,
+                )
+                db.session.add(mov)
+                
+                # 🔥 Lote com validade variada para testar FIFO e alertas
+                sorteio = random.random()
+                if sorteio < 0.12:
+                    dias_val = random.randint(-15, -1)   # JÁ VENCIDO
+                elif sorteio < 0.25:
+                    dias_val = random.randint(1, 7)      # CRÍTICO: 1-7 dias
+                elif sorteio < 0.42:
+                    dias_val = random.randint(8, 30)     # MÉDIO: 8-30 dias
+                else:
+                    dias_val = random.randint(60, 300)    # NORMAL
+                
+                data_validade_lote = hoje + timedelta(days=dias_val)
+                
+                lote = ProdutoLote(
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=produto.id,
+                    pedido_compra_id=pedido.id,
+                    fornecedor_id=fornecedor.id,
+                    numero_lote=f"LREAB{data_pedido.strftime('%Y%m%d')}{lotes_criados+1:04d}",
+                    quantidade_inicial=quantidade,
+                    quantidade=quantidade,
+                    data_validade=data_validade_lote,
+                    data_entrada=data_pedido,
+                    preco_custo_unitario=preco_compra,
+                    ativo=True,
+                )
+                db.session.add(lote)
+                lotes_criados += 1
+                
+                # Sincronizar Produto.data_validade com o lote MAIS PRÓXIMO de vencer (FIFO)
+                if not produto.data_validade or data_validade_lote < produto.data_validade:
+                    produto.data_validade = data_validade_lote
+                    produto.lote = lote.numero_lote
+                
+                produtos_reabastecidos += 1
+            
+            pedido.subtotal = subtotal_pedido
+            pedido.total = subtotal_pedido
+            fornecedor.total_compras += 1
+            fornecedor.valor_total_comprado += subtotal_pedido
+            pedidos_criados += 1
+    
+    db.session.commit()
+    
+    # Estatísticas
+    lotes_vencidos = db.session.query(ProdutoLote).filter(
+        ProdutoLote.estabelecimento_id == estabelecimento_id,
+        ProdutoLote.data_validade < hoje,
+        ProdutoLote.ativo == True,
+    ).count()
+    
+    lotes_criticos = db.session.query(ProdutoLote).filter(
+        ProdutoLote.estabelecimento_id == estabelecimento_id,
+        ProdutoLote.data_validade.between(hoje, hoje + timedelta(days=7)),
+        ProdutoLote.ativo == True,
+    ).count()
+    
+    lotes_medios = db.session.query(ProdutoLote).filter(
+        ProdutoLote.estabelecimento_id == estabelecimento_id,
+        ProdutoLote.data_validade.between(hoje + timedelta(days=8), hoje + timedelta(days=30)),
+        ProdutoLote.ativo == True,
+    ).count()
+    
+    print(f"✅ {lotes_criados} lotes de reabastecimento criados via {pedidos_criados} pedidos de compra")
+    print(f"   🔴 {lotes_vencidos} lotes JÁ VENCIDOS (alerta imediato)")
+    print(f"   🟠 {lotes_criticos} lotes vencendo em 1-7 dias (alerta CRÍTICO)")
+    print(f"   🟡 {lotes_medios} lotes vencendo em 8-30 dias (alerta MÉDIO)")
+    print(f"   📦 {produtos_reabastecidos} reabastecimentos para {len(produtos_para_reabastecer)} produtos")
+
+
+def seed_historico_precos(
+    fake: Faker,
+    estabelecimento_id: int,
+    produtos: List[Produto],
+    funcionarios: List[Funcionario],
+    dias_historico: int = 180,
+):
+    """
+    🔥 Gera histórico realista de alterações de preços ao longo do tempo.
+    
+    Simula cenários reais de mercado:
+    - Reajuste de fornecedor (custo sobe → venda sobe)
+    - Promoção temporária (venda cai, custo mantém)
+    - Fim de promoção (venda volta ao normal)
+    - Correção inflacionária (ambos sobem)
+    - Negociação com fornecedor (custo cai → repasse parcial ao consumidor)
+    - Aumento de demanda (venda sobe, custo mantém)
+    
+    O sistema pode então identificar:
+    - Produtos com ALTA de preço recente
+    - Produtos com BAIXA de preço recente
+    - Tendência de preço por período
+    - Impacto na margem de lucro
+    """
+    print("📈 Criando histórico de alterações de preços...")
+    
+    hoje = date.today()
+    registros_criados = 0
+    produtos_com_alta = 0
+    produtos_com_baixa = 0
+    produtos_estavel = 0
+    
+    # Funcionários que podem alterar preços (gerentes/admin)
+    funcionarios_gestores = [
+        f for f in funcionarios 
+        if f.cargo in ("Gerente", "Administrador", "Supervisor")
+    ]
+    if not funcionarios_gestores:
+        funcionarios_gestores = funcionarios[:3]  # Fallback
+    
+    # Motivos e cenários de alteração de preço
+    cenarios = [
+        {
+            "motivo": "Reajuste do fornecedor",
+            "tipo": "alta_custo",
+            "custo_pct": (0.03, 0.15),   # Custo sobe 3-15%
+            "venda_pct": (0.03, 0.12),    # Venda sobe 3-12% (repasse parcial)
+            "peso": 25,
+        },
+        {
+            "motivo": "Promoção temporária",
+            "tipo": "baixa_venda",
+            "custo_pct": (0, 0),           # Custo mantém
+            "venda_pct": (-0.20, -0.05),   # Venda cai 5-20%
+            "peso": 20,
+        },
+        {
+            "motivo": "Fim de promoção",
+            "tipo": "alta_venda",
+            "custo_pct": (0, 0),           # Custo mantém
+            "venda_pct": (0.05, 0.20),     # Venda volta 5-20%
+            "peso": 15,
+        },
+        {
+            "motivo": "Correção inflacionária",
+            "tipo": "alta_ambos",
+            "custo_pct": (0.02, 0.08),     # Custo sobe 2-8%
+            "venda_pct": (0.02, 0.08),     # Venda sobe 2-8%
+            "peso": 15,
+        },
+        {
+            "motivo": "Negociação com fornecedor",
+            "tipo": "baixa_custo",
+            "custo_pct": (-0.10, -0.03),   # Custo cai 3-10%
+            "venda_pct": (-0.05, 0.0),     # Venda cai 0-5% (repasse parcial)
+            "peso": 10,
+        },
+        {
+            "motivo": "Aumento de demanda",
+            "tipo": "alta_venda",
+            "custo_pct": (0, 0),           # Custo mantém
+            "venda_pct": (0.03, 0.10),     # Venda sobe 3-10%
+            "peso": 8,
+        },
+        {
+            "motivo": "Concorrência - redução estratégica",
+            "tipo": "baixa_venda",
+            "custo_pct": (0, 0),           # Custo mantém
+            "venda_pct": (-0.15, -0.03),   # Venda cai 3-15%
+            "peso": 7,
+        },
+    ]
+    
+    pesos = [c["peso"] for c in cenarios]
+    
+    # 60-70% dos produtos terão alterações de preço
+    produtos_alterados = random.sample(
+        produtos, 
+        k=min(len(produtos), max(1, int(len(produtos) * random.uniform(0.60, 0.70))))
+    )
+    
+    for produto in produtos_alterados:
+        # Cada produto tem 1-5 alterações ao longo do período
+        num_alteracoes = random.randint(1, 5)
+        
+        # Gerar datas distribuídas ao longo do período
+        datas_alteracao = sorted([
+            hoje - timedelta(days=random.randint(1, dias_historico))
+            for _ in range(num_alteracoes)
+        ])
+        
+        # Preço base do produto (custo e venda originais vindo do pedido de compra)
+        custo_atual = float(produto.preco_custo)
+        venda_atual = float(produto.preco_venda)
+        
+        # Rastrear se o preço final ficou maior ou menor que o original
+        venda_original = venda_atual
+        
+        for data_alt in datas_alteracao:
+            # Selecionar cenário
+            cenario = random.choices(cenarios, weights=pesos, k=1)[0]
+            funcionario = random.choice(funcionarios_gestores)
+            
+            # Calcular variações
+            custo_min, custo_max = cenario["custo_pct"]
+            venda_min, venda_max = cenario["venda_pct"]
+            
+            variacao_custo = random.uniform(custo_min, custo_max) if custo_min != custo_max else 0.0
+            variacao_venda = random.uniform(venda_min, venda_max) if venda_min != venda_max else 0.0
+            
+            # Valores anteriores
+            custo_anterior = custo_atual
+            venda_anterior = venda_atual
+            
+            # Aplicar variações
+            custo_novo = max(0.01, custo_atual * (1 + variacao_custo))
+            venda_novo = max(custo_novo * 1.05, venda_atual * (1 + variacao_venda))  # Venda nunca abaixo de custo+5%
+            
+            # Calcular margens
+            margem_anterior = ((venda_anterior - custo_anterior) / custo_anterior * 100) if custo_anterior > 0 else 0
+            margem_nova = ((venda_novo - custo_novo) / custo_novo * 100) if custo_novo > 0 else 0
+            
+            # Limitar margem ao Numeric(5,2) do banco (max 999.99)
+            margem_anterior = max(-99.99, min(999.99, margem_anterior))
+            margem_nova = max(-99.99, min(999.99, margem_nova))
+            
+            # Gerar observação contextualizada
+            observacoes = None
+            if cenario["tipo"] == "alta_custo":
+                observacoes = f"Fornecedor reajustou em {abs(variacao_custo)*100:.1f}%. Repasse parcial ao consumidor."
+            elif cenario["tipo"] == "baixa_venda" and "Promoção" in cenario["motivo"]:
+                dias_promo = random.randint(7, 30)
+                observacoes = f"Promoção válida por {dias_promo} dias. Desconto de {abs(variacao_venda)*100:.1f}%."
+            elif cenario["tipo"] == "baixa_custo":
+                observacoes = f"Renegociação bem-sucedida. Economia de {abs(variacao_custo)*100:.1f}% no custo."
+            elif "Concorrência" in cenario["motivo"]:
+                observacoes = "Redução para acompanhar preço da concorrência local."
+            
+            data_hora = datetime.combine(data_alt, time(
+                hour=random.randint(8, 17),
+                minute=random.randint(0, 59)
+            ))
+            
+            historico = HistoricoPrecos(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=produto.id,
+                funcionario_id=funcionario.id,
+                preco_custo_anterior=Decimal(str(round(custo_anterior, 2))),
+                preco_venda_anterior=Decimal(str(round(venda_anterior, 2))),
+                margem_anterior=Decimal(str(round(margem_anterior, 2))),
+                preco_custo_novo=Decimal(str(round(custo_novo, 2))),
+                preco_venda_novo=Decimal(str(round(venda_novo, 2))),
+                margem_nova=Decimal(str(round(margem_nova, 2))),
+                motivo=cenario["motivo"],
+                observacoes=observacoes,
+                data_alteracao=data_hora,
+            )
+            db.session.add(historico)
+            registros_criados += 1
+            
+            # Atualizar preços atuais para a próxima iteração
+            custo_atual = custo_novo
+            venda_atual = venda_novo
+        
+        # 🔥 Atualizar o produto com o preço FINAL (último da cadeia)
+        produto.preco_custo = Decimal(str(round(custo_atual, 2)))
+        produto.preco_venda = Decimal(str(round(venda_atual, 2)))
+        nova_margem = ((venda_atual - custo_atual) / custo_atual * 100) if custo_atual > 0 else 0
+        produto.margem_lucro = Decimal(str(round(min(999.99, max(0, nova_margem)), 2)))
+        
+        # Classificar tendência
+        variacao_total = ((venda_atual - venda_original) / venda_original * 100) if venda_original > 0 else 0
+        if variacao_total > 2:
+            produtos_com_alta += 1
+        elif variacao_total < -2:
+            produtos_com_baixa += 1
+        else:
+            produtos_estavel += 1
+    
+    db.session.commit()
+    
+    print(f"✅ {registros_criados} registros de histórico de preços criados para {len(produtos_alterados)} produtos")
+    print(f"   📈 {produtos_com_alta} produtos com ALTA de preço (tendência de alta)")
+    print(f"   📉 {produtos_com_baixa} produtos com BAIXA de preço (tendência de baixa)")
+    print(f"   ➡️  {produtos_estavel} produtos com preço estável (variação < 2%)")
+    print(f"   📊 {len(produtos) - len(produtos_alterados)} produtos sem alteração de preço no período")
 
 
 def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Fornecedor]):
-    """Cria despesas fixas, variáveis e DESNECESSÁRIAS para teste do sistema."""
-    print("💸 Criando despesas (incluindo desnecessárias)...")
+    """
+    🔥 MÓDULO FINANCEIRO ERP - Despesas integradas com Contas a Pagar.
+    
+    Regras de negócio:
+    1. Despesas fixas recorrentes GERAM ContaPagar (boleto) mensal com vencimento definido
+    2. Boletos antigos são marcados como pagos
+    3. Boletos recentes ficam com status variado (pagos, abertos, vencidos)
+    4. Sistema deve alertar boletos próximos do vencimento
+    5. Despesas problemáticas são registradas para análise de corte
+    6. Toda despesa com forma_pagamento='boleto' TEM uma ContaPagar correspondente
+    """
+    print("💸 Criando despesas + contas a pagar (módulo financeiro ERP)...")
 
+    hoje = date.today()
+    despesas = []
+    boletos_criados = 0
+    boletos_pagos = 0
+    boletos_abertos = 0
+    boletos_vencidos = 0
+    
+    # ═══════════════════════════════════════════════════════════
+    # DESPESAS FIXAS RECORRENTES → GERAM BOLETO (ContaPagar)
+    # ═══════════════════════════════════════════════════════════
     despesas_fixas = [
-        {
-            "descricao": "Aluguel",
-            "categoria": "Aluguel",
-            "valor": 2500.00,
-            "tipo": "fixa",
-            "recorrente": True,
-        },
-        {
-            "descricao": "Energia Elétrica",
-            "categoria": "Energia",
-            "valor": 800.00,
-            "tipo": "fixa",
-            "recorrente": True,
-        },
-        {
-            "descricao": "Água e Esgoto",
-            "categoria": "Água",
-            "valor": 300.00,
-            "tipo": "fixa",
-            "recorrente": True,
-        },
-        {
-            "descricao": "Internet",
-            "categoria": "Telecomunicações",
-            "valor": 150.00,
-            "tipo": "fixa",
-            "recorrente": True,
-        },
-        {
-            "descricao": "Salários",
-            "categoria": "Pessoal",
-            "valor": 7500.00,
-            "tipo": "fixa",
-            "recorrente": True,
-        },
+        {"descricao": "Aluguel",             "categoria": "Aluguel",          "valor": 2500.00, "dia_vencimento": 10, "fornecedor_nome": "Imobiliária"},
+        {"descricao": "Energia Elétrica",     "categoria": "Energia",          "valor": 800.00,  "dia_vencimento": 15, "fornecedor_nome": "Concessionária"},
+        {"descricao": "Água e Esgoto",        "categoria": "Água",             "valor": 300.00,  "dia_vencimento": 20, "fornecedor_nome": "Saneamento"},
+        {"descricao": "Internet/Telefonia",   "categoria": "Telecomunicações", "valor": 250.00,  "dia_vencimento": 5,  "fornecedor_nome": "Telecom"},
+        {"descricao": "Contabilidade",        "categoria": "Contábil",         "valor": 600.00,  "dia_vencimento": 10, "fornecedor_nome": "Escritório Contábil"},
+        {"descricao": "Seguro do Imóvel",     "categoria": "Seguros",          "valor": 180.00,  "dia_vencimento": 25, "fornecedor_nome": "Seguradora"},
+        {"descricao": "Alvará/Licenças",      "categoria": "Impostos",         "valor": 120.00,  "dia_vencimento": 15, "fornecedor_nome": "Prefeitura"},
+        {"descricao": "Sistema de Câmeras",   "categoria": "Segurança",        "valor": 150.00,  "dia_vencimento": 1,  "fornecedor_nome": "Segurança"},
+        {"descricao": "Manutenção Ar-Condicionado", "categoria": "Manutenção", "valor": 200.00,  "dia_vencimento": 20, "fornecedor_nome": "Climatização"},
+        {"descricao": "Software ERP (licença)", "categoria": "TI",            "valor": 99.90,   "dia_vencimento": 5,  "fornecedor_nome": "TI"},
     ]
     
-    # 🔥 DESPESAS DESNECESSÁRIAS/PROBLEMÁTICAS para o sistema detectar
-    despesas_problematicas = [
-        {
-            "descricao": "Assinatura de revista de fofocas",
-            "categoria": "Outros",
-            "valor": 89.90,
-            "tipo": "variavel",
-            "recorrente": True,
-        },
-        {
-            "descricao": "Decoração de Natal fora de época",
-            "categoria": "Marketing",
-            "valor": 1200.00,
-            "tipo": "variavel",
-            "recorrente": False,
-        },
-        {
-            "descricao": "Almoço executivo em restaurante caro",
-            "categoria": "Alimentação",
-            "valor": 450.00,
-            "tipo": "variavel",
-            "recorrente": False,
-        },
-        {
-            "descricao": "Curso de astrologia empresarial",
-            "categoria": "Treinamento",
-            "valor": 890.00,
-            "tipo": "variavel",
-            "recorrente": False,
-        },
-        {
-            "descricao": "Plantas ornamentais de luxo",
-            "categoria": "Outros",
-            "valor": 650.00,
-            "tipo": "variavel",
-            "recorrente": False,
-        },
-        {
-            "descricao": "Assinatura de streaming premium",
-            "categoria": "Outros",
-            "valor": 55.90,
-            "tipo": "variavel",
-            "recorrente": True,
-        },
-        {
-            "descricao": "Consultoria de feng shui",
-            "categoria": "Consultoria",
-            "valor": 1500.00,
-            "tipo": "variavel",
-            "recorrente": False,
-        },
-    ]
-
-    despesas = []
-    hoje = date.today()
-
-    # Despesas fixas (últimos 6 meses)
-    for despesa_data in despesas_fixas:
+    # Mapa de fornecedores por nome aproximado
+    fornecedor_map = {}
+    for f in fornecedores:
+        fornecedor_map[f.id] = f
+    fornecedor_fallback = fornecedores[0] if fornecedores else None
+    
+    for desp_data in despesas_fixas:
+        # Selecionar fornecedor aleatório para esta despesa fixa
+        forn = random.choice(fornecedores) if fornecedores else None
+        
+        # Criar despesa + boleto para cada mês (últimos 6 meses + mês atual)
         for mes_offset in range(6, -1, -1):
-            data_despesa = hoje - timedelta(days=30 * mes_offset)
-
+            ano = hoje.year
+            mes = hoje.month - mes_offset
+            while mes <= 0:
+                mes += 12
+                ano -= 1
+            
+            # Data da despesa (primeiro dia útil do mês)
+            data_despesa = date(ano, mes, 1)
+            
+            # Data de vencimento do boleto
+            dia_venc = min(desp_data["dia_vencimento"], 28)
+            data_vencimento = date(ano, mes, dia_venc)
+            
+            # Valor com variação mensal realista (±10%)
+            valor = Decimal(str(round(desp_data["valor"] * random.uniform(0.90, 1.10), 2)))
+            
+            # Criar despesa
             d = Despesa(
                 estabelecimento_id=estabelecimento_id,
-                fornecedor_id=(
-                    random.choice(fornecedores).id
-                    if fornecedores and random.random() > 0.5
-                    else None
-                ),
-                descricao=despesa_data["descricao"],
-                categoria=despesa_data["categoria"],
-                tipo=despesa_data["tipo"],
-                valor=Decimal(
-                    str(despesa_data["valor"] * random.uniform(0.9, 1.1))
-                ),  # Variação de 10%
+                fornecedor_id=forn.id if forn else None,
+                descricao=desp_data["descricao"],
+                categoria=desp_data["categoria"],
+                tipo="fixa",
+                valor=valor,
                 data_despesa=data_despesa,
-                forma_pagamento=random.choice(
-                    ["pix", "dinheiro", "transferencia", "boleto"]
-                ),
-                recorrente=despesa_data["recorrente"],
-                observacoes=None,
+                forma_pagamento="boleto",
+                recorrente=True,
+                observacoes=f"Ref. {mes:02d}/{ano} - Venc. {data_vencimento.isoformat()}",
             )
-
             db.session.add(d)
             despesas.append(d)
-    
-    # 🔥 Despesas problemáticas (últimos 3 meses)
-    for despesa_data in despesas_problematicas:
-        # Se é recorrente, criar para os últimos 3 meses
-        if despesa_data["recorrente"]:
-            for mes_offset in range(3, -1, -1):
-                data_despesa = hoje - timedelta(days=30 * mes_offset)
-                
-                d = Despesa(
-                    estabelecimento_id=estabelecimento_id,
-                    fornecedor_id=None,  # Despesas problemáticas geralmente sem fornecedor
-                    descricao=despesa_data["descricao"],
-                    categoria=despesa_data["categoria"],
-                    tipo=despesa_data["tipo"],
-                    valor=Decimal(str(despesa_data["valor"])),
-                    data_despesa=data_despesa,
-                    forma_pagamento=random.choice(["cartao_credito", "pix"]),
-                    recorrente=True,
-                    observacoes="⚠️ Despesa questionável",
-                )
-                db.session.add(d)
-                despesas.append(d)
-        else:
-            # Despesa única nos últimos 90 dias
-            data_despesa = hoje - timedelta(days=random.randint(1, 90))
             
+            # 🔥 GERAR ContaPagar (BOLETO) para esta despesa fixa
+            # Status baseado na idade:
+            # - Meses passados: 85% pago, 10% pago com atraso, 5% vencido (esquecido)
+            # - Mês atual: 40% pago, 30% aberto, 20% vencido, 10% a vencer
+            dias_ate_vencimento = (data_vencimento - hoje).days
+            
+            if mes_offset >= 2:
+                # Meses antigos: maioria paga
+                sorteio = random.random()
+                if sorteio < 0.85:
+                    status = "pago"
+                    data_pgto = data_vencimento - timedelta(days=random.randint(0, 5))
+                    valor_pago = valor
+                    valor_atual = Decimal("0")
+                elif sorteio < 0.95:
+                    status = "pago"
+                    data_pgto = data_vencimento + timedelta(days=random.randint(1, 15))
+                    valor_pago = valor
+                    valor_atual = Decimal("0")
+                else:
+                    status = "aberto"  # Boleto esquecido!
+                    data_pgto = None
+                    valor_pago = Decimal("0")
+                    valor_atual = valor
+                    boletos_vencidos += 1
+            elif mes_offset == 1:
+                # Mês passado: variado
+                sorteio = random.random()
+                if sorteio < 0.60:
+                    status = "pago"
+                    data_pgto = data_vencimento - timedelta(days=random.randint(0, 3))
+                    valor_pago = valor
+                    valor_atual = Decimal("0")
+                elif sorteio < 0.80:
+                    status = "aberto"  # Vencido e não pago
+                    data_pgto = None
+                    valor_pago = Decimal("0")
+                    valor_atual = valor
+                    boletos_vencidos += 1
+                else:
+                    status = "pago"
+                    data_pgto = data_vencimento + timedelta(days=random.randint(1, 10))
+                    valor_pago = valor
+                    valor_atual = Decimal("0")
+            else:
+                # Mês atual
+                if dias_ate_vencimento < 0:
+                    # Venceu e não pagou
+                    sorteio = random.random()
+                    if sorteio < 0.50:
+                        status = "pago"
+                        data_pgto = data_vencimento + timedelta(days=random.randint(1, 5))
+                        valor_pago = valor
+                        valor_atual = Decimal("0")
+                    else:
+                        status = "aberto"
+                        data_pgto = None
+                        valor_pago = Decimal("0")
+                        valor_atual = valor
+                        boletos_vencidos += 1
+                elif dias_ate_vencimento <= 7:
+                    # Vence em breve
+                    status = "aberto"
+                    data_pgto = None
+                    valor_pago = Decimal("0")
+                    valor_atual = valor
+                    boletos_abertos += 1
+                else:
+                    # Vence daqui a mais de 7 dias
+                    status = "aberto"
+                    data_pgto = None
+                    valor_pago = Decimal("0")
+                    valor_atual = valor
+                    boletos_abertos += 1
+            
+            if status == "pago":
+                boletos_pagos += 1
+            
+            boleto = ContaPagar(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=forn.id if forn else fornecedor_fallback.id,
+                numero_documento=f"BOL-{desp_data['categoria'][:3].upper()}-{ano}{mes:02d}",
+                tipo_documento="boleto",
+                valor_original=valor,
+                valor_pago=valor_pago,
+                valor_atual=valor_atual,
+                data_emissao=data_despesa,
+                data_vencimento=data_vencimento,
+                data_pagamento=data_pgto,
+                status=status,
+                forma_pagamento="boleto",
+                observacoes=f"{desp_data['descricao']} - {mes:02d}/{ano}",
+            )
+            db.session.add(boleto)
+            boletos_criados += 1
+    
+    # ═══════════════════════════════════════════════════════════
+    # DESPESAS PROBLEMÁTICAS (para análise de corte)
+    # ═══════════════════════════════════════════════════════════
+    despesas_problematicas = [
+        {"descricao": "Assinatura de revista de fofocas", "categoria": "Outros", "valor": 89.90, "recorrente": True},
+        {"descricao": "Decoração de Natal fora de época", "categoria": "Marketing", "valor": 1200.00, "recorrente": False},
+        {"descricao": "Almoço executivo em restaurante caro", "categoria": "Alimentação", "valor": 450.00, "recorrente": False},
+        {"descricao": "Curso de astrologia empresarial", "categoria": "Treinamento", "valor": 890.00, "recorrente": False},
+        {"descricao": "Plantas ornamentais de luxo", "categoria": "Outros", "valor": 650.00, "recorrente": False},
+        {"descricao": "Assinatura de streaming premium", "categoria": "Outros", "valor": 55.90, "recorrente": True},
+        {"descricao": "Consultoria de feng shui", "categoria": "Consultoria", "valor": 1500.00, "recorrente": False},
+    ]
+    
+    for desp_data in despesas_problematicas:
+        meses = range(3, -1, -1) if desp_data["recorrente"] else [random.randint(0, 2)]
+        for mes_offset in meses:
+            data_despesa = hoje - timedelta(days=30 * mes_offset)
             d = Despesa(
                 estabelecimento_id=estabelecimento_id,
                 fornecedor_id=None,
-                descricao=despesa_data["descricao"],
-                categoria=despesa_data["categoria"],
-                tipo=despesa_data["tipo"],
-                valor=Decimal(str(despesa_data["valor"])),
+                descricao=desp_data["descricao"],
+                categoria=desp_data["categoria"],
+                tipo="variavel",
+                valor=Decimal(str(desp_data["valor"])),
                 data_despesa=data_despesa,
-                forma_pagamento=random.choice(["cartao_credito", "dinheiro"]),
-                recorrente=False,
-                observacoes="⚠️ Despesa questionável",
+                forma_pagamento=random.choice(["cartao_credito", "pix"]),
+                recorrente=desp_data["recorrente"],
+                observacoes="Despesa questionável - revisar necessidade",
             )
             db.session.add(d)
             despesas.append(d)
-
-    # Despesas variáveis normais
-    categorias_variaveis = [
-        "Manutenção",
-        "Material de Escritório",
-        "Marketing",
-        "Transporte",
-        "Outros",
+    
+    # ═══════════════════════════════════════════════════════════
+    # DESPESAS VARIÁVEIS OPERACIONAIS
+    # ═══════════════════════════════════════════════════════════
+    despesas_variaveis = [
+        ("Troca de lâmpadas LED", "Manutenção", 180.00),
+        ("Resma de papel A4 (5un)", "Material de Escritório", 95.00),
+        ("Sacolas plásticas biodegradáveis", "Embalagens", 320.00),
+        ("Reparo na porta automática", "Manutenção", 450.00),
+        ("Frete de mercadorias (complementar)", "Transporte", 280.00),
+        ("Material de limpeza", "Limpeza", 150.00),
+        ("Etiquetas e bobinas de impressão", "Material de Escritório", 120.00),
+        ("Dedetização mensal", "Higiene", 200.00),
+        ("Uniforme funcionários (3 kits)", "Pessoal", 360.00),
+        ("Serviço de grafiteiro (fachada)", "Marketing", 800.00),
+        ("Banner promocional", "Marketing", 150.00),
+        ("Manutenção do refrigerador", "Manutenção", 550.00),
+        ("Rolo filme PVC (10un)", "Embalagens", 85.00),
+        ("Recarga extintor de incêndio", "Segurança", 120.00),
+        ("Limpeza de caixa de gordura", "Manutenção", 250.00),
+        ("Gasolina (entregas delivery)", "Transporte", 200.00),
+        ("Luvas e toucas descartáveis", "Higiene", 90.00),
+        ("Conserto do carrinho de compras", "Manutenção", 75.00),
+        ("Pilhas e baterias", "Material de Escritório", 45.00),
+        ("Reparo no piso cerâmico", "Manutenção", 380.00),
     ]
-
-    for _ in range(20):
+    
+    for desc, cat, valor_base in despesas_variaveis:
         data_despesa = hoje - timedelta(days=random.randint(1, 180))
-
+        forn = random.choice(fornecedores) if fornecedores and random.random() > 0.3 else None
+        valor = Decimal(str(round(valor_base * random.uniform(0.85, 1.15), 2)))
+        
         d = Despesa(
             estabelecimento_id=estabelecimento_id,
-            fornecedor_id=(
-                random.choice(fornecedores).id
-                if fornecedores and random.random() > 0.3
-                else None
-            ),
-            descricao=fake.text(max_nb_chars=30),
-            categoria=random.choice(categorias_variaveis),
+            fornecedor_id=forn.id if forn else None,
+            descricao=desc,
+            categoria=cat,
             tipo="variavel",
-            valor=Decimal(str(round(random.uniform(50, 500), 2))),
+            valor=valor,
             data_despesa=data_despesa,
-            forma_pagamento=random.choice(["pix", "dinheiro", "cartao_credito"]),
+            forma_pagamento=random.choice(["pix", "dinheiro", "cartao_credito", "boleto"]),
             recorrente=False,
-            observacoes=fake.text(max_nb_chars=100) if random.random() > 0.7 else None,
+            observacoes=None,
         )
-
         db.session.add(d)
         despesas.append(d)
-
+        
+        # Se pagamento é boleto, gera ContaPagar
+        if d.forma_pagamento == "boleto" and forn:
+            data_venc = data_despesa + timedelta(days=random.randint(15, 45))
+            pago = data_venc < hoje
+            
+            boleto = ContaPagar(
+                estabelecimento_id=estabelecimento_id,
+                fornecedor_id=forn.id,
+                numero_documento=f"NF-{random.randint(10000, 99999)}",
+                tipo_documento="nota_fiscal",
+                valor_original=valor,
+                valor_pago=valor if pago else Decimal("0"),
+                valor_atual=Decimal("0") if pago else valor,
+                data_emissao=data_despesa,
+                data_vencimento=data_venc,
+                data_pagamento=data_venc - timedelta(days=random.randint(0, 3)) if pago else None,
+                status="pago" if pago else "aberto",
+                forma_pagamento="boleto",
+                observacoes=desc,
+            )
+            db.session.add(boleto)
+            boletos_criados += 1
+            if pago:
+                boletos_pagos += 1
+            elif data_venc < hoje:
+                boletos_vencidos += 1
+            else:
+                boletos_abertos += 1
+    
     db.session.commit()
-    print(f"✅ {len(despesas)} despesas criadas (incluindo {len(despesas_problematicas)} problemáticas)")
+    print(f"✅ {len(despesas)} despesas criadas (fixas + variáveis + problemáticas)")
+    print(f"✅ {boletos_criados} boletos (ContaPagar) gerados:")
+    print(f"   ✅ {boletos_pagos} pagos | 📋 {boletos_abertos} abertos | 🔴 {boletos_vencidos} vencidos")
     return despesas
+
+
+def seed_contas_receber(
+    estabelecimento_id: int,
+    clientes: List[Cliente],
+):
+    """
+    🔥 Gera contas a receber (vendas a prazo/fiado) para clientes.
+    
+    Cenários:
+    - Vendas a prazo para clientes cadastrados
+    - Parcelamentos (2x a 6x)
+    - Status variado: recebido, aberto, vencido
+    - Clientes bons pagadores vs inadimplentes
+    """
+    print("💰 Criando contas a receber (vendas a prazo)...")
+    
+    hoje = date.today()
+    contas_criadas = 0
+    contas_recebidas = 0
+    contas_abertas = 0
+    contas_vencidas = 0
+    
+    if not clientes:
+        print("   ⚠️ Nenhum cliente para gerar contas a receber")
+        return
+    
+    # ~30% dos clientes fazem compras a prazo
+    clientes_prazo = random.sample(
+        clientes,
+        k=min(len(clientes), max(5, int(len(clientes) * 0.30)))
+    )
+    
+    for cliente in clientes_prazo:
+        # Cada cliente tem 1-4 compras a prazo ao longo dos últimos 90 dias
+        num_compras = random.randint(1, 4)
+        
+        for _ in range(num_compras):
+            data_compra = hoje - timedelta(days=random.randint(5, 90))
+            valor_total = Decimal(str(round(random.uniform(50, 800), 2)))
+            
+            # Parcelamento: 1x a 4x
+            num_parcelas = random.choice([1, 1, 2, 2, 3, 4])
+            valor_parcela = (valor_total / num_parcelas).quantize(Decimal("0.01"))
+            
+            for parcela in range(1, num_parcelas + 1):
+                data_venc = data_compra + timedelta(days=30 * parcela)
+                dias_ate = (data_venc - hoje).days
+                
+                # Status baseado na data de vencimento
+                if dias_ate < -30:
+                    # Venceu há muito tempo
+                    sorteio = random.random()
+                    if sorteio < 0.75:
+                        status = "recebido"
+                        data_rec = data_venc + timedelta(days=random.randint(0, 15))
+                    else:
+                        status = "aberto"  # Inadimplente
+                        data_rec = None
+                        contas_vencidas += 1
+                elif dias_ate < 0:
+                    # Venceu recentemente
+                    sorteio = random.random()
+                    if sorteio < 0.50:
+                        status = "recebido"
+                        data_rec = data_venc + timedelta(days=random.randint(0, 5))
+                    else:
+                        status = "aberto"  # Vencido
+                        data_rec = None
+                        contas_vencidas += 1
+                else:
+                    # Ainda não venceu
+                    status = "aberto"
+                    data_rec = None
+                    contas_abertas += 1
+                
+                if status == "recebido":
+                    contas_recebidas += 1
+                
+                conta = ContaReceber(
+                    estabelecimento_id=estabelecimento_id,
+                    cliente_id=cliente.id,
+                    numero_documento=f"CR-{data_compra.strftime('%Y%m%d')}-{random.randint(100, 999)}-{parcela}",
+                    tipo_documento="duplicata" if num_parcelas > 1 else "recibo",
+                    valor_original=valor_parcela,
+                    valor_recebido=valor_parcela if status == "recebido" else Decimal("0"),
+                    valor_atual=Decimal("0") if status == "recebido" else valor_parcela,
+                    data_emissao=data_compra,
+                    data_vencimento=data_venc,
+                    data_recebimento=data_rec,
+                    status=status,
+                    forma_recebimento="pix" if status == "recebido" else None,
+                    observacoes=f"Parcela {parcela}/{num_parcelas}" if num_parcelas > 1 else "Pagamento à vista (prazo)",
+                )
+                db.session.add(conta)
+                contas_criadas += 1
+    
+    db.session.commit()
+    print(f"✅ {contas_criadas} contas a receber criadas para {len(clientes_prazo)} clientes")
+    print(f"   ✅ {contas_recebidas} recebidas | 📋 {contas_abertas} abertas | 🔴 {contas_vencidas} vencidas")
 
 
 def seed_ponto(
     fake: Faker,
     estabelecimento_id: int,
     funcionarios: List[Funcionario],
-    dias_passados: int = 30
+    dias_passados: int = 90,
 ):
-    """Cria histórico realista de registros de ponto"""
-    print("⏰ Criando histórico de ponto...")
+    """
+    Cria histórico COMPLETO e realista de registros de ponto.
     
-    from app.models import RegistroPonto, ConfiguracaoHorario
+    Cenários por funcionário:
+    - Dias normais (pontual, 4 registros)
+    - Dias com atraso na entrada
+    - Dias com hora extra (saída após 18h)
+    - Dias com atraso no retorno do almoço
+    - Dias de falta (sem registros)
+    - Dias com apenas entrada (esqueceu de bater saída)
     
-    # Criar configuração de horários se não existir
+    Cada funcionário tem um "perfil" comportamental:
+    - Pontual: raramente atrasa, nunca faz hora extra
+    - Normal: atrasa às vezes, hora extra ocasional
+    - Atrasado crônico: atrasa frequentemente
+    - Trabalhador: faz muita hora extra
+    """
+    print(f"⏰ Criando histórico de ponto ({dias_passados} dias)...")
+    
+    # Criar configuração de horários
     config = ConfiguracaoHorario.query.filter_by(
         estabelecimento_id=estabelecimento_id
     ).first()
@@ -1630,126 +2374,565 @@ def seed_ponto(
     if not config:
         config = ConfiguracaoHorario(
             estabelecimento_id=estabelecimento_id,
-            hora_entrada=datetime.strptime('08:00', '%H:%M').time(),
-            hora_saida_almoco=datetime.strptime('12:00', '%H:%M').time(),
-            hora_retorno_almoco=datetime.strptime('13:00', '%H:%M').time(),
-            hora_saida=datetime.strptime('18:00', '%H:%M').time(),
+            hora_entrada=time(8, 0),
+            hora_saida_almoco=time(12, 0),
+            hora_retorno_almoco=time(13, 0),
+            hora_saida=time(18, 0),
             tolerancia_entrada=10,
             tolerancia_saida_almoco=5,
             tolerancia_retorno_almoco=10,
             tolerancia_saida=5,
             exigir_foto=True,
             exigir_localizacao=False,
-            raio_permitido_metros=100
+            raio_permitido_metros=100,
         )
         db.session.add(config)
         db.session.flush()
     
-    # Criar registros apenas para funcionários (não para clientes)
-    funcionarios_filtrados = [f for f in funcionarios if f.role in ['ADMIN', 'FUNCIONARIO']]
-    
+    funcionarios_filtrados = [f for f in funcionarios if f.ativo and f.role in ("ADMIN", "FUNCIONARIO")]
     if not funcionarios_filtrados:
-        print("   ⚠️  Nenhum funcionário para criar ponto")
+        print("   ⚠️ Nenhum funcionário ativo para criar ponto")
         return 0
     
+    # Perfis comportamentais para cada funcionário
+    perfis = ["pontual", "normal", "atrasado_cronico", "trabalhador"]
+    perfil_funcionario = {}
+    for func in funcionarios_filtrados:
+        if func.cargo in ("Gerente", "Administrador"):
+            perfil_funcionario[func.id] = "trabalhador"  # Gerentes fazem mais HE
+        elif func.cargo == "Operador de Caixa":
+            perfil_funcionario[func.id] = random.choice(["pontual", "normal"])
+        else:
+            perfil_funcionario[func.id] = random.choice(perfis)
+    
     pontos_criados = 0
+    dias_atraso = 0
+    dias_hora_extra = 0
+    dias_falta = 0
     hoje = date.today()
     
     for dias_atras in range(dias_passados, 0, -1):
         data_registro = hoje - timedelta(days=dias_atras)
         
         # Pular fins de semana
-        if data_registro.weekday() >= 5:  # 5=sábado, 6=domingo
+        if data_registro.weekday() >= 5:
             continue
         
         for funcionario in funcionarios_filtrados:
-            # Entrada (entre 07:50 e 08:15)
-            hora_entrada = datetime.strptime('08:00', '%H:%M').time()
-            minutos_variacao = random.randint(-10, 15)
-            hora_entrada = (
-                datetime.combine(data_registro, hora_entrada) + 
-                timedelta(minutes=minutos_variacao)
-            ).time()
+            perfil = perfil_funcionario.get(funcionario.id, "normal")
+            
+            # ═══ CENÁRIO: FALTA ═══
+            # Probabilidade de falta baseada no perfil
+            prob_falta = {
+                "pontual": 0.02,       # 2% - quase nunca falta
+                "normal": 0.05,        # 5% - falta ocasional
+                "atrasado_cronico": 0.10,  # 10% - falta mais
+                "trabalhador": 0.03,   # 3% - raramente falta
+            }
+            if random.random() < prob_falta.get(perfil, 0.05):
+                dias_falta += 1
+                continue  # Sem registros neste dia
+            
+            # ═══ ENTRADA ═══
+            variacao_entrada = {
+                "pontual": random.randint(-10, 5),      # Quase sempre no horário
+                "normal": random.randint(-5, 15),        # Variação moderada
+                "atrasado_cronico": random.randint(5, 40),  # Frequentemente atrasado
+                "trabalhador": random.randint(-15, 5),   # Chega cedo
+            }
+            min_entrada = variacao_entrada.get(perfil, random.randint(-5, 15))
+            hora_ent = (datetime.combine(data_registro, time(8, 0)) + timedelta(minutes=min_entrada)).time()
+            
+            atraso_entrada = max(0, min_entrada - 10)  # Tolerância de 10min
+            status_ent = "atrasado" if atraso_entrada > 0 else "normal"
+            if atraso_entrada > 0:
+                dias_atraso += 1
             
             entrada = RegistroPonto(
                 funcionario_id=funcionario.id,
                 estabelecimento_id=estabelecimento_id,
                 data=data_registro,
-                hora=hora_entrada,
-                tipo_registro='entrada',
-                status='normal' if minutos_variacao <= 10 else 'atrasado',
-                minutos_atraso=max(0, minutos_variacao - 10),
-                observacao='Entrada matinal'
+                hora=hora_ent,
+                tipo_registro="entrada",
+                status=status_ent,
+                minutos_atraso=atraso_entrada,
+                dispositivo="Chrome/Windows" if random.random() > 0.3 else "Safari/iOS",
+                ip_address=f"192.168.1.{random.randint(10, 254)}",
+                observacao="Entrada matinal" if status_ent == "normal" else f"Atraso de {atraso_entrada}min",
             )
             db.session.add(entrada)
             pontos_criados += 1
             
-            # Saída almoço (entre 11:55 e 12:10)
-            hora_saida_alm = datetime.strptime('12:00', '%H:%M').time()
-            minutos_var_alm = random.randint(-5, 10)
-            hora_saida_alm = (
-                datetime.combine(data_registro, hora_saida_alm) + 
-                timedelta(minutes=minutos_var_alm)
-            ).time()
+            # ═══ CENÁRIO: ESQUECEU DE BATER SAÍDA (raro) ═══
+            if random.random() < 0.03:  # 3% das vezes
+                continue  # Só bateu entrada
+            
+            # ═══ SAÍDA ALMOÇO ═══
+            min_saida_alm = random.randint(-5, 10)
+            hora_sa = (datetime.combine(data_registro, time(12, 0)) + timedelta(minutes=min_saida_alm)).time()
             
             saida_almoco = RegistroPonto(
                 funcionario_id=funcionario.id,
                 estabelecimento_id=estabelecimento_id,
                 data=data_registro,
-                hora=hora_saida_alm,
-                tipo_registro='saida_almoco',
-                status='normal',
+                hora=hora_sa,
+                tipo_registro="saida_almoco",
+                status="normal",
                 minutos_atraso=0,
-                observacao='Saída para almoço'
+                observacao="Saída para almoço",
             )
             db.session.add(saida_almoco)
             pontos_criados += 1
             
-            # Retorno almoço (entre 12:55 e 13:15)
-            hora_retorno_alm = datetime.strptime('13:00', '%H:%M').time()
-            minutos_var_ret = random.randint(-5, 15)
-            hora_retorno_alm = (
-                datetime.combine(data_registro, hora_retorno_alm) + 
-                timedelta(minutes=minutos_var_ret)
-            ).time()
+            # ═══ RETORNO ALMOÇO ═══
+            variacao_retorno = {
+                "pontual": random.randint(-5, 5),
+                "normal": random.randint(-3, 15),
+                "atrasado_cronico": random.randint(5, 25),
+                "trabalhador": random.randint(-10, 5),
+            }
+            min_retorno = variacao_retorno.get(perfil, random.randint(-5, 15))
+            hora_ret = (datetime.combine(data_registro, time(13, 0)) + timedelta(minutes=min_retorno)).time()
+            atraso_retorno = max(0, min_retorno - 10)
             
             retorno_almoco = RegistroPonto(
                 funcionario_id=funcionario.id,
                 estabelecimento_id=estabelecimento_id,
                 data=data_registro,
-                hora=hora_retorno_alm,
-                tipo_registro='retorno_almoco',
-                status='normal' if minutos_var_ret <= 10 else 'atrasado',
-                minutos_atraso=max(0, minutos_var_ret - 10),
-                observacao='Retorno do almoço'
+                hora=hora_ret,
+                tipo_registro="retorno_almoco",
+                status="atrasado" if atraso_retorno > 0 else "normal",
+                minutos_atraso=atraso_retorno,
+                observacao="Retorno do almoço",
             )
             db.session.add(retorno_almoco)
             pontos_criados += 1
             
-            # Saída final (entre 17:50 e 18:30)
-            hora_saida_fim = datetime.strptime('18:00', '%H:%M').time()
-            minutos_var_fim = random.randint(-10, 30)
-            hora_saida_fim = (
-                datetime.combine(data_registro, hora_saida_fim) + 
-                timedelta(minutes=minutos_var_fim)
-            ).time()
+            # ═══ SAÍDA ═══
+            variacao_saida = {
+                "pontual": random.randint(-5, 5),       # Sai no horário
+                "normal": random.randint(-5, 30),        # Às vezes faz HE
+                "atrasado_cronico": random.randint(-10, 10),  # Sai no horário
+                "trabalhador": random.randint(15, 120),  # Faz MUITA hora extra
+            }
+            min_saida = variacao_saida.get(perfil, random.randint(-5, 30))
+            hora_sai = (datetime.combine(data_registro, time(18, 0)) + timedelta(minutes=min_saida)).time()
+            
+            is_hora_extra = min_saida > 5  # Saiu mais de 5min depois
+            if is_hora_extra:
+                dias_hora_extra += 1
             
             saida = RegistroPonto(
                 funcionario_id=funcionario.id,
                 estabelecimento_id=estabelecimento_id,
                 data=data_registro,
-                hora=hora_saida_fim,
-                tipo_registro='saida',
-                status='normal',
+                hora=hora_sai,
+                tipo_registro="saida",
+                status="normal",
                 minutos_atraso=0,
-                observacao='Saída final'
+                observacao=f"Hora extra: +{min_saida}min" if is_hora_extra else "Saída normal",
             )
             db.session.add(saida)
             pontos_criados += 1
     
     db.session.commit()
-    print(f"✅ {pontos_criados} registros de ponto criados")
+    print(f"✅ {pontos_criados} registros de ponto criados ({dias_passados} dias)")
+    print(f"   📊 {dias_atraso} dias com atraso | {dias_hora_extra} dias com hora extra | {dias_falta} faltas")
+    
+    # Resumo de perfis
+    for perfil_nome in set(perfil_funcionario.values()):
+        qtd = sum(1 for p in perfil_funcionario.values() if p == perfil_nome)
+        print(f"   👤 {qtd} funcionário(s) com perfil '{perfil_nome}'")
+    
     return pontos_criados
+
+
+def seed_beneficios(
+    fake: Faker,
+    estabelecimento_id: int,
+    funcionarios: List[Funcionario],
+):
+    """
+    Cria benefícios do estabelecimento e atribui a funcionários.
+    
+    Benefícios típicos de supermercado:
+    - Vale Transporte, Vale Alimentação, Plano de Saúde, etc.
+    - Cada funcionário recebe 2-5 benefícios com valores variados
+    """
+    print("🎁 Criando benefícios e atribuindo a funcionários...")
+    
+    beneficios_data = [
+        {"nome": "Vale Transporte", "descricao": "Auxílio transporte público municipal", "valor_padrao": 220.00},
+        {"nome": "Vale Alimentação", "descricao": "Cartão alimentação mensal", "valor_padrao": 450.00},
+        {"nome": "Vale Refeição", "descricao": "Refeição diária no trabalho", "valor_padrao": 25.00},
+        {"nome": "Plano de Saúde", "descricao": "Plano de saúde coletivo empresarial", "valor_padrao": 350.00},
+        {"nome": "Plano Odontológico", "descricao": "Assistência odontológica", "valor_padrao": 80.00},
+        {"nome": "Seguro de Vida", "descricao": "Seguro de vida em grupo", "valor_padrao": 30.00},
+        {"nome": "Cesta Básica", "descricao": "Cesta básica mensal do estabelecimento", "valor_padrao": 180.00},
+        {"nome": "Auxílio Creche", "descricao": "Auxílio para funcionários com filhos até 5 anos", "valor_padrao": 300.00},
+        {"nome": "Participação nos Lucros", "descricao": "PLR semestral baseado em metas", "valor_padrao": 500.00},
+        {"nome": "Desconto em Produtos", "descricao": "10% de desconto nas compras do estabelecimento", "valor_padrao": 0.00},
+    ]
+    
+    beneficios = []
+    for ben_data in beneficios_data:
+        ben = Beneficio(
+            estabelecimento_id=estabelecimento_id,
+            nome=ben_data["nome"],
+            descricao=ben_data["descricao"],
+            valor_padrao=Decimal(str(ben_data["valor_padrao"])),
+            ativo=True,
+        )
+        db.session.add(ben)
+        beneficios.append(ben)
+    
+    db.session.flush()
+    
+    # Atribuir benefícios aos funcionários ativos
+    funcionarios_ativos = [f for f in funcionarios if f.ativo]
+    atribuicoes = 0
+    
+    for func in funcionarios_ativos:
+        # Todos recebem VT, VA e Seguro de Vida (obrigatórios)
+        beneficios_obrigatorios = [b for b in beneficios if b.nome in (
+            "Vale Transporte", "Vale Alimentação", "Seguro de Vida"
+        )]
+        
+        # Selecionar 1-3 benefícios opcionais adicionais
+        beneficios_opcionais = [b for b in beneficios if b not in beneficios_obrigatorios]
+        num_opcionais = random.randint(1, min(3, len(beneficios_opcionais)))
+        beneficios_selecionados = beneficios_obrigatorios + random.sample(beneficios_opcionais, num_opcionais)
+        
+        # Gerentes/Admin recebem mais benefícios
+        if func.cargo in ("Gerente", "Administrador"):
+            extras = [b for b in beneficios_opcionais if b not in beneficios_selecionados]
+            beneficios_selecionados += random.sample(extras, min(2, len(extras)))
+        
+        for ben in beneficios_selecionados:
+            # Valor pode variar ±20% do padrão baseado no cargo
+            valor_base = float(ben.valor_padrao)
+            if valor_base > 0:
+                fator_cargo = 1.0
+                if func.cargo in ("Gerente", "Administrador"):
+                    fator_cargo = random.uniform(1.1, 1.3)  # +10-30%
+                elif func.cargo == "Supervisor":
+                    fator_cargo = random.uniform(1.0, 1.15)
+                valor_func = round(valor_base * fator_cargo, 2)
+            else:
+                valor_func = 0.0
+            
+            fb = FuncionarioBeneficio(
+                funcionario_id=func.id,
+                beneficio_id=ben.id,
+                valor=Decimal(str(valor_func)),
+                data_inicio=func.data_admissao,
+                ativo=True,
+            )
+            db.session.add(fb)
+            atribuicoes += 1
+    
+    db.session.commit()
+    print(f"✅ {len(beneficios)} benefícios criados | {atribuicoes} atribuições a {len(funcionarios_ativos)} funcionários")
+
+
+def seed_banco_horas(
+    estabelecimento_id: int,
+    funcionarios: List[Funcionario],
+    meses_passados: int = 3,
+):
+    """
+    Calcula e registra o banco de horas baseado nos registros de ponto existentes.
+    
+    Para cada funcionário e cada mês:
+    - Soma horas trabalhadas (entrada→saída com desconto de almoço)
+    - Compara com horas esperadas (8h × dias úteis do mês)
+    - Saldo positivo = hora extra, negativo = devedor
+    - Calcula valor monetário da hora extra (50% sobre hora normal)
+    """
+    print("⏱️ Calculando banco de horas baseado nos registros de ponto...")
+    
+    hoje = date.today()
+    registros_criados = 0
+    
+    funcionarios_ativos = [f for f in funcionarios if f.ativo and f.role in ("ADMIN", "FUNCIONARIO")]
+    
+    for func in funcionarios_ativos:
+        salario_hora = float(func.salario_base or 1800) / 220  # 220h mensais (CLT)
+        valor_he_50 = salario_hora * 1.5  # 50% adicional
+        
+        for mes_offset in range(meses_passados, -1, -1):
+            # Calcular mês de referência
+            ano = hoje.year
+            mes = hoje.month - mes_offset
+            while mes <= 0:
+                mes += 12
+                ano -= 1
+            mes_ref = f"{ano:04d}-{mes:02d}"
+            
+            # Buscar registros de ponto deste mês
+            primeiro_dia = date(ano, mes, 1)
+            if mes == 12:
+                ultimo_dia = date(ano + 1, 1, 1) - timedelta(days=1)
+            else:
+                ultimo_dia = date(ano, mes + 1, 1) - timedelta(days=1)
+            
+            # Limitar ao hoje se for mês atual
+            if ultimo_dia > hoje:
+                ultimo_dia = hoje
+            
+            registros = RegistroPonto.query.filter(
+                RegistroPonto.funcionario_id == func.id,
+                RegistroPonto.estabelecimento_id == estabelecimento_id,
+                RegistroPonto.data.between(primeiro_dia, ultimo_dia),
+            ).order_by(RegistroPonto.data, RegistroPonto.hora).all()
+            
+            # Agrupar registros por dia
+            registros_por_dia = {}
+            for reg in registros:
+                if reg.data not in registros_por_dia:
+                    registros_por_dia[reg.data] = {}
+                registros_por_dia[reg.data][reg.tipo_registro] = reg
+            
+            # Calcular horas trabalhadas
+            total_minutos_trabalhados = 0
+            dias_trabalhados = 0
+            
+            for data_dia, regs_dia in registros_por_dia.items():
+                entrada = regs_dia.get("entrada")
+                saida = regs_dia.get("saida")
+                saida_alm = regs_dia.get("saida_almoco")
+                retorno_alm = regs_dia.get("retorno_almoco")
+                
+                if entrada and saida:
+                    # Período manhã + tarde
+                    dt_entrada = datetime.combine(data_dia, entrada.hora)
+                    dt_saida = datetime.combine(data_dia, saida.hora)
+                    
+                    # Desconto almoço
+                    minutos_almoco = 60  # Padrão 1h
+                    if saida_alm and retorno_alm:
+                        dt_sa = datetime.combine(data_dia, saida_alm.hora)
+                        dt_ret = datetime.combine(data_dia, retorno_alm.hora)
+                        minutos_almoco = max(0, int((dt_ret - dt_sa).total_seconds() / 60))
+                    
+                    minutos_dia = max(0, int((dt_saida - dt_entrada).total_seconds() / 60) - minutos_almoco)
+                    total_minutos_trabalhados += minutos_dia
+                    dias_trabalhados += 1
+            
+            # Calcular dias úteis esperados no mês
+            dias_uteis = 0
+            d = primeiro_dia
+            while d <= ultimo_dia:
+                if d.weekday() < 5:  # Segunda a sexta
+                    dias_uteis += 1
+                d += timedelta(days=1)
+            
+            horas_esperadas_minutos = dias_uteis * 480  # 8h × 60min
+            saldo_minutos = total_minutos_trabalhados - horas_esperadas_minutos
+            
+            # Calcular valor das horas extras (apenas saldo positivo)
+            horas_extras = max(0, saldo_minutos) / 60.0
+            valor_he = round(horas_extras * valor_he_50, 2)
+            
+            banco = BancoHoras(
+                funcionario_id=func.id,
+                mes_referencia=mes_ref,
+                saldo_minutos=saldo_minutos,
+                valor_hora_extra=Decimal(str(valor_he)),
+                horas_trabalhadas_minutos=total_minutos_trabalhados,
+                horas_esperadas_minutos=horas_esperadas_minutos,
+            )
+            db.session.add(banco)
+            registros_criados += 1
+    
+    db.session.commit()
+    
+    # Estatísticas
+    total_he_positivo = db.session.query(db.func.count(BancoHoras.id)).filter(
+        BancoHoras.saldo_minutos > 0
+    ).scalar()
+    total_he_negativo = db.session.query(db.func.count(BancoHoras.id)).filter(
+        BancoHoras.saldo_minutos < 0
+    ).scalar()
+    
+    print(f"✅ {registros_criados} registros de banco de horas criados")
+    print(f"   📈 {total_he_positivo} meses com hora extra (saldo positivo)")
+    print(f"   📉 {total_he_negativo} meses com saldo negativo (devedor)")
+
+
+def seed_justificativas(
+    fake: Faker,
+    estabelecimento_id: int,
+    funcionarios: List[Funcionario],
+    dias_passados: int = 90,
+):
+    """
+    Cria justificativas de ponto realistas baseadas nos registros existentes.
+    
+    Cenários:
+    - Justificativas de atraso (com e sem atestado)
+    - Justificativas de falta (atestado médico, compromisso pessoal)
+    - Justificativas de saída antecipada
+    - Justificativas de hora extra
+    - Status variados: pendente, aprovado, rejeitado
+    """
+    print("📋 Criando justificativas de ponto...")
+    
+    hoje = date.today()
+    justificativas_criadas = 0
+    
+    funcionarios_ativos = [f for f in funcionarios if f.ativo and f.role in ("ADMIN", "FUNCIONARIO")]
+    if not funcionarios_ativos:
+        print("   ⚠️ Nenhum funcionário ativo")
+        return
+    
+    # Funcionários que podem aprovar
+    aprovadores = [f for f in funcionarios if f.cargo in ("Gerente", "Administrador")]
+    if not aprovadores:
+        aprovadores = funcionarios_ativos[:1]
+    
+    motivos_atraso = [
+        "Trânsito congestionado na BR-101",
+        "Problema mecânico no carro",
+        "Ônibus atrasou na linha 42",
+        "Consulta médica de emergência",
+        "Acompanhamento de filho ao médico",
+        "Acidente na via de acesso",
+        "Problema com transporte público",
+        "Chuva forte na região",
+        "Enchente na rua de casa",
+    ]
+    
+    motivos_falta = [
+        "Atestado médico - gripe",
+        "Atestado médico - consulta oftalmologista",
+        "Atestado médico - exame de sangue",
+        "Acompanhamento de familiar ao hospital",
+        "Falecimento de parente",
+        "Audiência judicial",
+        "Compromisso no cartório",
+        "Problema familiar urgente",
+        "Doação de sangue",
+        "Atestado médico - procedimento odontológico",
+    ]
+    
+    motivos_saida_antecipada = [
+        "Consulta médica agendada",
+        "Reunião escolar do filho",
+        "Problema de saúde familiar",
+        "Compromisso no banco (horário comercial)",
+        "Emergência domiciliar",
+    ]
+    
+    motivos_hora_extra = [
+        "Fechamento de balanço mensal",
+        "Inventário de estoque",
+        "Promoção especial - alto movimento",
+        "Cobertura de colega ausente",
+        "Reposição de mercadorias urgente",
+        "Preparação para auditoria",
+        "Período de alta demanda (feriado próximo)",
+    ]
+    
+    for func in funcionarios_ativos:
+        # Cada funcionário tem 3-8 justificativas ao longo do período
+        num_justificativas = random.randint(3, 8)
+        
+        for _ in range(num_justificativas):
+            data_just = hoje - timedelta(days=random.randint(1, dias_passados))
+            
+            # Tipo da justificativa
+            tipo = random.choices(
+                ["atraso", "falta", "saida_antecipada", "hora_extra"],
+                weights=[40, 25, 15, 20],
+                k=1,
+            )[0]
+            
+            if tipo == "atraso":
+                motivo = random.choice(motivos_atraso)
+            elif tipo == "falta":
+                motivo = random.choice(motivos_falta)
+            elif tipo == "saida_antecipada":
+                motivo = random.choice(motivos_saida_antecipada)
+            else:
+                motivo = random.choice(motivos_hora_extra)
+            
+            # Status: mais velhas tendem a estar resolvidas
+            dias_atras = (hoje - data_just).days
+            if dias_atras > 30:
+                status = random.choices(
+                    ["aprovado", "rejeitado"],
+                    weights=[80, 20],
+                    k=1,
+                )[0]
+            elif dias_atras > 7:
+                status = random.choices(
+                    ["aprovado", "rejeitado", "pendente"],
+                    weights=[60, 15, 25],
+                    k=1,
+                )[0]
+            else:
+                status = random.choices(
+                    ["pendente", "aprovado"],
+                    weights=[70, 30],
+                    k=1,
+                )[0]
+            
+            aprovador = random.choice(aprovadores) if status != "pendente" else None
+            data_resposta = None
+            motivo_rejeicao = None
+            
+            if status != "pendente":
+                data_resposta = datetime.combine(
+                    data_just + timedelta(days=random.randint(1, 5)),
+                    time(random.randint(9, 17), random.randint(0, 59)),
+                )
+            
+            if status == "rejeitado":
+                motivo_rejeicao = random.choice([
+                    "Sem comprovante anexado",
+                    "Justificativa insuficiente",
+                    "Recorrência excessiva",
+                    "Fora do prazo de envio",
+                    "Não se enquadra na política interna",
+                ])
+            
+            # Documento (30% das justificativas tem documento)
+            doc_url = None
+            if random.random() < 0.30 and tipo in ("falta", "atraso"):
+                doc_url = f"/uploads/justificativas/atestado_{func.id}_{data_just.isoformat()}.pdf"
+            
+            just = JustificativaPonto(
+                estabelecimento_id=estabelecimento_id,
+                funcionario_id=func.id,
+                aprovador_id=aprovador.id if aprovador else None,
+                tipo=tipo,
+                data=data_just,
+                motivo=motivo,
+                documento_url=doc_url,
+                status=status,
+                data_resposta=data_resposta,
+                motivo_rejeicao=motivo_rejeicao,
+                created_at=datetime.combine(data_just, time(random.randint(8, 18), random.randint(0, 59))),
+            )
+            db.session.add(just)
+            justificativas_criadas += 1
+    
+    db.session.commit()
+    
+    # Estatísticas
+    pendentes = sum(1 for _ in db.session.query(JustificativaPonto).filter_by(
+        estabelecimento_id=estabelecimento_id, status="pendente"
+    ))
+    aprovadas = sum(1 for _ in db.session.query(JustificativaPonto).filter_by(
+        estabelecimento_id=estabelecimento_id, status="aprovado"
+    ))
+    rejeitadas = sum(1 for _ in db.session.query(JustificativaPonto).filter_by(
+        estabelecimento_id=estabelecimento_id, status="rejeitado"
+    ))
+    
+    print(f"✅ {justificativas_criadas} justificativas criadas")
+    print(f"   ⏳ {pendentes} pendentes | ✅ {aprovadas} aprovadas | ❌ {rejeitadas} rejeitadas")
 
 
 def seed_caixas(fake: Faker, estabelecimento_id: int, funcionarios: List[Funcionario]):
@@ -1997,19 +3180,23 @@ def test_admin_login():
         else:
             print("❌ FALHA: Senha 'admin123' NÃO FUNCIONA!")
             print(
-                f"   Hash armazenado: {admin.senha[:50]}..."
-                if admin.senha
+                f"   Hash armazenado: {admin.senha_hash[:50]}..."
+                if admin.senha_hash
                 else "Nenhum hash"
             )
-            print(f"   Salt: {admin.salt}" if hasattr(admin, "salt") else "Sem salt")
-
-            # Calcular hash manualmente para debug
-            if hasattr(admin, "salt") and admin.salt:
-                test_hash = hashlib.sha256(f"admin123{admin.salt}".encode()).hexdigest()
-                print(f"   Hash calculado: {test_hash[:50]}...")
-                print(f"   Hash correto? {admin.senha == test_hash}")
-
-            return False
+            
+            # Tentar corrigir a senha
+            print("\n🔧 Tentando corrigir a senha...")
+            admin.set_senha("admin123")
+            db.session.commit()
+            db.session.refresh(admin)
+            
+            if admin.check_senha("admin123"):
+                print("✅ Senha corrigida com sucesso!")
+                return True
+            else:
+                print("❌ Ainda não funciona após correção!")
+                return False
     else:
         print("⚠️  AVISO: Método check_senha não encontrado no model")
         return False
@@ -2032,8 +3219,55 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--dias", type=int, default=300)  # 300 dias de histórico
     parser.add_argument("--test-login", action="store_true", help="Apenas testa login")
     parser.add_argument("--local", action="store_true", help="Popula APENAS banco local (SQLite)")
+    parser.add_argument("--cloud", action="store_true", help="Popula APENAS banco na nuvem (Neon/Postgres)")
+    parser.add_argument("--both", action="store_true", help="Popula AMBOS: local (SQLite) + nuvem (Neon/Postgres)")
 
     args = parser.parse_args(argv)
+
+    # 🔥 --both: Executa o seed nos dois bancos sequencialmente
+    if args.both:
+        import subprocess
+        print("=" * 60)
+        print("🔄 MODO BOTH: Semeando LOCAL + NUVEM")
+        print("=" * 60)
+        
+        base_args = []
+        if args.reset:
+            base_args.append("--reset")
+        base_args += [
+            "--clientes", str(args.clientes),
+            "--fornecedores", str(args.fornecedores),
+            "--produtos", str(args.produtos),
+            "--dias", str(args.dias),
+        ]
+        
+        # 1. Semear LOCAL
+        print("\n" + "=" * 60)
+        print("📦 [1/2] SEMEANDO BANCO LOCAL (SQLite)")
+        print("=" * 60)
+        result_local = subprocess.run(
+            [sys.executable, __file__, "--local"] + base_args,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        
+        # 2. Semear NUVEM
+        print("\n" + "=" * 60)
+        print("☁️ [2/2] SEMEANDO BANCO NUVEM (Neon/Postgres)")
+        print("=" * 60)
+        result_cloud = subprocess.run(
+            [sys.executable, __file__, "--cloud"] + base_args,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        
+        if result_local.returncode == 0 and result_cloud.returncode == 0:
+            print("\n✅ AMBOS OS BANCOS SEMEADOS COM SUCESSO!")
+        else:
+            if result_local.returncode != 0:
+                print("\n❌ FALHA no seed LOCAL")
+            if result_cloud.returncode != 0:
+                print("\n❌ FALHA no seed NUVEM")
+        
+        return max(result_local.returncode, result_cloud.returncode)
 
     fake = _faker()
 
@@ -2042,7 +3276,33 @@ def main(argv: Optional[List[str]] = None) -> int:
         for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
             if key in os.environ:
                 del os.environ[key]
-        print("Modo LOCAL: Populando APENAS SQLite")
+        print("🏠 Modo LOCAL: Populando APENAS SQLite")
+    
+    elif args.cloud:
+        # Garantir que a variável NEON está definida
+        neon_url = os.environ.get("NEON_DATABASE_URL")
+        if not neon_url:
+            # Tentar ler do .env
+            env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+            if os.path.exists(env_path):
+                with open(env_path, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("NEON_DATABASE_URL="):
+                            neon_url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            os.environ["NEON_DATABASE_URL"] = neon_url
+                            break
+        
+        if not neon_url:
+            print("❌ NEON_DATABASE_URL não definida! Configure no .env ou variável de ambiente.")
+            print("   Exemplo: NEON_DATABASE_URL=postgresql://user:pass@host/db?sslmode=require")
+            return 1
+        
+        print(f"☁️ Modo CLOUD: Populando Neon/Postgres")
+        # Exibir host sem expor credenciais
+        if "@" in neon_url:
+            host_part = neon_url.split("@")[1].split("/")[0]
+            print(f"   Host: {host_part}")
 
     app = create_app(os.getenv("FLASK_ENV", "default"))
 
@@ -2111,6 +3371,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             # 8. Criar pedidos de compra (PRIMEIRO - isso popula o estoque via lotes)
             seed_pedidos_compra(fake, est.id, funcionarios, fornecedores, produtos)
 
+            # 8.5. Criar lotes de reabastecimento (FIFO com múltiplos lotes por produto)
+            seed_lotes_reabastecimento(fake, est.id, funcionarios, fornecedores, produtos)
+
             # 9. Criar vendas (DEPOIS - agora há estoque disponível)
             seed_vendas(
                 fake, est.id, funcionarios, clientes, produtos, dias_passados=args.dias
@@ -2119,11 +3382,26 @@ def main(argv: Optional[List[str]] = None) -> int:
             # 9.5. Garantir que todos os produtos tenham vendas
             seed_garantir_vendas_todos_produtos(fake, est.id, funcionarios, clientes, produtos)
 
-            # 10. Criar despesas
+            # 9.6. Criar histórico de preços (alterações ao longo do tempo)
+            seed_historico_precos(fake, est.id, produtos, funcionarios, dias_historico=args.dias)
+
+            # 10. Criar despesas + contas a pagar (módulo financeiro ERP)
             seed_despesas(fake, est.id, fornecedores)
 
-            # 11. Criar histórico de ponto
-            seed_ponto(fake, est.id, funcionarios, dias_passados=30)
+            # 10.5. Criar contas a receber (vendas a prazo)
+            seed_contas_receber(est.id, clientes)
+
+            # 11. Criar histórico de ponto (90 dias com cenários variados)
+            seed_ponto(fake, est.id, funcionarios, dias_passados=90)
+
+            # 11.5. Criar benefícios e atribuir a funcionários
+            seed_beneficios(fake, est.id, funcionarios)
+
+            # 11.6. Calcular banco de horas (baseado nos registros de ponto)
+            seed_banco_horas(est.id, funcionarios, meses_passados=3)
+
+            # 11.7. Criar justificativas de ponto
+            seed_justificativas(fake, est.id, funcionarios, dias_passados=90)
 
             # 12. Criar caixas
             seed_caixas(fake, est.id, funcionarios)
@@ -2137,6 +3415,186 @@ def main(argv: Optional[List[str]] = None) -> int:
             # 14. Criar histórico de login
             seed_login_history(fake, est.id, funcionarios)
 
+            # 🔥 VERIFICAÇÃO FINAL: Regras de negócio do seed
+            print("\n" + "=" * 60)
+            print("🔍 VERIFICAÇÃO FINAL DE INTEGRIDADE")
+            print("=" * 60)
+            
+            hoje = date.today()
+            
+            # Regra 1: Todo produto DEVE ter pelo menos um PedidoCompraItem
+            produtos_sem_pc = []
+            for p in produtos:
+                tem_pedido = db.session.query(
+                    exists().where(PedidoCompraItem.produto_id == p.id)
+                ).scalar()
+                if not tem_pedido:
+                    produtos_sem_pc.append(p)
+            
+            if produtos_sem_pc:
+                print(f"  ❌ FALHA: {len(produtos_sem_pc)} produtos SEM pedido de compra:")
+                for p in produtos_sem_pc[:10]:
+                    print(f"     - [{p.id}] {p.nome} (fornecedor_id={p.fornecedor_id})")
+                print("  → VIOLAÇÃO: Todo produto deve ser oriundo de um pedido de compra!")
+                return 1
+            else:
+                print(f"  ✅ REGRA OK: {len(produtos)}/{len(produtos)} produtos oriundos de pedido de compra (100%)")
+            
+            # Regra 2: Todo produto DEVE ter fornecedor válido
+            produtos_sem_forn = [p for p in produtos if not p.fornecedor_id]
+            if produtos_sem_forn:
+                print(f"  ❌ FALHA: {len(produtos_sem_forn)} produtos sem fornecedor")
+                return 1
+            else:
+                print(f"  ✅ REGRA OK: {len(produtos)}/{len(produtos)} produtos com fornecedor válido (100%)")
+            
+            # Regra 3: Todo produto DEVE ter pelo menos um ProdutoLote
+            produtos_sem_lote = []
+            for p in produtos:
+                tem_lote = db.session.query(
+                    exists().where(ProdutoLote.produto_id == p.id)
+                ).scalar()
+                if not tem_lote:
+                    produtos_sem_lote.append(p)
+            
+            if produtos_sem_lote:
+                print(f"  ⚠️ AVISO: {len(produtos_sem_lote)} produtos sem lote registrado")
+            else:
+                print(f"  ✅ REGRA OK: {len(produtos)}/{len(produtos)} produtos com lote (100%)")
+            
+            # Regra 4: Toda entrada de estoque DEVE estar vinculada a um pedido de compra
+            entradas_sem_pc = db.session.query(MovimentacaoEstoque).filter(
+                MovimentacaoEstoque.tipo == "entrada",
+                MovimentacaoEstoque.pedido_compra_id.is_(None),
+            ).count()
+            if entradas_sem_pc > 0:
+                print(f"  ⚠️ AVISO: {entradas_sem_pc} entradas de estoque sem vínculo com pedido de compra")
+            else:
+                total_entradas = db.session.query(MovimentacaoEstoque).filter(
+                    MovimentacaoEstoque.tipo == "entrada"
+                ).count()
+                print(f"  ✅ REGRA OK: {total_entradas} entradas de estoque vinculadas a pedidos de compra (100%)")
+            
+            # Regra 5: Todo produto DEVE ter data_validade e lote (FIFO)
+            produtos_sem_validade = [p for p in produtos if not p.data_validade]
+            produtos_sem_lote_campo = [p for p in produtos if not p.lote]
+            
+            if produtos_sem_validade:
+                print(f"  ❌ FALHA: {len(produtos_sem_validade)} produtos SEM data_validade!")
+                for p in produtos_sem_validade[:5]:
+                    print(f"     - [{p.id}] {p.nome}")
+                return 1
+            else:
+                print(f"  ✅ REGRA OK: {len(produtos)}/{len(produtos)} produtos com data_validade (100%)")
+            
+            if produtos_sem_lote_campo:
+                print(f"  ⚠️ AVISO: {len(produtos_sem_lote_campo)} produtos sem campo lote no Produto")
+            else:
+                print(f"  ✅ REGRA OK: {len(produtos)}/{len(produtos)} produtos com lote (100%)")
+            
+            # Regra 6: Todo produto DEVE ter pelo menos 1 ProdutoLote ativo
+            produtos_sem_lote_tabela = []
+            for p in produtos:
+                tem_lote = db.session.query(
+                    exists().where(
+                        db.and_(ProdutoLote.produto_id == p.id, ProdutoLote.ativo == True)
+                    )
+                ).scalar()
+                if not tem_lote:
+                    produtos_sem_lote_tabela.append(p)
+            
+            if produtos_sem_lote_tabela:
+                print(f"  ❌ FALHA: {len(produtos_sem_lote_tabela)} produtos sem ProdutoLote ativo!")
+                return 1
+            else:
+                total_lotes = db.session.query(ProdutoLote).filter_by(
+                    estabelecimento_id=est.id, ativo=True
+                ).count()
+                media_lotes = total_lotes / len(produtos) if produtos else 0
+                print(f"  ✅ REGRA OK: {total_lotes} lotes ativos (média {media_lotes:.1f} lotes/produto)")
+            
+            # Regra 7: Verificar distribuição de validade para alertas
+            lotes_vencidos = db.session.query(ProdutoLote).filter(
+                ProdutoLote.estabelecimento_id == est.id,
+                ProdutoLote.ativo == True,
+                ProdutoLote.data_validade < hoje,
+            ).count()
+            lotes_7d = db.session.query(ProdutoLote).filter(
+                ProdutoLote.estabelecimento_id == est.id,
+                ProdutoLote.ativo == True,
+                ProdutoLote.data_validade.between(hoje, hoje + timedelta(days=7)),
+            ).count()
+            lotes_30d = db.session.query(ProdutoLote).filter(
+                ProdutoLote.estabelecimento_id == est.id,
+                ProdutoLote.ativo == True,
+                ProdutoLote.data_validade.between(hoje + timedelta(days=8), hoje + timedelta(days=30)),
+            ).count()
+            print(f"  ✅ ALERTAS: {lotes_vencidos} vencidos | {lotes_7d} críticos (≤7d) | {lotes_30d} médios (8-30d)")
+            
+            # Regra 8: Deve existir histórico de preços (análise de alta/baixa)
+            total_hist = db.session.query(HistoricoPrecos).filter_by(
+                estabelecimento_id=est.id
+            ).count()
+            produtos_com_hist = db.session.query(
+                db.func.count(db.distinct(HistoricoPrecos.produto_id))
+            ).filter_by(estabelecimento_id=est.id).scalar()
+            
+            if total_hist > 0:
+                print(f"  ✅ REGRA OK: {total_hist} registros de histórico de preços para {produtos_com_hist} produtos")
+            else:
+                print(f"  ⚠️ AVISO: Nenhum histórico de preços encontrado")
+            
+            # Regra 9: MÓDULO FINANCEIRO - Contas a Pagar (boletos)
+            total_cp = db.session.query(ContaPagar).filter_by(
+                estabelecimento_id=est.id
+            ).count()
+            cp_abertos = db.session.query(ContaPagar).filter_by(
+                estabelecimento_id=est.id, status="aberto"
+            ).count()
+            cp_pagos = db.session.query(ContaPagar).filter_by(
+                estabelecimento_id=est.id, status="pago"
+            ).count()
+            cp_vencidos = db.session.query(ContaPagar).filter(
+                ContaPagar.estabelecimento_id == est.id,
+                ContaPagar.status == "aberto",
+                ContaPagar.data_vencimento < hoje,
+            ).count()
+            
+            if total_cp > 0:
+                print(f"  ✅ REGRA OK: {total_cp} contas a pagar ({cp_pagos} pagas, {cp_abertos} abertas, {cp_vencidos} vencidas)")
+            else:
+                print(f"  ⚠️ AVISO: Nenhuma conta a pagar encontrada")
+            
+            # Regra 10: Contas a Receber (vendas a prazo)
+            total_cr = db.session.query(ContaReceber).filter_by(
+                estabelecimento_id=est.id
+            ).count()
+            cr_abertos = db.session.query(ContaReceber).filter_by(
+                estabelecimento_id=est.id, status="aberto"
+            ).count()
+            cr_recebidos = db.session.query(ContaReceber).filter_by(
+                estabelecimento_id=est.id, status="recebido"
+            ).count()
+            cr_inadimplentes = db.session.query(ContaReceber).filter(
+                ContaReceber.estabelecimento_id == est.id,
+                ContaReceber.status == "aberto",
+                ContaReceber.data_vencimento < hoje,
+            ).count()
+            
+            if total_cr > 0:
+                print(f"  ✅ REGRA OK: {total_cr} contas a receber ({cr_recebidos} recebidas, {cr_abertos} abertas, {cr_inadimplentes} inadimplentes)")
+            else:
+                print(f"  ⚠️ AVISO: Nenhuma conta a receber encontrada")
+            
+            # Regra 11: Despesas devem gerar boletos (forma_pagamento='boleto' → ContaPagar)
+            despesas_boleto = db.session.query(Despesa).filter(
+                Despesa.estabelecimento_id == est.id,
+                Despesa.forma_pagamento == "boleto",
+            ).count()
+            print(f"  ✅ FINANCEIRO: {despesas_boleto} despesas com pagamento via boleto")
+            
+            print("=" * 60)
+            
             # 🔥 TESTE FINAL DE LOGIN
             if test_admin_login():
                 print("\n" + "=" * 60)
@@ -2149,11 +3607,47 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("  • Administrador: admin / admin123")
                 print("  • Caixa: caixa01 / 123456")
                 print("  • Estoque: estoque01 / 123456")
+                # Contar registros de histórico de preços
+                total_hist_precos = db.session.query(HistoricoPrecos).filter_by(
+                    estabelecimento_id=est.id
+                ).count()
+                
+                # Contar registros RH
+                total_registros_ponto = db.session.query(RegistroPonto).filter_by(
+                    estabelecimento_id=est.id
+                ).count()
+                total_beneficios = db.session.query(FuncionarioBeneficio).count()
+                total_banco_horas = db.session.query(BancoHoras).count()
+                total_justificativas = db.session.query(JustificativaPonto).filter_by(
+                    estabelecimento_id=est.id
+                ).count()
+                
+                # Contar registros financeiros
+                total_contas_pagar = db.session.query(ContaPagar).filter_by(
+                    estabelecimento_id=est.id
+                ).count()
+                total_contas_receber = db.session.query(ContaReceber).filter_by(
+                    estabelecimento_id=est.id
+                ).count()
+                total_despesas = db.session.query(Despesa).filter_by(
+                    estabelecimento_id=est.id
+                ).count()
+                
                 print("\n📊 DADOS GERADOS:")
                 print(f"  • {len(clientes)} clientes")
                 print(f"  • {len(fornecedores)} fornecedores")
-                print(f"  • {len(produtos)} produtos")
+                print(f"  • {len(produtos)} produtos (100% oriundos de pedidos de compra)")
                 print(f"  • Vendas dos últimos {args.dias} dias")
+                print(f"  • {total_hist_precos} registros de histórico de preços")
+                print(f"\n💰 MÓDULO FINANCEIRO:")
+                print(f"  • {total_despesas} despesas (fixas + variáveis + problemáticas)")
+                print(f"  • {total_contas_pagar} contas a pagar (boletos de fornecedores + despesas)")
+                print(f"  • {total_contas_receber} contas a receber (vendas a prazo)")
+                print(f"\n👥 DADOS RH:")
+                print(f"  • {total_registros_ponto} registros de ponto (90 dias)")
+                print(f"  • {total_beneficios} atribuições de benefícios")
+                print(f"  • {total_banco_horas} registros de banco de horas")
+                print(f"  • {total_justificativas} justificativas de ponto")
                 print("=" * 60)
 
                 return 0

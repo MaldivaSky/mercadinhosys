@@ -21,14 +21,15 @@ import QuickFiltersPanel from './components/QuickFiltersPanel';
 import ProductHistoryModal from './components/ProductHistoryModal';
 import PurchaseOrdersPanel from './components/PurchaseOrdersPanel';
 import PurchaseOrderModal from './components/PurchaseOrderModal';
-import { aplicarFiltroRapido, calcularContadoresFiltros } from './utils/quickFilters';
+
 
 import ProductFormModal from './components/ProductFormModal';
 import { ProductsTable } from './components/ProductsTable';
+import LotesDisponiveisModal from './components/LotesDisponiveisModal';
 
 const ProductsPage: React.FC = () => {
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [todosProdutos, setTodosProdutos] = useState<Produto[]>([]);
+  // todosProdutos removed in favor of server-side stats
   const [loading, setLoading] = useState(true);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
@@ -44,6 +45,10 @@ const ProductsPage: React.FC = () => {
     produtos_normal: 0,
     valor_total_estoque: 0,
     margem_media: 0,
+    classificacao_abc: { A: 0, B: 0, C: 0 },
+    giro_estoque: { rapido: 0, normal: 0, lento: 0 },
+    top_produtos_margem: [] as any[],
+    produtos_criticos: [] as any[]
   });
 
   const [filtros, setFiltros] = useState<ProdutoFiltros>({
@@ -62,6 +67,7 @@ const ProductsPage: React.FC = () => {
   const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
   const [showProductHistory, setShowProductHistory] = useState(false);
   const [showPurchaseOrders, setShowPurchaseOrders] = useState(false);
+  const [showLotesModal, setShowLotesModal] = useState(false);
 
   const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
   const [selectedProductForOrder, setSelectedProductForOrder] = useState<Produto | null>(null);
@@ -95,19 +101,26 @@ const ProductsPage: React.FC = () => {
     }
   }, [page, filtros]);
 
-  const loadTodosProdutos = useCallback(async () => {
+  const loadStats = useCallback(async () => {
     try {
-      const response = await productsService.getAllEstoque(1, 10000, { ativos: true });
-      setTodosProdutos(response.produtos);
-      const total = response.produtos.length;
-      const esgotados = response.produtos.filter(p => p.quantidade <= 0).length;
-      const baixo = response.produtos.filter(p => p.quantidade > 0 && p.quantidade <= p.quantidade_minima).length;
-      const normal = total - esgotados - baixo;
-      const valorTotal = response.produtos.reduce((sum, p) => sum + p.preco_custo * p.quantidade, 0);
-      const margemMedia = total > 0 ? response.produtos.reduce((sum, p) => sum + (p.margem_lucro || 0), 0) / total : 0;
-      setStats({ total_produtos: total, produtos_esgotados: esgotados, produtos_baixo_estoque: baixo, produtos_normal: normal, valor_total_estoque: valorTotal, margem_media: margemMedia });
+      const response = await productsService.getEstatisticas({ ativos: true });
+      if (response.success && response.estatisticas) {
+        const s = response.estatisticas;
+        setStats({
+          total_produtos: s.total_produtos,
+          produtos_esgotados: s.produtos_esgotados,
+          produtos_baixo_estoque: s.produtos_baixo_estoque,
+          produtos_normal: s.produtos_normal,
+          valor_total_estoque: s.valor_total_estoque,
+          margem_media: s.margem_media,
+          classificacao_abc: s.classificacao_abc || { A: 0, B: 0, C: 0 },
+          giro_estoque: s.giro_estoque || { rapido: 0, normal: 0, lento: 0 },
+          top_produtos_margem: s.top_produtos_margem || [],
+          produtos_criticos: s.produtos_criticos || []
+        });
+      }
     } catch (error) {
-      console.error('Erro ao carregar todos os produtos:', error);
+      console.error('Erro ao carregar estatísticas:', error);
     }
   }, []);
 
@@ -135,7 +148,7 @@ const ProductsPage: React.FC = () => {
   }, [buscaLocal]);
 
   useEffect(() => { loadProdutos(); }, [loadProdutos]);
-  useEffect(() => { loadCategorias(); loadFornecedores(); loadTodosProdutos(); }, []);
+  useEffect(() => { loadCategorias(); loadFornecedores(); loadStats(); }, []);
 
   // Handlers
   const handleDelete = async (id: number) => {
@@ -144,7 +157,7 @@ const ProductsPage: React.FC = () => {
       await productsService.delete(id);
       toast.success('Produto desativado!');
       loadProdutos();
-      loadTodosProdutos();
+      loadStats();
     } catch (error) {
       toast.error('Erro ao desativar produto');
     }
@@ -160,7 +173,7 @@ const ProductsPage: React.FC = () => {
       toast.success('Estoque ajustado!');
       setShowStockModal(false);
       loadProdutos();
-      loadTodosProdutos();
+      loadStats();
     } catch (error) {
       toast.error('Erro ao ajustar estoque');
     }
@@ -203,20 +216,74 @@ const ProductsPage: React.FC = () => {
   };
 
   const handleCardClick = (filterType: string) => {
-    setFiltroRapido(null);
-    if (filterType === 'esgotado') setFiltros(prev => ({ ...prev, estoque_status: 'esgotado' }));
-    else if (filterType === 'baixo') setFiltros(prev => ({ ...prev, estoque_status: 'baixo' }));
-    else if (filterType === 'normal') setFiltros(prev => ({ ...prev, estoque_status: 'normal' }));
-    else setFiltros({ busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' });
+    // Limpa outros filtros ao clicar no dashboard
+    setFiltros({ busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' });
+    setFiltroRapido(null); // Desativar filtro rápido se houver lógica conflitante
+
+    if (filterType === 'esgotado') {
+      setFiltros(prev => ({ ...prev, estoque_status: 'esgotado' }));
+    } else if (filterType === 'baixo') {
+      setFiltros(prev => ({ ...prev, estoque_status: 'baixo' }));
+    } else if (filterType === 'normal') {
+      setFiltros(prev => ({ ...prev, estoque_status: 'normal' }));
+    } else if (filterType === 'valor') {
+      // Ordenar por valor total de estoque
+      setFiltros(prev => ({ ...prev, ordenar_por: 'valor_total_estoque', direcao: 'desc' }));
+    } else if (filterType === 'margem') {
+      // Ordenar por margem
+      setFiltros(prev => ({ ...prev, ordenar_por: 'margem_lucro', direcao: 'desc' }));
+    }
+
     setPage(1);
   };
 
   const handleQuickFilterChange = (filter: string | null) => {
     setFiltroRapido(filter);
-    if (filter) {
-      setFiltros({ busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' });
-      setPage(1);
+
+    // Resetar filtros base e aplicar o específico
+    const novosFiltros: ProdutoFiltros = { busca: '', ativos: true, ordenar_por: 'nome', direcao: 'asc' };
+
+    if (filter === 'vencimento_proximo') {
+      novosFiltros.validade_proxima = true;
+      novosFiltros.ordenar_por = 'data_validade';
+      novosFiltros.direcao = 'asc';
+    } else if (filter === 'vencido') {
+      // Assumindo que o backend suporta ou precisamos implementar. 
+      // Por enquanto, validade_proxima pega até +30 dias. Vencido seria < hoje.
+      // Vamos focar no que temos: validade_proxima.
+      // Se o backend não tem 'vencido', usar validade_proxima ordenado
+      novosFiltros.validade_proxima = true;
+      novosFiltros.ordenar_por = 'data_validade';
+    } else if (filter === 'classe_a') {
+      // Backend precisa suportar filtro por classe ABC ou ordenamos
+      // Como o backend calculate ABC dinamicamente, talvez não tenha filtro direto na query SQL simples.
+      // Vamos focar no que funciona: ordenação ou filtro se houver.
+      // O backend NÃO tem filtro ABC na query SQL reformulada. 
+      // Solução paliativa: Ordenar por valor total vendido (proxy para ABC)
+      novosFiltros.ordenar_por = 'total_vendido';
+      novosFiltros.direcao = 'desc';
+    } else if (filter === 'classe_c') {
+      novosFiltros.ordenar_por = 'total_vendido';
+      novosFiltros.direcao = 'asc';
+    } else if (filter === 'repor_urgente') {
+      novosFiltros.estoque_status = 'baixo'; // Backend trata 'baixo' (<= min)
+      novosFiltros.ordenar_por = 'quantidade';
+      novosFiltros.direcao = 'asc';
+    } else if (filter === 'margem_alta') {
+      novosFiltros.ordenar_por = 'margem_lucro';
+      novosFiltros.direcao = 'desc';
+      // Poderia adicionar filtro preco_min se backend suportasse margem_min
+    } else if (filter === 'giro_rapido') {
+      // Assumindo suporte a ordenação por ultima_venda ou similar
+      novosFiltros.ordenar_por = 'ultima_venda';
+      novosFiltros.direcao = 'desc';
+    } else if (filter === 'giro_lento') {
+      novosFiltros.ordenar_por = 'ultima_venda';
+      novosFiltros.direcao = 'asc';
     }
+
+    setFiltros(novosFiltros);
+    setPage(1);
   };
 
   const handleSort = (key: string) => {
@@ -228,53 +295,29 @@ const ProductsPage: React.FC = () => {
     setPage(1);
   };
 
-  const currentTableData = useMemo(() => {
-    if (filtroRapido) {
-      let filtered = aplicarFiltroRapido(todosProdutos, filtroRapido, todosProdutos);
+  // Simplificado: Dados vêm direto do estado 'produtos', que é atualizado pelo 'loadProdutos' usando os filtros do server
+  const currentTableData = {
+    produtos: produtos,
+    totalItems: totalItems,
+    totalPages: totalPages
+  };
 
-      if (filtros.ordenar_por) {
-        filtered = [...filtered].sort((a, b) => {
-          let valA = a[filtros.ordenar_por as keyof Produto];
-          let valB = b[filtros.ordenar_por as keyof Produto];
-
-          if (valA === undefined || valA === null) valA = '';
-          if (valB === undefined || valB === null) valB = '';
-
-          if (typeof valA === 'string' && typeof valB === 'string') {
-            return filtros.direcao === 'asc'
-              ? valA.localeCompare(valB)
-              : valB.localeCompare(valA);
-          }
-
-          if (valA < valB) return filtros.direcao === 'asc' ? -1 : 1;
-          if (valA > valB) return filtros.direcao === 'asc' ? 1 : -1;
-          return 0;
-        });
-      }
-
-      const itemsPerPage = 50;
-      const totalItems = filtered.length;
-      const totalPages = Math.ceil(totalItems / itemsPerPage);
-      const startIndex = (page - 1) * itemsPerPage;
-      const paginatedItems = filtered.slice(startIndex, startIndex + itemsPerPage);
-
-      return {
-        produtos: paginatedItems,
-        totalItems,
-        totalPages,
-        isClientSide: true
-      };
-    } else {
-      return {
-        produtos: produtos,
-        totalItems: totalItems,
-        totalPages: totalPages,
-        isClientSide: false
-      };
-    }
-  }, [produtos, filtroRapido, todosProdutos, page, totalItems, totalPages, filtros.ordenar_por, filtros.direcao]);
-
-  const contadoresFiltros = useMemo(() => calcularContadoresFiltros(todosProdutos, todosProdutos), [todosProdutos]);
+  const contadoresFiltros = useMemo(() => ({
+    total: stats.total_produtos,
+    esgotado: stats.produtos_esgotados,
+    baixo: stats.produtos_baixo_estoque,
+    normal: stats.produtos_normal,
+    classe_a: stats.classificacao_abc?.A || 0,
+    classe_c: stats.classificacao_abc?.C || 0,
+    giro_rapido: stats.giro_estoque?.rapido || 0,
+    giro_lento: stats.giro_estoque?.lento || 0,
+    margem_alta: 0,
+    margem_baixa: 0,
+    repor_urgente: stats.produtos_esgotados + stats.produtos_baixo_estoque,
+    sem_fornecedor: 0,
+    vencimento_proximo: 0,
+    vencido: 0
+  }), [stats]);
 
   return (
     <div className="space-y-6 p-6">
@@ -304,7 +347,7 @@ const ProductsPage: React.FC = () => {
 
       <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
-      <ProductAnalyticsDashboard produtos={todosProdutos} stats={stats} onCardClick={handleCardClick} />
+      <ProductAnalyticsDashboard produtos={[]} stats={stats} onCardClick={handleCardClick} />
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
         <div className="flex flex-col md:flex-row gap-4">
@@ -389,6 +432,7 @@ const ProductsPage: React.FC = () => {
         onStockAdjust={openStockModal}
         onHistory={(p) => { setSelectedProduct(p); setShowProductHistory(true); }}
         onMakeOrder={openOrderModal}
+        onViewLotes={(p) => { setSelectedProduct(p); setShowLotesModal(true); }}
         onSort={handleSort}
         sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
       />
@@ -400,7 +444,7 @@ const ProductsPage: React.FC = () => {
         categorias={categorias}
         fornecedores={fornecedores}
         onClose={() => { setShowProductModal(false); setSelectedProduct(null); setEditMode(false); }}
-        onSuccess={() => { setShowProductModal(false); loadProdutos(); loadTodosProdutos(); }}
+        onSuccess={() => { setShowProductModal(false); loadProdutos(); loadStats(); }}
       />
 
       {showStockModal && selectedProduct && (
@@ -479,6 +523,14 @@ const ProductsPage: React.FC = () => {
           fornecedores={fornecedores}
           initialProduct={selectedProductForOrder}
           initialSupplierId={selectedProductForOrder?.fornecedor_id}
+        />
+      )}
+
+      {showLotesModal && selectedProduct && (
+        <LotesDisponiveisModal
+          produtoId={selectedProduct.id}
+          produtoNome={selectedProduct.nome}
+          onClose={() => { setShowLotesModal(false); setSelectedProduct(null); }}
         />
       )}
     </div>

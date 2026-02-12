@@ -435,7 +435,8 @@ const DashboardPage: React.FC = () => {
           roi: p.roi || 0,
           elasticidade: p.elasticidade || 0,
           faturamento: p.faturamento || 0,
-          quantidade_vendida: p.quantidade_vendida || p.total_vendido || 0
+          quantidade_vendida: p.quantidade_vendida || p.total_vendido || 0,
+          ultima_compra: p.ultima_compra || null
         })) || [];
 
       // 🔥 FORÇAR GERAÇÃO DE PRODUTOS LENTOS SEMPRE
@@ -563,7 +564,7 @@ const DashboardPage: React.FC = () => {
             quantidade_vendas: backendData?.summary?.revenue?.sample_size || 0,
             ticket_medio: backendData?.summary?.avg_ticket?.value || 0,
             clientes_atendidos: backendData?.summary?.unique_customers || 0,
-            crescimento_vs_ontem: backendData?.summary?.growth?.value || 0,
+            crescimento_vs_ontem: backendData?.summary?.growth_period?.value ?? backendData?.summary?.growth?.value ?? 0,
             meta_atingida: 0,
             vendas_por_forma_pagamento: {},
             custo_vendas: cogs, // 🔥 CORRIGIDO: Usar CMV (Custo das Mercadorias Vendidas)
@@ -576,7 +577,7 @@ const DashboardPage: React.FC = () => {
             lucro_bruto: lucroBruto,
             lucro_liquido: lucroLiquido,
             margem_lucro: margemLucro,
-            crescimento_mensal: backendData?.summary?.growth?.value || 0,
+            crescimento_mensal: backendData?.summary?.growth_period?.value ?? backendData?.summary?.growth?.value ?? 0,
             despesas_por_tipo: {},
             custo_produtos_vendidos: cogs, // 🔥 CORRIGIDO: Usar CMV
             investimentos: valorEstoqueAtivo, // 🔥 Manter valor do estoque como investimento (Ativo)
@@ -1116,9 +1117,15 @@ const DashboardPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white/80 p-4 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Crescimento</p>
-                    <p className={`text-2xl font-bold ${(mes?.crescimento_mensal || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {(mes?.crescimento_mensal || 0) >= 0 ? '+' : ''}{(mes?.crescimento_mensal || 0).toFixed(1)}%
-                    </p>
+                    {mes?.crescimento_mensal != null && mes.crescimento_mensal !== 0 ? (
+                      <p className={`text-2xl font-bold ${mes.crescimento_mensal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {mes.crescimento_mensal >= 0 ? '+' : ''}{mes.crescimento_mensal.toFixed(1)}%
+                      </p>
+                    ) : mes?.crescimento_mensal === 0 ? (
+                      <p className="text-2xl font-bold text-gray-500">0.0%</p>
+                    ) : (
+                      <p className="text-2xl font-bold text-gray-400">--</p>
+                    )}
                     <p className="text-xs text-gray-500 mt-1">vs período anterior</p>
                   </div>
                   <div className="bg-white/80 p-4 rounded-lg">

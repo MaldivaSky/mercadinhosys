@@ -50,6 +50,46 @@ export interface FiltrosDespesas {
     por_pagina?: number;
 }
 
+export interface AlertaFinanceiro {
+    tipo: string;
+    severidade: 'critica' | 'alta' | 'media' | 'baixa';
+    titulo: string;
+    descricao: string;
+    acao: string;
+}
+
+export interface ResumoFinanceiro {
+    success: boolean;
+    contas_pagar: {
+        total_aberto: number;
+        total_vencido: number;
+        vence_7_dias: number;
+        vence_30_dias: number;
+        qtd_vencidos: number;
+        qtd_vence_7d: number;
+        pago_no_mes: number;
+    };
+    contas_receber: {
+        total_aberto: number;
+        total_vencido: number;
+        a_receber_30_dias: number;
+        qtd_inadimplentes: number;
+        recebido_no_mes: number;
+    };
+    despesas_mes: {
+        total: number;
+        recorrentes: number;
+        variaveis: number;
+    };
+    fluxo_caixa_30d: {
+        entradas_previstas: number;
+        saidas_previstas: number;
+        saldo_previsto: number;
+    };
+    alertas: AlertaFinanceiro[];
+    total_alertas: number;
+}
+
 export const expensesService = {
     async listar(filtros: FiltrosDespesas = {}) {
         const response = await apiClient.get("/despesas", { params: filtros });
@@ -73,6 +113,11 @@ export const expensesService = {
 
     async excluir(id: number) {
         const response = await apiClient.delete(`/despesas/${id}`);
+        return response.data;
+    },
+
+    async resumoFinanceiro(): Promise<ResumoFinanceiro> {
+        const response = await apiClient.get("/despesas/resumo-financeiro/");
         return response.data;
     },
 };

@@ -1,4 +1,4 @@
-import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 
@@ -14,6 +14,7 @@ interface ProductsTableProps {
     onStockAdjust: (produto: Produto) => void;
     onHistory: (produto: Produto) => void;
     onMakeOrder: (produto: Produto) => void;
+    onViewLotes?: (produto: Produto) => void;
     onSort?: (key: string) => void;
     sortConfig?: { key: string; direction: 'asc' | 'desc' };
 }
@@ -30,6 +31,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
     onStockAdjust,
     onHistory,
     onMakeOrder,
+    onViewLotes,
     onSort,
     sortConfig,
 }) => {
@@ -184,6 +186,15 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                         >
                                             <ShoppingCart className="w-4 h-4" />
                                         </button>
+                                        {onViewLotes && (
+                                            <button
+                                                onClick={() => onViewLotes(produto)}
+                                                className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
+                                                title="Ver Lotes (FIFO)"
+                                            >
+                                                <Layers className="w-4 h-4" />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => onHistory(produto)}
                                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
