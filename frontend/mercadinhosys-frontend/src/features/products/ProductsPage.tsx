@@ -26,6 +26,7 @@ import PurchaseOrderModal from './components/PurchaseOrderModal';
 import ProductFormModal from './components/ProductFormModal';
 import { ProductsTable } from './components/ProductsTable';
 import LotesDisponiveisModal from './components/LotesDisponiveisModal';
+import ExpiringProductsModal from './components/ExpiringProductsModal';
 
 const ProductsPage: React.FC = () => {
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -47,6 +48,7 @@ const ProductsPage: React.FC = () => {
     margem_media: 0,
     classificacao_abc: { A: 0, B: 0, C: 0 },
     giro_estoque: { rapido: 0, normal: 0, lento: 0 },
+    validade: { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 },
     top_produtos_margem: [] as any[],
     produtos_criticos: [] as any[]
   });
@@ -68,6 +70,8 @@ const ProductsPage: React.FC = () => {
   const [showProductHistory, setShowProductHistory] = useState(false);
   const [showPurchaseOrders, setShowPurchaseOrders] = useState(false);
   const [showLotesModal, setShowLotesModal] = useState(false);
+  const [showExpiryModal, setShowExpiryModal] = useState(false);
+  const [expiryTimeframe, setExpiryTimeframe] = useState<'vencidos' | '15' | '30' | '90'>('30');
 
   const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
   const [selectedProductForOrder, setSelectedProductForOrder] = useState<Produto | null>(null);
@@ -103,26 +107,17 @@ const ProductsPage: React.FC = () => {
 
   const loadStats = useCallback(async () => {
     try {
-      const response = await productsService.getEstatisticas({ ativos: true });
+      const response = await productsService.getEstatisticas(filtros);
       if (response.success && response.estatisticas) {
-        const s = response.estatisticas;
         setStats({
-          total_produtos: s.total_produtos,
-          produtos_esgotados: s.produtos_esgotados,
-          produtos_baixo_estoque: s.produtos_baixo_estoque,
-          produtos_normal: s.produtos_normal,
-          valor_total_estoque: s.valor_total_estoque,
-          margem_media: s.margem_media,
-          classificacao_abc: s.classificacao_abc || { A: 0, B: 0, C: 0 },
-          giro_estoque: s.giro_estoque || { rapido: 0, normal: 0, lento: 0 },
-          top_produtos_margem: s.top_produtos_margem || [],
-          produtos_criticos: s.produtos_criticos || []
+          ...response.estatisticas,
+          validade: response.estatisticas.validade || { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 }
         });
       }
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
     }
-  }, []);
+  }, [filtros]);
 
   const loadCategorias = useCallback(async () => {
     try {
@@ -147,8 +142,8 @@ const ProductsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [buscaLocal]);
 
-  useEffect(() => { loadProdutos(); }, [loadProdutos]);
-  useEffect(() => { loadCategorias(); loadFornecedores(); loadStats(); }, []);
+  useEffect(() => { loadProdutos(); loadStats(); }, [loadProdutos, loadStats]);
+  useEffect(() => { loadCategorias(); loadFornecedores(); }, [loadCategorias, loadFornecedores]);
 
   // Handlers
   const handleDelete = async (id: number) => {
@@ -232,6 +227,23 @@ const ProductsPage: React.FC = () => {
     } else if (filterType === 'margem') {
       // Ordenar por margem
       setFiltros(prev => ({ ...prev, ordenar_por: 'margem_lucro', direcao: 'desc' }));
+    } else if (filterType === 'vencido' || filterType === 'vence_15' || filterType === 'vence_30' || filterType === 'vence_90') {
+      const timeframeMap: Record<string, 'vencidos' | '15' | '30' | '90'> = {
+        'vencido': 'vencidos',
+        'vence_15': '15',
+        'vence_30': '30',
+        'vence_90': '90'
+      };
+      setExpiryTimeframe(timeframeMap[filterType]);
+      setShowExpiryModal(true);
+
+      // Também filtra a tabela por consistência
+      if (filterType === 'vencido') {
+        setFiltros(prev => ({ ...prev, vencidos: true, validade_proxima: false, ordenar_por: 'data_validade', direcao: 'asc' }));
+      } else {
+        const days = parseInt(filterType.split('_')[1]);
+        setFiltros(prev => ({ ...prev, validade_proxima: true, vencidos: false, dias_validade: days, ordenar_por: 'data_validade', direcao: 'asc' }));
+      }
     }
 
     setPage(1);
@@ -245,15 +257,13 @@ const ProductsPage: React.FC = () => {
 
     if (filter === 'vencimento_proximo') {
       novosFiltros.validade_proxima = true;
+      novosFiltros.dias_validade = 30;
       novosFiltros.ordenar_por = 'data_validade';
       novosFiltros.direcao = 'asc';
     } else if (filter === 'vencido') {
-      // Assumindo que o backend suporta ou precisamos implementar. 
-      // Por enquanto, validade_proxima pega até +30 dias. Vencido seria < hoje.
-      // Vamos focar no que temos: validade_proxima.
-      // Se o backend não tem 'vencido', usar validade_proxima ordenado
-      novosFiltros.validade_proxima = true;
+      novosFiltros.vencidos = true;
       novosFiltros.ordenar_por = 'data_validade';
+      novosFiltros.direcao = 'asc';
     } else if (filter === 'classe_a') {
       // Backend precisa suportar filtro por classe ABC ou ordenamos
       // Como o backend calculate ABC dinamicamente, talvez não tenha filtro direto na query SQL simples.
@@ -315,8 +325,8 @@ const ProductsPage: React.FC = () => {
     margem_baixa: 0,
     repor_urgente: stats.produtos_esgotados + stats.produtos_baixo_estoque,
     sem_fornecedor: 0,
-    vencimento_proximo: 0,
-    vencido: 0
+    vencimento_proximo: stats.validade?.vence_30 || 0,
+    vencido: stats.validade?.vencidos || 0
   }), [stats]);
 
   return (
@@ -397,6 +407,30 @@ const ProductsPage: React.FC = () => {
                 <option value="Alimentos">Alimentos</option>
                 <option value="Bebidas">Bebidas</option>
                 <option value="Hortifruti">Hortifruti</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Validade</label>
+              <select value={filtros.vencidos ? 'vencidos' : (filtros.validade_proxima ? `proxima_${filtros.dias_validade || 30}` : '')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const nf: ProdutoFiltros = { ...filtros, vencidos: false, validade_proxima: false, dias_validade: undefined };
+                  if (val === 'vencidos') {
+                    nf.vencidos = true;
+                  } else if (val.startsWith('proxima_')) {
+                    nf.validade_proxima = true;
+                    nf.dias_validade = parseInt(val.split('_')[1]);
+                  }
+                  setFiltros(nf);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                <option value="">Qualquer</option>
+                <option value="vencidos">Já Vencidos</option>
+                <option value="proxima_15">Vence em 15 dias</option>
+                <option value="proxima_30">Vence em 30 dias</option>
+                <option value="proxima_90">Vence em 90 dias</option>
               </select>
             </div>
             <div>
@@ -533,6 +567,16 @@ const ProductsPage: React.FC = () => {
           onClose={() => { setShowLotesModal(false); setSelectedProduct(null); }}
         />
       )}
+
+      <ExpiringProductsModal
+        isOpen={showExpiryModal}
+        onClose={() => {
+          setShowExpiryModal(false);
+          loadStats();
+          loadProdutos();
+        }}
+        timeframe={expiryTimeframe}
+      />
     </div>
   );
 };

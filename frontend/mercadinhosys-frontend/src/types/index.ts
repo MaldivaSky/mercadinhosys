@@ -174,6 +174,17 @@ export interface ProdutosResponse {
         produtos_baixo_estoque: number;
         produtos_esgotados: number;
         produtos_normal: number;
+        validade?: {
+            vencidos: number;
+            vence_15: number;
+            vence_30: number;
+            vence_90: number;
+        };
+        giro_estoque?: {
+            rapido: number;
+            normal: number;
+            lento: number;
+        };
     };
     filtros_aplicados?: Record<string, any>;
 }
@@ -188,6 +199,8 @@ export interface ProdutoFiltros {
     preco_max?: number;
     estoque_status?: 'baixo' | 'esgotado' | 'normal';
     validade_proxima?: boolean;
+    dias_validade?: number;
+    vencidos?: boolean;
     tipo?: string;
     ordenar_por?: string;
     direcao?: 'asc' | 'desc';

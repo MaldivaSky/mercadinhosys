@@ -36,6 +36,8 @@ export const productsService = {
             if (filtros.preco_max) params.preco_max = filtros.preco_max;
             if (filtros.estoque_status) params.estoque_status = filtros.estoque_status;
             if (filtros.validade_proxima) params.validade_proxima = filtros.validade_proxima;
+            if (filtros.dias_validade) params.dias_validade = filtros.dias_validade;
+            if (filtros.vencidos) params.vencidos = filtros.vencidos;
             if (filtros.tipo) params.tipo = filtros.tipo;
             if (filtros.ordenar_por) params.ordenar_por = filtros.ordenar_por;
             if (filtros.direcao) params.direcao = filtros.direcao;
@@ -161,6 +163,7 @@ export const productsService = {
             margem_media: number;
             classificacao_abc: { A: number; B: number; C: number };
             giro_estoque: { rapido: number; normal: number; lento: number };
+            validade: { vencidos: number; vence_15: number; vence_30: number; vence_90: number };
             top_produtos_margem: any[];
             produtos_criticos: any[];
             filtros_aplicados: any;
@@ -184,6 +187,10 @@ export const productsService = {
 
         console.log('📊 ESTATÍSTICAS RECEBIDAS:', response.data.estatisticas);
 
+        return response.data;
+    },
+    bulkUpdatePrices: async (atualizacoes: { id: number; novo_preco: number }[]): Promise<{ success: boolean; message: string }> => {
+        const response = await apiClient.post('/produtos/bulk-update-prices', { atualizacoes });
         return response.data;
     },
 };
