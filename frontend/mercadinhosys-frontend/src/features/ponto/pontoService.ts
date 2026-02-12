@@ -121,7 +121,9 @@ export const pontoService = {
 
   // Obter lista de funcionários (para filtros)
   obterFuncionarios: async () => {
-    const response = await apiClient.get('/funcionarios');
+    const response = await apiClient.get('/funcionarios', {
+      params: { simples: true, por_pagina: 200, incluir_estatisticas: false },
+    });
     return response.data;
   },
 };
