@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, Download, Trash2, AlertCircle, CheckCircle, Clock, Filter, ThumbsUp, ThumbsDown, X } from 'lucide-react';
+import { Upload, Download, AlertCircle, CheckCircle, Clock, Filter, ThumbsUp, ThumbsDown, X } from 'lucide-react';
 import { apiClient } from '../../../api/apiClient';
 
 interface Justificativa {

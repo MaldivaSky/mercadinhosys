@@ -8,7 +8,6 @@ import {
   BarChart3,
   Bell,
   ChevronRight,
-  DollarSign,
   RefreshCw,
   ShieldAlert,
   TrendingDown,
