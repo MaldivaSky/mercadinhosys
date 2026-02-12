@@ -437,18 +437,7 @@ export default function ExpensesPage() {
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                        <button
-                            onClick={() => setMostrarAnalises(!mostrarAnalises)}
-                            className={`px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 shadow-md font-medium ${
-                                mostrarAnalises
-                                    ? "bg-blue-500 text-white hover:bg-blue-600"
-                                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            }`}
-                        >
-                            <TrendingUp className="w-5 h-5" />
-                            {mostrarAnalises ? "Ocultar Análises" : "Mostrar Análises"}
-                        </button>
-                        
+                                                
                         {/* Menu Exportar */}
                         <div className="relative export-menu-container">
                             <button

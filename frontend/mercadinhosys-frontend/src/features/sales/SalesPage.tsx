@@ -124,9 +124,8 @@ export default function SalesPage() {
     const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
     const [detalhesVenda, setDetalhesVenda] = useState<VendaDetalhada | null>(null);
     const [loadingDetalhes, setLoadingDetalhes] = useState(false);
-    
+
     // Novos estados para análises
-    const [mostrarAnalises, setMostrarAnalises] = useState(true);
     const [analisesData, setAnalisesData] = useState<any>(null);
     const [loadingAnalises, setLoadingAnalises] = useState(false);
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
@@ -134,9 +133,7 @@ export default function SalesPage() {
     // Carregar vendas e estatísticas
     useEffect(() => {
         carregarVendas();
-        if (mostrarAnalises) {
-            carregarAnalises();
-        }
+        carregarAnalises();
     }, [filtros]);
 
     // Fechar menu de exportação ao clicar fora
@@ -160,6 +157,7 @@ export default function SalesPage() {
             if (filtros.forma_pagamento) params.forma_pagamento = filtros.forma_pagamento;
             if (filtros.funcionario_id) params.funcionario_id = filtros.funcionario_id;
             if (filtros.cliente_id) params.cliente_id = filtros.cliente_id;
+            if (filtros.status) params.status = filtros.status;
 
             const response = await apiClient.get("/vendas/estatisticas", { params });
             console.log("📈 Análises carregadas:", response.data);
@@ -174,7 +172,7 @@ export default function SalesPage() {
     async function carregarVendas() {
         setLoading(true);
         setErro(null);
-        
+
         try {
             const params: any = {
                 page: filtros.page,
@@ -189,11 +187,11 @@ export default function SalesPage() {
             if (filtros.forma_pagamento) params.forma_pagamento = filtros.forma_pagamento;
 
             const response = await apiClient.get("/vendas", { params });
-            
+
             console.log("📊 Resposta da API de vendas:", response.data);
-            
+
             setVendas(response.data.vendas || []);
-            
+
             const estatisticasFromApi = response.data.paginacao?.estatisticas || {
                 total_vendas: 0,
                 quantidade_vendas: 0,
@@ -202,7 +200,7 @@ export default function SalesPage() {
                 total_valor_recebido: 0,
                 formas_pagamento: {},
             };
-            
+
             setEstatisticas(estatisticasFromApi);
             setPaginacao(response.data.paginacao || null);
         } catch (err: unknown) {
@@ -248,7 +246,7 @@ export default function SalesPage() {
     async function abrirDetalhes(venda: Venda) {
         setLoadingDetalhes(true);
         setModalDetalhesAberto(true);
-        
+
         try {
             const response = await apiClient.get(`/vendas/${venda.id}`);
             console.log("📋 Detalhes da venda:", response.data);
@@ -265,10 +263,10 @@ export default function SalesPage() {
     // Cancelar venda
     async function cancelarVenda(vendaId: number) {
         if (!confirm("Tem certeza que deseja cancelar esta venda? Os produtos serão devolvidos ao estoque.")) return;
-        
+
         try {
-            await apiClient.post(`/vendas/${vendaId}/cancelar`, { 
-                motivo: "Cancelamento via painel de vendas" 
+            await apiClient.post(`/vendas/${vendaId}/cancelar`, {
+                motivo: "Cancelamento via painel de vendas"
             });
             alert("Venda cancelada com sucesso!");
             carregarVendas(); // Recarregar vendas
@@ -329,7 +327,7 @@ export default function SalesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setMenuExportarAberto(false);
             alert("✅ CSV exportado com sucesso!");
         } catch (err: any) {
@@ -365,7 +363,7 @@ export default function SalesPage() {
             ];
 
             // Converter para CSV (Excel pode abrir CSV)
-            const csvContent = ws_data.map(row => 
+            const csvContent = ws_data.map(row =>
                 row.map(cell => `"${cell}"`).join(",")
             ).join("\n");
 
@@ -379,7 +377,7 @@ export default function SalesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setMenuExportarAberto(false);
             alert("✅ Excel exportado com sucesso!");
         } catch (err: any) {
@@ -392,13 +390,13 @@ export default function SalesPage() {
         try {
             const response = await apiClient.get("/vendas/relatorio-diario");
             const dataStr = JSON.stringify(response.data, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
             const exportFileDefaultName = `relatorio-vendas-${new Date().toISOString().split('T')[0]}.json`;
             const linkElement = document.createElement('a');
             linkElement.setAttribute('href', dataUri);
             linkElement.setAttribute('download', exportFileDefaultName);
             linkElement.click();
-            
+
             setMenuExportarAberto(false);
             alert("✅ JSON exportado com sucesso!");
         } catch (err: any) {
@@ -420,20 +418,6 @@ export default function SalesPage() {
                     <p className="text-sm text-gray-600 mt-1">Análise completa e histórico de vendas</p>
                 </div>
                 <div className="flex gap-3">
-                    <button
-                        onClick={() => setMostrarAnalises(!mostrarAnalises)}
-                        className={`px-4 py-2 rounded transition-colors flex items-center gap-2 ${
-                            mostrarAnalises
-                                ? "bg-blue-500 text-white hover:bg-blue-600"
-                                : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                        }`}
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        {mostrarAnalises ? "Ocultar Análises" : "Mostrar Análises"}
-                    </button>
-                    
                     {/* Menu de Exportação */}
                     <div className="relative export-menu-container">
                         <button
@@ -448,7 +432,7 @@ export default function SalesPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
-                        
+
                         {/* Dropdown Menu */}
                         {menuExportarAberto && (
                             <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 overflow-hidden">
@@ -465,7 +449,7 @@ export default function SalesPage() {
                                             <div className="text-xs text-gray-500">Planilha editável</div>
                                         </div>
                                     </button>
-                                    
+
                                     <button
                                         onClick={exportarCSV}
                                         className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-center gap-3 text-gray-700"
@@ -478,7 +462,7 @@ export default function SalesPage() {
                                             <div className="text-xs text-gray-500">Dados separados por vírgula</div>
                                         </div>
                                     </button>
-                                    
+
                                     <button
                                         onClick={exportarJSON}
                                         className="w-full text-left px-4 py-3 hover:bg-purple-50 transition-colors flex items-center gap-3 text-gray-700"
@@ -491,7 +475,7 @@ export default function SalesPage() {
                                             <div className="text-xs text-gray-500">Relatório completo</div>
                                         </div>
                                     </button>
-                                    
+
                                     <button
                                         onClick={exportarPDF}
                                         className="w-full text-left px-4 py-3 hover:bg-red-50 transition-colors flex items-center gap-3 text-gray-700"
@@ -505,7 +489,7 @@ export default function SalesPage() {
                                         </div>
                                     </button>
                                 </div>
-                                
+
                                 <div className="border-t border-gray-200 px-4 py-2 bg-gray-50">
                                     <p className="text-xs text-gray-600">
                                         📊 {vendas.length} vendas • {formatCurrency(estatisticas.total_vendas)}
@@ -517,8 +501,161 @@ export default function SalesPage() {
                 </div>
             </div>
 
-            {/* Métricas */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            {/* Filtros com Design Premium (MOVIDO PARA O TOPO) */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                            </svg>
+                        </div>
+                        Filtros Avançados
+                    </h2>
+
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { label: "Hoje", days: 0 },
+                            { label: "Ontem", days: 1 },
+                            { label: "7 Dias", days: 7 },
+                            { label: "30 Dias", days: 30 },
+                            { label: "Este Mês", type: "month" },
+                        ].map((filtro, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => {
+                                    let start = new Date();
+                                    let end = new Date();
+
+                                    if (filtro.type === "month") {
+                                        start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+                                        end = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+                                    } else if (filtro.days === 1) { // Ontem
+                                        start.setDate(start.getDate() - 1);
+                                        end.setDate(end.getDate() - 1);
+                                    } else {
+                                        start.setDate(start.getDate() - (filtro.days || 0));
+                                    }
+
+                                    setFiltros(prev => ({
+                                        ...prev,
+                                        data_inicio: start.toISOString().split('T')[0],
+                                        data_fim: end.toISOString().split('T')[0],
+                                        page: 1
+                                    }));
+                                }}
+                                className="px-3 py-1.5 text-xs font-medium bg-gray-50 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors border border-gray-200"
+                            >
+                                {filtro.label}
+                            </button>
+                        ))}
+
+                        <button
+                            onClick={limparFiltros}
+                            className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium flex items-center gap-1 ml-2 border border-transparent hover:border-red-100"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {/* Periodo - Agrupado */}
+                    <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">De</label>
+                            <input
+                                type="date"
+                                name="data_inicio"
+                                value={filtros.data_inicio}
+                                onChange={handleFiltroChange}
+                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Até</label>
+                            <input
+                                type="date"
+                                name="data_fim"
+                                value={filtros.data_fim}
+                                onChange={handleFiltroChange}
+                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                        <div className="relative">
+                            <select
+                                name="status"
+                                value={filtros.status}
+                                onChange={handleFiltroChange}
+                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm appearance-none"
+                            >
+                                <option value="">Todos os Status</option>
+                                <option value="finalizada">✅ Finalizada</option>
+                                <option value="cancelada">❌ Cancelada</option>
+                                <option value="em_andamento">⏳ Em Andamento</option>
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Pagamento</label>
+                        <div className="relative">
+                            <select
+                                name="forma_pagamento"
+                                value={filtros.forma_pagamento}
+                                onChange={handleFiltroChange}
+                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm appearance-none"
+                            >
+                                <option value="">Todas as Formas</option>
+                                <option value="dinheiro">💵 Dinheiro</option>
+                                <option value="cartao credito">💳 Crédito</option>
+                                <option value="cartao debito">💳 Débito</option>
+                                <option value="pix">💠 PIX</option>
+                                <option value="fiado">📝 Fiado</option>
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Busca</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                name="search"
+                                placeholder="Buscar venda..."
+                                value={filtros.search}
+                                onChange={handleFiltroChange}
+                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            />
+                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Métricas (KPIs) */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-green-100 rounded-lg text-green-600">
@@ -530,7 +667,7 @@ export default function SalesPage() {
                     </div>
                     <div className="text-2xl font-bold text-gray-900">{formatCurrency(estatisticas.total_vendas)}</div>
                 </div>
-                
+
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
@@ -566,959 +703,879 @@ export default function SalesPage() {
                     </div>
                     <div className="text-2xl font-bold text-gray-900">{formatCurrency(estatisticas.total_descontos)}</div>
                 </div>
+
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-green-100 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10">
+                        <svg className="w-16 h-16 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                        </svg>
+                    </div>
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-green-500 rounded-lg text-white shadow-green-200 shadow-lg">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div className="text-sm font-bold text-green-700">Lucro Estimado</div>
+                    </div>
+                    <div className="text-2xl font-bold text-green-700">
+                        {/* Se o backend ainda não retornar total_lucro, mostramos Loading ou calculado */}
+                        {analisesData?.estatisticas_gerais?.total_lucro !== undefined
+                            ? formatCurrency(analisesData.estatisticas_gerais.total_lucro)
+                            : <span className="text-sm text-gray-400">Carregando...</span>
+                        }
+                    </div>
+                    <div className="text-xs text-green-600 mt-1 font-medium">
+                        Margem: {analisesData?.estatisticas_gerais?.total_valor ? ((analisesData.estatisticas_gerais.total_lucro / analisesData.estatisticas_gerais.total_valor) * 100).toFixed(1) + "%" : "-"}
+                    </div>
+                </div>
             </div>
 
             {/* Seção de Análises Avançadas */}
-            {mostrarAnalises && (
+            {true && (
                 loadingAnalises ? (
                     <div className="bg-white p-12 rounded-lg shadow-md border mb-6 text-center">
                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                         <p className="mt-4 text-gray-700">Carregando análises...</p>
                     </div>
                 ) : analisesData && (
-                <div className="space-y-6 mb-6">
-                    {/* Dashboard de Tendência PROFISSIONAL */}
-                    {analisesData.vendas_por_dia && analisesData.vendas_por_dia.length > 0 && (
-                        <div className="space-y-6">
-                            {/* Cards de Comparação Rápida */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                {/* Hoje vs Ontem */}
-                                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium opacity-90">Hoje vs Ontem</span>
-                                        {(() => {
-                                            const hoje = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0;
-                                            const ontem = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0;
-                                            const diff = ontem > 0 ? ((hoje - ontem) / ontem * 100) : 0;
-                                            return diff >= 0 ? (
-                                                <span className="text-green-300 text-xs flex items-center gap-1">
-                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                    </svg>
-                                                    +{diff.toFixed(1)}%
-                                                </span>
-                                            ) : (
-                                                <span className="text-red-300 text-xs flex items-center gap-1">
-                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                    </svg>
-                                                    {diff.toFixed(1)}%
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0)}
-                                    </div>
-                                    <div className="text-xs opacity-75 mt-1">
-                                        Ontem: {formatCurrency(analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0)}
-                                    </div>
-                                </div>
-
-                                {/* Esta Semana vs Semana Passada */}
-                                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium opacity-90">Esta Semana</span>
-                                        {(() => {
-                                            const ultimos7 = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0);
-                                            const anteriores7 = analisesData.vendas_por_dia.slice(-14, -7).reduce((sum: number, v: any) => sum + v.total, 0);
-                                            const diff = anteriores7 > 0 ? ((ultimos7 - anteriores7) / anteriores7 * 100) : 0;
-                                            return diff >= 0 ? (
-                                                <span className="text-green-200 text-xs">+{diff.toFixed(1)}%</span>
-                                            ) : (
-                                                <span className="text-red-200 text-xs">{diff.toFixed(1)}%</span>
-                                            );
-                                        })()}
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0))}
-                                    </div>
-                                    <div className="text-xs opacity-75 mt-1">
-                                        Últimos 7 dias
-                                    </div>
-                                </div>
-
-                                {/* Previsão Próxima Semana */}
-                                {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
-                                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                    <div className="space-y-6 mb-6">
+                        {/* Dashboard de Tendência PROFISSIONAL */}
+                        {analisesData.vendas_por_dia && analisesData.vendas_por_dia.length > 0 && (
+                            <div className="space-y-6">
+                                {/* Cards de Comparação Rápida */}
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    {/* Hoje vs Ontem */}
+                                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium opacity-90">Previsão 7 Dias</span>
-                                            <span className="text-xs bg-white/20 px-2 py-1 rounded">IA</span>
+                                            <span className="text-sm font-medium opacity-90">Hoje vs Ontem</span>
+                                            {(() => {
+                                                const hoje = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0;
+                                                const ontem = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0;
+                                                const diff = ontem > 0 ? ((hoje - ontem) / ontem * 100) : 0;
+                                                return diff >= 0 ? (
+                                                    <span className="text-green-300 text-xs flex items-center gap-1">
+                                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                        +{diff.toFixed(1)}%
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-red-300 text-xs flex items-center gap-1">
+                                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                        {diff.toFixed(1)}%
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="text-3xl font-bold">
-                                            {formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0))}
+                                            {formatCurrency(analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0)}
                                         </div>
                                         <div className="text-xs opacity-75 mt-1">
-                                            Média: {formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0) / 7)}/dia
+                                            Ontem: {formatCurrency(analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0)}
                                         </div>
                                     </div>
-                                )}
 
-                                {/* Melhor Dia */}
-                                <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium opacity-90">Melhor Dia</span>
-                                        <span className="text-2xl">🏆</span>
+                                    {/* Esta Semana vs Semana Passada */}
+                                    <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium opacity-90">Esta Semana</span>
+                                            {(() => {
+                                                const ultimos7 = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0);
+                                                const anteriores7 = analisesData.vendas_por_dia.slice(-14, -7).reduce((sum: number, v: any) => sum + v.total, 0);
+                                                const diff = anteriores7 > 0 ? ((ultimos7 - anteriores7) / anteriores7 * 100) : 0;
+                                                return diff >= 0 ? (
+                                                    <span className="text-green-200 text-xs">+{diff.toFixed(1)}%</span>
+                                                ) : (
+                                                    <span className="text-red-200 text-xs">{diff.toFixed(1)}%</span>
+                                                );
+                                            })()}
+                                        </div>
+                                        <div className="text-3xl font-bold">
+                                            {formatCurrency(analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0))}
+                                        </div>
+                                        <div className="text-xs opacity-75 mt-1">
+                                            Últimos 7 dias
+                                        </div>
                                     </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(Math.max(...analisesData.vendas_por_dia.map((v: any) => v.total)))}
-                                    </div>
-                                    <div className="text-xs opacity-75 mt-1">
-                                        {(() => {
-                                            const melhorDia = analisesData.vendas_por_dia.reduce((max: any, v: any) => v.total > max.total ? v : max);
-                                            const data = new Date(melhorDia.data);
-                                            const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                                            return `${diasSemana[data.getDay()]}, ${data.getDate()}/${data.getMonth() + 1}`;
-                                        })()}
+
+                                    {/* Previsão Próxima Semana */}
+                                    {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
+                                        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-sm font-medium opacity-90">Previsão 7 Dias</span>
+                                                <span className="text-xs bg-white/20 px-2 py-1 rounded">IA</span>
+                                            </div>
+                                            <div className="text-3xl font-bold">
+                                                {formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0))}
+                                            </div>
+                                            <div className="text-xs opacity-75 mt-1">
+                                                Média: {formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0) / 7)}/dia
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Melhor Dia */}
+                                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-medium opacity-90">Melhor Dia</span>
+                                            <span className="text-2xl">🏆</span>
+                                        </div>
+                                        <div className="text-3xl font-bold">
+                                            {formatCurrency(Math.max(...analisesData.vendas_por_dia.map((v: any) => v.total)))}
+                                        </div>
+                                        <div className="text-xs opacity-75 mt-1">
+                                            {(() => {
+                                                const melhorDia = analisesData.vendas_por_dia.reduce((max: any, v: any) => v.total > max.total ? v : max);
+                                                const data = new Date(melhorDia.data);
+                                                const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                                return `${diasSemana[data.getDay()]}, ${data.getDate()}/${data.getMonth() + 1}`;
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Gráfico com Previsão */}
-                            <div className="bg-white p-6 rounded-lg shadow-md border">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                                            <span>📈</span> Histórico e Previsão de Vendas
-                                        </h3>
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            {analisesData.vendas_por_dia.length} dias de histórico
-                                            {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && 
-                                                ` + ${analisesData.previsao_vendas.length} dias de previsão`
-                                            }
-                                        </p>
-                                    </div>
-                                    {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
-                                        <div className="flex items-center gap-4 text-sm">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                                                <span className="text-gray-600">Real</span>
+                                {/* Gráfico com Previsão */}
+                                <div className="bg-white p-6 rounded-lg shadow-md border">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                                <span>📈</span> Histórico e Previsão de Vendas
+                                            </h3>
+                                            <p className="text-sm text-gray-500 mt-1">
+                                                {analisesData.vendas_por_dia.length} dias de histórico
+                                                {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 &&
+                                                    ` + ${analisesData.previsao_vendas.length} dias de previsão`
+                                                }
+                                            </p>
+                                        </div>
+                                        {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
+                                            <div className="flex items-center gap-4 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                                                    <span className="text-gray-600">Real</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 bg-green-500 rounded border-2 border-dashed border-green-600"></div>
+                                                    <span className="text-gray-600">Previsão</span>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-3 h-3 bg-green-500 rounded border-2 border-dashed border-green-600"></div>
-                                                <span className="text-gray-600">Previsão</span>
+                                        )}
+                                    </div>
+
+                                    {analisesData.vendas_por_dia.length < 7 && (
+                                        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                            <p className="text-sm text-orange-700">
+                                                ⚠️ <strong>Atenção:</strong> Previsão requer pelo menos 7 dias de dados. Ajuste os filtros de data.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="h-96">
+                                        <Line
+                                            data={{
+                                                labels: [
+                                                    ...analisesData.vendas_por_dia.map((v: any) => {
+                                                        const date = new Date(v.data);
+                                                        const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                                        return `${diasSemana[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+                                                    }),
+                                                    ...(analisesData.previsao_vendas || []).map((v: any) => {
+                                                        const date = new Date(v.data);
+                                                        const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                                                        return `${diasSemana[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
+                                                    })
+                                                ],
+                                                datasets: [
+                                                    {
+                                                        label: "Vendas Reais",
+                                                        data: [
+                                                            ...analisesData.vendas_por_dia.map((v: any) => v.total),
+                                                            ...Array((analisesData.previsao_vendas || []).length).fill(null)
+                                                        ],
+                                                        borderColor: "#3B82F6",
+                                                        backgroundColor: (context) => {
+                                                            const ctx = context.chart.ctx;
+                                                            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                                                            gradient.addColorStop(0, "rgba(59, 130, 246, 0.3)");
+                                                            gradient.addColorStop(1, "rgba(59, 130, 246, 0.0)");
+                                                            return gradient;
+                                                        },
+                                                        fill: true,
+                                                        tension: 0.4,
+                                                        pointRadius: 5,
+                                                        pointHoverRadius: 8,
+                                                        pointBackgroundColor: "#3B82F6",
+                                                        pointBorderColor: "#fff",
+                                                        pointBorderWidth: 2,
+                                                        borderWidth: 3,
+                                                    },
+                                                    ...(analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 ? [{
+                                                        label: "Previsão IA",
+                                                        data: [
+                                                            ...Array(analisesData.vendas_por_dia.length - 1).fill(null),
+                                                            analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1].total,
+                                                            ...(analisesData.previsao_vendas || []).map((v: any) => v.total)
+                                                        ],
+                                                        borderColor: "#10B981",
+                                                        backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                                        fill: false,
+                                                        tension: 0.4,
+                                                        pointRadius: 5,
+                                                        pointHoverRadius: 8,
+                                                        pointBackgroundColor: "#10B981",
+                                                        pointBorderColor: "#fff",
+                                                        pointBorderWidth: 2,
+                                                        borderWidth: 3,
+                                                        borderDash: [8, 4],
+                                                    }] : []),
+                                                ],
+                                            }}
+                                            options={{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                interaction: {
+                                                    mode: 'index',
+                                                    intersect: false,
+                                                },
+                                                plugins: {
+                                                    legend: {
+                                                        display: false
+                                                    },
+                                                    tooltip: {
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                                        titleColor: '#1F2937',
+                                                        bodyColor: '#4B5563',
+                                                        borderColor: '#E5E7EB',
+                                                        borderWidth: 2,
+                                                        padding: 12,
+                                                        displayColors: true,
+                                                        titleFont: {
+                                                            size: 14,
+                                                            weight: 'bold'
+                                                        },
+                                                        bodyFont: {
+                                                            size: 13
+                                                        },
+                                                        callbacks: {
+                                                            title: (context) => {
+                                                                return context[0].label;
+                                                            },
+                                                            label: (context) => {
+                                                                const label = context.dataset.label || '';
+                                                                const value = context.parsed.y;
+                                                                return `${label}: ${formatCurrency(value || 0)}`;
+                                                            },
+                                                            afterBody: (context) => {
+                                                                const idx = context[0].dataIndex;
+                                                                if (idx < analisesData.vendas_por_dia.length) {
+                                                                    const venda = analisesData.vendas_por_dia[idx];
+                                                                    return [
+                                                                        '',
+                                                                        `Quantidade: ${venda.quantidade} vendas`,
+                                                                        `Ticket Médio: ${formatCurrency(venda.total / venda.quantidade)}`
+                                                                    ];
+                                                                }
+                                                                return [];
+                                                            }
+                                                        },
+                                                    },
+                                                },
+                                                scales: {
+                                                    y: {
+                                                        beginAtZero: true,
+                                                        grid: {
+                                                            color: '#F3F4F6',
+                                                        },
+                                                        ticks: {
+                                                            callback: (value) => formatCurrency(Number(value) || 0),
+                                                            font: {
+                                                                size: 12,
+                                                                weight: 500
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    },
+                                                    x: {
+                                                        grid: {
+                                                            display: false
+                                                        },
+                                                        ticks: {
+                                                            font: {
+                                                                size: 11,
+                                                                weight: 500
+                                                            },
+                                                            color: '#6B7280',
+                                                            maxRotation: 45,
+                                                            minRotation: 45
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    }
+                                                },
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Insights Automáticos */}
+                                    {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
+                                        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-2xl">💰</span>
+                                                    <span className="font-semibold text-blue-900">Faturamento Previsto</span>
+                                                </div>
+                                                <p className="text-sm text-blue-700">
+                                                    Próximos 7 dias: <strong>{formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0))}</strong>
+                                                </p>
+                                            </div>
+
+                                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-2xl">📦</span>
+                                                    <span className="font-semibold text-green-900">Recomendação</span>
+                                                </div>
+                                                <p className="text-sm text-green-700">
+                                                    {(() => {
+                                                        const mediaAtual = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                        const mediaPrevisao = analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                        const diff = ((mediaPrevisao - mediaAtual) / mediaAtual * 100);
+
+                                                        if (diff > 10) {
+                                                            return "Vendas em alta! Considere aumentar estoque.";
+                                                        } else if (diff < -10) {
+                                                            return "Vendas em queda. Planeje promoções.";
+                                                        } else {
+                                                            return "Vendas estáveis. Mantenha o ritmo.";
+                                                        }
+                                                    })()}
+                                                </p>
+                                            </div>
+
+                                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-2xl">📊</span>
+                                                    <span className="font-semibold text-purple-900">Tendência</span>
+                                                </div>
+                                                <p className="text-sm text-purple-700">
+                                                    {(() => {
+                                                        const primeira = analisesData.vendas_por_dia.slice(0, 7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                        const ultima = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
+                                                        const crescimento = ((ultima - primeira) / primeira * 100);
+
+                                                        if (crescimento > 0) {
+                                                            return `Crescimento de ${crescimento.toFixed(1)}% no período`;
+                                                        } else {
+                                                            return `Queda de ${Math.abs(crescimento).toFixed(1)}% no período`;
+                                                        }
+                                                    })()}
+                                                </p>
                                             </div>
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        )}
 
-                                {analisesData.vendas_por_dia.length < 7 && (
-                                    <div className="mb-4 bg-orange-50 border border-orange-200 rounded-lg p-3">
-                                        <p className="text-sm text-orange-700">
-                                            ⚠️ <strong>Atenção:</strong> Previsão requer pelo menos 7 dias de dados. Ajuste os filtros de data.
-                                        </p>
+                        {/* Grid de 2 colunas - Top Produtos */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Top Produtos */}
+                            {analisesData.produtos_mais_vendidos && analisesData.produtos_mais_vendidos.length > 0 && (
+                                <div className="bg-white p-6 rounded-lg shadow-md border">
+                                    <h3 className="text-lg font-semibold mb-4 text-gray-900 flex items-center gap-2">
+                                        <span>🛍️</span> Top 10 Produtos Mais Vendidos
+                                    </h3>
+                                    <div className="h-80">
+                                        <Bar
+                                            data={{
+                                                labels: analisesData.produtos_mais_vendidos.slice(0, 10).map((p: any) => p.nome),
+                                                datasets: [
+                                                    {
+                                                        label: "Quantidade Vendida",
+                                                        data: analisesData.produtos_mais_vendidos.slice(0, 10).map((p: any) => p.quantidade),
+                                                        backgroundColor: "#10B981",
+                                                        borderRadius: 4,
+                                                        barThickness: 20,
+                                                    },
+                                                ],
+                                            }}
+                                            options={{
+                                                indexAxis: "y",
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: { display: false },
+                                                    tooltip: {
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                        titleColor: '#1F2937',
+                                                        bodyColor: '#4B5563',
+                                                        borderColor: '#E5E7EB',
+                                                        borderWidth: 1,
+                                                        padding: 10,
+                                                        displayColors: false,
+                                                        callbacks: {
+                                                            label: (context) => `${context.parsed.x} unidades`,
+                                                            afterLabel: (context) => {
+                                                                const item = analisesData.produtos_mais_vendidos[context.dataIndex];
+                                                                return `Total: ${formatCurrency(item.total || 0)}`;
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                                scales: {
+                                                    x: {
+                                                        beginAtZero: true,
+                                                        grid: {
+                                                            color: '#F3F4F6',
+                                                        },
+                                                        ticks: {
+                                                            stepSize: 1,
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    },
+                                                    y: {
+                                                        grid: {
+                                                            display: false
+                                                        },
+                                                        ticks: {
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    }
+                                                },
+                                            }}
+                                        />
                                     </div>
-                                )}
+                                </div>
+                            )}
+                        </div>
 
-                                <div className="h-96">
-                                    <Line
-                                        data={{
-                                            labels: [
-                                                ...analisesData.vendas_por_dia.map((v: any) => {
-                                                    const date = new Date(v.data);
-                                                    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                                                    return `${diasSemana[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
-                                                }),
-                                                ...(analisesData.previsao_vendas || []).map((v: any) => {
-                                                    const date = new Date(v.data);
-                                                    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                                                    return `${diasSemana[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`;
-                                                })
-                                            ],
-                                            datasets: [
-                                                {
-                                                    label: "Vendas Reais",
-                                                    data: [
-                                                        ...analisesData.vendas_por_dia.map((v: any) => v.total),
-                                                        ...Array((analisesData.previsao_vendas || []).length).fill(null)
-                                                    ],
-                                                    borderColor: "#3B82F6",
-                                                    backgroundColor: (context) => {
-                                                        const ctx = context.chart.ctx;
-                                                        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                                                        gradient.addColorStop(0, "rgba(59, 130, 246, 0.3)");
-                                                        gradient.addColorStop(1, "rgba(59, 130, 246, 0.0)");
-                                                        return gradient;
+                        {/* Grid de 2 colunas - Top Clientes e Top Fornecedores */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Top Clientes */}
+                            {analisesData.vendas_por_cliente && analisesData.vendas_por_cliente.length > 0 && (
+                                <div className="bg-white p-6 rounded-lg shadow-md border">
+                                    <h3 className="text-lg font-semibold mb-4 text-gray-900 flex items-center gap-2">
+                                        <span>🏅</span> Top 10 Clientes
+                                    </h3>
+                                    <div className="h-80">
+                                        <Bar
+                                            data={{
+                                                labels: analisesData.vendas_por_cliente.slice(0, 10).map((c: any) => c.cliente),
+                                                datasets: [
+                                                    {
+                                                        label: "Total Gasto (R$)",
+                                                        data: analisesData.vendas_por_cliente.slice(0, 10).map((c: any) => c.total),
+                                                        backgroundColor: "#8B5CF6",
+                                                        borderRadius: 4,
+                                                        barThickness: 20,
                                                     },
-                                                    fill: true,
-                                                    tension: 0.4,
-                                                    pointRadius: 5,
-                                                    pointHoverRadius: 8,
-                                                    pointBackgroundColor: "#3B82F6",
-                                                    pointBorderColor: "#fff",
-                                                    pointBorderWidth: 2,
-                                                    borderWidth: 3,
-                                                },
-                                                ...(analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 ? [{
-                                                    label: "Previsão IA",
-                                                    data: [
-                                                        ...Array(analisesData.vendas_por_dia.length - 1).fill(null),
-                                                        analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1].total,
-                                                        ...(analisesData.previsao_vendas || []).map((v: any) => v.total)
-                                                    ],
-                                                    borderColor: "#10B981",
-                                                    backgroundColor: "rgba(16, 185, 129, 0.1)",
-                                                    fill: false,
-                                                    tension: 0.4,
-                                                    pointRadius: 5,
-                                                    pointHoverRadius: 8,
-                                                    pointBackgroundColor: "#10B981",
-                                                    pointBorderColor: "#fff",
-                                                    pointBorderWidth: 2,
-                                                    borderWidth: 3,
-                                                    borderDash: [8, 4],
-                                                }] : []),
-                                            ],
-                                        }}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            interaction: {
-                                                mode: 'index',
-                                                intersect: false,
-                                            },
-                                            plugins: {
-                                                legend: { 
-                                                    display: false
-                                                },
-                                                tooltip: {
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                                    titleColor: '#1F2937',
-                                                    bodyColor: '#4B5563',
-                                                    borderColor: '#E5E7EB',
-                                                    borderWidth: 2,
-                                                    padding: 12,
-                                                    displayColors: true,
-                                                    titleFont: {
-                                                        size: 14,
-                                                        weight: 'bold'
-                                                    },
-                                                    bodyFont: {
-                                                        size: 13
-                                                    },
-                                                    callbacks: {
-                                                        title: (context) => {
-                                                            return context[0].label;
-                                                        },
-                                                        label: (context) => {
-                                                            const label = context.dataset.label || '';
-                                                            const value = context.parsed.y;
-                                                            return `${label}: ${formatCurrency(value || 0)}`;
-                                                        },
-                                                        afterBody: (context) => {
-                                                            const idx = context[0].dataIndex;
-                                                            if (idx < analisesData.vendas_por_dia.length) {
-                                                                const venda = analisesData.vendas_por_dia[idx];
-                                                                return [
-                                                                    '',
-                                                                    `Quantidade: ${venda.quantidade} vendas`,
-                                                                    `Ticket Médio: ${formatCurrency(venda.total / venda.quantidade)}`
-                                                                ];
+                                                ],
+                                            }}
+                                            options={{
+                                                indexAxis: "y",
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: { display: false },
+                                                    tooltip: {
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                        titleColor: '#1F2937',
+                                                        bodyColor: '#4B5563',
+                                                        borderColor: '#E5E7EB',
+                                                        borderWidth: 1,
+                                                        padding: 10,
+                                                        displayColors: false,
+                                                        callbacks: {
+                                                            label: (context) => `Total: ${formatCurrency(context.parsed.x || 0)}`,
+                                                            afterLabel: (context) => {
+                                                                const item = analisesData.vendas_por_cliente[context.dataIndex];
+                                                                return item.quantidade ? `${item.quantidade} compras` : '';
                                                             }
-                                                            return [];
+                                                        },
+                                                    },
+                                                },
+                                                scales: {
+                                                    x: {
+                                                        beginAtZero: true,
+                                                        grid: {
+                                                            color: '#F3F4F6',
+                                                        },
+                                                        ticks: {
+                                                            callback: (value) => formatCurrency(Number(value) || 0),
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
                                                         }
                                                     },
-                                                },
-                                            },
-                                            scales: {
-                                                y: {
-                                                    beginAtZero: true,
-                                                    grid: {
-                                                        color: '#F3F4F6',
-                                                    },
-                                                    ticks: {
-                                                        callback: (value) => formatCurrency(Number(value) || 0),
-                                                        font: {
-                                                            size: 12,
-                                                            weight: 500
+                                                    y: {
+                                                        grid: {
+                                                            display: false
                                                         },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
+                                                        ticks: {
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
                                                     }
                                                 },
-                                                x: {
-                                                    grid: {
-                                                        display: false
-                                                    },
-                                                    ticks: {
-                                                        font: {
-                                                            size: 11,
-                                                            weight: 500
-                                                        },
-                                                        color: '#6B7280',
-                                                        maxRotation: 45,
-                                                        minRotation: 45
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                }
-                                            },
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Insights Automáticos */}
-                                {analisesData.previsao_vendas && analisesData.previsao_vendas.length > 0 && (
-                                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-2xl">💰</span>
-                                                <span className="font-semibold text-blue-900">Faturamento Previsto</span>
-                                            </div>
-                                            <p className="text-sm text-blue-700">
-                                                Próximos 7 dias: <strong>{formatCurrency(analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0))}</strong>
-                                            </p>
-                                        </div>
-
-                                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-2xl">📦</span>
-                                                <span className="font-semibold text-green-900">Recomendação</span>
-                                            </div>
-                                            <p className="text-sm text-green-700">
-                                                {(() => {
-                                                    const mediaAtual = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
-                                                    const mediaPrevisao = analisesData.previsao_vendas.reduce((sum: number, v: any) => sum + v.total, 0) / 7;
-                                                    const diff = ((mediaPrevisao - mediaAtual) / mediaAtual * 100);
-                                                    
-                                                    if (diff > 10) {
-                                                        return "Vendas em alta! Considere aumentar estoque.";
-                                                    } else if (diff < -10) {
-                                                        return "Vendas em queda. Planeje promoções.";
-                                                    } else {
-                                                        return "Vendas estáveis. Mantenha o ritmo.";
-                                                    }
-                                                })()}
-                                            </p>
-                                        </div>
-
-                                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-2xl">📊</span>
-                                                <span className="font-semibold text-purple-900">Tendência</span>
-                                            </div>
-                                            <p className="text-sm text-purple-700">
-                                                {(() => {
-                                                    const primeira = analisesData.vendas_por_dia.slice(0, 7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
-                                                    const ultima = analisesData.vendas_por_dia.slice(-7).reduce((sum: number, v: any) => sum + v.total, 0) / 7;
-                                                    const crescimento = ((ultima - primeira) / primeira * 100);
-                                                    
-                                                    if (crescimento > 0) {
-                                                        return `Crescimento de ${crescimento.toFixed(1)}% no período`;
-                                                    } else {
-                                                        return `Queda de ${Math.abs(crescimento).toFixed(1)}% no período`;
-                                                    }
-                                                })()}
-                                            </p>
-                                        </div>
+                                            }}
+                                        />
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
+
+                            {/* Top Fornecedores */}
+                            {analisesData.vendas_por_fornecedor && analisesData.vendas_por_fornecedor.length > 0 && (
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                                    <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
+                                        <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                            </svg>
+                                        </div>
+                                        Top 10 Fornecedores
+                                    </h3>
+                                    <div className="h-80">
+                                        <Bar
+                                            data={{
+                                                labels: analisesData.vendas_por_fornecedor.slice(0, 10).map((f: any) => f.fornecedor),
+                                                datasets: [
+                                                    {
+                                                        label: "Total Vendido (R$)",
+                                                        data: analisesData.vendas_por_fornecedor.slice(0, 10).map((f: any) => f.total),
+                                                        backgroundColor: "#F97316", // Orange-500
+                                                        borderRadius: 4,
+                                                        barThickness: 20,
+                                                    },
+                                                ],
+                                            }}
+                                            options={{
+                                                indexAxis: "y",
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: { display: false },
+                                                    tooltip: {
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                        titleColor: '#1F2937',
+                                                        bodyColor: '#4B5563',
+                                                        borderColor: '#E5E7EB',
+                                                        borderWidth: 1,
+                                                        padding: 10,
+                                                        displayColors: false,
+                                                        callbacks: {
+                                                            label: (context) => `Total: ${formatCurrency(context.parsed.x || 0)}`,
+                                                            afterLabel: (context) => {
+                                                                const item = analisesData.vendas_por_fornecedor[context.dataIndex];
+                                                                return `${item.quantidade_vendas} vendas`;
+                                                            }
+                                                        },
+                                                    },
+                                                },
+                                                scales: {
+                                                    x: {
+                                                        beginAtZero: true,
+                                                        grid: {
+                                                            color: '#F3F4F6',
+                                                        },
+                                                        ticks: {
+                                                            callback: (value) => formatCurrency(Number(value) || 0),
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    },
+                                                    y: {
+                                                        grid: {
+                                                            display: false
+                                                        },
+                                                        ticks: {
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    }
+                                                },
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    )}
 
-                    {/* Grid de 2 colunas - Top Produtos */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Top Produtos */}
-                        {analisesData.produtos_mais_vendidos && analisesData.produtos_mais_vendidos.length > 0 && (
-                            <div className="bg-white p-6 rounded-lg shadow-md border">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 flex items-center gap-2">
-                                    <span>🛍️</span> Top 10 Produtos Mais Vendidos
-                                </h3>
-                                <div className="h-80">
-                                    <Bar
-                                        data={{
-                                            labels: analisesData.produtos_mais_vendidos.slice(0, 10).map((p: any) => p.nome),
-                                            datasets: [
-                                                {
-                                                    label: "Quantidade Vendida",
-                                                    data: analisesData.produtos_mais_vendidos.slice(0, 10).map((p: any) => p.quantidade),
-                                                    backgroundColor: "#10B981",
-                                                    borderRadius: 4,
-                                                    barThickness: 20,
-                                                },
-                                            ],
-                                        }}
-                                        options={{
-                                            indexAxis: "y",
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: { display: false },
-                                                tooltip: {
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                    titleColor: '#1F2937',
-                                                    bodyColor: '#4B5563',
-                                                    borderColor: '#E5E7EB',
-                                                    borderWidth: 1,
-                                                    padding: 10,
-                                                    displayColors: false,
-                                                    callbacks: {
-                                                        label: (context) => `${context.parsed.x} unidades`,
-                                                        afterLabel: (context) => {
-                                                            const item = analisesData.produtos_mais_vendidos[context.dataIndex];
-                                                            return `Total: ${formatCurrency(item.total || 0)}`;
-                                                        },
-                                                    },
-                                                },
-                                            },
-                                            scales: {
-                                                x: {
-                                                    beginAtZero: true,
-                                                    grid: {
-                                                        color: '#F3F4F6',
-                                                    },
-                                                    ticks: {
-                                                        stepSize: 1,
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                },
-                                                y: {
-                                                    grid: {
-                                                        display: false
-                                                    },
-                                                    ticks: {
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                }
-                                            },
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Grid de 2 colunas - Top Clientes e Top Fornecedores */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Top Clientes */}
-                        {analisesData.vendas_por_cliente && analisesData.vendas_por_cliente.length > 0 && (
-                            <div className="bg-white p-6 rounded-lg shadow-md border">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 flex items-center gap-2">
-                                    <span>🏅</span> Top 10 Clientes
-                                </h3>
-                                <div className="h-80">
-                                    <Bar
-                                        data={{
-                                            labels: analisesData.vendas_por_cliente.slice(0, 10).map((c: any) => c.cliente),
-                                            datasets: [
-                                                {
-                                                    label: "Total Gasto (R$)",
-                                                    data: analisesData.vendas_por_cliente.slice(0, 10).map((c: any) => c.total),
-                                                    backgroundColor: "#8B5CF6",
-                                                    borderRadius: 4,
-                                                    barThickness: 20,
-                                                },
-                                            ],
-                                        }}
-                                        options={{
-                                            indexAxis: "y",
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: { display: false },
-                                                tooltip: {
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                    titleColor: '#1F2937',
-                                                    bodyColor: '#4B5563',
-                                                    borderColor: '#E5E7EB',
-                                                    borderWidth: 1,
-                                                    padding: 10,
-                                                    displayColors: false,
-                                                    callbacks: {
-                                                        label: (context) => `Total: ${formatCurrency(context.parsed.x || 0)}`,
-                                                        afterLabel: (context) => {
-                                                            const item = analisesData.vendas_por_cliente[context.dataIndex];
-                                                            return item.quantidade ? `${item.quantidade} compras` : '';
-                                                        }
-                                                    },
-                                                },
-                                            },
-                                            scales: {
-                                                x: {
-                                                    beginAtZero: true,
-                                                    grid: {
-                                                        color: '#F3F4F6',
-                                                    },
-                                                    ticks: {
-                                                        callback: (value) => formatCurrency(Number(value) || 0),
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                },
-                                                y: {
-                                                    grid: {
-                                                        display: false
-                                                    },
-                                                    ticks: {
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                }
-                                            },
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Top Fornecedores */}
-                        {analisesData.vendas_por_fornecedor && analisesData.vendas_por_fornecedor.length > 0 && (
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                                <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
-                                    <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                        </svg>
-                                    </div>
-                                    Top 10 Fornecedores
-                                </h3>
-                                <div className="h-80">
-                                    <Bar
-                                        data={{
-                                            labels: analisesData.vendas_por_fornecedor.slice(0, 10).map((f: any) => f.fornecedor),
-                                            datasets: [
-                                                {
-                                                    label: "Total Vendido (R$)",
-                                                    data: analisesData.vendas_por_fornecedor.slice(0, 10).map((f: any) => f.total),
-                                                    backgroundColor: "#F97316", // Orange-500
-                                                    borderRadius: 4,
-                                                    barThickness: 20,
-                                                },
-                                            ],
-                                        }}
-                                        options={{
-                                            indexAxis: "y",
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: { display: false },
-                                                tooltip: {
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                    titleColor: '#1F2937',
-                                                    bodyColor: '#4B5563',
-                                                    borderColor: '#E5E7EB',
-                                                    borderWidth: 1,
-                                                    padding: 10,
-                                                    displayColors: false,
-                                                    callbacks: {
-                                                        label: (context) => `Total: ${formatCurrency(context.parsed.x || 0)}`,
-                                                        afterLabel: (context) => {
-                                                            const item = analisesData.vendas_por_fornecedor[context.dataIndex];
-                                                            return `${item.quantidade_vendas} vendas`;
-                                                        }
-                                                    },
-                                                },
-                                            },
-                                            scales: {
-                                                x: {
-                                                    beginAtZero: true,
-                                                    grid: {
-                                                        color: '#F3F4F6',
-                                                    },
-                                                    ticks: {
-                                                        callback: (value) => formatCurrency(Number(value) || 0),
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                },
-                                                y: {
-                                                    grid: {
-                                                        display: false
-                                                    },
-                                                    ticks: {
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                }
-                                            },
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Grid de 2 colunas - Formas de Pagamento e Horários */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Formas de Pagamento */}
-                        {analisesData.formas_pagamento && analisesData.formas_pagamento.length > 0 && (
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                                <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
-                                    <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                        </svg>
-                                    </div>
-                                    Distribuição por Forma de Pagamento
-                                </h3>
-                                <div className="h-80 flex items-center justify-center">
-                                    <Doughnut
-                                        data={{
-                                            labels: analisesData.formas_pagamento.map((f: any) => f.forma.replace(/_/g, " ").toUpperCase()),
-                                            datasets: [
-                                                {
-                                                    data: analisesData.formas_pagamento.map((f: any) => f.total),
-                                                    backgroundColor: [
-                                                        "#3B82F6", // Blue
-                                                        "#10B981", // Emerald
-                                                        "#F59E0B", // Amber
-                                                        "#EF4444", // Red
-                                                        "#8B5CF6", // Violet
-                                                    ],
-                                                    borderWidth: 0,
-                                                    hoverOffset: 4,
-                                                },
-                                            ],
-                                        }}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            cutout: '70%',
-                                            plugins: {
-                                                legend: { 
-                                                    position: "bottom",
-                                                    labels: {
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        usePointStyle: true,
-                                                        padding: 20
-                                                    }
-                                                },
-                                                tooltip: {
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                    titleColor: '#1F2937',
-                                                    bodyColor: '#4B5563',
-                                                    borderColor: '#E5E7EB',
-                                                    borderWidth: 1,
-                                                    padding: 10,
-                                                    callbacks: {
-                                                        label: (context) => {
-                                                            const label = context.label || "";
-                                                            const value = context.parsed || 0;
-                                                            return ` ${label}: ${formatCurrency(value)}`;
-                                                        },
-                                                        afterLabel: (context) => {
-                                                            const item = analisesData.formas_pagamento[context.dataIndex];
-                                                            return `${item.quantidade} vendas (${item.percentual.toFixed(1)}%)`;
-                                                        }
-                                                    },
-                                                },
-                                            },
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Horários de Pico */}
-                        {analisesData.vendas_por_hora && analisesData.vendas_por_hora.length > 0 && (
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                                <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
-                                    <div className="p-2 bg-pink-100 rounded-lg text-pink-600">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </div>
-                                    Vendas por Horário
-                                    <span className="text-sm font-normal text-gray-500 ml-auto">
-                                        ({analisesData.vendas_por_hora.length} {analisesData.vendas_por_hora.length === 1 ? 'horário' : 'horários'})
-                                    </span>
-                                </h3>
-                                <div className="h-80">
-                                    <Bar
-                                        data={{
-                                            labels: analisesData.vendas_por_hora.map((v: any) => `${v.hora}h`),
-                                            datasets: [
-                                                {
-                                                    label: "Quantidade de Vendas",
-                                                    data: analisesData.vendas_por_hora.map((v: any) => v.quantidade),
-                                                    backgroundColor: "#EC4899", // Pink-500
-                                                    borderRadius: 4,
-                                                    maxBarThickness: 40,
-                                                },
-                                            ],
-                                        }}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: { display: false },
-                                                tooltip: {
-                                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                                                    titleColor: '#1F2937',
-                                                    bodyColor: '#4B5563',
-                                                    borderColor: '#E5E7EB',
-                                                    borderWidth: 1,
-                                                    padding: 10,
-                                                    displayColors: false,
-                                                    callbacks: {
-                                                        label: (context) => `${context.parsed.y} vendas`,
-                                                        afterLabel: (context) => {
-                                                            const item = analisesData.vendas_por_hora[context.dataIndex];
-                                                            return `Total: ${formatCurrency(item.total)}`;
-                                                        },
-                                                    },
-                                                },
-                                            },
-                                            scales: {
-                                                y: {
-                                                    beginAtZero: true,
-                                                    grid: {
-                                                        color: '#F3F4F6',
-                                                    },
-                                                    ticks: {
-                                                        stepSize: 1,
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                },
-                                                x: {
-                                                    grid: {
-                                                        display: false
-                                                    },
-                                                    ticks: {
-                                                        font: {
-                                                            family: "'Inter', sans-serif",
-                                                            size: 11
-                                                        },
-                                                        color: '#6B7280'
-                                                    },
-                                                    border: {
-                                                        display: false
-                                                    }
-                                                }
-                                            },
-                                        }}
-                                    />
-                                </div>
-                                {analisesData.vendas_por_hora.length === 1 && (
-                                    <p className="text-sm text-gray-500 mt-3 text-center flex items-center justify-center gap-2">
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        Dica: Vendas em diferentes horários aparecerão como barras separadas
-                                    </p>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Top Funcionários */}
-                    {analisesData.vendas_por_funcionario && analisesData.vendas_por_funcionario.length > 0 && (
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-                            <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
-                                <div className="p-2 bg-yellow-100 rounded-lg text-yellow-600">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                </div>
-                                Ranking de Funcionários
-                            </h3>
-                            <div className="space-y-4">
-                                {analisesData.vendas_por_funcionario.slice(0, 5).map((func: any, index: number) => (
-                                    <div
-                                        key={index}
-                                        className={`flex items-center justify-between p-4 bg-white rounded-xl border transition-all hover:shadow-md ${
-                                            index === 0 ? 'border-yellow-200 ring-1 ring-yellow-100' :
-                                            index === 1 ? 'border-gray-200' :
-                                            index === 2 ? 'border-orange-200' : 'border-gray-100'
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
-                                                index === 0 ? 'bg-yellow-100 text-yellow-700' :
-                                                index === 1 ? 'bg-gray-100 text-gray-700' :
-                                                index === 2 ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'
-                                            }`}>
-                                                {index + 1}º
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-gray-900">{func.funcionario}</p>
-                                                <p className="text-sm text-gray-500 flex items-center gap-2">
-                                                    <span>{func.quantidade} vendas</span>
-                                                    <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                                    <span>Ticket médio: {formatCurrency(func.total / func.quantidade)}</span>
-                                                </p>
-                                            </div>
+                        {/* Grid de 2 colunas - Formas de Pagamento e Horários */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Formas de Pagamento */}
+                            {analisesData.formas_pagamento && analisesData.formas_pagamento.length > 0 && (
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                                    <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
+                                        <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                            </svg>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-lg text-gray-900">
-                                                {formatCurrency(func.total)}
-                                            </p>
-                                            <div className="flex items-center justify-end gap-1 text-xs text-gray-500">
-                                                <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className="h-full bg-green-500 rounded-full"
-                                                        style={{ width: `${(func.total / analisesData.estatisticas_gerais.total_valor) * 100}%` }}
-                                                    ></div>
+                                        Distribuição por Forma de Pagamento
+                                    </h3>
+                                    <div className="h-80 flex items-center justify-center">
+                                        <Doughnut
+                                            data={{
+                                                labels: analisesData.formas_pagamento.map((f: any) => f.forma.replace(/_/g, " ").toUpperCase()),
+                                                datasets: [
+                                                    {
+                                                        data: analisesData.formas_pagamento.map((f: any) => f.total),
+                                                        backgroundColor: [
+                                                            "#3B82F6", // Blue
+                                                            "#10B981", // Emerald
+                                                            "#F59E0B", // Amber
+                                                            "#EF4444", // Red
+                                                            "#8B5CF6", // Violet
+                                                        ],
+                                                        borderWidth: 0,
+                                                        hoverOffset: 4,
+                                                    },
+                                                ],
+                                            }}
+                                            options={{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                cutout: '70%',
+                                                plugins: {
+                                                    legend: {
+                                                        position: "bottom",
+                                                        labels: {
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            usePointStyle: true,
+                                                            padding: 20
+                                                        }
+                                                    },
+                                                    tooltip: {
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                        titleColor: '#1F2937',
+                                                        bodyColor: '#4B5563',
+                                                        borderColor: '#E5E7EB',
+                                                        borderWidth: 1,
+                                                        padding: 10,
+                                                        callbacks: {
+                                                            label: (context) => {
+                                                                const label = context.label || "";
+                                                                const value = context.parsed || 0;
+                                                                return ` ${label}: ${formatCurrency(value)}`;
+                                                            },
+                                                            afterLabel: (context) => {
+                                                                const item = analisesData.formas_pagamento[context.dataIndex];
+                                                                return `${item.quantidade} vendas (${item.percentual.toFixed(1)}%)`;
+                                                            }
+                                                        },
+                                                    },
+                                                },
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Horários de Pico */}
+                            {analisesData.vendas_por_hora && analisesData.vendas_por_hora.length > 0 && (
+                                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                                    <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
+                                        <div className="p-2 bg-pink-100 rounded-lg text-pink-600">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        Vendas por Horário
+                                        <span className="text-sm font-normal text-gray-500 ml-auto">
+                                            ({analisesData.vendas_por_hora.length} {analisesData.vendas_por_hora.length === 1 ? 'horário' : 'horários'})
+                                        </span>
+                                    </h3>
+                                    <div className="h-80">
+                                        <Bar
+                                            data={{
+                                                labels: analisesData.vendas_por_hora.map((v: any) => `${v.hora}h`),
+                                                datasets: [
+                                                    {
+                                                        label: "Quantidade de Vendas",
+                                                        data: analisesData.vendas_por_hora.map((v: any) => v.quantidade),
+                                                        backgroundColor: "#EC4899", // Pink-500
+                                                        borderRadius: 4,
+                                                        maxBarThickness: 40,
+                                                    },
+                                                ],
+                                            }}
+                                            options={{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: { display: false },
+                                                    tooltip: {
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                                        titleColor: '#1F2937',
+                                                        bodyColor: '#4B5563',
+                                                        borderColor: '#E5E7EB',
+                                                        borderWidth: 1,
+                                                        padding: 10,
+                                                        displayColors: false,
+                                                        callbacks: {
+                                                            label: (context) => `${context.parsed.y} vendas`,
+                                                            afterLabel: (context) => {
+                                                                const item = analisesData.vendas_por_hora[context.dataIndex];
+                                                                return `Total: ${formatCurrency(item.total)}`;
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                                scales: {
+                                                    y: {
+                                                        beginAtZero: true,
+                                                        grid: {
+                                                            color: '#F3F4F6',
+                                                        },
+                                                        ticks: {
+                                                            stepSize: 1,
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    },
+                                                    x: {
+                                                        grid: {
+                                                            display: false
+                                                        },
+                                                        ticks: {
+                                                            font: {
+                                                                family: "'Inter', sans-serif",
+                                                                size: 11
+                                                            },
+                                                            color: '#6B7280'
+                                                        },
+                                                        border: {
+                                                            display: false
+                                                        }
+                                                    }
+                                                },
+                                            }}
+                                        />
+                                    </div>
+                                    {analisesData.vendas_por_hora.length === 1 && (
+                                        <p className="text-sm text-gray-500 mt-3 text-center flex items-center justify-center gap-2">
+                                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Dica: Vendas em diferentes horários aparecerão como barras separadas
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Top Funcionários */}
+                        {analisesData.vendas_por_funcionario && analisesData.vendas_por_funcionario.length > 0 && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                                <h3 className="text-lg font-bold mb-6 text-gray-900 flex items-center gap-2">
+                                    <div className="p-2 bg-yellow-100 rounded-lg text-yellow-600">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    Ranking de Funcionários
+                                </h3>
+                                <div className="space-y-4">
+                                    {analisesData.vendas_por_funcionario.slice(0, 5).map((func: any, index: number) => (
+                                        <div
+                                            key={index}
+                                            className={`flex items-center justify-between p-4 bg-white rounded-xl border transition-all hover:shadow-md ${index === 0 ? 'border-yellow-200 ring-1 ring-yellow-100' :
+                                                index === 1 ? 'border-gray-200' :
+                                                    index === 2 ? 'border-orange-200' : 'border-gray-100'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                                    index === 1 ? 'bg-gray-100 text-gray-700' :
+                                                        index === 2 ? 'bg-orange-100 text-orange-700' : 'bg-blue-50 text-blue-600'
+                                                    }`}>
+                                                    {index + 1}º
                                                 </div>
-                                                <span>{((func.total / analisesData.estatisticas_gerais.total_valor) * 100).toFixed(1)}%</span>
+                                                <div>
+                                                    <p className="font-bold text-gray-900">{func.funcionario}</p>
+                                                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                                                        <span>{func.quantidade} vendas</span>
+                                                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                                        <span>Ticket médio: {formatCurrency(func.total / func.quantidade)}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-lg text-gray-900">
+                                                    {formatCurrency(func.total)}
+                                                </p>
+                                                <div className="flex items-center justify-end gap-1 text-xs text-gray-500">
+                                                    <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-green-500 rounded-full"
+                                                            style={{ width: `${(func.total / analisesData.estatisticas_gerais.total_valor) * 100}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span>{((func.total / analisesData.estatisticas_gerais.total_valor) * 100).toFixed(1)}%</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
                 )
             )}
 
-            {/* Filtros */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
-                        Filtros de Busca
-                    </h2>
-                    <button
-                        onClick={limparFiltros}
-                        className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-medium flex items-center gap-1"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        Limpar Filtros
-                    </button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Data Início</label>
-                        <input
-                            type="date"
-                            name="data_inicio"
-                            value={filtros.data_inicio}
-                            onChange={handleFiltroChange}
-                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Data Fim</label>
-                        <input
-                            type="date"
-                            name="data_fim"
-                            value={filtros.data_fim}
-                            onChange={handleFiltroChange}
-                            className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                        <div className="relative">
-                            <select
-                                name="status"
-                                value={filtros.status}
-                                onChange={handleFiltroChange}
-                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm appearance-none"
-                            >
-                                <option value="">Todos</option>
-                                <option value="finalizada">Finalizada</option>
-                                <option value="cancelada">Cancelada</option>
-                                <option value="em_andamento">Em Andamento</option>
-                            </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Forma de Pagamento</label>
-                        <div className="relative">
-                            <select
-                                name="forma_pagamento"
-                                value={filtros.forma_pagamento}
-                                onChange={handleFiltroChange}
-                                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm appearance-none"
-                            >
-                                <option value="">Todas</option>
-                                <option value="dinheiro">Dinheiro</option>
-                                <option value="cartao_credito">Cartão de Crédito</option>
-                                <option value="cartao_debito">Cartão de Débito</option>
-                                <option value="pix">PIX</option>
-                                <option value="fiado">Fiado</option>
-                            </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Busca</label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                name="search"
-                                placeholder="Código, cliente..."
-                                value={filtros.search}
-                                onChange={handleFiltroChange}
-                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
-                            />
-                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
 
 
             {/* Tabela de Vendas */}
@@ -1599,16 +1656,15 @@ export default function SalesPage() {
                                             </td>
                                             <td className="p-3 text-center">
                                                 <span
-                                                    className={`px-2 py-1 rounded text-xs font-medium ${
-                                                        venda.status === "finalizada"
-                                                            ? "bg-green-100 text-green-800"
-                                                            : venda.status === "cancelada"
+                                                    className={`px-2 py-1 rounded text-xs font-medium ${venda.status === "finalizada"
+                                                        ? "bg-green-100 text-green-800"
+                                                        : venda.status === "cancelada"
                                                             ? "bg-red-100 text-red-800"
                                                             : "bg-yellow-100 text-yellow-800"
-                                                    }`}
+                                                        }`}
                                                 >
-                                                    {venda.status === "finalizada" ? "Finalizada" : 
-                                                     venda.status === "cancelada" ? "Cancelada" : "Em Andamento"}
+                                                    {venda.status === "finalizada" ? "Finalizada" :
+                                                        venda.status === "cancelada" ? "Cancelada" : "Em Andamento"}
                                                 </span>
                                             </td>
                                             <td className="p-3 text-center">
@@ -1682,7 +1738,7 @@ export default function SalesPage() {
                                 ×
                             </button>
                         </div>
-                        
+
                         {loadingDetalhes ? (
                             <div className="text-center py-12">
                                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -1699,16 +1755,15 @@ export default function SalesPage() {
                                     <div>
                                         <p className="text-sm text-gray-600">Status</p>
                                         <span
-                                            className={`inline-block px-3 py-1 rounded text-sm font-medium ${
-                                                detalhesVenda.status === "finalizada"
-                                                    ? "bg-green-100 text-green-800"
-                                                    : detalhesVenda.status === "cancelada"
+                                            className={`inline-block px-3 py-1 rounded text-sm font-medium ${detalhesVenda.status === "finalizada"
+                                                ? "bg-green-100 text-green-800"
+                                                : detalhesVenda.status === "cancelada"
                                                     ? "bg-red-100 text-red-800"
                                                     : "bg-yellow-100 text-yellow-800"
-                                            }`}
+                                                }`}
                                         >
-                                            {detalhesVenda.status === "finalizada" ? "Finalizada" : 
-                                             detalhesVenda.status === "cancelada" ? "Cancelada" : "Em Andamento"}
+                                            {detalhesVenda.status === "finalizada" ? "Finalizada" :
+                                                detalhesVenda.status === "cancelada" ? "Cancelada" : "Em Andamento"}
                                         </span>
                                     </div>
                                     <div>

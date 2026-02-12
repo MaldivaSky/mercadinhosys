@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Users, TrendingUp, DollarSign, AlertCircle,
-  Download, ChevronDown, ChevronUp
+  Download, ChevronDown, ChevronUp, Printer
 } from 'lucide-react';
 import {
   BarChart as RechartsBarChart, Bar,
@@ -10,6 +10,7 @@ import {
 import { apiClient } from '../../../api/apiClient';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import HoleriteModal from './HoleriteModal';
 
 interface RHMetrics {
   total_beneficios_mensal: number;
@@ -39,8 +40,6 @@ interface RHMetrics {
   resumo_mes?: { inicio: string | null; fim: string | null; dias_uteis: number; total_atrasos_minutos: number; total_atrasos_qtd: number; total_extras_minutos: number; total_faltas: number };
 }
 
-
-
 export default function RHDashboard() {
   const [rhData, setRhData] = useState<RHMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +53,10 @@ export default function RHDashboard() {
   });
   const [filtroAtrasados, setFiltroAtrasados] = useState(false);
   const [periodoDias, setPeriodoDias] = useState(30);
+
+  // Holerite Modal State
+  const [holeriteModalOpen, setHoleriteModalOpen] = useState(false);
+  const [selectedFuncionarioHolerite, setSelectedFuncionarioHolerite] = useState<any>(null);
 
   useEffect(() => {
     loadRHData();
@@ -84,6 +87,11 @@ export default function RHDashboard() {
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  const openHolerite = (funcionario: any) => {
+    setSelectedFuncionarioHolerite(funcionario);
+    setHoleriteModalOpen(true);
   };
 
   const exportarFolhaPagamentoPDF = () => {
@@ -278,7 +286,7 @@ export default function RHDashboard() {
               className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
-              PDF
+              Relatório Geral (PDF)
             </button>
             <button
               onClick={() => toggleSection('folha')}
@@ -301,7 +309,8 @@ export default function RHDashboard() {
                   <th className="px-4 py-3">H. Extras</th>
                   <th className="px-4 py-3">Faltas</th>
                   <th className="px-4 py-3">Atrasos</th>
-                  <th className="px-4 py-3 rounded-r-lg text-right">Total Estimado</th>
+                  <th className="px-4 py-3">Total Estimado</th>
+                  <th className="px-4 py-3 rounded-r-lg text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -319,14 +328,23 @@ export default function RHDashboard() {
                       </td>
                       <td className="px-4 py-3 text-gray-900">{row.faltas}</td>
                       <td className="px-4 py-3 text-gray-900">{row.atrasos_minutos}m</td>
-                      <td className="px-4 py-3 text-right font-bold text-gray-900">
+                      <td className="px-4 py-3 font-bold text-gray-900">
                         R$ {row.total_estimado.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => openHolerite(row)}
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium text-xs ml-auto"
+                        >
+                          <Printer className="w-4 h-4" />
+                          Holerite
+                        </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                    <td colSpan={9} className="px-4 py-10 text-center text-gray-400">
                       Sem dados para espelho de pagamento
                     </td>
                   </tr>
@@ -336,6 +354,19 @@ export default function RHDashboard() {
           </div>
         )}
       </div>
+
+      {/* Modal Holerite */}
+      {selectedFuncionarioHolerite && rhData?.resumo_mes && (
+        <HoleriteModal
+          isOpen={holeriteModalOpen}
+          onClose={() => setHoleriteModalOpen(false)}
+          funcionario={selectedFuncionarioHolerite}
+          periodo={{
+            inicio: rhData.resumo_mes.inicio || '',
+            fim: rhData.resumo_mes.fim || ''
+          }}
+        />
+      )}
     </div>
   );
 }

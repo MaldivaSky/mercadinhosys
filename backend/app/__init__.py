@@ -413,13 +413,34 @@ def create_app(config_name=None):
         )
 
     # ==================== ROTA PARA SERVIR UPLOADS ====================
-    from flask import send_from_directory
-    
+    from flask import send_from_directory, abort
+    import os
+
     @app.route("/uploads/<path:filename>")
     def serve_uploads(filename):
         """Serve arquivos da pasta uploads (logos, etc)"""
-        upload_folder = app.config.get("UPLOAD_FOLDER", "uploads")
-        return send_from_directory(upload_folder, filename)
+        # Tenta pegar do config
+        upload_folder = app.config.get("UPLOAD_FOLDER")
+        
+        # Se não estiver no config ou for relativo, tenta resolver
+        if not upload_folder:
+            # Fallback para ../uploads relativo a app/
+            # app.root_path é .../backend/app
+            # Queremos .../backend/uploads
+            upload_folder = os.path.join(os.path.dirname(app.root_path), "uploads")
+        
+        if not os.path.isabs(upload_folder):
+            # Se for relativo (ex: 'uploads'), assume relativo ao root
+            base = os.path.dirname(app.root_path)
+            upload_folder = os.path.join(base, upload_folder)
+
+        logger.info(f"Serving upload: '{filename}' from '{upload_folder}'")
+        
+        try:
+            return send_from_directory(upload_folder, filename)
+        except Exception as e:
+            logger.error(f"Erro ao servir arquivo {filename}: {e}")
+            abort(404)
 
     # Log de inicialização
     logger.info(
