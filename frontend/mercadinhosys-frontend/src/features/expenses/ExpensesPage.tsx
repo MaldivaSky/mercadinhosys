@@ -109,7 +109,7 @@ export default function ExpensesPage() {
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [estatisticas, setEstatisticas] = useState<Estatisticas | null>(null);
-    
+
     // Filtros
     const [filtros, setFiltros] = useState({
         inicio: "",
@@ -141,6 +141,7 @@ export default function ExpensesPage() {
     });
 
     // Analytics
+    const [mostrarAnalises, setMostrarAnalises] = useState(true);
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
 
     // Toast notifications
@@ -176,7 +177,7 @@ export default function ExpensesPage() {
     async function carregarDespesas() {
         setLoading(true);
         setErro(null);
-        
+
         try {
             const params: any = {
                 pagina: filtros.pagina,
@@ -192,7 +193,7 @@ export default function ExpensesPage() {
 
             const response = await apiClient.get("/despesas", { params });
             console.log("📊 Despesas carregadas:", response.data);
-            
+
             if (response.data.success) {
                 setDespesas(response.data.data || []);
                 console.log(`✅ ${response.data.data?.length || 0} despesas carregadas`);
@@ -216,7 +217,7 @@ export default function ExpensesPage() {
 
             const response = await apiClient.get("/despesas/estatisticas", { params });
             console.log("📈 Estatísticas carregadas:", response.data);
-            
+
             if (response.data.success && response.data.estatisticas) {
                 setEstatisticas(response.data.estatisticas);
                 console.log("✅ Estatísticas definidas:", response.data.estatisticas);
@@ -352,7 +353,7 @@ export default function ExpensesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setMenuExportarAberto(false);
             showToast("CSV exportado com sucesso!");
         } catch (err: any) {
@@ -379,7 +380,7 @@ export default function ExpensesPage() {
                 ...dados.map(obj => Object.values(obj))
             ];
 
-            const csvContent = ws_data.map(row => 
+            const csvContent = ws_data.map(row =>
                 row.map(cell => `"${cell}"`).join(",")
             ).join("\n");
 
@@ -392,7 +393,7 @@ export default function ExpensesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setMenuExportarAberto(false);
             showToast("Excel exportado com sucesso!");
         } catch (err: any) {
@@ -405,11 +406,10 @@ export default function ExpensesPage() {
         <div className="p-6 max-w-7xl mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen">
             {/* Toast Notification */}
             {toast && (
-                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in ${
-                    toast.type === 'success' 
-                        ? 'bg-green-500 text-white' 
+                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in ${toast.type === 'success'
+                        ? 'bg-green-500 text-white'
                         : 'bg-red-500 text-white'
-                }`}>
+                    }`}>
                     {toast.type === 'success' ? (
                         <CheckCircle className="w-5 h-5" />
                     ) : (
@@ -418,7 +418,7 @@ export default function ExpensesPage() {
                     <span>{toast.message}</span>
                 </div>
             )}
-            
+
             {/* Header */}
             <div className="mb-8">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -436,7 +436,17 @@ export default function ExpensesPage() {
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-3">
-                                                
+                        <button
+                            onClick={() => setMostrarAnalises(!mostrarAnalises)}
+                            className={`px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 shadow-md font-medium ${mostrarAnalises
+                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                }`}
+                        >
+                            <TrendingUp className="w-5 h-5" />
+                            {mostrarAnalises ? "Ocultar Gráficos" : "Ver Análises"}
+                        </button>
+
                         {/* Menu Exportar */}
                         <div className="relative export-menu-container">
                             <button
@@ -446,7 +456,7 @@ export default function ExpensesPage() {
                                 <Download className="w-5 h-5" />
                                 Exportar
                             </button>
-                            
+
                             {menuExportarAberto && (
                                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                                     <div className="py-1">
@@ -460,7 +470,7 @@ export default function ExpensesPage() {
                                                 <div className="text-xs text-gray-500">Planilha editável</div>
                                             </div>
                                         </button>
-                                        
+
                                         <button
                                             onClick={exportarCSV}
                                             className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-3 text-gray-700 dark:text-gray-300"
@@ -472,7 +482,7 @@ export default function ExpensesPage() {
                                             </div>
                                         </button>
                                     </div>
-                                    
+
                                     <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-gray-50 dark:bg-gray-900">
                                         <p className="text-xs text-gray-600 dark:text-gray-400">
                                             📊 {despesas.length} despesas • {estatisticas ? formatCurrency(estatisticas.soma_total) : "R$ 0,00"}
@@ -555,198 +565,198 @@ export default function ExpensesPage() {
                         </div>
                     ) : (
                         <>
-                            {console.log("🎨 Renderizando análises:", { 
-                                mostrarAnalises, 
+                            {console.log("🎨 Renderizando análises:", {
+                                mostrarAnalises,
                                 temEstatisticas: !!estatisticas,
                                 categorias: estatisticas?.despesas_por_categoria?.length,
-                                evolucao: estatisticas?.evolucao_mensal?.length 
+                                evolucao: estatisticas?.evolucao_mensal?.length
                             })}
-                            
+
                             {/* Evolução Mensal */}
                             {estatisticas.evolucao_mensal && estatisticas.evolucao_mensal.length > 0 && (
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
-                                <span>📈</span> Evolução Mensal de Despesas
-                            </h3>
-                            <div className="h-80">
-                                <Line
-                                    data={{
-                                        labels: estatisticas.evolucao_mensal.map((e: any) => e.mes_nome),
-                                        datasets: [
-                                            {
-                                                label: "Despesas (R$)",
-                                                data: estatisticas.evolucao_mensal.map((e: any) => e.total),
-                                                borderColor: "rgb(239, 68, 68)",
-                                                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                                                fill: true,
-                                                tension: 0.4,
-                                                pointRadius: 6,
-                                                pointHoverRadius: 8,
-                                                pointBackgroundColor: "rgb(239, 68, 68)",
-                                                pointBorderColor: "#fff",
-                                                pointBorderWidth: 2,
-                                            },
-                                        ],
-                                    }}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: { display: false },
-                                            tooltip: {
-                                                callbacks: {
-                                                    label: (context: any) => `Despesas: ${formatCurrency(context.parsed.y || 0)}`,
-                                                }
-                                            },
-                                        },
-                                        scales: {
-                                            y: {
-                                                beginAtZero: true,
-                                                ticks: {
-                                                    callback: (value: any) => formatCurrency(Number(value) || 0),
-                                                },
-                                            },
-                                        },
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Gráfico de Categorias - Barras */}
-                        {estatisticas.despesas_por_categoria && estatisticas.despesas_por_categoria.length > 0 ? (
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>📊</span> Despesas por Categoria
-                                </h3>
-                                <div className="h-80">
-                                    <Bar
-                                    data={{
-                                        labels: estatisticas.despesas_por_categoria.map(c => c.categoria),
-                                        datasets: [
-                                            {
-                                                label: "Valor (R$)",
-                                                data: estatisticas.despesas_por_categoria.map(c => c.total),
-                                                backgroundColor: "rgba(239, 68, 68, 0.7)",
-                                                borderColor: "rgb(239, 68, 68)",
-                                                borderWidth: 2,
-                                            },
-                                        ],
-                                    }}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: { display: false },
-                                            tooltip: {
-                                                callbacks: {
-                                                    label: (context) => `Valor: ${formatCurrency(context.parsed.y || 0)}`,
-                                                    afterLabel: (context) => {
-                                                        const item = estatisticas.despesas_por_categoria[context.dataIndex];
-                                                        return `Quantidade: ${item.quantidade} despesas\nPercentual: ${item.percentual.toFixed(1)}%`;
-                                                    }
-                                                },
-                                            },
-                                        },
-                                        scales: {
-                                            y: {
-                                                beginAtZero: true,
-                                                ticks: {
-                                                    callback: (value) => formatCurrency(Number(value) || 0),
-                                                },
-                                            },
-                                        },
-                                    }}
-                                />
-                            </div>
-                        </div>
-                        ) : (
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>📊</span> Despesas por Categoria
-                                </h3>
-                                <div className="h-80 flex items-center justify-center">
-                                    <div className="text-center text-gray-500 dark:text-gray-400">
-                                        <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                        <p>Nenhuma despesa nos últimos 30 dias</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Gráfico de Pizza - Distribuição */}
-                        {estatisticas.despesas_por_categoria && estatisticas.despesas_por_categoria.length > 0 ? (
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>🥧</span> Distribuição por Categoria
-                                </h3>
-                                <div className="h-80 flex items-center justify-center">
-                                    <Doughnut
-                                    data={{
-                                        labels: estatisticas.despesas_por_categoria.map(c => c.categoria),
-                                        datasets: [
-                                            {
-                                                data: estatisticas.despesas_por_categoria.map(c => c.total),
-                                                backgroundColor: [
-                                                    'rgba(239, 68, 68, 0.8)',
-                                                    'rgba(249, 115, 22, 0.8)',
-                                                    'rgba(234, 179, 8, 0.8)',
-                                                    'rgba(34, 197, 94, 0.8)',
-                                                    'rgba(59, 130, 246, 0.8)',
-                                                    'rgba(168, 85, 247, 0.8)',
-                                                    'rgba(236, 72, 153, 0.8)',
-                                                    'rgba(20, 184, 166, 0.8)',
-                                                    'rgba(251, 146, 60, 0.8)',
-                                                    'rgba(132, 204, 22, 0.8)',
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+                                        <span>📈</span> Evolução Mensal de Despesas
+                                    </h3>
+                                    <div className="h-80">
+                                        <Line
+                                            data={{
+                                                labels: estatisticas.evolucao_mensal.map((e: any) => e.mes_nome),
+                                                datasets: [
+                                                    {
+                                                        label: "Despesas (R$)",
+                                                        data: estatisticas.evolucao_mensal.map((e: any) => e.total),
+                                                        borderColor: "rgb(239, 68, 68)",
+                                                        backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                                        fill: true,
+                                                        tension: 0.4,
+                                                        pointRadius: 6,
+                                                        pointHoverRadius: 8,
+                                                        pointBackgroundColor: "rgb(239, 68, 68)",
+                                                        pointBorderColor: "#fff",
+                                                        pointBorderWidth: 2,
+                                                    },
                                                 ],
-                                                borderWidth: 2,
-                                                borderColor: '#fff',
-                                            },
-                                        ],
-                                    }}
-                                    options={{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: {
-                                                position: 'right',
-                                                labels: {
-                                                    boxWidth: 15,
-                                                    padding: 10,
-                                                    font: { size: 11 }
-                                                }
-                                            },
-                                            tooltip: {
-                                                callbacks: {
-                                                    label: (context) => {
-                                                        const item = estatisticas.despesas_por_categoria[context.dataIndex];
-                                                        return `${item.categoria}: ${formatCurrency(item.total)} (${item.percentual.toFixed(1)}%)`;
-                                                    }
+                                            }}
+                                            options={{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {
+                                                    legend: { display: false },
+                                                    tooltip: {
+                                                        callbacks: {
+                                                            label: (context: any) => `Despesas: ${formatCurrency(context.parsed.y || 0)}`,
+                                                        }
+                                                    },
                                                 },
-                                            },
-                                        },
-                                    }}
-                                />
-                            </div>
-                        </div>
-                        ) : (
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
-                                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
-                                    <span>🥧</span> Distribuição por Categoria
-                                </h3>
-                                <div className="h-80 flex items-center justify-center">
-                                    <div className="text-center text-gray-500 dark:text-gray-400">
-                                        <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                        <p>Nenhuma despesa nos últimos 30 dias</p>
+                                                scales: {
+                                                    y: {
+                                                        beginAtZero: true,
+                                                        ticks: {
+                                                            callback: (value: any) => formatCurrency(Number(value) || 0),
+                                                        },
+                                                    },
+                                                },
+                                            }}
+                                        />
                                     </div>
                                 </div>
+                            )}
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Gráfico de Categorias - Barras */}
+                                {estatisticas.despesas_por_categoria && estatisticas.despesas_por_categoria.length > 0 ? (
+                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>📊</span> Despesas por Categoria
+                                        </h3>
+                                        <div className="h-80">
+                                            <Bar
+                                                data={{
+                                                    labels: estatisticas.despesas_por_categoria.map(c => c.categoria),
+                                                    datasets: [
+                                                        {
+                                                            label: "Valor (R$)",
+                                                            data: estatisticas.despesas_por_categoria.map(c => c.total),
+                                                            backgroundColor: "rgba(239, 68, 68, 0.7)",
+                                                            borderColor: "rgb(239, 68, 68)",
+                                                            borderWidth: 2,
+                                                        },
+                                                    ],
+                                                }}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    plugins: {
+                                                        legend: { display: false },
+                                                        tooltip: {
+                                                            callbacks: {
+                                                                label: (context) => `Valor: ${formatCurrency(context.parsed.y || 0)}`,
+                                                                afterLabel: (context) => {
+                                                                    const item = estatisticas.despesas_por_categoria[context.dataIndex];
+                                                                    return `Quantidade: ${item.quantidade} despesas\nPercentual: ${item.percentual.toFixed(1)}%`;
+                                                                }
+                                                            },
+                                                        },
+                                                    },
+                                                    scales: {
+                                                        y: {
+                                                            beginAtZero: true,
+                                                            ticks: {
+                                                                callback: (value) => formatCurrency(Number(value) || 0),
+                                                            },
+                                                        },
+                                                    },
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>📊</span> Despesas por Categoria
+                                        </h3>
+                                        <div className="h-80 flex items-center justify-center">
+                                            <div className="text-center text-gray-500 dark:text-gray-400">
+                                                <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                                <p>Nenhuma despesa nos últimos 30 dias</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Gráfico de Pizza - Distribuição */}
+                                {estatisticas.despesas_por_categoria && estatisticas.despesas_por_categoria.length > 0 ? (
+                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>🥧</span> Distribuição por Categoria
+                                        </h3>
+                                        <div className="h-80 flex items-center justify-center">
+                                            <Doughnut
+                                                data={{
+                                                    labels: estatisticas.despesas_por_categoria.map(c => c.categoria),
+                                                    datasets: [
+                                                        {
+                                                            data: estatisticas.despesas_por_categoria.map(c => c.total),
+                                                            backgroundColor: [
+                                                                'rgba(239, 68, 68, 0.8)',
+                                                                'rgba(249, 115, 22, 0.8)',
+                                                                'rgba(234, 179, 8, 0.8)',
+                                                                'rgba(34, 197, 94, 0.8)',
+                                                                'rgba(59, 130, 246, 0.8)',
+                                                                'rgba(168, 85, 247, 0.8)',
+                                                                'rgba(236, 72, 153, 0.8)',
+                                                                'rgba(20, 184, 166, 0.8)',
+                                                                'rgba(251, 146, 60, 0.8)',
+                                                                'rgba(132, 204, 22, 0.8)',
+                                                            ],
+                                                            borderWidth: 2,
+                                                            borderColor: '#fff',
+                                                        },
+                                                    ],
+                                                }}
+                                                options={{
+                                                    responsive: true,
+                                                    maintainAspectRatio: false,
+                                                    plugins: {
+                                                        legend: {
+                                                            position: 'right',
+                                                            labels: {
+                                                                boxWidth: 15,
+                                                                padding: 10,
+                                                                font: { size: 11 }
+                                                            }
+                                                        },
+                                                        tooltip: {
+                                                            callbacks: {
+                                                                label: (context) => {
+                                                                    const item = estatisticas.despesas_por_categoria[context.dataIndex];
+                                                                    return `${item.categoria}: ${formatCurrency(item.total)} (${item.percentual.toFixed(1)}%)`;
+                                                                }
+                                                            },
+                                                        },
+                                                    },
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700">
+                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>🥧</span> Distribuição por Categoria
+                                        </h3>
+                                        <div className="h-80 flex items-center justify-center">
+                                            <div className="text-center text-gray-500 dark:text-gray-400">
+                                                <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                                <p>Nenhuma despesa nos últimos 30 dias</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                </>
-            )}
-        </div>
+                        </>
+                    )}
+                </div>
             )}
 
             {/* Filtros */}
@@ -763,7 +773,7 @@ export default function ExpensesPage() {
                         Limpar Filtros
                     </button>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
@@ -778,7 +788,7 @@ export default function ExpensesPage() {
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                         />
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                             Categoria
@@ -795,7 +805,7 @@ export default function ExpensesPage() {
                             ))}
                         </select>
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                             Tipo
@@ -811,7 +821,7 @@ export default function ExpensesPage() {
                             <option value="variavel">Variável</option>
                         </select>
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                             Recorrência
@@ -827,7 +837,7 @@ export default function ExpensesPage() {
                             <option value="false">Não Recorrentes</option>
                         </select>
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                             Data Início
@@ -840,7 +850,7 @@ export default function ExpensesPage() {
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                         />
                     </div>
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                             Data Fim
@@ -931,11 +941,10 @@ export default function ExpensesPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                despesa.tipo === 'fixa' 
-                                                    ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${despesa.tipo === 'fixa'
+                                                    ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
                                                     : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
-                                            }`}>
+                                                }`}>
                                                 {despesa.tipo === 'fixa' ? 'Fixa' : 'Variável'}
                                             </span>
                                         </td>
@@ -985,7 +994,7 @@ export default function ExpensesPage() {
                         </table>
                     )}
                 </div>
-                
+
                 {/* Paginação */}
                 {!loading && !erro && despesas.length > 0 && (
                     <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -1030,7 +1039,7 @@ export default function ExpensesPage() {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        
+
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1187,7 +1196,7 @@ export default function ExpensesPage() {
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        
+
                         <div className="p-6 space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -1223,11 +1232,10 @@ export default function ExpensesPage() {
                                     <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                                         Tipo
                                     </label>
-                                    <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${
-                                        despesaSelecionada.tipo === 'fixa' 
-                                            ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200' 
+                                    <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${despesaSelecionada.tipo === 'fixa'
+                                            ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
                                             : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
-                                    }`}>
+                                        }`}>
                                         {despesaSelecionada.tipo === 'fixa' ? 'Fixa' : 'Variável'}
                                     </span>
                                 </div>
