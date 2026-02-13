@@ -214,202 +214,6 @@ def bulk_update_prices():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
-@produtos_bp.route("/estatisticas", methods=["GET"])
-@funcionario_required
-def obter_estatisticas_gerais():
-    """Retorna estatísticas gerais e KPIs de estoque para o dashboard de produtos"""
-    try:
-        claims = get_jwt()
-        raw_est_id = claims.get("estabelecimento_id")
-        
-        # Log para depuração
-        current_app.logger.info(f"[DEBUG_STATS] Claims: {claims}")
-        
-        if raw_est_id is None:
-            est_first = Estabelecimento.query.first()
-            estabelecimento_id = est_first.id if est_first else 1
-        else:
-            estabelecimento_id = int(raw_est_id)
-        
-        # Filtros básicos da query string
-        categoria = request.args.get("categoria")
-        # Aceitar tanto 'ativo' quanto 'ativos' para compatibilidade
-        ativo_param = request.args.get("ativo") or request.args.get("ativos") or "true"
-        ativo = ativo_param.lower() == "true"
-        
-        # Query base para agregação
-        query = db.session.query(
-            func.count(Produto.id).label("total"),
-            func.sum(case((Produto.quantidade <= 0, 1), else_=0)).label("esgotados"),
-            func.sum(case((and_(Produto.quantidade > 0, Produto.quantidade <= Produto.quantidade_minima), 1), else_=0)).label("baixo"),
-            func.sum(Produto.quantidade * Produto.preco_custo).label("valor_total"),
-            func.avg(Produto.margem_lucro).label("margem_media")
-        ).filter(Produto.estabelecimento_id == estabelecimento_id)
-        
-        if ativo:
-            query = query.filter(Produto.ativo == True)
-            
-        if categoria:
-            # Assumindo que o filtro vem como nome da categoria
-            cat_obj = CategoriaProduto.query.filter_by(nome=categoria, estabelecimento_id=estabelecimento_id).first()
-            if cat_obj:
-                query = query.filter(Produto.categoria_id == cat_obj.id)
-        
-        # Executar query de agregação
-        stats = query.one()
-        
-        # Classificação ABC (se houver campo)
-        abc_query = db.session.query(
-            Produto.classificacao_abc, func.count(Produto.id)
-        ).filter(
-            Produto.estabelecimento_id == estabelecimento_id, 
-            Produto.ativo == True
-        )
-        
-        if ativo:
-            abc_query = abc_query.filter(Produto.ativo == True)
-            
-        abc_counts = abc_query.group_by(Produto.classificacao_abc).all()
-        
-        abc_dict = {row[0]: row[1] for row in abc_counts if row[0]}
-        
-        # Calcular "normal"
-        total = stats.total or 0
-        esgotados = int(stats.esgotados or 0)
-        baixo = int(stats.baixo or 0)
-        normal = total - esgotados - baixo
-        if normal < 0: normal = 0
-
-        # Melhoria na contagem de validade: Abordagem ANSI SQL compatível com strings ISO (mais seguro para SQLite/PG)
-        hoje_iso = date.today().isoformat()
-        val_15_iso = (date.today() + timedelta(days=15)).isoformat()
-        val_30_iso = (date.today() + timedelta(days=30)).isoformat()
-        val_90_iso = (date.today() + timedelta(days=90)).isoformat()
-        
-        # Filtro base para SQL textual
-        base_where = "estabelecimento_id = :est_id AND ativo = 1 AND controlar_validade = 1 AND data_validade IS NOT NULL"
-        
-        vencidos_count = db.session.query(func.count(Produto.id)).filter(
-            text(f"{base_where} AND data_validade < :hoje")
-        ).params(est_id=estabelecimento_id, hoje=hoje_iso).scalar() or 0
-        
-        vence_15_count = db.session.query(func.count(Produto.id)).filter(
-            text(f"{base_where} AND data_validade >= :hoje AND data_validade <= :val_15")
-        ).params(est_id=estabelecimento_id, hoje=hoje_iso, val_15=val_15_iso).scalar() or 0
-
-        vence_30_count = db.session.query(func.count(Produto.id)).filter(
-            text(f"{base_where} AND data_validade >= :hoje AND data_validade <= :val_30")
-        ).params(est_id=estabelecimento_id, hoje=hoje_iso, val_30=val_30_iso).scalar() or 0
-
-        vence_90_count = db.session.query(func.count(Produto.id)).filter(
-            text(f"{base_where} AND data_validade >= :hoje AND data_validade <= :val_90")
-        ).params(est_id=estabelecimento_id, hoje=hoje_iso, val_90=val_90_iso).scalar() or 0
-
-        validade_data = {
-            "vencidos": int(vencidos_count),
-            "vence_15": int(vence_15_count),
-            "vence_30": int(vence_30_count),
-            "vence_90": int(vence_90_count)
-        }
-        
-        current_app.logger.info(f"[STATS] Validade Result (RAW SQL): {validade_data}")
-        
-        current_app.logger.info(f"[STATS] Validade para est {estabelecimento_id}: {validade_data}")
-
-        # --- NOVAS ESTATÍSTICAS PARA DASHBOARD ---
-        
-        # 1. Top 5 Maior Margem
-        top_margem = db.session.query(
-            Produto
-        ).filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.ativo == True,
-            Produto.margem_lucro != None
-        ).order_by(
-            Produto.margem_lucro.desc()
-        ).limit(5).all()
-        
-        top_margem_data = [{
-            "id": p.id, 
-            "nome": p.nome, 
-            "margem_lucro": float(p.margem_lucro or 0), 
-            "preco_venda": float(p.preco_venda or 0)
-        } for p in top_margem]
-
-        # 2. Produtos Críticos (Esgotado ou Baixo Estoque)
-        # Prioridade para Esgotados (quantidade <= 0) depois Baixo Estoque
-        criticos = db.session.query(
-            Produto
-        ).filter(
-            Produto.estabelecimento_id == estabelecimento_id,
-            Produto.ativo == True,
-            or_(
-                Produto.quantidade <= 0,
-                Produto.quantidade <= Produto.quantidade_minima
-            )
-        ).order_by(
-            Produto.quantidade.asc()
-        ).limit(10).all()
-        
-        criticos_data = [{
-            "id": p.id,
-            "nome": p.nome,
-            "quantidade": p.quantidade,
-            "estoque_status": "esgotado" if p.quantidade <= 0 else "baixo",
-            "categoria": p.categoria.nome if p.categoria else "Sem Categoria"
-        } for p in criticos]
-        
-        # 3. Giro de Estoque (baseado em ultima_venda)
-        hoje = datetime.now()
-        data_7 = hoje - timedelta(days=7)
-        data_30 = hoje - timedelta(days=30)
-        
-        # Assumindo que ultima_venda existe e é datetime
-        # Se não existir, retorna 0 (tratado no try/except geral se falhar query)
-        try:
-            giro_stats = db.session.query(
-                func.sum(case((Produto.ultima_venda >= data_7, 1), else_=0)).label("rapido"),
-                func.sum(case((and_(Produto.ultima_venda < data_7, Produto.ultima_venda >= data_30), 1), else_=0)).label("normal"),
-                func.sum(case((or_(Produto.ultima_venda < data_30, Produto.ultima_venda == None), 1), else_=0)).label("lento")
-            ).filter(
-                Produto.estabelecimento_id == estabelecimento_id, 
-                Produto.ativo == True
-            ).one()
-            
-            giro_data = {
-                "rapido": int(giro_stats.rapido or 0),
-                "normal": int(giro_stats.normal or 0),
-                "lento": int(giro_stats.lento or 0)
-            }
-        except Exception:
-            # Fallback se ultima_venda não existir ou erro de data
-            giro_data = {"rapido": 0, "normal": 0, "lento": 0}
-
-        return jsonify({
-            "success": True,
-            "estatisticas": {
-                "total_produtos": total,
-                "produtos_esgotados": esgotados,
-                "produtos_baixo_estoque": baixo,
-                "produtos_normal": normal,
-                "valor_total_estoque": float(stats.valor_total or 0),
-                "margem_media": float(stats.margem_media or 0),
-                "classificacao_abc": {
-                    "A": abc_dict.get("A", 0),
-                    "B": abc_dict.get("B", 0),
-                    "C": abc_dict.get("C", 0)
-                },
-                "giro_estoque": giro_data,
-                "validade": validade_data,
-                "top_produtos_margem": top_margem_data,
-                "produtos_criticos": criticos_data,
-                "filtros_aplicados": {"categoria": categoria}
-            }
-        })
-
-    except Exception as e:
-        current_app.logger.error(f"Erro ao obter estatisticas: {str(e)}")
-        return jsonify({"success": False, "message": "Erro ao obter estatisticas", "error": str(e)}), 500
 
 
 @produtos_bp.route("/", methods=["GET"])
@@ -1806,7 +1610,13 @@ def obter_estatisticas_produtos():
     try:
         # Obter claims do JWT
         claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        raw_est_id = claims.get("estabelecimento_id")
+        if raw_est_id is None:
+            # Fallback para o primeiro estabelecimento se não houver no token (apenas para teste)
+            est = Estabelecimento.query.first()
+            estabelecimento_id = est.id if est else 1
+        else:
+            estabelecimento_id = int(raw_est_id)
         
         # Obter filtros (mesmos da listagem)
         ativos = request.args.get("ativos", None, type=str)
@@ -1972,7 +1782,11 @@ def obter_estatisticas_produtos():
         # Giro de estoque
         giro_counts = {"rapido": 0, "normal": 0, "lento": 0}
         
+        # Monitor de validade
+        val_counts = {"vencidos": 0, "vence_15": 0, "vence_30": 0, "vence_90": 0}
+        
         hoje = datetime.utcnow()
+        hoje_date = hoje.date()
         
         # Calcular faturamento total para classificação ABC
         produtos_com_faturamento = []
@@ -1999,7 +1813,7 @@ def obter_estatisticas_produtos():
             # Status do estoque
             if produto.quantidade <= 0:
                 produtos_esgotados += 1
-            elif produto.quantidade <= produto.quantidade_minima:
+            elif produto.quantidade <= (produto.quantidade_minima or 0):
                 produtos_baixo_estoque += 1
             else:
                 produtos_normal += 1
@@ -2008,41 +1822,45 @@ def obter_estatisticas_produtos():
             valor_produto = Decimal(str(produto.preco_custo or 0)) * Decimal(str(produto.quantidade or 0))
             valor_total_estoque += valor_produto
             
-            # Margem - USAR FÓRMULA CORRIGIDA
+            # Margem
             margem_calculada = calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo))
             soma_margens += Decimal(str(margem_calculada))
             
-            # Acumular faturamento para ABC
+            # Validade
+            if produto.data_validade:
+                # Converter para date se for datetime para permitir comparação
+                dt_val = produto.data_validade.date() if isinstance(produto.data_validade, datetime) else produto.data_validade
+                
+                if dt_val < hoje_date:
+                    val_counts["vencidos"] += 1
+                elif dt_val <= hoje_date + timedelta(days=15):
+                    val_counts["vence_15"] += 1
+                    val_counts["vence_30"] += 1
+                    val_counts["vence_90"] += 1
+                elif dt_val <= hoje_date + timedelta(days=30):
+                    val_counts["vence_30"] += 1
+                    val_counts["vence_90"] += 1
+                elif dt_val <= hoje_date + timedelta(days=90):
+                    val_counts["vence_90"] += 1
+
+            # Classificação ABC
             acumulado_faturamento += faturamento
-            
-            # Classificação ABC (Pareto 80/20)
-            # A: primeiros 80% do faturamento acumulado (produtos mais valiosos)
-            # B: próximos 15% (até 95% acumulado)
-            # C: últimos 5% (produtos menos valiosos)
             if faturamento_total > 0:
                 percentual_acumulado = acumulado_faturamento / faturamento_total
-                
-                # Classificar baseado no percentual acumulado
                 if percentual_acumulado <= Decimal('0.80'):
                     abc_counts["A"] += 1
-                    produto.classificacao_abc = "A"
                 elif percentual_acumulado <= Decimal('0.95'):
                     abc_counts["B"] += 1
-                    produto.classificacao_abc = "B"
                 else:
                     abc_counts["C"] += 1
-                    produto.classificacao_abc = "C"
             else:
-                # Se não há faturamento, classificar como C
                 abc_counts["C"] += 1
-                produto.classificacao_abc = "C"
             
-            # Giro de estoque - Corrigido
-            # Rápido: vendido nos últimos 7 dias
-            # Normal: vendido entre 8 e 30 dias
-            # Lento: não vendido há mais de 30 dias ou nunca vendeu
+            # Giro de estoque
             if produto.ultima_venda:
-                dias_desde_venda = (hoje - produto.ultima_venda).days
+                # Converter para date se for datetime
+                data_venda = produto.ultima_venda.date() if isinstance(produto.ultima_venda, datetime) else produto.ultima_venda
+                dias_desde_venda = (hoje_date - data_venda).days
                 if dias_desde_venda <= 7:
                     giro_counts["rapido"] += 1
                 elif dias_desde_venda <= 30:
@@ -2050,23 +1868,28 @@ def obter_estatisticas_produtos():
                 else:
                     giro_counts["lento"] += 1
             else:
-                # Nunca vendeu = giro lento
                 giro_counts["lento"] += 1
 
         # Calcular margem média
         margem_media = soma_margens / total_produtos if total_produtos > 0 else Decimal('0')
 
-        # Preparar lista de produtos com todos os campos
-        produtos_lista = []
-        for produto in produtos:
-            prod_dict = produto.to_dict()
-            # Garantir que os campos estão presentes
-            prod_dict['total_vendido'] = float(produto.total_vendido or 0)
-            prod_dict['quantidade_vendida'] = int(produto.quantidade_vendida or 0)
-            prod_dict['ultima_venda'] = produto.ultima_venda.isoformat() if produto.ultima_venda else None
-            # USAR FÓRMULA CORRIGIDA PARA MARGEM
-            prod_dict['margem_lucro'] = calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo))
-            produtos_lista.append(prod_dict)
+        # Preparar lista de produtos e listas auxiliares
+        produtos_lista = [p.to_dict() for p in produtos]
+        
+        # Top 10 Críticos
+        criticos = sorted(
+            [p for p in produtos if p.quantidade <= (p.quantidade_minima or 0)],
+            key=lambda x: x.quantidade
+        )[:10]
+        criticos_lista = [p.to_dict() for p in criticos]
+
+        # Top 5 Margem
+        top_margem = sorted(
+            produtos,
+            key=lambda x: calcular_margem_lucro(float(x.preco_venda), float(x.preco_custo)),
+            reverse=True
+        )[:5]
+        top_margem_lista = [p.to_dict() for p in top_margem]
 
         # Preparar resposta
         estatisticas = {
@@ -2078,6 +1901,9 @@ def obter_estatisticas_produtos():
             "margem_media": float(margem_media.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
             "classificacao_abc": abc_counts,
             "giro_estoque": giro_counts,
+            "validade": val_counts,
+            "top_produtos_margem": top_margem_lista,
+            "produtos_criticos": criticos_lista,
             "produtos": produtos_lista,
             "filtros_aplicados": {
                 "categoria": categoria,
@@ -2089,8 +1915,6 @@ def obter_estatisticas_produtos():
                 "filtro_rapido": filtro_rapido
             }
         }
-
-        current_app.logger.info(f"📊 Estatísticas calculadas: {total_produtos} produtos, filtros: {filtro_rapido}")
 
         return jsonify({
             "success": True,

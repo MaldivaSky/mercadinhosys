@@ -10,7 +10,7 @@ from app.models import (
     Cliente,
     Fornecedor,
 )
-from sqlalchemy import or_, and_, func, extract, cast, String, Date, distinct
+from sqlalchemy import or_, and_, func, extract, cast, String, Date, distinct, select
 import random
 import string
 from collections import defaultdict
@@ -416,18 +416,19 @@ def estatisticas_vendas():
             # Se tem filtro de item, precisamos de distinct
             venda_ids_query = query_base.with_entities(Venda.id).distinct()
             v_ids = venda_ids_query.subquery()
-            
+            v_ids_sel = select(v_ids.c.id)
+
             stats_gerais = db.session.query(
                 func.count(Venda.id).label("total_vendas"),
                 func.sum(Venda.total).label("total_valor")
-            ).filter(Venda.id.in_(v_ids)).first()
-            
+            ).filter(Venda.id.in_(v_ids_sel)).first()
+
             total_vendas = stats_gerais.total_vendas or 0
             total_valor = float(stats_gerais.total_valor or 0)
-            
+
             total_lucro = (
                 db.session.query(func.sum(VendaItem.margem_lucro_real))
-                .filter(VendaItem.venda_id.in_(v_ids))
+                .filter(VendaItem.venda_id.in_(v_ids_sel))
                 .scalar() or 0
             )
         else:
@@ -454,13 +455,14 @@ def estatisticas_vendas():
         
         if has_item_filter:
             v_ids = query_base.with_entities(Venda.id).distinct().subquery()
+            v_ids_sel = select(v_ids.c.id)
             vendas_por_dia_query = (
                 db.session.query(
                     campo_data_dia.label("data"),
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total"),
                 )
-                .filter(Venda.id.in_(v_ids))
+                .filter(Venda.id.in_(v_ids_sel))
                 .group_by(campo_data_dia)
                 .order_by(campo_data_dia.asc())
             )
@@ -505,11 +507,12 @@ def estatisticas_vendas():
         def get_grouped_stats(q, group_by_col):
             if has_item_filter:
                 v_ids = q.with_entities(Venda.id).distinct().subquery()
+                v_ids_sel = select(v_ids.c.id)
                 return db.session.query(
                     group_by_col,
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total")
-                ).filter(Venda.id.in_(v_ids)).group_by(group_by_col).all()
+                ).filter(Venda.id.in_(v_ids_sel)).group_by(group_by_col).all()
             else:
                 return q.with_entities(
                     group_by_col,
@@ -538,7 +541,8 @@ def estatisticas_vendas():
 
         # --- PRODUTOS E FORNECEDORES (Sempre join com VendaItem) ---
         v_ids_sub = query_base.with_entities(Venda.id).distinct().subquery()
-        
+        v_ids_select = select(v_ids_sub.c.id)
+
         produtos_res = (
             db.session.query(
                 Produto.nome,
@@ -548,7 +552,7 @@ def estatisticas_vendas():
             )
             .join(VendaItem, VendaItem.produto_id == Produto.id)
             .outerjoin(Fornecedor, Fornecedor.id == Produto.fornecedor_id)
-            .filter(VendaItem.venda_id.in_(v_ids_sub))
+            .filter(VendaItem.venda_id.in_(v_ids_select))
             .group_by(Produto.id, Produto.nome, Fornecedor.nome_fantasia)
             .order_by(func.sum(VendaItem.quantidade).desc())
             .limit(10)
@@ -563,7 +567,7 @@ def estatisticas_vendas():
             )
             .join(Produto, Produto.fornecedor_id == Fornecedor.id)
             .join(VendaItem, VendaItem.produto_id == Produto.id)
-            .filter(VendaItem.venda_id.in_(v_ids_sub))
+            .filter(VendaItem.venda_id.in_(v_ids_select))
             .group_by(Fornecedor.id, Fornecedor.nome_fantasia)
             .order_by(func.sum(VendaItem.total_item).desc())
             .limit(10)
@@ -585,7 +589,7 @@ def estatisticas_vendas():
                     "forma": fp[0],
                     "quantidade": fp[1],
                     "total": float(fp[2] or 0),
-                    "percentual": float((fp[2] / total_valor * 100) if total_valor > 0 else 0),
+                    "percentual": (float(fp[2] or 0) / total_valor * 100) if total_valor > 0 else 0.0,
                 } for fp in formas_pgto_res
             ],
             "vendas_por_funcionario": [
