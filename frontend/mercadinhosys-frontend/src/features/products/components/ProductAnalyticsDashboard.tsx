@@ -500,7 +500,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                                 <div
                                     className="bg-red-600 h-3 rounded-full transition-all duration-500"
-                                    style={{ width: `${stats.total_produtos > 0 ? (validade.vencidos / stats.total_produtos) * 100 : 0}%` }}
+                                    style={{ width: `${stats.total_produtos > 0 ? (validade.vencidos / stats.total_produtos) * 100 : 10}%` }}
                                 />
                             </div>
                         </div>

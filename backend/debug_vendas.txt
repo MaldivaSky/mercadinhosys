@@ -237,3 +237,9 @@ DEBUG APPLY: Applying filter forma_pagamento=cartao_credito
 DEBUG LISTAR: request.args=ImmutableMultiDict([('page', '3'), ('per_page', '20'), ('data_inicio', '2025-11-01'), ('data_fim', '2026-02-12'), ('forma_pagamento', 'cartao_credito')])
 DEBUG LISTAR: search='', filtros_avancados={'forma_pagamento': 'cartao_credito', 'data_inicio': '2025-11-01', 'data_fim': '2026-02-12'}
 DEBUG APPLY: Applying filter forma_pagamento=cartao_credito
+DEBUG LISTAR: request.args=ImmutableMultiDict([('page', '1'), ('per_page', '20'), ('data_inicio', '2025-11-15'), ('data_fim', '2026-02-13')])
+DEBUG LISTAR: search='', filtros_avancados={'data_inicio': '2025-11-15', 'data_fim': '2026-02-13'}
+DEBUG ESTATISTICAS: args=ImmutableMultiDict([('data_inicio', '2025-11-15'), ('data_fim', '2026-02-13')])
+DEBUG LISTAR: request.args=ImmutableMultiDict([('page', '1'), ('per_page', '20'), ('data_inicio', '2025-11-15'), ('data_fim', '2026-02-13')])
+DEBUG LISTAR: search='', filtros_avancados={'data_inicio': '2025-11-15', 'data_fim': '2026-02-13'}
+DEBUG ESTATISTICAS: args=ImmutableMultiDict([('data_inicio', '2025-11-15'), ('data_fim', '2026-02-13')])

@@ -21,7 +21,7 @@ export const productsService = {
     },
 
     // ==================== CRUD COMPLETO ESTOQUE ====================
-    getAllEstoque: async (pagina = 1, porPagina = 50, filtros?: ProdutoFiltros): Promise<ProdutosResponse> => {
+    getAllEstoque: async (pagina = 1, porPagina = 25, filtros?: ProdutoFiltros): Promise<ProdutosResponse> => {
         const params: any = {
             pagina,
             por_pagina: porPagina,
@@ -101,7 +101,7 @@ export const productsService = {
 
     getRelatorioEstoque: async (
         pagina = 1,
-        porPagina = 100,
+        porPagina = 50,
         filtros?: { categoria?: string; estoque_status?: string; ativos?: boolean }
     ): Promise<any> => {
         const params: any = { pagina, por_pagina: porPagina };
@@ -142,12 +142,12 @@ export const productsService = {
     },
 
     getLowStock: async (): Promise<Produto[]> => {
-        const response = await productsService.getAllEstoque(1, 100, { estoque_status: 'baixo' });
+        const response = await productsService.getAllEstoque(1, 50, { estoque_status: 'baixo' });
         return response.produtos;
     },
 
     getByCategory: async (categoria: string): Promise<Produto[]> => {
-        const response = await productsService.getAllEstoque(1, 100, { categoria });
+        const response = await productsService.getAllEstoque(1, 50, { categoria });
         return response.produtos;
     },
 
