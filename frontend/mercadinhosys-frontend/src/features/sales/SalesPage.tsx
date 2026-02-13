@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { Bar, Line, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS,
@@ -448,11 +448,6 @@ export default function SalesPage() {
             console.error("❌ Erro ao exportar JSON:", err);
             alert(`Erro ao exportar JSON: ${err.response?.data?.error || err.message}`);
         }
-    }
-
-    function exportarPDF() {
-        alert("📄 Exportação para PDF será implementada em breve!\n\nPor enquanto, use CSV ou Excel e converta para PDF.");
-        setMenuExportarAberto(false);
     }
 
     return (
