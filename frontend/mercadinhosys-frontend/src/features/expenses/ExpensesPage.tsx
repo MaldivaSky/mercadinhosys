@@ -141,7 +141,6 @@ export default function ExpensesPage() {
     });
 
     // Analytics
-    const [mostrarAnalises, setMostrarAnalises] = useState(true);
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
 
     // Toast notifications
