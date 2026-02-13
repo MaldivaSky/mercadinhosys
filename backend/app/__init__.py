@@ -76,9 +76,39 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+
+    # Callbacks JWT: unificar falhas de autenticação como 401 (ERP/API padrão)
+    # Evita 422 para token inválido; frontend trata apenas 401 (refresh ou redirect)
+    @jwt.invalid_token_loader
+    def custom_invalid_token_callback(error_string):
+        logger.warning("[JWT] Token inválido ou malformado (não logamos o valor)")
+        return jsonify({
+            "success": False,
+            "error": "Não autorizado",
+            "msg": "Token inválido ou expirado. Faça login novamente.",
+        }), 401
+
+    @jwt.expired_token_loader
+    def custom_expired_token_callback(_jwt_header, _jwt_data):
+        logger.info("[JWT] Token expirado")
+        return jsonify({
+            "success": False,
+            "error": "Não autorizado",
+            "msg": "Token expirado. Faça login novamente.",
+        }), 401
+
+    @jwt.unauthorized_loader
+    def custom_unauthorized_callback(error_string):
+        logger.info("[JWT] Requisição sem token válido")
+        return jsonify({
+            "success": False,
+            "error": "Não autorizado",
+            "msg": error_string or "Token não informado.",
+        }), 401
+
     cache.init_app(app)
     mail.init_app(app)
-    
+
     db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
     redacted_db_uri = db_uri
     if db_uri:
@@ -384,6 +414,20 @@ def create_app(config_name=None):
                 },
                 "health_check": "/api/health",
             }
+        )
+
+    # Erro de conexão com o banco (ex.: Neon pooler - remover statement_timeout em config)
+    from sqlalchemy.exc import OperationalError
+    @app.errorhandler(OperationalError)
+    def handle_db_connection_error(exc):
+        logger.error(f"[DB] Falha de conexão: {exc}")
+        return (
+            jsonify({
+                "success": False,
+                "error": "Banco de dados temporariamente indisponível",
+                "message": "Verifique a configuração da conexão (Neon pooler não suporta statement_timeout).",
+            }),
+            503,
         )
 
     # Manipuladores de erro

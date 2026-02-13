@@ -52,6 +52,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
 }) => {
     const [classificacaoABC, setClassificacaoABC] = useState<ClassificacaoABC>({ A: 0, B: 0, C: 0 });
     const [statusGiro, setStatusGiro] = useState<StatusGiro>({ rapido: 0, normal: 0, lento: 0 });
+    const [validadeState, setValidadeState] = useState({ vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 });
     const [topProdutos, setTopProdutos] = useState<Produto[]>([]);
     const [produtosCriticos, setProdutosCriticos] = useState<Produto[]>([]);
 
@@ -60,6 +61,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         if ((!produtos || produtos.length === 0) && !stats.classificacao_abc) {
             setClassificacaoABC({ A: 0, B: 0, C: 0 });
             setStatusGiro({ rapido: 0, normal: 0, lento: 0 });
+            setValidadeState({ vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 });
             setTopProdutos([]);
             setProdutosCriticos([]);
             // Continuar execução para pegar stats se existirem
@@ -69,7 +71,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         // Se o backend forneceu as estatísticas, usar elas (já calculadas para TODOS os produtos)
         if (stats.classificacao_abc) {
             setClassificacaoABC(stats.classificacao_abc);
-        } else {
+        } else if (produtos && produtos.length > 0) {
             // Fallback: calcular localmente (apenas para os produtos da página)
             const faturamentoTotal = produtos.reduce((sum, p) => sum + (p.total_vendido || 0), 0);
             const abc = { A: 0, B: 0, C: 0 };
@@ -98,7 +100,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         // ==================== USAR GIRO DO BACKEND ====================
         if (stats.giro_estoque) {
             setStatusGiro(stats.giro_estoque);
-        } else {
+        } else if (produtos && produtos.length > 0) {
             // Fallback: calcular localmente
             const hoje = new Date();
             const giro = { rapido: 0, normal: 0, lento: 0 };
@@ -120,6 +122,40 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 }
             });
             setStatusGiro(giro);
+        }
+
+        // ==================== USAR VALIDADE DO BACKEND ====================
+        if (stats.validade) {
+            setValidadeState(stats.validade);
+        } else if (produtos && produtos.length > 0) {
+            // Fallback: calcular localmente
+            const val = { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 };
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            produtos.forEach(p => {
+                if (p.data_validade) {
+                    const dataVal = new Date(p.data_validade);
+                    dataVal.setHours(0, 0, 0, 0);
+
+                    const diffTime = dataVal.getTime() - hoje.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    if (diffDays < 0) {
+                        val.vencidos++;
+                    } else if (diffDays <= 15) {
+                        val.vence_15++;
+                        val.vence_30++;
+                        val.vence_90++;
+                    } else if (diffDays <= 30) {
+                        val.vence_30++;
+                        val.vence_90++;
+                    } else if (diffDays <= 90) {
+                        val.vence_90++;
+                    }
+                }
+            });
+            setValidadeState(val);
         }
 
         // ==================== TOP 5 PRODUTOS POR MARGEM ====================
@@ -167,19 +203,23 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         }
     }, [produtos, stats]);
 
+    // Dados finais para exibição (prioriza backend, depois fallback local)
+    const validade = stats.validade || validadeState;
+    const abc = stats.classificacao_abc || classificacaoABC;
+    const giro = stats.giro_estoque || statusGiro;
+
     const percentualABC = {
-        A: stats.total_produtos > 0 ? (classificacaoABC.A / stats.total_produtos * 100).toFixed(1) : '0',
-        B: stats.total_produtos > 0 ? (classificacaoABC.B / stats.total_produtos * 100).toFixed(1) : '0',
-        C: stats.total_produtos > 0 ? (classificacaoABC.C / stats.total_produtos * 100).toFixed(1) : '0',
+        A: stats.total_produtos > 0 ? (abc.A / stats.total_produtos * 100).toFixed(1) : '0',
+        B: stats.total_produtos > 0 ? (abc.B / stats.total_produtos * 100).toFixed(1) : '0',
+        C: stats.total_produtos > 0 ? (abc.C / stats.total_produtos * 100).toFixed(1) : '0',
     };
 
     const percentualGiro = {
-        rapido: stats.total_produtos > 0 ? (statusGiro.rapido / stats.total_produtos * 100).toFixed(1) : '0',
-        normal: stats.total_produtos > 0 ? (statusGiro.normal / stats.total_produtos * 100).toFixed(1) : '0',
-        lento: stats.total_produtos > 0 ? (statusGiro.lento / stats.total_produtos * 100).toFixed(1) : '0',
+        rapido: stats.total_produtos > 0 ? (giro.rapido / stats.total_produtos * 100).toFixed(1) : '0',
+        normal: stats.total_produtos > 0 ? (giro.normal / stats.total_produtos * 100).toFixed(1) : '0',
+        lento: stats.total_produtos > 0 ? (giro.lento / stats.total_produtos * 100).toFixed(1) : '0',
     };
 
-    const validade = stats.validade || { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 };
 
     return (
         <div className="space-y-6">

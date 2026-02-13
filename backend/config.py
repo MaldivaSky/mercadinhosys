@@ -53,6 +53,7 @@ class Config:
     USING_POSTGRES = _using_postgres
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Neon (pooler) não suporta statement_timeout em connect_args; usar apenas parâmetros compatíveis
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,   # Verifica conexão antes de usar
         "pool_recycle": 120,     # Recicla conexões a cada 2 minutos (Neon fecha idle rápido)
@@ -64,9 +65,8 @@ class Config:
             "keepalives_interval": 10,
             "keepalives_count": 5,
             "connect_timeout": 10,
-            "options": "-c statement_timeout=60000",  # 60s de timeout por statement
         },
-    } if USING_POSTGRES else {}
+    } if _using_postgres else {}
 
     # ==================== CORS ====================
     cors_origins_str = os.environ.get("CORS_ORIGINS", "")
@@ -90,6 +90,7 @@ class Config:
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB max
 
     # ==================== JWT ====================
+    # JWT_SECRET_KEY: manter estável entre restarts; se mudar, tokens em uso passam a retornar 401.
     JWT_ACCESS_TOKEN_EXPIRES = 3600
     JWT_REFRESH_TOKEN_EXPIRES = 604800  # 7 dias
 
