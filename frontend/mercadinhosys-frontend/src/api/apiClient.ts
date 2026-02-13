@@ -105,11 +105,11 @@ apiClient.interceptors.response.use(
                 isRefreshing = false;
             }
         } else if (error.response?.status === 401 && originalRequest._retry) {
-            // Se falhou mesmo após o refresh
-            console.error('❌ Falha após refresh, mas NÃO forçando logout para evitar loop (debug)');
-            // localStorage.removeItem('access_token');
-            // localStorage.removeItem('refresh_token');
-            // window.location.href = '/login';
+            // Falha após tentativa de refresh: limpa sessão e redireciona para login
+            console.error('❌ Falha após refresh; redirecionando para login');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            window.location.href = '/login';
             return Promise.reject(error);
         }
 

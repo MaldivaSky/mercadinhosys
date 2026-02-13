@@ -357,7 +357,7 @@ const ProductsPage: React.FC = () => {
 
       <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
-      <ProductAnalyticsDashboard produtos={[]} stats={stats} onCardClick={handleCardClick} />
+      <ProductAnalyticsDashboard produtos={produtos} stats={stats} onCardClick={handleCardClick} />
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
         <div className="flex flex-col md:flex-row gap-4">
