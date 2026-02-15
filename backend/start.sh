@@ -5,9 +5,14 @@ set -o errexit  # Exit on error
 
 echo "🚀 Starting MercadinhoSys Backend..."
 
-# Criar tabelas se não existirem
-echo "📋 Creating database tables..."
-python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all(); print('✅ Tables created')"
+# 1) Aplicar migrações Alembic no Postgres (obrigatório para colunas/tabelas novas)
+export FLASK_APP=run:app
+echo "📋 Applying database migrations (flask db upgrade)..."
+python -m flask db upgrade || { echo "⚠️ Migration failed, continuing with create_all fallback..."; true; }
+
+# 2) Garantir que todas as tabelas existam (create_all não altera tabelas já existentes)
+echo "📋 Ensuring database tables exist..."
+python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all(); print('✅ Tables OK')"
 
 # Verificar se precisa fazer seed
 echo "🌱 Checking if database needs seeding..."
