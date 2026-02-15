@@ -152,17 +152,22 @@ class DashboardOrchestrator:
         }
 
     @cache_response(ttl_seconds=300, require_db_check=True)  # 5 minutos de cache (otimizado)
-    def get_scientific_dashboard(self, days: int = 30) -> Dict[str, Any]:
+    def get_scientific_dashboard(
+        self,
+        days: int = 30,
+        start_date: datetime = None,
+        end_date: datetime = None
+    ) -> Dict[str, Any]:
         """
-        Dashboard científico - Análise avançada com insights
+        Dashboard científico - Análise avançada com insights.
+        Se start_date e end_date forem fornecidos, usa esse período; senão usa os últimos N dias.
         """
         from app.models import db
         import logging
         _logger = logging.getLogger(__name__)
         try:
-            # 🔥 RESET TRANSACTION: Garante que erros de requests anteriores não envenenem este dashboard
             db.session.rollback()
-            return self._get_scientific_dashboard_logic(days)
+            return self._get_scientific_dashboard_logic(days, start_date, end_date)
         except Exception as e:
             db.session.rollback()
             _logger.error(f"Erro CRÍTICO no dashboard científico: {e}", exc_info=True)
@@ -172,10 +177,21 @@ class DashboardOrchestrator:
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-    def _get_scientific_dashboard_logic(self, days: int = 30) -> Dict[str, Any]:
-        # Garantir que logger está disponível - sempre criar novo para evitar problemas
+    def _get_scientific_dashboard_logic(
+        self,
+        days: int = 30,
+        start_date_override: datetime = None,
+        end_date_override: datetime = None
+    ) -> Dict[str, Any]:
         import logging
         _logger = logging.getLogger(__name__)
+        
+        from datetime import timedelta
+        end_date = end_date_override if end_date_override else datetime.utcnow()
+        if start_date_override and end_date_override:
+            start_current = start_date_override
+        else:
+            start_current = end_date - timedelta(days=days)
         
         def _confidence_from_samples(samples: int) -> str:
             """Função auxiliar para calcular confiança baseada em amostras"""
@@ -187,11 +203,8 @@ class DashboardOrchestrator:
                 return "MEDIUM"
             return "HIGH"
         
-        from datetime import timedelta
         from app.models import Cliente
         from app.dashboard_cientifico.models_layer import PracticalModels as _PM
-        end_date = datetime.utcnow()
-        start_current = end_date - timedelta(days=days)
         start_previous = end_date - timedelta(days=days * 2)
         end_previous = end_date - timedelta(days=days)
 

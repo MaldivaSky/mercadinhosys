@@ -645,6 +645,13 @@ def finalizar_venda():
             db.session.commit()
             current_app.logger.info(f"✅ Transação commitada com sucesso!")
             
+            # Invalidar cache do dashboard para refletir nova venda
+            try:
+                from app.dashboard_cientifico.cache_layer import SmartCache
+                SmartCache.invalidate_pattern("orchestration")
+            except Exception:
+                pass
+            
             # 5. PREPARAR RESPOSTA
             resposta_venda = {
                 "success": True,
@@ -901,8 +908,8 @@ def estatisticas_rapidas():
         
         hoje = datetime.now().date()
         inicio_dia = datetime.combine(hoje, datetime.min.time())
+        fim_dia = datetime.combine(hoje, datetime.max.time())
         
-        # Query otimizada
         est_id = funcionario.estabelecimento_id if funcionario else int(est_id_claim)
         stats = db.session.query(
             func.count(Venda.id).label("total_vendas"),
@@ -911,6 +918,7 @@ def estatisticas_rapidas():
         ).filter(
             Venda.estabelecimento_id == est_id,
             Venda.data_venda >= inicio_dia,
+            Venda.data_venda <= fim_dia,
             Venda.status == "finalizada"
         ).first()
         

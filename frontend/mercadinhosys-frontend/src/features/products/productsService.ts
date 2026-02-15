@@ -41,6 +41,7 @@ export const productsService = {
             if (filtros.tipo) params.tipo = filtros.tipo;
             if (filtros.ordenar_por) params.ordenar_por = filtros.ordenar_por;
             if (filtros.direcao) params.direcao = filtros.direcao;
+            if (filtros.filtro_rapido) params.filtro_rapido = filtros.filtro_rapido;
         }
 
         const response = await apiClient.get<ProdutosResponse>('/produtos/', { params });
@@ -161,6 +162,8 @@ export const productsService = {
             produtos_normal: number;
             valor_total_estoque: number;
             margem_media: number;
+            margem_alta?: number;
+            margem_baixa?: number;
             classificacao_abc: { A: number; B: number; C: number };
             giro_estoque: { rapido: number; normal: number; lento: number };
             validade: { vencidos: number; vence_15: number; vence_30: number; vence_90: number };

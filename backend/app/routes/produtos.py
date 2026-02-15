@@ -242,6 +242,7 @@ def listar_produtos():
         # Parâmetros de ordenação
         ordenar_por = request.args.get("ordenar_por", "nome")
         direcao = request.args.get("direcao", "asc")
+        filtro_rapido = request.args.get("filtro_rapido", None, type=str)
 
         # Query base com Eager Loading para evitar N+1
         query = Produto.query.options(
@@ -311,6 +312,12 @@ def listar_produtos():
         if vencidos and vencidos.lower() == 'true':
             query = query.filter(Produto.data_validade.isnot(None))
             query = query.filter(Produto.data_validade < hoje)
+
+        # Filtro rápido por margem (Alta Margem >50%, Baixa Margem <30%)
+        if filtro_rapido == "margem_alta":
+            query = query.filter(Produto.margem_lucro >= 50)
+        elif filtro_rapido == "margem_baixa":
+            query = query.filter(Produto.margem_lucro < 30)
 
         # 8. Ordenação
         coluna_ordenacao = getattr(Produto, ordenar_por, Produto.nome)
@@ -1652,8 +1659,13 @@ def obter_estatisticas_produtos():
                         "produtos_normal": 0,
                         "valor_total_estoque": 0.0,
                         "margem_media": 0.0,
+                        "margem_alta": 0,
+                        "margem_baixa": 0,
                         "classificacao_abc": {"A": 0, "B": 0, "C": 0},
                         "giro_estoque": {"rapido": 0, "normal": 0, "lento": 0},
+                        "validade": {"vencidos": 0, "vence_15": 0, "vence_30": 0, "vence_90": 0},
+                        "top_produtos_margem": [],
+                        "produtos_criticos": [],
                         "filtros_aplicados": {
                             "categoria": categoria,
                             "ativos": ativos,
@@ -1775,13 +1787,15 @@ def obter_estatisticas_produtos():
         produtos_normal = 0
         valor_total_estoque = Decimal('0')
         soma_margens = Decimal('0')
-        
+        margem_alta_count = 0   # margem >= 50%
+        margem_baixa_count = 0  # margem < 30%
+
         # Classificação ABC
         abc_counts = {"A": 0, "B": 0, "C": 0}
-        
+
         # Giro de estoque
         giro_counts = {"rapido": 0, "normal": 0, "lento": 0}
-        
+
         # Monitor de validade
         val_counts = {"vencidos": 0, "vence_15": 0, "vence_30": 0, "vence_90": 0}
         
@@ -1825,7 +1839,11 @@ def obter_estatisticas_produtos():
             # Margem
             margem_calculada = calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo))
             soma_margens += Decimal(str(margem_calculada))
-            
+            if margem_calculada >= 50:
+                margem_alta_count += 1
+            elif margem_calculada < 30:
+                margem_baixa_count += 1
+
             # Validade
             if produto.data_validade:
                 # Converter para date se for datetime para permitir comparação
@@ -1899,6 +1917,8 @@ def obter_estatisticas_produtos():
             "produtos_normal": produtos_normal,
             "valor_total_estoque": float(valor_total_estoque.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
             "margem_media": float(margem_media.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "margem_alta": margem_alta_count,
+            "margem_baixa": margem_baixa_count,
             "classificacao_abc": abc_counts,
             "giro_estoque": giro_counts,
             "validade": val_counts,

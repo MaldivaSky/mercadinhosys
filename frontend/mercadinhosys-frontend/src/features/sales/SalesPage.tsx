@@ -733,13 +733,15 @@ export default function SalesPage() {
                         <div className="text-sm font-bold text-green-700">Lucro Estimado</div>
                     </div>
                     <div className="text-2xl font-bold text-green-700">
-                        {analisesData?.estatisticas_gerais?.total_lucro !== undefined
-                            ? formatCurrency(analisesData.estatisticas_gerais.total_lucro)
+                        {analisesData?.estatisticas_gerais
+                            ? formatCurrency(Number(analisesData.estatisticas_gerais.total_lucro ?? 0))
                             : <span className="text-sm text-gray-400">Carregando...</span>
                         }
                     </div>
                     <div className="text-xs text-green-600 mt-1 font-medium">
-                        Margem: {analisesData?.estatisticas_gerais?.total_valor ? ((analisesData.estatisticas_gerais.total_lucro / analisesData.estatisticas_gerais.total_valor) * 100).toFixed(1) + "%" : "-"}
+                        Margem: {analisesData?.estatisticas_gerais?.total_valor
+                            ? (((Number(analisesData.estatisticas_gerais.total_lucro ?? 0) / Number(analisesData.estatisticas_gerais.total_valor)) * 100).toFixed(1) + "%")
+                            : "-"}
                     </div>
                 </div>
             </div>

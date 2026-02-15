@@ -19,9 +19,12 @@ class DataLayer:
 
     @staticmethod
     def get_sales_summary_range(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
-        """Resumo de vendas para um período específico"""
+        """Resumo de vendas para um período específico (inclui o dia inteiro de end_date)"""
         try:
-            # 🔥 OTIMIZAÇÃO: Usar comparação direta de datetime em vez de func.date()
+            start_d = start_date.date() if isinstance(start_date, datetime) else start_date
+            end_d = end_date.date() if isinstance(end_date, datetime) else end_date
+            end_exclusive = end_d + timedelta(days=1)  # Inclui o dia inteiro de end_d
+            
             result = db.session.query(
                 func.count(Venda.id).label('total_vendas'),
                 func.sum(Venda.total).label('total_faturado'),
@@ -29,8 +32,8 @@ class DataLayer:
                 func.count(func.distinct(func.date(Venda.data_venda))).label('dias_com_venda')
             ).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= start_date.date() if isinstance(start_date, datetime) else start_date,
-                Venda.data_venda <= end_date.date() if isinstance(end_date, datetime) else end_date,
+                Venda.data_venda >= start_d,
+                Venda.data_venda < end_exclusive,
                 Venda.status == 'finalizada'
             ).first()
 
@@ -56,14 +59,18 @@ class DataLayer:
             # Importante: VendaItem.custo_unitario armazena o custo no momento da venda (histórico)
             
             # 🔥 OTIMIZAÇÃO: Usar comparação direta de datetime
+            start_d = start_date.date() if isinstance(start_date, datetime) else start_date
+            end_d = end_date.date() if isinstance(end_date, datetime) else end_date
+            end_exclusive = end_d + timedelta(days=1)
+            
             result = db.session.query(
                 func.coalesce(func.sum(Venda.total), 0).label('revenue'),
                 func.coalesce(func.sum(VendaItem.custo_unitario * VendaItem.quantidade), 0).label('cogs'),
                 func.coalesce(func.sum(VendaItem.total_item), 0).label('gross_sales')
             ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= start_date.date() if isinstance(start_date, datetime) else start_date,
-                Venda.data_venda <= end_date.date() if isinstance(end_date, datetime) else end_date,
+                Venda.data_venda >= start_d,
+                Venda.data_venda < end_exclusive,
                 Venda.status == 'finalizada'
             ).first()
 
