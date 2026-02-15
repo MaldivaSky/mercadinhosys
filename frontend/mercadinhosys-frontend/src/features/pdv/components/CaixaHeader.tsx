@@ -6,9 +6,11 @@ import { formatCurrency } from '../../../utils/formatters';
 interface CaixaHeaderProps {
     funcionarioNome?: string;
     funcionarioRole?: string;
+    /** Quando muda, força novo carregamento das estatísticas (ex: após finalizar venda) */
+    refreshKey?: number | string;
 }
 
-const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioRole }) => {
+const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioRole, refreshKey }) => {
     const [stats, setStats] = useState<any>(null);
     const [horaAtual, setHoraAtual] = useState(new Date());
 
@@ -21,7 +23,7 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
         return () => clearInterval(interval);
     }, []);
 
-    // Carregar estatísticas do dia
+    // Carregar estatísticas do dia (e quando refreshKey muda, ex: após venda)
     useEffect(() => {
         const carregarStats = async () => {
             try {
@@ -29,9 +31,6 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                 setStats(data);
             } catch (error: any) {
                 console.error('❌ Erro ao carregar estatísticas:', error);
-                
-                // Não mostrar erro se for problema de rede (servidor offline)
-                // Apenas logar no console para não poluir a UI
                 if (error.code !== 'ERR_NETWORK') {
                     console.warn('Estatísticas indisponíveis:', error.message);
                 }
@@ -43,7 +42,7 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
         // Atualizar a cada 30 segundos
         const interval = setInterval(carregarStats, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [refreshKey]);
 
     const formatarHora = (data: Date) => {
         return data.toLocaleTimeString('pt-BR', {

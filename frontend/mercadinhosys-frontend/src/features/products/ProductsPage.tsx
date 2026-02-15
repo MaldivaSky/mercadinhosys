@@ -46,6 +46,8 @@ const ProductsPage: React.FC = () => {
     produtos_normal: 0,
     valor_total_estoque: 0,
     margem_media: 0,
+    margem_alta: 0,
+    margem_baixa: 0,
     classificacao_abc: { A: 0, B: 0, C: 0 },
     giro_estoque: { rapido: 0, normal: 0, lento: 0 },
     validade: { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 },
@@ -280,9 +282,13 @@ const ProductsPage: React.FC = () => {
       novosFiltros.ordenar_por = 'quantidade';
       novosFiltros.direcao = 'asc';
     } else if (filter === 'margem_alta') {
+      novosFiltros.filtro_rapido = 'margem_alta';
       novosFiltros.ordenar_por = 'margem_lucro';
       novosFiltros.direcao = 'desc';
-      // Poderia adicionar filtro preco_min se backend suportasse margem_min
+    } else if (filter === 'margem_baixa') {
+      novosFiltros.filtro_rapido = 'margem_baixa';
+      novosFiltros.ordenar_por = 'margem_lucro';
+      novosFiltros.direcao = 'asc';
     } else if (filter === 'giro_rapido') {
       // Assumindo suporte a ordenação por ultima_venda ou similar
       novosFiltros.ordenar_por = 'ultima_venda';
@@ -321,8 +327,8 @@ const ProductsPage: React.FC = () => {
     classe_c: stats.classificacao_abc?.C || 0,
     giro_rapido: stats.giro_estoque?.rapido || 0,
     giro_lento: stats.giro_estoque?.lento || 0,
-    margem_alta: 0,
-    margem_baixa: 0,
+    margem_alta: stats.margem_alta ?? 0,
+    margem_baixa: stats.margem_baixa ?? 0,
     repor_urgente: stats.produtos_esgotados + stats.produtos_baixo_estoque,
     sem_fornecedor: 0,
     vencimento_proximo: stats.validade?.vence_30 || 0,

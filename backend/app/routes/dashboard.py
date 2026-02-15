@@ -62,34 +62,36 @@ def dashboard_cientifico():
         end_date_str = request.args.get('end_date', default=None, type=str)
         days = request.args.get('days', default=30, type=int)
         
-        # Se datas específicas foram fornecidas, calcular days a partir delas
+        start_date_obj = None
+        end_date_obj = None
+        
         if start_date_str and end_date_str:
             try:
                 from datetime import datetime as dt
-                start_date = dt.fromisoformat(start_date_str)
-                end_date = dt.fromisoformat(end_date_str)
-                days = (end_date - start_date).days
+                start_date_obj = dt.fromisoformat(start_date_str.replace('Z', '').replace('+00:00', ''))
+                end_date_obj = dt.fromisoformat(end_date_str.replace('Z', '').replace('+00:00', ''))
+                days = (end_date_obj - start_date_obj).days
                 if days < 1:
                     days = 1
-                logger.info(f"📊 Dashboard científico com datas específicas: {start_date_str} a {end_date_str} ({days} dias)")
+                logger.info(f"📊 Dashboard com datas específicas: {start_date_str} a {end_date_str} ({days} dias)")
             except Exception as date_err:
-                logger.warning(f"Datas inválidas fornecidas: {date_err}, usando days={days}")
+                logger.warning(f"Datas inválidas: {date_err}, usando days={days}")
+                start_date_obj = None
+                end_date_obj = None
         else:
-            logger.info(f"📊 Dashboard científico solicitado para {days} dias")
+            logger.info(f"📊 Dashboard solicitado para {days} dias")
         
-        # Validar range de dias (mínimo 1, máximo 365)
         if days < 1:
             days = 1
         elif days > 365:
             days = 365
         
-        # 2. Orquestração (Injeção de Dependência Simplificada)
-        logger.info(f"🔥 Criando DashboardOrchestrator para estabelecimento {estabelecimento_id}")
         orchestrator = DashboardOrchestrator(estabelecimento_id)
-        
-        # 3. Execução Direta (Contrato Definido) - 🔥 PASSANDO O PARÂMETRO DAYS
-        logger.info(f"🔥 Chamando get_scientific_dashboard com days={days}")
-        data = orchestrator.get_scientific_dashboard(days=days)
+        data = orchestrator.get_scientific_dashboard(
+            days=days,
+            start_date=start_date_obj,
+            end_date=end_date_obj
+        )
         
         if not data.get("success", True):
             logger.error(f"❌ Orchestrator returned success=False: {data.get('error')}")

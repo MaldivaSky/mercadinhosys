@@ -204,6 +204,7 @@ export interface ProdutoFiltros {
     tipo?: string;
     ordenar_por?: string;
     direcao?: 'asc' | 'desc';
+    filtro_rapido?: string | null;
 }
 
 // Tipos para vendas - COMPLETAMENTE ATUALIZADO
