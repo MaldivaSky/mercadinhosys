@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   server: {
+    // ECONNREFUSED = backend não está rodando. Inicie: cd backend && python run.py
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

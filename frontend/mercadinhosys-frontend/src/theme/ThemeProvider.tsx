@@ -1,9 +1,10 @@
-// src/theme/ThemeProvider.tsx - VERSÃO FINAL CORRIGIDA
+// src/theme/ThemeProvider.tsx - Sincronizado com ConfigContext
 import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { ThemeContext } from './ThemeContext';
+import { useConfig } from '../contexts/ConfigContext';
 
 interface ThemeProviderProps {
     children: ReactNode;
@@ -11,37 +12,33 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderProps) {
-    // Carregar tema do localStorage ou usar padrão
-    const [mode, setMode] = useState<'dark' | 'light'>(() => {
-        const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
-        return savedTheme || defaultMode;
-    });
+    const { config, updateConfig } = useConfig();
 
-    const toggleTheme = () => {
-        console.log('🎨 TOGGLE THEME CHAMADO!');
-        setMode((prevMode) => {
-            const newMode = prevMode === 'light' ? 'dark' : 'light';
-            console.log(`🔄 Alterando de ${prevMode} para ${newMode}`);
-            
-            // Salvar no localStorage
-            localStorage.setItem('theme', newMode);
-            console.log('💾 Tema salvo no localStorage:', newMode);
-            
-            // Atualizar a classe no HTML para Tailwind
-            if (newMode === 'dark') {
+    // Mode vem do ConfigContext (API) quando disponível, senão localStorage
+    const mode: 'dark' | 'light' = useMemo(() => {
+        if (config !== null) {
+            return config.tema_escuro ? 'dark' : 'light';
+        }
+        const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
+        return saved || defaultMode;
+    }, [config, defaultMode]);
+
+    const toggleTheme = async () => {
+        try {
+            const newMode = mode === 'light' ? 'dark' : 'light';
+            await updateConfig({ tema_escuro: newMode === 'dark' });
+        } catch {
+            // Fallback local se API falhar (ex: sem token)
+            const fallback = mode === 'light' ? 'dark' : 'light';
+            localStorage.setItem('theme', fallback);
+            if (fallback === 'dark') {
                 document.documentElement.classList.add('dark');
-                console.log('✅ Classe "dark" ADICIONADA ao <html>');
             } else {
                 document.documentElement.classList.remove('dark');
-                console.log('❌ Classe "dark" REMOVIDA do <html>');
             }
-            
-            console.log('📋 Classes atuais no <html>:', document.documentElement.className);
-            return newMode;
-        });
+        }
     };
 
-    // Aplicar classe dark no mount
     useEffect(() => {
         if (mode === 'dark') {
             document.documentElement.classList.add('dark');
@@ -51,11 +48,12 @@ export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderP
     }, [mode]);
 
     const theme = useMemo(() => {
+        const primaryColor = config?.cor_principal || '#2563eb';
         return createTheme({
             palette: {
                 mode,
                 primary: {
-                    main: mode === 'dark' ? '#90caf9' : '#2563eb',
+                    main: primaryColor,
                 },
                 secondary: {
                     main: mode === 'dark' ? '#ce93d8' : '#10b981',
@@ -66,7 +64,7 @@ export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderP
                 },
             },
         });
-    }, [mode]);
+    }, [mode, config?.cor_principal]);
 
     return (
         <ThemeContext.Provider value={{ mode, toggleTheme }}>
