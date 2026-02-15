@@ -50,7 +50,7 @@ class Estabelecimento(db.Model, EnderecoMixin):
     razao_social = db.Column(db.String(150), nullable=False)
     cnpj = db.Column(db.String(18), nullable=False)
     inscricao_estadual = db.Column(db.String(20))
-    telefone = db.Column(db.String(15), nullable=False)
+    telefone = db.Column(db.String(30), nullable=False)
     email = db.Column(db.String(100), nullable=False)
 
     regime_tributario = db.Column(db.String(30), default="SIMPLES NACIONAL")
@@ -188,8 +188,8 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
     rg = db.Column(db.String(20))
     data_nascimento = db.Column(db.Date, nullable=False)
 
-    celular = db.Column(db.String(15), nullable=False)
-    telefone = db.Column(db.String(15))
+    celular = db.Column(db.String(30), nullable=False)
+    telefone = db.Column(db.String(30))
     email = db.Column(db.String(100), nullable=False)
 
     cargo = db.Column(db.String(50), nullable=False)
@@ -488,8 +488,8 @@ class Cliente(db.Model, EnderecoMixin):
     rg = db.Column(db.String(20))
     data_nascimento = db.Column(db.Date)
 
-    telefone = db.Column(db.String(15))
-    celular = db.Column(db.String(15), nullable=False)
+    telefone = db.Column(db.String(30))
+    celular = db.Column(db.String(30), nullable=False)
     email = db.Column(db.String(100))
 
     limite_credito = db.Column(db.Numeric(10, 2), default=0)
@@ -682,11 +682,11 @@ class Fornecedor(db.Model, EnderecoMixin):
     cnpj = db.Column(db.String(18), nullable=False)
     inscricao_estadual = db.Column(db.String(20))
 
-    telefone = db.Column(db.String(15), nullable=False)
+    telefone = db.Column(db.String(30), nullable=False)
     email = db.Column(db.String(100), nullable=False)
 
     contato_nome = db.Column(db.String(100))
-    contato_telefone = db.Column(db.String(15))
+    contato_telefone = db.Column(db.String(30))
 
     prazo_entrega = db.Column(db.Integer, default=7)
     forma_pagamento = db.Column(db.String(50), default="30 DIAS")

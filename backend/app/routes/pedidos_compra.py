@@ -45,7 +45,8 @@ def listar_pedidos():
             estabelecimento_id=user.estabelecimento_id
         ).options(
             joinedload(PedidoCompra.fornecedor),
-            joinedload(PedidoCompra.funcionario)
+            joinedload(PedidoCompra.funcionario),
+            joinedload(PedidoCompra.itens),
         )
         
         if status:
@@ -182,9 +183,27 @@ def criar_pedido():
         pedido.desconto = desconto_pedido
         pedido.frete = frete
         pedido.total = total
-        
+
+        # ERP: criar Conta a Pagar ao emitir o pedido (obrigação financeira)
+        # A Despesa é criada quando o boleto for pago (pagar boleto)
+        data_vencimento = data_previsao or (date.today() + timedelta(days=30))
+        conta_pagar = ContaPagar(
+            estabelecimento_id=user.estabelecimento_id,
+            fornecedor_id=pedido.fornecedor_id,
+            pedido_compra_id=pedido.id,
+            numero_documento=f'PC-{numero_pedido}',
+            tipo_documento='pedido_compra',
+            valor_original=total,
+            valor_atual=total,
+            data_emissao=date.today(),
+            data_vencimento=data_vencimento,
+            status='aberto',
+            observacoes=f'Pedido de compra {numero_pedido}' + (f' - {pedido.observacoes}' if pedido.observacoes else ''),
+        )
+        db.session.add(conta_pagar)
+
         db.session.commit()
-        
+
         return jsonify({
             'message': 'Pedido criado com sucesso',
             'pedido': pedido.to_dict()
@@ -302,24 +321,27 @@ def receber_pedido_compra():
                 db.session.add(lote)
                 
                 # Recalcular preço de custo médio ponderado ANTES de atualizar o estoque
-                # para usar o estoque atual correto no cálculo
                 if hasattr(produto, 'recalcular_preco_custo_ponderado'):
-                    produto.recalcular_preco_custo_ponderado(
-                        quantidade_entrada=quantidade_recebida,
-                        custo_unitario_entrada=item.preco_unitario,
-                        funcionario_id=user.id,
-                        motivo=f'Recebimento pedido {pedido.numero_pedido}'
-                    )
+                    try:
+                        produto.recalcular_preco_custo_ponderado(
+                            quantidade_entrada=quantidade_recebida,
+                            custo_unitario_entrada=item.preco_unitario,
+                            funcionario_id=user.id,
+                            motivo=f'Recebimento pedido {pedido.numero_pedido}'
+                        )
+                    except Exception as ex:
+                        from flask import current_app
+                        current_app.logger.warning(
+                            f"recalcular_preco_custo_ponderado ignorado para produto {produto.id}: {ex}"
+                        )
 
-                # Usar método centralizado para movimentar estoque (atualiza qtd e cria histórico)
+                # Movimentar estoque (atualiza produto.quantidade e cria MovimentacaoEstoque)
                 movimentacao = produto.movimentar_estoque(
                     quantidade=quantidade_recebida,
                     tipo='entrada',
                     motivo=f'Recebimento pedido {pedido.numero_pedido}. Lote: {numero_lote}',
                     usuario_id=user.id
                 )
-                
-                # Associar movimentação ao pedido de compra
                 movimentacao.pedido_compra_id = pedido.id
                 db.session.add(movimentacao)
             
@@ -330,17 +352,30 @@ def receber_pedido_compra():
         pedido.status = 'recebido'
         pedido.numero_nota_fiscal = data.get('numero_nota_fiscal', '')
         pedido.serie_nota_fiscal = data.get('serie_nota_fiscal', '')
-        
-        # Criar conta a pagar se solicitado
-        if data.get('gerar_boleto', False):
+
+        # Conta a pagar: usar a criada na emissão do pedido ou criar se recebimento pedir boleto
+        conta_existente = getattr(pedido, 'conta_pagar', None) or (
+            ContaPagar.query.filter_by(pedido_compra_id=pedido.id, estabelecimento_id=user.estabelecimento_id).first()
+        )
+        if conta_existente:
+            # Atualizar valor com o total realmente recebido (pode diferir do pedido)
+            conta_existente.valor_original = total_recebido
+            conta_existente.valor_atual = total_recebido
+            if data.get('numero_documento'):
+                conta_existente.numero_documento = data.get('numero_documento')
+        elif data.get('gerar_boleto', False):
             data_vencimento_str = data.get('data_vencimento')
             if not data_vencimento_str:
-                # Usar prazo do fornecedor
-                dias_prazo = int(pedido.condicao_pagamento.split()[0]) if pedido.condicao_pagamento else 30
+                dias_prazo = 30
+                if pedido.condicao_pagamento:
+                    try:
+                        dias_prazo = int(str(pedido.condicao_pagamento).split()[0])
+                    except (ValueError, IndexError):
+                        pass
                 data_vencimento = date.today() + timedelta(days=dias_prazo)
             else:
                 data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
-            
+
             conta_pagar = ContaPagar(
                 estabelecimento_id=user.estabelecimento_id,
                 fornecedor_id=pedido.fornecedor_id,
@@ -354,9 +389,8 @@ def receber_pedido_compra():
                 status='aberto',
                 observacoes=f'Referente ao pedido {pedido.numero_pedido}'
             )
-            
             db.session.add(conta_pagar)
-        
+
         db.session.commit()
         
         return jsonify({

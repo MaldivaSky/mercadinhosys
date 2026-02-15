@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 import DebugRoutes from './components/DebugRoutes';
@@ -8,14 +8,9 @@ import { ConfigProvider } from './contexts/ConfigContext';
 import { Toaster } from 'react-hot-toast';
 
 const App: React.FC = () => {
-  useEffect(() => {
-    console.log('App iniciando...');
-    console.log('Token no localStorage:', localStorage.getItem('access_token'));
-  }, []);
-
   return (
-    <ThemeProvider defaultMode="dark">
-      <ConfigProvider>
+    <ConfigProvider>
+      <ThemeProvider defaultMode="dark">
         <Router>
           <DebugRoutes />
           <AppRoutes />
@@ -44,8 +39,8 @@ const App: React.FC = () => {
           }}
         />
       </Router>
-      </ConfigProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </ConfigProvider>
   );
 };
 

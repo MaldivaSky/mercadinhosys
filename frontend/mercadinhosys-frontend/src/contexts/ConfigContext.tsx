@@ -40,18 +40,16 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
             // Cor mais clara (backgrounds) - 10% de opacidade
             root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
             
-            console.log('✅ Cor aplicada:', config.cor_principal);
         }
 
-        // Aplicar tema escuro
-        if (config.tema_escuro) {
+        // Aplicar tema escuro - única fonte de verdade para o tema
+        const isDark = Boolean(config.tema_escuro);
+        if (isDark) {
             document.documentElement.classList.add('dark');
             localStorage.setItem('theme', 'dark');
-            console.log('✅ Tema escuro ativado');
         } else {
             document.documentElement.classList.remove('dark');
             localStorage.setItem('theme', 'light');
-            console.log('✅ Tema claro ativado');
         }
     };
 
@@ -94,8 +92,16 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
             const response = await settingsService.getConfig();
             setConfig(response);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Erro ao carregar configurações:', error);
+            // ECONNREFUSED = backend não está rodando
+            const isNetworkError =
+                (error as { code?: string })?.code === 'ERR_NETWORK' ||
+                (error as { message?: string })?.message?.includes('ECONNREFUSED') ||
+                (error as { message?: string })?.message?.includes('Network Error');
+            if (isNetworkError) {
+                toast.error('Backend indisponível. Inicie o servidor Flask na porta 5000.');
+            }
             // Usar configurações padrão em caso de erro
             setConfig({
                 id: 0,
@@ -132,11 +138,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
             const response = await settingsService.updateConfig(newConfig);
             setConfig(response);
             toast.success('Configurações atualizadas com sucesso!');
-            
-            // Forçar aplicação do tema imediatamente
-            setTimeout(() => {
-                applyTheme();
-            }, 100);
+            // O useEffect [config] aplicará o tema automaticamente com os dados corretos
         } catch (error) {
             console.error('Erro ao atualizar configurações:', error);
             toast.error('Erro ao atualizar configurações');
@@ -153,7 +155,9 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     useEffect(() => {
-        applyTheme();
+        if (config) {
+            applyTheme();
+        }
     }, [config]);
 
     return (

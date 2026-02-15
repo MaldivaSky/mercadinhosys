@@ -23,9 +23,18 @@ from __future__ import annotations
 import os
 import sys
 import argparse
+
+# Carregar .env no início para NEON_DATABASE_URL estar disponível com --cloud
+try:
+    from dotenv import load_dotenv
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    load_dotenv(env_path)
+except Exception:
+    pass
 import random
 import json
 import hashlib
+import time as time_module
 from datetime import datetime, timedelta, date, time
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
@@ -102,43 +111,11 @@ def reset_database():
             db.drop_all()
             db.create_all()
         else:
-            # PostgreSQL - usar TRUNCATE CASCADE
-            print("  - [PostgreSQL] Limpando dados (TRUNCATE CASCADE)...")
-
-            # Ordem reversa para evitar violações de FK
-            tabelas = [
-                "movimentacoes_caixa",
-                "caixas",
-                "login_history",
-                "dashboard_metricas",
-                "relatorios_agendados",
-                "contas_receber",
-                "contas_pagar",
-                "pedido_compra_itens",
-                "pedidos_compra",
-                "movimentacoes_estoque",
-                "pagamentos",
-                "venda_itens",
-                "vendas",
-                "despesas",
-                "produtos",
-                "categorias_produto",
-                "fornecedores",
-                "clientes",
-                "funcionarios",
-                "configuracoes",
-                "estabelecimentos",
-            ]
-
-            for tabela in tabelas:
-                try:
-                    db.session.execute(
-                        text(f"TRUNCATE TABLE {tabela} RESTART IDENTITY CASCADE")
-                    )
-                except Exception as e:
-                    print(f"  ⚠️ Tabela {tabela} não existe ou erro: {e}")
-
-            # Garante estrutura atualizada
+            # PostgreSQL - recriar todas as tabelas (DROP + CREATE) para garantir
+            # schema igual ao models.py (ex.: coluna produtos.tipo). TRUNCATE não
+            # adiciona colunas faltantes; create_all() não altera tabelas existentes.
+            print("  - [PostgreSQL] Recriando tabelas (DROP ALL + CREATE ALL)...")
+            db.drop_all()
             db.create_all()
 
         db.session.commit()
@@ -965,6 +942,7 @@ def seed_vendas(
     produtos: List[Produto],
     dias_passados: int = 90,  # Reduzido de 180 para 90 dias
     vendas_por_dia: tuple = (2, 5),  # Reduzido de (3, 8) para (2, 5)
+    neon_safe: bool = False,  # True = batches menores + delay para Neon free tier
 ):
     """Cria vendas realistas com itens e pagamentos.
     
@@ -972,12 +950,16 @@ def seed_vendas(
     - Dias mais antigos têm MENOS vendas (multiplicador menor)
     - Dias mais recentes têm MAIS vendas (multiplicador maior)
     - Isso garante que a métrica de crescimento no dashboard seja realista (~15-25%)
+    
+    🔥 DEADLOCK: Ordena produtos por ID antes de atualizar (ordem consistente de locks).
+    🔥 NEON FREE TIER: neon_safe=True → BATCH_SIZE=10, delay 10s entre batches.
     """
     print("🧾 Criando vendas (com tendência de crescimento)...")
 
     vendas_criadas = 0
     hoje = date.today()
-    BATCH_SIZE = 20  # Commit a cada N vendas (evita timeout no Neon free tier)
+    BATCH_SIZE = 10 if neon_safe else 20  # Neon free tier: batches menores
+    DELAY_BETWEEN_BATCHES = 10.0 if neon_safe else 0.0  # 10s para Neon
 
     # Distribuição horária de vendas (8h às 21h - horário comercial estendido)
     horarios_pico = [
@@ -1034,7 +1016,6 @@ def seed_vendas(
                 random.choice([None] + clientes) if random.random() > 0.3 else None
             )
 
-            # Criar venda
             venda = Venda(
                 estabelecimento_id=estabelecimento_id,
                 cliente_id=cliente.id if cliente else None,
@@ -1055,25 +1036,23 @@ def seed_vendas(
                 ),
                 data_venda=data_hora_venda,
             )
-
             db.session.add(venda)
             db.session.flush()
 
-            # Criar itens da venda - 🔥 Mais itens em dias recentes (tendência de ticket médio crescente)
+            # Criar itens da venda - 🔥 Mais itens em dias recentes
             base_itens = random.randint(1, 8)
             num_itens = max(1, round(base_itens * multiplicador_tendencia))
             subtotal = Decimal("0.00")
 
-            # DISTRIBUIÇÃO DE PARETO: 80% das vendas vêm de 20% dos produtos
-            # Selecionar produtos com probabilidade ponderada (alguns produtos vendem muito mais)
-            if random.random() < 0.80:  # 80% das vendas
-                # Usar os 20% dos produtos mais populares
+            if random.random() < 0.80:
                 num_produtos_populares = max(1, len(produtos) // 5)
                 produtos_populares = produtos[:num_produtos_populares]
                 produtos_venda = random.choices(produtos_populares, k=min(num_itens, len(produtos_populares)))
-            else:  # 20% das vendas
-                # Usar produtos aleatórios (incluindo os menos populares)
+            else:
                 produtos_venda = random.sample(produtos, min(num_itens, len(produtos)))
+
+            # 🔥 ANTI-DEADLOCK: Ordenar por ID para ordem consistente de locks no PostgreSQL
+            produtos_venda = sorted(set(produtos_venda), key=lambda p: p.id)
 
             for produto in produtos_venda:
                 quantidade = random.randint(1, 3)
@@ -1174,9 +1153,12 @@ def seed_vendas(
 
             vendas_criadas += 1
 
-            # 🔥 Commit em lotes para evitar timeout de conexão (Neon free tier)
+            # 🔥 Commit em lotes para evitar timeout/deadlock (Neon free tier)
             if vendas_criadas % BATCH_SIZE == 0:
                 db.session.commit()
+                if DELAY_BETWEEN_BATCHES > 0:
+                    print(f"   ⏳ {vendas_criadas} vendas... aguardando {int(DELAY_BETWEEN_BATCHES)}s (Neon free tier)")
+                    time_module.sleep(DELAY_BETWEEN_BATCHES)
 
     # Commit final do que restou
     db.session.commit()
@@ -1190,9 +1172,10 @@ def seed_garantir_vendas_todos_produtos(
     funcionarios: List[Funcionario],
     clientes: List[Cliente],
     produtos: List[Produto],
+    neon_safe: bool = False,
 ):
     """Garante que TODOS os produtos tenham pelo menos uma venda registrada.
-    Mantém a distribuição de Pareto: produtos populares vendem muito, produtos menos populares vendem pouco."""
+    Mantém a distribuição de Pareto. neon_safe=True: batches menores + delay 10s para Neon."""
     print("🔄 Garantindo que todos os produtos tenham vendas com distribuição de Pareto...")
 
     produtos_sem_venda = [p for p in produtos if not p.ultima_venda or p.quantidade_vendida == 0]
@@ -1206,7 +1189,8 @@ def seed_garantir_vendas_todos_produtos(
     hoje = date.today()
     funcionario = random.choice([f for f in funcionarios if f.ativo])
     vendas_batch = 0
-    BATCH_SIZE = 20
+    BATCH_SIZE = 10 if neon_safe else 20
+    DELAY_BETWEEN_BATCHES = 10.0 if neon_safe else 0.0
 
     # Dividir produtos em grupos para distribuição de Pareto
     num_produtos_populares = max(1, len(produtos) // 5)  # 20% dos produtos
@@ -1317,6 +1301,9 @@ def seed_garantir_vendas_todos_produtos(
             vendas_batch += 1
             if vendas_batch % BATCH_SIZE == 0:
                 db.session.commit()
+                if DELAY_BETWEEN_BATCHES > 0:
+                    print(f"   ⏳ {vendas_batch} vendas (garantia)... aguardando {int(DELAY_BETWEEN_BATCHES)}s (Neon free tier)")
+                    time_module.sleep(DELAY_BETWEEN_BATCHES)
     
     db.session.commit()
     print(f"✅ {len(produtos_sem_venda)} produtos agora têm vendas registradas com distribuição de Pareto")
@@ -3391,12 +3378,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             seed_lotes_reabastecimento(fake, est.id, funcionarios, fornecedores, produtos)
 
             # 9. Criar vendas (DEPOIS - agora há estoque disponível)
+            is_neon = db.engine.name == "postgresql"
             seed_vendas(
-                fake, est.id, funcionarios, clientes, produtos, dias_passados=args.dias
+                fake, est.id, funcionarios, clientes, produtos, dias_passados=args.dias,
+                neon_safe=is_neon
             )
 
             # 9.5. Garantir que todos os produtos tenham vendas
-            seed_garantir_vendas_todos_produtos(fake, est.id, funcionarios, clientes, produtos)
+            seed_garantir_vendas_todos_produtos(
+                fake, est.id, funcionarios, clientes, produtos, neon_safe=is_neon
+            )
 
             # 9.6. Criar histórico de preços (alterações ao longo do tempo)
             seed_historico_precos(fake, est.id, produtos, funcionarios, dias_historico=args.dias)

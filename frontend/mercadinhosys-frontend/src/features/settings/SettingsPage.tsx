@@ -7,7 +7,7 @@ import {
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
 import { useConfig } from '../../contexts/ConfigContext';
-import { buscarCep, formatCep } from '../../utils/cepUtils';
+import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
 import { API_CONFIG } from '../../api/apiConfig';
 import { apiClient } from '../../api/apiClient';
 
@@ -73,28 +73,36 @@ const SwitchField = ({ label, checked, onChange, description }: SwitchFieldProps
     </div>
 );
 
+const defaultConfig: Configuracao = {
+    id: 0, estabelecimento_id: 0, cor_principal: '#2563eb', tema_escuro: false,
+    emitir_nfe: false, emitir_nfce: true, impressao_automatica: false, tipo_impressora: 'termica_80mm',
+    exibir_preco_tela: true, permitir_venda_sem_estoque: false, desconto_maximo_percentual: 10,
+    desconto_maximo_funcionario: 10, arredondamento_valores: true, formas_pagamento: [],
+    controlar_validade: true, alerta_estoque_minimo: true, dias_alerta_validade: 30, estoque_minimo_padrao: 10,
+    tempo_sessao_minutos: 30, tentativas_senha_bloqueio: 3, alertas_email: false, alertas_whatsapp: false
+};
+
+const defaultEstab: Estabelecimento = {
+    id: 0, nome_fantasia: '', razao_social: '', cnpj: '', telefone: '', email: '',
+    cep: '', logradouro: '', numero: '', bairro: '', cidade: '', estado: ''
+};
+
 const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState('geral');
-    const [loading, setLoading] = useState(true);
+    const [loadingEstab, setLoadingEstab] = useState(true);
     const [saving, setSaving] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [loadingGeolocation, setLoadingGeolocation] = useState(false);
-    const { config: globalConfig, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
+    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const { config: globalConfig, loading: configLoading, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
     
-    const [config, setConfig] = useState<Configuracao>({
-        id: 0, estabelecimento_id: 0, cor_principal: '#2563eb', tema_escuro: false,
-        emitir_nfe: false, emitir_nfce: true, impressao_automatica: false, tipo_impressora: 'termica_80mm',
-        exibir_preco_tela: true, permitir_venda_sem_estoque: false, desconto_maximo_percentual: 10,
-        desconto_maximo_funcionario: 10, arredondamento_valores: true, formas_pagamento: [],
-        controlar_validade: true, alerta_estoque_minimo: true, dias_alerta_validade: 30, estoque_minimo_padrao: 10,
-        tempo_sessao_minutos: 30, tentativas_senha_bloqueio: 3, alertas_email: false, alertas_whatsapp: false
-    });
+    const [config, setConfig] = useState<Configuracao>(defaultConfig);
+    const [estab, setEstab] = useState<Estabelecimento>(defaultEstab);
 
-    const [estab, setEstab] = useState<Estabelecimento>({
-        id: 0, nome_fantasia: '', razao_social: '', cnpj: '', telefone: '', email: '',
-        cep: '', logradouro: '', numero: '', bairro: '', cidade: '', estado: ''
-    });
+    useEffect(() => {
+        if (globalConfig) setConfig(globalConfig);
+    }, [globalConfig]);
 
     // Cores predefinidas
     const coresPredefinidas = [
@@ -105,41 +113,29 @@ const SettingsPage: React.FC = () => {
     ];
 
     useEffect(() => {
-        loadData();
+        const loadEstab = async () => {
+            try {
+                setLoadingEstab(true);
+                const data = await settingsService.getEstabelecimento();
+                setEstab(data);
+            } catch (error) {
+                console.error("Erro ao carregar estabelecimento:", error);
+                toast.error("Erro ao carregar dados do estabelecimento.");
+            } finally {
+                setLoadingEstab(false);
+            }
+        };
+        loadEstab();
     }, []);
-
-    useEffect(() => {
-        if (globalConfig) {
-            setConfig(globalConfig);
-        }
-    }, [globalConfig]);
-
-    const loadData = async () => {
-        try {
-            setLoading(true);
-            const [configData, estabData] = await Promise.all([
-                settingsService.getConfig(),
-                settingsService.getEstabelecimento()
-            ]);
-            setConfig(configData);
-            setEstab(estabData);
-        } catch (error) {
-            console.error("Erro ao carregar configurações:", error);
-            toast.error("Erro ao carregar configurações.");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleSave = async () => {
         try {
             setSaving(true);
-            await Promise.all([
+            const [, updatedEstab] = await Promise.all([
                 updateGlobalConfig(config),
                 settingsService.updateEstabelecimento(estab)
             ]);
-            await refreshConfig();
-            toast.success("Configurações salvas com sucesso!");
+            setEstab(updatedEstab);
         } catch (error) {
             console.error("Erro ao salvar:", error);
             toast.error("Erro ao salvar alterações.");
@@ -179,9 +175,8 @@ const SettingsPage: React.FC = () => {
                 toast.loading("Fazendo upload da logo...", { id: 'upload-logo' });
                 await settingsService.uploadLogo(file);
                 
-                // Atualizar dados
+                setLogoPreview(null);
                 await refreshConfig();
-                
                 toast.success("Logo atualizada com sucesso!", { id: 'upload-logo' });
             } catch (error) {
                 console.error("Erro ao fazer upload:", error);
@@ -245,20 +240,23 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleCepBlur = async () => {
-        if (!estab.cep) return;
+        const cepLimpo = estab.cep?.replace(/\D/g, '') ?? '';
+        if (cepLimpo.length !== 8) return;
         
         setLoadingCep(true);
-        const dados = await buscarCep(estab.cep);
-        setLoadingCep(false);
-        
-        if (dados) {
-            setEstab(prev => ({
-                ...prev,
-                logradouro: dados.logradouro,
-                bairro: dados.bairro,
-                cidade: dados.localidade,
-                estado: dados.uf
-            }));
+        try {
+            const dados = await buscarCep(estab.cep);
+            if (dados) {
+                setEstab(prev => ({
+                    ...prev,
+                    logradouro: dados.logradouro || prev.logradouro,
+                    bairro: dados.bairro || prev.bairro,
+                    cidade: dados.localidade || prev.cidade,
+                    estado: dados.uf || prev.estado
+                }));
+            }
+        } finally {
+            setLoadingCep(false);
         }
     };
 
@@ -271,8 +269,14 @@ const SettingsPage: React.FC = () => {
         { id: 'sistema', label: 'Sistema & Segurança', icon: Shield },
     ];
 
+    const loading = configLoading || loadingEstab;
     if (loading) {
-        return <div className="flex justify-center items-center h-screen text-gray-500">Carregando configurações...</div>;
+        return (
+            <div className="flex flex-col justify-center items-center h-screen gap-3 text-gray-500 dark:text-gray-400">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span>Carregando configurações...</span>
+            </div>
+        );
     }
 
     return (
@@ -328,14 +332,14 @@ const SettingsPage: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="col-span-2 flex items-center gap-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
                                     <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-300 dark:border-gray-600 relative group">
-                                        {config.logo_base64 || config.logo_url ? (
+                                        {logoPreview || config.logo_base64 || config.logo_url ? (
                                             <img 
                                                 src={
-                                                    config.logo_base64
-                                                        ? config.logo_base64
-                                                        : (config.logo_url?.startsWith('data:') === true
-                                                            ? (config.logo_url as string)
-                                                            : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}${config.logo_url || ''}`)
+                                                    logoPreview ||
+                                                    config.logo_base64 ||
+                                                    (config.logo_url?.startsWith('data:') === true
+                                                        ? (config.logo_url as string)
+                                                        : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}${config.logo_url || ''}`)
                                                 } 
                                                 alt="Logo" 
                                                 className="w-full h-full object-contain" 
@@ -410,31 +414,39 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'estabelecimento' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Dados da Empresa" icon={Building} />
-                            
+                            <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
+                                Preencha o CEP para buscar endereço automaticamente via ViaCEP.
+                            </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField label="Nome Fantasia" value={estab.nome_fantasia} onChange={(e) => setEstab({...estab, nome_fantasia: e.target.value})} />
-                                <InputField label="Razão Social" value={estab.razao_social} onChange={(e) => setEstab({...estab, razao_social: e.target.value})} />
-                                <InputField label="CNPJ" value={estab.cnpj} onChange={(e) => setEstab({...estab, cnpj: e.target.value})} />
-                                <InputField label="Inscrição Estadual" value={estab.inscricao_estadual || ''} onChange={(e) => setEstab({...estab, inscricao_estadual: e.target.value})} />
-                                <InputField label="Telefone" value={estab.telefone} onChange={(e) => setEstab({...estab, telefone: e.target.value})} />
-                                <InputField label="E-mail" value={estab.email} onChange={(e) => setEstab({...estab, email: e.target.value})} />
+                                <InputField label="Nome Fantasia" value={estab.nome_fantasia} onChange={(e) => setEstab({...estab, nome_fantasia: e.target.value})} placeholder="Ex: Mercado do João" />
+                                <InputField label="Razão Social" value={estab.razao_social} onChange={(e) => setEstab({...estab, razao_social: e.target.value})} placeholder="Ex: João Comércio Ltda" />
+                                <InputField label="CNPJ" value={estab.cnpj} onChange={(e) => setEstab({...estab, cnpj: formatCnpj(e.target.value)})} placeholder="00.000.000/0000-00" />
+                                <InputField label="Inscrição Estadual" value={estab.inscricao_estadual || ''} onChange={(e) => setEstab({...estab, inscricao_estadual: e.target.value})} placeholder="Opcional" />
+                                <InputField label="Telefone" value={estab.telefone} onChange={(e) => setEstab({...estab, telefone: formatPhone(e.target.value)})} placeholder="(00) 00000-0000" />
+                                <InputField label="E-mail" value={estab.email} onChange={(e) => setEstab({...estab, email: e.target.value})} type="email" placeholder="contato@empresa.com" />
                             </div>
 
-                            <SectionTitle title="Endereço" icon={Building} />
+                            <SectionTitle title="Endereço" icon={MapPin} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
-                                    <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e) => setEstab({...estab, cep: formatCep(e.target.value)})} />
-                                    {loadingCep && (
-                                        <p className="text-xs text-blue-500 mt-1">Buscando endereço...</p>
-                                    )}
+                                    <div className="relative">
+                                        <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e) => setEstab({...estab, cep: formatCep(e.target.value)})} />
+                                        {loadingCep && (
+                                            <div className="absolute right-3 top-9 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                                                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                                Buscando...
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="md:col-span-2">
-                                    <InputField label="Logradouro" value={estab.logradouro} onChange={(e) => setEstab({...estab, logradouro: e.target.value})} />
+                                    <InputField label="Logradouro" value={estab.logradouro} onChange={(e) => setEstab({...estab, logradouro: e.target.value})} placeholder="Rua, Avenida..." />
                                 </div>
-                                <InputField label="Número" value={estab.numero} onChange={(e) => setEstab({...estab, numero: e.target.value})} />
-                                <InputField label="Bairro" value={estab.bairro} onChange={(e) => setEstab({...estab, bairro: e.target.value})} />
-                                <InputField label="Cidade" value={estab.cidade} onChange={(e) => setEstab({...estab, cidade: e.target.value})} />
-                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({...estab, estado: e.target.value})} />
+                                <InputField label="Número" value={estab.numero} onChange={(e) => setEstab({...estab, numero: e.target.value})} placeholder="Nº" />
+                                <InputField label="Complemento" value={estab.complemento || ''} onChange={(e) => setEstab({...estab, complemento: e.target.value})} placeholder="Sala, Loja, etc." />
+                                <InputField label="Bairro" value={estab.bairro} onChange={(e) => setEstab({...estab, bairro: e.target.value})} placeholder="Preenchido pelo CEP" />
+                                <InputField label="Cidade" value={estab.cidade} onChange={(e) => setEstab({...estab, cidade: e.target.value})} placeholder="Preenchido pelo CEP" />
+                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({...estab, estado: e.target.value.toUpperCase().slice(0, 2)})} placeholder="UF" />
                             </div>
                         </div>
                     )}
