@@ -60,6 +60,64 @@ def ping():
     return jsonify({"status": "ok", "message": "Servidor ativo!"}), 200
 
 
+@auth_bp.route("/db-schema", methods=["GET"])
+def db_schema_check():
+    """
+    Diagnóstico do schema no banco (Postgres/Neon).
+    Verifica migrações aplicadas e colunas críticas para viabilizar deploy.
+    """
+    result = {
+        "database": "disconnected",
+        "migrations_revision": None,
+        "checks": {},
+        "schema_ok": False,
+        "message": "",
+    }
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        result["database"] = "connected"
+    except Exception as e:
+        result["message"] = str(e)
+        return jsonify(result), 503
+
+    try:
+        r = db.session.execute(db.text("SELECT version_num FROM alembic_version"))
+        row = r.fetchone()
+        result["migrations_revision"] = row[0] if row else None
+        result["checks"]["alembic_version"] = bool(row)
+    except Exception as e:
+        result["checks"]["alembic_version"] = False
+        result["message"] = f"alembic_version: {e}"
+
+    for table in ["estabelecimentos", "venda_itens", "produtos"]:
+        try:
+            db.session.execute(db.text(f"SELECT 1 FROM {table} LIMIT 1"))
+            result["checks"][f"table_{table}"] = True
+        except Exception:
+            result["checks"][f"table_{table}"] = False
+
+    try:
+        db.session.execute(db.text("SELECT margem_lucro_real FROM venda_itens LIMIT 1"))
+        result["checks"]["venda_itens.margem_lucro_real"] = True
+    except Exception:
+        result["checks"]["venda_itens.margem_lucro_real"] = False
+
+    try:
+        db.session.execute(db.text("SELECT 1 FROM historico_precos LIMIT 1"))
+        result["checks"]["table_historico_precos"] = True
+    except Exception:
+        result["checks"]["table_historico_precos"] = False
+
+    all_ok = all(result["checks"].get(k) for k in [
+        "alembic_version", "table_estabelecimentos", "table_venda_itens",
+        "table_produtos", "venda_itens.margem_lucro_real"
+    ])
+    result["schema_ok"] = all_ok
+    if not all_ok:
+        result["message"] = "Schema desatualizado. No servidor, rode: flask db upgrade"
+    return jsonify(result), 200 if result["database"] == "connected" else 503
+
+
 # ==================== ROTAS DE AUTENTICAÇÃO COM AUDITORIA ====================
 
 
