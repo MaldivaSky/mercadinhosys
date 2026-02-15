@@ -396,7 +396,7 @@ const DashboardPage: React.FC = () => {
         console.log(`🔍 Carregando dashboard com período de ${periodoDias} dias`);
       }
 
-      const response = await apiClient.get(url);
+      const response = await apiClient.get(url, { timeout: 60000 });
 
       console.log('🔍 Backend Response:', response.data);
       console.log('📊 Período retornado pelo backend:', response.data?.metadata?.period_days);
@@ -708,9 +708,18 @@ const DashboardPage: React.FC = () => {
       console.log('🔍 Correlações:', backendData?.correlations);
       console.log('🔍 Insights Científicos:', mappedData.data.insights_cientificos);
       setData(mappedData);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('❌ Dashboard Error:', err);
-      setError('Erro ao carregar dados científicos');
+      const e = err as { code?: string; message?: string };
+      const isNetworkError =
+        e?.code === 'ERR_NETWORK' ||
+        e?.message?.includes('ECONNREFUSED') ||
+        e?.message?.includes('Network Error');
+      setError(
+        isNetworkError
+          ? 'Backend indisponível. Inicie o servidor Flask na porta 5000.'
+          : 'Erro ao carregar dados científicos'
+      );
     } finally {
       setLoading(false);
     }
