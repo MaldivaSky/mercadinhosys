@@ -24,7 +24,7 @@ import os
 import sys
 import argparse
 
-# Carregar .env no início para NEON_DATABASE_URL estar disponível com --cloud
+# Carregar .env no início para AIVEN_DATABASE_URL/DATABASE_URL estar disponível com --cloud
 try:
     from dotenv import load_dotenv
     env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -1159,6 +1159,23 @@ def seed_vendas(
                 if DELAY_BETWEEN_BATCHES > 0:
                     print(f"   ⏳ {vendas_criadas} vendas... aguardando {int(DELAY_BETWEEN_BATCHES)}s (Neon free tier)")
                     time_module.sleep(DELAY_BETWEEN_BATCHES)
+                    # Keepalive + retry: após sleep o Neon pode ter suspendido. Forçar conexão viva antes do próximo batch.
+                    for t in range(5):
+                        try:
+                            db.session.execute(text("SELECT 1"))
+                            db.session.commit()
+                            break
+                        except Exception:
+                            db.session.rollback()
+                            try:
+                                db.engine.dispose()
+                            except Exception:
+                                pass
+                            if t == 4:
+                                raise
+                            wait = 20 * (t + 1)
+                            print(f"   ⚠️ Reconectando... (tentativa {t+1}/5, aguardando {wait}s)")
+                            time_module.sleep(wait)
 
     # Commit final do que restou
     db.session.commit()
@@ -1304,7 +1321,23 @@ def seed_garantir_vendas_todos_produtos(
                 if DELAY_BETWEEN_BATCHES > 0:
                     print(f"   ⏳ {vendas_batch} vendas (garantia)... aguardando {int(DELAY_BETWEEN_BATCHES)}s (Neon free tier)")
                     time_module.sleep(DELAY_BETWEEN_BATCHES)
-    
+                    for t in range(5):
+                        try:
+                            db.session.execute(text("SELECT 1"))
+                            db.session.commit()
+                            break
+                        except Exception:
+                            db.session.rollback()
+                            try:
+                                db.engine.dispose()
+                            except Exception:
+                                pass
+                            if t == 4:
+                                raise
+                            wait = 20 * (t + 1)
+                            print(f"   ⚠️ Reconectando... (tentativa {t+1}/5, aguardando {wait}s)")
+                            time_module.sleep(wait)
+
     db.session.commit()
     print(f"✅ {len(produtos_sem_venda)} produtos agora têm vendas registradas com distribuição de Pareto")
 
@@ -3276,40 +3309,78 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.local:
         # Remover variáveis de ambiente que apontam para bancos externos
-        for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+        for key in ["AIVEN_DATABASE_URL", "NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
             if key in os.environ:
                 del os.environ[key]
         print("🏠 Modo LOCAL: Populando APENAS SQLite")
-    
+
     elif args.cloud:
-        # Garantir que a variável NEON está definida
-        neon_url = os.environ.get("NEON_DATABASE_URL")
-        if not neon_url:
+        # Buscar URL do banco cloud (Aiven, Neon ou genérico)
+        cloud_url = (
+            os.environ.get("AIVEN_DATABASE_URL")
+            or os.environ.get("NEON_DATABASE_URL")
+            or os.environ.get("DATABASE_URL")
+        )
+        if not cloud_url:
             # Tentar ler do .env
             env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
             if os.path.exists(env_path):
                 with open(env_path, "r") as f:
                     for line in f:
                         line = line.strip()
-                        if line.startswith("NEON_DATABASE_URL="):
-                            neon_url = line.split("=", 1)[1].strip().strip('"').strip("'")
-                            os.environ["NEON_DATABASE_URL"] = neon_url
+                        for prefix in ["AIVEN_DATABASE_URL=", "NEON_DATABASE_URL=", "DATABASE_URL="]:
+                            if line.startswith(prefix):
+                                cloud_url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                                break
+                        if cloud_url:
                             break
-        
-        if not neon_url:
-            print("❌ NEON_DATABASE_URL não definida! Configure no .env ou variável de ambiente.")
-            print("   Exemplo: NEON_DATABASE_URL=postgresql://user:pass@host/db?sslmode=require")
+
+        if not cloud_url:
+            print("❌ URL do banco cloud não definida!")
+            print("   Configure no .env: AIVEN_DATABASE_URL=postgres://user:pass@host:port/db?sslmode=require")
             return 1
-        
-        print(f"☁️ Modo CLOUD: Populando Neon/Postgres")
-        # Exibir host sem expor credenciais
-        if "@" in neon_url:
-            host_part = neon_url.split("@")[1].split("/")[0]
+
+        # Normalizar protocolo
+        if cloud_url.startswith("postgres://"):
+            cloud_url = cloud_url.replace("postgres://", "postgresql://", 1)
+
+        # Injetar como DATABASE_URL para que create_app() use o banco cloud
+        os.environ["DATABASE_URL"] = cloud_url
+
+        print(f"☁️ Modo CLOUD: Populando PostgreSQL")
+        if "@" in cloud_url:
+            host_part = cloud_url.split("@")[1].split("/")[0]
             print(f"   Host: {host_part}")
 
     app = create_app(os.getenv("FLASK_ENV", "default"))
 
     with app.app_context():
+        # Pré-teste de conectividade (evita falhar no meio do seed)
+        if args.cloud or args.both:
+            try:
+                db.session.execute(text("SELECT 1"))
+                db.session.commit()
+                print("✅ Conexão com banco cloud verificada")
+            except Exception as conn_err:
+                err_str = str(conn_err).lower()
+                if "translate host" in err_str or "name or service not known" in err_str or "could not connect" in err_str or "connection refused" in err_str:
+                    host = "?"
+                    try:
+                        url = os.environ.get("AIVEN_DATABASE_URL") or os.environ.get("NEON_DATABASE_URL") or os.environ.get("DATABASE_URL") or ""
+                        if "@" in url:
+                            host = url.split("@")[1].split("/")[0]
+                    except Exception:
+                        pass
+                    print(f"\n❌ ERRO: Não foi possível conectar ao banco PostgreSQL.")
+                    print(f"   Host usado: {host}")
+                    print("\n   Verifique:")
+                    print("   1. AIVEN_DATABASE_URL no .env com a URL correta do seu provedor (Aiven, Neon, etc).")
+                    print("   2. O serviço PostgreSQL está ativo no painel do provedor.")
+                    print("   3. Sua internet/DNS está funcionando.")
+                    print("\n   Dica: Copie a connection string do Render e cole no .env como AIVEN_DATABASE_URL")
+                    return 1
+                raise
+
         print("=" * 60)
         print("INICIANDO SEED DE DADOS COMPLETO")
         print("=" * 60)
@@ -3668,9 +3739,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         except Exception as e:
             print(f"\n❌ ERRO CRÍTICO NO SEED: {e}")
             import traceback
-
             traceback.print_exc()
             db.session.rollback()
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+            err_str = str(e).lower()
+            if "translate host" in err_str or "name or service not known" in err_str:
+                print("\n💡 Dica: Esse erro geralmente indica host/URL errado ou serviço PostgreSQL inativo.")
+                print("   Use no .env a MESMA connection string do Render (AIVEN_DATABASE_URL ou DATABASE_URL).")
             return 1
 
 

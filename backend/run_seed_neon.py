@@ -3,13 +3,19 @@
 import os
 import sys
 import subprocess
+from dotenv import load_dotenv
 
-# Configurar NEON_DATABASE_URL
-neon_url = "postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require"
-os.environ['NEON_DATABASE_URL'] = neon_url
+load_dotenv()
+# Usar variável de ambiente — NUNCA coloque a URL com senha no código
+neon_url = os.environ.get("AIVEN_DATABASE_URL") or os.environ.get("NEON_DATABASE_URL") or os.environ.get("DATABASE_URL")
+if not neon_url or not neon_url.startswith(("postgresql", "postgres")):
+    print("❌ Configure AIVEN_DATABASE_URL ou DATABASE_URL no .env")
+    sys.exit(1)
+if neon_url.startswith("postgres://"):
+    neon_url = neon_url.replace("postgres://", "postgresql://", 1)
 
 print("Iniciando seed do Neon...")
-print(f"Neon: {neon_url[:50]}...")
+print(f"Neon: ...@{neon_url.split('@')[-1].split('/')[0] if '@' in neon_url else '***'}")
 
 # Executar seed com input 's'
 process = subprocess.Popen(

@@ -1,6 +1,14 @@
+import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-neon_url = "postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
+load_dotenv()
+neon_url = os.environ.get("AIVEN_DATABASE_URL") or os.environ.get("NEON_DATABASE_URL") or os.environ.get("DATABASE_URL")
+if not neon_url:
+    print("❌ Configure AIVEN_DATABASE_URL ou DATABASE_URL no .env")
+    exit(1)
+if neon_url.startswith("postgres://"):
+    neon_url = neon_url.replace("postgres://", "postgresql://", 1)
 
 try:
     engine = create_engine(neon_url)

@@ -71,8 +71,9 @@ from app.models import Funcionario
 from werkzeug.security import generate_password_hash
 import os
 
-# Configurar para usar Neon
-os.environ['DATABASE_URL'] = 'postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require'
+# Configurar para usar Neon (use a URL do seu .env, nunca commite a senha)
+# Antes: from dotenv import load_dotenv; load_dotenv()
+os.environ['DATABASE_URL'] = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL')
 
 app = create_app('production')
 
@@ -107,12 +108,14 @@ Execute este script para ver quais usuários existem:
 cd backend
 python
 
-# Cole este código:
+# Cole este código (com .env carregado ou export DATABASE_URL antes):
+from dotenv import load_dotenv
+load_dotenv()
 from app import create_app, db
 from app.models import Funcionario
 import os
 
-os.environ['DATABASE_URL'] = 'postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require'
+os.environ['DATABASE_URL'] = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL')
 
 app = create_app('production')
 

@@ -9,9 +9,9 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
-target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL')
+target_url = os.environ.get('AIVEN_DATABASE_URL') or os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL')
 if not target_url:
-    print("[ERRO] NEON_DATABASE_URL nao configurado")
+    print("[ERRO] AIVEN_DATABASE_URL nao configurado")
     exit(1)
 
 if target_url.startswith("postgres://"):

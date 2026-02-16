@@ -170,6 +170,7 @@ def sync_health():
     try:
         db_url = (
             current_app.config.get("SQLALCHEMY_DATABASE_URI")
+            or os.environ.get("AIVEN_DATABASE_URL")
             or os.environ.get("NEON_DATABASE_URL")
             or os.environ.get("DATABASE_URL")
             or ""
@@ -233,7 +234,7 @@ def db_info():
                 file_path = os.path.abspath(os.path.join(os.getcwd(), rel))
                 file_exists = os.path.exists(file_path)
         db_source = None
-        for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+        for key in ["AIVEN_DATABASE_URL", "NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
             if os.environ.get(key):
                 db_source = key
                 break

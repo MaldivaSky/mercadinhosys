@@ -8,8 +8,7 @@ db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
 
 # ==================== DATABASE CONFIGURATION ====================
 _database_url = (
-    os.environ.get("NEON_DATABASE_URL")
-    or os.environ.get("DATABASE_URL_TARGET")
+    os.environ.get("DATABASE_URL_TARGET")
     or os.environ.get("DB_PRIMARY")
     or os.environ.get("DATABASE_URL")
     or os.environ.get("POSTGRES_URL")
@@ -53,12 +52,11 @@ class Config:
     USING_POSTGRES = _using_postgres
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # Neon (pooler) não suporta statement_timeout em connect_args; usar apenas parâmetros compatíveis
     SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,   # Verifica conexão antes de usar
-        "pool_recycle": 120,     # Recicla conexões a cada 2 minutos (Neon fecha idle rápido)
-        "pool_size": 5,          # Pool menor para free tier
-        "max_overflow": 10,      # Até 10 conexões extras
+        "pool_pre_ping": True,
+        "pool_recycle": 120,
+        "pool_size": 5,
+        "max_overflow": 10,
         "connect_args": {
             "keepalives": 1,
             "keepalives_idle": 30,
