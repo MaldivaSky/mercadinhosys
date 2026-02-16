@@ -605,17 +605,37 @@ def finalizar_venda():
                 
                 db.session.add(venda_item)
                 
-                # Atualizar estoque
+                # Atualizar estoque com consumo FIFO de lotes
                 estoque_anterior = int(produto.quantidade) if produto.quantidade else 0
-                produto.quantidade = estoque_anterior - quantidade
+
+                lotes_consumidos = []
+                lotes_disponiveis = produto.get_lotes_disponiveis() if hasattr(produto, 'get_lotes_disponiveis') else []
+
+                if lotes_disponiveis:
+                    try:
+                        lotes_consumidos = produto.consumir_estoque_fifo(quantidade)
+                    except Exception as fifo_err:
+                        current_app.logger.warning(
+                            f"FIFO falhou para produto {produto.id}: {fifo_err}. "
+                            f"Decrementando estoque geral."
+                        )
+                        produto.quantidade = estoque_anterior - quantidade
+                else:
+                    produto.quantidade = estoque_anterior - quantidade
+
                 produto.updated_at = datetime.now()
-                
+
                 # ATUALIZAR CAMPOS DE VENDAS PARA ANÁLISE ABC
                 produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
                 produto.total_vendido = (produto.total_vendido or 0) + total_item
                 produto.ultima_venda = datetime.now()
-                
+
                 # Registrar movimentação
+                lotes_info = ", ".join(
+                    f"Lote {lc['lote'].numero_lote}({lc['quantidade_consumida']}un)"
+                    for lc in lotes_consumidos
+                ) if lotes_consumidos else "sem lote"
+
                 movimentacao = MovimentacaoEstoque(
                     estabelecimento_id=funcionario.estabelecimento_id,
                     produto_id=produto.id,
@@ -626,9 +646,9 @@ def finalizar_venda():
                     venda_id=nova_venda.id,
                     funcionario_id=funcionario.id,
                     motivo="Venda",
-                    observacoes=f"Venda {codigo_venda}"
+                    observacoes=f"Venda {codigo_venda} | {lotes_info}"
                 )
-                
+
                 db.session.add(movimentacao)
                 
                 itens_processados.append({

@@ -687,10 +687,22 @@ def boletos_a_vencer():
         
         for boleto in boletos:
             dias_vencimento = (boleto.data_vencimento - date.today()).days
-            
+
+            # Determinar origem: mercadoria (pedido de compra) ou despesa fixa
+            tem_pedido = boleto.pedido_compra_id is not None and boleto.pedido_compra is not None
+            if tem_pedido:
+                origem = "mercadoria"
+                descricao = f"Pedido {boleto.pedido_compra.numero_pedido}"
+            else:
+                origem = "despesa"
+                descricao = boleto.observacoes or boleto.tipo_documento or "Despesa"
+
             boleto_info = {
                 'id': boleto.id,
                 'numero_documento': boleto.numero_documento,
+                'tipo_documento': boleto.tipo_documento,
+                'origem': origem,
+                'descricao': descricao,
                 'fornecedor_nome': boleto.fornecedor.nome_fantasia if boleto.fornecedor else 'N/A',
                 'fornecedor_id': boleto.fornecedor_id,
                 'valor_original': float(boleto.valor_original),
@@ -704,10 +716,10 @@ def boletos_a_vencer():
                     'vence_em_breve' if dias_vencimento <= 7 else
                     'normal'
                 ),
-                'pedido_numero': boleto.pedido_compra.numero_pedido if boleto.pedido_compra else None,
-                'pedido_id': boleto.pedido_compra.id if boleto.pedido_compra else None,
-                'data_pedido': boleto.pedido_compra.data_pedido.isoformat() if boleto.pedido_compra and boleto.pedido_compra.data_pedido else None,
-                'itens': [item.to_dict() for item in boleto.pedido_compra.itens] if boleto.pedido_compra else [],
+                'pedido_numero': boleto.pedido_compra.numero_pedido if tem_pedido else None,
+                'pedido_id': boleto.pedido_compra.id if tem_pedido else None,
+                'data_pedido': boleto.pedido_compra.data_pedido.isoformat() if tem_pedido and boleto.pedido_compra.data_pedido else None,
+                'itens': [item.to_dict() for item in boleto.pedido_compra.itens] if tem_pedido else [],
                 'observacoes': boleto.observacoes
             }
             

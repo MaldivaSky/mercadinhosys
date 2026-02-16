@@ -277,11 +277,25 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                       </div>
                     </div>
 
-                    {boleto.pedido_numero && (
-                      <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        Pedido: {boleto.pedido_numero}
-                      </div>
-                    )}
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        boleto.origem === 'mercadoria'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                          : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+                      }`}>
+                        {boleto.origem === 'mercadoria' ? 'Mercadoria' : 'Despesa'}
+                      </span>
+                      {boleto.pedido_numero && (
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          Pedido: {boleto.pedido_numero}
+                        </span>
+                      )}
+                      {boleto.origem === 'despesa' && boleto.descricao && (
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          {boleto.descricao}
+                        </span>
+                      )}
+                    </div>
 
                     {boleto.dias_vencimento < 0 && (
                       <div className="mt-2 text-sm text-red-600 dark:text-red-400 font-medium">
@@ -395,15 +409,24 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                 </div>
               </div>
 
-              {/* Informações do Pedido */}
-              {selectedBoleto.pedido_numero && (
-                <div className="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">
-                    Informações do Pedido
-                  </h4>
+              {/* Tipo / Origem */}
+              <div className={`p-4 rounded-lg ${
+                selectedBoleto.origem === 'mercadoria'
+                  ? 'bg-blue-50 dark:bg-blue-900'
+                  : 'bg-purple-50 dark:bg-purple-900'
+              }`}>
+                <h4 className={`font-semibold mb-3 ${
+                  selectedBoleto.origem === 'mercadoria'
+                    ? 'text-blue-900 dark:text-blue-100'
+                    : 'text-purple-900 dark:text-purple-100'
+                }`}>
+                  {selectedBoleto.origem === 'mercadoria' ? 'Pedido de Compra (Mercadoria)' : 'Despesa Fixa / Operacional'}
+                </h4>
+
+                {selectedBoleto.origem === 'mercadoria' && selectedBoleto.pedido_numero ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-blue-700 dark:text-blue-300">Número:</span>
+                      <span className="text-blue-700 dark:text-blue-300">Número do Pedido:</span>
                       <div className="font-medium text-blue-900 dark:text-blue-100">
                         {selectedBoleto.pedido_numero}
                       </div>
@@ -417,8 +440,15 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                       </div>
                     )}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="text-sm">
+                    <span className="text-purple-700 dark:text-purple-300">Descrição:</span>
+                    <div className="font-medium text-purple-900 dark:text-purple-100">
+                      {selectedBoleto.descricao || selectedBoleto.observacoes || 'Despesa recorrente'}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Informações de Vencimento */}
               <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
