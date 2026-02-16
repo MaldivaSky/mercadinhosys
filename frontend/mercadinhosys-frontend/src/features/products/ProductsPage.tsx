@@ -113,6 +113,8 @@ const ProductsPage: React.FC = () => {
       if (response.success && response.estatisticas) {
         setStats({
           ...response.estatisticas,
+          margem_alta: response.estatisticas.margem_alta ?? 0,
+          margem_baixa: response.estatisticas.margem_baixa ?? 0,
           validade: response.estatisticas.validade || { vencidos: 0, vence_15: 0, vence_30: 0, vence_90: 0 }
         });
       }
