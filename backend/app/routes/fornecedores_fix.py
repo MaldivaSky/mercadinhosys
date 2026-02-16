@@ -1,7 +1,8 @@
 """ROTA DE FORNECEDORES - VERSÃO QUE FUNCIONA"""
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt
-from app.models import db, Fornecedor, Produto
+from app.models import db, Fornecedor, Produto, PedidoCompra, ContaPagar
+from datetime import datetime, date
 
 fornecedores_fix_bp = Blueprint("fornecedores_fix", __name__)
 
@@ -256,4 +257,149 @@ def deletar(id):
 
     except Exception as e:
         db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@fornecedores_fix_bp.route("/relatorio/analitico", methods=["GET", "OPTIONS"])
+def relatorio_analitico_fornecedores():
+    """Gera relatório analítico detalhado dos fornecedores"""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+
+    from flask_jwt_extended import verify_jwt_in_request
+    verify_jwt_in_request()
+
+    try:
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id", 1)
+
+        data_inicio = request.args.get("data_inicio", None)
+        data_fim = request.args.get("data_fim", None)
+        classificacao = request.args.get("classificacao", None, type=str)
+
+        query = Fornecedor.query.filter_by(
+            estabelecimento_id=estabelecimento_id, ativo=True
+        )
+
+        if classificacao:
+            query = query.filter_by(classificacao=classificacao.upper())
+
+        fornecedores = query.all()
+
+        relatorio = []
+        for fornecedor in fornecedores:
+            pedidos_query = PedidoCompra.query.filter_by(
+                fornecedor_id=fornecedor.id,
+                estabelecimento_id=estabelecimento_id,
+            )
+
+            if data_inicio:
+                pedidos_query = pedidos_query.filter(
+                    PedidoCompra.data_pedido >= datetime.fromisoformat(data_inicio)
+                )
+
+            if data_fim:
+                pedidos_query = pedidos_query.filter(
+                    PedidoCompra.data_pedido <= datetime.fromisoformat(data_fim)
+                )
+
+            pedidos = pedidos_query.all()
+
+            total_pedidos = len(pedidos)
+            valor_total = sum(float(p.total) for p in pedidos if p.total)
+            pedidos_pendentes = len([p for p in pedidos if p.status == "pendente"])
+            pedidos_concluidos = len([p for p in pedidos if p.status == "concluido"])
+
+            tempos_entrega = []
+            for p in pedidos:
+                if p.status == "concluido" and p.data_pedido and p.data_recebimento:
+                    try:
+                        d_pedido = p.data_pedido.date() if hasattr(p.data_pedido, 'date') else p.data_pedido
+                        d_receb = p.data_recebimento if not hasattr(p.data_recebimento, 'date') else p.data_recebimento.date() if hasattr(p.data_recebimento, 'date') else p.data_recebimento
+                        dias = (d_receb - d_pedido).days
+                        if dias > 0:
+                            tempos_entrega.append(dias)
+                    except Exception:
+                        pass
+
+            media_entrega = (
+                sum(tempos_entrega) / len(tempos_entrega) if tempos_entrega else 0
+            )
+
+            produtos = Produto.query.filter_by(
+                fornecedor_id=fornecedor.id,
+                estabelecimento_id=estabelecimento_id,
+                ativo=True,
+            ).all()
+
+            total_produtos = len(produtos)
+
+            # Boletos / Contas a Pagar do fornecedor
+            boletos_query = ContaPagar.query.filter_by(
+                fornecedor_id=fornecedor.id,
+                estabelecimento_id=estabelecimento_id,
+            )
+            boletos_all = boletos_query.all()
+            hoje = date.today()
+
+            boletos_abertos = [b for b in boletos_all if b.status == "aberto"]
+            boletos_vencidos = [b for b in boletos_abertos if b.data_vencimento and b.data_vencimento < hoje]
+            boletos_pagos = [b for b in boletos_all if b.status == "pago"]
+
+            valor_boletos_aberto = sum(float(b.valor_atual or b.valor_original or 0) for b in boletos_abertos)
+            valor_boletos_vencido = sum(float(b.valor_atual or b.valor_original or 0) for b in boletos_vencidos)
+            valor_boletos_pago = sum(float(b.valor_pago or 0) for b in boletos_pagos)
+
+            relatorio.append({
+                "fornecedor": {
+                    "id": fornecedor.id,
+                    "nome": fornecedor.nome_fantasia or fornecedor.razao_social,
+                    "cnpj": fornecedor.cnpj,
+                    "classificacao": fornecedor.classificacao,
+                    "prazo_entrega_padrao": getattr(fornecedor, 'prazo_entrega', None),
+                },
+                "metricas": {
+                    "total_pedidos": total_pedidos,
+                    "valor_total": valor_total,
+                    "pedidos_pendentes": pedidos_pendentes,
+                    "pedidos_concluidos": pedidos_concluidos,
+                    "taxa_conclusao": round(
+                        (pedidos_concluidos / total_pedidos * 100)
+                        if total_pedidos > 0
+                        else 0, 1
+                    ),
+                    "media_entrega_dias": round(media_entrega, 1),
+                    "total_produtos": total_produtos,
+                },
+                "boletos": {
+                    "total_abertos": len(boletos_abertos),
+                    "valor_aberto": round(valor_boletos_aberto, 2),
+                    "total_vencidos": len(boletos_vencidos),
+                    "valor_vencido": round(valor_boletos_vencido, 2),
+                    "total_pagos": len(boletos_pagos),
+                    "valor_pago": round(valor_boletos_pago, 2),
+                },
+                "produtos": [
+                    {
+                        "id": p.id,
+                        "nome": p.nome,
+                        "preco_custo": float(p.preco_custo) if p.preco_custo else 0,
+                        "quantidade_estoque": p.quantidade,
+                    }
+                    for p in produtos[:10]
+                ],
+            })
+
+        return jsonify({
+            "success": True,
+            "relatorio": relatorio,
+            "total_fornecedores": len(relatorio),
+            "filtros": {
+                "data_inicio": data_inicio,
+                "data_fim": data_fim,
+                "classificacao": classificacao,
+            },
+        })
+
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

@@ -105,17 +105,19 @@ def reset_database():
         engine_name = db.engine.name
         print(f"  - Banco detectado: {engine_name}")
 
-        # Estratégia híbrida para SQLite e PostgreSQL
         if engine_name == "sqlite":
             print("  - [SQLite] Recriando tabelas (DROP/CREATE)...")
             db.drop_all()
             db.create_all()
         else:
-            # PostgreSQL - recriar todas as tabelas (DROP + CREATE) para garantir
-            # schema igual ao models.py (ex.: coluna produtos.tipo). TRUNCATE não
-            # adiciona colunas faltantes; create_all() não altera tabelas existentes.
-            print("  - [PostgreSQL] Recriando tabelas (DROP ALL + CREATE ALL)...")
-            db.drop_all()
+            print("  - [PostgreSQL] Limpando schema público com CASCADE...")
+            db.session.rollback()
+            with db.engine.connect() as conn:
+                conn.execute(text("DROP SCHEMA public CASCADE"))
+                conn.execute(text("CREATE SCHEMA public"))
+                conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+                conn.commit()
+            print("  - [PostgreSQL] Recriando tabelas...")
             db.create_all()
 
         db.session.commit()
@@ -2019,15 +2021,43 @@ def seed_despesas(fake: Faker, estabelecimento_id: int, fornecedores: List[Forne
         {"descricao": "Software ERP (licença)", "categoria": "TI",            "valor": 99.90,   "dia_vencimento": 5,  "fornecedor_nome": "TI"},
     ]
     
-    # Mapa de fornecedores por nome aproximado
-    fornecedor_map = {}
-    for f in fornecedores:
-        fornecedor_map[f.id] = f
-    fornecedor_fallback = fornecedores[0] if fornecedores else None
-    
+    # Criar fornecedores PRESTADORES DE SERVIÇO para despesas fixas
+    # (não faz sentido "Aluguel" estar vinculado a Ambev/Colgate)
+    prestadores_servico = {}
     for desp_data in despesas_fixas:
-        # Selecionar fornecedor aleatório para esta despesa fixa
-        forn = random.choice(fornecedores) if fornecedores else None
+        nome_prestador = desp_data["fornecedor_nome"]
+        if nome_prestador not in prestadores_servico:
+            existente = Fornecedor.query.filter_by(
+                estabelecimento_id=estabelecimento_id,
+                nome_fantasia=nome_prestador,
+            ).first()
+            if not existente:
+                existente = Fornecedor(
+                    estabelecimento_id=estabelecimento_id,
+                    nome_fantasia=nome_prestador,
+                    razao_social=f"{nome_prestador} Serviços LTDA",
+                    cnpj=fake.cnpj(),
+                    telefone=fake.phone_number(),
+                    email=fake.email(),
+                    contato_nome=fake.name(),
+                    forma_pagamento="30 DIAS",
+                    classificacao="REGULAR",
+                    ativo=True,
+                    cep=fake.postcode(),
+                    logradouro=fake.street_name(),
+                    numero=str(random.randint(1, 9999)),
+                    bairro=fake.bairro(),
+                    cidade=fake.city(),
+                    estado=fake.estado_sigla(),
+                )
+                db.session.add(existente)
+                db.session.flush()
+            prestadores_servico[nome_prestador] = existente
+
+    fornecedor_fallback = fornecedores[0] if fornecedores else None
+
+    for desp_data in despesas_fixas:
+        forn = prestadores_servico.get(desp_data["fornecedor_nome"], fornecedor_fallback)
         
         # Criar despesa + boleto para cada mês (últimos 6 meses + mês atual)
         for mes_offset in range(6, -1, -1):

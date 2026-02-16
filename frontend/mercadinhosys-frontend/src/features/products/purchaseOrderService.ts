@@ -47,6 +47,9 @@ export interface PedidoCompraItem {
 export interface BoletoFornecedor {
   id: number;
   numero_documento: string;
+  tipo_documento?: string;
+  origem: 'mercadoria' | 'despesa';
+  descricao?: string;
   fornecedor_nome: string;
   fornecedor_id: number;
   valor_original: number;
