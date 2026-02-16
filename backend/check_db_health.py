@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_db_url():
-    for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+    for key in ["AIVEN_DATABASE_URL", "NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
         url = os.environ.get(key)
         if url:
             if url.startswith("postgres://"):
@@ -25,7 +25,7 @@ def get_db_url():
 def main():
     db_url = get_db_url()
     if not db_url:
-        print("❌ Nenhuma URL de banco configurada (NEON_DATABASE_URL, DATABASE_URL, etc.)")
+        print("❌ Nenhuma URL de banco configurada (AIVEN_DATABASE_URL, DATABASE_URL, etc.)")
         sys.exit(1)
 
     # Evitar imprimir senha
@@ -34,7 +34,6 @@ def main():
     print()
 
     try:
-        from sqlalchemy import create_engine, text
         engine = create_engine(db_url)
     except Exception as e:
         print(f"❌ Erro ao criar engine: {e}")
@@ -42,6 +41,7 @@ def main():
 
     errors = []
     warnings = []
+    from sqlalchemy import create_engine, text
 
     with engine.connect() as conn:
         # 1) Conexão

@@ -6,13 +6,16 @@ Uso: python verificar_neon.py
 
 import os
 import sys
+from dotenv import load_dotenv
 from app import create_app, db
 from app.models import Funcionario, Estabelecimento
 from werkzeug.security import generate_password_hash
 
-# Configurar DATABASE_URL para Neon
-NEON_URL = "postgresql://neondb_owner:npg_jl8aMb4KGZBR@ep-quiet-smoke-a8z521gd-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
-os.environ['DATABASE_URL'] = NEON_URL
+load_dotenv()
+# Usar .env: AIVEN_DATABASE_URL, NEON_DATABASE_URL ou DATABASE_URL
+if not os.environ.get("AIVEN_DATABASE_URL") and not os.environ.get("NEON_DATABASE_URL") and not os.environ.get("DATABASE_URL"):
+    print("❌ Configure AIVEN_DATABASE_URL ou DATABASE_URL no .env")
+    sys.exit(1)
 os.environ['FLASK_ENV'] = 'production'
 
 def verificar_conexao():

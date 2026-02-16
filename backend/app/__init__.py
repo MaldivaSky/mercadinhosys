@@ -57,8 +57,7 @@ def create_app(config_name=None):
 
     db_source = None
     runtime_db_url = (
-        os.environ.get("NEON_DATABASE_URL")
-        or os.environ.get("DATABASE_URL_TARGET")
+        os.environ.get("DATABASE_URL_TARGET")
         or os.environ.get("DB_PRIMARY")
         or os.environ.get("DATABASE_URL")
         or os.environ.get("POSTGRES_URL")
@@ -67,7 +66,7 @@ def create_app(config_name=None):
         if runtime_db_url.startswith("postgres://"):
             runtime_db_url = runtime_db_url.replace("postgres://", "postgresql://", 1)
         app.config["SQLALCHEMY_DATABASE_URI"] = runtime_db_url
-        for key in ["NEON_DATABASE_URL", "DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
+        for key in ["DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL"]:
             if os.environ.get(key):
                 db_source = key
                 break

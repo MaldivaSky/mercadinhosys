@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 load_dotenv()
 
 # Detectar URL do banco: Neon (prioridade) ou SQLite local
-target_url = os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL_ORIG') or os.environ.get('NEON_DB_URL') or os.environ.get('DB_PRIMARY') or os.environ.get('DATABASE_URL_TARGET')
+target_url = os.environ.get('AIVEN_DATABASE_URL') or os.environ.get('NEON_DATABASE_URL') or os.environ.get('DATABASE_URL_ORIG') or os.environ.get('DB_PRIMARY') or os.environ.get('DATABASE_URL_TARGET')
 
 # Se não tiver URL do Neon, usa SQLite local como fallback
 if not target_url:
@@ -857,7 +857,7 @@ with app.app_context():
                 traceback.print_exc()
         else:
             print()
-            print("ℹ️ Neon não configurado. Configure NEON_DATABASE_URL para replicar.")
+            print("ℹ️ Banco cloud não configurado. Configure AIVEN_DATABASE_URL para replicar.")
 
         
         # RESUMO

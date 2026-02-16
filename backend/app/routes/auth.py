@@ -114,7 +114,7 @@ def db_schema_check():
     ])
     result["schema_ok"] = all_ok
     if not all_ok:
-        result["message"] = "Schema desatualizado. No servidor, rode: flask db upgrade"
+        result["message"] = "Schema desatualizado. No servidor rode: flask db upgrade"
     return jsonify(result), 200 if result["database"] == "connected" else 503
 
 

@@ -11,11 +11,11 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
-# Tentar obter URL do Neon de várias variáveis de ambiente
+# Obter URL do banco cloud (Aiven, Neon ou genérico)
 neon_url = (
+    os.environ.get('AIVEN_DATABASE_URL') or
     os.environ.get('NEON_DATABASE_URL') or 
     os.environ.get('DATABASE_URL_ORIG') or
-    os.environ.get('NEON_DB_URL') or
     os.environ.get('DB_PRIMARY') or
     os.environ.get('DATABASE_URL_TARGET') or
     os.environ.get('DATABASE_URL')
