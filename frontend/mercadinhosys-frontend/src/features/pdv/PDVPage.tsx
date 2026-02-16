@@ -333,7 +333,7 @@ const PDVPage: React.FC = () => {
                 <CaixaHeader
                     funcionarioNome={configuracoes?.funcionario.nome}
                     funcionarioRole={configuracoes?.funcionario.role}
-                    refreshKey={ultimaVendaId}
+                    refreshKey={ultimaVendaId ?? undefined}
                 />
 
                 {/* Layout Principal */}
