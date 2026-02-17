@@ -17,17 +17,14 @@ def funcionario_required(f):
         current_user_id = get_jwt_identity()
         claims = get_jwt()  # ✅ Agora pega os claims adicionais
 
-        from flask import current_app
-        current_app.logger.info(f"[DEBUG] funcionario_required: identity={current_user_id}, claims={claims}")
-
         # Verifica se o usuário está autenticado
         if not current_user_id:
-            current_app.logger.warning("[DEBUG] funcionario_required: identity ausente!")
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
         # Verifica se não está bloqueado - agora usa claims
         if claims.get("status") != "ativo":
-            current_app.logger.warning(f"[DEBUG] funcionario_required: status inválido! status={claims.get('status')}")
+            from flask import current_app
+            current_app.logger.warning(f"Acesso bloqueado: user={current_user_id}, status={claims.get('status')}")
             return (
                 jsonify(
                     {

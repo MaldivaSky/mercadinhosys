@@ -91,66 +91,77 @@ const PDVPage: React.FC = () => {
     }, [descontoGeral, descontoGeralCalculado, descontoAprovado, validarDescontoPermitido]);
 
     const handleProdutoSelecionado = (produto: Produto) => {
-        // 1. Validação de Estoque (Bloqueante)
-        if (!produto.quantidade_estoque || produto.quantidade_estoque <= 0) {
-            showToast.error(`PRODUTO INDISPONÍVEL: ${produto.nome} está sem estoque!`, { id: TOAST_IDS.estoqueIndisponivel });
+        // Campo de estoque pode vir como quantidade_estoque (validarProduto) ou quantidade (buscarProduto)
+        const estoqueDisponivel = produto.quantidade_estoque ?? produto.quantidade ?? 0;
+
+        // 1. Sem estoque — bloqueio total
+        if (estoqueDisponivel <= 0) {
+            showToast.error(`Sem estoque: ${produto.nome}`, {
+                id: TOAST_IDS.estoqueIndisponivel,
+                duration: 4000,
+            });
             return;
         }
 
-        // Verificar quantidade já no carrinho
+        // 2. Verificar quantidade já no carrinho
         const itemCarrinho = carrinho.find(item => item.produto.id === produto.id);
         const qtdAtual = itemCarrinho ? itemCarrinho.quantidade : 0;
 
-        if (qtdAtual + 1 > produto.quantidade_estoque) {
-            showToast.error(`ESTOQUE INSUFICIENTE: Disponível: ${produto.quantidade_estoque} un.`, { id: TOAST_IDS.estoqueInsuficiente });
+        if (qtdAtual + 1 > estoqueDisponivel) {
+            showToast.error(
+                `Estoque insuficiente — ${produto.nome}. Disponível: ${estoqueDisponivel} un.`,
+                { id: TOAST_IDS.estoqueInsuficiente, duration: 4000 }
+            );
             return;
         }
 
-        // 2. Validação de Validade (Alerta Crítico ou Aviso)
+        // 3. Validade
         if (produto.data_validade) {
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
-
-            // Tratamento fuso horário simples (considerando data string YYYY-MM-DD)
-            const partesData = produto.data_validade.split('-');
+            const partes = produto.data_validade.split('-');
             const validade = new Date(
-                parseInt(partesData[0]),
-                parseInt(partesData[1]) - 1,
-                parseInt(partesData[2])
+                parseInt(partes[0]),
+                parseInt(partes[1]) - 1,
+                parseInt(partes[2])
             );
-
-            const diffTime = validade.getTime() - hoje.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = Math.ceil((validade.getTime() - hoje.getTime()) / 86400000);
 
             if (diffDays < 0) {
-                showToast.error(`⛔ PRODUTO VENCIDO! Validade expirou em ${validade.toLocaleDateString('pt-BR')}`, {
-                    duration: 6000,
-                    id: TOAST_IDS.produtoVencido
-                });
-                // Opcional: Bloquear venda de produto vencido
-                // return; 
+                showToast.error(
+                    `Produto VENCIDO — ${produto.nome}. Venceu em ${validade.toLocaleDateString('pt-BR')}`,
+                    { duration: 6000, id: TOAST_IDS.produtoVencido }
+                );
+                return; // Bloquear venda de produto vencido
+            } else if (diffDays <= 7) {
+                showToast.warning(
+                    `Validade crítica — ${produto.nome} vence em ${diffDays} dia(s)`,
+                    { duration: 5000, id: TOAST_IDS.validadeProxima }
+                );
             } else if (diffDays <= 30) {
-                showToast.warning(`⚠️ ATENÇÃO: Validade próxima! Vence em ${diffDays} dias (${validade.toLocaleDateString('pt-BR')})`, {
-                    duration: 5000,
-                    id: TOAST_IDS.validadeProxima
-                });
+                showToast.warning(
+                    `Validade próxima — ${produto.nome} vence em ${diffDays} dias`,
+                    { duration: 4000, id: TOAST_IDS.validadeProxima }
+                );
             }
         }
 
-        // 3. Alerta de Estoque Baixo (Aviso)
-        // Se a quantidade atual no carrinho + 1 atingir ou baixar do mínimo
-        const estoqueRestante = produto.quantidade_estoque - (qtdAtual + 1);
+        // 4. Estoque baixo
+        const estoqueRestante = estoqueDisponivel - (qtdAtual + 1);
         if (produto.quantidade_minima && estoqueRestante <= produto.quantidade_minima && estoqueRestante >= 0) {
-            showToast.warning(`📉 ESTOQUE BAIXO: Restarão apenas ${estoqueRestante} unidades após esta venda.`, {
-                duration: 4000,
-                id: TOAST_IDS.estoqueBaixo
-            });
+            showToast.warning(
+                `Estoque baixo — ${produto.nome}: restará ${estoqueRestante} un.`,
+                { duration: 4000, id: TOAST_IDS.estoqueBaixo }
+            );
         }
 
         adicionarProduto(produto);
-        // Feedback de sucesso mais curto para não poluir se houver outros alertas
+        // Feedback só no primeiro item (não polui ao incrementar)
         if (!itemCarrinho) {
-            showToast.success(`${produto.nome} adicionado!`, { id: TOAST_IDS.itemAdicionado });
+            showToast.success(`${produto.nome} adicionado ao carrinho`, {
+                id: `${TOAST_IDS.itemAdicionado}-${produto.id}`,
+                duration: 2500,
+            });
         }
     };
 
@@ -192,7 +203,7 @@ const PDVPage: React.FC = () => {
             }
 
             showToast.success(
-                `✅ VENDA ${venda.codigo} FINALIZADA! Total: ${formatCurrency(venda.total)}`,
+                `Venda ${venda.codigo} finalizada — ${formatCurrency(venda.total)}`,
                 { duration: 5000, id: TOAST_IDS.vendaFinalizada }
             );
 
@@ -389,7 +400,10 @@ const PDVPage: React.FC = () => {
             setEnviandoEmail(true);
             await pdvService.enviarCupomFiscal(ultimaVendaId, email);
 
-            showToast.success(`Nota fiscal enviada para ${email}!`);
+            showToast.success(`Email enviado para ${email}`, {
+                id: 'pdv-email-sucesso',
+                duration: 5000,
+            });
 
             // Fechar modal e limpar após sucesso
             setMostrarModalNotaFiscal(false);
@@ -402,10 +416,10 @@ const PDVPage: React.FC = () => {
             console.error('❌ ERRO AO ENVIAR EMAIL:', error);
             const err = error as { response?: { data?: { error?: string; details?: string; message?: string } } };
             const detalhe = err.response?.data?.details || err.response?.data?.error || err.response?.data?.message;
-            showToast.error(`❌ Falha ao enviar email${detalhe ? `: ${detalhe}` : '. Tente novamente.'}`, {
-                duration: 5000,
-                id: TOAST_IDS.erroEmail
-            });
+            showToast.error(
+                `Falha ao enviar email${detalhe ? `: ${detalhe}` : '. Verifique as configurações SMTP.'}`,
+                { duration: 6000, id: TOAST_IDS.erroEmail }
+            );
         } finally {
             setEnviandoEmail(false);
         }
@@ -578,9 +592,11 @@ const PDVPage: React.FC = () => {
                                                 desconto={item.desconto}
                                                 total={item.total}
                                                 onAtualizarQuantidade={(qtd) => {
-                                                    const estoque = item.produto.quantidade_estoque || 0;
+                                                    const estoque = item.produto.quantidade_estoque ?? item.produto.quantidade ?? 0;
                                                     if (qtd > estoque) {
-                                                        showToast.error(`Estoque insuficiente! Máximo: ${estoque}`);
+                                                        showToast.error(`Estoque insuficiente — máximo ${estoque} un.`, {
+                                                            id: TOAST_IDS.estoqueInsuficiente,
+                                                        });
                                                         return;
                                                     }
                                                     atualizarQuantidade(item.produto.id, qtd);
