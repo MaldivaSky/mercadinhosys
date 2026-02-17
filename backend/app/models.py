@@ -1405,7 +1405,9 @@ class ProdutoLote(db.Model):
     
     # Preço de custo (pode variar por lote)
     preco_custo_unitario = db.Column(db.Numeric(10, 2), nullable=False)
-    
+    # Preço de venda do lote (promoção); se None, usa o preço do produto
+    preco_venda = db.Column(db.Numeric(10, 2), nullable=True)
+
     # Status
     ativo = db.Column(db.Boolean, default=True)  # False se lote foi descartado/devolvido
     motivo_inativacao = db.Column(db.String(100))  # Ex: "Validade expirada", "Devolução"
@@ -1469,6 +1471,7 @@ class ProdutoLote(db.Model):
             "dias_para_vencer": self.dias_para_vencer,
             "esta_vencido": self.esta_vencido,
             "preco_custo_unitario": float(self.preco_custo_unitario) if self.preco_custo_unitario else 0.0,
+            "preco_venda": float(self.preco_venda) if self.preco_venda is not None else None,
             "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
             "ativo": self.ativo,
         }

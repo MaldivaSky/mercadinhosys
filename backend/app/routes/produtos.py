@@ -177,42 +177,81 @@ def bulk_update_prices():
         claims = get_jwt()
         raw_est_id = claims.get("estabelecimento_id")
         estabelecimento_id = int(raw_est_id) if raw_est_id is not None else 1
-        
+        funcionario_id = int(get_jwt_identity())
+
         data = request.get_json() or {}
         atualizacoes = data.get("atualizacoes", [])
-        
+
         if not atualizacoes:
             return jsonify({"success": False, "message": "Nenhuma atualização fornecida"}), 400
-            
+
         cont_sucesso = 0
         for item in atualizacoes:
             prod_id = item.get("id")
+            lote_id = item.get("lote_id")
             novo_preco = item.get("novo_preco")
-            
-            if prod_id and novo_preco is not None:
-                produto = Produto.query.filter_by(
-                    id=prod_id, 
-                    estabelecimento_id=estabelecimento_id
+
+            if prod_id is None or novo_preco is None:
+                continue
+
+            novo_preco_dec = Decimal(str(novo_preco))
+
+            if lote_id is not None:
+                # Atualização por lote: altera preço de venda do lote (promoção)
+                lote = ProdutoLote.query.filter_by(
+                    id=lote_id,
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=prod_id,
+                    ativo=True,
                 ).first()
-                
-                if produto:
-                    historico = HistoricoPrecos(
-                        produto_id=produto.id,
-                        estabelecimento_id=estabelecimento_id,
-                        preco_antigo=produto.preco_venda,
-                        preco_novo=Decimal(str(novo_preco)),
-                        motivo="Promoção via Monitor de Validade"
-                    )
-                    db.session.add(historico)
-                    produto.preco_venda = Decimal(str(novo_preco))
-                    if produto.preco_custo and produto.preco_custo > 0:
-                        produto.margem_lucro = ((produto.preco_venda - produto.preco_custo) / produto.preco_custo) * 100
+                if lote:
+                    lote.preco_venda = novo_preco_dec
+                    lote.updated_at = datetime.utcnow()
                     cont_sucesso += 1
-        
+                continue
+
+            # Atualização no produto (sem lote)
+            produto = Produto.query.filter_by(
+                id=prod_id,
+                estabelecimento_id=estabelecimento_id,
+            ).first()
+
+            if not produto:
+                continue
+
+            preco_custo = produto.preco_custo or Decimal("0")
+            preco_venda_ant = produto.preco_venda
+            margem_ant = produto.margem_lucro or Decimal("0")
+            margem_nova = (
+                ((novo_preco_dec - preco_custo) / preco_custo * 100)
+                if preco_custo > 0
+                else Decimal("0")
+            )
+
+            historico = HistoricoPrecos(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=produto.id,
+                funcionario_id=funcionario_id,
+                preco_custo_anterior=preco_custo,
+                preco_venda_anterior=preco_venda_ant,
+                margem_anterior=margem_ant,
+                preco_custo_novo=preco_custo,
+                preco_venda_novo=novo_preco_dec,
+                margem_nova=margem_nova,
+                motivo="Promoção via Monitor de Validade",
+                observacoes=f"Atualizado por {claims.get('nome', 'Sistema')}",
+            )
+            db.session.add(historico)
+            produto.preco_venda = novo_preco_dec
+            if preco_custo > 0:
+                produto.margem_lucro = margem_nova
+            cont_sucesso += 1
+
         db.session.commit()
         return jsonify({"success": True, "message": f"{cont_sucesso} preços atualizados!", "atualizados": cont_sucesso})
     except Exception as e:
         db.session.rollback()
+        current_app.logger.exception("bulk_update_prices: %s", e)
         return jsonify({"success": False, "message": str(e)}), 500
 
 
@@ -243,6 +282,7 @@ def listar_produtos():
         ordenar_por = request.args.get("ordenar_por", "nome")
         direcao = request.args.get("direcao", "asc")
         filtro_rapido = request.args.get("filtro_rapido", None, type=str)
+        expandir_por_lote = request.args.get("expandir_por_lote", "").lower() == "true"
 
         # Query base sem joinedload para teste de simplicidade
         query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
@@ -293,22 +333,58 @@ def listar_produtos():
                 )
             )
 
-        # 8. Filtros de Validade
+        # 8. Filtros de Validade (produto OU lotes do produto; fallback só por produto se lotes falhar)
         validade_proxima = request.args.get("validade_proxima")
         dias_validade = request.args.get("dias_validade", 30, type=int)
         vencidos = request.args.get("vencidos")
 
         hoje = date.today()
-        
-        if validade_proxima and validade_proxima.lower() == 'true':
-            limite = hoje + timedelta(days=dias_validade)
-            query = query.filter(Produto.data_validade.isnot(None))
-            query = query.filter(Produto.data_validade >= hoje)
-            query = query.filter(Produto.data_validade <= limite)
-        
-        if vencidos and vencidos.lower() == 'true':
-            query = query.filter(Produto.data_validade.isnot(None))
-            query = query.filter(Produto.data_validade < hoje)
+
+        try:
+            if validade_proxima and validade_proxima.lower() == "true":
+                limite = hoje + timedelta(days=dias_validade)
+                cond_produto = and_(
+                    Produto.data_validade.isnot(None),
+                    Produto.data_validade >= hoje,
+                    Produto.data_validade <= limite,
+                )
+                subq_lotes = (
+                    db.session.query(ProdutoLote.produto_id)
+                    .filter(
+                        ProdutoLote.estabelecimento_id == estabelecimento_id,
+                        ProdutoLote.ativo == True,
+                        ProdutoLote.quantidade > 0,
+                        ProdutoLote.data_validade >= hoje,
+                        ProdutoLote.data_validade <= limite,
+                    )
+                    .distinct()
+                )
+                query = query.filter(or_(cond_produto, Produto.id.in_(subq_lotes)))
+            if vencidos and vencidos.lower() == "true":
+                cond_produto = and_(
+                    Produto.data_validade.isnot(None),
+                    Produto.data_validade < hoje,
+                )
+                subq_lotes = (
+                    db.session.query(ProdutoLote.produto_id)
+                    .filter(
+                        ProdutoLote.estabelecimento_id == estabelecimento_id,
+                        ProdutoLote.ativo == True,
+                        ProdutoLote.quantidade > 0,
+                        ProdutoLote.data_validade < hoje,
+                    )
+                    .distinct()
+                )
+                query = query.filter(or_(cond_produto, Produto.id.in_(subq_lotes)))
+        except Exception:
+            # Fallback: filtrar só por data_validade do produto (sem lotes)
+            if validade_proxima and validade_proxima.lower() == "true":
+                limite = hoje + timedelta(days=dias_validade)
+                query = query.filter(Produto.data_validade.isnot(None))
+                query = query.filter(Produto.data_validade >= hoje, Produto.data_validade <= limite)
+            if vencidos and vencidos.lower() == "true":
+                query = query.filter(Produto.data_validade.isnot(None))
+                query = query.filter(Produto.data_validade < hoje)
 
         # Filtro rápido por margem (Alta Margem >50%, Baixa Margem <30%)
         if filtro_rapido == "margem_alta":
@@ -387,6 +463,83 @@ def listar_produtos():
             else:
                 produto_dict["alerta_validade"] = False
 
+            # Lotes no período (modal validade) ou todos os lotes (listagem "por lote")
+            # Resiliente: se a tabela produto_lotes não tiver preco_venda (ex.: schema_sync não rodou), não quebra
+            produto_dict["lotes_no_periodo"] = []
+            produto_dict["preco_venda_efetivo"] = float(produto.preco_venda)
+            try:
+                if validade_proxima and validade_proxima.lower() == "true":
+                    limite = hoje + timedelta(days=dias_validade)
+                    lotes = (
+                        ProdutoLote.query.filter_by(
+                            produto_id=produto.id,
+                            estabelecimento_id=estabelecimento_id,
+                            ativo=True,
+                        )
+                        .filter(ProdutoLote.quantidade > 0)
+                        .filter(ProdutoLote.data_validade >= hoje, ProdutoLote.data_validade <= limite)
+                        .order_by(ProdutoLote.data_validade.asc())
+                        .all()
+                    )
+                elif vencidos and vencidos.lower() == "true":
+                    lotes = (
+                        ProdutoLote.query.filter_by(
+                            produto_id=produto.id,
+                            estabelecimento_id=estabelecimento_id,
+                            ativo=True,
+                        )
+                        .filter(ProdutoLote.quantidade > 0)
+                        .filter(ProdutoLote.data_validade < hoje)
+                        .order_by(ProdutoLote.data_validade.asc())
+                        .all()
+                    )
+                elif expandir_por_lote:
+                    lotes = (
+                        ProdutoLote.query.filter_by(
+                            produto_id=produto.id,
+                            estabelecimento_id=estabelecimento_id,
+                            ativo=True,
+                        )
+                        .filter(ProdutoLote.quantidade > 0)
+                        .order_by(ProdutoLote.data_validade.asc())
+                        .all()
+                    )
+                else:
+                    lotes = []
+
+                for l in lotes:
+                    preco_lote = getattr(l, "preco_venda", None)
+                    produto_dict["lotes_no_periodo"].append({
+                        "id": l.id,
+                        "numero_lote": l.numero_lote,
+                        "data_validade": l.data_validade.isoformat() if l.data_validade else None,
+                        "quantidade": l.quantidade,
+                        "preco_venda": float(preco_lote) if preco_lote is not None else None,
+                        "preco_produto": float(produto.preco_venda),
+                    })
+
+                if not produto_dict["lotes_no_periodo"] and (
+                    (validade_proxima and produto.data_validade and hoje <= produto.data_validade <= (hoje + timedelta(days=dias_validade)))
+                    or (vencidos and produto.data_validade and produto.data_validade < hoje)
+                ):
+                    produto_dict["lotes_no_periodo"].append({
+                        "id": None,
+                        "numero_lote": produto.lote or "N/A",
+                        "data_validade": produto.data_validade.isoformat() if produto.data_validade else None,
+                        "quantidade": produto.quantidade,
+                        "preco_venda": None,
+                        "preco_produto": float(produto.preco_venda),
+                    })
+
+                lotes_fifo = produto.get_lotes_disponiveis()
+                for l in lotes_fifo:
+                    pv = getattr(l, "preco_venda", None)
+                    if pv is not None:
+                        produto_dict["preco_venda_efetivo"] = float(pv)
+                        break
+            except Exception as e:
+                current_app.logger.warning("listar_produtos: lotes/preco_efetivo ignorado para produto %s: %s", produto.id, e)
+
             produtos.append(produto_dict)
 
         # Estatísticas Rápidas (cálculo otimizado)
@@ -440,6 +593,17 @@ def obter_produto(id):
         dados_produto["classificacao_abc"] = calcular_classificacao_abc(produto)
         dados_produto["estoque_baixo"] = verificar_estoque_baixo(produto)
         dados_produto["validade_proxima"] = verificar_validade_proxima(produto)
+
+        dados_produto["preco_venda_efetivo"] = float(produto.preco_venda)
+        try:
+            lotes_fifo = produto.get_lotes_disponiveis()
+            for l in lotes_fifo:
+                pv = getattr(l, "preco_venda", None)
+                if pv is not None:
+                    dados_produto["preco_venda_efetivo"] = float(pv)
+                    break
+        except Exception as e:
+            current_app.logger.warning("obter_produto: preco_venda_efetivo por lote ignorado: %s", e)
 
         # Histórico de movimentações (últimas 20)
         movimentacoes = (
@@ -1255,6 +1419,16 @@ def buscar_produtos():
             if produto.categoria:
                 categoria_nome = produto.categoria.nome
             
+            preco_efetivo = float(produto.preco_venda)
+            try:
+                lotes_fifo = produto.get_lotes_disponiveis()
+                for l in lotes_fifo:
+                    pv = getattr(l, "preco_venda", None)
+                    if pv is not None:
+                        preco_efetivo = float(pv)
+                        break
+            except Exception:
+                pass
             resultados.append(
                 {
                     "id": produto.id,
@@ -1262,9 +1436,10 @@ def buscar_produtos():
                     "codigo_barras": produto.codigo_barras,
                     "codigo_interno": produto.codigo_interno,
                     "quantidade": produto.quantidade,
-                    "quantidade_estoque": produto.quantidade,  # Alias para compatibilidade frontend
+                    "quantidade_estoque": produto.quantidade,
                     "preco_custo": float(produto.preco_custo),
                     "preco_venda": float(produto.preco_venda),
+                    "preco_venda_efetivo": preco_efetivo,
                     "margem_lucro": calcular_margem_lucro(
                         float(produto.preco_venda), float(produto.preco_custo)
                     ),

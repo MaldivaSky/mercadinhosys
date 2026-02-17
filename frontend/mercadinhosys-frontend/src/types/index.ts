@@ -205,6 +205,8 @@ export interface ProdutoFiltros {
     ordenar_por?: string;
     direcao?: 'asc' | 'desc';
     filtro_rapido?: string;
+    /** true = API retorna lotes_no_periodo para cada produto (listagem por lote) */
+    expandir_por_lote?: boolean;
 }
 
 // Tipos para vendas - COMPLETAMENTE ATUALIZADO

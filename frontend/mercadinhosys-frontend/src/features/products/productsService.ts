@@ -42,6 +42,7 @@ export const productsService = {
             if (filtros.ordenar_por) params.ordenar_por = filtros.ordenar_por;
             if (filtros.direcao) params.direcao = filtros.direcao;
             if (filtros.filtro_rapido) params.filtro_rapido = filtros.filtro_rapido;
+            if (filtros.expandir_por_lote === true) params.expandir_por_lote = "true";
         }
 
         const response = await apiClient.get<ProdutosResponse>('/produtos/', { params });
@@ -192,7 +193,9 @@ export const productsService = {
 
         return response.data;
     },
-    bulkUpdatePrices: async (atualizacoes: { id: number; novo_preco: number }[]): Promise<{ success: boolean; message: string }> => {
+    bulkUpdatePrices: async (
+        atualizacoes: { id: number; lote_id?: number; novo_preco: number }[]
+    ): Promise<{ success: boolean; message: string }> => {
         const response = await apiClient.post('/produtos/bulk-update-prices', { atualizacoes });
         return response.data;
     },

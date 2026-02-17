@@ -43,6 +43,8 @@ def run_sync():
             "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS total_compras INTEGER DEFAULT 0",
             "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS classificacao VARCHAR(20) DEFAULT 'REGULAR'",
             "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS prazo_entrega INTEGER DEFAULT 7",
+            # produto_lotes: preço de venda por lote (promoção)
+            "ALTER TABLE produto_lotes ADD COLUMN IF NOT EXISTS preco_venda NUMERIC(10,2)",
         ]
         ok = 0
         for sql in alteras:
