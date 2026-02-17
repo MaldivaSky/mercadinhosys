@@ -27,6 +27,17 @@ const apiClient = axios.create({
     },
 });
 
+const shouldRetryRequest = (error: any): boolean => {
+    const cfg = error?.config;
+    if (!cfg) return false;
+    const method = String(cfg.method || 'get').toLowerCase();
+    const isGet = method === 'get';
+    const isTimeout = error?.code === 'ECONNABORTED';
+    const isNetwork = !error?.response && !!error?.request;
+    const retryCount = cfg.__retryCount || 0;
+    return isGet && (isTimeout || isNetwork) && retryCount < 1;
+};
+
 // Request interceptor para adicionar token
 apiClient.interceptors.request.use(
     (config) => {
@@ -44,6 +55,11 @@ apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+        if (shouldRetryRequest(error)) {
+            originalRequest.__retryCount = (originalRequest.__retryCount || 0) + 1;
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            return apiClient(originalRequest);
+        }
 
         // Se for 401 e não for uma retentativa
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -128,7 +144,7 @@ apiClient.interceptors.response.use(
         } else if (error.request) {
             console.error('❌ Network Error:', {
                 url: error.config?.url,
-                message: 'Sem resposta do servidor',
+                message: error.code === 'ECONNABORTED' ? 'Timeout na resposta do servidor' : 'Sem resposta do servidor',
                 baseURL: API_CONFIG.BASE_URL,
             });
         } else {

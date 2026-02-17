@@ -82,14 +82,21 @@ def ensure_configuracoes_schema():
         for stmt in ddl:
             try:
                 db.session.execute(stmt)
+                db.session.commit()
             except Exception as e:
-                current_app.logger.error(f"Erro ao executar DDL: {e}")
-                pass
-        if ddl:
-            db.session.commit()
+                # Rollback OBRIGATÓRIO no Postgres – sem rollback a sessão fica
+                # em estado abortado e todas as queries seguintes falham com 500.
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                current_app.logger.warning(f"DDL ignorado (coluna já existe?): {e}")
     except Exception as e:
-        current_app.logger.error(f"Erro ao verificar schema: {e}")
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.error(f"Erro ao verificar schema de configuracoes: {e}")
 
 @configuracao_bp.route("/", methods=["GET"])
 def obter_configuracoes():

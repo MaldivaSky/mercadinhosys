@@ -99,7 +99,7 @@ const ProductsPage: React.FC = () => {
   const loadProdutos = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await productsService.getAllEstoque(page, 50, filtros);
+      const response = await productsService.getAllEstoque(page, 25, filtros);
       setProdutos(response?.produtos ?? []);
       setTotalPages(response?.paginacao?.total_paginas ?? 1);
       setTotalItems(response?.paginacao?.total_itens ?? 0);
@@ -139,7 +139,7 @@ const ProductsPage: React.FC = () => {
 
   const loadFornecedores = useCallback(async () => {
     try {
-      const response = await apiClient.get<{ fornecedores: Fornecedor[] }>('/fornecedores/', { params: { per_page: 200 } });
+      const response = await apiClient.get<{ fornecedores: Fornecedor[] }>('/fornecedores/', { params: { per_page: 100 } });
       setFornecedores(response.data.fornecedores || []);
     } catch (error) {
       console.error('Erro ao carregar fornecedores:', error);
@@ -151,7 +151,11 @@ const ProductsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [buscaLocal]);
 
-  useEffect(() => { loadProdutos(); loadStats(); }, [loadProdutos, loadStats]);
+  useEffect(() => { loadProdutos(); }, [loadProdutos]);
+  useEffect(() => {
+    const timer = setTimeout(() => { loadStats(); }, 350);
+    return () => clearTimeout(timer);
+  }, [loadStats]);
   useEffect(() => { loadCategorias(); loadFornecedores(); }, [loadCategorias, loadFornecedores]);
 
   // Handlers

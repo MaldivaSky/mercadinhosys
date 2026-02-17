@@ -38,6 +38,7 @@ services:
       FLASK_ENV: development
       FLASK_DEBUG: 1
       WERKZEUG_DEBUG_PIN: "off"
+      DATABASE_URL: sqlite:///instance/mercadinho.db
       # Não definir DATABASE_URL = app usa SQLite (instance/mercadinho.db), mesmo banco do desenvolvimento local.
       # Para usar Postgres no Docker: crie backend/.env com DATABASE_URL=postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
       SECRET_KEY: dev-secret-key

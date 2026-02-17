@@ -24,7 +24,6 @@ from app.models import (
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
 from sqlalchemy import text, func, or_, case, and_, Date, Integer
-
 produtos_bp = Blueprint("produtos", __name__)
 
 # ============================================
@@ -284,7 +283,7 @@ def listar_produtos():
         filtro_rapido = request.args.get("filtro_rapido", None, type=str)
         expandir_por_lote = request.args.get("expandir_por_lote", "").lower() == "true"
 
-        # Query base sem joinedload para teste de simplicidade
+        # Lazy load – joinedload causava InFailedSqlTransaction no Aiven/Render.
         query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
 
         # 1. Filtro de Ativo/Inativo
@@ -463,49 +462,55 @@ def listar_produtos():
             else:
                 produto_dict["alerta_validade"] = False
 
-            # Lotes no período (modal validade) ou todos os lotes (listagem "por lote")
-            # Resiliente: se a tabela produto_lotes não tiver preco_venda (ex.: schema_sync não rodou), não quebra
+            # Lotes no período (modal validade) ou todos os lotes (listagem "por lote").
+            # Em listagem padrão (sem filtros de validade e sem expandir por lote),
+            # não consultamos lotes para evitar N+1 e timeouts.
             produto_dict["lotes_no_periodo"] = []
             produto_dict["preco_venda_efetivo"] = float(produto.preco_venda)
+            precisa_consultar_lotes = (
+                expandir_por_lote
+                or (validade_proxima and validade_proxima.lower() == "true")
+                or (vencidos and vencidos.lower() == "true")
+            )
             try:
-                if validade_proxima and validade_proxima.lower() == "true":
-                    limite = hoje + timedelta(days=dias_validade)
-                    lotes = (
-                        ProdutoLote.query.filter_by(
-                            produto_id=produto.id,
-                            estabelecimento_id=estabelecimento_id,
-                            ativo=True,
+                lotes = []
+                if precisa_consultar_lotes:
+                    if validade_proxima and validade_proxima.lower() == "true":
+                        limite = hoje + timedelta(days=dias_validade)
+                        lotes = (
+                            ProdutoLote.query.filter_by(
+                                produto_id=produto.id,
+                                estabelecimento_id=estabelecimento_id,
+                                ativo=True,
+                            )
+                            .filter(ProdutoLote.quantidade > 0)
+                            .filter(ProdutoLote.data_validade >= hoje, ProdutoLote.data_validade <= limite)
+                            .order_by(ProdutoLote.data_validade.asc())
+                            .all()
                         )
-                        .filter(ProdutoLote.quantidade > 0)
-                        .filter(ProdutoLote.data_validade >= hoje, ProdutoLote.data_validade <= limite)
-                        .order_by(ProdutoLote.data_validade.asc())
-                        .all()
-                    )
-                elif vencidos and vencidos.lower() == "true":
-                    lotes = (
-                        ProdutoLote.query.filter_by(
-                            produto_id=produto.id,
-                            estabelecimento_id=estabelecimento_id,
-                            ativo=True,
+                    elif vencidos and vencidos.lower() == "true":
+                        lotes = (
+                            ProdutoLote.query.filter_by(
+                                produto_id=produto.id,
+                                estabelecimento_id=estabelecimento_id,
+                                ativo=True,
+                            )
+                            .filter(ProdutoLote.quantidade > 0)
+                            .filter(ProdutoLote.data_validade < hoje)
+                            .order_by(ProdutoLote.data_validade.asc())
+                            .all()
                         )
-                        .filter(ProdutoLote.quantidade > 0)
-                        .filter(ProdutoLote.data_validade < hoje)
-                        .order_by(ProdutoLote.data_validade.asc())
-                        .all()
-                    )
-                elif expandir_por_lote:
-                    lotes = (
-                        ProdutoLote.query.filter_by(
-                            produto_id=produto.id,
-                            estabelecimento_id=estabelecimento_id,
-                            ativo=True,
+                    elif expandir_por_lote:
+                        lotes = (
+                            ProdutoLote.query.filter_by(
+                                produto_id=produto.id,
+                                estabelecimento_id=estabelecimento_id,
+                                ativo=True,
+                            )
+                            .filter(ProdutoLote.quantidade > 0)
+                            .order_by(ProdutoLote.data_validade.asc())
+                            .all()
                         )
-                        .filter(ProdutoLote.quantidade > 0)
-                        .order_by(ProdutoLote.data_validade.asc())
-                        .all()
-                    )
-                else:
-                    lotes = []
 
                 for l in lotes:
                     preco_lote = getattr(l, "preco_venda", None)
@@ -531,13 +536,18 @@ def listar_produtos():
                         "preco_produto": float(produto.preco_venda),
                     })
 
-                lotes_fifo = produto.get_lotes_disponiveis()
-                for l in lotes_fifo:
-                    pv = getattr(l, "preco_venda", None)
-                    if pv is not None:
-                        produto_dict["preco_venda_efetivo"] = float(pv)
-                        break
+                if precisa_consultar_lotes:
+                    lotes_fifo = produto.get_lotes_disponiveis()
+                    for l in lotes_fifo:
+                        pv = getattr(l, "preco_venda", None)
+                        if pv is not None:
+                            produto_dict["preco_venda_efetivo"] = float(pv)
+                            break
             except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
                 current_app.logger.warning("listar_produtos: lotes/preco_efetivo ignorado para produto %s: %s", produto.id, e)
 
             produtos.append(produto_dict)
@@ -565,6 +575,10 @@ def listar_produtos():
         import traceback
         error_details = traceback.format_exc()
         current_app.logger.error(f"Erro ao listar produtos: {str(e)}\n{error_details}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return jsonify({
             "success": False, 
             "message": "Erro interno ao listar produtos", 
