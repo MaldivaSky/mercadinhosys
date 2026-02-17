@@ -37,7 +37,8 @@ services:
       FLASK_APP: run.py
       FLASK_ENV: development
       FLASK_DEBUG: 1
-      # DATABASE_URL: ${DATABASE_URL:-postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys}
+      WERKZEUG_DEBUG_PIN: "off"  # Desabilita PIN do debugger para hot-reload mais fluido
+      DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
       SECRET_KEY: dev-secret-key
       JWT_SECRET_KEY: dev-jwt-secret
       CORS_ORIGINS: http://localhost:5173
@@ -62,6 +63,7 @@ services:
     command: sh -c "npm install && npm run dev -- --host"
     environment:
       - VITE_API_TARGET=http://backend:5000
+      - CHOKIDAR_USEPOLLING=true  # Garante hot-reload no Docker (Windows/WSL)
     depends_on:
       - backend
     networks:
