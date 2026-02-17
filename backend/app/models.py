@@ -1332,6 +1332,27 @@ class Produto(db.Model):
         
         return lotes_consumidos
 
+    def calcular_status_giro(self, days: int = 30) -> str:
+        """
+        Calcula o status de giro do estoque baseado na demanda média diária.
+        
+        Returns:
+            str: "Sem Vendas", "Baixo Giro", "Médio Giro", "Alto Giro"
+        """
+        try:
+            demanda = self.demanda_media_diaria(days=days)
+            
+            if demanda <= 0:
+                return "Sem Vendas"
+            elif demanda < 1:  # Menos de 1 unidade por dia
+                return "Baixo Giro"
+            elif demanda < 5:  # Entre 1 e 5 unidades por dia
+                return "Médio Giro"
+            else:  # Mais de 5 unidades por dia
+                return "Alto Giro"
+        except Exception:
+            return "Sem Vendas"
+
 
 # ============================================
 # 7.1. LOTE/BATCH DE PRODUTO (VALIDADE)
