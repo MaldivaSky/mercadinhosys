@@ -238,18 +238,20 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_expense_details(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
-        """Detalhamento de despesas por categoria"""
+    def get_expense_details(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """Detalhamento de despesas por categoria (período específico)"""
         try:
-            # Normalizar para data pura para comparação correta no Postgres
-            start_date_only = (datetime.utcnow() - timedelta(days=days)).date()
+            # Normalizar para data pura
+            start_d = start_date.date() if isinstance(start_date, datetime) else start_date
+            end_d = end_date.date() if isinstance(end_date, datetime) else end_date
             
             results = db.session.query(
                 Despesa.tipo,
                 func.sum(Despesa.valor).label('total')
             ).filter(
                 Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.data_despesa >= start_date_only
+                Despesa.data_despesa >= start_d,
+                Despesa.data_despesa <= end_d  # 🔥 FIX: Limite superior estrito
             ).group_by(Despesa.tipo).all()
 
             return [

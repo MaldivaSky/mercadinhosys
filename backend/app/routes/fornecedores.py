@@ -1351,17 +1351,51 @@ def relatorio_analitico_fornecedores():
 
             # Média de tempo de entrega (apenas pedidos concluídos)
             tempos_entrega = []
+            atrasos = []
+            entregas_no_prazo = 0
+            total_entregas_avaliadas = 0
+
             for p in pedidos:
-                if p.status == "concluido" and p.data_pedido and p.data_recebimento:
-                    dias = (p.data_recebimento - p.data_pedido.date()).days
-                    if dias > 0:
-                        tempos_entrega.append(dias)
+                # Considerar entregas concluídas
+                if p.status == "concluido":
+                    data_efetiva = p.data_recebimento or p.data_pedido.date() # Fallback se não tiver data recebimento (assumir instantâneo/mesmo dia se manual)
+                    
+                    if p.data_pedido:
+                        dias_reais = (data_efetiva - p.data_pedido.date()).days
+                        tempos_entrega.append(dias_reais)
+                        
+                        # Cálculo de OTD (On-Time Delivery)
+                        prazo_prometido = None
+                        if p.data_previsao_entrega:
+                            prazo_prometido = p.data_previsao_entrega
+                        else:
+                            # Fallback: data_pedido + prazo_padrao
+                            from datetime import timedelta
+                            prazo_padrao = fornecedor.prazo_entrega or 7
+                            prazo_prometido = p.data_pedido.date() + timedelta(days=prazo_padrao)
+                        
+                        if prazo_prometido:
+                            total_entregas_avaliadas += 1
+                            if data_efetiva <= prazo_prometido:
+                                entregas_no_prazo += 1
+                            else:
+                                dias_atraso = (data_efetiva - prazo_prometido).days
+                                atrasos.append(dias_atraso)
 
             media_entrega = (
                 sum(tempos_entrega) / len(tempos_entrega) if tempos_entrega else 0
             )
+            
+            # Se não há entregas avaliadas, assumir 100% (Inocente até que se prove o contrário) ou Neutro
+            # Se o fornecedor tem pedidos mas nenhum concluído, talvez Score deva ser neutro (100)
+            if total_entregas_avaliadas > 0:
+                taxa_otd = (entregas_no_prazo / total_entregas_avaliadas * 100)
+            else:
+                taxa_otd = 100.0 # Sem histórico negativo
 
-            # Produtos fornecidos
+            media_atraso = (sum(atrasos) / len(atrasos)) if atrasos else 0
+
+            # Produtos fornecidos e Variação de Preço (Simplificada)
             produtos = Produto.query.filter_by(
                 fornecedor_id=fornecedor.id,
                 estabelecimento_id=estabelecimento_id,
@@ -1369,6 +1403,15 @@ def relatorio_analitico_fornecedores():
             ).all()
 
             total_produtos = len(produtos)
+            
+            # Cálculo de Score (0-100)
+            # Pesos: OTD (60%), Atraso Médio (40%)
+            # Penalidade por atraso: 10 pontos por dia de atraso médio
+            score = taxa_otd * 0.6 + (100 if media_atraso <= 0 else max(0, 100 - media_atraso * 10)) * 0.4
+            
+            # Se não tem pedido nenhum, score 100? Ou 50 (novo)? Vamos de 100 (neutro)
+            if not pedidos:
+                score = 100.0
 
             # Adicionar ao relatório
             relatorio.append(
@@ -1379,6 +1422,7 @@ def relatorio_analitico_fornecedores():
                         "cnpj": fornecedor.cnpj,
                         "classificacao": fornecedor.classificacao,
                         "prazo_entrega_padrao": fornecedor.prazo_entrega,
+                        "score": round(score, 1)
                     },
                     "metricas": {
                         "total_pedidos": total_pedidos,
@@ -1391,6 +1435,8 @@ def relatorio_analitico_fornecedores():
                             else 0
                         ),
                         "media_tempo_entrega": media_entrega,
+                        "taxa_otd": taxa_otd,
+                        "media_atraso": media_atraso,
                         "total_produtos": total_produtos,
                     },
                     "produtos": [
@@ -1398,6 +1444,8 @@ def relatorio_analitico_fornecedores():
                             "id": p.id,
                             "nome": p.nome,
                             "preco_custo": float(p.preco_custo),
+                            "preco_venda": float(p.preco_venda),
+                            "margem": float(p.margem_lucro) if p.margem_lucro else 0,
                             "quantidade_estoque": p.quantidade,
                         }
                         for p in produtos[:10]

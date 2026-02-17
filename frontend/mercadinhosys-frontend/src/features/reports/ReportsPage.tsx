@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    BarChart3, 
-    FileSpreadsheet, 
-    FileText, 
+import {
+    BarChart3,
+    FileSpreadsheet,
+    FileText,
     Calendar as CalendarIcon,
     TrendingUp,
     Users,
@@ -28,6 +28,8 @@ import {
     Filter,
     Eye,
     EyeOff,
+    Trophy,
+    AlertOctagon,
     ChevronDown,
     Download
 } from 'lucide-react';
@@ -63,7 +65,7 @@ type ModalType = 'vendas' | 'produtos' | 'financeiro' | 'equipe' | 'ponto' | 'rf
 
 // ==================== COMPONENTE CARD ====================
 
-const ReportCard: React.FC<ReportCardProps> = ({ 
+const ReportCard: React.FC<ReportCardProps> = ({
     title, description, icon: Icon, color, loading, onOpen, badge
 }) => (
     <button onClick={onOpen} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 group text-left relative">
@@ -205,8 +207,8 @@ const ReportsPage: React.FC = () => {
     // ==================== GERADORES GENÉRICOS DE PDF ====================
 
     const generateGenericPDF = (
-        data: any[], 
-        title: string, 
+        data: any[],
+        title: string,
         columns: { header: string; key: string; format?: (v: any) => string }[],
         filename: string,
         headColor: [number, number, number],
@@ -227,7 +229,7 @@ const ReportsPage: React.FC = () => {
     };
 
     const handleGenericExport = (
-        data: any[], type: 'pdf' | 'excel' | 'csv', 
+        data: any[], type: 'pdf' | 'excel' | 'csv',
         title: string, filename: string, sheetName: string,
         columns: { header: string; key: string; format?: (v: any) => string }[],
         headColor: [number, number, number],
@@ -249,7 +251,7 @@ const ReportsPage: React.FC = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `backup_local_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.zip`;
+            a.download = `backup_local_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.zip`;
             a.click();
             window.URL.revokeObjectURL(url);
             toast.success('Backup baixado com sucesso!');
@@ -379,7 +381,9 @@ const ReportsPage: React.FC = () => {
         setLoadingReport('financeiro');
         try {
             const [resumo, vendasStats, analytics] = await Promise.all([
-                apiClient.get('/despesas/resumo-financeiro/'),
+                apiClient.get('/despesas/resumo-financeiro/', {
+                    params: { data_inicio: dateRange.startDate, data_fim: dateRange.endDate }
+                }),
                 apiClient.get('/vendas/estatisticas', {
                     params: { data_inicio: dateRange.startDate, data_fim: dateRange.endDate }
                 }),
@@ -387,12 +391,19 @@ const ReportsPage: React.FC = () => {
             ]);
 
             const stats = vendasStats.data?.estatisticas_gerais || {};
-            const faturamento = parseFloat(stats.total_valor || 0);
-            const lucroBruto = parseFloat(stats.total_lucro || 0);
-            const custoMercadoria = faturamento - lucroBruto;
-            const totalVendas = stats.total_vendas || 0;
-            const despesasMes = parseFloat(resumo.data?.despesas_mes?.total || 0);
+            // 🔥 DRE Consolidado vindo do Backend (Alinhado com Dashboard)
+            const dreBackend = resumo.data?.dre_consolidado || {};
+
+            // Priorizar dados consolidados do backend se disponíveis
+            const faturamento = dreBackend.receita_bruta !== undefined ? parseFloat(dreBackend.receita_bruta) : parseFloat(stats.total_valor || 0);
+            const lucroBruto = dreBackend.lucro_bruto !== undefined ? parseFloat(dreBackend.lucro_bruto) : parseFloat(stats.total_lucro || 0);
+            const custoMercadoria = dreBackend.custo_mercadoria !== undefined ? parseFloat(dreBackend.custo_mercadoria) : (faturamento - lucroBruto);
+            const despesasMes = dreBackend.despesas_operacionais !== undefined ? parseFloat(dreBackend.despesas_operacionais) : parseFloat(resumo.data?.despesas_mes?.total || 0);
+
+            // Lucro Liquido = Lucro Bruto - Despesas
             const lucroLiquido = lucroBruto - despesasMes;
+
+            const totalVendas = stats.total_vendas || 0;
 
             setFinanceiroData({
                 faturamento,
@@ -518,7 +529,12 @@ const ReportsPage: React.FC = () => {
     const fetchABCData = async () => {
         setLoadingReport('abc');
         try {
-            const response = await apiClient.get('/relatorios/rentabilidade/abc', { params: { days: 30 } });
+            const response = await apiClient.get('/relatorios/rentabilidade/abc', {
+                params: {
+                    data_inicio: dateRange.startDate,
+                    data_fim: dateRange.endDate
+                }
+            });
             if (response.data.success) {
                 setAbcData(response.data.produtos.map((p: any) => ({
                     'Produto': p.produto_nome, 'Classe ABC': p.classe_abc,
@@ -569,6 +585,9 @@ const ReportsPage: React.FC = () => {
                     'Ped. Pendentes': item.metricas?.pedidos_pendentes ?? 0,
                     'Ped. Concluídos': item.metricas?.pedidos_concluidos ?? 0,
                     'Taxa Conclusão (%)': item.metricas?.taxa_conclusao ?? 0,
+                    'OTD (%)': item.metricas?.taxa_otd ?? 100,
+                    'Atraso Médio (dias)': item.metricas?.media_atraso ?? 0,
+                    'Score': item.fornecedor?.score ?? 0,
                     'Entrega (dias)': item.metricas?.media_entrega_dias ?? item.metricas?.media_tempo_entrega ?? 0,
                     'Produtos': item.metricas?.total_produtos ?? 0,
                     'Boletos Abertos': item.boletos?.total_abertos ?? 0,
@@ -860,7 +879,7 @@ const ReportsPage: React.FC = () => {
         Object.entries(columnFilters).forEach(([key, filterVal]) => {
             if (filterVal) {
                 const lowerFilter = filterVal.toLowerCase();
-                processedData = processedData.filter(row => 
+                processedData = processedData.filter(row =>
                     String(row[key] ?? '').toLowerCase().includes(lowerFilter)
                 );
             }
@@ -873,7 +892,7 @@ const ReportsPage: React.FC = () => {
                 const bVal = b[sortConfig.key];
                 const aNum = typeof aVal === 'number' ? aVal : parseFloat(String(aVal));
                 const bNum = typeof bVal === 'number' ? bVal : parseFloat(String(bVal));
-                
+
                 if (!isNaN(aNum) && !isNaN(bNum)) {
                     return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
                 }
@@ -889,7 +908,7 @@ const ReportsPage: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
                     <button
                         onClick={() => setShowColumnFilters(p => !p)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showColumnFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showColumnFilters ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                     >
                         <Filter className="w-3.5 h-3.5" />
                         Filtros por Coluna
@@ -898,28 +917,28 @@ const ReportsPage: React.FC = () => {
                     <div className="relative">
                         <button
                             onClick={() => setShowColumnPicker(p => !p)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showColumnPicker ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showColumnPicker ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                         >
                             <Eye className="w-3.5 h-3.5" />
                             Colunas
                             <ChevronDown className="w-3 h-3" />
                         </button>
                         {showColumnPicker && (
-                            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2 min-w-[200px] max-h-[300px] overflow-y-auto">
+                            <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 p-2 min-w-[200px] max-h-[300px] overflow-y-auto">
                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1 px-1">Mostrar/Ocultar</p>
                                 {columns.map(col => (
-                                    <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-xs">
+                                    <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-xs">
                                         <input
                                             type="checkbox"
                                             checked={!hiddenColumns.has(col.key)}
                                             onChange={() => toggleColumnVisibility(col.key)}
-                                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                                            className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-gray-700 h-3.5 w-3.5"
                                         />
-                                        <span className="text-gray-700">{col.label}</span>
+                                        <span className="text-gray-700 dark:text-gray-300">{col.label}</span>
                                     </label>
                                 ))}
                                 {hiddenColumns.size > 0 && (
-                                    <button onClick={() => setHiddenColumns(new Set())} className="w-full mt-1 text-[10px] text-indigo-600 hover:text-indigo-800 font-medium py-1">
+                                    <button onClick={() => setHiddenColumns(new Set())} className="w-full mt-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium py-1">
                                         Mostrar todas
                                     </button>
                                 )}
@@ -928,21 +947,21 @@ const ReportsPage: React.FC = () => {
                     </div>
 
                     {sortConfig && (
-                        <button onClick={() => setSortConfig(null)} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors">
+                        <button onClick={() => setSortConfig(null)} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors">
                             Ordenando: {columns.find(c => c.key === sortConfig.key)?.label} {sortConfig.direction === 'asc' ? '↑' : '↓'}
                             <X className="w-3 h-3" />
                         </button>
                     )}
 
                     {Object.keys(columnFilters).length > 0 && (
-                        <button onClick={() => setColumnFilters({})} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition-colors">
+                        <button onClick={() => setColumnFilters({})} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-700/50 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors">
                             {Object.keys(columnFilters).length} filtro(s) ativos
                             <X className="w-3 h-3" />
                         </button>
                     )}
 
                     {hiddenColumns.size > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-gray-100 text-gray-500">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                             <EyeOff className="w-3 h-3" /> {hiddenColumns.size} coluna(s) oculta(s)
                         </span>
                     )}
@@ -952,27 +971,27 @@ const ReportsPage: React.FC = () => {
 
                 {/* Tabela */}
                 <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                    <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                         <tr>
                             {visibleCols.map(col => (
                                 <th
                                     key={col.key}
                                     onClick={() => handleSort(col.key)}
-                                    className={`px-3 py-2 font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-100 transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                                    className={`px-3 py-2 font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
                                 >
                                     <div className={`flex items-center gap-1 ${col.align === 'right' ? 'justify-end' : ''}`}>
                                         <span className="text-xs">{col.label}</span>
                                         {sortConfig?.key === col.key ? (
-                                            sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600" /> : <ArrowDown className="w-3 h-3 text-indigo-600" />
+                                            sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /> : <ArrowDown className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                                         ) : (
-                                            <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                                            <ArrowUpDown className="w-3 h-3 text-gray-300 dark:text-gray-600" />
                                         )}
                                     </div>
                                 </th>
                             ))}
                         </tr>
                         {showColumnFilters && (
-                            <tr className="bg-gray-25">
+                            <tr className="bg-gray-25 dark:bg-gray-800/50">
                                 {visibleCols.map(col => (
                                     <th key={`filter-${col.key}`} className="px-2 py-1">
                                         <input
@@ -980,14 +999,14 @@ const ReportsPage: React.FC = () => {
                                             value={columnFilters[col.key] || ''}
                                             onChange={(e) => handleColumnFilter(col.key, e.target.value)}
                                             placeholder={`Filtrar ${col.label}...`}
-                                            className="w-full text-xs font-normal px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 bg-white"
+                                            className="w-full text-xs font-normal px-2 py-1 border border-gray-200 dark:border-gray-700 rounded focus:outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 placeholder-gray-400"
                                         />
                                     </th>
                                 ))}
                             </tr>
                         )}
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                         {processedData.length === 0 ? (
                             <tr>
                                 <td colSpan={visibleCols.length} className="px-4 py-8 text-center text-gray-400 text-sm">
@@ -996,9 +1015,9 @@ const ReportsPage: React.FC = () => {
                             </tr>
                         ) : (
                             processedData.map((row, idx) => (
-                                <tr key={idx} className="border-t hover:bg-gray-50 transition-colors">
+                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
                                     {visibleCols.map(col => (
-                                        <td key={col.key} className={`px-3 py-2 text-xs ${col.align === 'right' ? 'text-right' : ''}`}>
+                                        <td key={col.key} className={`px-3 py-2 text-xs text-gray-600 dark:text-gray-300 ${col.align === 'right' ? 'text-right' : ''}`}>
                                             {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? '')}
                                         </td>
                                     ))}
@@ -1024,38 +1043,38 @@ const ReportsPage: React.FC = () => {
         return (
             <div className="space-y-6">
                 {/* DRE Simplificado */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 mb-2">
-                    <h4 className="font-bold text-gray-800 mb-4 text-sm uppercase tracking-wide">DRE - Demonstrativo de Resultado</h4>
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-2">
+                    <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase tracking-wide">DRE - Demonstrativo de Resultado</h4>
                     <div className="space-y-1 text-sm">
-                        <div className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="font-medium text-gray-700">( + ) Receita Bruta (Faturamento)</span>
-                            <span className="font-bold text-blue-700 text-base">{fmtBRL(financeiroData.faturamento)}</span>
+                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">( + ) Receita Bruta (Faturamento)</span>
+                            <span className="font-bold text-blue-700 dark:text-blue-400 text-base">{fmtBRL(financeiroData.faturamento)}</span>
                         </div>
-                        <div className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="text-gray-500 pl-4">( - ) Custo da Mercadoria Vendida (CMV)</span>
-                            <span className="text-red-600 font-medium">{fmtBRL(financeiroData.custo_mercadoria)}</span>
+                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                            <span className="text-gray-500 dark:text-gray-400 pl-4">( - ) Custo da Mercadoria Vendida (CMV)</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">{fmtBRL(financeiroData.custo_mercadoria)}</span>
                         </div>
-                        <div className="flex justify-between py-2 border-b-2 border-green-200 bg-green-50 px-3 rounded">
-                            <span className="font-bold text-green-800">( = ) Lucro Bruto</span>
-                            <span className="font-bold text-green-700 text-base">{fmtBRL(financeiroData.lucro_bruto)}</span>
+                        <div className="flex justify-between py-2 border-b-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 rounded">
+                            <span className="font-bold text-green-800 dark:text-green-300">( = ) Lucro Bruto</span>
+                            <span className="font-bold text-green-700 dark:text-green-400 text-base">{fmtBRL(financeiroData.lucro_bruto)}</span>
                         </div>
-                        <div className="flex justify-between py-1 text-xs text-green-600 pl-6">
+                        <div className="flex justify-between py-1 text-xs text-green-600 dark:text-green-400 pl-6">
                             <span>Margem bruta</span>
                             <span>{financeiroData.faturamento > 0 ? ((financeiroData.lucro_bruto / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</span>
                         </div>
-                        <div className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="text-gray-500 pl-4">( - ) Despesas Operacionais (mês)</span>
-                            <span className="text-red-600 font-medium">{fmtBRL(desp.total || 0)}</span>
+                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                            <span className="text-gray-500 dark:text-gray-400 pl-4">( - ) Despesas Operacionais (mês)</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">{fmtBRL(desp.total || 0)}</span>
                         </div>
-                        <div className="flex justify-between py-1 text-xs text-gray-400 pl-8">
+                        <div className="flex justify-between py-1 text-xs text-gray-400 dark:text-gray-500 pl-8">
                             <span>Fixas (recorrentes): {fmtBRL(desp.recorrentes || 0)}</span>
                             <span>Variáveis: {fmtBRL(desp.variaveis || 0)}</span>
                         </div>
-                        <div className={`flex justify-between py-2 px-3 rounded ${financeiroData.lucro_liquido >= 0 ? 'bg-emerald-50 border-2 border-emerald-300' : 'bg-red-50 border-2 border-red-300'}`}>
-                            <span className={`font-bold ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-800' : 'text-red-800'}`}>( = ) Lucro Líquido</span>
-                            <span className={`font-bold text-lg ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{fmtBRL(financeiroData.lucro_liquido)}</span>
+                        <div className={`flex justify-between py-2 px-3 rounded ${financeiroData.lucro_liquido >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-300 dark:border-emerald-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700'}`}>
+                            <span className={`font-bold ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-800 dark:text-emerald-300' : 'text-red-800 dark:text-red-300'}`}>( = ) Lucro Líquido</span>
+                            <span className={`font-bold text-lg ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>{fmtBRL(financeiroData.lucro_liquido)}</span>
                         </div>
-                        <div className={`flex justify-between py-1 text-xs pl-6 ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <div className={`flex justify-between py-1 text-xs pl-6 ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                             <span>Margem líquida</span>
                             <span>{financeiroData.faturamento > 0 ? ((financeiroData.lucro_liquido / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</span>
                         </div>
@@ -1064,34 +1083,34 @@ const ReportsPage: React.FC = () => {
 
                 {/* KPIs resumo */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                        <p className="text-xs text-blue-600 font-medium mb-1">Faturamento</p>
-                        <p className="text-xl font-bold text-blue-900">{fmtBRL(financeiroData.faturamento)}</p>
-                        <p className="text-[10px] text-blue-500 mt-1">{financeiroData.total_vendas} vendas</p>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800">
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">Faturamento</p>
+                        <p className="text-xl font-bold text-blue-900 dark:text-blue-200">{fmtBRL(financeiroData.faturamento)}</p>
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400/70 mt-1">{financeiroData.total_vendas} vendas</p>
                     </div>
-                    <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                        <p className="text-xs text-green-600 font-medium mb-1">Lucro Bruto</p>
-                        <p className="text-xl font-bold text-green-900">{fmtBRL(financeiroData.lucro_bruto)}</p>
-                        <p className="text-[10px] text-green-500 mt-1">Margem: {financeiroData.faturamento > 0 ? ((financeiroData.lucro_bruto / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</p>
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 border border-green-100 dark:border-green-800">
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium mb-1">Lucro Bruto</p>
+                        <p className="text-xl font-bold text-green-900 dark:text-green-200">{fmtBRL(financeiroData.lucro_bruto)}</p>
+                        <p className="text-[10px] text-green-500 dark:text-green-400/70 mt-1">Margem: {financeiroData.faturamento > 0 ? ((financeiroData.lucro_bruto / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</p>
                     </div>
-                    <div className={`rounded-xl p-4 border ${financeiroData.lucro_liquido >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                        <p className={`text-xs font-medium mb-1 ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Lucro Líquido</p>
-                        <p className={`text-xl font-bold ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>{fmtBRL(financeiroData.lucro_liquido)}</p>
-                        <p className="text-[10px] text-gray-500 mt-1">Margem: {financeiroData.faturamento > 0 ? ((financeiroData.lucro_liquido / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</p>
+                    <div className={`rounded-xl p-4 border ${financeiroData.lucro_liquido >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800'}`}>
+                        <p className={`text-xs font-medium mb-1 ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>Lucro Líquido</p>
+                        <p className={`text-xl font-bold ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-900 dark:text-emerald-200' : 'text-red-900 dark:text-red-200'}`}>{fmtBRL(financeiroData.lucro_liquido)}</p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Margem: {financeiroData.faturamento > 0 ? ((financeiroData.lucro_liquido / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</p>
                     </div>
-                    <div className={`rounded-xl p-4 border ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-orange-50 border-orange-100'}`}>
-                        <p className={`text-xs font-medium mb-1 ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'text-sky-600' : 'text-orange-600'}`}>Fluxo Caixa (30d)</p>
-                        <p className={`text-xl font-bold ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'text-sky-900' : 'text-orange-900'}`}>{fmtBRL(fluxo.saldo_previsto ?? 0)}</p>
-                        <p className="text-[10px] text-gray-500 mt-1">
-                            <span className="text-green-600">+{fmtBRL(fluxo.entradas_previstas ?? 0)}</span> / <span className="text-red-600">-{fmtBRL(fluxo.saidas_previstas ?? 0)}</span>
+                    <div className={`rounded-xl p-4 border ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'bg-sky-50 dark:bg-sky-900/20 border-sky-100 dark:border-sky-800' : 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800'}`}>
+                        <p className={`text-xs font-medium mb-1 ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'text-sky-600 dark:text-sky-400' : 'text-orange-600 dark:text-orange-400'}`}>Fluxo Caixa (30d)</p>
+                        <p className={`text-xl font-bold ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'text-sky-900 dark:text-sky-200' : 'text-orange-900 dark:text-orange-200'}`}>{fmtBRL(fluxo.saldo_previsto ?? 0)}</p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                            <span className="text-green-600 dark:text-green-400">+{fmtBRL(fluxo.entradas_previstas ?? 0)}</span> / <span className="text-red-600 dark:text-red-400">-{fmtBRL(fluxo.saidas_previstas ?? 0)}</span>
                         </p>
                     </div>
                 </div>
 
                 {/* Contas a Pagar e Receber */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white border border-gray-200 rounded-xl p-5">
-                        <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+                        <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
                             <ArrowDownRight className="w-4 h-4 text-red-500" /> Contas a Pagar
                         </h4>
                         <div className="space-y-2 text-sm">
@@ -1152,11 +1171,10 @@ const ReportsPage: React.FC = () => {
                             <AlertTriangle className="w-4 h-4 text-amber-500" /> Alertas Financeiros
                         </h4>
                         {alertas.map((alerta: any, i: number) => (
-                            <div key={i} className={`p-3 rounded-lg border text-sm ${
-                                alerta.severidade === 'critica' ? 'bg-red-50 border-red-200 text-red-800' :
+                            <div key={i} className={`p-3 rounded-lg border text-sm ${alerta.severidade === 'critica' ? 'bg-red-50 border-red-200 text-red-800' :
                                 alerta.severidade === 'alta' ? 'bg-orange-50 border-orange-200 text-orange-800' :
-                                'bg-yellow-50 border-yellow-200 text-yellow-800'
-                            }`}>
+                                    'bg-yellow-50 border-yellow-200 text-yellow-800'
+                                }`}>
                                 <p className="font-semibold">{alerta.titulo}</p>
                                 <p className="text-xs mt-0.5 opacity-80">{alerta.descricao}</p>
                                 <p className="text-xs mt-1 font-medium opacity-70">Ação: {alerta.acao}</p>
@@ -1218,16 +1236,22 @@ const ReportsPage: React.FC = () => {
         { key: 'Categoria', label: 'Categoria' },
         { key: 'Preço Venda (R$)', label: 'Preço Venda', align: 'right', render: (v) => fmtBRL(v) },
         { key: 'Preço Custo (R$)', label: 'Preço Custo', align: 'right', render: (v) => fmtBRL(v) },
-        { key: 'Margem (%)', label: 'Margem', align: 'right', render: (v) => (
-            <span className={`font-semibold ${v < 10 ? 'text-red-600' : v < 30 ? 'text-orange-600' : 'text-green-600'}`}>{v}%</span>
-        )},
+        {
+            key: 'Margem (%)', label: 'Margem', align: 'right', render: (v) => (
+                <span className={`font-semibold ${v < 10 ? 'text-red-600' : v < 30 ? 'text-orange-600' : 'text-green-600'}`}>{v}%</span>
+            )
+        },
         { key: 'Estoque', label: 'Estoque', render: (v) => String(v) },
-        { key: 'Classificação ABC', label: 'ABC', render: (v) => (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v === 'A' ? 'bg-green-100 text-green-800' : v === 'B' ? 'bg-yellow-100 text-yellow-800' : v === 'C' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>{v}</span>
-        )},
-        { key: 'Status', label: 'Status', render: (v) => (
-            <span className={v === 'CRÍTICO' ? 'text-red-600 font-bold' : 'text-emerald-600'}>{v}</span>
-        )},
+        {
+            key: 'Classificação ABC', label: 'ABC', render: (v) => (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v === 'A' ? 'bg-green-100 text-green-800' : v === 'B' ? 'bg-yellow-100 text-yellow-800' : v === 'C' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}`}>{v}</span>
+            )
+        },
+        {
+            key: 'Status', label: 'Status', render: (v) => (
+                <span className={v === 'CRÍTICO' ? 'text-red-600 font-bold' : 'text-emerald-600'}>{v}</span>
+            )
+        },
     ]);
 
     // ==================== RENDER TABELAS GENÉRICAS ====================
@@ -1241,31 +1265,39 @@ const ReportsPage: React.FC = () => {
 
     const renderRFM = () => renderDataTable(rfmData, [
         { key: 'Nome', label: 'Cliente', render: (v) => <span className="font-medium">{v}</span> },
-        { key: 'Segmento', label: 'Segmento', render: (v) => (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v === 'Campeão' ? 'bg-purple-100 text-purple-800' : v === 'Fiel' ? 'bg-blue-100 text-blue-800' : v === 'Em Risco' ? 'bg-orange-100 text-orange-800' : v === 'Perdido' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{v}</span>
-        )},
+        {
+            key: 'Segmento', label: 'Segmento', render: (v) => (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v === 'Campeão' ? 'bg-purple-100 text-purple-800' : v === 'Fiel' ? 'bg-blue-100 text-blue-800' : v === 'Em Risco' ? 'bg-orange-100 text-orange-800' : v === 'Perdido' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{v}</span>
+            )
+        },
         { key: 'Recência (dias)', label: 'Recência', render: (v) => v + ' dias' },
         { key: 'Frequência', label: 'Freq.' },
         { key: 'Valor Total (R$)', label: 'Valor', align: 'right', render: (v) => <span className="font-semibold text-green-600">{fmtBRL(v)}</span> },
         { key: 'Score RFM', label: 'Score', render: (v) => <span className="font-mono text-xs">{v}</span> },
-        { key: 'Em Risco', label: 'Status', render: (v) => (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v === 'SIM' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                {v === 'SIM' ? 'Em Risco' : 'OK'}
-            </span>
-        )},
+        {
+            key: 'Em Risco', label: 'Status', render: (v) => (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v === 'SIM' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                    {v === 'SIM' ? 'Em Risco' : 'OK'}
+                </span>
+            )
+        },
     ]);
 
     const renderABC = () => renderDataTable(abcData, [
         { key: 'Produto', label: 'Produto', render: (v) => <span className="font-medium">{v}</span> },
-        { key: 'Classe ABC', label: 'Classe', render: (v) => (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v === 'A' ? 'bg-green-100 text-green-800' : v === 'B' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{v}</span>
-        )},
+        {
+            key: 'Classe ABC', label: 'Classe', render: (v) => (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v === 'A' ? 'bg-green-100 text-green-800' : v === 'B' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{v}</span>
+            )
+        },
         { key: 'Quantidade Vendida', label: 'Qtd' },
         { key: 'Faturamento (R$)', label: 'Faturamento', align: 'right', render: (v) => <span className="font-semibold">{fmtBRL(v)}</span> },
         { key: 'Lucro Real (R$)', label: 'Lucro', align: 'right', render: (v) => <span className="font-semibold text-green-600">{fmtBRL(v)}</span> },
-        { key: 'Margem Real (%)', label: 'Margem', render: (v) => (
-            <span className={`font-semibold ${parseFloat(v) < 0 ? 'text-red-600' : parseFloat(v) < 20 ? 'text-orange-600' : 'text-green-600'}`}>{v}%</span>
-        )},
+        {
+            key: 'Margem Real (%)', label: 'Margem', render: (v) => (
+                <span className={`font-semibold ${parseFloat(v) < 0 ? 'text-red-600' : parseFloat(v) < 20 ? 'text-orange-600' : 'text-green-600'}`}>{v}%</span>
+            )
+        },
         { key: '% Faturamento', label: '% Fat.', render: (v) => v + '%' },
     ]);
 
@@ -1275,46 +1307,118 @@ const ReportsPage: React.FC = () => {
         { key: 'Média Vendas/Dia', label: 'Média/Dia' },
         { key: 'Dias até Esgotamento', label: 'Dias Restantes', render: (v) => <span className="font-semibold">{v}</span> },
         { key: 'Data Prevista', label: 'Data Prevista' },
-        { key: 'Status', label: 'Status', render: (v) => (
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v === 'CRÍTICO' ? 'bg-red-100 text-red-800 animate-pulse' : v === 'ATENÇÃO' ? 'bg-orange-100 text-orange-800' : v === 'ESGOTADO' ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'}`}>{v}</span>
-        )},
+        {
+            key: 'Status', label: 'Status', render: (v) => (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${v === 'CRÍTICO' ? 'bg-red-100 text-red-800 animate-pulse' : v === 'ATENÇÃO' ? 'bg-orange-100 text-orange-800' : v === 'ESGOTADO' ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'}`}>{v}</span>
+            )
+        },
     ]);
 
-    const renderFornecedores = () => renderDataTable(fornecedoresData, [
-        { key: 'Fornecedor', label: 'Fornecedor', render: (v) => <span className="font-medium">{v}</span> },
-        { key: 'CNPJ', label: 'CNPJ', render: (v) => <span className="font-mono text-[10px]">{v}</span> },
-        { key: 'Classificação', label: 'Class.', render: (v) => (
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${v === 'PREMIUM' ? 'bg-purple-100 text-purple-800' : v === 'REGULAR' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>{v}</span>
-        )},
-        { key: 'Total Pedidos', label: 'Pedidos' },
-        { key: 'Valor Compras (R$)', label: 'Valor Compras', align: 'right', render: (v) => <span className="font-semibold">{fmtBRL(v)}</span> },
-        { key: 'Ped. Pendentes', label: 'Pendentes', render: (v) => (
-            <span className={v > 0 ? 'text-orange-600 font-semibold' : 'text-gray-400'}>{v}</span>
-        )},
-        { key: 'Ped. Concluídos', label: 'Concluídos', render: (v) => (
-            <span className={v > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}>{v}</span>
-        )},
-        { key: 'Taxa Conclusão (%)', label: 'Taxa %', align: 'right', render: (v) => (
-            <span className={`font-medium ${v >= 80 ? 'text-green-600' : v >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{v}%</span>
-        )},
-        { key: 'Entrega (dias)', label: 'Entrega', render: (v) => v > 0 ? <span className="text-gray-600">{v} dias</span> : <span className="text-gray-300">-</span> },
-        { key: 'Produtos', label: 'Produtos' },
-        { key: 'Boletos Abertos', label: 'Bol. Abertos', render: (v) => (
-            <span className={v > 0 ? 'bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full text-[10px] font-bold' : 'text-gray-300'}>{v}</span>
-        )},
-        { key: 'Valor Aberto (R$)', label: 'Valor Aberto', align: 'right', render: (v) => (
-            <span className={v > 0 ? 'text-amber-700 font-semibold' : 'text-gray-300'}>{v > 0 ? fmtBRL(v) : '-'}</span>
-        )},
-        { key: 'Boletos Vencidos', label: 'Vencidos', render: (v) => (
-            <span className={v > 0 ? 'bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full text-[10px] font-bold' : 'text-gray-300'}>{v}</span>
-        )},
-        { key: 'Valor Vencido (R$)', label: 'Valor Vencido', align: 'right', render: (v) => (
-            <span className={v > 0 ? 'text-red-700 font-bold' : 'text-gray-300'}>{v > 0 ? fmtBRL(v) : '-'}</span>
-        )},
-        { key: 'Total Pago (R$)', label: 'Pago', align: 'right', render: (v) => (
-            <span className={v > 0 ? 'text-green-600 font-medium' : 'text-gray-300'}>{v > 0 ? fmtBRL(v) : '-'}</span>
-        )},
-    ]);
+    const renderFornecedores = () => {
+        const topFornecedor = fornecedoresData.length > 0 ? fornecedoresData.reduce((prev: any, current: any) => (prev.Score > current.Score) ? prev : current) : {};
+        const atencaoFornecedor = fornecedoresData.length > 0 ? fornecedoresData.reduce((prev: any, current: any) => (prev.Score < current.Score) ? prev : current) : {};
+
+        return (
+            <div className="space-y-6">
+                {/* Visual Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Top Supplier */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 rounded-xl border border-green-100 dark:border-green-800 flex items-center justify-between shadow-sm">
+                        <div>
+                            <p className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <Trophy className="w-3 h-3" /> Melhor Fornecedor
+                            </p>
+                            <p className="text-lg font-bold text-gray-800 dark:text-gray-100">{topFornecedor['Fornecedor'] || '-'}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-200 px-2 py-0.5 rounded-full font-bold border border-green-300 dark:border-green-700">
+                                    Score: {topFornecedor['Score']?.toFixed(1) || 0}
+                                </span>
+                                <span className="text-[10px] text-gray-600 dark:text-gray-400">
+                                    OTD: <span className="font-medium text-gray-800 dark:text-gray-200">{topFornecedor['OTD (%)']?.toFixed(1) || 0}%</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-white dark:bg-gray-800 rounded-full text-green-600 dark:text-green-400 shadow-sm border border-green-100 dark:border-green-900">
+                            <Trophy className="w-6 h-6" />
+                        </div>
+                    </div>
+
+                    {/* Attention Needed */}
+                    <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800 flex items-center justify-between shadow-sm">
+                        <div>
+                            <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <AlertOctagon className="w-3 h-3" /> Atenção Necessária
+                            </p>
+                            <p className="text-lg font-bold text-gray-800 dark:text-gray-100">{atencaoFornecedor['Fornecedor'] || '-'}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs bg-red-200 dark:bg-red-800/50 text-red-800 dark:text-red-200 px-2 py-0.5 rounded-full font-bold border border-red-300 dark:border-red-700">
+                                    Score: {atencaoFornecedor['Score']?.toFixed(1) || 0}
+                                </span>
+                                <span className="text-[10px] text-gray-600 dark:text-gray-400">
+                                    Atraso Médio: <span className="font-medium text-gray-800 dark:text-gray-200">{atencaoFornecedor['Atraso Médio (dias)']?.toFixed(1) || 0} dias</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-white dark:bg-gray-800 rounded-full text-red-600 dark:text-red-400 shadow-sm border border-red-100 dark:border-red-900">
+                            <AlertOctagon className="w-6 h-6" />
+                        </div>
+                    </div>
+                </div>
+
+                {renderDataTable(fornecedoresData, [
+                    { key: 'Fornecedor', label: 'Fornecedor', render: (v) => <span className="font-medium text-gray-900 dark:text-gray-100">{v}</span> },
+                    {
+                        key: 'Score', label: 'Score', align: 'center', render: (v) => (
+                            <div className="w-full max-w-[80px] mx-auto">
+                                <div className="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full ${v >= 80 ? 'bg-green-500' : v >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                        style={{ width: `${Math.min(100, Math.max(0, v))}%` }}
+                                    ></div>
+                                </div>
+                                <div className="text-[10px] text-center mt-0.5 font-bold text-gray-600 dark:text-gray-400">{v?.toFixed(1)}</div>
+                            </div>
+                        )
+                    },
+                    {
+                        key: 'OTD (%)', label: 'OTD', align: 'right', render: (v) => (
+                            <span className={`font-bold ${v >= 90 ? 'text-green-600 dark:text-green-400' : v >= 75 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {v?.toFixed(1)}%
+                            </span>
+                        )
+                    },
+                    {
+                        key: 'Classificação', label: 'Class.', render: (v) => (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${v === 'PREMIUM' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : v === 'REGULAR' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>{v}</span>
+                        )
+                    },
+                    { key: 'Total Pedidos', label: 'Pedidos', align: 'center' },
+                    { key: 'Valor Compras (R$)', label: 'Valor Compras', align: 'right', render: (v) => <span className="font-semibold text-gray-700 dark:text-gray-300">{fmtBRL(v)}</span> },
+                    {
+                        key: 'Taxa Conclusão (%)', label: 'Conclusão', align: 'right', render: (v) => (
+                            <span className={`font-medium ${v >= 80 ? 'text-green-600 dark:text-green-400' : v >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>{v?.toFixed(0)}%</span>
+                        )
+                    },
+                    {
+                        key: 'Atraso Médio (dias)', label: 'Atraso Méd.', align: 'right', render: (v) => (
+                            <span className={v > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-400 dark:text-gray-500'}>{v > 0 ? `${v.toFixed(1)} dias` : '-'}</span>
+                        )
+                    },
+                    { key: 'Entrega (dias)', label: 'Lead Time', align: 'right', render: (v) => v > 0 ? <span className="text-gray-600 dark:text-gray-400">{v} dias</span> : <span className="text-gray-300 dark:text-gray-600">-</span> },
+                    {
+                        key: 'Boletos Abertos', label: 'Bol. Abertos', align: 'center', render: (v) => (
+                            <span className={v > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full text-[10px] font-bold' : 'text-gray-300 dark:text-gray-600'}>{v}</span>
+                        )
+                    },
+                    {
+                        key: 'Boletos Vencidos', label: 'Vencidos', align: 'center', render: (v) => (
+                            <span className={v > 0 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full text-[10px] font-bold' : 'text-gray-300 dark:text-gray-600'}>{v}</span>
+                        )
+                    },
+                ])}
+            </div>
+        );
+    };
 
     const renderClientes = () => renderDataTable(clientesData, [
         { key: 'Cliente', label: 'Cliente', render: (v) => <span className="font-medium">{v}</span> },
@@ -1361,9 +1465,9 @@ const ReportsPage: React.FC = () => {
                 <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
                     <CalendarIcon className="w-5 h-5 text-gray-500 ml-2" />
                     <div className="flex items-center gap-2">
-                        <input type="date" value={dateRange.startDate} onChange={(e) => setDateRange({...dateRange, startDate: e.target.value})} className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0" />
+                        <input type="date" value={dateRange.startDate} onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })} className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0" />
                         <span className="text-gray-400">até</span>
-                        <input type="date" value={dateRange.endDate} onChange={(e) => setDateRange({...dateRange, endDate: e.target.value})} className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0" />
+                        <input type="date" value={dateRange.endDate} onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })} className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0" />
                     </div>
                 </div>
             </div>
@@ -1417,23 +1521,29 @@ const ReportsPage: React.FC = () => {
 
             {/* Modal */}
             {modalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-                        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
-                            <h2 className="text-xl font-bold text-gray-800">{modalTitles[modalType || ''] || ''}</h2>
-                            <button onClick={closeModal} className="text-gray-500 hover:text-gray-700"><X className="w-6 h-6" /></button>
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-800 transition-colors duration-200">
+                        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex justify-between items-center z-10">
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{modalTitles[modalType || ''] || ''}</h2>
+                            <button onClick={closeModal} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"><X className="w-6 h-6" /></button>
                         </div>
                         <div className="px-6 py-4">
                             {/* Toolbar */}
                             <div className="flex flex-wrap items-center gap-2 mb-4">
                                 {renderExportButtons()}
-                                <div className="ml-auto flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg">
-                                    <Search className="w-4 h-4 text-gray-500" />
-                                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar..." className="bg-transparent text-sm focus:outline-none w-32" />
+                                <div className="ml-auto flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                                    <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Buscar..."
+                                        className="bg-transparent text-sm focus:outline-none w-32 text-gray-700 dark:text-gray-200 placeholder-gray-400"
+                                    />
                                 </div>
                             </div>
                             {/* Conteúdo */}
-                            <div className="rounded-lg border border-gray-100 max-h-[70vh] overflow-auto">
+                            <div className="rounded-lg border border-gray-100 dark:border-gray-800 max-h-[70vh] overflow-auto bg-white dark:bg-gray-900">
                                 {renderModalContent()}
                             </div>
                         </div>

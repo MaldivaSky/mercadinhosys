@@ -233,7 +233,7 @@ class DashboardOrchestrator:
             _logger.info(f"⏱️ get_sales_timeseries: {time.time()-t0:.2f}s")
             
             t0 = time.time()
-            expense_details = DataLayer.get_expense_details(self.establishment_id, timeseries_days)
+            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
             _logger.info(f"⏱️ get_expense_details: {time.time()-t0:.2f}s")
         except Exception as e:
             _logger.error(f"Erro ao obter dados base do dashboard: {e}")
@@ -258,7 +258,7 @@ class DashboardOrchestrator:
         
         # 🔥 ADICIONADO: Detalhes de despesas
         try:
-            expense_details = DataLayer.get_expense_details(self.establishment_id, days)
+            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
         except Exception as e:
             _logger.error(f"Erro ao obter detalhes de despesas: {e}")
             expense_details = []

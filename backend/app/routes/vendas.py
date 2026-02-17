@@ -50,25 +50,21 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
     # Filtro por data
     for filtro_data in ["data_inicio", "data_fim"]:
         if filtro_data in filtros and filtros[filtro_data]:
-            # Log dos filtros recebidos (para debug)
-            print(f"Applying filter {filtro_data}: {filtros[filtro_data]}")
-            
             try:
                 data_str = filtros[filtro_data].strip()
                 data_dt = None
                 
-                # Tentar múltiplos formatos
-                for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"]:
-                    try:
-                        data_dt = datetime.strptime(data_str.split('T')[0] if 'T' in data_str and fmt == "%Y-%m-%d" else data_str, fmt)
-                        break
-                    except ValueError:
-                        continue
-                
-                # Se falhar, tenta fromisoformat
+                # Tentar parsing flexível
+                # 1. Tentar ISO format direto (ex: 2026-02-16T15:00:00.000Z)
+                try:
+                    data_dt = datetime.fromisoformat(data_str.replace('Z', '+00:00'))
+                except ValueError:
+                    pass
+
+                # 2. Tentar YYYY-MM-DD
                 if not data_dt:
                     try:
-                        data_dt = datetime.fromisoformat(data_str.replace("Z", "+00:00"))
+                        data_dt = datetime.strptime(data_str.split('T')[0], "%Y-%m-%d")
                     except ValueError:
                         pass
                 
@@ -77,18 +73,22 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
                     campo_data = func.coalesce(Venda.data_venda, Venda.created_at)
                     
                     if filtro_data == "data_inicio":
+                        # Remover parte de hora para garantir inicio do dia se for apenas data
+                        if len(data_str) <= 10:
+                             data_dt = data_dt.replace(hour=0, minute=0, second=0, microsecond=0)
                         query = query.filter(campo_data >= data_dt)
+                        
                     elif filtro_data == "data_fim":
-                        # Adiciona 1 dia para incluir o dia inteiro se for apenas data
-                        if len(data_str) <= 10: # Apenas data, sem hora
-                            data_fim = data_dt + timedelta(days=1)
-                            query = query.filter(campo_data < data_fim)
+                        # Se for apenas data (yyyy-mm-dd), ajustar para final do dia (ou dia seguinte exclusivo)
+                        if len(data_str) <= 10 or (data_dt.hour == 0 and data_dt.minute == 0):
+                            data_fim = data_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                            query = query.filter(campo_data <= data_fim)
                         else:
                             query = query.filter(campo_data <= data_dt)
                 else:
-                    print(f"❌ Failed to parse date: {data_str}")
+                    print(f"⚠️ Formato de data desconhecido: {data_str}")
             except Exception as e:
-                print(f"❌ Error applying date filter: {str(e)}")
+                print(f"❌ Erro ao aplicar filtro de data ({filtro_data}): {str(e)}")
                 pass
 
     # Filtro por intervalo de total
@@ -1003,6 +1003,8 @@ def criar_venda():
                 produto_nome=produto.nome,
                 produto_codigo=produto.codigo_barras,
                 produto_unidade=produto.unidade_medida,
+                custo_unitario=produto.preco_custo,
+                margem_lucro_real=(float(preco_unitario) - float(produto.preco_custo or 0)) * float(quantidade)
             )
 
             db.session.add(venda_item)
