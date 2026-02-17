@@ -118,7 +118,7 @@ ERROR:app:❌ Erro ao enviar cupom: Authentication failed
 
 **Solução:**
 1. Verifique se a senha de app está correta
-2. Remova espaços da senha: `ribpqcbfxhqrsgvz`
+2. Remova espaços da senha de app e mantenha apenas os 16 caracteres contínuos
 3. Gere nova senha de app: https://myaccount.google.com/apppasswords
 
 ### Cliente sem email

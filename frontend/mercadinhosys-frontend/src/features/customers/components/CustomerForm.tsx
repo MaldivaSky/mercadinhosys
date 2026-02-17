@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { maskCPF, maskPhone } from './inputMasks';
 import { Cliente } from '../../../types';
+import { apiClient } from '../../../api/apiClient';
 import {
   Dialog, DialogContent, DialogActions, Button, TextField, Typography, Box, IconButton, CircularProgress
 } from '@mui/material';
@@ -60,9 +61,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
     if (!cpf || cpf.length < 14) return false;
     try {
       const cleanCPF = cpf.replace(/\D/g, '');
-      const response = await fetch(`/api/clientes?busca=${cleanCPF}`);
-      const data = await response.json();
-      const existing = data.clientes?.find((c: Cliente) => c.cpf === cleanCPF && c.id !== initialData?.id);
+      const response = await apiClient.get('/clientes/', { params: { busca: cleanCPF } });
+      const data = response.data;
+      const existing = data.clientes?.find(
+        (c: Cliente) => (c.cpf || '').replace(/\D/g, '') === cleanCPF && c.id !== initialData?.id
+      );
       return !!existing;
     } catch {
       return false;

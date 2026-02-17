@@ -15,30 +15,17 @@ const App: React.FC = () => {
           <DebugRoutes />
           <AppRoutes />
           <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 2500,
-            style: {
-              background: '#363636',
-              color: '#fff',
-              fontSize: '14px',
-              fontWeight: '500',
-            },
-            success: {
-              duration: 2500,
+            position="top-right"
+            toastOptions={{
+              duration: 3000,
               style: {
-                background: '#10b981',
+                background: '#333',
+                color: '#fff',
+                zIndex: 99999, // Ensure it's high but simple
               },
-            },
-            error: {
-              duration: 3500,
-              style: {
-                background: '#ef4444',
-              },
-            },
-          }}
-        />
-      </Router>
+            }}
+          />
+        </Router>
       </ThemeProvider>
     </ConfigProvider>
   );

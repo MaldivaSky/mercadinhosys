@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, timedelta, date
 from decimal import Decimal
+from sqlalchemy.exc import IntegrityError
 import re
 from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber, Funcionario
 from app.utils import validar_cpf, validar_email, formatar_telefone, calcular_idade
@@ -32,15 +33,23 @@ def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
     # Validação de CPF
     if data.get("cpf"):
         cpf = re.sub(r"\D", "", data["cpf"])
+        cpf_formatado = formatar_cpf(cpf)
         if len(cpf) != 11:
             erros.append("CPF deve conter 11 dígitos")
         elif not validar_cpf(cpf):
             erros.append("CPF inválido")
 
         # Verifica se CPF já existe (exceto para o próprio cliente em atualização)
-        cliente_existente = Cliente.query.filter_by(
-            cpf=cpf, estabelecimento_id=estabelecimento_id
-        ).first()
+        cliente_existente = (
+            Cliente.query.filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                db.or_(
+                    Cliente.cpf == cpf,
+                    Cliente.cpf == cpf_formatado,
+                ),
+            )
+            .first()
+        )
 
         if cliente_existente and cliente_existente.id != cliente_id:
             erros.append("CPF já cadastrado para outro cliente")
@@ -547,9 +556,22 @@ def criar_cliente():
             201,
         )
 
+    except IntegrityError:
+        db.session.rollback()
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "CPF já cadastrado para outro cliente",
+                }
+            ),
+            400,
+        )
     except Exception as e:
         db.session.rollback()
+        import traceback
         current_app.logger.error(f"Erro ao criar cliente: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
         return (
             jsonify({"success": False, "message": "Erro interno ao criar cliente"}),
             500,

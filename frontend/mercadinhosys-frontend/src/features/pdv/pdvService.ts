@@ -82,9 +82,45 @@ export interface AutorizarGerenteRequest {
     valor_desconto?: number;
 }
 
+export interface ComprovanteVendaResponse {
+    success: boolean;
+    venda: {
+        id: number;
+        codigo: string;
+        data: string;
+    };
+    estabelecimento?: {
+        nome_fantasia?: string;
+        razao_social?: string;
+        cnpj?: string;
+        inscricao_estadual?: string;
+        telefone?: string;
+        email?: string;
+        endereco?: string;
+    };
+    comprovante: {
+        funcionario: string;
+        cliente: string;
+        itens: Array<{
+            nome: string;
+            codigo?: string;
+            quantidade: number;
+            preco_unitario: number;
+            total: number;
+        }>;
+        subtotal: number;
+        desconto: number;
+        total: number;
+        forma_pagamento: string;
+        valor_recebido: number;
+        troco: number;
+        rodape?: string;
+    };
+}
+
 export const pdvService = {
     // ==================== CONFIGURAÇÕES PDV ====================
-    
+
     /**
      * Carrega configurações do PDV incluindo permissões do funcionário
      */
@@ -94,7 +130,7 @@ export const pdvService = {
     },
 
     // ==================== VALIDAÇÃO DE PRODUTOS ====================
-    
+
     /**
      * Valida produto antes de adicionar ao carrinho
      * Verifica estoque disponível e retorna dados completos
@@ -112,18 +148,24 @@ export const pdvService = {
      * Busca produtos por nome, marca, categoria
      */
     buscarProduto: async (query: string): Promise<Produto[]> => {
-        const response = await apiClient.get<any>('/produtos/search', {
-            params: { q: query },
+        // OTIMIZAÇÃO: Usar endpoint de listagem que já retorna alertas e dados completos
+        const response = await apiClient.get<any>('/produtos/', {
+            params: {
+                busca: query,
+                por_pagina: 20, // Limitar resultados para performance
+                ativo: true    // Apenas produtos ativos
+            },
         });
         console.log('🔍 Resposta da API de busca:', response.data);
-        
-        // A API retorna { success: true, produtos: [...], total: X }
+
         if (response.data.success && Array.isArray(response.data.produtos)) {
-            return response.data.produtos;
+            return response.data.produtos.map((p: any) => ({
+                ...p,
+                quantidade_estoque: p.quantidade // Garantir compatibilidade com PDV
+            }));
         }
-        
-        // Fallback para compatibilidade
-        return Array.isArray(response.data) ? response.data : [];
+
+        return [];
     },
 
     /**
@@ -143,7 +185,7 @@ export const pdvService = {
     },
 
     // ==================== CÁLCULOS E PREVIEW ====================
-    
+
     /**
      * Calcula totais em tempo real (preview)
      * Não persiste dados, apenas retorna cálculos
@@ -154,7 +196,7 @@ export const pdvService = {
     },
 
     // ==================== FINALIZAÇÃO DE VENDA ====================
-    
+
     /**
      * Finaliza venda de forma ATÔMICA
      * Atualiza estoque e registra movimentações
@@ -165,7 +207,7 @@ export const pdvService = {
     },
 
     // ==================== ESTATÍSTICAS E RESUMOS ====================
-    
+
     /**
      * Retorna resumo das vendas de hoje
      */
@@ -183,7 +225,7 @@ export const pdvService = {
     },
 
     // ==================== CANCELAMENTO ====================
-    
+
     /**
      * Cancela venda (requer permissão)
      */
@@ -192,7 +234,7 @@ export const pdvService = {
     },
 
     // ==================== AUTORIZAÇÃO DE GERENTE ====================
-    
+
     /**
      * Solicita autorização de gerente para desconto/cancelamento
      */
@@ -221,7 +263,7 @@ export const pdvService = {
     },
 
     // ==================== CLIENTES ====================
-    
+
     /**
      * Busca clientes para vincular à venda
      */
@@ -230,18 +272,18 @@ export const pdvService = {
             params: { q: query },
         });
         console.log('👥 Resposta da API de clientes:', response.data);
-        
+
         // A API retorna { success: true, clientes: [...], total: X }
         if (response.data.success && Array.isArray(response.data.clientes)) {
             return response.data.clientes;
         }
-        
+
         // Fallback para compatibilidade
         return Array.isArray(response.data) ? response.data : [];
     },
 
     // ==================== IMPRESSÃO ====================
-    
+
     /**
      * Imprime comprovante da venda
      */
@@ -253,7 +295,7 @@ export const pdvService = {
     },
 
     // ==================== EMAIL ====================
-    
+
     /**
      * Envia cupom fiscal por email
      */
@@ -265,5 +307,27 @@ export const pdvService = {
             success: true,
             message: response.data.message || 'Email enviado com sucesso!',
         };
+    },
+
+    /**
+     * Envia nota fiscal para email específico (para consumidor final ou cliente sem email)
+     */
+    enviarCupomFiscal: async (vendaId: number, email: string): Promise<{ success: boolean; message: string }> => {
+        const response = await apiClient.post<ApiResponse<any>>('/pdv/enviar-cupom', {
+            venda_id: vendaId,
+            email_destino: email,
+        });
+        return {
+            success: true,
+            message: response.data.message || 'Nota fiscal enviada com sucesso!',
+        };
+    },
+
+    /**
+     * Busca comprovante completo para exibir em tela
+     */
+    obterComprovante: async (vendaId: number): Promise<ComprovanteVendaResponse> => {
+        const response = await apiClient.get<ComprovanteVendaResponse>(`/pdv/comprovante/${vendaId}`);
+        return response.data;
     },
 };
