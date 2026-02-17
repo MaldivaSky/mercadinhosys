@@ -45,6 +45,29 @@ def run_sync():
             "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS prazo_entrega INTEGER DEFAULT 7",
             # produto_lotes: preço de venda por lote (promoção)
             "ALTER TABLE produto_lotes ADD COLUMN IF NOT EXISTS preco_venda NUMERIC(10,2)",
+            # configuracoes - restaurar o que a migração reset_v2 removeu
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS tema_escuro BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS cor_principal VARCHAR(7) DEFAULT '#2563eb'",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS emitir_nfe BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS emitir_nfce BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS impressao_automatica BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS tipo_impressora VARCHAR(20) DEFAULT 'termica_80mm'",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS exibir_preco_tela BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS permitir_venda_sem_estoque BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS desconto_maximo_percentual NUMERIC(5,2) DEFAULT 10.00",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS desconto_maximo_funcionario NUMERIC(5,2) DEFAULT 10.00",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS arredondamento_valores BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS formas_pagamento TEXT DEFAULT '[\"Dinheiro\", \"Cartão de Crédito\", \"Cartão de Débito\", \"PIX\"]'",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS controlar_validade BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alerta_estoque_minimo BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS dias_alerta_validade INTEGER DEFAULT 30",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS estoque_minimo_padrao INTEGER DEFAULT 10",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS tempo_sessao_minutos INTEGER DEFAULT 30",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS tentativas_senha_bloqueio INTEGER DEFAULT 3",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alertas_email BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS alertas_whatsapp BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS logo_base64 TEXT",
+            "ALTER TABLE configuracoes ADD COLUMN IF NOT EXISTS horas_extras_percentual NUMERIC(5,2) DEFAULT 50.00",
         ]
         ok = 0
         for sql in alteras:

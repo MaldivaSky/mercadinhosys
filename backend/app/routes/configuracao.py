@@ -76,6 +76,8 @@ def ensure_configuracoes_schema():
             ddl.append(text(f"ALTER TABLE configuracoes ADD COLUMN alertas_whatsapp {get_bool_type()}"))
         if "logo_base64" not in columns:
             ddl.append(text("ALTER TABLE configuracoes ADD COLUMN logo_base64 TEXT"))
+        if "horas_extras_percentual" not in columns:
+            ddl.append(text("ALTER TABLE configuracoes ADD COLUMN horas_extras_percentual NUMERIC(5,2) DEFAULT 50.00"))
             
         for stmt in ddl:
             try:
