@@ -762,11 +762,15 @@ def resumo_financeiro():
     - Despesas: total mês, recorrentes, variáveis
     - Fluxo de caixa previsto: entradas vs saídas nos próximos 30 dias
     - Alertas financeiros
+    
+    Query Params:
+    - data_inicio: YYYY-MM-DD (opcional)
+    - data_fim: YYYY-MM-DD (opcional)
     """
     try:
         from app.models import ContaPagar, ContaReceber, Fornecedor, Cliente
         from sqlalchemy import func
-        from datetime import date, timedelta
+        from datetime import date, timedelta, datetime
 
         current_user_id = get_jwt_identity()
         funcionario = Funcionario.query.get(current_user_id)
@@ -779,12 +783,29 @@ def resumo_financeiro():
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
 
+        # Datas base para "Hoje" (Balance Sheet / Posição Atual)
         hoje = date.today()
-        inicio_mes = hoje.replace(day=1)
         limite_7d = hoje + timedelta(days=7)
         limite_30d = hoje + timedelta(days=30)
 
-        # ═══════ CONTAS A PAGAR ═══════
+        # Datas para "Período" (P&L / Fluxo / Despesas)
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+
+        if data_inicio_str and data_fim_str:
+            try:
+                dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+                dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+            except ValueError:
+                # Fallback para o mês atual se formato inválido
+                dt_inicio = hoje.replace(day=1)
+                dt_fim = hoje
+        else:
+            # Fallback para o mês atual se não informado
+            dt_inicio = hoje.replace(day=1)
+            dt_fim = hoje
+
+        # ═══════ CONTAS A PAGAR (Posição Atual - Balance Sheet) ═══════
         cp_base = ContaPagar.query.filter(
             ContaPagar.estabelecimento_id == estabelecimento_id,
             ContaPagar.status == "aberto",
@@ -821,13 +842,15 @@ def resumo_financeiro():
             ContaPagar.data_vencimento <= limite_7d,
         ).count()
 
+        # Pagamentos realizados no PERÍODO (Fluxo de Caixa)
         cp_pago_mes = db.session.query(func.sum(ContaPagar.valor_pago)).filter(
             ContaPagar.estabelecimento_id == estabelecimento_id,
             ContaPagar.status == "pago",
-            ContaPagar.data_pagamento >= inicio_mes,
+            ContaPagar.data_pagamento >= dt_inicio,
+            ContaPagar.data_pagamento <= dt_fim,
         ).scalar() or Decimal("0")
 
-        # ═══════ CONTAS A RECEBER ═══════
+        # ═══════ CONTAS A RECEBER (Posição Atual - Balance Sheet) ═══════
         cr_total_aberto = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
             ContaReceber.estabelecimento_id == estabelecimento_id,
             ContaReceber.status == "aberto",
@@ -852,25 +875,38 @@ def resumo_financeiro():
             ContaReceber.data_vencimento < hoje,
         ).count()
 
+        # Recebimentos realizados no PERÍODO (Fluxo de Caixa)
         cr_recebido_mes = db.session.query(func.sum(ContaReceber.valor_recebido)).filter(
             ContaReceber.estabelecimento_id == estabelecimento_id,
             ContaReceber.status == "recebido",
-            ContaReceber.data_recebimento >= inicio_mes,
+            ContaReceber.data_recebimento >= dt_inicio,
+            ContaReceber.data_recebimento <= dt_fim,
         ).scalar() or Decimal("0")
 
-        # ═══════ DESPESAS DO MÊS ═══════
+        # ═══════ DADOS DE VENDAS (Via DataLayer para consistência com Dashboard) ═══════
+        from app.dashboard_cientifico.data_layer import DataLayer
+        
+        # Converter dates para datetime para o DataLayer
+        dt_inicio_full = datetime.combine(dt_inicio, datetime.min.time())
+        dt_fim_full = datetime.combine(dt_fim, datetime.max.time())
+        
+        financials = DataLayer.get_sales_financials(estabelecimento_id, dt_inicio_full, dt_fim_full)
+        
+        # ═══════ DESPESAS DO PERÍODO ═══════
         desp_mes_total = db.session.query(func.sum(Despesa.valor)).filter(
             Despesa.estabelecimento_id == estabelecimento_id,
-            Despesa.data_despesa >= inicio_mes,
+            Despesa.data_despesa >= dt_inicio,
+            Despesa.data_despesa <= dt_fim,
         ).scalar() or Decimal("0")
 
         desp_mes_recorrentes = db.session.query(func.sum(Despesa.valor)).filter(
             Despesa.estabelecimento_id == estabelecimento_id,
-            Despesa.data_despesa >= inicio_mes,
+            Despesa.data_despesa >= dt_inicio,
+            Despesa.data_despesa <= dt_fim,
             Despesa.recorrente == True,
         ).scalar() or Decimal("0")
 
-        # ═══════ FLUXO DE CAIXA PREVISTO (30 dias) ═══════
+        # ═══════ FLUXO DE CAIXA PREVISTO (30 dias - Futuro) ═══════
         entradas_previstas = float(cr_vence_30d)
         saidas_previstas = float(cp_vence_30d)
         saldo_previsto = entradas_previstas - saidas_previstas
@@ -928,6 +964,17 @@ def resumo_financeiro():
 
         return jsonify({
             "success": True,
+            "periodo": {
+                "inicio": dt_inicio.isoformat(),
+                "fim": dt_fim.isoformat()
+            },
+            "dre_consolidado": {
+                "receita_bruta": financials.get("revenue", 0.0),
+                "custo_mercadoria": financials.get("cogs", 0.0),
+                "lucro_bruto": financials.get("gross_profit", 0.0),
+                "despesas_operacionais": float(desp_mes_total),
+                "lucro_liquido": financials.get("gross_profit", 0.0) - float(desp_mes_total)
+            },
             "contas_pagar": {
                 "total_aberto": float(cp_total_aberto),
                 "total_vencido": float(cp_total_vencido),
@@ -957,7 +1004,6 @@ def resumo_financeiro():
             "alertas": alertas,
             "total_alertas": len(alertas),
         })
-
     except Exception as e:
         current_app.logger.error(f"Erro ao gerar resumo financeiro: {str(e)}")
         return jsonify({"error": "Erro interno do servidor", "message": str(e)}), 500

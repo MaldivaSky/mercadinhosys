@@ -266,17 +266,23 @@ def calcular_previsao_esgotamento(produto_id: int, estabelecimento_id: int) -> D
 
 
 
-def relatorio_rentabilidade_abc(estabelecimento_id: int, days: int = 30) -> Dict[str, Any]:
+def relatorio_rentabilidade_abc(estabelecimento_id: int, days: int = 30, data_inicio: datetime = None, data_fim: datetime = None) -> Dict[str, Any]:
     """
     Relatório de rentabilidade com análise ABC e alertas de margem negativa.
-    
-    FEATURES:
-    - Classificação ABC baseada em faturamento (Pareto 80/20)
-    - Identificação de produtos com margem negativa
-    - Produtos de baixo giro (Classe C)
-    - Usa CMP (Custo Médio Ponderado) para cálculo de margem real
     """
-    data_inicio = datetime.now() - timedelta(days=days)
+    if data_inicio:
+        # Se data_inicio foonecida, usa o range explícito
+        if not data_fim:
+            data_fim = datetime.now()
+    else:
+        # Padrão: últimos X dias
+        data_fim = datetime.now()
+        data_inicio = data_fim - timedelta(days=days)
+
+    # Query otimizada: usa custo_unitario da venda SE existir, senão usa preco_custo atual (fallback)
+    lucro_real_expr = func.sum(
+        (VendaItem.preco_unitario - func.coalesce(VendaItem.custo_unitario, Produto.preco_custo, 0)) * VendaItem.quantidade
+    ).label('lucro_real_total')
     
     # Query otimizada: faturamento por produto
     faturamento_produtos = db.session.query(
@@ -290,7 +296,7 @@ def relatorio_rentabilidade_abc(estabelecimento_id: int, days: int = 30) -> Dict
         Produto.classificacao_abc.label('classe_abc'),
         func.sum(VendaItem.quantidade).label('quantidade_vendida'),
         func.sum(VendaItem.total_item).label('faturamento'),
-        func.sum(VendaItem.margem_lucro_real).label('lucro_real_total')
+        lucro_real_expr
     ).join(
         VendaItem, Produto.id == VendaItem.produto_id
     ).join(
@@ -298,6 +304,7 @@ def relatorio_rentabilidade_abc(estabelecimento_id: int, days: int = 30) -> Dict
     ).filter(
         Venda.estabelecimento_id == estabelecimento_id,
         Venda.data_venda >= data_inicio,
+        Venda.data_venda <= data_fim,
         Venda.status == 'finalizada'
     ).group_by(
         Produto.id,
@@ -560,9 +567,26 @@ def get_rentabilidade_abc():
         days = request.args.get('days', 30, type=int)
         classe_filtro = request.args.get('classe', type=str)
         apenas_problemas = request.args.get('apenas_problemas', 'false', type=str).lower() == 'true'
+        data_inicio = request.args.get('data_inicio')
+        data_fim = request.args.get('data_fim')
+
+        dt_inicio = None
+        dt_fim = None
+
+        if data_inicio:
+            try:
+                dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+            except ValueError:
+                pass
+        
+        if data_fim:
+            try:
+                dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)
+            except ValueError:
+                pass
         
         # Análise de rentabilidade
-        relatorio = relatorio_rentabilidade_abc(funcionario.estabelecimento_id, days)
+        relatorio = relatorio_rentabilidade_abc(funcionario.estabelecimento_id, days, dt_inicio, dt_fim)
         
         # Aplicar filtros
         if classe_filtro:
