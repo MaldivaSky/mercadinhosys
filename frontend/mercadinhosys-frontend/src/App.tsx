@@ -16,13 +16,12 @@ const App: React.FC = () => {
           <AppRoutes />
           <Toaster
             position="top-right"
+            reverseOrder={false}
+            gutter={10}
+            containerStyle={{ zIndex: 99999, top: '16px', right: '16px' }}
             toastOptions={{
-              duration: 3000,
-              style: {
-                background: '#333',
-                color: '#fff',
-                zIndex: 99999, // Ensure it's high but simple
-              },
+              duration: 4000,
+              // Sem style global — cada toast define o seu próprio
             }}
           />
         </Router>

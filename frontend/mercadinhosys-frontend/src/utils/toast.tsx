@@ -1,35 +1,30 @@
 import toast, { ToastOptions } from 'react-hot-toast';
-import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 
-/* 
- * Professional Toast Utility 
- * Wraps react-hot-toast with consistent styling and icons.
+/**
+ * Sistema de notificações profissional — MercadinhoSys
+ * Compatível com dark mode (padrão do app).
  */
-
-const TOAST_DURATION = 4000;
-const TOAST_POSITION = 'top-right';
-
-const defaultStyle = {
-    padding: '16px',
-    borderRadius: '12px',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-    fontWeight: 500,
-    fontSize: '0.95rem',
-    maxWidth: '400px',
-};
 
 export const showToast = {
     success: (message: string, options?: ToastOptions) => {
         toast.success(message, {
-            duration: TOAST_DURATION,
-            position: TOAST_POSITION,
+            duration: 4000,
+            position: 'top-right',
             style: {
-                ...defaultStyle,
-                background: '#ECFDF5', // green-50
-                border: '1px solid #10B981', // green-500
-                color: '#065F46', // green-800
+                background: '#052e16',
+                border: '1px solid #16a34a',
+                color: '#86efac',
+                borderRadius: '10px',
+                padding: '14px 18px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                maxWidth: '420px',
+                boxShadow: '0 0 0 1px rgba(22,163,74,0.2), 0 4px 24px rgba(0,0,0,0.4)',
             },
-            icon: <CheckCircle2 className="w-5 h-5 text-green-600" />,
+            iconTheme: {
+                primary: '#22c55e',
+                secondary: '#052e16',
+            },
             ...options,
         });
     },
@@ -37,53 +32,80 @@ export const showToast = {
     error: (message: string, options?: ToastOptions) => {
         toast.error(message, {
             duration: 5000,
-            position: TOAST_POSITION,
+            position: 'top-right',
             style: {
-                ...defaultStyle,
-                background: '#FEF2F2', // red-50
-                border: '1px solid #EF4444', // red-500
-                color: '#991B1B', // red-800
+                background: '#2d0a0a',
+                border: '1px solid #dc2626',
+                color: '#fca5a5',
+                borderRadius: '10px',
+                padding: '14px 18px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                maxWidth: '420px',
+                boxShadow: '0 0 0 1px rgba(220,38,38,0.2), 0 4px 24px rgba(0,0,0,0.4)',
             },
-            icon: <XCircle className="w-5 h-5 text-red-600" />,
+            iconTheme: {
+                primary: '#ef4444',
+                secondary: '#2d0a0a',
+            },
             ...options,
         });
     },
 
     warning: (message: string, options?: ToastOptions) => {
         toast(message, {
-            duration: TOAST_DURATION,
-            position: TOAST_POSITION,
+            duration: 4500,
+            position: 'top-right',
+            icon: '⚠️',
             style: {
-                ...defaultStyle,
-                background: '#FFFBEB', // amber-50
-                border: '1px solid #F59E0B', // amber-500
-                color: '#92400E', // amber-800
+                background: '#1c1407',
+                border: '1px solid #d97706',
+                color: '#fcd34d',
+                borderRadius: '10px',
+                padding: '14px 18px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                maxWidth: '420px',
+                boxShadow: '0 0 0 1px rgba(217,119,6,0.2), 0 4px 24px rgba(0,0,0,0.4)',
             },
-            icon: <AlertTriangle className="w-5 h-5 text-amber-600" />,
             ...options,
         });
     },
 
     info: (message: string, options?: ToastOptions) => {
         toast(message, {
-            duration: TOAST_DURATION,
-            position: TOAST_POSITION,
+            duration: 4000,
+            position: 'top-right',
+            icon: 'ℹ️',
             style: {
-                ...defaultStyle,
-                background: '#EFF6FF', // blue-50
-                border: '1px solid #3B82F6', // blue-500
-                color: '#1E40AF', // blue-800
+                background: '#020c1b',
+                border: '1px solid #2563eb',
+                color: '#93c5fd',
+                borderRadius: '10px',
+                padding: '14px 18px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                maxWidth: '420px',
+                boxShadow: '0 0 0 1px rgba(37,99,235,0.2), 0 4px 24px rgba(0,0,0,0.4)',
             },
-            icon: <Info className="w-5 h-5 text-blue-600" />,
             ...options,
         });
     },
 
-    // Default loading
-    loading: (message: string) => toast.loading(message, {
-        style: { ...defaultStyle, background: '#fff', color: '#333' }
+    loading: (message: string, options?: ToastOptions) => toast.loading(message, {
+        position: 'top-right',
+        style: {
+            background: '#111827',
+            border: '1px solid #374151',
+            color: '#d1d5db',
+            borderRadius: '10px',
+            padding: '14px 18px',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+            maxWidth: '420px',
+        },
+        ...options,
     }),
 
-    // Dismiss
     dismiss: (toastId?: string) => toast.dismiss(toastId),
 };
