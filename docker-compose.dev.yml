@@ -43,6 +43,9 @@ services:
       SECRET_KEY: dev-secret-key
       JWT_SECRET_KEY: dev-jwt-secret
       CORS_ORIGINS: http://localhost:5173
+    env_file:
+      - ./backend/.env
+      - ./backend/mail.env
     volumes:
       - ./backend:/app
       - ./backend/instance:/app/instance

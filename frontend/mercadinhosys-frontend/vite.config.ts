@@ -4,11 +4,13 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, process.cwd(), '')
 
+  // Docker: VITE_API_TARGET=http://backend:5000
+  // Local: fallback para backend na máquina host
   const apiTarget = env.VITE_API_TARGET || 'http://localhost:5000';
+
+  console.log('🔧 Vite proxy configurado para:', apiTarget);
 
   return {
     plugins: [react()],
@@ -18,7 +20,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      // ECONNREFUSED = backend não está rodando. Inicie: cd backend && python run.py
+      port: 5173,
+      host: true,
       proxy: {
         '/api': {
           target: apiTarget,

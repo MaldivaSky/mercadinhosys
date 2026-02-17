@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 import {
     ShoppingCart,
     Printer,
@@ -10,14 +10,14 @@ import {
     Smartphone,
     TrendingUp,
     Tag,
-    AlertTriangle,
-    Mail
+    AlertTriangle
 } from 'lucide-react';
 import ProdutoSearch from './components/ProdutoSearch';
 import CarrinhoItem from './components/CarrinhoItem';
 import ClienteSelect from './components/ClienteSelect';
 import CaixaHeader from './components/CaixaHeader';
 import GerenteAuthModal from './components/GerenteAuthModal';
+import NotaFiscalModal from './components/NotaFiscalModal';
 import { usePDV } from '../../hooks/usePDV';
 import { Produto } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
@@ -61,43 +61,80 @@ const PDVPage: React.FC = () => {
     const [descontoAprovado, setDescontoAprovado] = useState(false);
     const [ultimaVendaId, setUltimaVendaId] = useState<number | null>(null);
     const [enviandoEmail, setEnviandoEmail] = useState(false);
-    const [mostrarModalEmail, setMostrarModalEmail] = useState(false);
+    const [mostrarModalNotaFiscal, setMostrarModalNotaFiscal] = useState(false);
+    const [ultimoComprovante, setUltimoComprovante] = useState<any | null>(null);
 
     // Validar desconto ao alterar
     useEffect(() => {
         if (descontoGeral > 0 && !descontoAprovado) {
             const permitido = validarDescontoPermitido(descontoGeralCalculado);
             if (!permitido) {
-                toast(
-                    `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`,
-                    {
-                        icon: '⚠️',
-                        duration: 4000,
-                        style: {
-                            background: '#f59e0b',
-                            color: '#fff',
-                        },
-                    }
+                showToast.warning(
+                    `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`
                 );
             }
         }
     }, [descontoGeral, descontoGeralCalculado, descontoAprovado, validarDescontoPermitido]);
 
     const handleProdutoSelecionado = (produto: Produto) => {
+        // 1. Validação de Estoque (Bloqueante)
         if (!produto.quantidade_estoque || produto.quantidade_estoque <= 0) {
-            toast.error(`📦 ${produto.nome} está sem estoque!`, {
-                duration: 2500,
-            });
+            showToast.error(`PRODUTO INDISPONÍVEL: ${produto.nome} está sem estoque!`);
             return;
         }
+
+        // Verificar quantidade já no carrinho
+        const itemCarrinho = carrinho.find(item => item.produto.id === produto.id);
+        const qtdAtual = itemCarrinho ? itemCarrinho.quantidade : 0;
+
+        if (qtdAtual + 1 > produto.quantidade_estoque) {
+            showToast.error(`ESTOQUE INSUFICIENTE: Disponível: ${produto.quantidade_estoque} un.`);
+            return;
+        }
+
+        // 2. Validação de Validade (Alerta Crítico ou Aviso)
+        if (produto.data_validade) {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            // Tratamento fuso horário simples (considerando data string YYYY-MM-DD)
+            const partesData = produto.data_validade.split('-');
+            const validade = new Date(
+                parseInt(partesData[0]),
+                parseInt(partesData[1]) - 1,
+                parseInt(partesData[2])
+            );
+
+            const diffTime = validade.getTime() - hoje.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) {
+                showToast.error(`⛔ PRODUTO VENCIDO! Validade expirou em ${validade.toLocaleDateString('pt-BR')}`, { duration: 6000 });
+                // Opcional: Bloquear venda de produto vencido
+                // return; 
+            } else if (diffDays <= 30) {
+                showToast.warning(`⚠️ ATENÇÃO: Validade próxima! Vence em ${diffDays} dias (${validade.toLocaleDateString('pt-BR')})`, { duration: 5000 });
+            }
+        }
+
+        // 3. Alerta de Estoque Baixo (Aviso)
+        // Se a quantidade atual no carrinho + 1 atingir ou baixar do mínimo
+        const estoqueRestante = produto.quantidade_estoque - (qtdAtual + 1);
+        if (produto.quantidade_minima && estoqueRestante <= produto.quantidade_minima && estoqueRestante >= 0) {
+            showToast.warning(`📉 ESTOQUE BAIXO: Restarão apenas ${estoqueRestante} unidades após esta venda.`, { duration: 4000 });
+        }
+
         adicionarProduto(produto);
-        toast.success(`✅ ${produto.nome} adicionado ao carrinho`, { duration: 2000 });
+        // Feedback de sucesso mais curto para não poluir se houver outros alertas
+        if (!itemCarrinho) {
+            showToast.success(`${produto.nome} adicionado!`);
+        }
     };
 
     const handleAplicarDesconto = () => {
         if (descontoGeral > 0) {
             const permitido = validarDescontoPermitido(descontoGeralCalculado);
-            
+
             if (!permitido && !descontoAprovado) {
                 setMostrarAutorizacao(true);
             }
@@ -107,9 +144,7 @@ const PDVPage: React.FC = () => {
     const handleAutorizacaoAprovada = () => {
         setDescontoAprovado(true);
         setMostrarAutorizacao(false);
-        toast.success('Desconto autorizado pelo gerente', {
-            icon: '✅',
-        });
+        showToast.success('Desconto autorizado pelo gerente');
     };
 
     const handleFinalizarVenda = async () => {
@@ -125,24 +160,23 @@ const PDVPage: React.FC = () => {
 
             const venda = await finalizarVenda();
             setUltimaVendaId(venda.id);
+            try {
+                const comprovante = await pdvService.obterComprovante(venda.id);
+                setUltimoComprovante(comprovante);
+            } catch (err) {
+                console.error('Erro ao buscar comprovante da venda:', err);
+                setUltimoComprovante(null);
+            }
 
-            toast.success(
-                `🎉 Venda ${venda.codigo} finalizada com sucesso! Total: ${formatCurrency(venda.total)}`,
-                { duration: 3000 }
+            showToast.success(
+                `✅ VENDA ${venda.codigo} FINALIZADA! Total: ${formatCurrency(venda.total)}`,
+                { duration: 5000 }
             );
 
             setDescontoAprovado(false);
 
-            // Perguntar se deseja enviar email ao cliente
-            if (cliente?.email) {
-                setMostrarModalEmail(true);
-            } else {
-                // Se não tem email, limpar automaticamente após 2 segundos
-                setTimeout(() => {
-                    limparCarrinho();
-                    setUltimaVendaId(null);
-                }, 2000);
-            }
+            // Sempre mostrar modal de nota fiscal após finalizar
+            setMostrarModalNotaFiscal(true);
 
         } catch (error: unknown) {
             console.error('❌ ERRO AO FINALIZAR:', error);
@@ -163,79 +197,218 @@ const PDVPage: React.FC = () => {
                     errorMessage = err.message;
                 }
             }
-            toast.error(
-                errorMessage,
-                {
-                    icon: '❌',
-                    duration: 3500,
-                }
-            );
+            showToast.error(errorMessage);
         }
     };
 
-    const handleEnviarEmail = async (enviar: boolean) => {
-        setMostrarModalEmail(false);
-
-        if (!enviar) {
-            // Cliente não quer email, limpar PDV
-            setTimeout(() => {
-                limparCarrinho();
-                setUltimaVendaId(null);
-            }, 1000);
+    const abrirNotaEmNovaTela = (imprimirAutomaticamente = false) => {
+        if (!ultimoComprovante) {
+            showToast.error('Comprovante ainda não carregado');
             return;
         }
 
-        if (!ultimaVendaId || !cliente?.email) {
-            // Limpar mesmo sem email
-            setTimeout(() => {
-                limparCarrinho();
-                setUltimaVendaId(null);
-            }, 1000);
+        const { venda, comprovante, estabelecimento } = ultimoComprovante;
+        const itensHtml = (comprovante.itens || [])
+            .map((item: any) => `
+                <tr>
+                    <td class="item-desc">${item.nome}</td>
+                </tr>
+                <tr>
+                    <td class="item-details">
+                        ${item.quantidade} x R$ ${Number(item.preco_unitario || 0).toFixed(2)} 
+                        <span style="float:right;">R$ ${Number(item.total || 0).toFixed(2)}</span>
+                    </td>
+                </tr>
+            `)
+            .join('');
+
+        const html = `
+            <!doctype html>
+            <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <title>Comprovante - ${venda.codigo}</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            font-family: 'Consolas', 'Courier New', monospace;
+                            font-size: 12px;
+                            color: #000;
+                            line-height: 1.2;
+                        }
+                        .page {
+                            width: 302px; /* ~80mm */
+                            margin: 0 auto;
+                            padding: 10px 0;
+                        }
+                        .text-center { text-align: center; }
+                        .text-right { text-align: right; }
+                        .fw-bold { font-weight: bold; }
+                        .divider { border-top: 1px dashed #000; margin: 8px 0; }
+                        .header { margin-bottom: 10px; }
+                        .logo { max-width: 120px; max-height: 80px; margin-bottom: 5px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        .item-desc { font-weight: bold; padding-top: 4px; }
+                        .item-details { padding-bottom: 4px; font-size: 11px; }
+                        .totals { margin-top: 10px; }
+                        .footer { margin-top: 20px; font-size: 10px; text-align: center; }
+                        
+                        @media print {
+                            @page { margin: 0; }
+                            body { margin: 0; }
+                        }
+                    </style>
+                </head>
+                <body onload="${imprimirAutomaticamente ? 'window.print()' : ''}">
+                    <div class="page">
+                        <div class="text-center header">
+                            ${comprovante.logo_url ?
+                `<img src="${comprovante.logo_url}" class="logo" />` :
+                // SVG Fallback Simples (Carrinho)
+                `<svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>`
+            }
+                            <div class="fw-bold" style="font-size: 14px;">${estabelecimento?.nome_fantasia || 'MercadinhoSys'}</div>
+                            <div>${estabelecimento?.razao_social || ''}</div>
+                            <div>CNPJ: ${estabelecimento?.cnpj || 'Não informado'}</div>
+                            <div>${estabelecimento?.endereco || ''}</div>
+                            <div>Tel: ${estabelecimento?.telefone || ''}</div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div>
+                            <div><strong>Venda:</strong> ${venda.codigo}</div>
+                            <div><strong>Data:</strong> ${venda.data}</div>
+                            <div><strong>Cliente:</strong> ${comprovante.cliente}</div>
+                            <div><strong>Operador:</strong> ${comprovante.funcionario}</div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <table>
+                            ${itensHtml}
+                        </table>
+
+                        <div class="divider"></div>
+
+                        <div class="totals">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>Qtd Itens:</span>
+                                <span>${(comprovante.itens || []).length}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>Subtotal:</span>
+                                <span>R$ ${Number(comprovante.subtotal || 0).toFixed(2)}</span>
+                            </div>
+                            ${comprovante.desconto > 0 ? `
+                                <div style="display:flex; justify-content:space-between;">
+                                    <span>Desconto:</span>
+                                    <span>- R$ ${Number(comprovante.desconto || 0).toFixed(2)}</span>
+                                </div>
+                            ` : ''}
+                            <div style="display:flex; justify-content:space-between; font-weight:bold; font-size: 16px; margin-top: 5px;">
+                                <span>TOTAL:</span>
+                                <span>R$ ${Number(comprovante.total || 0).toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div>
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>Forma Pagto:</span>
+                                <span>${comprovante.forma_pagamento}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>Valor Recebido:</span>
+                                <span>R$ ${Number(comprovante.valor_recebido || 0).toFixed(2)}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between;">
+                                <span>Troco:</span>
+                                <span>R$ ${Number(comprovante.troco || 0).toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <div class="footer">
+                            ${comprovante.rodape || 'Obrigado pela preferência!'}<br/>
+                            *** Documento Não Fiscal ***<br/>
+                            Sistema: MercadinhoSys
+                        </div>
+                    </div>
+                </body>
+            </html>
+        `;
+
+        const novaJanela = window.open('', '_blank');
+        if (!novaJanela) {
+            showToast.error('Nao foi possivel abrir a visualizacao da nota');
+            return;
+        }
+        novaJanela.document.write(html);
+        novaJanela.document.close();
+
+        if (imprimirAutomaticamente) {
+            novaJanela.focus();
+            setTimeout(() => novaJanela.print(), 300);
+        }
+    };
+
+    const handleEnviarEmail = async (email: string) => {
+        if (!ultimaVendaId || !email) {
+            showToast.error('Email inválido');
             return;
         }
 
         try {
             setEnviandoEmail(true);
-            await pdvService.enviarCupomEmail(ultimaVendaId);
-            
-            toast.success(`📧 Cupom fiscal enviado para ${cliente.email}`, {
-                duration: 6000,
-            });
+            await pdvService.enviarCupomFiscal(ultimaVendaId, email);
 
-            // Limpar após envio bem-sucedido
+            showToast.success(`Nota fiscal enviada para ${email}!`);
+
+            // Fechar modal e limpar após sucesso
+            setMostrarModalNotaFiscal(false);
             setTimeout(() => {
                 limparCarrinho();
                 setUltimaVendaId(null);
-            }, 2000);
+            }, 1500);
 
         } catch (error: unknown) {
             console.error('❌ ERRO AO ENVIAR EMAIL:', error);
-            let errorMessage = '❌ Erro ao enviar email';
-            interface ErrorWithResponse {
-                response?: {
-                    data?: {
-                        error?: string;
-                    };
-                };
-            }
-            if (typeof error === 'object' && error !== null) {
-                const err = error as ErrorWithResponse;
-                if ('response' in err && typeof err.response?.data?.error === 'string') {
-                    errorMessage = err.response!.data!.error!;
-                }
-            }
-            toast.error(errorMessage, {
-                duration: 3500,
+            const err = error as { response?: { data?: { error?: string; details?: string; message?: string } } };
+            const detalhe = err.response?.data?.details || err.response?.data?.error || err.response?.data?.message;
+            showToast.error(`❌ Falha ao enviar email${detalhe ? `: ${detalhe}` : '. Tente novamente.'}`, {
+                duration: 5000
             });
-            
-            // Limpar mesmo com erro no email
-            setTimeout(() => {
-                limparCarrinho();
-                setUltimaVendaId(null);
-            }, 2000);
         } finally {
             setEnviandoEmail(false);
         }
+    };
+
+    const handleImprimirNota = () => {
+        setMostrarModalNotaFiscal(false);
+        showToast.info('Preparando impressao...');
+        setTimeout(() => {
+            abrirNotaEmNovaTela(true);
+            limparCarrinho();
+            setUltimaVendaId(null);
+            setUltimoComprovante(null);
+        }, 1000);
+    };
+
+    const handleVisualizarNota = () => {
+        abrirNotaEmNovaTela(false);
+    };
+
+    const handleFecharModalNota = () => {
+        setMostrarModalNotaFiscal(false);
+        setTimeout(() => {
+            limparCarrinho();
+            setUltimaVendaId(null);
+            setUltimoComprovante(null);
+        }, 500);
     };
 
     // const handleNovaVenda = () => {
@@ -252,9 +425,7 @@ const PDVPage: React.FC = () => {
             if (confirm('Tem certeza que deseja cancelar esta venda?')) {
                 limparCarrinho();
                 setDescontoAprovado(false);
-                toast.success('Venda cancelada', {
-                    icon: '🗑️',
-                });
+                showToast.info('Venda cancelada');
             }
         }
     };
@@ -382,9 +553,14 @@ const PDVPage: React.FC = () => {
                                                 precoUnitario={item.precoUnitario}
                                                 desconto={item.desconto}
                                                 total={item.total}
-                                                onAtualizarQuantidade={(qtd) =>
-                                                    atualizarQuantidade(item.produto.id, qtd)
-                                                }
+                                                onAtualizarQuantidade={(qtd) => {
+                                                    const estoque = item.produto.quantidade_estoque || 0;
+                                                    if (qtd > estoque) {
+                                                        showToast.error(`Estoque insuficiente! Máximo: ${estoque}`);
+                                                        return;
+                                                    }
+                                                    atualizarQuantidade(item.produto.id, qtd);
+                                                }}
                                                 onRemover={() => removerProduto(item.produto.id)}
                                                 onAplicarDesconto={(desc, perc) =>
                                                     aplicarDescontoItem(item.produto.id, desc, perc)
@@ -439,11 +615,10 @@ const PDVPage: React.FC = () => {
                                         <div className="flex items-center space-x-2">
                                             <button
                                                 onClick={() => setDescontoPercentual(!descontoPercentual)}
-                                                className={`px-3 py-1 text-xs rounded transition ${
-                                                    descontoPercentual
-                                                        ? 'bg-blue-500 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                }`}
+                                                className={`px-3 py-1 text-xs rounded transition ${descontoPercentual
+                                                    ? 'bg-blue-500 text-white'
+                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                    }`}
                                             >
                                                 {descontoPercentual ? '%' : 'R$'}
                                             </button>
@@ -493,11 +668,10 @@ const PDVPage: React.FC = () => {
 
                                 {/* Indicador de permissões */}
                                 {configuracoes && (
-                                    <div className={`mt-4 p-3 rounded-lg ${
-                                        configuracoes.funcionario.role === 'ADMIN' 
-                                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                                            : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
-                                    }`}>
+                                    <div className={`mt-4 p-3 rounded-lg ${configuracoes.funcionario.role === 'ADMIN'
+                                        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                                        : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                                        }`}>
                                         <div className="flex items-center justify-between text-xs">
                                             <div className="flex items-center space-x-2">
                                                 <Tag className="w-4 h-4" />
@@ -506,7 +680,7 @@ const PDVPage: React.FC = () => {
                                                         ? 'text-green-700 dark:text-green-300 font-semibold'
                                                         : 'text-blue-700 dark:text-blue-300'
                                                 }>
-                                                    {configuracoes.funcionario.role === 'ADMIN' 
+                                                    {configuracoes.funcionario.role === 'ADMIN'
                                                         ? '👑 Admin - Desconto Ilimitado'
                                                         : `Limite de desconto: ${configuracoes.funcionario.limite_desconto}%`
                                                     }
@@ -524,11 +698,10 @@ const PDVPage: React.FC = () => {
                                                     <span className="text-gray-600 dark:text-gray-400">
                                                         Desconto usado: {((descontoGeralCalculado / subtotal) * 100).toFixed(1)}%
                                                     </span>
-                                                    <span className={`font-semibold ${
-                                                        ((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
-                                                            ? 'text-red-600 dark:text-red-400'
-                                                            : 'text-green-600 dark:text-green-400'
-                                                    }`}>
+                                                    <span className={`font-semibold ${((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
+                                                        ? 'text-red-600 dark:text-red-400'
+                                                        : 'text-green-600 dark:text-green-400'
+                                                        }`}>
                                                         {((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
                                                             ? '⚠️ Requer autorização'
                                                             : '✓ Dentro do limite'
@@ -537,11 +710,10 @@ const PDVPage: React.FC = () => {
                                                 </div>
                                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                     <div
-                                                        className={`h-2 rounded-full transition-all ${
-                                                            ((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
-                                                                ? 'bg-red-500'
-                                                                : 'bg-green-500'
-                                                        }`}
+                                                        className={`h-2 rounded-full transition-all ${((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
+                                                            ? 'bg-red-500'
+                                                            : 'bg-green-500'
+                                                            }`}
                                                         style={{
                                                             width: `${Math.min(100, ((descontoGeralCalculado / subtotal) * 100 / configuracoes.funcionario.limite_desconto) * 100)}%`
                                                         }}
@@ -580,11 +752,10 @@ const PDVPage: React.FC = () => {
                                                     setValorRecebido(0);
                                                 }
                                             }}
-                                            className={`w-full p-4 rounded-lg flex items-center justify-between transition ${
-                                                formaPagamentoSelecionada === forma.tipo
-                                                    ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
-                                                    : 'border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                            }`}
+                                            className={`w-full p-4 rounded-lg flex items-center justify-between transition ${formaPagamentoSelecionada === forma.tipo
+                                                ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
+                                                : 'border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                }`}
                                         >
                                             <div className="flex items-center space-x-3">
                                                 {renderIconPagamento(forma.tipo)}
@@ -690,11 +861,10 @@ const PDVPage: React.FC = () => {
                                 <button
                                     onClick={handleFinalizarVenda}
                                     disabled={carrinho.length === 0 || loading || enviandoEmail}
-                                    className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${
-                                        carrinho.length === 0 || loading || enviandoEmail
-                                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-                                    }`}
+                                    className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${carrinho.length === 0 || loading || enviandoEmail
+                                        ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                                        }`}
                                 >
                                     {loading || enviandoEmail ? (
                                         <>
@@ -714,11 +884,10 @@ const PDVPage: React.FC = () => {
                                     <button
                                         onClick={handleLimparCarrinho}
                                         disabled={carrinho.length === 0 || loading || enviandoEmail}
-                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
-                                            carrinho.length === 0 || loading || enviandoEmail
-                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
-                                        }`}
+                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${carrinho.length === 0 || loading || enviandoEmail
+                                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                            : 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
+                                            }`}
                                     >
                                         <X className="w-5 h-5" />
                                         <span>Cancelar</span>
@@ -727,11 +896,10 @@ const PDVPage: React.FC = () => {
 
                                     <button
                                         disabled={carrinho.length === 0}
-                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
-                                            carrinho.length === 0
-                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                        }`}
+                                        className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${carrinho.length === 0
+                                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
+                                            }`}
                                     >
                                         <Printer className="w-5 h-5" />
                                         <span>Imprimir</span>
@@ -755,54 +923,16 @@ const PDVPage: React.FC = () => {
                     />
                 )}
 
-                {/* Modal de Confirmação de Envio de Email */}
-                {mostrarModalEmail && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 animate-fadeIn">
-                            <div className="text-center mb-6">
-                                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Mail className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                                    Enviar Cupom Fiscal por Email?
-                                </h3>
-                                <p className="text-gray-600 dark:text-gray-400">
-                                    Deseja enviar o cupom fiscal para o email do cliente?
-                                </p>
-                                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mt-2">
-                                    📧 {cliente?.email}
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => handleEnviarEmail(false)}
-                                    disabled={enviandoEmail}
-                                    className="px-6 py-3 rounded-lg font-medium transition bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-50"
-                                >
-                                    Não, obrigado
-                                </button>
-                                <button
-                                    onClick={() => handleEnviarEmail(true)}
-                                    disabled={enviandoEmail}
-                                    className="px-6 py-3 rounded-lg font-medium transition bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 flex items-center justify-center space-x-2"
-                                >
-                                    {enviandoEmail ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                            <span>Enviando...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Mail className="w-5 h-5" />
-                                            <span>Sim, enviar</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                {/* Modal Profissional de Nota Fiscal */}
+                <NotaFiscalModal
+                    mostrar={mostrarModalNotaFiscal}
+                    emailCliente={cliente?.email}
+                    onEnviarEmail={handleEnviarEmail}
+                    onVisualizar={handleVisualizarNota}
+                    onImprimir={handleImprimirNota}
+                    onFechar={handleFecharModalNota}
+                    enviando={enviandoEmail}
+                />
             </div>
         </div>
     );

@@ -226,11 +226,6 @@ class DashboardOrchestrator:
         except Exception as e:
             _logger.warning(f"get_inventory_summary falhou: {e}")
         try:
-            timeseries_days = max(90, days * 2)
-            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
-        except Exception as e:
-            _logger.warning(f"get_sales_timeseries falhou: {e}")
-        try:
             expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
         except Exception as e:
             _logger.warning(f"get_expense_details falhou: {e}")
@@ -245,19 +240,6 @@ class DashboardOrchestrator:
             _logger.error(f"Erro ao obter resumo de vendas anterior: {e}")
             sales_previous_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
 
-        try:
-            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
-        except Exception as e:
-            _logger.error(f"Erro ao obter resumo de estoque: {e}")
-            inventory_summary = {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}
-        
-        # 🔥 ADICIONADO: Detalhes de despesas
-        try:
-            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
-        except Exception as e:
-            _logger.error(f"Erro ao obter detalhes de despesas: {e}")
-            expense_details = []
-        
         # 🔥 NOVO: Dados Financeiros Reais (Faturamento, CMV, Lucro Bruto)
         try:
             financials_data = DataLayer.get_sales_financials(

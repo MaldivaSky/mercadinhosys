@@ -10,7 +10,7 @@ export const customerService = {
     return [];
   },
   async create(cliente: Partial<Cliente>): Promise<Cliente> {
-    const res = await apiClient.post('/clientes', cliente);
+    const res = await apiClient.post('/clientes/', cliente);
     // Ajuste para buscar cliente na resposta correta
     if (res.data && res.data.cliente) {
       return res.data.cliente;

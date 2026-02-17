@@ -39,6 +39,8 @@ class InsuficientStockError(Exception):
     """Exceção lançada quando não há estoque suficiente para a venda"""
     pass
 
+
+
 # ==================== FUNÇÕES AUXILIARES ====================
 
 def calcular_rfm_cliente(cliente_id: int, estabelecimento_id: int) -> dict:
@@ -379,6 +381,8 @@ def validar_produto():
                 "classificacao_abc": produto.classificacao_abc,
                 "alerta_alto_giro": alerta_alto_giro,
                 "mensagem_alerta": mensagem_alerta,
+                "quantidade_minima": produto.quantidade_minima,
+                "data_validade": produto.data_validade.isoformat() if produto.data_validade else None,
             }
         }), 200
         
@@ -517,6 +521,13 @@ def finalizar_venda():
             current_app.logger.info(f"✅ Código gerado: {codigo_venda}")
             
             # 2. CRIAR VENDA
+            try:
+                manaus_tz = pytz.timezone('America/Manaus')
+                data_venda = datetime.now(manaus_tz)
+            except Exception:
+                current_app.logger.warning("⚠️ Erro ao definir timezone Manaus, usando UTC-4 manual")
+                data_venda = datetime.now() - timedelta(hours=4)
+
             nova_venda = Venda(
                 codigo=codigo_venda,
                 estabelecimento_id=funcionario.estabelecimento_id,
@@ -530,7 +541,7 @@ def finalizar_venda():
                 troco=troco,
                 status="finalizada",
                 observacoes=observacoes,
-                data_venda=datetime.now()
+                data_venda=data_venda
             )
             
             db.session.add(nova_venda)
@@ -710,9 +721,40 @@ def finalizar_venda():
             if enviar_email and nova_venda.cliente and nova_venda.cliente.email:
                 try:
                     from app.utils.email_service import enviar_cupom_fiscal
+                    from app.models import Estabelecimento
+                    estabelecimento = Estabelecimento.query.get(nova_venda.estabelecimento_id)
+                    endereco_estab = (
+                        estabelecimento.endereco_completo()
+                        if estabelecimento and hasattr(estabelecimento, "endereco_completo")
+                        else ""
+                    )
                     
-                    email_enviado = enviar_cupom_fiscal(
-                        venda_data=resposta_venda,
+                    payload_email = {
+                        **resposta_venda,
+                        "estabelecimento": {
+                            "nome_fantasia": estabelecimento.nome_fantasia if estabelecimento else "",
+                            "razao_social": estabelecimento.razao_social if estabelecimento else "",
+                            "cnpj": estabelecimento.cnpj if estabelecimento else "",
+                            "inscricao_estadual": estabelecimento.inscricao_estadual if estabelecimento else "",
+                            "telefone": estabelecimento.telefone if estabelecimento else "",
+                            "email": estabelecimento.email if estabelecimento else "",
+                            "endereco": endereco_estab,
+                            "endereco": endereco_estab,
+                        },
+                    }
+                    
+                    # Definir logo a ser usado (Priorizar Base64 do banco)
+                    final_logo = None
+                    if estabelecimento.configuracao:
+                        if estabelecimento.configuracao.logo_base64:
+                            final_logo = estabelecimento.configuracao.logo_base64
+                        elif estabelecimento.configuracao.logo_url:
+                            final_logo = estabelecimento.configuracao.logo_url
+                        
+                    payload_email["estabelecimento"]["logo_url"] = final_logo
+
+                    email_enviado, email_erro = enviar_cupom_fiscal(
+                        venda_data=payload_email,
                         cliente_email=nova_venda.cliente.email
                     )
                     
@@ -724,9 +766,9 @@ def finalizar_venda():
                         )
                     else:
                         resposta_venda["email_enviado"] = False
-                        resposta_venda["email_erro"] = "Falha ao enviar email"
+                        resposta_venda["email_erro"] = email_erro or "Falha ao enviar email"
                         current_app.logger.warning(
-                            f"⚠️ Falha ao enviar email para {nova_venda.cliente.email}"
+                            f"⚠️ Falha ao enviar email para {nova_venda.cliente.email}: {resposta_venda['email_erro']}"
                         )
                         
                 except Exception as email_error:
@@ -964,12 +1006,14 @@ def estatisticas_rapidas():
 @funcionario_required
 def enviar_cupom_email():
     """
-    Envia cupom fiscal por email para o cliente
+    Envia cupom fiscal por email para o cliente ou email específico
     Requer: venda_id
+    Opcional: email_destino (para consumidor final ou sobrescrever email do cliente)
     """
     try:
         data = request.get_json()
         venda_id = data.get("venda_id")
+        email_destino = data.get("email_destino")  # Novo: aceitar email customizado
         
         if not venda_id:
             return jsonify({"error": "venda_id é obrigatório"}), 400
@@ -979,61 +1023,175 @@ def enviar_cupom_email():
         if not venda:
             return jsonify({"error": "Venda não encontrada"}), 404
         
-        # Buscar cliente
+        # Determinar email de destino
         cliente = Cliente.query.get(venda.cliente_id) if venda.cliente_id else None
         
-        if not cliente or not cliente.email:
-            return jsonify({"error": "Cliente não possui email cadastrado"}), 400
+        # Prioridade: email_destino passado > email do cliente > erro
+        if email_destino:
+            email_final = email_destino
+            nome_cliente = cliente.nome if cliente else "Consumidor Final"
+        elif cliente and cliente.email:
+            email_final = cliente.email
+            nome_cliente = cliente.nome
+        else:
+            return jsonify({"error": "Email não informado e cliente não possui email cadastrado"}), 400
         
-        # Buscar estabelecimento
+        # Buscar estabelecimento para dados do cabeçalho
         from app.models import Estabelecimento
         estabelecimento = Estabelecimento.query.get(venda.estabelecimento_id)
-        
-        if not estabelecimento:
-            return jsonify({"error": "Estabelecimento não encontrado"}), 404
         
         # Preparar dados da venda
         from app.utils.email_service import enviar_cupom_fiscal
         
         # Estrutura compatível com o template em email_service.py
+        configuracao_estab = getattr(estabelecimento, "configuracao", None) if estabelecimento else None
+        rodape_customizado = getattr(configuracao_estab, "rodape_cupom", None) if configuracao_estab else None
+
         dados_formatados = {
             "venda": {
                 "codigo": venda.codigo,
-                "data": venda.data_venda.strftime("%d/%m/%Y %H:%M")
+                "data": venda.data_venda.strftime("%d/%m/%Y %H:%M:%S")
             },
             "comprovante": {
                 "funcionario": venda.funcionario.nome if venda.funcionario else "Balcão",
-                "cliente": cliente.nome if cliente else "Consumidor Final",
+                "cliente": nome_cliente,
                 "itens": [
                     {
                         "nome": item.produto.nome,
+                        "codigo": item.produto.codigo_barras or item.produto.codigo_interno,
                         "quantidade": float(item.quantidade),
-                        "preco_unitario": float(item.preco_unitario)
+                        "preco_unitario": float(item.preco_unitario),
+                        "total": float(item.total_item)
                     }
                     for item in venda.itens
                 ],
-                "total": float(venda.total),
                 "subtotal": float(venda.subtotal),
-                "desconto": float(venda.desconto)
+                "desconto": float(venda.desconto),
+                "total": float(venda.total),
+                "forma_pagamento": venda.forma_pagamento or "Não informado",
+                "valor_recebido": float(venda.valor_recebido) if venda.valor_recebido else 0.0,
+                "troco": float(venda.troco) if venda.troco else 0.0,
+                "rodape": rodape_customizado or "Obrigado pela preferência!"
             }
+        }
+
+        endereco_estab = (
+            estabelecimento.endereco_completo()
+            if estabelecimento and hasattr(estabelecimento, "endereco_completo")
+            else ""
+        )
+        dados_formatados["estabelecimento"] = {
+            "nome_fantasia": estabelecimento.nome_fantasia if estabelecimento else "",
+            "razao_social": estabelecimento.razao_social if estabelecimento else "",
+            "cnpj": estabelecimento.cnpj if estabelecimento else "",
+            "inscricao_estadual": estabelecimento.inscricao_estadual if estabelecimento else "",
+            "telefone": estabelecimento.telefone if estabelecimento else "",
+            "email": estabelecimento.email if estabelecimento else "",
+            "endereco": endereco_estab,
         }
         
         # Enviar email
-        sucesso = enviar_cupom_fiscal(dados_formatados, cliente.email)
+        sucesso, erro_email = enviar_cupom_fiscal(dados_formatados, email_final)
         
         if sucesso:
             return jsonify({
                 "success": True,
-                "message": "Cupom fiscal enviado com sucesso!",
-                "email_destino": cliente.email
+                "message": f"Nota fiscal enviada com sucesso para {email_final}!",
+                "email_destino": email_final
             }), 200
         else:
-            current_app.logger.error(f"Erro ao enviar email para {cliente.email}")
+            current_app.logger.error(f"Erro ao enviar email para {email_final}: {erro_email}")
             return jsonify({
-                "error": "Erro ao enviar email",
-                "details": "Falha no serviço de email"
+                "error": "Erro ao enviar email. Verifique as configurações SMTP.",
+                "details": erro_email or "Falha no serviço de email"
             }), 500
         
     except Exception as e:
         current_app.logger.error(f"Erro ao enviar cupom: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
         return jsonify({"error": f"Erro ao enviar cupom: {str(e)}"}), 500
+
+
+@pdv_bp.route("/comprovante/<int:venda_id>", methods=["GET"])
+@funcionario_required
+def obter_comprovante_venda(venda_id):
+    """
+    Retorna dados completos do comprovante para visualização na tela.
+    """
+    try:
+        venda = Venda.query.get(venda_id)
+        if not venda:
+            return jsonify({"error": "Venda não encontrada"}), 404
+
+        cliente = Cliente.query.get(venda.cliente_id) if venda.cliente_id else None
+        nome_cliente = cliente.nome if cliente else "Consumidor Final"
+
+        from app.models import Estabelecimento
+        estabelecimento = Estabelecimento.query.get(venda.estabelecimento_id)
+
+        # Lógica de seleção do logo (Priorizar Base64)
+        logo_url = None
+        if estabelecimento.configuracao:
+            if estabelecimento.configuracao.logo_base64:
+                logo_url = estabelecimento.configuracao.logo_base64
+                print(f"DEBUG: Logo Base64 found in DB. Length: {len(logo_url)}")
+            elif estabelecimento.configuracao.logo_url:
+                logo_url = estabelecimento.configuracao.logo_url
+                print(f"DEBUG: Logo URL found: {logo_url}")
+        
+        if not logo_url:
+            print("DEBUG: No logo found in configuracao.")
+
+        comprovante = {
+            "funcionario": venda.funcionario.nome if venda.funcionario else "Balcão",
+            "cliente": nome_cliente,
+            "logo_url": logo_url,  # Adicionado logo para o frontend
+            "itens": [
+                {
+                    "nome": item.produto_nome or (item.produto.nome if item.produto else "Produto"),
+                    "codigo": item.produto_codigo or (item.produto.codigo_barras if item.produto else ""),
+                    "quantidade": float(item.quantidade or 0),
+                    "preco_unitario": float(item.preco_unitario or 0),
+                    "total": float(item.total_item or 0),
+                }
+                for item in venda.itens
+            ],
+            "subtotal": float(venda.subtotal or 0),
+            "desconto": float(venda.desconto or 0),
+            "total": float(venda.total or 0),
+            "forma_pagamento": venda.forma_pagamento or "Não informado",
+            "valor_recebido": float(venda.valor_recebido or 0),
+            "troco": float(venda.troco or 0),
+            "rodape": "Obrigado pela preferência!",
+        }
+
+        return jsonify(
+            {
+                "success": True,
+                "venda": {
+                    "id": venda.id,
+                    "codigo": venda.codigo,
+                    "data": venda.data_venda.strftime("%d/%m/%Y %H:%M:%S")
+                    if venda.data_venda
+                    else "",
+                },
+                "estabelecimento": {
+                    "nome_fantasia": estabelecimento.nome_fantasia if estabelecimento else "",
+                    "razao_social": estabelecimento.razao_social if estabelecimento else "",
+                    "cnpj": estabelecimento.cnpj if estabelecimento else "",
+                    "inscricao_estadual": estabelecimento.inscricao_estadual if estabelecimento else "",
+                    "telefone": estabelecimento.telefone if estabelecimento else "",
+                    "email": estabelecimento.email if estabelecimento else "",
+                    "endereco": (
+                        estabelecimento.endereco_completo()
+                        if estabelecimento and hasattr(estabelecimento, "endereco_completo")
+                        else ""
+                    ),
+                },
+                "comprovante": comprovante,
+            }
+        ), 200
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter comprovante da venda {venda_id}: {str(e)}")
+        return jsonify({"error": "Erro ao obter comprovante"}), 500

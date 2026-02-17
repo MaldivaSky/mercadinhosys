@@ -28,7 +28,7 @@ export const usePDV = () => {
     const [observacoes, setObservacoes] = useState<string>('');
     const [descontoGeral, setDescontoGeral] = useState<number>(0);
     const [descontoPercentual, setDescontoPercentual] = useState<boolean>(false);
-    
+
     // Configurações e permissões
     const [configuracoes, setConfiguracoes] = useState<ConfiguracoesPDV | null>(null);
     const [loading, setLoading] = useState(false);
@@ -61,7 +61,7 @@ export const usePDV = () => {
 
     const descontoTotal = descontoItens + descontoGeralCalculado;
     const total = Math.max(0, subtotal - descontoTotal);
-    
+
     const formaPagamento = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
     const troco = (formaPagamento?.permite_troco && valorRecebido > total) ? valorRecebido - total : 0;
 
@@ -183,8 +183,18 @@ export const usePDV = () => {
         }
 
         const formaPg = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
-        if (formaPg?.permite_troco && valorRecebido < total) {
-            throw new Error(`Valor recebido insuficiente. Faltam R$ ${(total - valorRecebido).toFixed(2)}`);
+
+        // Se permite troco (dinheiro), valida valor recebido
+        if (formaPg?.permite_troco) {
+            if (valorRecebido < total) {
+                throw new Error(`Valor recebido insuficiente. Faltam R$ ${(total - valorRecebido).toFixed(2)}`);
+            }
+        } else {
+            // Se não permite troco (cartão/pix), assume valor exato se não informado
+            if (valorRecebido <= 0) {
+                // Opcional: setValorRecebido(total) aqui não funcionaria pois é state, 
+                // mas podemos considerar o valor recebido como total para fins de registro
+            }
         }
 
         setLoading(true);

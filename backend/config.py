@@ -1,9 +1,14 @@
 import os
 from pathlib import Path
 from urllib.parse import urlparse
+from dotenv import load_dotenv
 
 basedir = Path(__file__).parent.absolute()
 db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
+
+# Carrega .env cedo para que todas as variáveis estejam disponíveis
+# antes da avaliação das classes de configuração.
+load_dotenv(dotenv_path=basedir / ".env", override=False)
 
 
 # ==================== DATABASE CONFIGURATION ====================
