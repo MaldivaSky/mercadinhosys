@@ -164,7 +164,7 @@ def create_app(config_name=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-    # ==================== BOOTSTRAP: CRIAR TABELAS SE NÃO EXISTIREM ====================
+    # ==================== BOOTSTRAP: CRIAR TABELAS E COLUNAS CRÍTICAS ====================
     with app.app_context():
         try:
             logger.info("🛠️ Verificando/Criando tabelas no banco de dados...")
@@ -172,6 +172,35 @@ def create_app(config_name=None):
             logger.info("✅ Tabelas verificadas/criadas com sucesso.")
         except Exception as e:
             logger.error(f"❌ Erro ao criar tabelas no bootstrap: {e}")
+
+        # Postgres: garantir colunas críticas (produtos.tipo, margem_lucro_real, etc.)
+        if app.config.get("USING_POSTGRES"):
+            try:
+                from sqlalchemy import text
+                alteras = [
+                    "ALTER TABLE venda_itens ADD COLUMN IF NOT EXISTS margem_lucro_real NUMERIC(10,2)",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem_lucro NUMERIC(10,2)",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo VARCHAR(50)",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS classificacao_abc VARCHAR(1)",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS total_vendido FLOAT DEFAULT 0",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS quantidade_vendida INTEGER DEFAULT 0",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ultima_venda TIMESTAMP",
+                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fabricante VARCHAR(100)",
+                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS valor_total_comprado NUMERIC(12,2) DEFAULT 0",
+                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS total_compras INTEGER DEFAULT 0",
+                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS classificacao VARCHAR(20) DEFAULT 'REGULAR'",
+                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS prazo_entrega INTEGER DEFAULT 7",
+                ]
+                for sql in alteras:
+                    try:
+                        db.session.execute(text(sql))
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.debug("Schema sync col: %s", str(e)[:80])
+                logger.info("✅ Schema sync (colunas críticas) aplicado.")
+            except Exception as e:
+                logger.warning("⚠️ Schema sync falhou (ignorando): %s", str(e)[:120])
 
     # ==================== REGISTRO DE BLUEPRINTS ====================
 
