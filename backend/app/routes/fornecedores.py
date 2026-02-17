@@ -1358,28 +1358,35 @@ def relatorio_analitico_fornecedores():
             for p in pedidos:
                 # Considerar entregas concluídas
                 if p.status == "concluido":
-                    data_efetiva = p.data_recebimento or p.data_pedido.date() # Fallback se não tiver data recebimento (assumir instantâneo/mesmo dia se manual)
+                    # Garantir que temos objetos date (não datetime)
+                    data_pedido_date = p.data_pedido.date() if isinstance(p.data_pedido, datetime) else p.data_pedido
                     
-                    if p.data_pedido:
-                        dias_reais = (data_efetiva - p.data_pedido.date()).days
+                    # Data Efetiva (Recebimento)
+                    if p.data_recebimento:
+                        data_efetiva = p.data_recebimento.date() if isinstance(p.data_recebimento, datetime) else p.data_recebimento
+                    else:
+                        data_efetiva = data_pedido_date # Fallback
+
+                    if data_pedido_date:
+                        dias_reais = (data_efetiva - data_pedido_date).days
                         tempos_entrega.append(dias_reais)
                         
                         # Cálculo de OTD (On-Time Delivery)
-                        prazo_prometido = None
+                        prazo_prometido_date = None
                         if p.data_previsao_entrega:
-                            prazo_prometido = p.data_previsao_entrega
+                            prazo_prometido_date = p.data_previsao_entrega.date() if isinstance(p.data_previsao_entrega, datetime) else p.data_previsao_entrega
                         else:
                             # Fallback: data_pedido + prazo_padrao
                             from datetime import timedelta
                             prazo_padrao = fornecedor.prazo_entrega or 7
-                            prazo_prometido = p.data_pedido.date() + timedelta(days=prazo_padrao)
+                            prazo_prometido_date = data_pedido_date + timedelta(days=prazo_padrao)
                         
-                        if prazo_prometido:
+                        if prazo_prometido_date:
                             total_entregas_avaliadas += 1
-                            if data_efetiva <= prazo_prometido:
+                            if data_efetiva <= prazo_prometido_date:
                                 entregas_no_prazo += 1
                             else:
-                                dias_atraso = (data_efetiva - prazo_prometido).days
+                                dias_atraso = (data_efetiva - prazo_prometido_date).days
                                 atrasos.append(dias_atraso)
 
             media_entrega = (
@@ -1405,11 +1412,8 @@ def relatorio_analitico_fornecedores():
             total_produtos = len(produtos)
             
             # Cálculo de Score (0-100)
-            # Pesos: OTD (60%), Atraso Médio (40%)
-            # Penalidade por atraso: 10 pontos por dia de atraso médio
             score = taxa_otd * 0.6 + (100 if media_atraso <= 0 else max(0, 100 - media_atraso * 10)) * 0.4
             
-            # Se não tem pedido nenhum, score 100? Ou 50 (novo)? Vamos de 100 (neutro)
             if not pedidos:
                 score = 100.0
 

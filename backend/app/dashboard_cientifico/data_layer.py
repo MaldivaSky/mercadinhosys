@@ -58,10 +58,17 @@ class DataLayer:
             # Join Venda -> VendaItem para somar custo * quantidade
             # Importante: VendaItem.custo_unitario armazena o custo no momento da venda (histórico)
             
-            # 🔥 OTIMIZAÇÃO: Usar comparação direta de datetime
-            start_d = start_date.date() if isinstance(start_date, datetime) else start_date
-            end_d = end_date.date() if isinstance(end_date, datetime) else end_date
-            end_exclusive = end_d + timedelta(days=1)
+            # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
+            start_dt = start_date if isinstance(start_date, datetime) else datetime.combine(start_date, datetime.min.time())
+            
+            if isinstance(end_date, datetime):
+                end_dt = end_date
+            else:
+                end_dt = datetime.combine(end_date, datetime.max.time())
+                
+            # Garante que end_dt cubra o dia todo se vier com hora 00:00
+            if end_dt.hour == 0 and end_dt.minute == 0:
+                 end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             
             result = db.session.query(
                 func.coalesce(func.sum(Venda.total), 0).label('revenue'),
@@ -69,8 +76,8 @@ class DataLayer:
                 func.coalesce(func.sum(VendaItem.total_item), 0).label('gross_sales')
             ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= start_d,
-                Venda.data_venda < end_exclusive,
+                Venda.data_venda >= start_dt,
+                Venda.data_venda <= end_dt,
                 Venda.status == 'finalizada'
             ).first()
 
@@ -198,7 +205,9 @@ class DataLayer:
     def get_top_products(estabelecimento_id: int, days: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Top produtos mais vendidos (Curva ABC)"""
         try:
+            # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
             start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
             
             results = db.session.query(
                 Produto.id,
@@ -241,17 +250,27 @@ class DataLayer:
     def get_expense_details(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Detalhamento de despesas por categoria (período específico)"""
         try:
-            # Normalizar para data pura
-            start_d = start_date.date() if isinstance(start_date, datetime) else start_date
-            end_d = end_date.date() if isinstance(end_date, datetime) else end_date
+            # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
+            # Se receber apenas data, forçar inicio 00:00 e fim 23:59
             
+            start_dt = start_date if isinstance(start_date, datetime) else datetime.combine(start_date, datetime.min.time())
+            
+            if isinstance(end_date, datetime):
+                end_dt = end_date
+            else:
+                end_dt = datetime.combine(end_date, datetime.max.time())
+                
+            # Garante que end_dt cubra o dia todo se vier com hora 00:00
+            if end_dt.hour == 0 and end_dt.minute == 0:
+                 end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+
             results = db.session.query(
                 Despesa.tipo,
                 func.sum(Despesa.valor).label('total')
             ).filter(
                 Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.data_despesa >= start_d,
-                Despesa.data_despesa <= end_d  # 🔥 FIX: Limite superior estrito
+                Despesa.data_despesa >= start_dt,
+                Despesa.data_despesa <= end_dt
             ).group_by(Despesa.tipo).all()
 
             return [
