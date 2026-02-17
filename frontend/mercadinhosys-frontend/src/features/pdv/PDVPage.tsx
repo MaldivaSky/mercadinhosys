@@ -24,6 +24,19 @@ import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
 
 const PDVPage: React.FC = () => {
+    const TOAST_IDS = {
+        descontoAutorizacao: 'pdv-desconto-autorizacao',
+        estoqueIndisponivel: 'pdv-estoque-indisponivel',
+        estoqueInsuficiente: 'pdv-estoque-insuficiente',
+        produtoVencido: 'pdv-produto-vencido',
+        validadeProxima: 'pdv-validade-proxima',
+        estoqueBaixo: 'pdv-estoque-baixo',
+        itemAdicionado: 'pdv-item-adicionado',
+        vendaFinalizada: 'pdv-venda-finalizada',
+        erroFinalizacao: 'pdv-erro-finalizacao',
+        emailInvalido: 'pdv-email-invalido',
+        erroEmail: 'pdv-erro-email',
+    } as const;
     const {
         carrinho,
         cliente,
@@ -70,7 +83,8 @@ const PDVPage: React.FC = () => {
             const permitido = validarDescontoPermitido(descontoGeralCalculado);
             if (!permitido) {
                 showToast.warning(
-                    `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`
+                    `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`,
+                    { id: TOAST_IDS.descontoAutorizacao }
                 );
             }
         }
@@ -79,7 +93,7 @@ const PDVPage: React.FC = () => {
     const handleProdutoSelecionado = (produto: Produto) => {
         // 1. Validação de Estoque (Bloqueante)
         if (!produto.quantidade_estoque || produto.quantidade_estoque <= 0) {
-            showToast.error(`PRODUTO INDISPONÍVEL: ${produto.nome} está sem estoque!`);
+            showToast.error(`PRODUTO INDISPONÍVEL: ${produto.nome} está sem estoque!`, { id: TOAST_IDS.estoqueIndisponivel });
             return;
         }
 
@@ -88,7 +102,7 @@ const PDVPage: React.FC = () => {
         const qtdAtual = itemCarrinho ? itemCarrinho.quantidade : 0;
 
         if (qtdAtual + 1 > produto.quantidade_estoque) {
-            showToast.error(`ESTOQUE INSUFICIENTE: Disponível: ${produto.quantidade_estoque} un.`);
+            showToast.error(`ESTOQUE INSUFICIENTE: Disponível: ${produto.quantidade_estoque} un.`, { id: TOAST_IDS.estoqueInsuficiente });
             return;
         }
 
@@ -109,11 +123,17 @@ const PDVPage: React.FC = () => {
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
             if (diffDays < 0) {
-                showToast.error(`⛔ PRODUTO VENCIDO! Validade expirou em ${validade.toLocaleDateString('pt-BR')}`, { duration: 6000 });
+                showToast.error(`⛔ PRODUTO VENCIDO! Validade expirou em ${validade.toLocaleDateString('pt-BR')}`, {
+                    duration: 6000,
+                    id: TOAST_IDS.produtoVencido
+                });
                 // Opcional: Bloquear venda de produto vencido
                 // return; 
             } else if (diffDays <= 30) {
-                showToast.warning(`⚠️ ATENÇÃO: Validade próxima! Vence em ${diffDays} dias (${validade.toLocaleDateString('pt-BR')})`, { duration: 5000 });
+                showToast.warning(`⚠️ ATENÇÃO: Validade próxima! Vence em ${diffDays} dias (${validade.toLocaleDateString('pt-BR')})`, {
+                    duration: 5000,
+                    id: TOAST_IDS.validadeProxima
+                });
             }
         }
 
@@ -121,13 +141,16 @@ const PDVPage: React.FC = () => {
         // Se a quantidade atual no carrinho + 1 atingir ou baixar do mínimo
         const estoqueRestante = produto.quantidade_estoque - (qtdAtual + 1);
         if (produto.quantidade_minima && estoqueRestante <= produto.quantidade_minima && estoqueRestante >= 0) {
-            showToast.warning(`📉 ESTOQUE BAIXO: Restarão apenas ${estoqueRestante} unidades após esta venda.`, { duration: 4000 });
+            showToast.warning(`📉 ESTOQUE BAIXO: Restarão apenas ${estoqueRestante} unidades após esta venda.`, {
+                duration: 4000,
+                id: TOAST_IDS.estoqueBaixo
+            });
         }
 
         adicionarProduto(produto);
         // Feedback de sucesso mais curto para não poluir se houver outros alertas
         if (!itemCarrinho) {
-            showToast.success(`${produto.nome} adicionado!`);
+            showToast.success(`${produto.nome} adicionado!`, { id: TOAST_IDS.itemAdicionado });
         }
     };
 
@@ -170,7 +193,7 @@ const PDVPage: React.FC = () => {
 
             showToast.success(
                 `✅ VENDA ${venda.codigo} FINALIZADA! Total: ${formatCurrency(venda.total)}`,
-                { duration: 5000 }
+                { duration: 5000, id: TOAST_IDS.vendaFinalizada }
             );
 
             setDescontoAprovado(false);
@@ -197,7 +220,7 @@ const PDVPage: React.FC = () => {
                     errorMessage = err.message;
                 }
             }
-            showToast.error(errorMessage);
+            showToast.error(errorMessage, { id: TOAST_IDS.erroFinalizacao });
         }
     };
 
@@ -358,7 +381,7 @@ const PDVPage: React.FC = () => {
 
     const handleEnviarEmail = async (email: string) => {
         if (!ultimaVendaId || !email) {
-            showToast.error('Email inválido');
+            showToast.error('Email inválido', { id: TOAST_IDS.emailInvalido });
             return;
         }
 
@@ -380,7 +403,8 @@ const PDVPage: React.FC = () => {
             const err = error as { response?: { data?: { error?: string; details?: string; message?: string } } };
             const detalhe = err.response?.data?.details || err.response?.data?.error || err.response?.data?.message;
             showToast.error(`❌ Falha ao enviar email${detalhe ? `: ${detalhe}` : '. Tente novamente.'}`, {
-                duration: 5000
+                duration: 5000,
+                id: TOAST_IDS.erroEmail
             });
         } finally {
             setEnviandoEmail(false);

@@ -189,8 +189,6 @@ export const productsService = {
 
         const response = await apiClient.get<any>('/produtos/estatisticas', { params });
 
-        console.log('📊 ESTATÍSTICAS RECEBIDAS:', response.data.estatisticas);
-
         return response.data;
     },
     bulkUpdatePrices: async (
