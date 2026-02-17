@@ -575,10 +575,13 @@ def listar_produtos():
         import traceback
         error_details = traceback.format_exc()
         current_app.logger.error(f"Erro ao listar produtos: {str(e)}\n{error_details}")
+<<<<<<< HEAD
         try:
             db.session.rollback()
         except Exception:
             pass
+=======
+>>>>>>> ec5f6c49026c88e249b89468eaa5b0e9dbdada73
         return jsonify({
             "success": False, 
             "message": "Erro interno ao listar produtos", 
