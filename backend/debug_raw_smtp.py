@@ -2,12 +2,16 @@
 import smtplib
 import os
 
-# Define credentials directly to test
-EMAIL_ADDRESS = 'rafaelmaldivas@gmail.com'
-EMAIL_PASSWORD = 'dqyxxvdflsmodlhn' # No spaces
+# Define credentials from environment variables
+EMAIL_ADDRESS = os.environ.get('MAIL_USERNAME', 'seu_email@gmail.com')
+EMAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or os.environ.get('EMAIL_APP_PASSWORD')
+
+if not EMAIL_PASSWORD:
+    print("❌ ERROR: EMAIL_PASSWORD or EMAIL_APP_PASSWORD not set in environment.")
+    exit(1)
 
 print(f"Testing connectivity for: {EMAIL_ADDRESS}")
-print(f"Password length: {len(EMAIL_PASSWORD)}")
+# print(f"Password length: {len(EMAIL_PASSWORD)}") # Still helpful but redacted
 
 # Test 587 (TLS)
 print("\n--- Testing port 587 (STARTTLS) ---")

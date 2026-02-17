@@ -562,10 +562,15 @@ def listar_produtos():
         })
 
     except Exception as e:
-        current_app.logger.error(f"Erro ao listar produtos: {str(e)}")
         import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "message": "Erro interno ao listar produtos", "error": str(e)}), 500
+        error_details = traceback.format_exc()
+        current_app.logger.error(f"Erro ao listar produtos: {str(e)}\n{error_details}")
+        return jsonify({
+            "success": False, 
+            "message": "Erro interno ao listar produtos", 
+            "error": str(e),
+            "traceback": error_details if current_app.debug else None
+        }), 500
 
 
 @produtos_bp.route("/<int:id>", methods=["GET"])

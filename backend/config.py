@@ -17,6 +17,7 @@ _database_url = (
     or os.environ.get("DB_PRIMARY")
     or os.environ.get("DATABASE_URL")
     or os.environ.get("POSTGRES_URL")
+    or os.environ.get("AIVEN_DATABASE_URL")
 )
 _sqlite_db = os.environ.get("SQLITE_DB")
 _using_postgres = False
@@ -32,6 +33,7 @@ if _database_url:
     elif os.environ.get("DB_PRIMARY"): source = "DB_PRIMARY"
     elif os.environ.get("DATABASE_URL"): source = "DATABASE_URL"
     elif os.environ.get("POSTGRES_URL"): source = "POSTGRES_URL"
+    elif os.environ.get("AIVEN_DATABASE_URL"): source = "AIVEN_DATABASE_URL"
     
     if _using_postgres:
         print(f"[DB: POSTGRES] Source: {source} | URL: {(_database_url.split('@')[1] if '@' in _database_url else 'cloud')}")
@@ -91,7 +93,7 @@ class Config:
     MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
     MAIL_USE_SSL = os.environ.get("MAIL_USE_SSL", "false").lower() == "true"
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
-    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD") or os.environ.get("EMAIL_APP_PASSWORD")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", os.environ.get("MAIL_USERNAME"))
 
     # ==================== UPLOADS ====================

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 BASE_URL = "http://localhost:5000"
 # Adjust these credentials as needed for your local environment
 USERNAME = "admin"
-PASSWORD = "123" 
+PASSWORD = "admin123" 
 
 class PDVStressTest:
     def __init__(self):
@@ -23,7 +23,7 @@ class PDVStressTest:
     def login(self):
         print("Logging in...")
         try:
-            resp = requests.post(f"{BASE_URL}/auth/login", json={
+            resp = requests.post(f"{BASE_URL}/api/auth/login", json={
                 "username": USERNAME,
                 "password": PASSWORD
             })
@@ -44,13 +44,13 @@ class PDVStressTest:
         print("Fetching products and clients...")
         try:
             # Fetch products
-            resp_prod = requests.get(f"{BASE_URL}/produtos/?por_pagina=100&ativo=true", headers=self.headers)
+            resp_prod = requests.get(f"{BASE_URL}/api/produtos/?por_pagina=100&ativo=true", headers=self.headers)
             if resp_prod.status_code == 200:
                 self.produtos = resp_prod.json().get('produtos', [])
                 print(f"Loaded {len(self.produtos)} products.")
             
             # Fetch clients
-            resp_cli = requests.get(f"{BASE_URL}/clientes/?por_pagina=50", headers=self.headers)
+            resp_cli = requests.get(f"{BASE_URL}/api/clientes/?por_pagina=50", headers=self.headers)
             if resp_cli.status_code == 200:
                 self.clientes = resp_cli.json().get('clientes', [])
                 print(f"Loaded {len(self.clientes)} clients.")
@@ -105,7 +105,7 @@ class PDVStressTest:
         }
         
         try:
-            resp = requests.post(f"{BASE_URL}/pdv/finalizar", json=payload, headers=self.headers)
+            resp = requests.post(f"{BASE_URL}/api/pdv/finalizar", json=payload, headers=self.headers)
             duration = (time.time() - start_time) * 1000 # ms
             
             with self.lock:
@@ -154,4 +154,5 @@ class PDVStressTest:
 
 if __name__ == "__main__":
     test = PDVStressTest()
-    test.run_stress_test(num_sales=50, concurrency=10)
+    # Reduced concurrency for local SQLite environment to avoid database locking
+    test.run_stress_test(num_sales=50, concurrency=2)
