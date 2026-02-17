@@ -2013,12 +2013,13 @@ def listar_categorias():
         try:
             claims = get_jwt()
             estabelecimento_id = claims.get("estabelecimento_id")
+            # Fallback: usar categorias_produto se existir, senão extrair de produtos via categoria_id
             sql = text(
-                "SELECT DISTINCT categoria AS nome "
-                "FROM produtos "
-                "WHERE estabelecimento_id = :estabelecimento_id AND (ativo = TRUE OR ativo IS NULL)"
+                "SELECT DISTINCT cp.nome FROM categorias_produto cp "
+                "INNER JOIN produtos p ON p.categoria_id = cp.id "
+                "WHERE p.estabelecimento_id = :est_id AND (p.ativo = TRUE OR p.ativo IS NULL)"
             )
-            result = db.session.execute(sql, {"estabelecimento_id": estabelecimento_id}).fetchall()
+            result = db.session.execute(sql, {"est_id": estabelecimento_id}).fetchall()
             categorias_nomes = []
             for row in result:
                 try:
@@ -2036,10 +2037,13 @@ def listar_categorias():
             )
         except Exception as e2:
             current_app.logger.error(f"Fallback categorias falhou: {str(e2)}")
-            return (
-                jsonify({"success": False, "message": "Erro interno ao listar categorias"}),
-                500,
-            )
+            # Fallback final: retornar lista vazia para evitar 500 (melhor que quebrar a página)
+            return jsonify({
+                "success": True,
+                "categorias": [],
+                "categorias_detalhadas": [],
+                "total_categorias": 0,
+            })
 
 
 @produtos_bp.route("/alertas", methods=["GET"])

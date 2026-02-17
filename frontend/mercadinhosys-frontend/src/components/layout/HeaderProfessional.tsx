@@ -1,13 +1,29 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavLink } from 'react-router-dom';
 import { 
     User, LogOut, Settings, Moon, Sun, ChevronDown, 
-    Menu as MenuIcon, X 
+    Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3, 
+    CreditCard, FileText, UserCog, Briefcase, Clock, Truck
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
 import { API_CONFIG } from '../../api/apiConfig';
+
+const mobileMenuItems = [
+    { to: '/dashboard', icon: Home, label: 'Dashboard' },
+    { to: '/pdv', icon: ShoppingCart, label: 'PDV' },
+    { to: '/products', icon: Package, label: 'Produtos' },
+    { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
+    { to: '/customers', icon: Users, label: 'Clientes' },
+    { to: '/sales', icon: CreditCard, label: 'Vendas' },
+    { to: '/expenses', icon: FileText, label: 'Despesas' },
+    { to: '/employees', icon: UserCog, label: 'Funcionários' },
+    { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
+    { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
+    { to: '/reports', icon: BarChart3, label: 'Relatórios' },
+    { to: '/settings', icon: Settings, label: 'Configurações' },
+];
 
 const HeaderProfessional = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -162,8 +178,8 @@ const HeaderProfessional = () => {
 
     return (
         <>
-        <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm">
-            <div className="container mx-auto px-4">
+        <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm safe-area-top" style={{ paddingTop: 'env(safe-area-inset-top)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
+            <div className="container mx-auto px-4 max-w-full">
                 <div className="flex h-16 items-center justify-between">
                     {/* Logo */}
                     <div className="flex items-center gap-3">
@@ -292,7 +308,31 @@ const HeaderProfessional = () => {
 
                 {/* Mobile Menu */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden border-t border-gray-200 dark:border-gray-800 py-4">
+                    <div className="md:hidden border-t border-gray-200 dark:border-gray-800 py-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
+                        {/* Navegação principal - igual ao Sidebar */}
+                        <nav className="px-2 py-2">
+                            <p className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Menu</p>
+                            <ul className="space-y-0.5">
+                                {mobileMenuItems.map((item) => (
+                                    <li key={item.to}>
+                                        <NavLink
+                                            to={item.to}
+                                            onClick={() => setMobileMenuOpen(false)}
+                                            className={({ isActive }) =>
+                                                `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                }`
+                                            }
+                                        >
+                                            <item.icon className="w-5 h-5 shrink-0" />
+                                            <span className="font-medium">{item.label}</span>
+                                        </NavLink>
+                                    </li>
+                                ))}
+                            </ul>
+                        </nav>
+                        <div className="border-t border-gray-200 dark:border-gray-800 my-2" />
                         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
                             {user.foto_url ? (
                                 <img 
