@@ -6,9 +6,10 @@ import path from 'path'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
-  // Docker: VITE_API_TARGET=http://backend:5000
-  // Local: fallback para backend na máquina host
-  const apiTarget = env.VITE_API_TARGET || 'http://localhost:5000';
+  // Docker: VITE_API_TARGET=http://backend:5000  (via docker-compose environment)
+  // Local:  fallback para localhost:5000
+  // process.env é necessário pois loadEnv lê apenas arquivos .env, não variáveis injetadas pelo Docker
+  const apiTarget = env.VITE_API_TARGET || process.env.VITE_API_TARGET || 'http://localhost:5000';
 
   console.log('🔧 Vite proxy configurado para:', apiTarget);
 

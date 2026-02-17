@@ -6,8 +6,7 @@ import './index.css';
 // Importar teste de conectividade (disponível no console como testConnection())
 import './utils/testConnection';
 
+// StrictMode removido — causava dupla execução de useEffect (dobrava chamadas de API)
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <App />
 );

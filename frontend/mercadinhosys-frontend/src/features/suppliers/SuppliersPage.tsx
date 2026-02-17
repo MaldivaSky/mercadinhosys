@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { Fornecedor } from '../../types';
 import { apiClient } from '../../api/apiClient';
-import { Toaster, toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -97,26 +97,20 @@ const SuppliersPage: React.FC = () => {
     const loadSuppliers = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await apiClient.get<{ fornecedores: Fornecedor[], success: boolean }>('/fornecedores', {
-                params: {
-                    por_pagina: 200,
-                },
+            const response = await apiClient.get<{ fornecedores: Fornecedor[], success: boolean }>('/fornecedores/', {
+                params: { por_pagina: 100 },
             });
-            
-            console.log('📦 Resposta da API fornecedores:', response.data);
-            
-            // Mapear dados do backend para o formato esperado
+
             const fornecedoresFormatados = (response.data.fornecedores || []).map(f => ({
                 ...f,
-                nome: f.nome_fantasia || f.razao_social || f.nome || '',
-                total_produtos: f.produtos_ativos || f.total_produtos || 0,
+                nome: f.nome_fantasia || f.razao_social || (f as any).nome || '',
+                total_produtos: (f as any).produtos_ativos || f.total_produtos || 0,
             }));
-            
+
             setSuppliers(fornecedoresFormatados);
-           
         } catch (error) {
             console.error('Erro ao carregar fornecedores:', error);
-            toast.error('Erro ao carregar fornecedores. Verifique sua conexão.');
+            showToast.error('Erro ao carregar fornecedores. Verifique sua conexão.');
         } finally {
             setLoading(false);
         }
@@ -189,10 +183,10 @@ const SuppliersPage: React.FC = () => {
 
             if (editMode && selectedSupplier) {
                 await apiClient.put(`/fornecedores/${selectedSupplier.id}`, dadosBackend);
-                toast.success('✅ Fornecedor atualizado com sucesso!');
+                showToast.success('Fornecedor atualizado com sucesso');
             } else {
                 await apiClient.post('/fornecedores', dadosBackend);
-                toast.success('✅ Fornecedor cadastrado com sucesso!');
+                showToast.success('Fornecedor cadastrado com sucesso');
             }
 
             setShowModal(false);
@@ -201,7 +195,7 @@ const SuppliersPage: React.FC = () => {
         } catch (error: unknown) {
             console.error('Erro ao salvar fornecedor:', error);
             const apiError = error as { response?: { data?: { error?: string; message?: string } } };
-            toast.error(apiError.response?.data?.error || apiError.response?.data?.message || '❌ Erro ao salvar fornecedor');
+            showToast.error(apiError.response?.data?.error || apiError.response?.data?.message || 'Erro ao salvar fornecedor');
         }
     };
 
@@ -232,12 +226,12 @@ const SuppliersPage: React.FC = () => {
         try {
             // Usar PATCH para desativar ao invés de DELETE
             await apiClient.patch(`/fornecedores/${id}/status`, { ativo: false });
-            toast.success('✅ Fornecedor desativado com sucesso!');
+            showToast.success('Fornecedor desativado');
             loadSuppliers();
         } catch (error: unknown) {
             console.error('Erro ao desativar fornecedor:', error);
             const apiError = error as { response?: { data?: { message?: string } } };
-            toast.error(apiError.response?.data?.message || '❌ Erro ao desativar fornecedor');
+            showToast.error(apiError.response?.data?.message || 'Erro ao desativar fornecedor');
         }
     };
 
@@ -257,7 +251,7 @@ const SuppliersPage: React.FC = () => {
             setProdutosFornecedor(response.data.produtos || []);
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
-            toast.error('Erro ao carregar produtos do fornecedor');
+            showToast.error('Erro ao carregar produtos do fornecedor');
             setProdutosFornecedor([]);
         } finally {
             setLoadingProdutos(false);
@@ -281,36 +275,32 @@ const SuppliersPage: React.FC = () => {
     });
 
     const handleCardClick = useCallback((type: string) => {
+        // Filtros são visuais — sem toast para não poluir
         switch(type) {
             case 'all':
                 setFilterStatus('all');
                 setFilterProdutos('all');
                 setSearchTerm('');
-                toast.success('Mostrando todos os fornecedores');
                 break;
             case 'active':
                 setFilterStatus('active');
                 setFilterProdutos('all');
                 setSearchTerm('');
-                toast.success('Filtrando fornecedores ativos');
                 break;
             case 'inactive':
                 setFilterStatus('inactive');
                 setFilterProdutos('all');
                 setSearchTerm('');
-                toast.success('Filtrando fornecedores inativos');
                 break;
             case 'com_produtos':
                 setFilterProdutos(filterProdutos === 'com' ? 'all' : 'com');
                 setFilterStatus('all');
                 setSearchTerm('');
-                toast.success(filterProdutos === 'com' ? 'Mostrando todos' : 'Filtrando fornecedores com produtos');
                 break;
             case 'sem_produtos':
                 setFilterProdutos(filterProdutos === 'sem' ? 'all' : 'sem');
                 setFilterStatus('all');
                 setSearchTerm('');
-                toast.success(filterProdutos === 'sem' ? 'Mostrando todos' : 'Filtrando fornecedores sem produtos');
                 break;
         }
     }, [filterProdutos]);
@@ -343,11 +333,11 @@ const SuppliersPage: React.FC = () => {
             link.download = `fornecedores_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
 
-            toast.success('✅ Arquivo CSV exportado com sucesso!');
+            showToast.success('CSV exportado com sucesso');
             setShowExportMenu(false);
         } catch (error) {
             console.error('Erro ao exportar CSV:', error);
-            toast.error('❌ Erro ao exportar arquivo');
+            showToast.error('Erro ao exportar CSV');
         } finally {
             setExportando(false);
         }
@@ -375,11 +365,11 @@ const SuppliersPage: React.FC = () => {
             XLSX.utils.book_append_sheet(wb, ws, "Fornecedores");
             XLSX.writeFile(wb, `fornecedores_${new Date().toISOString().split('T')[0]}.xlsx`);
             
-            toast.success('✅ Excel exportado com sucesso!');
+            showToast.success('Excel exportado com sucesso');
             setShowExportMenu(false);
         } catch (error) {
             console.error('Erro ao exportar Excel:', error);
-            toast.error('❌ Erro ao exportar Excel');
+            showToast.error('Erro ao exportar Excel');
         } finally {
             setExportando(false);
         }
@@ -433,11 +423,11 @@ const SuppliersPage: React.FC = () => {
 
             doc.save(`fornecedores-${new Date().toISOString().split('T')[0]}.pdf`);
             
-            toast.success('✅ PDF exportado com sucesso!');
+            showToast.success('PDF exportado com sucesso');
             setShowExportMenu(false);
         } catch (error) {
             console.error('Erro ao exportar PDF:', error);
-            toast.error('❌ Erro ao exportar PDF');
+            showToast.error('Erro ao exportar PDF');
         } finally {
             setExportando(false);
         }
@@ -445,7 +435,6 @@ const SuppliersPage: React.FC = () => {
 
     return (
         <div className="space-y-6 p-6">
-            <Toaster position="top-right" />
 
             {/* Header */}
             <div className="flex justify-between items-start">

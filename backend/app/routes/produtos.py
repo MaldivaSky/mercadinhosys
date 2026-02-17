@@ -258,7 +258,6 @@ def bulk_update_prices():
 @funcionario_required
 def listar_produtos():
     """Lista todos os produtos com filtros avançados e paginação"""
-    current_app.logger.info(f"[DEBUG] listar_produtos chamado por identity: {get_jwt_identity()}")
     try:
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
@@ -575,13 +574,10 @@ def listar_produtos():
         import traceback
         error_details = traceback.format_exc()
         current_app.logger.error(f"Erro ao listar produtos: {str(e)}\n{error_details}")
-<<<<<<< HEAD
         try:
             db.session.rollback()
         except Exception:
             pass
-=======
->>>>>>> ec5f6c49026c88e249b89468eaa5b0e9dbdada73
         return jsonify({
             "success": False, 
             "message": "Erro interno ao listar produtos", 
