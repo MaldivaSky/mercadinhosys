@@ -1,0 +1,14 @@
+﻿--- Cloud Database Tables (31) ---
+['banco_horas', 'beneficios', 'caixas', 'categorias_produto', 'clientes', 'configuracoes', 'configuracoes_horario', 'contas_pagar', 'contas_receber', 'dashboard_metricas', 'despesas', 'estabelecimentos', 'fornecedores', 'funcionario_beneficios', 'funcionarios', 'historico_precos', 'justificativas_ponto', 'login_history', 'movimentacoes_caixa', 'movimentacoes_estoque', 'pagamentos', 'pedido_compra_itens', 'pedidos_compra', 'produto_lotes', 'produtos', 'registros_ponto', 'relatorios_agendados', 'sync_logs', 'sync_queue', 'venda_itens', 'vendas']
+
+--- Local Model Tables (31) ---
+['banco_horas', 'beneficios', 'caixas', 'categorias_produto', 'clientes', 'configuracoes', 'configuracoes_horario', 'contas_pagar', 'contas_receber', 'dashboard_metricas', 'despesas', 'estabelecimentos', 'fornecedores', 'funcionario_beneficios', 'funcionarios', 'historico_precos', 'justificativas_ponto', 'login_history', 'movimentacoes_caixa', 'movimentacoes_estoque', 'pagamentos', 'pedido_compra_itens', 'pedidos_compra', 'produto_lotes', 'produtos', 'registros_ponto', 'relatorios_agendados', 'sync_logs', 'sync_queue', 'venda_itens', 'vendas']
+
+--- Column Audit for 'produtos' ---
+Cloud columns: ['ativo', 'categoria_id', 'classificacao_abc', 'codigo_barras', 'codigo_interno', 'controlar_validade', 'created_at', 'data_validade', 'descricao', 'estabelecimento_id', 'fabricante', 'fornecedor_id', 'id', 'imagem_url', 'lote', 'marca', 'margem_lucro', 'ncm', 'nome', 'origem', 'preco_custo', 'preco_venda', 'quantidade', 'quantidade_minima', 'quantidade_vendida', 'tipo', 'total_vendido', 'ultima_venda', 'unidade_medida', 'updated_at']
+
+--- Column Audit for 'venda_itens' ---
+Cloud columns: ['created_at', 'custo_unitario', 'desconto', 'id', 'margem_item', 'margem_lucro_real', 'preco_unitario', 'produto_codigo', 'produto_id', 'produto_nome', 'produto_unidade', 'quantidade', 'total_item', 'venda_id']
+
+--- Column Audit for 'vendas' ---
+Cloud columns: ['cliente_id', 'codigo', 'created_at', 'data_cancelamento', 'data_venda', 'desconto', 'estabelecimento_id', 'forma_pagamento', 'funcionario_id', 'id', 'motivo_cancelamento', 'observacoes', 'quantidade_itens', 'status', 'subtotal', 'total', 'troco', 'updated_at', 'valor_recebido']
