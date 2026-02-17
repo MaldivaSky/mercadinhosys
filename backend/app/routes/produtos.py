@@ -244,11 +244,8 @@ def listar_produtos():
         direcao = request.args.get("direcao", "asc")
         filtro_rapido = request.args.get("filtro_rapido", None, type=str)
 
-        # Query base com Eager Loading para evitar N+1
-        query = Produto.query.options(
-            db.joinedload(Produto.categoria),
-            db.joinedload(Produto.fornecedor)
-        ).filter_by(estabelecimento_id=estabelecimento_id)
+        # Query base sem joinedload para teste de simplicidade
+        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
 
         # 1. Filtro de Ativo/Inativo
         if ativo is not None:
@@ -320,7 +317,22 @@ def listar_produtos():
             query = query.filter(Produto.margem_lucro < 30)
 
         # 8. Ordenação
-        coluna_ordenacao = getattr(Produto, ordenar_por, Produto.nome)
+        # 4. Ordenação Robusta
+        # Whitelist de colunas permitidas para evitar UndefinedColumn no Postgres
+        COLUNAS_ORDENACAO_VALIDAS = {
+            "nome": Produto.nome,
+            "preco_venda": Produto.preco_venda,
+            "preco_custo": Produto.preco_custo,
+            "precocusto": Produto.preco_custo, # Handle typo
+            "quantidade": Produto.quantidade,
+            "categoria": Produto.categoria_id,
+            "atualizado": Produto.updated_at,
+            "margem_lucro": Produto.margem_lucro,
+            "valor_total_estoque": func.coalesce(Produto.preco_custo * Produto.quantidade, 0)
+        }
+
+        coluna_ordenacao = COLUNAS_ORDENACAO_VALIDAS.get(ordenar_por, Produto.nome)
+
         if direcao == "desc":
             query = query.order_by(coluna_ordenacao.desc())
         else:

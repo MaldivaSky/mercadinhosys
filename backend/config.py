@@ -22,10 +22,16 @@ if _database_url:
         _database_url = _database_url.replace("postgres://", "postgresql://", 1)
     _sqlalchemy_database_uri = _database_url
     _using_postgres = _database_url.startswith("postgresql://")
+    source = "ENV_VAR"
+    if os.environ.get("DATABASE_URL_TARGET"): source = "DATABASE_URL_TARGET"
+    elif os.environ.get("DB_PRIMARY"): source = "DB_PRIMARY"
+    elif os.environ.get("DATABASE_URL"): source = "DATABASE_URL"
+    elif os.environ.get("POSTGRES_URL"): source = "POSTGRES_URL"
+    
     if _using_postgres:
-        print(f"[DB: POSTGRES] {_database_url.split('@')[1] if '@' in _database_url else 'cloud'}")
+        print(f"[DB: POSTGRES] Source: {source} | URL: {(_database_url.split('@')[1] if '@' in _database_url else 'cloud')}")
     else:
-        print(f"[DB: SQLITE] {_database_url}")
+        print(f"[DB: SQLITE] Source: {source} | URL: {_database_url}")
 elif _sqlite_db:
     # Garantir prefixo sqlite:///
     if not _sqlite_db.startswith("sqlite:///"):

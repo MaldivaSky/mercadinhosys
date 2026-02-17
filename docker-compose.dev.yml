@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mercadinhosys-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mercadinhosys
+      POSTGRES_USER: mercadinho_user
+      POSTGRES_PASSWORD: mercadinho_secure_pass_2024
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U mercadinho_user -d mercadinhosys" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mercadinhosys-network-dev
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder # Use the builder stage which has dependencies installed
+    container_name: mercadinhosys-backend-dev
+    command: flask run --debug --host=0.0.0.0
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      FLASK_APP: run.py
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      # DATABASE_URL: ${DATABASE_URL:-postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys}
+      SECRET_KEY: dev-secret-key
+      JWT_SECRET_KEY: dev-jwt-secret
+      CORS_ORIGINS: http://localhost:5173
+    volumes:
+      - ./backend:/app
+      - ./backend/instance:/app/instance # Explicitly mount the instance folder
+      - backend_uploads:/app/instance/uploads
+    ports:
+      - "5000:5000"
+    networks:
+      - mercadinhosys-network-dev
+
+  frontend:
+    image: node:20-alpine
+    container_name: mercadinhosys-frontend-dev
+    working_dir: /app
+    volumes:
+      - ./frontend/mercadinhosys-frontend:/app
+      - /app/node_modules # Anonymous volume to isolate container usage
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - VITE_API_TARGET=http://backend:5000
+    depends_on:
+      - backend
+    networks:
+      - mercadinhosys-network-dev
+
+volumes:
+  postgres_data_dev:
+  backend_uploads:
+
+
+networks:
+  mercadinhosys-network-dev:
+    driver: bridge

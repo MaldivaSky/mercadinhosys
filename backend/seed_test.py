@@ -819,24 +819,42 @@ def seed_produtos(
     # Lista de produtos reais conhecidos no Brasil
     # The previous produtos_reais list was replaced with the expanded one above.
 
+    # Lista de códigos já usados para evitar duplicidade
     used_codes = set()
     for p in produtos_reais:
-        if p[2]: used_codes.add(p[2])
+        # p[2] é o código (ex: "COC-001")
+        if len(p) > 2 and p[2]: 
+            used_codes.add(p[2])
 
-    # Gerar mais produtos até chegar a n=200
+    # Gerar mais produtos até chegar a n=produtos (se necessário)
+    # Lista de marcas disponíveis baseadas nos fornecedores criados
+    marcas_disponiveis = [f.nome_fantasia for f in fornecedores]
+    if not marcas_disponiveis:
+        marcas_disponiveis = ["Marca Genérica"]
+
     while len(produtos_reais) < n:
         cat = random.choice(categorias)
         nome_gen = f"{fake.word().capitalize()} {fake.word().capitalize()} {random.choice(['Premium', 'Tradicional', 'Plus', 'Eco'])}"
         
+        # Gerar código único
+        tentativas = 0
         while True:
             codigo_gen = f"{cat.nome[:3].upper()}-{random.randint(1000, 9999)}"
             if codigo_gen not in used_codes:
                 used_codes.add(codigo_gen)
                 break
+            tentativas += 1
+            if tentativas > 100:
+                # Fallback se não conseguir gerar código curto único
+                codigo_gen = f"{cat.nome[:3].upper()}-{random.randint(10000, 99999)}"
+                used_codes.add(codigo_gen)
+                break
                 
-        marca_gen = random.choice([f.nome_fantasia for f in fornecedores])
+        marca_gen = random.choice(marcas_disponiveis)
         custo_gen = round(random.uniform(2.0, 50.0), 2)
-        venda_gen = round(custo_gen * random.uniform(1.3, 1.8), 2)
+        venda_gen = Decimal(str(custo_gen)) * Decimal(str(random.uniform(1.3, 1.8)))
+        venda_gen = round(float(venda_gen), 2)
+        
         produtos_reais.append((nome_gen, cat.nome, codigo_gen, fake.ean13(), marca_gen, custo_gen, venda_gen))
 
     for i, (

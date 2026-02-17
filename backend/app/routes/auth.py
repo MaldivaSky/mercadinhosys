@@ -206,14 +206,12 @@ def login():
             except Exception:
                 pass  # Ignora se não conseguir
 
-            # Só salva se estabelecimento_id não for None
-            if login_history.estabelecimento_id is not None:
-                db.session.add(login_history)
                 try:
+                    db.session.add(login_history)
                     db.session.commit()
                 except Exception as e:
-                    db.session.rollback()  # 🔥 IMPORTANTE: rollback em caso de erro
-                    current_app.logger.error(f"Erro ao salvar histórico de login: {str(e)}")
+                    db.session.rollback()
+                    current_app.logger.warning(f"Não foi possível salvar histórico de login (tabela pode estar ausente): {str(e)}")
             else:
                 current_app.logger.warning("Não foi possível registrar histórico de login: nenhum estabelecimento encontrado.")
 
@@ -241,8 +239,12 @@ def login():
             )
 
             login_history.observacoes = "Senha incorreta"
-            db.session.add(login_history)
-            db.session.commit()
+            try:
+                db.session.add(login_history)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Erro ao salvar histórico (senha incorreta): {e}")
 
             current_app.logger.warning("[LOGIN] Retornando 401 - Credenciais inválidas (senha incorreta)")
             return (
@@ -259,8 +261,12 @@ def login():
         # Verificar status
         if funcionario.status != "ativo":
             login_history.observacoes = f"Conta {funcionario.status}"
-            db.session.add(login_history)
-            db.session.commit()
+            try:
+                db.session.add(login_history)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Erro ao salvar histórico (conta status): {e}")
 
             return (
                 jsonify(
@@ -277,8 +283,12 @@ def login():
         # Verificar se está ativo (campo ativo)
         if not funcionario.ativo:
             login_history.observacoes = "Conta inativa (campo ativo=False)"
-            db.session.add(login_history)
-            db.session.commit()
+            try:
+                db.session.add(login_history)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Erro ao salvar histórico (conta inativa): {e}")
 
             return (
                 jsonify(
@@ -300,8 +310,12 @@ def login():
 
         if not estabelecimento:
             login_history.observacoes = "Estabelecimento não encontrado"
-            db.session.add(login_history)
-            db.session.commit()
+            try:
+                db.session.add(login_history)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Erro ao salvar histórico (sem estab): {e}")
 
             return (
                 jsonify(
@@ -349,8 +363,12 @@ def login():
         # Registrar login bem-sucedido
         login_history.success = True
         login_history.token_hash = token_hash
-        db.session.add(login_history)
-        db.session.commit()
+        try:
+            db.session.add(login_history)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.warning(f"Erro ao salvar histórico (sucesso): {e}")
 
         current_app.logger.info(
             f"Login bem-sucedido: {identifier} ({funcionario.nome}) "

@@ -533,7 +533,7 @@ def criar_cliente():
 
         # Log de auditoria
         current_app.logger.info(
-            f"Cliente criado: {cliente.id} - {cliente.nome} por {jwt_data.get("sub")}"
+            f"Cliente criado: {cliente.id} - {cliente.nome} por {jwt_data.get('sub')}"
         )
 
         return (
@@ -642,7 +642,7 @@ def atualizar_cliente(id):
 
         # Log de auditoria
         current_app.logger.info(
-            f"Cliente atualizado: {cliente.id} por {jwt_data.get("sub")}"
+            f"Cliente atualizado: {cliente.id} por {jwt_data.get('sub')}"
         )
 
         return jsonify(
@@ -705,7 +705,7 @@ def atualizar_status_cliente(id):
 
         acao = "ativado" if novo_status else "desativado"
         current_app.logger.info(
-            f"Cliente {acao}: {cliente.id} por {jwt_data.get("sub")}"
+            f"Cliente {acao}: {cliente.id} por {jwt_data.get('sub')}"
         )
 
         return jsonify(
@@ -774,7 +774,7 @@ def excluir_cliente(id):
         db.session.delete(cliente)
         db.session.commit()
 
-        current_app.logger.info(f"Cliente excluído: {id} por {jwt_data.get("sub")}")
+        current_app.logger.info(f"Cliente excluído: {id} por {jwt_data.get('sub')}")
 
         return jsonify({"success": True, "message": "Cliente excluído com sucesso"})
 

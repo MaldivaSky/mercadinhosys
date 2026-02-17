@@ -164,6 +164,15 @@ def create_app(config_name=None):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
+    # ==================== BOOTSTRAP: CRIAR TABELAS SE NÃO EXISTIREM ====================
+    with app.app_context():
+        try:
+            logger.info("🛠️ Verificando/Criando tabelas no banco de dados...")
+            db.create_all()
+            logger.info("✅ Tabelas verificadas/criadas com sucesso.")
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar tabelas no bootstrap: {e}")
+
     # ==================== REGISTRO DE BLUEPRINTS ====================
 
     # Auth - IMPORTANTE: blueprint se chama 'auth_bp' no arquivo
