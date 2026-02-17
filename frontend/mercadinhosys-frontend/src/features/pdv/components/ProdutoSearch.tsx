@@ -197,7 +197,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                 </div>
                                 <div className="text-right ml-4">
                                     <p className="font-bold text-xl text-gray-800 dark:text-white">
-                                        R$ {(produto.preco_venda || 0).toFixed(2)}
+                                        R$ {((produto as { preco_venda_efetivo?: number }).preco_venda_efetivo ?? produto.preco_venda ?? 0).toFixed(2)}
                                     </p>
                                     <div className="flex items-center justify-end space-x-2 mt-1">
                                         <span className={`text-xs px-2 py-0.5 rounded ${

@@ -28,6 +28,10 @@ import { ProductsTable } from './components/ProductsTable';
 import LotesDisponiveisModal from './components/LotesDisponiveisModal';
 import ExpiringProductsModal from './components/ExpiringProductsModal';
 
+type LoteNoPeriodo = { id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number };
+type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
+type LinhaProdutoLote = { produto: ProdutoComLotes; lote: LoteNoPeriodo | null };
+
 const ProductsPage: React.FC = () => {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   // todosProdutos removed in favor of server-side stats
@@ -96,12 +100,13 @@ const ProductsPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await productsService.getAllEstoque(page, 50, filtros);
-      setProdutos(response.produtos);
-      setTotalPages(response.paginacao.total_paginas);
-      setTotalItems(response.paginacao.total_itens);
+      setProdutos(response?.produtos ?? []);
+      setTotalPages(response?.paginacao?.total_paginas ?? 1);
+      setTotalItems(response?.paginacao?.total_itens ?? 0);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       toast.error('Erro ao carregar produtos');
+      setProdutos([]);
     } finally {
       setLoading(false);
     }
@@ -313,11 +318,25 @@ const ProductsPage: React.FC = () => {
     setPage(1);
   };
 
-  // Simplificado: Dados vêm direto do estado 'produtos', que é atualizado pelo 'loadProdutos' usando os filtros do server
+  const linhasPorLote = useMemo((): LinhaProdutoLote[] => {
+    if (!filtros.expandir_por_lote || !Array.isArray(produtos) || produtos.length === 0) return [];
+    const out: LinhaProdutoLote[] = [];
+    for (const p of produtos as ProdutoComLotes[]) {
+      const lotes = p.lotes_no_periodo && p.lotes_no_periodo.length > 0 ? p.lotes_no_periodo : null;
+      if (lotes) {
+        for (const lote of lotes) out.push({ produto: p, lote });
+      } else {
+        out.push({ produto: p, lote: null });
+      }
+    }
+    return out;
+  }, [produtos, filtros.expandir_por_lote]);
+
   const currentTableData = {
-    produtos: produtos,
+    produtos: Array.isArray(produtos) ? produtos : [],
     totalItems: totalItems,
-    totalPages: totalPages
+    totalPages: totalPages,
+    linhasPorLote: filtros.expandir_por_lote ? linhasPorLote : undefined,
   };
 
   const contadoresFiltros = useMemo(() => ({
@@ -464,6 +483,7 @@ const ProductsPage: React.FC = () => {
 
       <ProductsTable
         produtos={currentTableData.produtos}
+        linhasPorLote={currentTableData.linhasPorLote}
         loading={loading}
         totalItems={currentTableData.totalItems}
         page={page}

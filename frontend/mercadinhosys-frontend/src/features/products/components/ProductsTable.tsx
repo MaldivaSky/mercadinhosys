@@ -2,8 +2,14 @@ import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRigh
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 
+export interface LinhaProdutoLote {
+    produto: Produto & { lotes_no_periodo?: Array<{ id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number }> };
+    lote: { id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number } | null;
+}
+
 interface ProductsTableProps {
     produtos: Produto[];
+    linhasPorLote?: LinhaProdutoLote[];
     loading: boolean;
     totalItems: number;
     page: number;
@@ -20,7 +26,8 @@ interface ProductsTableProps {
 }
 
 export const ProductsTable: React.FC<ProductsTableProps> = ({
-    produtos,
+    produtos = [],
+    linhasPorLote,
     loading,
     totalItems,
     page,
@@ -135,7 +142,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {produtos.map((produto) => (
+                        {(produtos || []).map((produto) => (
                             <tr key={produto.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <td className="px-4 py-3">
                                     <div className="font-medium text-gray-900 dark:text-white">{produto.nome}</div>
@@ -234,7 +241,9 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
             {/* Pagination */}
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Mostrando {produtos.length} de {totalItems} produtos
+                    {linhasPorLote && linhasPorLote.length > 0
+                        ? `Mostrando ${linhasPorLote.length} linhas (${produtos.length} produtos)`
+                        : `Mostrando ${produtos.length} de ${totalItems} produtos`}
                 </div>
                 <div className="flex items-center gap-2">
                     <button

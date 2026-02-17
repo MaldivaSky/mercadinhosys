@@ -1,9 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Calendar, AlertTriangle, TrendingDown } from 'lucide-react';
 import { Produto } from '../../../types';
 import { productsService } from '../productsService';
 import { formatCurrency } from '../../../utils/formatters';
 import { toast } from 'react-hot-toast';
+
+/** Lote no período de validade (vindo da API) */
+export interface LoteNoPeriodo {
+    id: number | null;
+    numero_lote: string;
+    data_validade: string | null;
+    quantidade: number;
+    preco_venda: number | null;
+    preco_produto: number;
+}
+
+export type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
+
+/** Uma linha da tabela: produto + lote (ou só produto quando não há lotes) */
+interface LinhaValidade {
+    produto: ProdutoComLotes;
+    lote: LoteNoPeriodo | null;
+}
 
 interface ExpiringProductsModalProps {
     isOpen: boolean;
@@ -13,7 +31,7 @@ interface ExpiringProductsModalProps {
 
 const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, onClose, timeframe }) => {
     const [loading, setLoading] = useState(false);
-    const [produtos, setProdutos] = useState<Produto[]>([]);
+    const [produtos, setProdutos] = useState<ProdutoComLotes[]>([]);
 
     useEffect(() => {
         if (isOpen) {
@@ -24,17 +42,17 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
     const carregarProdutos = async () => {
         try {
             setLoading(true);
-            const params: any = { por_pagina: 100 };
+            const params: Record<string, unknown> = { por_pagina: 100 };
 
             if (timeframe === 'vencidos') {
                 params.vencidos = true;
             } else {
                 params.validade_proxima = true;
-                params.dias_validade = parseInt(timeframe);
+                params.dias_validade = parseInt(timeframe, 10);
             }
 
-            const response = await productsService.getAllEstoque(1, 100, params);
-            setProdutos(response.produtos);
+            const response = await productsService.getAllEstoque(1, 100, params as import('../../../types').ProdutoFiltros);
+            setProdutos((response.produtos || []) as ProdutoComLotes[]);
         } catch (error) {
             console.error('Erro ao carregar produtos expirando:', error);
             toast.error('Erro ao carregar lista de produtos');
@@ -50,17 +68,44 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
         return { acao: 'Monitorar', cor: 'text-blue-600', desconto: 0 };
     };
 
+    /** Linhas para exibição: uma por lote (ou uma por produto quando não há lotes) */
+    const linhas = useMemo((): LinhaValidade[] => {
+        const out: LinhaValidade[] = [];
+        for (const p of produtos) {
+            const lotes = p.lotes_no_periodo && p.lotes_no_periodo.length > 0 ? p.lotes_no_periodo : null;
+            if (lotes) {
+                for (const lote of lotes) {
+                    out.push({ produto: p, lote });
+                }
+            } else {
+                out.push({ produto: p, lote: null });
+            }
+        }
+        return out;
+    }, [produtos]);
+
     const handleApplyPromotions = async () => {
         const sugestao = getSugestao();
         if (sugestao.desconto === 0) return;
 
+        const atualizacoes = linhas
+            .filter(() => sugestao.desconto > 0)
+            .map(({ produto, lote }) => {
+                const precoAtual = lote
+                    ? (lote.preco_venda ?? lote.preco_produto)
+                    : produto.preco_venda;
+                const novoPreco = parseFloat((precoAtual * (1 - sugestao.desconto)).toFixed(2));
+                return {
+                    id: produto.id,
+                    lote_id: lote && lote.id != null ? lote.id : undefined,
+                    novo_preco: novoPreco,
+                };
+            });
+
+        if (atualizacoes.length === 0) return;
+
         try {
             setLoading(true);
-            const atualizacoes = produtos.map(p => ({
-                id: p.id,
-                novo_preco: parseFloat((p.preco_venda * (1 - sugestao.desconto)).toFixed(2))
-            }));
-
             const response = await productsService.bulkUpdatePrices(atualizacoes);
 
             if (response.success) {
@@ -69,9 +114,16 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
             } else {
                 toast.error(response.message || 'Erro ao aplicar promoções');
             }
-        } catch (error) {
+        } catch (error: unknown) {
+            const axiosError = error as { response?: { data?: { message?: string }; status?: number }; message?: string };
+            const msg =
+                axiosError.response?.data?.message ||
+                (axiosError.response?.status === 401 ? 'Sessão expirada. Faça login novamente.' : null) ||
+                (axiosError.response?.status === 403 ? 'Sem permissão para alterar preços.' : null) ||
+                axiosError.message ||
+                'Ocorreu um erro ao aplicar as promoções. Tente novamente.';
             console.error('Erro ao aplicar promoções:', error);
-            toast.error('Ocorreu um erro ao processar a solicitação');
+            toast.error(msg);
         } finally {
             setLoading(false);
         }
@@ -119,7 +171,7 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                             <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
                             <p className="text-gray-500 font-medium">Analisando estoque...</p>
                         </div>
-                    ) : produtos.length === 0 ? (
+                    ) : linhas.length === 0 ? (
                         <div className="text-center py-20">
                             <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
                                 <TrendingDown className="w-10 h-10 text-green-600" />
@@ -130,36 +182,42 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                     ) : (
                         <div className="space-y-4">
                             <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
-                                <div className="col-span-4">Produto</div>
+                                <div className="col-span-4">Produto / Lote</div>
                                 <div className="col-span-2">Validade</div>
                                 <div className="col-span-2 text-right">Preço Atual</div>
                                 <div className="col-span-2 text-right">Sugestão</div>
                                 <div className="col-span-2 text-right">Ação</div>
                             </div>
-                            {produtos.map(p => {
+                            {linhas.map(({ produto: p, lote }, idx) => {
                                 const sugestao = getSugestao();
-                                const precoSugerido = p.preco_venda * (1 - sugestao.desconto);
+                                const precoAtual = lote ? (lote.preco_venda ?? lote.preco_produto) : p.preco_venda;
+                                const precoSugerido = precoAtual * (1 - sugestao.desconto);
+                                const dataValidade = lote?.data_validade ?? p.data_validade;
+                                const key = lote && lote.id != null ? `p-${p.id}-l-${lote.id}` : `p-${p.id}-${idx}`;
 
                                 return (
-                                    <div key={p.id} className="grid grid-cols-12 gap-4 items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
+                                    <div key={key} className="grid grid-cols-12 gap-4 items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                                         <div className="col-span-4">
                                             <p className="font-bold text-gray-900 dark:text-white truncate">{p.nome}</p>
-                                            <p className="text-xs text-gray-500">{p.categoria} | Qtd: {p.quantidade}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {p.categoria}
+                                                {lote ? ` | Lote: ${lote.numero_lote} (${lote.quantidade} un.)` : ` | Qtd: ${p.quantidade}`}
+                                            </p>
                                         </div>
                                         <div className="col-span-2">
                                             <div className="flex flex-col">
                                                 <span className={`text-sm font-medium ${timeframe === 'vencidos' ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'}`}>
-                                                    {p.data_validade ? new Date(p.data_validade).toLocaleDateString() : 'N/A'}
+                                                    {dataValidade ? new Date(dataValidade).toLocaleDateString() : 'N/A'}
                                                 </span>
-                                                {p.data_validade && (
+                                                {dataValidade && (
                                                     <span className="text-[10px] text-gray-400">
-                                                        {Math.ceil((new Date(p.data_validade).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} dias restando
+                                                        {Math.ceil((new Date(dataValidade).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} dias
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="col-span-2 text-right">
-                                            <p className="text-sm font-medium">{formatCurrency(p.preco_venda)}</p>
+                                            <p className="text-sm font-medium">{formatCurrency(precoAtual)}</p>
                                         </div>
                                         <div className="col-span-2 text-right">
                                             {sugestao.desconto > 0 ? (

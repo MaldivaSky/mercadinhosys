@@ -81,13 +81,14 @@ export const usePDV = () => {
                         : item
                 );
             } else {
+                const preco = (produto as { preco_venda_efetivo?: number }).preco_venda_efetivo ?? produto.preco_venda;
                 const novoItem: ItemCarrinho = {
                     produto,
                     quantidade,
-                    precoUnitario: produto.preco_venda,
+                    precoUnitario: preco,
                     desconto: 0,
                     descontoPercentual: false,
-                    total: produto.preco_venda * quantidade,
+                    total: preco * quantidade,
                 };
                 return [...prev, novoItem];
             }

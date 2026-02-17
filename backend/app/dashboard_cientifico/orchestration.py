@@ -166,9 +166,9 @@ class DashboardOrchestrator:
         import logging
         _logger = logging.getLogger(__name__)
         try:
-            db.session.rollback()
             return self._get_scientific_dashboard_logic(days, start_date, end_date)
         except Exception as e:
+            from app.models import db
             db.session.rollback()
             _logger.error(f"Erro CRÍTICO no dashboard científico: {e}", exc_info=True)
             return {
@@ -210,35 +210,30 @@ class DashboardOrchestrator:
 
         import time
         start_exec = time.time()
-        # 1. Obter resumos básicos
+        # 1. Obter resumos básicos (cada query em try próprio para uma falha não zerar as outras)
+        sales_current_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+        inventory_summary = {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}
+        sales_timeseries = []
+        expense_details = []
         try:
-            t0 = time.time()
             sales_current_summary = DataLayer.get_sales_summary_range(
                 self.establishment_id, start_current, end_date
             )
-            _logger.info(f"⏱️ get_sales_summary_range: {time.time()-t0:.2f}s")
-            
-            t0 = time.time()
-            financials = DataLayer.get_sales_financials(self.establishment_id, start_current, end_date)
-            _logger.info(f"⏱️ get_sales_financials: {time.time()-t0:.2f}s")
-            
-            t0 = time.time()
-            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
-            _logger.info(f"⏱️ get_inventory_summary: {time.time()-t0:.2f}s")
-            
-            t0 = time.time()
-            # Obter séries temporais para modelos preditivos e correlações
-            timeseries_days = max(90, days * 2) # Pegar mais dados para tendências melhores
-            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
-            _logger.info(f"⏱️ get_sales_timeseries: {time.time()-t0:.2f}s")
-            
-            t0 = time.time()
-            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
-            _logger.info(f"⏱️ get_expense_details: {time.time()-t0:.2f}s")
         except Exception as e:
-            _logger.error(f"Erro ao obter dados base do dashboard: {e}")
-            # Fallbacks já tratados nas chamadas individuais, mas garante fluxo
-            pass
+            _logger.warning(f"get_sales_summary_range falhou: {e}")
+        try:
+            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
+        except Exception as e:
+            _logger.warning(f"get_inventory_summary falhou: {e}")
+        try:
+            timeseries_days = max(90, days * 2)
+            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
+        except Exception as e:
+            _logger.warning(f"get_sales_timeseries falhou: {e}")
+        try:
+            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
+        except Exception as e:
+            _logger.warning(f"get_expense_details falhou: {e}")
 
         try:
             t0 = time.time()
@@ -254,7 +249,7 @@ class DashboardOrchestrator:
             inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
         except Exception as e:
             _logger.error(f"Erro ao obter resumo de estoque: {e}")
-            inventory_summary = {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "itens_baixo_estoque": 0}
+            inventory_summary = {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}
         
         # 🔥 ADICIONADO: Detalhes de despesas
         try:
