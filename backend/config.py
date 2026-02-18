@@ -11,7 +11,13 @@ db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
 load_dotenv(dotenv_path=basedir / ".env", override=False)
 
 
-# ==================== DATABASE CONFIGURATION ====================
+# ==================== HYBRID DATABASE CONFIGURATION ====================
+# Hybrid Logic: Cloud First, Local Fallback
+# CLOUD_ENABLED: 'true' (default, use cloud if possible), 'false' (standalone local only)
+# HYBRID_MODE: 'online' (try cloud, fallback), 'offline' (straight to local)
+
+_cloud_enabled = os.environ.get("CLOUD_ENABLED", "true").lower() == "true"
+_hybrid_mode = os.environ.get("HYBRID_MODE", "online").lower()
 _database_url = (
     os.environ.get("DATABASE_URL_TARGET")
     or os.environ.get("DB_PRIMARY")
@@ -19,43 +25,38 @@ _database_url = (
     or os.environ.get("POSTGRES_URL")
     or os.environ.get("AIVEN_DATABASE_URL")
 )
-_sqlite_db = os.environ.get("SQLITE_DB")
+
 _using_postgres = False
 _sqlalchemy_database_uri = None
+_db_source = "DEFAULT"
 
-if _database_url:
-    if _database_url.startswith("postgres://"):
-        _database_url = _database_url.replace("postgres://", "postgresql://", 1)
-    _sqlalchemy_database_uri = _database_url
-    _using_postgres = _database_url.startswith("postgresql://")
-    source = "ENV_VAR"
-    if os.environ.get("DATABASE_URL_TARGET"): source = "DATABASE_URL_TARGET"
-    elif os.environ.get("DB_PRIMARY"): source = "DB_PRIMARY"
-    elif os.environ.get("DATABASE_URL"): source = "DATABASE_URL"
-    elif os.environ.get("POSTGRES_URL"): source = "POSTGRES_URL"
-    elif os.environ.get("AIVEN_DATABASE_URL"): source = "AIVEN_DATABASE_URL"
-    
-    if _using_postgres:
-        print(f"[DB: POSTGRES] Source: {source} | URL: {(_database_url.split('@')[1] if '@' in _database_url else 'cloud')}")
-    else:
-        print(f"[DB: SQLITE] Source: {source} | URL: {_database_url}")
-elif _sqlite_db:
-    # Garantir prefixo sqlite:///
-    if not _sqlite_db.startswith("sqlite:///"):
-        _sqlite_db = f"sqlite:///{_sqlite_db}"
-    
-    # Se for apenas o nome do arquivo, redirecionar para 'instance/'
-    db_relative_path = _sqlite_db[10:] # Tirar 'sqlite:///'
-    if not any(c in db_relative_path for c in [':', '\\', '/']):
-        instance_path = os.path.join(basedir, 'instance', db_relative_path)
-        _sqlalchemy_database_uri = f"sqlite:///{instance_path}"
-    else:
-        _sqlalchemy_database_uri = _sqlite_db
-    print(f"[DB: SQLITE] {_sqlalchemy_database_uri}")
+# Caminho padrão para SQLite (Instalável / Fallback)
+_local_sqlite_uri = f"sqlite:///{os.path.join(basedir, 'instance', 'mercadinho_local.db')}"
+
+if not _cloud_enabled or _hybrid_mode == "offline":
+    _sqlalchemy_database_uri = _local_sqlite_uri
+    _db_source = "LOCAL_ONLY"
+    reason = "CLOUD_ENABLED=false" if not _cloud_enabled else "HYBRID_MODE=offline"
+    print(f"[DB: HYBRID] Mode: {reason} | Using Local SQLite: {_sqlalchemy_database_uri}")
 else:
-    # Padrão: SQLite na pasta instance
-    _sqlalchemy_database_uri = f"sqlite:///{os.path.join(basedir, 'instance', 'mercadinho.db')}"
-    print(f"[DB: SQLITE] {_sqlalchemy_database_uri}")
+    # Tentar configurar Cloud (Postgres)
+    if _database_url:
+        if _database_url.startswith("postgres://"):
+            _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+        
+        _sqlalchemy_database_uri = _database_url
+        _using_postgres = _database_url.startswith("postgresql://")
+        _db_source = "CLOUD_ENV"
+        
+        if _using_postgres:
+            print(f"[DB: HYBRID] Mode: ONLINE | Source: CLOUD (Postgres)")
+        else:
+            print(f"[DB: HYBRID] Mode: ONLINE | Source: CLOUD (SQLite via URL?)")
+    else:
+        # Sem URL de nuvem configura automaticamente para local
+        _sqlalchemy_database_uri = _local_sqlite_uri
+        _db_source = "AUTO_LOCAL"
+        print(f"[DB: HYBRID] Mode: ONLINE | No Cloud URL found. Fallback to Local SQLite.")
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-fallback-secret-key-12345"

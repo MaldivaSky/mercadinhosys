@@ -166,42 +166,81 @@ def create_app(config_name=None):
             os.makedirs(folder)
 
     # ==================== BOOTSTRAP: CRIAR TABELAS E COLUNAS CRÍTICAS ====================
-    with app.app_context():
-        try:
-            logger.info("🛠️ Verificando/Criando tabelas no banco de dados...")
-            db.create_all()
-            logger.info("✅ Tabelas verificadas/criadas com sucesso.")
-        except Exception as e:
-            logger.error(f"❌ Erro ao criar tabelas no bootstrap: {e}")
-
-        # Postgres: garantir colunas críticas (produtos.tipo, margem_lucro_real, etc.)
-        if app.config.get("USING_POSTGRES"):
+    # Otimização para Vercel/Render: Pular setup se SKIP_DB_SETUP=true ou se em produção após primeiro deploy
+    skip_db_setup = os.environ.get("SKIP_DB_SETUP", "false").lower() == "true"
+    
+    # Em produção, só rodamos o setup se explicitamente solicitado ou se não for um ambiente serverless
+    # No Vercel/Render, o setup pesado em cada requisição causa timeouts.
+    is_production = config_name == "production"
+    
+    if not skip_db_setup and not (is_production and os.environ.get("VERCEL") == "1"):
+        with app.app_context():
             try:
-                from sqlalchemy import text
-                alteras = [
-                    "ALTER TABLE venda_itens ADD COLUMN IF NOT EXISTS margem_lucro_real NUMERIC(10,2)",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem_lucro NUMERIC(10,2)",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo VARCHAR(50)",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS classificacao_abc VARCHAR(1)",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS total_vendido FLOAT DEFAULT 0",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS quantidade_vendida INTEGER DEFAULT 0",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ultima_venda TIMESTAMP",
-                    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fabricante VARCHAR(100)",
-                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS valor_total_comprado NUMERIC(12,2) DEFAULT 0",
-                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS total_compras INTEGER DEFAULT 0",
-                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS classificacao VARCHAR(20) DEFAULT 'REGULAR'",
-                    "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS prazo_entrega INTEGER DEFAULT 7",
-                ]
-                for sql in alteras:
-                    try:
-                        db.session.execute(text(sql))
-                        db.session.commit()
-                    except Exception as e:
-                        db.session.rollback()
-                        logger.debug("Schema sync col: %s", str(e)[:80])
-                logger.info("✅ Schema sync (colunas críticas) aplicado.")
+                # Testar conexão se for Postgres
+                if app.config.get("USING_POSTGRES"):
+                    from sqlalchemy import text
+                    logger.info("VERIFICANDO: Conexao com a Nuvem (Postgres)...")
+                    db.session.execute(text("SELECT 1"))
+                
+                logger.info("VERIFICANDO: Tabelas no banco de dados...")
+                db.create_all()
+                logger.info("SUCESSO: Tabelas verificadas/criadas.")
             except Exception as e:
-                logger.warning("⚠️ Schema sync falhou (ignorando): %s", str(e)[:120])
+                logger.error(f"ERRO: Falha ao conectar na Nuvem: {e}")
+                
+                # FALLBACK LOGIC
+                hybrid_mode = os.environ.get("HYBRID_MODE", "online").lower()
+                if hybrid_mode != "offline" and app.config.get("USING_POSTGRES"):
+                    logger.warning("FALLBACK: Mudando para banco de dados LOCAL (SQLite) devido a falha na Nuvem.")
+                    
+                    # Tentar reconfigurar para SQLite em tempo de execução
+                    from flask_sqlalchemy import SQLAlchemy
+                    basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+                    local_uri = f"sqlite:///{os.path.join(basedir, 'instance', 'mercadinho_local.db')}"
+                    
+                    app.config["SQLALCHEMY_DATABASE_URI"] = local_uri
+                    app.config["USING_POSTGRES"] = False
+                    
+                    # Recriar engine/session (simplificado - idealmente reiniciaria a app, mas vamos tentar create_all local)
+                    try:
+                        db.create_all()
+                        logger.info("SUCESSO: Banco de dados LOCAL inicializado.")
+                    except Exception as le:
+                        logger.error(f"ERRO FATAL: Nem o banco local pode ser inicializado: {le}")
+                else:
+                    logger.error(f"ERRO: Criar tabelas no bootstrap: {e}")
+    
+            # Postgres: garantir colunas críticas (produtos.tipo, margem_lucro_real, etc.)
+            if app.config.get("USING_POSTGRES"):
+                try:
+                    from sqlalchemy import text
+                    alteras = [
+                        "ALTER TABLE venda_itens ADD COLUMN IF NOT EXISTS margem_lucro_real NUMERIC(10,2)",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem_lucro NUMERIC(10,2)",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo VARCHAR(50)",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS classificacao_abc VARCHAR(1)",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS total_vendido FLOAT DEFAULT 0",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS quantidade_vendida INTEGER DEFAULT 0",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ultima_venda TIMESTAMP",
+                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fabricante VARCHAR(100)",
+                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS valor_total_comprado NUMERIC(12,2) DEFAULT 0",
+                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS total_compras INTEGER DEFAULT 0",
+                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS classificacao VARCHAR(20) DEFAULT 'REGULAR'",
+                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS prazo_entrega INTEGER DEFAULT 7",
+                    ]
+                    for sql in alteras:
+                        try:
+                            # Executa apenas se não for produção ou se o log indicar necessidade
+                            db.session.execute(text(sql))
+                            db.session.commit()
+                        except Exception as e:
+                            db.session.rollback()
+                            logger.debug("Schema sync col: %s", str(e)[:80])
+                    logger.info("SUCESSO: Schema sync aplicado.")
+                except Exception as e:
+                    logger.warning("AVISO: Schema sync falhou: %s", str(e)[:120])
+    else:
+        logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
 
     # ==================== REGISTRO DE BLUEPRINTS ====================
 

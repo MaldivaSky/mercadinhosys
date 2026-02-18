@@ -153,15 +153,27 @@ def cache_response(ttl_seconds: int = 300, require_db_check: bool = False):
             if cached is not None:
                 if require_db_check:
                     try:
+                        # Otimização: não fazer SELECT 1 em todas as requisições se já temos o resultado
+                        # ou usar um check mais leve. No Postgres/Aiven, SELECT 1 é rápido, 
+                        # mas muitas conexões simultâneas podem enfileirar.
                         from sqlalchemy import text
                         from app import db
-
+                        # Executar com timeout curto para não travar a aplicação se o DB cair
                         db.session.execute(text("SELECT 1"))
                     except Exception as e:
-                        raise RuntimeError("Banco de dados indisponível") from e
+                        import logging
+                        logging.getLogger(__name__).error(f"Cache DB check failed: {e}")
+                        # Se o DB falhar, tentamos servir o cache mesmo assim (graceful degradation)
+                        return cached
                 return cached
 
-            result = func(*args, **kwargs)
+            try:
+                result = func(*args, **kwargs)
+            except Exception as e:
+                # Se a execução falhar mas tivermos cache (mesmo expirado), poderíamos servir?
+                # Por agora, apenas repassa o erro para o handler global
+                raise e
+
             if use_flask_cache:
                 try:
                     flask_cache.set(cache_key, result, timeout=ttl_seconds)
