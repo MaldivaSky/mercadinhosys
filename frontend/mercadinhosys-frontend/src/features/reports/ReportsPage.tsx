@@ -461,9 +461,9 @@ const ReportsPage: React.FC = () => {
                     'Percentual (%)': f.percentual.toFixed(2)
                 })),
                 contas_pagar: resumo.data?.contas_pagar || {},
-                contas_receber: resumo.data?.contas_receber || {},
+
                 despesas_mes: resumo.data?.despesas_mes || {},
-                fluxo_caixa: resumo.data?.fluxo_caixa_30d || {},
+                fluxo_caixa: resumo.data?.fluxo_caixa_real || {},
                 alertas: resumo.data?.alertas || [],
             });
         } catch (error) {
@@ -766,10 +766,6 @@ const ReportsPage: React.FC = () => {
             { 'Descrição': 'Vence em 7 dias', 'Valor (R$)': financeiroData.contas_pagar?.vence_7_dias || 0, 'Observação': '' },
             { 'Descrição': 'Pago no Mês', 'Valor (R$)': financeiroData.contas_pagar?.pago_no_mes || 0, 'Observação': '' },
             { 'Descrição': '', 'Valor (R$)': '', 'Observação': '' },
-            { 'Descrição': '--- CONTAS A RECEBER ---', 'Valor (R$)': '', 'Observação': '' },
-            { 'Descrição': 'Total em Aberto', 'Valor (R$)': financeiroData.contas_receber?.total_aberto || 0, 'Observação': '' },
-            { 'Descrição': 'Vencido (inadimplente)', 'Valor (R$)': financeiroData.contas_receber?.total_vencido || 0, 'Observação': '' },
-            { 'Descrição': 'Recebido no Mês', 'Valor (R$)': financeiroData.contas_receber?.recebido_no_mes || 0, 'Observação': '' },
         ];
 
         if (financeiroData.formas_pagamento?.length > 0) {
@@ -1135,7 +1131,7 @@ const ReportsPage: React.FC = () => {
     const renderFinanceiroDRE = () => {
         if (!financeiroData) return <div className="text-center py-12 text-gray-400"><Loader2 className="w-8 h-8 animate-spin mx-auto" /></div>;
         const cp = financeiroData.contas_pagar;
-        const cr = financeiroData.contas_receber;
+
         const desp = financeiroData.despesas_mes;
         const fluxo = financeiroData.fluxo_caixa;
         const alertas = financeiroData.alertas || [];
@@ -1199,17 +1195,17 @@ const ReportsPage: React.FC = () => {
                         <p className={`text-xl font-bold ${financeiroData.lucro_liquido >= 0 ? 'text-emerald-900 dark:text-emerald-200' : 'text-red-900 dark:text-red-200'}`}>{fmtBRL(financeiroData.lucro_liquido)}</p>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Margem: {financeiroData.faturamento > 0 ? ((financeiroData.lucro_liquido / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</p>
                     </div>
-                    <div className={`rounded-xl p-4 border ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'bg-sky-50 dark:bg-sky-900/20 border-sky-100 dark:border-sky-800' : 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800'}`}>
-                        <p className={`text-xs font-medium mb-1 ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'text-sky-600 dark:text-sky-400' : 'text-orange-600 dark:text-orange-400'}`}>Fluxo Caixa (30d)</p>
-                        <p className={`text-xl font-bold ${(fluxo.saldo_previsto ?? 0) >= 0 ? 'text-sky-900 dark:text-sky-200' : 'text-orange-900 dark:text-orange-200'}`}>{fmtBRL(fluxo.saldo_previsto ?? 0)}</p>
+                    <div className={`rounded-xl p-4 border ${(fluxo.saldo ?? 0) >= 0 ? 'bg-sky-50 dark:bg-sky-900/20 border-sky-100 dark:border-sky-800' : 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800'}`}>
+                        <p className={`text-xs font-medium mb-1 ${(fluxo.saldo ?? 0) >= 0 ? 'text-sky-600 dark:text-sky-400' : 'text-orange-600 dark:text-orange-400'}`}>Fluxo Caixa (Real)</p>
+                        <p className={`text-xl font-bold ${(fluxo.saldo ?? 0) >= 0 ? 'text-sky-900 dark:text-sky-200' : 'text-orange-900 dark:text-orange-200'}`}>{fmtBRL(fluxo.saldo ?? 0)}</p>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <span className="text-green-600 dark:text-green-400">+{fmtBRL(fluxo.entradas_previstas ?? 0)}</span> / <span className="text-red-600 dark:text-red-400">-{fmtBRL(fluxo.saidas_previstas ?? 0)}</span>
+                            <span className="text-green-600 dark:text-green-400">+{fmtBRL(fluxo.entradas ?? 0)}</span> / <span className="text-red-600 dark:text-red-400">-{fmtBRL(fluxo.saidas ?? 0)}</span>
                         </p>
                     </div>
                 </div>
 
-                {/* Contas a Pagar e Receber */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Contas a Pagar */}
+                <div className="grid grid-cols-1 gap-4">
                     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
                         <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
                             <ArrowDownRight className="w-4 h-4 text-red-500" /> Contas a Pagar
@@ -1223,67 +1219,58 @@ const ReportsPage: React.FC = () => {
                             <div className="flex justify-between"><span className="text-gray-500">Pago no mês</span><span className="font-medium text-green-600">{fmtBRL(cp.pago_no_mes ?? 0)}</span></div>
                         </div>
                     </div>
-                    <div className="bg-white border border-gray-200 rounded-xl p-5">
-                        <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                            <ArrowUpRight className="w-4 h-4 text-green-500" /> Contas a Receber
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between"><span className="text-gray-500">Total em aberto</span><span className="font-semibold text-green-600">{fmtBRL(cr.total_aberto ?? 0)}</span></div>
-                            <div className="flex justify-between"><span className="text-gray-500">Vencido (inadimplente)</span><span className="font-semibold text-red-600">{fmtBRL(cr.total_vencido ?? 0)}</span></div>
-                            <div className="flex justify-between"><span className="text-gray-500">A receber (30 dias)</span><span className="font-medium text-blue-600">{fmtBRL(cr.a_receber_30_dias ?? 0)}</span></div>
-                            <div className="flex justify-between"><span className="text-gray-500">Inadimplentes</span><span className="text-red-500">{cr.qtd_inadimplentes ?? 0} título(s)</span></div>
-                            <hr />
-                            <div className="flex justify-between"><span className="text-gray-500">Recebido no mês</span><span className="font-medium text-green-600">{fmtBRL(cr.recebido_no_mes ?? 0)}</span></div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Formas de pagamento */}
-                {financeiroData.formas_pagamento?.length > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-5">
-                        <h4 className="font-bold text-gray-800 mb-3">Receita por Forma de Pagamento</h4>
-                        <table className="min-w-full text-sm">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-3 py-2 text-left font-medium text-gray-700">Forma</th>
-                                    <th className="px-3 py-2 text-right font-medium text-gray-700">Transações</th>
-                                    <th className="px-3 py-2 text-right font-medium text-gray-700">Total</th>
-                                    <th className="px-3 py-2 text-right font-medium text-gray-700">%</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {financeiroData.formas_pagamento.map((f: any, i: number) => (
-                                    <tr key={i} className="border-t">
-                                        <td className="px-3 py-2">{f['Forma de Pagamento']}</td>
-                                        <td className="px-3 py-2 text-right">{f['Qtd. Transações']}</td>
-                                        <td className="px-3 py-2 text-right font-semibold">{fmtBRL(f['Total (R$)'])}</td>
-                                        <td className="px-3 py-2 text-right text-gray-500">{f['Percentual (%)']}%</td>
+                {
+                    financeiroData.formas_pagamento.length > 0 && (
+                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+                            <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-3">Receita por Forma de Pagamento</h4>
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Forma</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Transações</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Total</th>
+                                        <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-300">%</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {financeiroData.formas_pagamento.map((f: any, i: number) => (
+                                        <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
+                                            <td className="px-3 py-2 text-gray-800 dark:text-gray-200">{f['Forma de Pagamento']}</td>
+                                            <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-400">{f['Qtd. Transações']}</td>
+                                            <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">{fmtBRL(f['Total (R$)'])}</td>
+                                            <td className="px-3 py-2 text-right text-gray-500 dark:text-gray-400">{f['Percentual (%)']}%</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
+                }
 
                 {/* Alertas */}
-                {alertas.length > 0 && (
-                    <div className="space-y-2">
-                        <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-500" /> Alertas Financeiros
-                        </h4>
-                        {alertas.map((alerta: any, i: number) => (
-                            <div key={i} className={`p-3 rounded-lg border text-sm ${alerta.severidade === 'critica' ? 'bg-red-50 border-red-200 text-red-800' :
-                                alerta.severidade === 'alta' ? 'bg-orange-50 border-orange-200 text-orange-800' :
-                                    'bg-yellow-50 border-yellow-200 text-yellow-800'
-                                }`}>
-                                <p className="font-semibold">{alerta.titulo}</p>
-                                <p className="text-xs mt-0.5 opacity-80">{alerta.descricao}</p>
-                                <p className="text-xs mt-1 font-medium opacity-70">Ação: {alerta.acao}</p>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                {
+                    alertas.length > 0 && (
+                        <div className="space-y-2">
+                            <h4 className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-500" /> Alertas Financeiros
+                            </h4>
+                            {alertas.map((alerta: any, i: number) => (
+                                <div key={i} className={`p-3 rounded-lg border text-sm ${alerta.severidade === 'critica' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300' :
+                                    alerta.severidade === 'alta' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-300' :
+                                        'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'
+                                    }`}>
+                                    <p className="font-semibold">{alerta.titulo}</p>
+                                    <p className="text-xs mt-0.5 opacity-80">{alerta.descricao}</p>
+                                    <p className="text-xs mt-1 font-medium opacity-70">Ação: {alerta.acao}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                }
+            </div >
         );
     };
 
@@ -1623,7 +1610,7 @@ const ReportsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     <ReportCard title="Vendas Detalhadas" description="Análise cronológica, totais diários e volume por período." icon={TrendingUp} color="bg-blue-500" loading={loadingReport === 'vendas'} onOpen={() => openModal('vendas')} />
                     <ReportCard title="Estoque & Produtos" description="Inventário com margem, classificação ABC e status de estoque." icon={Package} color="bg-emerald-500" loading={loadingReport === 'produtos'} onOpen={() => openModal('produtos')} />
-                    <ReportCard title="DRE Financeiro" description="Faturamento, lucro bruto, contas a pagar/receber, fluxo de caixa e alertas." icon={DollarSign} color="bg-amber-500" loading={loadingReport === 'financeiro'} onOpen={() => openModal('financeiro')} badge="DRE" />
+                    <ReportCard title="DRE Financeiro" description="Faturamento, lucro bruto, contas a pagar, fluxo de caixa e alertas." icon={DollarSign} color="bg-amber-500" loading={loadingReport === 'financeiro'} onOpen={() => openModal('financeiro')} badge="DRE" />
                     <ReportCard title="Performance Equipe" description="Ranking de vendedores, ticket médio e produtividade por funcionário." icon={Users} color="bg-pink-500" loading={loadingReport === 'equipe'} onOpen={() => openModal('equipe')} />
                     <ReportCard title="Controle de Ponto" description="Frequência, atrasos, taxa de presença e horas por funcionário." icon={Clock} color="bg-indigo-600" loading={loadingReport === 'ponto'} onOpen={() => openModal('ponto')} />
                 </div>

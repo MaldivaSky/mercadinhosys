@@ -26,8 +26,8 @@ const CustomersPage: React.FC = () => {
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [clienteDetalhado, setClienteDetalhado] = useState<Cliente | null>(null);
     const [detalheLoading, setDetalheLoading] = useState(false);
-    const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success'|'error'}>({open: false, message: '', severity: 'success'});
-    const [dashboard, setDashboard] = useState<{total: number, ativos: number, inativos: number, novos: number, vip: number}>({total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0});
+    const [snackbar, setSnackbar] = useState<{ open: boolean, message: string, severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+    const [dashboard, setDashboard] = useState<{ total: number, ativos: number, inativos: number, novos: number, vip: number }>({ total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0 });
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
     const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
@@ -46,7 +46,7 @@ const CustomersPage: React.FC = () => {
                 });
             }
         } catch {
-            setSnackbar({open: true, message: 'Erro ao carregar métricas do dashboard', severity: 'error'});
+            setSnackbar({ open: true, message: 'Erro ao carregar métricas do dashboard', severity: 'error' });
         }
     };
 
@@ -56,7 +56,7 @@ const CustomersPage: React.FC = () => {
             const data = await customerService.list();
             setClientes(data);
         } catch {
-            setSnackbar({open: true, message: 'Erro ao carregar clientes', severity: 'error'});
+            setSnackbar({ open: true, message: 'Erro ao carregar clientes', severity: 'error' });
         } finally {
             setLoading(false);
         }
@@ -135,7 +135,7 @@ const CustomersPage: React.FC = () => {
 
     const handleEdit = async (cliente: Cliente) => {
         if (!cliente || !cliente.id) {
-            setSnackbar({open: true, message: 'Erro: Cliente inválido para edição', severity: 'error'});
+            setSnackbar({ open: true, message: 'Erro: Cliente inválido para edição', severity: 'error' });
             return;
         }
 
@@ -154,9 +154,9 @@ const CustomersPage: React.FC = () => {
                 typeof (err as { response?: { status?: number } }).response === 'object' &&
                 (err as { response?: { status?: number } }).response?.status === 404
             ) {
-                setSnackbar({open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error'});
+                setSnackbar({ open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error' });
             } else {
-                setSnackbar({open: true, message: 'Erro ao buscar dados do cliente para edição', severity: 'error'});
+                setSnackbar({ open: true, message: 'Erro ao buscar dados do cliente para edição', severity: 'error' });
             }
         } finally {
             setSaving(false);
@@ -184,9 +184,9 @@ const CustomersPage: React.FC = () => {
                 typeof (err as { response?: { status?: number } }).response === 'object' &&
                 (err as { response?: { status?: number } }).response?.status === 404
             ) {
-                setSnackbar({open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error'});
+                setSnackbar({ open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error' });
             } else {
-                setSnackbar({open: true, message: 'Erro ao buscar detalhes do cliente', severity: 'error'});
+                setSnackbar({ open: true, message: 'Erro ao buscar detalhes do cliente', severity: 'error' });
             }
         } finally {
             setDetalheLoading(false);
@@ -195,7 +195,7 @@ const CustomersPage: React.FC = () => {
 
     const handleDelete = async (cliente: Cliente) => {
         if (!cliente || !cliente.id) {
-            setSnackbar({open: true, message: 'Erro: Cliente inválido para exclusão', severity: 'error'});
+            setSnackbar({ open: true, message: 'Erro: Cliente inválido para exclusão', severity: 'error' });
             return;
         }
 
@@ -207,37 +207,37 @@ const CustomersPage: React.FC = () => {
         setSaving(true);
         try {
             await customerService.remove(cliente.id);
-            setSnackbar({open: true, message: `Cliente "${cliente.nome}" excluído com sucesso`, severity: 'success'});
+            setSnackbar({ open: true, message: `Cliente "${cliente.nome}" excluído com sucesso`, severity: 'success' });
             fetchClientes();
             fetchDashboard();
         } catch (error: unknown) {
             const err = error as { response?: { status?: number; data?: { message?: string; vinculos?: { vendas: number; contas_a_receber: number } } } };
-            
+
             // Tratamento específico para erro de vínculos (400)
             if (err.response?.status === 400 && err.response?.data?.vinculos) {
                 const { vendas, contas_a_receber } = err.response.data.vinculos;
                 const msg = `Não é possível excluir este cliente pois ele possui registros vinculados:\n` +
-                           `• ${vendas} Vendas\n` +
-                           `• ${contas_a_receber} Contas a receber\n\n` +
-                           `Deseja DESATIVAR o cliente em vez de excluir?\n` +
-                           `Isso impedirá novas vendas mas manterá o histórico.`;
-                
+                    `• ${vendas} Vendas\n` +
+                    `• ${contas_a_receber} Débitos em Aberto\n\n` +
+                    `Deseja DESATIVAR o cliente em vez de excluir?\n` +
+                    `Isso impedirá novas vendas mas manterá o histórico.`;
+
                 if (window.confirm(msg)) {
                     try {
                         await apiClient.patch(`/clientes/${cliente.id}/status`, { ativo: false });
-                        setSnackbar({open: true, message: `Cliente "${cliente.nome}" desativado com sucesso`, severity: 'success'});
+                        setSnackbar({ open: true, message: `Cliente "${cliente.nome}" desativado com sucesso`, severity: 'success' });
                         fetchClientes();
                         fetchDashboard();
                     } catch (patchErr: unknown) {
                         const patchMsg = (patchErr as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao desativar cliente';
-                        setSnackbar({open: true, message: patchMsg, severity: 'error'});
+                        setSnackbar({ open: true, message: patchMsg, severity: 'error' });
                     }
                     return; // Interrompe para não mostrar o erro original
                 }
             }
 
             const errorMessage = err.response?.data?.message || 'Erro ao excluir cliente';
-            setSnackbar({open: true, message: errorMessage, severity: 'error'});
+            setSnackbar({ open: true, message: errorMessage, severity: 'error' });
         } finally {
             setSaving(false);
         }
@@ -248,10 +248,10 @@ const CustomersPage: React.FC = () => {
         try {
             if (editData && editData.id) {
                 await customerService.update(editData.id, data);
-                setSnackbar({open: true, message: 'Cliente atualizado com sucesso', severity: 'success'});
+                setSnackbar({ open: true, message: 'Cliente atualizado com sucesso', severity: 'success' });
             } else {
                 await customerService.create(data);
-                setSnackbar({open: true, message: 'Cliente cadastrado com sucesso', severity: 'success'});
+                setSnackbar({ open: true, message: 'Cliente cadastrado com sucesso', severity: 'success' });
             }
             setFormOpen(false);
             setEditData(undefined);
@@ -266,9 +266,9 @@ const CustomersPage: React.FC = () => {
             ) {
                 const errResponse = (error as { response?: { data?: { message?: string; error?: string } } }).response;
                 const errorMessage = errResponse?.data?.message || errResponse?.data?.error || 'Erro ao salvar cliente';
-                setSnackbar({open: true, message: errorMessage, severity: 'error'});
+                setSnackbar({ open: true, message: errorMessage, severity: 'error' });
             } else {
-                setSnackbar({open: true, message: 'Erro ao salvar cliente', severity: 'error'});
+                setSnackbar({ open: true, message: 'Erro ao salvar cliente', severity: 'error' });
             }
         } finally {
             setSaving(false);
@@ -308,9 +308,9 @@ const CustomersPage: React.FC = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+
         handleExportClose();
-        setSnackbar({open: true, message: 'CSV exportado com sucesso', severity: 'success'});
+        setSnackbar({ open: true, message: 'CSV exportado com sucesso', severity: 'success' });
     };
 
     const exportarExcel = () => {
@@ -332,9 +332,9 @@ const CustomersPage: React.FC = () => {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Clientes");
         XLSX.writeFile(wb, `clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
-        
+
         handleExportClose();
-        setSnackbar({open: true, message: 'Excel exportado com sucesso', severity: 'success'});
+        setSnackbar({ open: true, message: 'Excel exportado com sucesso', severity: 'success' });
     };
 
     const exportarPDF = () => {
@@ -343,11 +343,11 @@ const CustomersPage: React.FC = () => {
         // Cabeçalho
         doc.setFillColor(25, 118, 210); // Cor primária (Blue 700)
         doc.rect(0, 0, 210, 40, 'F');
-        
+
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(22);
         doc.text("Relatório de Clientes", 105, 20, { align: "center" });
-        
+
         doc.setFontSize(10);
         doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 105, 30, { align: "center" });
 
@@ -381,18 +381,18 @@ const CustomersPage: React.FC = () => {
         }
 
         doc.save(`clientes-${new Date().toISOString().split('T')[0]}.pdf`);
-        
+
         handleExportClose();
-        setSnackbar({open: true, message: 'PDF exportado com sucesso', severity: 'success'});
+        setSnackbar({ open: true, message: 'PDF exportado com sucesso', severity: 'success' });
     };
 
     return (
         <div className="max-w-6xl mx-auto p-4">
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography 
-                    variant="h4" 
-                    sx={{ 
-                        fontWeight: 700, 
+                <Typography
+                    variant="h4"
+                    sx={{
+                        fontWeight: 700,
                         color: '#1976d2',
                         textShadow: '0 1px 2px rgba(0,0,0,0.1)'
                     }}
@@ -404,10 +404,10 @@ const CustomersPage: React.FC = () => {
                         variant="outlined"
                         startIcon={<GetAppIcon />}
                         onClick={handleExportClick}
-                        sx={{ 
-                            color: '#1976d2', 
+                        sx={{
+                            color: '#1976d2',
                             borderColor: '#1976d2',
-                            '&:hover': { 
+                            '&:hover': {
                                 borderColor: '#1565c0',
                                 bgcolor: '#e3f2fd'
                             }
@@ -428,9 +428,9 @@ const CustomersPage: React.FC = () => {
                         variant="contained"
                         startIcon={<PersonAddAlt1Icon />}
                         onClick={handleAdd}
-                        sx={{ 
+                        sx={{
                             bgcolor: '#1976d2',
-                            '&:hover': { 
+                            '&:hover': {
                                 bgcolor: '#1565c0'
                             }
                         }}
@@ -484,8 +484,8 @@ const CustomersPage: React.FC = () => {
                 {(searchTerm || statusFilter !== 'todos') && (
                     <Chip
                         label={`${filteredClientes.length} resultado${filteredClientes.length !== 1 ? 's' : ''}`}
-                        sx={{ 
-                            bgcolor: '#e3f2fd', 
+                        sx={{
+                            bgcolor: '#e3f2fd',
                             color: '#1976d2',
                             fontWeight: 500
                         }}
@@ -500,10 +500,10 @@ const CustomersPage: React.FC = () => {
                             onClick={handleExportClick}
                             startIcon={<GetAppIcon />}
                             disabled={filteredClientes.length === 0}
-                            sx={{ 
-                                color: '#1976d2', 
+                            sx={{
+                                color: '#1976d2',
                                 borderColor: '#1976d2',
-                                '&:hover': { 
+                                '&:hover': {
                                     borderColor: '#1565c0',
                                     bgcolor: '#e3f2fd'
                                 }
@@ -532,8 +532,8 @@ const CustomersPage: React.FC = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
             />
-            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({...snackbar, open: false})}>
-                <Alert onClose={() => setSnackbar({...snackbar, open: false})} severity={snackbar.severity} sx={{ width: '100%' }}>
+            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+                <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
                     {snackbar.message}
                 </Alert>
             </Snackbar>

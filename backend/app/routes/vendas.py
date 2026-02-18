@@ -959,8 +959,8 @@ def criar_venda():
                     400,
                 )
 
-            # Buscar produto
-            produto = Produto.query.get(produto_id)
+            # Buscar produto com bloqueio para evitar condições de corrida (Negative Stock Fix)
+            produto = Produto.query.with_for_update().get(produto_id)
             if not produto:
                 db.session.rollback()
                 return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
