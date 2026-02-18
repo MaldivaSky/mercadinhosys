@@ -380,11 +380,7 @@ Obrigado pela preferência!
         msg_alternative.attach(MIMEText(text_content, "plain"))
         msg_alternative.attach(MIMEText(html_content, "html"))
         
-        # Attach image if present (must be attached to the ROOT 'related' part)
-        if image_part:
-            msg.attach(image_part)
-
-        # Attach image if present (must be attached to the ROOT 'related' part)
+        # Anexar imagem inline ao ROOT 'related' (apenas uma vez)
         if image_part:
             msg.attach(image_part)
 
@@ -403,6 +399,25 @@ Obrigado pela preferência!
 
         current_app.logger.info(f"✅ Cupom enviado para {cliente_email} - Venda {venda.get('codigo', '')}")
         return True, ""
+
+    except smtplib.SMTPAuthenticationError as e:
+        msg_erro = str(e)
+        if "535" in msg_erro or "Username and Password not accepted" in msg_erro:
+            detalhe = (
+                "Credenciais Gmail rejeitadas. "
+                "O Gmail exige App Password (senha de aplicativo), não a senha normal da conta. "
+                "Acesse: myaccount.google.com → Segurança → Senhas de app → Gere uma senha para 'Email'. "
+                "Atualize MAIL_PASSWORD no backend/mail.env com os 16 caracteres gerados (sem espaços)."
+            )
+        else:
+            detalhe = f"Erro de autenticação SMTP: {msg_erro}"
+        current_app.logger.error(f"❌ Erro de autenticação ao enviar cupom: {msg_erro}")
+        return False, detalhe
+
+    except smtplib.SMTPConnectError as e:
+        detalhe = f"Não foi possível conectar ao servidor SMTP ({mail_server}:{mail_port}). Verifique MAIL_SERVER e MAIL_PORT."
+        current_app.logger.error(f"❌ Erro de conexão SMTP: {str(e)}")
+        return False, detalhe
 
     except Exception as e:
         current_app.logger.error(f"❌ Erro ao enviar cupom: {str(e)}")
