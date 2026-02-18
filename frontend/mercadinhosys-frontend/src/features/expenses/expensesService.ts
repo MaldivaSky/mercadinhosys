@@ -60,31 +60,43 @@ export interface AlertaFinanceiro {
 
 export interface ResumoFinanceiro {
     success: boolean;
+    periodo: {
+        inicio: string;
+        fim: string;
+    };
+    indicadores_gestao: {
+        indice_comprometimento: number;
+        pressao_caixa_diaria: number;
+        venda_media_diaria: number;
+        vence_hoje_valor: number;
+    };
     contas_pagar: {
         total_aberto: number;
         total_vencido: number;
+        vence_hoje: number;
         vence_7_dias: number;
         vence_30_dias: number;
-        qtd_vencidos: number;
-        qtd_vence_7d: number;
         pago_no_mes: number;
-    };
-    contas_receber: {
-        total_aberto: number;
-        total_vencido: number;
-        a_receber_30_dias: number;
-        qtd_inadimplentes: number;
-        recebido_no_mes: number;
+        qtd_vencidos: number;
+        qtd_vence_hoje: number;
+        qtd_vence_7d: number;
     };
     despesas_mes: {
         total: number;
         recorrentes: number;
         variaveis: number;
     };
-    fluxo_caixa_30d: {
-        entradas_previstas: number;
-        saidas_previstas: number;
-        saldo_previsto: number;
+    fluxo_caixa_real: {
+        entradas: number;
+        saidas: number;
+        saldo: number;
+    };
+    dre_consolidado: {
+        receita_bruta: number;
+        custo_mercadoria: number;
+        lucro_bruto: number;
+        despesas_operacionais: number;
+        lucro_liquido: number;
     };
     alertas: AlertaFinanceiro[];
     total_alertas: number;

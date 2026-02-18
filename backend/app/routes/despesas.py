@@ -754,22 +754,11 @@ def boletos_a_vencer():
 @funcionario_required
 def resumo_financeiro():
     """
-    Resumo financeiro consolidado (visão ERP).
-    
-    Retorna:
-    - Contas a pagar: total aberto, vencido, vence em 7/30 dias
-    - Contas a receber: total aberto, vencido, a receber 7/30 dias
-    - Despesas: total mês, recorrentes, variáveis
-    - Fluxo de caixa previsto: entradas vs saídas nos próximos 30 dias
-    - Alertas financeiros
-    
-    Query Params:
-    - data_inicio: YYYY-MM-DD (opcional)
-    - data_fim: YYYY-MM-DD (opcional)
+    Resumo financeiro consolidado otimizado para Vercel.
+    Retorna visão de DRE e Fluxo de Caixa Real.
     """
     try:
-        from app.models import ContaPagar, ContaReceber, Fornecedor, Cliente
-        from sqlalchemy import func
+        from app.dashboard_cientifico.data_layer import DataLayer
         from datetime import date, timedelta, datetime
 
         current_user_id = get_jwt_identity()
@@ -783,12 +772,7 @@ def resumo_financeiro():
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
 
-        # Datas base para "Hoje" (Balance Sheet / Posição Atual)
         hoje = date.today()
-        limite_7d = hoje + timedelta(days=7)
-        limite_30d = hoje + timedelta(days=30)
-
-        # Datas para "Período" (P&L / Fluxo / Despesas)
         data_inicio_str = request.args.get('data_inicio')
         data_fim_str = request.args.get('data_fim')
 
@@ -797,170 +781,58 @@ def resumo_financeiro():
                 dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
                 dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
             except ValueError:
-                # Fallback para o mês atual se formato inválido
                 dt_inicio = hoje.replace(day=1)
                 dt_fim = hoje
         else:
-            # Fallback para o mês atual se não informado
             dt_inicio = hoje.replace(day=1)
             dt_fim = hoje
 
-        # ═══════ CONTAS A PAGAR (Posição Atual - Balance Sheet) ═══════
-        cp_base = ContaPagar.query.filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == "aberto",
-        )
-
-        cp_total_aberto = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == "aberto",
-        ).scalar() or Decimal("0")
-
-        cp_total_vencido = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == "aberto",
-            ContaPagar.data_vencimento < hoje,
-        ).scalar() or Decimal("0")
-
-        cp_vence_7d = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == "aberto",
-            ContaPagar.data_vencimento >= hoje,
-            ContaPagar.data_vencimento <= limite_7d,
-        ).scalar() or Decimal("0")
-
-        cp_vence_30d = db.session.query(func.sum(ContaPagar.valor_atual)).filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == "aberto",
-            ContaPagar.data_vencimento >= hoje,
-            ContaPagar.data_vencimento <= limite_30d,
-        ).scalar() or Decimal("0")
-
-        cp_qtd_vencidos = cp_base.filter(ContaPagar.data_vencimento < hoje).count()
-        cp_qtd_vence_7d = cp_base.filter(
-            ContaPagar.data_vencimento >= hoje,
-            ContaPagar.data_vencimento <= limite_7d,
-        ).count()
-
-        # Pagamentos realizados no PERÍODO (Fluxo de Caixa)
-        cp_pago_mes = db.session.query(func.sum(ContaPagar.valor_pago)).filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == "pago",
-            ContaPagar.data_pagamento >= dt_inicio,
-            ContaPagar.data_pagamento <= dt_fim,
-        ).scalar() or Decimal("0")
-
-        # ═══════ CONTAS A RECEBER (Posição Atual - Balance Sheet) ═══════
-        cr_total_aberto = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
-            ContaReceber.estabelecimento_id == estabelecimento_id,
-            ContaReceber.status == "aberto",
-        ).scalar() or Decimal("0")
-
-        cr_total_vencido = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
-            ContaReceber.estabelecimento_id == estabelecimento_id,
-            ContaReceber.status == "aberto",
-            ContaReceber.data_vencimento < hoje,
-        ).scalar() or Decimal("0")
-
-        cr_vence_30d = db.session.query(func.sum(ContaReceber.valor_atual)).filter(
-            ContaReceber.estabelecimento_id == estabelecimento_id,
-            ContaReceber.status == "aberto",
-            ContaReceber.data_vencimento >= hoje,
-            ContaReceber.data_vencimento <= limite_30d,
-        ).scalar() or Decimal("0")
-
-        cr_qtd_inadimplentes = ContaReceber.query.filter(
-            ContaReceber.estabelecimento_id == estabelecimento_id,
-            ContaReceber.status == "aberto",
-            ContaReceber.data_vencimento < hoje,
-        ).count()
-
-        # Recebimentos realizados no PERÍODO (Fluxo de Caixa)
-        cr_recebido_mes = db.session.query(func.sum(ContaReceber.valor_recebido)).filter(
-            ContaReceber.estabelecimento_id == estabelecimento_id,
-            ContaReceber.status == "recebido",
-            ContaReceber.data_recebimento >= dt_inicio,
-            ContaReceber.data_recebimento <= dt_fim,
-        ).scalar() or Decimal("0")
-
-        # ═══════ DADOS DE VENDAS (Via DataLayer para consistência com Dashboard) ═══════
-        from app.dashboard_cientifico.data_layer import DataLayer
+        # 🚀 CONSOLIDAÇÃO PROFISSIONAL: Reduz de 12 para 3 queries principais
+        financial_data = DataLayer.get_consolidated_financial_summary(estabelecimento_id, dt_inicio, dt_fim)
         
-        # Converter dates para datetime para o DataLayer
-        dt_inicio_full = datetime.combine(dt_inicio, datetime.min.time())
-        dt_fim_full = datetime.combine(dt_fim, datetime.max.time())
+        if not financial_data:
+             return jsonify({"error": "Falha ao consolidar dados financeiros"}), 500
+
+        cp = financial_data['contas_pagar']
+        vendas = financial_data['vendas']
+        desp = financial_data['despesas']
         
-        financials = DataLayer.get_sales_financials(estabelecimento_id, dt_inicio_full, dt_fim_full)
+        # --- Lógica Exata para Mercadinho ---
+        receita_bruta = vendas.get("revenue", 0.0)
+        total_pagar_aberto = cp['total_aberto']
         
-        # ═══════ DESPESAS DO PERÍODO ═══════
-        desp_mes_total = db.session.query(func.sum(Despesa.valor)).filter(
-            Despesa.estabelecimento_id == estabelecimento_id,
-            Despesa.data_despesa >= dt_inicio,
-            Despesa.data_despesa <= dt_fim,
-        ).scalar() or Decimal("0")
+        # 1. Índice de Comprometimento (Dívida total vs Faturamento do período)
+        indice_comprometimento = (total_pagar_aberto / receita_bruta * 100) if receita_bruta > 0 else 0
+        
+        # 2. Pressão de Caixa Diária (Vence Hoje vs Média de Venda Diária)
+        dias_periodo = (dt_fim - dt_inicio).days + 1
+        venda_media_diaria = receita_bruta / dias_periodo if dias_periodo > 0 else 0
+        pressao_caixa = (cp['vence_hoje_valor'] / venda_media_diaria * 100) if venda_media_diaria > 0 else 0
 
-        desp_mes_recorrentes = db.session.query(func.sum(Despesa.valor)).filter(
-            Despesa.estabelecimento_id == estabelecimento_id,
-            Despesa.data_despesa >= dt_inicio,
-            Despesa.data_despesa <= dt_fim,
-            Despesa.recorrente == True,
-        ).scalar() or Decimal("0")
-
-        # ═══════ FLUXO DE CAIXA PREVISTO (30 dias - Futuro) ═══════
-        entradas_previstas = float(cr_vence_30d)
-        saidas_previstas = float(cp_vence_30d)
-        saldo_previsto = entradas_previstas - saidas_previstas
-
-        # ═══════ ALERTAS FINANCEIROS ═══════
+        # Alertas simplificados e precisos (Foco em Saídas)
         alertas = []
-
-        if cp_qtd_vencidos > 0:
+        if cp['qtd_vencidos'] > 0:
             alertas.append({
                 "tipo": "boleto_vencido",
                 "severidade": "critica",
-                "titulo": f"{cp_qtd_vencidos} boleto(s) vencido(s)",
-                "descricao": f"Total de R$ {float(cp_total_vencido):,.2f} em boletos vencidos não pagos",
-                "acao": "Regularizar pagamento imediatamente para evitar juros e multas",
+                "titulo": f"{cp['qtd_vencidos']} boleto(s) vencido(s)",
+                "descricao": f"Total de R$ {cp['total_vencido']:,.2f} vencidos. Regularize para evitar juros.",
+                "acao": "Regularizar pagamento imediatamente",
             })
-
-        if cp_qtd_vence_7d > 0:
+            
+        if indice_comprometimento > 80:
             alertas.append({
-                "tipo": "boleto_vencendo",
+                "tipo": "comprometimento_alto",
                 "severidade": "alta",
-                "titulo": f"{cp_qtd_vence_7d} boleto(s) vencem nos próximos 7 dias",
-                "descricao": f"Total de R$ {float(cp_vence_7d):,.2f} a pagar até {limite_7d.isoformat()}",
-                "acao": "Providenciar pagamento ou negociar prazo com fornecedor",
+                "titulo": "Comprometimento Crítico",
+                "descricao": f"Seus boletos em aberto representam {indice_comprometimento:.1f}% do faturamento deste período.",
+                "acao": "Reduzir compras ou renegociar prazos com fornecedores",
             })
 
-        if cr_qtd_inadimplentes > 0:
-            alertas.append({
-                "tipo": "cliente_inadimplente",
-                "severidade": "alta",
-                "titulo": f"{cr_qtd_inadimplentes} recebível(eis) vencido(s)",
-                "descricao": f"Total de R$ {float(cr_total_vencido):,.2f} em cobranças atrasadas",
-                "acao": "Entrar em contato com clientes para regularizar pagamento",
-            })
-
-        if saldo_previsto < 0:
-            alertas.append({
-                "tipo": "fluxo_caixa_negativo",
-                "severidade": "critica",
-                "titulo": "Fluxo de caixa negativo previsto",
-                "descricao": f"Saídas (R$ {saidas_previstas:,.2f}) superam entradas (R$ {entradas_previstas:,.2f}) nos próximos 30 dias",
-                "acao": "Renegociar prazos de pagamento ou antecipar recebíveis",
-            })
-
-        # Detectar despesas recorrentes pesadas
-        if float(desp_mes_recorrentes) > 0 and float(desp_mes_total) > 0:
-            pct_recorrente = float(desp_mes_recorrentes) / float(desp_mes_total) * 100
-            if pct_recorrente > 70:
-                alertas.append({
-                    "tipo": "despesas_fixas_altas",
-                    "severidade": "media",
-                    "titulo": f"{pct_recorrente:.0f}% das despesas são recorrentes",
-                    "descricao": f"R$ {float(desp_mes_recorrentes):,.2f} em despesas fixas de R$ {float(desp_mes_total):,.2f} total",
-                    "acao": "Revisar contratos e renegociar valores fixos",
-                })
+        # Fluxo de Caixa Real (Foco em Entradas de Vendas vs Saídas Totais)
+        # Fluxo de Caixa Real (Foco em Entradas de Recebimentos vs Saídas Totais)
+        entradas_reais = vendas.get("total_recebido", 0.0)
+        saidas_reais = cp['pago_periodo'] + desp['total']
 
         return jsonify({
             "success": True,
@@ -969,37 +841,39 @@ def resumo_financeiro():
                 "fim": dt_fim.isoformat()
             },
             "dre_consolidado": {
-                "receita_bruta": financials.get("revenue", 0.0),
-                "custo_mercadoria": financials.get("cogs", 0.0),
-                "lucro_bruto": financials.get("gross_profit", 0.0),
-                "despesas_operacionais": float(desp_mes_total),
-                "lucro_liquido": financials.get("gross_profit", 0.0) - float(desp_mes_total)
+                "receita_bruta": vendas.get("revenue", 0.0),
+                "custo_mercadoria": vendas.get("cogs", 0.0),
+                "lucro_bruto": vendas.get("gross_profit", 0.0),
+                "despesas_operacionais": desp['total'],
+                "lucro_liquido": vendas.get("gross_profit", 0.0) - desp['total']
+            },
+            "indicadores_gestao": {
+                "indice_comprometimento": indice_comprometimento,
+                "pressao_caixa_diaria": pressao_caixa,
+                "venda_media_diaria": venda_media_diaria,
+                "vence_hoje_valor": cp['vence_hoje_valor']
             },
             "contas_pagar": {
-                "total_aberto": float(cp_total_aberto),
-                "total_vencido": float(cp_total_vencido),
-                "vence_7_dias": float(cp_vence_7d),
-                "vence_30_dias": float(cp_vence_30d),
-                "qtd_vencidos": cp_qtd_vencidos,
-                "qtd_vence_7d": cp_qtd_vence_7d,
-                "pago_no_mes": float(cp_pago_mes),
-            },
-            "contas_receber": {
-                "total_aberto": float(cr_total_aberto),
-                "total_vencido": float(cr_total_vencido),
-                "a_receber_30_dias": float(cr_vence_30d),
-                "qtd_inadimplentes": cr_qtd_inadimplentes,
-                "recebido_no_mes": float(cr_recebido_mes),
+                "total_aberto": cp['total_aberto'],
+                "total_vencido": cp['total_vencido'],
+                "vence_hoje": cp['vence_hoje_valor'],
+                "vence_7_dias": cp['vence_7d'],
+                "vence_30_dias": cp['vence_30d'],
+                "pago_no_mes": cp['pago_periodo'],
+                "qtd_vencidos": cp['qtd_vencidos'],
+                "qtd_vence_hoje": cp['qtd_vence_hoje'],
+                "qtd_vence_7d": cp['qtd_vence_7d']
             },
             "despesas_mes": {
-                "total": float(desp_mes_total),
-                "recorrentes": float(desp_mes_recorrentes),
-                "variaveis": float(desp_mes_total - desp_mes_recorrentes),
+                "total": desp['total'],
+                "recorrentes": desp['recorrentes'],
+                "variaveis": desp['total'] - desp['recorrentes']
             },
-            "fluxo_caixa_30d": {
-                "entradas_previstas": entradas_previstas,
-                "saidas_previstas": saidas_previstas,
-                "saldo_previsto": saldo_previsto,
+            "fluxo_caixa_real": {
+                "entradas": entradas_reais,
+                "saidas": saidas_reais,
+                "saldo": entradas_reais - saidas_reais,
+                "interpretacao": "Positivo" if (entradas_reais - saidas_reais) >= 0 else "Negativo"
             },
             "alertas": alertas,
             "total_alertas": len(alertas),

@@ -407,8 +407,8 @@ export default function ExpensesPage() {
             {/* Toast Notification */}
             {toast && (
                 <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in ${toast.type === 'success'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-red-500 text-white'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-red-500 text-white'
                     }`}>
                     {toast.type === 'success' ? (
                         <CheckCircle className="w-5 h-5" />
@@ -431,7 +431,7 @@ export default function ExpensesPage() {
                                 Financeiro
                             </h1>
                             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                Despesas, boletos, contas a pagar e receber — visao completa ERP
+                                Gestão de Fluxo de Saída: Controle de Boletos, Despesas e Sobra de Caixa
                             </p>
                         </div>
                     </div>
@@ -439,8 +439,8 @@ export default function ExpensesPage() {
                         <button
                             onClick={() => setMostrarAnalises(!mostrarAnalises)}
                             className={`px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 shadow-md font-medium ${mostrarAnalises
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                                 }`}
                         >
                             <TrendingUp className="w-5 h-5" />
@@ -942,8 +942,8 @@ export default function ExpensesPage() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${despesa.tipo === 'fixa'
-                                                    ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
-                                                    : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
+                                                ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                                                : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
                                                 }`}>
                                                 {despesa.tipo === 'fixa' ? 'Fixa' : 'Variável'}
                                             </span>
@@ -1233,8 +1233,8 @@ export default function ExpensesPage() {
                                         Tipo
                                     </label>
                                     <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${despesaSelecionada.tipo === 'fixa'
-                                            ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
-                                            : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
+                                        ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                                        : 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200'
                                         }`}>
                                         {despesaSelecionada.tipo === 'fixa' ? 'Fixa' : 'Variável'}
                                     </span>

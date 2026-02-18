@@ -2,14 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
-  ArrowDownCircle,
-  ArrowUpCircle,
   BadgeDollarSign,
   BarChart3,
   Bell,
   ChevronRight,
   RefreshCw,
-  ShieldAlert,
   TrendingDown,
   TrendingUp,
   Wallet,
@@ -62,7 +59,7 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
     switch (tipo) {
       case 'boleto_vencido': return XCircle;
       case 'boleto_vencendo': return Bell;
-      case 'cliente_inadimplente': return ShieldAlert;
+      case 'cliente_inadimplente': return AlertTriangle;
       case 'fluxo_caixa_negativo': return TrendingDown;
       case 'despesas_fixas_altas': return AlertTriangle;
       default: return Bell;
@@ -97,8 +94,8 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
     );
   }
 
-  const fluxo = resumo.fluxo_caixa_30d;
-  const fluxoPositivo = fluxo.saldo_previsto >= 0;
+  const fluxo = resumo.fluxo_caixa_real;
+  const fluxoPositivo = fluxo.saldo >= 0;
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -113,11 +110,12 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
               <Wallet className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 Painel Financeiro
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">V2.0 PRO</span>
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Visao consolidada: contas a pagar, receber e fluxo de caixa
+                Visão consolidada: contas a pagar, pressão de caixa e saúde financeira
               </p>
             </div>
           </div>
@@ -146,7 +144,7 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
               {/* Contas a Pagar */}
               <div className="p-5 group">
                 <div className="flex items-center gap-2 mb-3">
-                  <ArrowUpCircle className="w-5 h-5 text-red-500" />
+                  <Wallet className="w-5 h-5 text-red-500" />
                   <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">A Pagar</span>
                 </div>
                 <div className="text-2xl font-bold text-red-600 dark:text-red-400 mb-1">
@@ -171,27 +169,6 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
                 </div>
               </div>
 
-              {/* Contas a Receber */}
-              <div className="p-5 group">
-                <div className="flex items-center gap-2 mb-3">
-                  <ArrowDownCircle className="w-5 h-5 text-emerald-500" />
-                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">A Receber</span>
-                </div>
-                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-1">
-                  {formatCurrency(resumo.contas_receber.total_aberto)}
-                </div>
-                <div className="space-y-1">
-                  {resumo.contas_receber.qtd_inadimplentes > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-medium">
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      {resumo.contas_receber.qtd_inadimplentes} inadimplente{resumo.contas_receber.qtd_inadimplentes > 1 ? 's' : ''}: {formatCurrency(resumo.contas_receber.total_vencido)}
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Recebido no mes: {formatCurrency(resumo.contas_receber.recebido_no_mes)}
-                  </div>
-                </div>
-              </div>
 
               {/* Despesas do Mes */}
               <div className="p-5 group">
@@ -224,67 +201,69 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
               <div className="p-5 group">
                 <div className="flex items-center gap-2 mb-3">
                   <BarChart3 className="w-5 h-5 text-blue-500" />
-                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Fluxo 30d</span>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Fluxo de Caixa (Realizado)</span>
                 </div>
                 <div className={`text-2xl font-bold mb-1 ${fluxoPositivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {fluxoPositivo ? '+' : ''}{formatCurrency(fluxo.saldo_previsto)}
+                  {fluxoPositivo ? '+' : ''}{formatCurrency(fluxo.saldo)}
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
                     <TrendingUp className="w-3.5 h-3.5" />
-                    Entradas: {formatCurrency(fluxo.entradas_previstas)}
+                    Entradas: {formatCurrency(fluxo.entradas)}
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
                     <TrendingDown className="w-3.5 h-3.5" />
-                    Saidas: {formatCurrency(fluxo.saidas_previstas)}
+                    Saidas: {formatCurrency(fluxo.saidas)}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Barra de saude financeira */}
+            {/* Monitor de Gestão Owner-First */}
             <div className="px-5 pb-4">
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Equilibrio financeiro (Receber vs Pagar)
-                  </span>
-                  <span className={`text-sm font-bold ${
-                    resumo.contas_receber.total_aberto >= resumo.contas_pagar.total_aberto
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {resumo.contas_pagar.total_aberto > 0
-                      ? `${((resumo.contas_receber.total_aberto / resumo.contas_pagar.total_aberto) * 100).toFixed(0)}%`
-                      : '100%'
-                    }
-                  </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Indicador 1: Comprometimento de Vendas */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:scale-125 transition-transform">
+                    <BarChart3 className="w-12 h-12 text-blue-900 dark:text-blue-100" />
+                  </div>
+                  <div className="flex items-center justify-between mb-3 relative">
+                    <span className="text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest">Comprometimento de Vendas</span>
+                    <span className={`text-lg font-black ${resumo.indicadores_gestao.indice_comprometimento > 80 ? 'text-red-600' : 'text-blue-700 dark:text-blue-400'}`}>
+                      {resumo.indicadores_gestao.indice_comprometimento.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full mb-3 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-1000 ${resumo.indicadores_gestao.indice_comprometimento > 80 ? 'bg-red-500' : 'bg-blue-500'}`}
+                      style={{ width: `${Math.min(100, resumo.indicadores_gestao.indice_comprometimento)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-tight">
+                    <strong>Relação Dívida/Venda:</strong> Para cada R$ 1,00 que você vende, <strong>{formatCurrency(resumo.indicadores_gestao.indice_comprometimento / 100)}</strong> já está "prometido" a fornecedores.
+                  </p>
                 </div>
-                <div className="relative h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  {/* Barra de pagar (vermelho) */}
-                  <div
-                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-red-400 to-red-500 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(100, resumo.contas_pagar.total_aberto > 0 || resumo.contas_receber.total_aberto > 0
-                        ? (resumo.contas_pagar.total_aberto / (resumo.contas_pagar.total_aberto + resumo.contas_receber.total_aberto)) * 100
-                        : 50
-                      )}%`
-                    }}
-                  />
-                  {/* Barra de receber (verde) */}
-                  <div
-                    className="absolute inset-y-0 right-0 bg-gradient-to-l from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.min(100, resumo.contas_pagar.total_aberto > 0 || resumo.contas_receber.total_aberto > 0
-                        ? (resumo.contas_receber.total_aberto / (resumo.contas_pagar.total_aberto + resumo.contas_receber.total_aberto)) * 100
-                        : 50
-                      )}%`
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  <span>A Pagar: {formatCurrency(resumo.contas_pagar.total_aberto)}</span>
-                  <span>A Receber: {formatCurrency(resumo.contas_receber.total_aberto)}</span>
+
+                {/* Indicador 2: Pressão de Caixa Diária */}
+                <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-xl p-4 border border-orange-100 dark:border-orange-800/50 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:scale-125 transition-transform">
+                    <TrendingDown className="w-12 h-12 text-red-900 dark:text-red-100" />
+                  </div>
+                  <div className="flex items-center justify-between mb-3 relative">
+                    <span className="text-[10px] font-black text-orange-800 dark:text-orange-300 uppercase tracking-widest">Pressão de Caixa (Hoje)</span>
+                    <span className={`text-lg font-black ${resumo.indicadores_gestao.pressao_caixa_diaria > 100 ? 'text-red-600' : 'text-orange-700 dark:text-orange-400'}`}>
+                      {resumo.indicadores_gestao.pressao_caixa_diaria.toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1 relative">
+                    <span className="text-xl font-black text-gray-900 dark:text-white">{formatCurrency(resumo.indicadores_gestao.vence_hoje_valor)}</span>
+                    <span className="text-[10px] text-gray-500 uppercase font-bold">Vence Hoje</span>
+                  </div>
+                  <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-2">
+                    {resumo.indicadores_gestao.pressao_caixa_diaria > 100
+                      ? "Média de vendas não cobre os boletos de hoje."
+                      : `Sua venda média de ${formatCurrency(resumo.indicadores_gestao.venda_media_diaria)} cobre os compromissos de hoje.`}
+                  </p>
                 </div>
               </div>
             </div>
@@ -311,11 +290,10 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
                     <h4 className={`font-semibold text-sm ${colors.text}`}>
                       {alerta.titulo}
                     </h4>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      alerta.severidade === 'critica' ? 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
-                        : alerta.severidade === 'alta' ? 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200'
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${alerta.severidade === 'critica' ? 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
+                      : alerta.severidade === 'alta' ? 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200'
                         : 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
-                    }`}>
+                      }`}>
                       {alerta.severidade}
                     </span>
                   </div>
