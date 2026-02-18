@@ -9,8 +9,12 @@ import logging
 from .data_layer import DataLayer
 from .stats_layer import StatsValidator
 from .models_layer import PracticalModels
+from .temporal_analysis import TemporalAnalysis
 from .serializers import DashboardSerializer
 from .cache_layer import cache_response
+
+# Alias para facilitar uso em cálculos
+_PM = PracticalModels
 
 # Logger global - DEVE estar no nível do módulo
 logger = logging.getLogger(__name__)
@@ -209,46 +213,81 @@ class DashboardOrchestrator:
         end_previous = end_date - timedelta(days=days)
 
         import time
+        from concurrent.futures import ThreadPoolExecutor
+        from flask import current_app
         start_exec = time.time()
-        # 1. Obter resumos básicos (cada query em try próprio para uma falha não zerar as outras)
-        sales_current_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
-        inventory_summary = {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}
-        sales_timeseries = []
-        expense_details = []
-        try:
-            sales_current_summary = DataLayer.get_sales_summary_range(
-                self.establishment_id, start_current, end_date
-            )
-        except Exception as e:
-            _logger.warning(f"get_sales_summary_range falhou: {e}")
-        try:
-            inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
-        except Exception as e:
-            _logger.warning(f"get_inventory_summary falhou: {e}")
-        try:
-            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
-        except Exception as e:
-            _logger.warning(f"get_expense_details falhou: {e}")
-
-        try:
-            t0 = time.time()
-            sales_previous_summary = DataLayer.get_sales_summary_range(
-                self.establishment_id, start_previous, end_previous
-            )
-            _logger.info(f"⏱️ get_sales_summary_range (prev): {time.time()-t0:.2f}s")
-        except Exception as e:
-            _logger.error(f"Erro ao obter resumo de vendas anterior: {e}")
-            sales_previous_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
-
-        # 🔥 NOVO: Dados Financeiros Reais (Faturamento, CMV, Lucro Bruto)
-        try:
-            financials_data = DataLayer.get_sales_financials(
-                self.establishment_id, start_current, end_date
-            )
-        except Exception as e:
-            _logger.error(f"Erro ao obter dados financeiros: {e}")
-            financials_data = {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
         
+        # Obter a instância da app para passar para as threads
+        app = current_app._get_current_object()
+        
+        def run_with_context(func, *args, **kwargs):
+            with app.app_context():
+                return func(*args, **kwargs)
+        
+        # 1. Obter resumos básicos e métricas em PARALELO
+        _logger.info(f"START: Coleta de dados paralela (est_id: {self.establishment_id})")
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Funções de busca independentes
+            f_sales_current = executor.submit(run_with_context, DataLayer.get_sales_summary_range, self.establishment_id, start_current, end_date)
+            f_inventory = executor.submit(run_with_context, DataLayer.get_inventory_summary, self.establishment_id)
+            f_expenses = executor.submit(run_with_context, DataLayer.get_expense_details, self.establishment_id, start_current, end_date)
+            f_sales_prev = executor.submit(run_with_context, DataLayer.get_sales_summary_range, self.establishment_id, start_previous, end_previous)
+            f_financials = executor.submit(run_with_context, DataLayer.get_sales_financials, self.establishment_id, start_current, end_date)
+            
+            # Dados analíticos
+            f_sales_hour = executor.submit(run_with_context, DataLayer.get_sales_by_hour, self.establishment_id, days)
+            f_top_hour = executor.submit(run_with_context, DataLayer.get_top_products_by_hour, self.establishment_id, days, top_n=5)
+            f_cust_patterns = executor.submit(run_with_context, DataLayer.get_customer_temporal_patterns, self.establishment_id, days=90)
+            f_hourly_conc = executor.submit(run_with_context, DataLayer.get_hourly_concentration_metrics, self.establishment_id, days)
+            
+            # Análises temporais
+            f_hourly_cat = executor.submit(run_with_context, TemporalAnalysis.get_hourly_sales_by_category, self.establishment_id, days)
+            f_period_anal = executor.submit(run_with_context, TemporalAnalysis.get_period_analysis, self.establishment_id, days)
+            f_weekday_anal = executor.submit(run_with_context, TemporalAnalysis.get_weekday_analysis, self.establishment_id, days)
+            f_rh_metrics = executor.submit(run_with_context, DataLayer.get_rh_metrics, self.establishment_id, days)
+            f_sales_series = executor.submit(run_with_context, DataLayer.get_sales_timeseries, self.establishment_id, max(days, 90))
+            
+            # Análises mais pesadas (ABC/RFM)
+            f_abc = executor.submit(run_with_context, self.get_abc_analysis, days=days, limit=500)
+            f_cust_metrics = executor.submit(run_with_context, DataLayer.get_customer_metrics, self.establishment_id, days)
+            
+            # Recomendações e Performance de categoria
+            f_recomm = executor.submit(run_with_context, TemporalAnalysis.get_product_hourly_recommendations, self.establishment_id, days)
+            f_cat_perf = executor.submit(run_with_context, TemporalAnalysis.get_category_performance_by_time, self.establishment_id, days)
+            
+            # Coletar resultados com try/except individual para resiliência
+            def get_result(future, name, default):
+                try: return future.result(timeout=20)
+                except Exception as e:
+                    _logger.warning(f"⚠️ Query paralela '{name}' falhou ou deu timeout: {e}")
+                    return default
+
+            sales_current_summary = get_result(f_sales_current, "sales_current", {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0})
+            inventory_summary = get_result(f_inventory, "inventory", {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0})
+            expense_details = get_result(f_expenses, "expenses", [])
+            sales_previous_summary = get_result(f_sales_prev, "sales_prev", {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0})
+            financials_data = get_result(f_financials, "financials", {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0})
+            
+            sales_by_hour = get_result(f_sales_hour, "sales_hour", [])
+            top_products_by_hour = get_result(f_top_hour, "top_hour", [])
+            customer_temporal_patterns = get_result(f_cust_patterns, "cust_patterns", [])
+            hourly_concentration = get_result(f_hourly_conc, "hourly_conc", {})
+            
+            hourly_sales_by_category = get_result(f_hourly_cat, "hourly_cat", {})
+            period_analysis = get_result(f_period_anal, "period_anal", {})
+            weekday_analysis = get_result(f_weekday_anal, "weekday_anal", {})
+            rh_metrics = get_result(f_rh_metrics, "rh_metrics", {})
+            sales_timeseries = get_result(f_sales_series, "sales_series", [])
+            
+            abc_analysis = get_result(f_abc, "abc", {"produtos": [], "resumo": {}, "total_value": 0})
+            customer_metrics = get_result(f_cust_metrics, "cust_metrics", {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0})
+            product_hourly_recommendations = get_result(f_recomm, "recomm", [])
+            category_performance_by_time = get_result(f_cat_perf, "cat_perf", {})
+
+        _logger.info(f"DONE: Coleta paralela concluida em {time.time()-start_exec:.2f}s")
+
+        # Dados Financeiros Reais (processar resultados coletados)
         revenue = float(financials_data.get("revenue", 0.0))
         cogs = float(financials_data.get("cogs", 0.0))
         gross_profit = float(financials_data.get("gross_profit", 0.0))
@@ -281,31 +320,7 @@ class DashboardOrchestrator:
             "roi": round(roi, 2)
         }
 
-        # 2. Obter dados analíticos (horários, clientes)
-        try:
-            sales_by_hour = DataLayer.get_sales_by_hour(self.establishment_id, days)
-        except Exception as e:
-            _logger.warning(f"Erro ao obter vendas por hora: {e}")
-            sales_by_hour = []
-
-        try:
-            top_products_by_hour = DataLayer.get_top_products_by_hour(self.establishment_id, days, top_n=5)
-        except Exception as e:
-            _logger.warning(f"Erro ao obter top produtos por hora: {e}")
-            top_products_by_hour = []
-
-        try:
-            customer_temporal_patterns = DataLayer.get_customer_temporal_patterns(self.establishment_id, days=90)
-        except Exception as e:
-            _logger.warning(f"Erro ao obter padrões de clientes: {e}")
-            customer_temporal_patterns = []
-
-        try:
-            hourly_concentration = DataLayer.get_hourly_concentration_metrics(self.establishment_id, days)
-        except Exception as e:
-            _logger.warning(f"Erro ao obter concentração horária: {e}")
-            hourly_concentration = {}
-
+        # Sub-queries que dependem ou são mais pesadas
         try:
             product_hour_matrix = DataLayer.get_product_hour_correlation_matrix(self.establishment_id, days, top_products=10)
         except Exception as e:
@@ -324,55 +339,6 @@ class DashboardOrchestrator:
             _logger.warning(f"Erro ao obter comportamento de clientes: {e}")
             hourly_customer_behavior = []
 
-        # 🔥 NOVO: Análises Temporais Avançadas
-        from .temporal_analysis import TemporalAnalysis
-        try:
-            hourly_sales_by_category = TemporalAnalysis.get_hourly_sales_by_category(self.establishment_id, days)
-        except Exception: hourly_sales_by_category = {}
-        
-        try:
-            period_analysis = TemporalAnalysis.get_period_analysis(self.establishment_id, days)
-        except Exception: period_analysis = {}
-        
-        try:
-            weekday_analysis = TemporalAnalysis.get_weekday_analysis(self.establishment_id, days)
-        except Exception: weekday_analysis = {}
-        
-        try:
-            product_hourly_recommendations = TemporalAnalysis.get_product_hourly_recommendations(self.establishment_id, days)
-        except Exception: product_hourly_recommendations = []
-        
-        try:
-            category_performance_by_time = TemporalAnalysis.get_category_performance_by_time(self.establishment_id, days)
-        except Exception: category_performance_by_time = {}
-
-        # 3. Análise ABC e RFM
-        try:
-            abc_analysis = self.get_abc_analysis(days=days, limit=500)
-        except Exception as e:
-            _logger.error(f"Erro na análise ABC: {e}")
-            abc_analysis = {"produtos": [], "resumo": {}, "total_value": 0}
-            
-        try:
-            customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
-        except Exception:
-            customer_metrics = {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}
-
-        try:
-            rh_metrics = DataLayer.get_rh_metrics(self.establishment_id, days)
-        except Exception as e:
-            _logger.warning(f"Erro ao obter métricas de RH: {e}")
-            rh_metrics = {}
-        
-        # 4. Timeseries e Forecast
-        try:
-            timeseries_days = max(days, 90)
-            sales_timeseries = DataLayer.get_sales_timeseries(self.establishment_id, timeseries_days)
-            _logger.info(f"📊 Timeseries retornado: {len(sales_timeseries)} dias de dados")
-        except Exception as e:
-            _logger.error(f"Erro ao carregar timeseries: {e}")
-            sales_timeseries = []
-        
         try:
             forecast = PracticalModels.generate_forecast(sales_timeseries) if sales_timeseries else []
         except Exception as e:
