@@ -244,7 +244,8 @@ def listar_vendas():
         # Configuração de paginação
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
-        per_page = min(per_page, 100)  # Limite máximo
+        # Aumentar o limite para 500 para suportar relatórios maiores sem sacrificar performance inicial
+        per_page = min(per_page, 500) 
 
         # Configuração de ordenação
         ordenar_por = request.args.get("ordenar_por", "data")
@@ -411,41 +412,25 @@ def estatisticas_vendas():
         
         # SQL centralizado para eficiência
         has_item_filter = "produto_nome" in filtros
+        estabelecimento_id = 1 # Define estabelecimento_id padrão
         
-        if has_item_filter:
-            # Se tem filtro de item, precisamos de distinct
-            venda_ids_query = query_base.with_entities(Venda.id).distinct()
-            v_ids = venda_ids_query.subquery()
-            v_ids_sel = select(v_ids.c.id)
+        # Obter IDs de vendas filtradas para cálculos subsequentes consistentes
+        vendas_base_query = aplicar_filtros_avancados_vendas(Venda.query.with_entities(Venda.id), filtros)
+        vendas_ids_subquery = vendas_base_query.distinct().subquery()
+        vendas_ids_select = select(vendas_ids_subquery.c.id)
 
-            stats_gerais = db.session.query(
-                func.count(Venda.id).label("total_vendas"),
-                func.sum(Venda.total).label("total_valor")
-            ).filter(Venda.id.in_(v_ids_sel)).first()
+        # 1. Total vendas e Total Valor (agregados das vendas únicas)
+        stats_gerais = db.session.query(
+            func.count(Venda.id).label("total_vendas"),
+            func.sum(Venda.total).label("total_valor")
+        ).filter(Venda.id.in_(vendas_ids_select)).first()
 
-            total_vendas = stats_gerais.total_vendas or 0
-            total_valor = float(stats_gerais.total_valor or 0)
+        total_vendas = stats_gerais.total_vendas or 0
+        total_valor = float(stats_gerais.total_valor or 0)
 
-            total_lucro = (
-                db.session.query(func.sum(VendaItem.margem_lucro_real))
-                .filter(VendaItem.venda_id.in_(v_ids_sel))
-                .scalar() or 0
-            )
-        else:
-            # Sem joins complexos, query direta é mais rápida
-            stats_gerais = query_base.with_entities(
-                func.count(Venda.id).label("total_vendas"),
-                func.sum(Venda.total).label("total_valor")
-            ).first()
-            
-            total_vendas = stats_gerais.total_vendas or 0
-            total_valor = float(stats_gerais.total_valor or 0)
-            
-            total_lucro = (
-                query_base.join(VendaItem)
-                .with_entities(func.sum(VendaItem.margem_lucro_real))
-                .scalar() or 0
-            )
+        # 2. Lucro Real (soma dos itens das vendas filtradas)
+        total_lucro = db.session.query(func.sum(VendaItem.margem_lucro_real)).filter(VendaItem.venda_id.in_(vendas_ids_select)).scalar() or 0
+        total_lucro = float(total_lucro)
 
         ticket_medio = total_valor / total_vendas if total_vendas > 0 else 0
 

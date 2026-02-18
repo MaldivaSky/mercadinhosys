@@ -1521,9 +1521,21 @@ def relatorio_analitico_clientes():
                 )
 
             if data_fim:
-                vendas_query = vendas_query.filter(
-                    Venda.data_venda <= datetime.strptime(data_fim, "%Y-%m-%d")
-                )
+                # Ajustar para o final do dia para incluir todas as vendas do dia
+                try:
+                    data_fim_dt = datetime.strptime(data_fim, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999)
+                    vendas_query = vendas_query.filter(
+                        Venda.data_venda <= data_fim_dt
+                    )
+                except ValueError:
+                    # Se vier em formato ISO ou outro, tentar parsing flexível
+                    try:
+                        data_fim_dt = datetime.fromisoformat(data_fim.replace('Z', '+00:00'))
+                        if data_fim_dt.hour == 0 and data_fim_dt.minute == 0:
+                            data_fim_dt = data_fim_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                        vendas_query = vendas_query.filter(Venda.data_venda <= data_fim_dt)
+                    except:
+                        pass
 
             vendas = vendas_query.all()
 

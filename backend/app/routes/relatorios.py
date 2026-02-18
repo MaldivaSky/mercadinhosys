@@ -110,13 +110,19 @@ def segmentar_cliente_rfm(r_score: int, f_score: int, m_score: int) -> str:
 
 
 
-def analise_rfm_clientes(estabelecimento_id: int, days: int = 180) -> List[Dict[str, Any]]:
+def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: datetime = None, data_fim: datetime = None) -> List[Dict[str, Any]]:
     """
     Análise RFM completa de clientes com queries otimizadas.
     
     OTIMIZAÇÃO: Usa SQLAlchemy aggregations para processar no banco.
     """
-    data_inicio = datetime.utcnow() - timedelta(days=days)
+    if data_inicio:
+        if not data_fim:
+            data_fim = datetime.utcnow()
+    else:
+        # Padrão: últimos X dias
+        data_fim = datetime.utcnow()
+        data_inicio = data_fim - timedelta(days=days)
     
     # Query otimizada: agrupa no banco de dados
     resultados = db.session.query(
@@ -132,6 +138,7 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180) -> List[Dict[
     ).filter(
         Venda.estabelecimento_id == estabelecimento_id,
         Venda.data_venda >= data_inicio,
+        Venda.data_venda <= data_fim,
         Venda.status == 'finalizada',
         Venda.cliente_id.isnot(None)
     ).group_by(
@@ -438,11 +445,39 @@ def get_rfm_clientes():
         
         # Parâmetros
         days = request.args.get('days', 180, type=int)
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
         segmento_filtro = request.args.get('segmento', type=str)
         em_risco_filtro = request.args.get('em_risco', type=str)
         
+        data_inicio = None
+        data_fim = None
+        
+        try:
+            if data_inicio_str:
+                data_inicio = datetime.fromisoformat(data_inicio_str.replace('Z', '+00:00'))
+            if data_fim_str:
+                data_fim = datetime.fromisoformat(data_fim_str.replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            # Fallback para parsing simples se ISO falhar
+            try:
+                if data_inicio_str:
+                    data_inicio = datetime.strptime(data_inicio_str.split('T')[0], "%Y-%m-%d")
+                if data_fim_str:
+                    data_fim = datetime.strptime(data_fim_str.split('T')[0], "%Y-%m-%d")
+                    # Ajustar para final do dia se for apenas data
+                    if len(data_fim_str) <= 10 or 'T' not in data_fim_str:
+                        data_fim = data_fim.replace(hour=23, minute=59, second=59, microsecond=999999)
+            except:
+                pass
+
         # Análise RFM
-        clientes_rfm = analise_rfm_clientes(funcionario.estabelecimento_id, days)
+        clientes_rfm = analise_rfm_clientes(
+            funcionario.estabelecimento_id, 
+            days=days, 
+            data_inicio=data_inicio, 
+            data_fim=data_fim
+        )
         
         # Aplicar filtros
         if segmento_filtro:

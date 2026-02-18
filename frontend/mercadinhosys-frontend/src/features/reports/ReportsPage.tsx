@@ -31,7 +31,11 @@ import {
     Trophy,
     AlertOctagon,
     ChevronDown,
-    Download
+    Download,
+    ChevronLeft,
+    ChevronRight,
+    Layers,
+    ListOrdered
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -117,6 +121,10 @@ const ReportsPage: React.FC = () => {
     const [fornecedoresData, setFornecedoresData] = useState<any[]>([]);
     const [clientesData, setClientesData] = useState<any[]>([]);
 
+    // State de Paginação
+
+    const [paginationInfo, setPaginationInfo] = useState<any>(null);
+
     // Tabela avançada: sort, filtros por coluna, colunas visíveis
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -132,6 +140,7 @@ const ReportsPage: React.FC = () => {
         setPontoData([]);
         setFornecedoresData([]);
         setClientesData([]);
+
     }, [dateRange.startDate, dateRange.endDate]);
 
     const filterRow = (row: any) => {
@@ -139,6 +148,31 @@ const ReportsPage: React.FC = () => {
         if (!q) return true;
         return Object.values(row).some((v) => String(v ?? '').toLowerCase().includes(q));
     };
+
+    const displayPeriodLabel = `${format(new Date(dateRange.startDate + 'T12:00:00'), 'dd/MM/yyyy')} a ${format(new Date(dateRange.endDate + 'T12:00:00'), 'dd/MM/yyyy')}`;
+
+    const ActiveFilterBanner = () => (
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-lg p-3 mb-4 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-md">
+                    <CalendarIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-300" />
+                </div>
+                <div>
+                    <p className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-wider">Período Ativo</p>
+                    <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">{displayPeriodLabel}</p>
+                </div>
+            </div>
+            <div className="text-right">
+                <p className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-wider">Status</p>
+                <div className="flex items-center gap-1.5 justify-end">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                        {loadingReport ? 'Atualizando...' : 'Filtro Aplicado'}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
 
     // ==================== MODAIS ====================
 
@@ -152,8 +186,10 @@ const ReportsPage: React.FC = () => {
         setHiddenColumns(new Set());
         setShowColumnPicker(false);
         setShowColumnFilters(false);
+        setPaginationInfo(null); // Resetar paginação para evitar "paginação fantasma" em outros relatórios
+
         try {
-            if (type === 'vendas' && vendasData.length === 0) await fetchVendasData();
+            if (type === 'vendas' && vendasData.length === 0) await fetchVendasData(1);
             else if (type === 'produtos' && produtosData.length === 0) await fetchProdutosData();
             else if (type === 'financeiro' && !financeiroData) await fetchFinanceiroData();
             else if (type === 'equipe' && equipeData.length === 0) await fetchEquipeData();
@@ -201,8 +237,6 @@ const ReportsPage: React.FC = () => {
         doc.text(`Gerado em: ${reportDate}`, doc.internal.pageSize.width - 14, 20, { align: 'right' });
         if (period) doc.text(`Período: ${period}`, doc.internal.pageSize.width - 14, 32, { align: 'right' });
     };
-
-    const periodLabel = `${format(new Date(dateRange.startDate), 'dd/MM/yyyy')} a ${format(new Date(dateRange.endDate), 'dd/MM/yyyy')}`;
 
     // ==================== GERADORES GENÉRICOS DE PDF ====================
 
@@ -265,12 +299,20 @@ const ReportsPage: React.FC = () => {
 
     // ==================== FETCH: VENDAS ====================
 
-    const fetchVendasData = async () => {
+    const fetchVendasData = async (targetPage = 1) => {
         setLoadingReport('vendas');
         try {
             const response = await apiClient.get('/vendas/', {
-                params: { data_inicio: dateRange.startDate, data_fim: dateRange.endDate, per_page: 10000, status: 'finalizada' }
+                params: {
+                    data_inicio: dateRange.startDate,
+                    data_fim: dateRange.endDate,
+                    page: targetPage,
+                    per_page: 50, // Lote profissional
+                    status: 'finalizada'
+                }
             });
+            setPaginationInfo(response.data.paginacao);
+
             const data = response.data.vendas.map((venda: any) => {
                 let dataFormatada = '';
                 try {
@@ -317,7 +359,7 @@ const ReportsPage: React.FC = () => {
                 { header: 'Desconto', key: 'Desconto (R$)', format: (v: number) => fmtBRL(v) },
                 { header: 'Forma Pgto', key: 'Forma Pagamento' },
             ];
-            handleGenericExport(vendasData, type, 'Relatório Detalhado de Vendas', filename, 'Vendas', cols, [63, 81, 181], periodLabel);
+            handleGenericExport(vendasData, type, 'Relatório Detalhado de Vendas', filename, 'Vendas', cols, [63, 81, 181], displayPeriodLabel);
         } catch {
             toast.error('Erro ao gerar relatório de vendas');
         } finally { setLoadingReport(null); }
@@ -460,7 +502,7 @@ const ReportsPage: React.FC = () => {
                 { header: 'Total', key: 'Total Vendido (R$)', format: (v: number) => fmtBRL(v) },
                 { header: 'Ticket Médio', key: 'Ticket Médio (R$)', format: (v: string) => fmtBRL(parseFloat(v)) },
             ];
-            handleGenericExport(equipeData, type, 'Performance da Equipe', filename, 'Equipe', cols, [236, 72, 153], periodLabel);
+            handleGenericExport(equipeData, type, 'Performance da Equipe', filename, 'Equipe', cols, [236, 72, 153], displayPeriodLabel);
         } catch {
             toast.error('Erro ao gerar relatório de equipe');
         } finally { setLoadingReport(null); }
@@ -499,7 +541,7 @@ const ReportsPage: React.FC = () => {
                 { header: 'Atrasos', key: 'Total Atrasos' },
                 { header: 'Min. Atraso', key: 'Minutos Atraso' },
             ];
-            handleGenericExport(pontoData, type, 'Relatório de Controle de Ponto', filename, 'Ponto', cols, [99, 102, 241], periodLabel);
+            handleGenericExport(pontoData, type, 'Relatório de Controle de Ponto', filename, 'Ponto', cols, [99, 102, 241], displayPeriodLabel);
         } catch {
             toast.error('Erro ao gerar relatório de ponto');
         } finally { setLoadingReport(null); }
@@ -510,7 +552,12 @@ const ReportsPage: React.FC = () => {
     const fetchRFMData = async () => {
         setLoadingReport('rfm');
         try {
-            const response = await apiClient.get('/relatorios/rfm/clientes', { params: { days: 180 } });
+            const response = await apiClient.get('/relatorios/rfm/clientes', {
+                params: {
+                    data_inicio: dateRange.startDate,
+                    data_fim: dateRange.endDate
+                }
+            });
             if (response.data.success) {
                 setRfmData(response.data.clientes.map((c: any) => ({
                     'Nome': c.nome, 'Email': c.email || 'N/A', 'Celular': c.celular || 'N/A',
@@ -686,7 +733,7 @@ const ReportsPage: React.FC = () => {
             { header: 'V. Vencido', key: 'Valor Vencido (R$)', format: (v: number) => fmtBRL(v) },
             { header: 'Pago', key: 'Total Pago (R$)', format: (v: number) => fmtBRL(v) },
         ];
-        handleGenericExport(fornecedoresData, type, 'Relatório Analítico de Fornecedores', 'Relatorio_Fornecedores', 'Fornecedores', cols, [20, 120, 170], periodLabel);
+        handleGenericExport(fornecedoresData, type, 'Relatório Analítico de Fornecedores', 'Relatorio_Fornecedores', 'Fornecedores', cols, [20, 120, 170], displayPeriodLabel);
     };
 
     const handleClientesExport = (type: 'pdf' | 'excel' | 'csv') => {
@@ -699,7 +746,7 @@ const ReportsPage: React.FC = () => {
             { header: 'Última Compra', key: 'Última Compra' },
             { header: 'Freq. (dias)', key: 'Frequência (dias)' },
         ];
-        handleGenericExport(clientesData, type, 'Relatório Analítico de Clientes', 'Relatorio_Clientes', 'Clientes', cols, [16, 150, 100], periodLabel);
+        handleGenericExport(clientesData, type, 'Relatório Analítico de Clientes', 'Relatorio_Clientes', 'Clientes', cols, [16, 150, 100], displayPeriodLabel);
     };
 
     // ==================== EXPORT: DRE FINANCEIRO ====================
@@ -739,7 +786,7 @@ const ReportsPage: React.FC = () => {
 
         if (type === 'pdf') {
             const doc = new jsPDF('portrait');
-            generatePDFHeader(doc, 'DRE - Demonstrativo de Resultado', periodLabel);
+            generatePDFHeader(doc, 'DRE - Demonstrativo de Resultado', displayPeriodLabel);
             autoTable(doc, {
                 startY: 50,
                 head: [['Descrição', 'Valor (R$)', 'Observação']],
@@ -870,7 +917,11 @@ const ReportsPage: React.FC = () => {
         });
     };
 
-    const renderDataTable = (data: any[], columns: { key: string; label: string; align?: string; render?: (v: any, row: any) => React.ReactNode }[]) => {
+    const renderDataTable = (
+        data: any[],
+        columns: { key: string; label: string; align?: string; render?: (v: any, row: any) => React.ReactNode }[],
+        onPageChange?: (page: number) => void
+    ) => {
         const visibleCols = columns.filter(c => !hiddenColumns.has(c.key));
 
         let processedData = data.filter(filterRow);
@@ -902,8 +953,13 @@ const ReportsPage: React.FC = () => {
             });
         }
 
+        const isPaginated = paginationInfo && (paginationInfo.total_paginas > 1 || paginationInfo.total_itens > data.length);
+
         return (
-            <div>
+            <div className="flex flex-col h-full">
+                {/* Visual Feedback Banner: Sempre no topo da tabela */}
+                <ActiveFilterBanner />
+
                 {/* Toolbar da tabela */}
                 <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
                     <button
@@ -966,7 +1022,12 @@ const ReportsPage: React.FC = () => {
                         </span>
                     )}
 
-                    <span className="ml-auto text-[10px] text-gray-400 font-medium">{processedData.length} registro(s)</span>
+                    <div className="ml-auto flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                        <span className="text-[10px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-tight">
+                            {processedData.length} <span className="font-normal opacity-70">Exibidos</span>
+                        </span>
+                    </div>
                 </div>
 
                 {/* Tabela */}
@@ -1026,6 +1087,45 @@ const ReportsPage: React.FC = () => {
                         )}
                     </tbody>
                 </table>
+                {/* Paginação Premium UX */}
+                {isPaginated && onPageChange && (
+                    <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white/50 dark:bg-gray-800/40 backdrop-blur-sm rounded-xl border border-indigo-100/50 dark:border-indigo-900/20 shadow-sm">
+                        <div className="flex items-center gap-6">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-wider mb-0.5">Navegação</span>
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                                    Página <span className="text-indigo-600 dark:text-indigo-400 font-bold">{paginationInfo.pagina_atual}</span> de <span className="text-gray-900 dark:text-gray-100 font-bold">{paginationInfo.total_paginas}</span>
+                                </span>
+                            </div>
+                            <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
+                            <div className="flex flex-col hidden sm:flex">
+                                <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-wider mb-0.5">Volume Total</span>
+                                <div className="flex items-center gap-1.5">
+                                    <Layers className="w-3 h-3 text-indigo-400" />
+                                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{paginationInfo.total_itens.toLocaleString('pt-BR')} registros</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => onPageChange(paginationInfo.pagina_atual - 1)}
+                                disabled={!paginationInfo.tem_anterior || loadingReport !== null}
+                                className="group flex items-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                            >
+                                <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+                                <span className="text-xs font-bold hidden xs:inline">Anterior</span>
+                            </button>
+                            <button
+                                onClick={() => onPageChange(paginationInfo.pagina_atual + 1)}
+                                disabled={!paginationInfo.tem_proxima || loadingReport !== null}
+                                className="group flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-400 transition-all shadow-md shadow-indigo-200 dark:shadow-indigo-900/20 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                <span className="text-xs font-bold hidden xs:inline">Próxima</span>
+                                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };
@@ -1042,6 +1142,7 @@ const ReportsPage: React.FC = () => {
 
         return (
             <div className="space-y-6">
+                <ActiveFilterBanner />
                 {/* DRE Simplificado */}
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-2">
                     <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-4 text-sm uppercase tracking-wide">DRE - Demonstrativo de Resultado</h4>
@@ -1190,24 +1291,59 @@ const ReportsPage: React.FC = () => {
 
     const renderVendas = () => (
         <>
-            <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100 dark:border-blue-800">
-                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">Total de Vendas</p>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{vendasData.length}</p>
-                </div>
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-100 dark:border-green-800">
-                    <p className="text-xs text-green-600 dark:text-green-400 font-medium mb-1">Faturamento Total</p>
-                    <p className="text-2xl font-bold text-green-900 dark:text-green-200">{fmtBRL(vendasData.reduce((s, v) => s + v['Total (R$)'], 0))}</p>
-                </div>
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border border-red-100 dark:border-red-800">
-                    <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-1">Total Descontos</p>
-                    <p className="text-2xl font-bold text-red-900 dark:text-red-200">{fmtBRL(vendasData.reduce((s, v) => s + v['Desconto (R$)'], 0))}</p>
-                </div>
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-100 dark:border-purple-800">
-                    <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-1">Ticket Médio</p>
-                    <p className="text-2xl font-bold text-purple-900 dark:text-purple-200">
-                        {vendasData.length > 0 ? fmtBRL(vendasData.reduce((s, v) => s + v['Total (R$)'], 0) / vendasData.length) : 'R$ 0,00'}
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="group bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-800 rounded-lg text-blue-600 dark:text-blue-300">
+                            <TrendingUp className="w-4 h-4" />
+                        </div>
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Volume</span>
+                    </div>
+                    <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+                        {paginationInfo?.total_itens || vendasData.length}
                     </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1">Vendas Totais</p>
+                </div>
+
+                <div className="group bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-800/50 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-800 rounded-lg text-emerald-600 dark:text-emerald-300">
+                            <DollarSign className="w-4 h-4" />
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Receita</span>
+                    </div>
+                    <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+                        {paginationInfo?.estatisticas?.total_valor ? fmtBRL(paginationInfo.estatisticas.total_valor) : fmtBRL(vendasData.reduce((s, v) => s + v['Total (R$)'], 0))}
+                    </p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">Faturamento Geral</p>
+                </div>
+
+                <div className="group bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-900/20 dark:to-orange-900/20 rounded-2xl p-4 border border-rose-100 dark:border-rose-800/50 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-rose-100 dark:bg-rose-800 rounded-lg text-rose-600 dark:text-rose-300">
+                            <Trophy className="w-4 h-4" />
+                        </div>
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Lucro</span>
+                    </div>
+                    <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+                        {paginationInfo?.estatisticas?.total_lucro ? fmtBRL(paginationInfo.estatisticas.total_lucro) : 'R$ 0,00'}
+                    </p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 font-medium mt-1">Lucro Real Estimado</p>
+                </div>
+
+                <div className="group bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 rounded-2xl p-4 border border-purple-100 dark:border-purple-800/50 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-800 rounded-lg text-purple-600 dark:text-purple-300">
+                            <Zap className="w-4 h-4" />
+                        </div>
+                        <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Média</span>
+                    </div>
+                    <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+                        {paginationInfo?.estatisticas?.total_vendas && paginationInfo?.estatisticas?.total_valor
+                            ? fmtBRL(paginationInfo.estatisticas.total_valor / paginationInfo.estatisticas.total_vendas)
+                            : 'R$ 0,00'}
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mt-1">Ticket Médio</p>
                 </div>
             </div>
             {renderDataTable(vendasData, [
@@ -1218,8 +1354,15 @@ const ReportsPage: React.FC = () => {
                 { key: 'Total (R$)', label: 'Total', align: 'right', render: (v) => <span className="font-bold text-green-600">{fmtBRL(v)}</span> },
                 { key: 'Desconto (R$)', label: 'Desconto', align: 'right', render: (v) => <span className="text-red-600">{fmtBRL(v)}</span> },
                 { key: 'Forma Pagamento', label: 'Forma Pgto', render: (v) => <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{v}</span> },
-                { key: 'Qtd Itens', label: 'Itens', render: (v) => <span className="px-2 py-0.5 bg-gray-100 rounded-full font-medium">{v}</span> },
-            ])}
+                {
+                    key: 'Qtd Itens', label: 'Itens', render: (v) => (
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] font-bold border border-indigo-100/50 dark:border-indigo-800/30">
+                            <ListOrdered className="w-3 h-3" />
+                            {v}
+                        </div>
+                    )
+                },
+            ], fetchVendasData)}
             {vendasData.filter(filterRow).length === 0 && (
                 <div className="text-center py-12 text-gray-500">
                     <p className="text-lg">Nenhuma venda encontrada</p>

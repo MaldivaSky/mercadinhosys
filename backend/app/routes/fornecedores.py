@@ -1332,14 +1332,25 @@ def relatorio_analitico_fornecedores():
             )
 
             if data_inicio:
-                pedidos_query = pedidos_query.filter(
-                    PedidoCompra.data_pedido >= datetime.fromisoformat(data_inicio)
-                )
+                try:
+                    data_inicio_dt = datetime.fromisoformat(data_inicio.replace('Z', '+00:00'))
+                    pedidos_query = pedidos_query.filter(PedidoCompra.data_pedido >= data_inicio_dt)
+                except ValueError:
+                    # Fallback para parsing simples
+                    data_inicio_dt = datetime.strptime(data_inicio.split('T')[0], "%Y-%m-%d")
+                    pedidos_query = pedidos_query.filter(PedidoCompra.data_pedido >= data_inicio_dt)
 
             if data_fim:
-                pedidos_query = pedidos_query.filter(
-                    PedidoCompra.data_pedido <= datetime.fromisoformat(data_fim)
-                )
+                try:
+                    data_fim_dt = datetime.fromisoformat(data_fim.replace('Z', '+00:00'))
+                    # Se for apenas data (00:00:00), ajustar para 23:59:59
+                    if data_fim_dt.hour == 0 and data_fim_dt.minute == 0:
+                        data_fim_dt = data_fim_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                    pedidos_query = pedidos_query.filter(PedidoCompra.data_pedido <= data_fim_dt)
+                except ValueError:
+                    # Fallback para parsing simples
+                    data_fim_dt = datetime.strptime(data_fim.split('T')[0], "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999)
+                    pedidos_query = pedidos_query.filter(PedidoCompra.data_pedido <= data_fim_dt)
 
             pedidos = pedidos_query.all()
 
