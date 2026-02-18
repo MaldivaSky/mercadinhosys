@@ -197,4 +197,22 @@ export const productsService = {
         const response = await apiClient.post('/produtos/bulk-update-prices', { atualizacoes });
         return response.data;
     },
+
+    importarCSV: async (file: File): Promise<{
+        success: boolean;
+        message: string;
+        total_importados: number;
+        total_erros: number;
+        erros: string[]
+    }> => {
+        const formData = new FormData();
+        formData.append('arquivo', file);
+
+        const response = await apiClient.post('/produtos/importar', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
+    },
 };
