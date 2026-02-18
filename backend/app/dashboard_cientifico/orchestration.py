@@ -26,7 +26,7 @@ class DashboardOrchestrator:
     def __init__(self, establishment_id: int):
         self.establishment_id = establishment_id
 
-    @cache_response(ttl_seconds=60, require_db_check=True)
+    @cache_response(ttl_seconds=60, require_db_check=False)
     def get_executive_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
         Dashboard executivo - Resumo para gestão
@@ -155,7 +155,7 @@ class DashboardOrchestrator:
             },
         }
 
-    @cache_response(ttl_seconds=300, require_db_check=True)  # 5 minutos de cache (otimizado)
+    @cache_response(ttl_seconds=300, require_db_check=False)  # 5 minutos de cache (otimizado)
     def get_scientific_dashboard(
         self,
         days: int = 30,
@@ -195,7 +195,8 @@ class DashboardOrchestrator:
         if start_date_override and end_date_override:
             start_current = start_date_override
         else:
-            start_current = end_date - timedelta(days=days)
+            # 🔥 CORREÇÃO: Forçar início do dia para capturar despesas/vendas do primeiro dia completo
+            start_current = (end_date - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
         
         def _confidence_from_samples(samples: int) -> str:
             """Função auxiliar para calcular confiança baseada em amostras"""
@@ -209,93 +210,105 @@ class DashboardOrchestrator:
         
         from app.models import Cliente
         from app.dashboard_cientifico.models_layer import PracticalModels as _PM
-        start_previous = end_date - timedelta(days=days * 2)
-        end_previous = end_date - timedelta(days=days)
+        # Ajustar período anterior também
+        start_previous = (start_current - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_previous = (start_current - timedelta(seconds=1))
 
         import time
-        from concurrent.futures import ThreadPoolExecutor
         from flask import current_app
         start_exec = time.time()
         
-        # Obter a instância da app para passar para as threads
+        # Obter a instância da app (para logs ou acesso ao config se necessário)
         app = current_app._get_current_object()
         
-        def run_with_context(func, *args, **kwargs):
-            with app.app_context():
+        # 🔥 ALTERAÇÃO CRÍTICA: Executar queries FINANCEIRAS fundamentais de forma SÍNCRONA
+        # Isso garante que não haja falhas silenciosas de thread pool para os números mais importantes (Lucro, Despesas)
+        try:
+            financials_data = DataLayer.get_sales_financials(self.establishment_id, start_current, end_date)
+            # Garantir que a lista de despesas nunca seja vazia por erro de thread
+            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
+            sales_current_summary = DataLayer.get_sales_summary_range(self.establishment_id, start_current, end_date)
+            sales_previous_summary = DataLayer.get_sales_summary_range(self.establishment_id, start_previous, end_previous)
+        except Exception as e:
+            _logger.error(f"Erro ao buscar dados financeiros síncronos: {e}")
+            financials_data = {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
+            expense_details = []
+            sales_current_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+            sales_previous_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+
+        # 1. Obter métricas secundárias e pesadas de forma SÍNCRONA e SEGURA
+        # Otimização: Removido ThreadPoolExecutor para evitar "QueuePool limit overflow"
+        # A execução sequencial é mais estável em ambientes com conexões limitadas (Aiven/Render)
+        
+        _logger.info(f"START: Coleta de dados secundários sequencial (est_id: {self.establishment_id})")
+        
+        def safe_get(func, name, default, *args, **kwargs):
+            try:
                 return func(*args, **kwargs)
-        
-        # 1. Obter resumos básicos e métricas em PARALELO
-        _logger.info(f"START: Coleta de dados paralela (est_id: {self.establishment_id})")
-        
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            # Funções de busca independentes
-            f_sales_current = executor.submit(run_with_context, DataLayer.get_sales_summary_range, self.establishment_id, start_current, end_date)
-            f_inventory = executor.submit(run_with_context, DataLayer.get_inventory_summary, self.establishment_id)
-            f_expenses = executor.submit(run_with_context, DataLayer.get_expense_details, self.establishment_id, start_current, end_date)
-            f_sales_prev = executor.submit(run_with_context, DataLayer.get_sales_summary_range, self.establishment_id, start_previous, end_previous)
-            f_financials = executor.submit(run_with_context, DataLayer.get_sales_financials, self.establishment_id, start_current, end_date)
-            
-            # Dados analíticos
-            f_sales_hour = executor.submit(run_with_context, DataLayer.get_sales_by_hour, self.establishment_id, days)
-            f_top_hour = executor.submit(run_with_context, DataLayer.get_top_products_by_hour, self.establishment_id, days, top_n=5)
-            f_cust_patterns = executor.submit(run_with_context, DataLayer.get_customer_temporal_patterns, self.establishment_id, days=90)
-            f_hourly_conc = executor.submit(run_with_context, DataLayer.get_hourly_concentration_metrics, self.establishment_id, days)
-            
-            # Análises temporais
-            f_hourly_cat = executor.submit(run_with_context, TemporalAnalysis.get_hourly_sales_by_category, self.establishment_id, days)
-            f_period_anal = executor.submit(run_with_context, TemporalAnalysis.get_period_analysis, self.establishment_id, days)
-            f_weekday_anal = executor.submit(run_with_context, TemporalAnalysis.get_weekday_analysis, self.establishment_id, days)
-            f_rh_metrics = executor.submit(run_with_context, DataLayer.get_rh_metrics, self.establishment_id, days)
-            f_sales_series = executor.submit(run_with_context, DataLayer.get_sales_timeseries, self.establishment_id, max(days, 90))
-            
-            # Análises mais pesadas (ABC/RFM)
-            f_abc = executor.submit(run_with_context, self.get_abc_analysis, days=days, limit=500)
-            f_cust_metrics = executor.submit(run_with_context, DataLayer.get_customer_metrics, self.establishment_id, days)
-            
-            # Recomendações e Performance de categoria
-            f_recomm = executor.submit(run_with_context, TemporalAnalysis.get_product_hourly_recommendations, self.establishment_id, days)
-            f_cat_perf = executor.submit(run_with_context, TemporalAnalysis.get_category_performance_by_time, self.establishment_id, days)
-            
-            # Coletar resultados com try/except individual para resiliência
-            def get_result(future, name, default):
-                try: return future.result(timeout=20)
-                except Exception as e:
-                    _logger.warning(f"⚠️ Query paralela '{name}' falhou ou deu timeout: {e}")
-                    return default
+            except Exception as e:
+                _logger.warning(f"⚠️ Query '{name}' falhou: {e}")
+                return default
 
-            sales_current_summary = get_result(f_sales_current, "sales_current", {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0})
-            inventory_summary = get_result(f_inventory, "inventory", {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0})
-            expense_details = get_result(f_expenses, "expenses", [])
-            sales_previous_summary = get_result(f_sales_prev, "sales_prev", {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0})
-            financials_data = get_result(f_financials, "financials", {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0})
-            
-            sales_by_hour = get_result(f_sales_hour, "sales_hour", [])
-            top_products_by_hour = get_result(f_top_hour, "top_hour", [])
-            customer_temporal_patterns = get_result(f_cust_patterns, "cust_patterns", [])
-            hourly_concentration = get_result(f_hourly_conc, "hourly_conc", {})
-            
-            hourly_sales_by_category = get_result(f_hourly_cat, "hourly_cat", {})
-            period_analysis = get_result(f_period_anal, "period_anal", {})
-            weekday_analysis = get_result(f_weekday_anal, "weekday_anal", {})
-            rh_metrics = get_result(f_rh_metrics, "rh_metrics", {})
-            sales_timeseries = get_result(f_sales_series, "sales_series", [])
-            
-            abc_analysis = get_result(f_abc, "abc", {"produtos": [], "resumo": {}, "total_value": 0})
-            customer_metrics = get_result(f_cust_metrics, "cust_metrics", {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0})
-            product_hourly_recommendations = get_result(f_recomm, "recomm", [])
-            category_performance_by_time = get_result(f_cat_perf, "cat_perf", {})
+        inventory_summary = safe_get(DataLayer.get_inventory_summary, "inventory", 
+                                   {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}, 
+                                   self.establishment_id)
+        
+        sales_by_hour = safe_get(DataLayer.get_sales_by_hour, "sales_hour", [], 
+                               self.establishment_id, days)
+                               
+        top_products_by_hour = safe_get(DataLayer.get_top_products_by_hour, "top_hour", [], 
+                                      self.establishment_id, days, top_n=5)
+                                      
+        customer_temporal_patterns = safe_get(DataLayer.get_customer_temporal_patterns, "cust_patterns", [], 
+                                            self.establishment_id, days=90)
+                                            
+        hourly_concentration = safe_get(DataLayer.get_hourly_concentration_metrics, "hourly_conc", {}, 
+                                      self.establishment_id, days)
+        
+        hourly_sales_by_category = safe_get(TemporalAnalysis.get_hourly_sales_by_category, "hourly_cat", {}, 
+                                          self.establishment_id, days)
+                                          
+        period_analysis = safe_get(TemporalAnalysis.get_period_analysis, "period_anal", {}, 
+                                 self.establishment_id, days)
+                                 
+        weekday_analysis = safe_get(TemporalAnalysis.get_weekday_analysis, "weekday_anal", {}, 
+                                  self.establishment_id, days)
+                                  
+        rh_metrics = safe_get(DataLayer.get_rh_metrics, "rh_metrics", {}, 
+                            self.establishment_id, days)
+                            
+        sales_timeseries = safe_get(DataLayer.get_sales_timeseries, "sales_series", [], 
+                                  self.establishment_id, max(days, 90))
+        
+        # Análises mais pesadas
+        abc_analysis = safe_get(self.get_abc_analysis, "abc", 
+                              {"produtos": [], "resumo": {}, "total_value": 0}, 
+                              days=days, limit=500)
+                              
+        customer_metrics = safe_get(DataLayer.get_customer_metrics, "cust_metrics", 
+                                  {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}, 
+                                  self.establishment_id, days)
+                                  
+        product_hourly_recommendations = safe_get(TemporalAnalysis.get_product_hourly_recommendations, "recomm", [], 
+                                                self.establishment_id, days)
+                                                
+        category_performance_by_time = safe_get(TemporalAnalysis.get_category_performance_by_time, "cat_perf", {}, 
+                                              self.establishment_id, days)
 
-        _logger.info(f"DONE: Coleta paralela concluida em {time.time()-start_exec:.2f}s")
+        _logger.info(f"DONE: Coleta sequencial concluida em {time.time()-start_exec:.2f}s")
 
         # Dados Financeiros Reais (processar resultados coletados)
         revenue = float(financials_data.get("revenue", 0.0))
         cogs = float(financials_data.get("cogs", 0.0))
         gross_profit = float(financials_data.get("gross_profit", 0.0))
         
-        # 🔥 CORREÇÃO: Calcular total de despesas para o período
+        # 🔥 CORREÇÃO FINAL: Usar Single Source of Truth para Despesas (Mesma query do DRE)
+        # Eliminamos a tentativa de somar o detalhamento agrupado, que estava falhando.
         try:
-            total_despesas_periodo = sum([float(exp.get("total", 0) if "total" in exp else exp.get("valor", 0)) for exp in expense_details])
-        except Exception:
+            total_despesas_periodo = DataLayer.get_total_expenses_value(self.establishment_id, start_current, end_date)
+            _logger.info(f"Dashboard Net Profit Calculation: Gross={gross_profit}, Expenses={total_despesas_periodo}")
+        except Exception as e:
+            _logger.error(f"Erro crítico ao buscar total de despesas: {e}")
             total_despesas_periodo = 0.0
         
         # Lucro Líquido = Lucro Bruto - Despesas
@@ -305,9 +318,9 @@ class DashboardOrchestrator:
         gross_margin = (gross_profit / revenue * 100) if revenue > 0 else 0.0
         net_margin = (net_profit / revenue * 100) if revenue > 0 else 0.0
         
-        # ROI (Baseado no custo do estoque médio ou CMV?) 
+        # ROI (Net Profit / Inventory Value)
         avg_inventory_cost = float(inventory_summary.get("valor_total", 0.0))
-        roi = (gross_profit / avg_inventory_cost * 100) if avg_inventory_cost > 0 else 0.0
+        roi = (net_profit / avg_inventory_cost * 100) if avg_inventory_cost > 0 else 0.0
         
         financials_consolidated = {
             "revenue": revenue,
@@ -315,10 +328,12 @@ class DashboardOrchestrator:
             "gross_profit": gross_profit,
             "expenses": total_despesas_periodo,
             "net_profit": net_profit,
-            "gross_margin": round(gross_margin, 2),
-            "net_margin": round(net_margin, 2),
-            "roi": round(roi, 2)
+            "gross_margin": gross_margin,
+            "net_margin": net_margin,
+            "roi": roi,
+            "count": int(financials_data.get("count", 0))
         }
+
 
         # Sub-queries que dependem ou são mais pesadas
         try:
@@ -655,6 +670,47 @@ class DashboardOrchestrator:
                     "alvo": "produtos",
                 }
             )
+
+        # 🔥 NOVO: "PLANO DE RESGATE FINANCEIRO" (Expert Advice for Negative Profit)
+        if net_profit < 0:
+            # Cenário 1: Despesas Operacionais engolindo o Lucro Bruto
+            if total_despesas_periodo > gross_profit:
+                recomendacoes.append({
+                    "tipo": "financeiro_critico",
+                    "mensagem": f"⚠️ ALERTA DE PREJUÍZO: Suas despesas operacionais (R$ {total_despesas_periodo:,.2f}) superam todo o seu Lucro Bruto. Você precisa cortar custos fixos urgentemente.",
+                    "cta": "Auditar despesas agora",
+                    "alvo": "financeiro",
+                     "prioridade": 1
+                })
+            
+            # Cenário 2: Margem Bruta muito baixa (Preço errado ou Custo alto)
+            if gross_margin < 25: # Limite de alerta para varejo geral
+                recomendacoes.append({
+                    "tipo": "precificacao",
+                    "mensagem": f"⚠️ MARGEM BRUTA CRÍTICA ({gross_margin:.1f}%): Você está vendendo quase a preço de custo. Revise o markup dos produtos Classe A.",
+                    "cta": "Ver produtos com margem baixa",
+                    "alvo": "produtos",
+                    "prioridade": 1
+                })
+            
+            # Fallback: Se prejuízo existe mas não caiu nos if acima (ex: margem ok mas volume baixo vs custos fixos)
+            if not any(r['tipo'] == 'financeiro_critico' for r in recomendacoes):
+                 recomendacoes.append({
+                    "tipo": "financeiro_critico",
+                    "mensagem": f"Diagnóstico: O negócio operou com prejuízo de R$ {abs(net_profit):,.2f}. A estrutura de custos está incompatível com o faturamento atual.",
+                    "cta": "Análise detalhada de DRE",
+                    "alvo": "financeiro",
+                     "prioridade": 1
+                })
+        
+        elif net_margin < 5 and net_margin > 0:
+             recomendacoes.append({
+                "tipo": "eficiencia",
+                "mensagem": f"💡 ALERTA DE RISCO: Sua operação está no azul, mas a margem líquida é baixa ({net_margin:.1f}%). Qualquer imprevisto pode gerar prejuízo.",
+                "cta": "Otimizar custos operacionais",
+                "alvo": "financeiro",
+                "prioridade": 2
+            })
 
         # 🔥 CORREÇÃO: Calcular total de despesas para o período
         total_despesas_periodo = sum([float(exp.get("valor", 0)) for exp in expense_details])

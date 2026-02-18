@@ -188,13 +188,21 @@ def create_app(config_name=None):
             except Exception as e:
                 logger.error(f"ERRO: Falha ao conectar na Nuvem: {e}")
                 
-                # FALLBACK LOGIC
+                # FALLBACK LOGIC - RESTRITO
+                # Em produção (Render/Vercel), NÃO fazer fallback automático para SQLite 
+                # pois isso cria um banco vazio e esconde o erro real de conexão.
                 hybrid_mode = os.environ.get("HYBRID_MODE", "online").lower()
-                if hybrid_mode != "offline" and app.config.get("USING_POSTGRES"):
-                    logger.warning("FALLBACK: Mudando para banco de dados LOCAL (SQLite) devido a falha na Nuvem.")
+                force_local = os.environ.get("FORCE_LOCAL_FALLBACK", "false").lower() == "true"
+                
+                # Se for PROD e não for forçado, não faz fallback!
+                if is_production and not force_local:
+                    logger.critical("🚫 PRODUÇÃO: Conexão com banco falhou. Fallback para SQLite BLOQUEADO para evitar perda de dados aparente.")
+                    logger.critical("Verifique DATABASE_URL e firewall.")
+                    # Não relançamos o erro para não derrubar o container em loop, mas a app ficará instável/erro 500
+                elif hybrid_mode != "offline" and app.config.get("USING_POSTGRES"):
+                    logger.warning("⚠️ FALLBACK: Mudando para banco de dados LOCAL (SQLite) devido a falha na Nuvem (Ambiente Dev/Híbrido).")
                     
                     # Tentar reconfigurar para SQLite em tempo de execução
-                    from flask_sqlalchemy import SQLAlchemy
                     basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
                     local_uri = f"sqlite:///{os.path.join(basedir, 'instance', 'mercadinho_local.db')}"
                     
@@ -460,6 +468,8 @@ def create_app(config_name=None):
                 "service": "mercadinhosys-api",
                 "version": "2.0.0",
                 "database": db_status,
+                "db_source": "POSTGRES_CLOUD" if app.config.get("USING_POSTGRES") else "SQLITE_LOCAL",
+                "db_url_redacted": redacted_db_uri,
                 "timestamp": datetime.now().isoformat(),
                 "dashboard_cientifico": (
                     "disponível"

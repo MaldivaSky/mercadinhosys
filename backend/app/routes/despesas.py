@@ -8,6 +8,7 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 from app import db
 from app.decorators.decorator_jwt import funcionario_required
 from app.models import Despesa, Funcionario
+from app.dashboard_cientifico.data_layer import DataLayer
 
 
 despesas_bp = Blueprint("despesas", __name__)

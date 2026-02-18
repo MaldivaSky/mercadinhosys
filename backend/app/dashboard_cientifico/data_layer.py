@@ -287,6 +287,35 @@ class DataLayer:
             return []
 
     @staticmethod
+    def get_total_expenses_value(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> float:
+        """
+        Retorna o valor TOTAL de despesas para o período, sem agrupamento.
+        Usado para cálculo de Lucro Líquido no Dashboard (Sincronizado com DRE).
+        """
+        try:
+            # Normalização de datas idêntica ao DRE
+            start_dt = start_date if isinstance(start_date, datetime) else datetime.combine(start_date, datetime.min.time())
+            
+            if isinstance(end_date, datetime):
+                end_dt = end_date
+            else:
+                end_dt = datetime.combine(end_date, datetime.max.time())
+                
+            if end_dt.hour == 0 and end_dt.minute == 0:
+                 end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            total = db.session.query(func.sum(Despesa.valor)).filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                Despesa.data_despesa >= start_dt,
+                Despesa.data_despesa <= end_dt
+            ).scalar()
+            
+            return float(total or 0.0)
+        except Exception as e:
+            logger.error(f"Erro em get_total_expenses_value: {e}")
+            return 0.0
+
+    @staticmethod
     def get_sales_by_hour(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """Vendas agrupadas por hora do dia (Heatmap)"""
         try:
