@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { showToast } from '../../utils/toast';
 import {
     ShoppingCart,
@@ -77,17 +77,26 @@ const PDVPage: React.FC = () => {
     const [mostrarModalNotaFiscal, setMostrarModalNotaFiscal] = useState(false);
     const [ultimoComprovante, setUltimoComprovante] = useState<any | null>(null);
 
-    // Validar desconto ao alterar
+    // Ref para debounce do warning de desconto
+    const descontoToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Validar desconto ao alterar — debounce de 700ms para não disparar a cada keystroke
     useEffect(() => {
         if (descontoGeral > 0 && !descontoAprovado) {
             const permitido = validarDescontoPermitido(descontoGeralCalculado);
             if (!permitido) {
-                showToast.warning(
-                    `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`,
-                    { id: TOAST_IDS.descontoAutorizacao }
-                );
+                if (descontoToastTimer.current) clearTimeout(descontoToastTimer.current);
+                descontoToastTimer.current = setTimeout(() => {
+                    showToast.warning(
+                        `Desconto de ${formatCurrency(descontoGeralCalculado)} requer autorização de gerente`,
+                        { id: TOAST_IDS.descontoAutorizacao }
+                    );
+                }, 700);
             }
         }
+        return () => {
+            if (descontoToastTimer.current) clearTimeout(descontoToastTimer.current);
+        };
     }, [descontoGeral, descontoGeralCalculado, descontoAprovado, validarDescontoPermitido]);
 
     const handleProdutoSelecionado = (produto: Produto) => {
@@ -146,18 +155,20 @@ const PDVPage: React.FC = () => {
             }
         }
 
-        // 4. Estoque baixo
+        // 4. Estoque baixo — se mostrado, suprime o success para não empilhar dois toasts
+        let warningExibido = false;
         const estoqueRestante = estoqueDisponivel - (qtdAtual + 1);
         if (produto.quantidade_minima && estoqueRestante <= produto.quantidade_minima && estoqueRestante >= 0) {
             showToast.warning(
                 `Estoque baixo — ${produto.nome}: restará ${estoqueRestante} un.`,
                 { duration: 4000, id: TOAST_IDS.estoqueBaixo }
             );
+            warningExibido = true;
         }
 
         adicionarProduto(produto);
-        // Feedback só no primeiro item (não polui ao incrementar)
-        if (!itemCarrinho) {
+        // Feedback só no primeiro item E quando nenhum warning foi exibido (evita dois toasts simultâneos)
+        if (!itemCarrinho && !warningExibido) {
             showToast.success(`${produto.nome} adicionado ao carrinho`, {
                 id: `${TOAST_IDS.itemAdicionado}-${produto.id}`,
                 duration: 2500,
@@ -378,7 +389,7 @@ const PDVPage: React.FC = () => {
 
         const novaJanela = window.open('', '_blank');
         if (!novaJanela) {
-            showToast.error('Nao foi possivel abrir a visualizacao da nota');
+            showToast.error('Não foi possível abrir a nota. Verifique se popups estão bloqueados.');
             return;
         }
         novaJanela.document.write(html);
@@ -427,8 +438,9 @@ const PDVPage: React.FC = () => {
 
     const handleImprimirNota = () => {
         setMostrarModalNotaFiscal(false);
-        showToast.info('Preparando impressao...');
+        const loadingId = showToast.loading('Preparando impressão...');
         setTimeout(() => {
+            showToast.dismiss(loadingId as string);
             abrirNotaEmNovaTela(true);
             limparCarrinho();
             setUltimaVendaId(null);
