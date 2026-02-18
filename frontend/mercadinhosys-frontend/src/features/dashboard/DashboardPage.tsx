@@ -6,7 +6,7 @@ import {
   ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
   DollarSign as DollarIcon, Target as TargetIcon, AlertCircle,
   TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
-  LineChart as LineChartIcon, RefreshCw, X, Clock, Lightbulb, Users
+  LineChart as LineChartIcon, RefreshCw, X, Clock, Lightbulb, Users, ArrowRight
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -835,6 +835,36 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {/* 🔥 DIAGNÓSTICO FINANCEIRO INTELIGENTE (CFO VIRTUAL) */}
+      {data?.data?.recomendacoes?.filter((rec: any) => rec.prioridade === 1).map((rec: any, idx: number) => (
+        <div key={idx} className="bg-white border-l-4 border-red-500 rounded-xl shadow-lg p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-6 animate-fadeIn">
+          <div className="bg-red-100 p-4 rounded-full">
+            <TrendingUpFill className="w-8 h-8 text-red-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Diagnóstico Financeiro: Atenção Requerida</h3>
+            <p className="text-gray-700 text-lg leading-relaxed">
+              {rec.mensagem}
+            </p>
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => setSelectedRecommendation(rec)}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition-all flex items-center gap-2"
+              >
+                <TargetIcon className="w-4 h-4" />
+                {rec.cta}
+              </button>
+              <button
+                onClick={() => document.getElementById('detalhes-financeiros')?.scrollIntoView({ behavior: 'smooth' })}
+                className="px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg transition-all"
+              >
+                Ver Detalhes do DRE
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
       {/* 🔥 NOVO: FILTROS DE PERÍODO E VISUALIZAÇÃO - ACIMA DAS ANÁLISES */}
       <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200">
         <div className="flex flex-col gap-6">
@@ -988,7 +1018,7 @@ const DashboardPage: React.FC = () => {
           {
             title: 'Lucro Líquido',
             periodo: `Últimos ${periodoDias} dias`,
-            value: `R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            value: `R$ ${(mes?.lucro_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: mes?.crescimento_mensal || 0,
             icon: TrendingUpFill,
             color: 'from-blue-500 to-cyan-600',
@@ -996,14 +1026,14 @@ const DashboardPage: React.FC = () => {
             key: `lucro-${periodoDias}` // 🔥 Key única para forçar re-render
           },
           {
-            title: 'Ticket Médio',
+            title: 'Lucro Bruto',
             periodo: `Últimos ${periodoDias} dias`,
-            value: `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`,
-            change: hoje?.crescimento_vs_ontem || 0,
+            value: `R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            change: mes?.crescimento_mensal || 0,
             icon: TrendingUp,
             color: 'from-purple-500 to-pink-600',
-            subtitle: `${hoje?.clientes_atendidos || 0} clientes`,
-            key: `ticket-${periodoDias}` // 🔥 Key única para forçar re-render
+            subtitle: `${(((mes?.lucro_bruto || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% de margem bruta`,
+            key: `bruto-${periodoDias}` // 🔥 Key única para forçar re-render
           },
           {
             title: 'Despesas',
@@ -1079,8 +1109,12 @@ const DashboardPage: React.FC = () => {
                     <span className="font-bold text-green-600">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Lucro Bruto:</span>
+                    <span className="font-bold text-emerald-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-700">Lucro Líquido:</span>
-                    <span className="font-bold text-blue-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="font-bold text-blue-600">R$ {(mes?.lucro_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Margem de Lucro:</span>

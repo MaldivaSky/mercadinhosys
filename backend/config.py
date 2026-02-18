@@ -68,15 +68,17 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_recycle": 120,
-        "pool_size": 5,
-        "max_overflow": 10,
+        "pool_recycle": 300,  # Aumentado para 5 minutos
+        "pool_size": 10,      # Aumentado para suportar mais threads
+        "max_overflow": 20,   # Margem de manobra maior
+        "pool_timeout": 30,   # Esperar até 30s por uma conexão livre
         "connect_args": {
             "keepalives": 1,
             "keepalives_idle": 30,
             "keepalives_interval": 10,
             "keepalives_count": 5,
             "connect_timeout": 10,
+            # "options": "-c statement_timeout=30000" # Removido para compatibilidade Neon/PgBouncer
         },
     } if _using_postgres else {}
 
