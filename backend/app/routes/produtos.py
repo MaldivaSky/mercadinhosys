@@ -3236,3 +3236,179 @@ def atualizar_classificacao_abc():
             jsonify({"success": False, "message": "Erro interno ao atualizar classificação ABC"}),
             500,
         )
+
+@produtos_bp.route("/importar", methods=["POST"])
+@funcionario_required
+def importar_produtos_csv():
+    """
+    Importa produtos em massa via CSV.
+    Permissao: ADMIN ou GERENTE.
+    """
+    import csv
+    import io
+    from decimal import Decimal
+    
+    try:
+        # 1. Validar Permissoes
+        claims = get_jwt()
+        role = claims.get("role")
+        if role not in ["ADMIN", "GERENTE"]:
+            return (
+                jsonify({
+                    "success": False,
+                    "message": "Permissao negada. Apenas Administradores ou Gerentes podem importar produtos."
+                }),
+                403,
+            )
+        
+        estabelecimento_id = claims.get("estabelecimento_id")
+        funcionario_id = claims.get("sub") # ID do funcionario logado
+        
+        # 2. Validar Arquivo
+        if 'arquivo' not in request.files:
+            return jsonify({"success": False, "message": "Nenhum arquivo enviado"}), 400
+        
+        file = request.files['arquivo']
+        if file.filename == '':
+            return jsonify({"success": False, "message": "Arquivo invalido"}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({"success": False, "message": "O arquivo deve ser um CSV"}), 400
+
+        # 3. Processar CSV
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        reader = csv.DictReader(stream, delimiter=';') # Padrao comum em Excel PT-BR eh ';'
+        
+        # Se nao encontrar nada com ';', tentar ','
+        if not reader.fieldnames or len(reader.fieldnames) < 2:
+            stream.seek(0)
+            reader = csv.DictReader(stream, delimiter=',')
+            
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        # Cache de categorias para evitar queries repetitivas
+        categorias_cache = {}
+        
+        for row_idx, row in enumerate(reader, start=1):
+            try:
+                # Limpeza de dados
+                nome = row.get('nome', '').strip()
+                cat_nome = row.get('categoria', '').strip()
+                preco_custo_str = row.get('preco_custo', '0').replace(',', '.')
+                marca = row.get('marca', '').strip()
+                unidade = row.get('unidade', 'UN').strip()
+                qtd_inicial_str = row.get('estoque', '0').strip()
+                qtd_inicial = int(qtd_inicial_str) if qtd_inicial_str.isdigit() else 0
+                
+                lote_num = row.get('lote', '').strip()
+                validade_str = row.get('data_validade', '').strip()
+                data_validade = None
+                
+                if validade_str:
+                    try:
+                        # Tenta vários formatos comuns
+                        for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y'):
+                            try:
+                                data_validade = datetime.strptime(validade_str, fmt).date()
+                                break
+                            except ValueError:
+                                continue
+                        if not data_validade:
+                            errors.append(f"Linha {row_idx}: Formato de data invalido para '{validade_str}'")
+                    except Exception:
+                        pass
+                
+                # Validações básicas
+                if not nome:
+                    errors.append(f"Linha {row_idx}: Nome do produto eh obrigatorio")
+                    error_count += 1
+                    continue
+                if not cat_nome:
+                    errors.append(f"Linha {row_idx}: Categoria eh obrigatoria")
+                    error_count += 1
+                    continue
+                
+                # Tratar Categoria
+                if cat_nome not in categorias_cache:
+                    cat = CategoriaProduto.query.filter_by(
+                        nome=cat_nome, 
+                        estabelecimento_id=estabelecimento_id
+                    ).first()
+                    
+                    if not cat:
+                        cat = CategoriaProduto(
+                            nome=cat_nome, 
+                            estabelecimento_id=estabelecimento_id,
+                            ativo=True
+                        )
+                        db.session.add(cat)
+                        db.session.flush() # Para pegar o ID
+                    
+                    categorias_cache[cat_nome] = cat.id
+                
+                categoria_id = categorias_cache[cat_nome]
+                
+                # Criar Produto
+                novo_produto = Produto(
+                    estabelecimento_id=estabelecimento_id,
+                    categoria_id=categoria_id,
+                    nome=nome,
+                    codigo_barras=codigo_barras or None,
+                    codigo_interno=codigo_interno or None,
+                    marca=marca,
+                    unidade_medida=unidade,
+                    preco_custo=Decimal(preco_custo_str),
+                    preco_venda=Decimal(preco_venda_str),
+                    quantidade=qtd_inicial,
+                    lote=lote_num or None,
+                    data_validade=data_validade,
+                    controlar_validade=True if data_validade else False,
+                    ativo=True
+                )
+                
+                db.session.add(novo_produto)
+                db.session.flush() # Para pegar o ID do produto para o lote
+                
+                # Se informou estoque > 0, cria o primeiro lote oficial
+                if qtd_inicial > 0:
+                    novo_lote = ProdutoLote(
+                        estabelecimento_id=estabelecimento_id,
+                        produto_id=novo_produto.id,
+                        numero_lote=lote_num or f"IMPORT-{date.today().strftime('%Y%m%d')}",
+                        quantidade=qtd_inicial,
+                        quantidade_inicial=qtd_inicial,
+                        data_validade=data_validade or (date.today() + timedelta(days=365)), # Fallback 1 ano se nao informado
+                        data_entrada=date.today(),
+                        preco_custo_unitario=Decimal(preco_custo_str),
+                        preco_venda=Decimal(preco_venda_str),
+                        ativo=True
+                    )
+                    db.session.add(novo_lote)
+
+                success_count += 1
+                
+                # Commit parcial a cada 50 itens para performance e seguranca
+                if success_count % 50 == 0:
+                    db.session.commit()
+                    
+            except Exception as row_err:
+                db.session.rollback()
+                errors.append(f"Linha {row_idx}: Erro inesperado - {str(row_err)}")
+                error_count += 1
+                
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Importacao concluida: {success_count} produtos importados, {error_count} erros.",
+            "total_importados": success_count,
+            "total_erros": error_count,
+            "erros": errors[:10] # Retornar apenas os 10 primeiros erros
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro na importacao de produtos: {str(e)}")
+        return jsonify({"success": False, "message": f"Erro interno na importacao: {str(e)}"}), 500

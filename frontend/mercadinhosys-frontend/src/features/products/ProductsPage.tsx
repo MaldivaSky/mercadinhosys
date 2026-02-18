@@ -8,7 +8,8 @@ import {
   Filter,
   ChevronDown,
   RefreshCw,
-  X
+  X,
+  Upload
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
@@ -27,6 +28,7 @@ import ProductFormModal from './components/ProductFormModal';
 import { ProductsTable } from './components/ProductsTable';
 import LotesDisponiveisModal from './components/LotesDisponiveisModal';
 import ExpiringProductsModal from './components/ExpiringProductsModal';
+import ProductImportModal from './components/ProductImportModal';
 
 type LoteNoPeriodo = { id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number };
 type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
@@ -71,6 +73,7 @@ const ProductsPage: React.FC = () => {
 
   const [showProductModal, setShowProductModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   // showDetailModal removed
   const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
   const [showProductHistory, setShowProductHistory] = useState(false);
@@ -377,6 +380,9 @@ const ProductsPage: React.FC = () => {
           <button onClick={() => setShowMarkupCalculator(true)} className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2">
             <Calculator className="w-5 h-5" />Markup
           </button>
+          <button onClick={() => setShowImportModal(true)} className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 flex items-center gap-2">
+            <Upload className="w-5 h-5" />Importar
+          </button>
           <button onClick={handleExportCSV} className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
             <Download className="w-5 h-5" />CSV
           </button>
@@ -608,6 +614,16 @@ const ProductsPage: React.FC = () => {
           loadProdutos();
         }}
         timeframe={expiryTimeframe}
+      />
+
+      <ProductImportModal
+        show={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={() => {
+          loadProdutos();
+          loadStats();
+          loadCategorias();
+        }}
       />
     </div>
   );
