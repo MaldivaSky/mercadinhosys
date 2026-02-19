@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import ConnectionTest from '../components/ConnectionTest';
-import {LoginPage} from '../features/auth/LoginPage';
+import { LoginPage } from '../features/auth/LoginPage';
 import { authService } from '../features/auth/authService';
 import ErrorBoundary from '../components/ErrorBoundary';
 
@@ -22,6 +22,8 @@ const RelatoriosPontoPage = lazy(() => import('../features/ponto/RelatoriosPonto
 const DiagnosticoFotos = lazy(() => import('../features/ponto/DiagnosticoFotos'));
 const ReportsPage = lazy(() => import('../features/reports/ReportsPage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
+
+const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 
 const AppRoutes: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
@@ -43,6 +45,9 @@ const AppRoutes: React.FC = () => {
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
             <Routes>
+                {/* Rota Pública - Landing Page no Root */}
+                <Route path="/" element={<LandingPage />} />
+
                 {/* Rota de login - sempre acessível */}
                 <Route path="/login" element={
                     isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
@@ -51,38 +56,32 @@ const AppRoutes: React.FC = () => {
                 {/* Rota de teste - sempre acessível */}
                 <Route path="/test" element={<ConnectionTest />} />
 
-                {/* Rotas protegidas */}
-                {isAuthenticated ? (
-                    <Route path="/" element={<MainLayout />}>
-                        <Route index element={<Navigate to="/dashboard" replace />} />
-                        <Route path="dashboard" element={
-                            <ErrorBoundary>
-                                <DashboardPage />
-                            </ErrorBoundary>
-                        } />
-                        <Route path="pdv" element={<PDVPage />} />
-                        <Route path="products" element={<ProductsPage />} />
-                        <Route path="suppliers" element={<SuppliersPage />} />
-                        <Route path="customers" element={<CustomersPage />} />
-                        <Route path="sales" element={<SalesPage />} />
-                        <Route path="expenses" element={<ExpensesPage />} />
-                        <Route path="employees" element={<EmployeesPage />} />
-                        <Route path="rh" element={<RHPage />} />
-                        <Route path="ponto" element={<PontoPage />} />
-                        <Route path="ponto-historico" element={<PontoHistoricoPage />} />
-                        <Route path="ponto-relatorios" element={<RelatoriosPontoPage />} />
-                        <Route path="ponto-diagnostico" element={<DiagnosticoFotos />} />
-                        <Route path="reports" element={<ReportsPage />} />
-                        <Route path="settings" element={<SettingsPage />} />
-                    </Route>
-                ) : (
-                    // Se não autenticado, redireciona todas as rotas para login
-                    <Route path="*" element={<Navigate to="/login" replace />} />
-                )}
+                {/* Rotas protegidas (sem prefixo /app para evitar quebrar links) */}
+                <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />}>
+                    <Route path="dashboard" element={
+                        <ErrorBoundary>
+                            <DashboardPage />
+                        </ErrorBoundary>
+                    } />
+                    <Route path="pdv" element={<PDVPage />} />
+                    <Route path="products" element={<ProductsPage />} />
+                    <Route path="suppliers" element={<SuppliersPage />} />
+                    <Route path="customers" element={<CustomersPage />} />
+                    <Route path="sales" element={<SalesPage />} />
+                    <Route path="expenses" element={<ExpensesPage />} />
+                    <Route path="employees" element={<EmployeesPage />} />
+                    <Route path="rh" element={<RHPage />} />
+                    <Route path="ponto" element={<PontoPage />} />
+                    <Route path="ponto-historico" element={<PontoHistoricoPage />} />
+                    <Route path="ponto-relatorios" element={<RelatoriosPontoPage />} />
+                    <Route path="ponto-diagnostico" element={<DiagnosticoFotos />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                </Route>
 
                 {/* Fallback - se alguém acessar uma rota não definida */}
                 <Route path="*" element={
-                    <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+                    <Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />
                 } />
             </Routes>
         </Suspense>
