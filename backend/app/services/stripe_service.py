@@ -6,13 +6,19 @@ from datetime import datetime
 
 class StripeService:
     def __init__(self):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
-        self.publishable_key = os.getenv('STRIPE_PUBLIC_KEY')
-        # Preços definidos no Dashboard do Stripe (ou constantes para teste)
-        self.PRICES = {
-            'Basic': 'price_1Q...', # Substituir pelos IDs reais do Stripe
-            'Premium': 'price_1Q...',
-            'Enterprise': 'price_1Q...'
+        secret_key = os.getenv('STRIPE_SECRET_KEY')
+        if not secret_key:
+            raise RuntimeError(
+                "STRIPE_SECRET_KEY não está configurado. "
+                "Adicione esta variável no arquivo .env ou no Render Dashboard."
+            )
+        stripe.api_key = secret_key
+        self.publishable_key = os.getenv('STRIPE_PUBLIC_KEY', '')
+        # Preços em centavos (BRL) por plano
+        self.PLAN_PRICES = {
+            'Basic': 2990,      # R$ 29,90/mês
+            'Premium': 6990,    # R$ 69,90/mês
+            'Enterprise': 9990  # R$ 99,90/mês
         }
 
     def create_checkout_session(self, estabelecimento_id, plan_name, user_email):
@@ -83,12 +89,7 @@ class StripeService:
         return customer.id
 
     def _get_price_amount(self, plan_name):
-        prices = {
-            'Basic': 2990,     # R$ 29,90
-            'Premium': 6990,   # R$ 69,90
-            'Enterprise': 9990 # R$ 99,90
-        }
-        return prices.get(plan_name, 2990)
+        return self.PLAN_PRICES.get(plan_name, 2990)
 
     def handle_webhook(self, payload, sig_header):
         """
@@ -128,7 +129,7 @@ class StripeService:
             estab = Estabelecimento.query.get(estabelecimento_id)
             if estab:
                 estab.plano = plan_name
-                estab.plano_status = 'active'
+                estab.plano_status = 'ativo'
                 estab.stripe_subscription_id = subscription_id
                 # Data de vencimento será atualizada no invoice.payment_succeeded
                 db.session.commit()
@@ -143,7 +144,7 @@ class StripeService:
             # period_end é timestamp unix
             period_end = invoice['lines']['data'][0]['period']['end']
             estab.vencimento_assinatura = datetime.fromtimestamp(period_end)
-            estab.plano_status = 'active'
+            estab.plano_status = 'ativo'
             db.session.commit()
 
     def _handle_subscription_deleted(self, subscription):

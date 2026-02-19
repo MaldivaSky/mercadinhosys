@@ -63,7 +63,24 @@ const SubscriptionSettings: React.FC = () => {
             }
         } catch (error) {
             console.error("Erro checkout:", error);
-            toast.error("Erro ao conectar com o pagamento.");
+            toast.error("Erro ao conectar com o pagamento. Verifique se as chaves Stripe estão configuradas.");
+        } finally {
+            setProcessingCheckout(false);
+        }
+    };
+
+    const handlePortal = async () => {
+        try {
+            setProcessingCheckout(true);
+            const response = await settingsService.openPortal();
+            if (response.portal_url) {
+                window.location.href = response.portal_url;
+            } else {
+                toast.error("Erro ao abrir portal. Tente novamente.");
+            }
+        } catch (error) {
+            console.error("Erro portal:", error);
+            toast.error("Erro ao abrir portal de gerenciamento.");
         } finally {
             setProcessingCheckout(false);
         }
@@ -97,13 +114,23 @@ const SubscriptionSettings: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <button
-                            onClick={() => handleCheckout('Premium')}
-                            disabled={processingCheckout}
-                            className="px-6 py-2 bg-white text-blue-700 hover:bg-blue-50 font-semibold rounded-lg transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait"
-                        >
-                            {processingCheckout ? 'Processando...' : (isActive ? 'Gerenciar Plano' : 'Renovar Agora')}
-                        </button>
+                        {isActive && status.status !== 'experimental' ? (
+                            <button
+                                onClick={handlePortal}
+                                disabled={processingCheckout}
+                                className="px-6 py-2 bg-white text-blue-700 hover:bg-blue-50 font-semibold rounded-lg transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait"
+                            >
+                                {processingCheckout ? 'Abrindo...' : 'Gerenciar Assinatura'}
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => handleCheckout('Premium')}
+                                disabled={processingCheckout}
+                                className="px-6 py-2 bg-white text-blue-700 hover:bg-blue-50 font-semibold rounded-lg transition-colors shadow-sm disabled:opacity-70 disabled:cursor-wait"
+                            >
+                                {processingCheckout ? 'Processando...' : (status.status === 'experimental' ? 'Assinar Agora' : 'Renovar Agora')}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

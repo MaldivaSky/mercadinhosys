@@ -16,6 +16,7 @@ db_config.json
 secrets.json
 credentials.json
 *.secret
+replacements.txt
 
 # ==================== Python ====================
 __pycache__/
