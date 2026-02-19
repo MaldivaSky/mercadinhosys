@@ -1,13 +1,14 @@
+import os
 import requests
 import time
 import threading
 import random
 from concurrent.futures import ThreadPoolExecutor
 
-BASE_URL = "http://localhost:5000"
-# Adjust these credentials as needed for your local environment
-USERNAME = "admin"
-PASSWORD = "admin123" 
+BASE_URL = os.getenv("STRESS_TEST_URL", "http://localhost:5000")
+# Configure via environment variables: STRESS_TEST_USER / STRESS_TEST_PASS
+USERNAME = os.getenv("STRESS_TEST_USER", "admin")
+PASSWORD = os.getenv("STRESS_TEST_PASS", "admin123")
 
 class PDVStressTest:
     def __init__(self):
