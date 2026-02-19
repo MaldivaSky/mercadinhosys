@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Camera, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Produto, Fornecedor } from '../../../types';
 import { productsService } from '../productsService';
+import { cosmosService } from '../../../services/cosmosService';
+import BarcodeScanner from '../../pdv/components/BarcodeScanner';
 
 interface ProductFormModalProps {
     show: boolean;
@@ -40,7 +42,10 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         quantidade_minima: 10,
         fornecedor_id: undefined as number | undefined,
         ativo: true,
+        imagem_url: '',
     });
+    const [showScanner, setShowScanner] = useState(false);
+    const [isSearchingCosmos, setIsSearchingCosmos] = useState(false);
 
     useEffect(() => {
         if (show) {
@@ -61,6 +66,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     quantidade_minima: produto.quantidade_minima || 10,
                     fornecedor_id: produto.fornecedor_id,
                     ativo: produto.ativo ?? true,
+                    imagem_url: produto.imagem_url || '',
                 });
             } else {
                 // Reset form for new product
@@ -80,10 +86,39 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     quantidade_minima: 10,
                     fornecedor_id: undefined,
                     ativo: true,
+                    imagem_url: '',
                 });
             }
         }
     }, [show, editMode, produto]);
+
+    const handleScanCodigo = async (codigo: string) => {
+        setShowScanner(false);
+        setFormData(prev => ({ ...prev, codigo_barras: codigo }));
+
+        setIsSearchingCosmos(true);
+        const loadingToast = toast.loading('Consultando Cosmos API...');
+
+        try {
+            const data = await cosmosService.buscarPorGtin(codigo);
+
+            setFormData(prev => ({
+                ...prev,
+                nome: data.description || prev.nome,
+                descricao: data.ncm?.full_description || data.description || prev.descricao,
+                marca: data.brand?.name || prev.marca,
+                imagem_url: data.thumbnail || prev.imagem_url,
+                // Mapear categoria se possível ou focar no nome/marca
+            }));
+
+            toast.success('Dados preenchidos automaticamente!', { id: loadingToast });
+        } catch (error) {
+            console.error('Erro na consulta Cosmos:', error);
+            toast.error('Produto não encontrado no banco de dados geral.', { id: loadingToast });
+        } finally {
+            setIsSearchingCosmos(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -124,7 +159,19 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
                 <div className="flex items-center justify-between p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900">
-                    <h3 className="text-lg font-bold">{editMode ? 'Editar Produto' : 'Novo Produto'}</h3>
+                    <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-bold">{editMode ? 'Editar Produto' : 'Novo Produto'}</h3>
+                        {!editMode && (
+                            <button
+                                type="button"
+                                onClick={() => setShowScanner(true)}
+                                className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-full shadow-sm hover:shadow-md transition-all border border-blue-200 dark:border-blue-700 animate-pulse"
+                            >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                CADASTRO INTELIGENTE
+                            </button>
+                        )}
+                    </div>
                     <button onClick={onClose} className="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded"><X className="w-5 h-5" /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
@@ -135,7 +182,17 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Codigo de Barras</label>
-                            <input type="text" value={formData.codigo_barras} onChange={(e) => setFormData(prev => ({ ...prev, codigo_barras: e.target.value }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                            <div className="flex gap-2">
+                                <input type="text" value={formData.codigo_barras} onChange={(e) => setFormData(prev => ({ ...prev, codigo_barras: e.target.value }))} className="flex-1 px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowScanner(true)}
+                                    className="p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                    title="Escanear com a camera"
+                                >
+                                    <Camera className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Categoria *</label>
@@ -197,11 +254,18 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 </form>
                 <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700">
                     <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                    <button onClick={handleSubmit} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    <button onClick={handleSubmit} disabled={loading || isSearchingCosmos} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                         {loading ? 'Salvando...' : 'Salvar'}
                     </button>
                 </div>
             </div>
+
+            {showScanner && (
+                <BarcodeScanner
+                    onScan={handleScanCodigo}
+                    onClose={() => setShowScanner(false)}
+                />
+            )}
         </div>
     );
 };

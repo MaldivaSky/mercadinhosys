@@ -21,6 +21,7 @@ interface ProductsTableProps {
     onHistory: (produto: Produto) => void;
     onMakeOrder: (produto: Produto) => void;
     onViewLotes?: (produto: Produto) => void;
+    onProductClick?: (produto: Produto) => void;
     onSort?: (key: string) => void;
     sortConfig?: { key: string; direction: 'asc' | 'desc' };
 }
@@ -39,6 +40,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
     onHistory,
     onMakeOrder,
     onViewLotes,
+    onProductClick,
     onSort,
     sortConfig,
 }) => {
@@ -144,7 +146,10 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {(produtos || []).map((produto) => (
                             <tr key={produto.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                <td className="px-4 py-3">
+                                <td
+                                    className="px-4 py-3 cursor-pointer hover:text-blue-600 transition-colors"
+                                    onClick={() => onProductClick?.(produto)}
+                                >
                                     <div className="font-medium text-gray-900 dark:text-white">{produto.nome}</div>
                                     <div className="text-sm text-gray-500">
                                         {produto.categoria} {produto.codigo_barras && `• ${produto.codigo_barras}`}

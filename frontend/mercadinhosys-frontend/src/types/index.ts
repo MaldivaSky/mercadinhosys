@@ -145,11 +145,15 @@ export interface Produto {
     quantidade_vendida?: number;
     frequencia_venda?: number;
     ultima_venda?: string;
-    classificação_abc?: 'A' | 'B' | 'C';
+    classificacao_abc?: 'A' | 'B' | 'C';
+    classificação_abc?: 'A' | 'B' | 'C'; // Alias for compatibility
     data_fabricacao?: string;
     data_validade?: string;
+    ncm?: string;
     lote?: string;
     imagem_url?: string;
+    alerta_validade?: boolean;
+    alerta_estoque?: boolean;
     ativo: boolean;
     controla_estoque?: boolean;
     created_at?: string;
