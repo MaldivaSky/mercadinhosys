@@ -222,34 +222,70 @@ def create_app(config_name=None):
             # Rodar sync via código em cada boot é lento.
             force_sync = os.environ.get("FORCE_SCHEMA_SYNC", "false").lower() == "true"
             
-            # Lógica otimizada de sincronização de schema
+            # Lógica otimizada de sincronização de schema (Versão Ultra-Resiliente)
             try:
                 from sqlalchemy import text, inspect
                 inspector = inspect(db.engine)
                 
-                # Sincronização vital: Stripe e SaaS
-                vital_sync = {
+                # Lista exaustiva de colunas para garantir estabilidade no Render/Postgres
+                schema_sync = {
                     "estabelecimentos": [
                         ("stripe_customer_id", "VARCHAR(100)"),
                         ("stripe_subscription_id", "VARCHAR(100)"),
                         ("plano", "VARCHAR(20)"),
                         ("plano_status", "VARCHAR(20)"),
                         ("vencimento_assinatura", "TIMESTAMP")
+                    ],
+                    "configuracoes": [
+                        ("logo_base64", "TEXT"),
+                        ("tema_escuro", "BOOLEAN DEFAULT FALSE"),
+                        ("cor_principal", "VARCHAR(7) DEFAULT '#2563eb'"),
+                        ("emitir_nfe", "BOOLEAN DEFAULT FALSE"),
+                        ("emitir_nfce", "BOOLEAN DEFAULT TRUE"),
+                        ("impressao_automatica", "BOOLEAN DEFAULT FALSE"),
+                        ("tipo_impressora", "VARCHAR(20) DEFAULT 'termica_80mm'"),
+                        ("exibir_preco_tela", "BOOLEAN DEFAULT TRUE"),
+                        ("permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
+                        ("desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
+                        ("desconto_maximo_funcionario", "NUMERIC(5,2) DEFAULT 10.00"),
+                        ("arredondamento_valores", "BOOLEAN DEFAULT TRUE"),
+                        ("formas_pagamento", "TEXT"),
+                        ("controlar_validade", "BOOLEAN DEFAULT TRUE"),
+                        ("alerta_estoque_minimo", "BOOLEAN DEFAULT TRUE"),
+                        ("dias_alerta_validade", "INTEGER DEFAULT 30"),
+                        ("estoque_minimo_padrao", "INTEGER DEFAULT 10"),
+                        ("tempo_sessao_minutos", "INTEGER DEFAULT 30"),
+                        ("tentativas_senha_bloqueio", "INTEGER DEFAULT 3"),
+                        ("alertas_email", "BOOLEAN DEFAULT FALSE"),
+                        ("alertas_whatsapp", "BOOLEAN DEFAULT FALSE"),
+                        ("horas_extras_percentual", "NUMERIC(5,2) DEFAULT 50.00")
                     ]
                 }
 
-                for table, cols in vital_sync.items():
+                for table, cols in schema_sync.items():
                     if inspector.has_table(table):
                         existing = {c['name'] for c in inspector.get_columns(table)}
                         for col_name, col_type in cols:
                             if col_name not in existing:
                                 try:
-                                    db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                                    # Correção de tipos para SQLite se necessário
+                                    final_type = col_type
+                                    if db.engine.name == 'sqlite':
+                                        if "BOOLEAN" in col_type: final_type = "INTEGER DEFAULT 0"
+                                        if "TRUE" in col_type: final_type = "INTEGER DEFAULT 1"
+                                        if "TIMESTAMP" in col_type: final_type = "DATETIME"
+                                        if "NUMERIC" in col_type: final_type = "FLOAT"
+
+                                    db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {final_type}"))
                                     db.session.commit()
-                                except Exception:
+                                    logger.info(f"Coluna sincronizada: {table}.{col_name}")
+                                except Exception as inner_e:
                                     db.session.rollback()
+                                    logger.debug(f"Falha ao adicionar {col_name}: {inner_e}")
+                
+                logger.info("Sincronização de schema vital concluída.")
             except Exception as e:
-                logger.debug(f"Schema sync skip: {e}")
+                logger.error(f"Erro crítico no bootstrap do schema: {e}")
     else:
         logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
 

@@ -16,9 +16,9 @@ class StripeService:
         self.publishable_key = os.getenv('STRIPE_PUBLIC_KEY', '')
         # Preços em centavos (BRL) por plano
         self.PLAN_PRICES = {
-            'Basic': 2990,      # R$ 29,90/mês
-            'Premium': 6990,    # R$ 69,90/mês
-            'Enterprise': 9990  # R$ 99,90/mês
+            'Basic': 4990,      # R$ 49,90/mês
+            'Advanced': 6990,   # R$ 69,90/mês
+            'Premium': 9990     # R$ 99,90/mês
         }
 
     def create_checkout_session(self, estabelecimento_id, plan_name, user_email):
