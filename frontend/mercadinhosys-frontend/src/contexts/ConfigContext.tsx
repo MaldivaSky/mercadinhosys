@@ -20,26 +20,26 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
         if (!config) return;
 
         const root = document.documentElement;
-        
+
         // Aplicar cor principal
         if (config.cor_principal) {
             root.style.setProperty('--color-primary', config.cor_principal);
-            
+
             // Gerar variações da cor principal
             const hex = config.cor_principal.replace('#', '');
             const r = parseInt(hex.substring(0, 2), 16);
             const g = parseInt(hex.substring(2, 4), 16);
             const b = parseInt(hex.substring(4, 6), 16);
-            
+
             // Cor mais escura (hover) - 20% mais escura
             const darkerR = Math.max(0, Math.floor(r * 0.8));
             const darkerG = Math.max(0, Math.floor(g * 0.8));
             const darkerB = Math.max(0, Math.floor(b * 0.8));
             root.style.setProperty('--color-primary-dark', `rgb(${darkerR}, ${darkerG}, ${darkerB})`);
-            
+
             // Cor mais clara (backgrounds) - 10% de opacidade
             root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
-            
+
         }
 
         // Aplicar tema escuro - única fonte de verdade para o tema
@@ -56,7 +56,7 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     const loadConfig = async () => {
         try {
             setLoading(true);
-            
+
             // Verificar se tem token antes de tentar carregar
             const token = localStorage.getItem('access_token');
             if (!token) {
