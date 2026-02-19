@@ -29,6 +29,7 @@ import { ProductsTable } from './components/ProductsTable';
 import LotesDisponiveisModal from './components/LotesDisponiveisModal';
 import ExpiringProductsModal from './components/ExpiringProductsModal';
 import ProductImportModal from './components/ProductImportModal';
+import ProdutoDetalhesModal from './components/ProdutoDetalhesModal';
 
 type LoteNoPeriodo = { id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number };
 type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
@@ -74,7 +75,7 @@ const ProductsPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  // showDetailModal removed
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
   const [showProductHistory, setShowProductHistory] = useState(false);
   const [showPurchaseOrders, setShowPurchaseOrders] = useState(false);
@@ -219,6 +220,11 @@ const ProductsPage: React.FC = () => {
   const openOrderModal = (produto: Produto) => {
     setSelectedProductForOrder(produto);
     setShowPurchaseOrders(true);
+  };
+
+  const openDetailModal = (produto: Produto) => {
+    setSelectedProduct(produto);
+    setShowDetailModal(true);
   };
 
   const calcularMarkup = () => {
@@ -505,6 +511,7 @@ const ProductsPage: React.FC = () => {
         onHistory={(p) => { setSelectedProduct(p); setShowProductHistory(true); }}
         onMakeOrder={openOrderModal}
         onViewLotes={(p) => { setSelectedProduct(p); setShowLotesModal(true); }}
+        onProductClick={openDetailModal}
         onSort={handleSort}
         sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
       />
@@ -625,6 +632,13 @@ const ProductsPage: React.FC = () => {
           loadCategorias();
         }}
       />
+
+      {showDetailModal && selectedProduct && (
+        <ProdutoDetalhesModal
+          produto={selectedProduct}
+          onClose={() => { setShowDetailModal(false); setSelectedProduct(null); }}
+        />
+      )}
     </div>
   );
 };

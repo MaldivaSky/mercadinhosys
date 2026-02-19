@@ -8,6 +8,8 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import re
+import os
+import requests
 from app.models import (
     db,
     Produto,
@@ -166,6 +168,39 @@ def debug_counts():
 @produtos_bp.route("/ping", methods=["GET"])
 def ping_produtos():
     return jsonify({"status": "ok", "message": "Blueprint Produtos Ativo"})
+
+@produtos_bp.route("/cosmos/<gtin>", methods=["GET"])
+@funcionario_required
+def buscar_cosmos_gtin(gtin):
+    """
+    Consulta o banco de dados geral do Cosmos através do GTIN.
+    Atua como um proxy para evitar exposição do Token no frontend e contornar CORS.
+    """
+    token = os.environ.get("COSMOS_TOKEN") or "MVsiut1dwhg12WGhPuTD9Q"
+    url = f"https://api.cosmos.bluesoft.com.br/gtins/{gtin}.json"
+    
+    headers = {
+        'X-Cosmos-Token': token,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Cosmos-API-Request'
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        elif response.status_code == 404:
+            return jsonify({"success": False, "message": "Produto não encontrado no Cosmos"}), 404
+        elif response.status_code == 429:
+            return jsonify({"success": False, "message": "Limite de requisições excedido no Cosmos"}), 429
+        else:
+            return jsonify({"success": False, "message": f"Erro na API Cosmos: {response.status_code}"}), response.status_code
+            
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Erro ao conectar com API Cosmos: {str(e)}")
+        return jsonify({"success": False, "message": "Erro de conexão com o serviço Cosmos"}), 502
+
 
 @produtos_bp.route("/bulk-update-prices", methods=["POST"], strict_slashes=False)
 @produtos_bp.route("/bulk-update-prices/", methods=["POST"])
