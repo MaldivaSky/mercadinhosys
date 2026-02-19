@@ -229,18 +229,35 @@ def create_app(config_name=None):
                 is_sqlite = db.engine.name == 'sqlite'
                 
                 sqls = [
+                    # Estabelecimento
                     ("estabelecimentos", "plano", "VARCHAR(20) DEFAULT 'Basic'"),
                     ("estabelecimentos", "plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
                     ("estabelecimentos", "stripe_customer_id", "VARCHAR(100)"),
                     ("estabelecimentos", "stripe_subscription_id", "VARCHAR(100)"),
                     ("estabelecimentos", "vencimento_assinatura", "TIMESTAMP"),
+                    # Configurações - Visuais
                     ("configuracoes", "logo_base64", "TEXT"),
                     ("configuracoes", "tema_escuro", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "cor_principal", "VARCHAR(7) DEFAULT '#2563eb'"),
+                    # Configurações - Vendas
                     ("configuracoes", "emitir_nfe", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "emitir_nfce", "BOOLEAN DEFAULT TRUE"),
                     ("configuracoes", "impressao_automatica", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "tipo_impressora", "VARCHAR(20) DEFAULT 'termica_80mm'"),
+                    ("configuracoes", "exibir_preco_tela", "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
+                    ("configuracoes", "desconto_maximo_funcionario", "NUMERIC(5,2) DEFAULT 10.00"),
+                    ("configuracoes", "arredondamento_valores", "BOOLEAN DEFAULT TRUE"),
                     ("configuracoes", "formas_pagamento", "TEXT"),
+                    # Configurações - Estoque
+                    ("configuracoes", "controlar_validade", "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "alerta_estoque_minimo", "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "dias_alerta_validade", "INTEGER DEFAULT 30"),
+                    ("configuracoes", "estoque_minimo_padrao", "INTEGER DEFAULT 10"),
+                    # Configurações - Sistema
+                    ("configuracoes", "tempo_sessao_minutos", "INTEGER DEFAULT 30"),
+                    ("configuracoes", "tentativas_senha_bloqueio", "INTEGER DEFAULT 3"),
                     ("configuracoes", "alertas_email", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "alertas_whatsapp", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "horas_extras_percentual", "NUMERIC(5,2) DEFAULT 50.00")
