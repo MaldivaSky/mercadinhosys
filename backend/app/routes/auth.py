@@ -194,15 +194,52 @@ def login():
             # TENTATIVA DE AUTO-BOOTSTRAP (Apenas se o banco estiver vazio e for admin)
             try:
                 if identifier.lower() == 'admin' and Funcionario.query.first() is None:
-                    current_app.logger.info("[LOGIN] Banco vazio detectado. Iniciando auto-bootstrap para 'admin'...")
-                    from flask import request as flask_request
-                    # Mocking data for bootstrap
-                    with current_app.test_request_context(json={'username': 'admin', 'password': 'admin123'}):
-                        bootstrap_admin()
+                    current_app.logger.info("[LOGIN] Banco vazio detectado. Criando administrador padrão via Auto-Bootstrap...")
+                    
+                    # Criar estabelecimento padrão se não existir
+                    estabelecimento = Estabelecimento.query.first()
+                    if not estabelecimento:
+                        estabelecimento = Estabelecimento(
+                            nome_fantasia="Sistema MercadinhoSys",
+                            razao_social="MercadinhoSys LTDA",
+                            cnpj="00.000.000/0001-00",
+                            telefone="(00) 0000-0000",
+                            email="admin@mercadinhosys.com",
+                            cep="00000-000",
+                            logradouro="Rua do Sistema",
+                            numero="0",
+                            bairro="Centro",
+                            cidade="Cloud",
+                            estado="SY",
+                            data_abertura=datetime.utcnow().date()
+                        )
+                        db.session.add(estabelecimento)
+                        db.session.flush()
+
+                    admin = Funcionario(
+                        estabelecimento_id=estabelecimento.id,
+                        nome="Administrador do Sistema",
+                        username="admin",
+                        email="admin@mercadinhosys.com",
+                        cpf="000.000.000-00",
+                        data_nascimento=datetime(1990, 1, 1).date(),
+                        celular="(00) 00000-0000",
+                        cargo="Gerente",
+                        data_admissao=datetime.utcnow().date(),
+                        role="ADMIN",
+                        status="ativo",
+                        ativo=True
+                    )
+                    admin.set_senha("admin123")
+                    db.session.add(admin)
+                    db.session.commit()
+                    
                     # Re-buscar funcionário após bootstrap
                     funcionario = Funcionario.query.filter_by(username='admin').first()
+                    current_app.logger.info("[LOGIN] Auto-Bootstrap concluído com sucesso.")
             except Exception as be:
-                current_app.logger.error(f"[LOGIN] Falha no auto-bootstrap: {be}")
+                db.session.rollback()
+                current_app.logger.error(f"[LOGIN] Falha crítica no auto-bootstrap: {be}\n{traceback.format_exc()}")
 
         if not funcionario:
             current_app.logger.warning(
@@ -383,6 +420,12 @@ def login():
             f"de IP: {ip_address}"
         )
 
+        # Monta resposta com campos defensivos para não quebrar se banco estiver desatualizado
+        try:
+            endereco_str = estabelecimento.endereco_completo()
+        except Exception:
+            endereco_str = 'Endereço não disponível'
+
         return (
             jsonify(
                 {
@@ -400,9 +443,9 @@ def login():
                             "role": funcionario.role,
                             "status": funcionario.status,
                             "cpf": funcionario.cpf,
-                            "telefone": funcionario.telefone,
-                            "foto_url": funcionario.foto_url,
-                            "permissoes": funcionario.permissoes,
+                            "telefone": getattr(funcionario, 'telefone', None),
+                            "foto_url": getattr(funcionario, 'foto_url', None),
+                            "permissoes": getattr(funcionario, 'permissoes', []),
                             "data_admissao": (
                                 funcionario.data_admissao.isoformat()
                                 if funcionario.data_admissao
@@ -412,14 +455,14 @@ def login():
                             "estabelecimento_nome": estabelecimento.nome_fantasia,
                             "created_at": (
                                 funcionario.data_cadastro.isoformat()
-                                if funcionario.data_cadastro
+                                if getattr(funcionario, 'data_cadastro', None)
                                 else None
                             ),
                         },
                         "session": {
                             "login_time": additional_claims["login_time"],
-                            "expires_in": 28800,  # 8 horas em segundos
-                            "refresh_expires_in": 604800,  # 7 dias em segundos
+                            "expires_in": 28800,
+                            "refresh_expires_in": 604800,
                             "token_type": "bearer",
                         },
                         "estabelecimento": {
@@ -428,11 +471,11 @@ def login():
                             "cnpj": estabelecimento.cnpj,
                             "telefone": estabelecimento.telefone,
                             "email": estabelecimento.email,
-                            "endereco": estabelecimento.endereco_completo(),
-                            "cidade": estabelecimento.cidade,
-                            "estado": estabelecimento.estado,
-                            "plano": estabelecimento.plano,
-                            "plano_status": estabelecimento.plano_status,
+                            "endereco": endereco_str,
+                            "cidade": getattr(estabelecimento, 'cidade', ''),
+                            "estado": getattr(estabelecimento, 'estado', ''),
+                            "plano": getattr(estabelecimento, 'plano', 'Basic'),
+                            "plano_status": getattr(estabelecimento, 'plano_status', 'experimental'),
                         },
                     },
                 }
@@ -1020,7 +1063,7 @@ def get_sessions():
 
         # Consultar histórico de login
         query = LoginHistory.query.filter_by(funcionario_id=int(current_user_id))
-        query = query.order_by(LoginHistory.created_at.desc())
+        query = query.order_by(LoginHistory.data_cadastro.desc())
 
         paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
         sessoes = paginacao.items
@@ -1030,16 +1073,12 @@ def get_sessions():
             resultado.append(
                 {
                     "id": sessao.id,
-                    "login_time": sessao.created_at.isoformat(),
+                    "login_time": sessao.data_cadastro.isoformat(),
                     "ip_address": sessao.ip_address,
                     "dispositivo": sessao.dispositivo,
                     "success": sessao.success,
                     "observacoes": sessao.observacoes,
-                    "duracao_minutos": (
-                        (sessao.updated_at - sessao.created_at).total_seconds() / 60
-                        if sessao.updated_at and sessao.created_at
-                        else None
-                    ),
+                    "duracao_minutos": None,
                 }
             )
 

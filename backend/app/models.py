@@ -30,11 +30,21 @@ class EnderecoMixin:
     pais = db.Column(db.String(50), default="Brasil")
 
     def endereco_completo(self):
-        end = f"{self.logradouro}, {self.numero}"
-        if self.complemento:
-            end += f" - {self.complemento}"
-        end += f" - {self.bairro} - {self.cidade}/{self.estado} - {self.cep}"
-        return end
+        try:
+            logradouro = getattr(self, 'logradouro', None) or 'Não Informado'
+            numero = getattr(self, 'numero', None) or 'S/N'
+            complemento = getattr(self, 'complemento', None)
+            bairro = getattr(self, 'bairro', None) or ''
+            cidade = getattr(self, 'cidade', None) or ''
+            estado = getattr(self, 'estado', None) or ''
+            cep = getattr(self, 'cep', None) or ''
+            end = f"{logradouro}, {numero}"
+            if complemento:
+                end += f" - {complemento}"
+            end += f" - {bairro} - {cidade}/{estado} - {cep}"
+            return end
+        except Exception:
+            return 'Endereço não disponível'
 
 
 # ============================================
@@ -2202,7 +2212,7 @@ class LoginHistory(db.Model):
     observacoes = db.Column(db.Text)
     token_hash = db.Column(db.Integer)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
 
     funcionario = db.relationship(
         "Funcionario", backref=db.backref("logins", lazy=True)
@@ -2210,7 +2220,7 @@ class LoginHistory(db.Model):
 
     __table_args__ = (
         db.Index("idx_login_history_user", "username"),
-        db.Index("idx_login_history_data", "created_at"),
+        db.Index("idx_login_history_data", "data_cadastro"),
     )
 
     def to_dict(self):
@@ -2221,7 +2231,7 @@ class LoginHistory(db.Model):
             "ip_address": self.ip_address,
             "dispositivo": self.dispositivo,
             "success": self.success,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": self.data_cadastro.isoformat() if self.data_cadastro else None,
         }
 
 

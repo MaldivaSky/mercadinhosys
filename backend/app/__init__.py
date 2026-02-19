@@ -37,16 +37,6 @@ def create_app(config_name=None):
     load_dotenv()
     app = Flask(__name__)
 
-    # Handler global para erros 500
-    @app.errorhandler(500)
-    def handle_500_error(e):
-        import traceback
-        logger.error(f"[ERRO 500] {e}\n{traceback.format_exc()}")
-        return jsonify({
-            "success": False,
-            "error": "Erro interno no servidor",
-            "message": str(e),
-        }), 500
 
     # Carrega configurações
     app.config.from_object(config[config_name])
@@ -581,12 +571,25 @@ def create_app(config_name=None):
 
     @app.errorhandler(500)
     def internal_error(error):
-        logger.error(f"Erro interno: {error}")
+        import traceback
+        err_msg = str(error)
+        tb = traceback.format_exc()
+        logger.error(f"💥 [ERRO GRAVE 500]: {err_msg}\n{tb}")
+        
+        # Se for um erro do SQLAlchemy, o rollback é obrigatório para não travar a session
+        try:
+            db.session.rollback()
+        except:
+            pass
+
         return (
             jsonify(
                 {
-                    "error": "Erro interno",
-                    "message": "Serviço temporariamente indisponível",
+                    "success": False,
+                    "error": "Erro interno no servidor",
+                    "message": err_msg,
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "timestamp": datetime.now().isoformat()
                 }
             ),
             500,
