@@ -817,8 +817,8 @@ const DashboardPage: React.FC = () => {
       <div className="mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Dashboard Executivo</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-gray-900 tracking-tight">Dashboard Executivo</h1>
+            <p className="text-gray-500 text-sm md:text-base mt-1 font-medium">
               Análise completa do seu negócio • {new Date().toLocaleDateString('pt-BR')}
             </p>
           </div>
@@ -1060,10 +1060,10 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-xs opacity-70 mb-1">📅 {kpi.periodo}</p>
-            <p className="text-sm opacity-80 mb-1">{kpi.title}</p>
-            <p className="text-3xl font-bold mb-2">{kpi.value}</p>
-            <p className="text-sm opacity-90">{kpi.subtitle}</p>
+            <p className="text-xs opacity-70 mb-1 leading-none">📅 {kpi.periodo}</p>
+            <p className="text-sm opacity-80 mb-1 font-medium">{kpi.title}</p>
+            <p className="text-2xl sm:text-3xl font-bold mb-2 break-all">{kpi.value}</p>
+            <p className="text-xs sm:text-sm opacity-90 font-medium">{kpi.subtitle}</p>
           </div>
         ))}
       </div>
@@ -1104,21 +1104,21 @@ const DashboardPage: React.FC = () => {
                   Desempenho Financeiro
                 </h3>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Faturamento Total:</span>
-                    <span className="font-bold text-green-600">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-700 text-sm">Faturamento Total:</span>
+                    <span className="font-bold text-green-600 text-sm sm:text-base">R$ {(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Lucro Bruto:</span>
-                    <span className="font-bold text-emerald-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-700 text-sm">Lucro Bruto:</span>
+                    <span className="font-bold text-emerald-600 text-sm sm:text-base">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Total Despesas:</span>
-                    <span className="font-bold text-red-600">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-700 text-sm">Total Despesas:</span>
+                    <span className="font-bold text-red-600 text-sm sm:text-base">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Lucro Líquido:</span>
-                    <span className="font-bold text-blue-600">R$ {(mes?.lucro_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-700 text-sm">Lucro Líquido:</span>
+                    <span className="font-bold text-blue-600 text-sm sm:text-base">R$ {(mes?.lucro_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Margem de Lucro:</span>

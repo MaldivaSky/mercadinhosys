@@ -62,8 +62,8 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
     };
 
     return (
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 text-white rounded-xl shadow-lg p-6 mb-6">
-            <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 text-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 {/* Informações do Caixa */}
                 <div className="flex items-center space-x-4">
                     <div className="p-4 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
@@ -71,7 +71,7 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                     </div>
                     <div>
                         <div className="flex items-center space-x-2">
-                            <h2 className="text-2xl font-bold">
+                            <h2 className="text-xl md:text-2xl font-bold truncate max-w-[150px] md:max-w-none">
                                 {funcionarioNome || 'Caixa PDV'}
                             </h2>
                             {funcionarioRole && (
@@ -80,16 +80,16 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                                 </span>
                             )}
                         </div>
-                        <p className="text-blue-100 mt-1">
+                        <p className="text-blue-100 mt-1 text-sm">
                             {formatarData(horaAtual)}
                         </p>
                     </div>
                 </div>
 
                 {/* Relógio */}
-                <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-6 py-3 rounded-xl backdrop-blur-sm">
-                    <Clock className="w-6 h-6" />
-                    <span className="text-3xl font-bold font-mono">
+                <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-4 md:px-6 py-2 md:py-3 rounded-xl backdrop-blur-sm w-full md:w-auto justify-center md:justify-start">
+                    <Clock className="w-5 h-5 md:w-6 md:h-6" />
+                    <span className="text-2xl md:text-3xl font-bold font-mono">
                         {formatarHora(horaAtual)}
                     </span>
                 </div>
@@ -97,7 +97,7 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
 
             {/* Estatísticas do Dia */}
             {stats && (
-                <div className="grid grid-cols-3 gap-4 mt-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mt-6">
                     <div className="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
                         <div className="flex items-center justify-between">
                             <div>

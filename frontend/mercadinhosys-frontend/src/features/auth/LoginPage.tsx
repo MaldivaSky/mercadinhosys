@@ -1,4 +1,3 @@
-// src/features/auth/LoginPage.tsx
 import { useState, useCallback } from 'react';
 import {
   Box,
@@ -28,19 +27,16 @@ export function LoginPage() {
   const mode = theme.palette.mode;
 
   // Estados do formulário
-  const [identifier, setIdentifier] = useState('admin'); // ← Valor inicial 'admin'
+  const [identifier, setIdentifier] = useState('admin');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [debugInfo, setDebugInfo] = useState('');
   const [showBootstrap, setShowBootstrap] = useState(false);
 
-  // Função de login com useCallback para evitar recriação
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validação básica
     if (!identifier.trim() || password.length < 6) {
       setError('Preencha email/usuário e senha (mínimo 6 caracteres)');
       return;
@@ -51,88 +47,51 @@ export function LoginPage() {
     setShowBootstrap(false);
 
     try {
-      console.log('🔐 Tentando login:', identifier);
       const response: LoginApiResponse = await authService.login(identifier, password);
 
       if (!response.success) {
         throw new Error(response.error || 'Falha no login');
       }
 
-      if (!response.data) {
-        throw new Error('Dados de login não retornados');
+      if (response.data) {
+        const { access_token, refresh_token, user } = response.data;
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('user_data', JSON.stringify(user));
+        window.dispatchEvent(new Event('auth-change'));
       }
-
-      const { access_token, refresh_token, user } = response.data;
-
-      // ✅ Salva no localStorage
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      localStorage.setItem('user_data', JSON.stringify(user));
-
-      console.log('✅ Login bem-sucedido para:', user.nome);
-
-      // Dispara evento - AppRoutes detectará e redirecionará
-      window.dispatchEvent(new Event('auth-change'));
-
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('❌ Erro no login:', err);
-
       let errorMessage = 'Erro ao fazer login';
-
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosError = err as { response?: { status?: number }; request?: unknown };
-        if (axiosError.response?.status === 401) {
-          errorMessage = 'Credenciais inválidas';
-          setShowBootstrap(true);
-        } else if (axiosError.response?.status === 404) {
-          errorMessage = 'Usuário não encontrado';
-          setShowBootstrap(true);
-        } else if (axiosError.request) {
-          errorMessage = 'Servidor não respondeu. Verifique se o backend está rodando.';
-        }
+      if (err.response?.status === 401) {
+        errorMessage = 'Credenciais inválidas';
+        setShowBootstrap(true);
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Usuário não encontrado';
+        setShowBootstrap(true);
       }
-
       setError(errorMessage);
-      authService.logout(); // Limpa tokens inválidos
-
+      authService.logout();
     } finally {
       setLoading(false);
     }
   }, [identifier, password]);
 
-  // ✅ Handle de teclas corrigido
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && identifier && password.length >= 6 && !loading) {
       handleSubmit(e as unknown as React.FormEvent);
     }
   };
 
-  // ✅ Login demo simplificado
   const handleDemoLogin = useCallback(() => {
-    // Login demo sempre disponível em desenvolvimento
     setIdentifier('admin');
     setPassword('admin123');
-
-      // Dispara login após preencher campos
-      setTimeout(() => {
-        const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
-        handleSubmit(fakeEvent);
-      }, 100);
+    setTimeout(() => {
+      const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
+      handleSubmit(fakeEvent);
+    }, 100);
   }, [handleSubmit]);
 
-  // ✅ Teste de conexão corrigido
-  const testBackendConnection = async () => {
-    try {
-      setDebugInfo('Testando conexão...');
-      const { API_CONFIG } = await import('../../api/apiConfig');
-      const response = await fetch(`${API_CONFIG.BASE_URL}/auth/health`, { method: 'GET' });
-      setDebugInfo(`✅ Backend respondeu: ${response.status} ${response.statusText}`);
-    } catch {
-      setDebugInfo('❌ Backend offline. Execute: cd backend && npm start');
-    }
-  };
-
-  // ✅ Validação de formulário
   const isFormValid = identifier.trim().length > 0 && password.length >= 6;
 
   return (
@@ -146,7 +105,7 @@ export function LoginPage() {
             : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
         }}
       >
-        {/* Lado esquerdo - Logo */}
+        {/* Lado esquerdo - Branding */}
         <Box
           sx={{
             display: { xs: 'none', md: 'flex' },
@@ -158,45 +117,16 @@ export function LoginPage() {
             color: mode === 'dark' ? 'white' : '#1e293b',
           }}
         >
-          <img src={logo} alt="Logo MercadinhoSys" style={{ height: 120, marginBottom: 32, borderRadius: 12, boxShadow: '0 2px 12px #0002' }} />
-          
-          <Typography variant="h5" sx={{ opacity: 0.8, textAlign: 'center' }}>
-            Sistema de Gestão Comercial
+          <img src={logo} alt="Logo" style={{ height: 120, marginBottom: 32, borderRadius: 12, boxShadow: '0 2px 12px #0002' }} />
+          <Typography variant="h4" fontWeight="black" sx={{ mb: 2, tracking: '-0.02em' }}>
+            Mercadinho<span style={{ color: '#3b82f6' }}>Sys</span>
           </Typography>
-
-          {/* Informações de debug */}
-          <Box sx={{ mt: 4, p: 3, bgcolor: 'rgba(0,0,0,0.1)', borderRadius: 2, width: '80%' }}>
-            <Typography variant="body2" fontWeight="bold" gutterBottom>
-              🔧 Informações Técnicas:
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block' }}>
-              • Backend: http://localhost:5000
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block' }}>
-              • Rota de login: POST /api/auth/login
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block' }}>
-              • Credenciais teste: admin / admin123
-            </Typography>
-
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={testBackendConnection}
-              sx={{ mt: 2 }}
-            >
-              Testar Conexão Backend
-            </Button>
-
-            {debugInfo && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="caption">{debugInfo}</Typography>
-              </Alert>
-            )}
-          </Box>
+          <Typography variant="h6" sx={{ opacity: 0.7, textAlign: 'center', maxWidth: 400 }}>
+            A inteligência que seu comércio merece para crescer com escala.
+          </Typography>
         </Box>
 
-        {/* Lado direito - Formulário */}
+        {/* Lado direito - Login Form */}
         <Box
           sx={{
             display: 'flex',
@@ -207,29 +137,28 @@ export function LoginPage() {
           }}
         >
           <Paper
-            elevation={3}
+            elevation={24}
             sx={{
-              p: { xs: 3, sm: 5 },
+              p: { xs: 3, sm: 6 },
               width: '100%',
               maxWidth: 450,
-              borderRadius: 3,
-              background: mode === 'dark'
-                ? 'rgba(30, 30, 30, 0.95)'
-                : 'rgba(255, 255, 255, 0.98)',
+              borderRadius: 4,
+              background: mode === 'dark' ? 'rgba(30, 30, 30, 0.8)' : 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.1)',
             }}
           >
-            <Box sx={{ textAlign: 'center', mb: 4 }}>
-              <LockOutlined sx={{ fontSize: 50, color: '#3b82f6', mb: 2 }} />
-              <Typography variant="h4" fontWeight="bold" gutterBottom>
-                Acessar Sistema
+            <Box sx={{ textAlign: 'center', mb: 5 }}>
+              <Typography variant="h4" fontWeight="900" gutterBottom tracking="-0.03em">
+                Entrar
               </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Use seu email ou nome de usuário
+              <Typography variant="body1" color="text.secondary" fontWeight="medium">
+                Bem-vindo de volta ao seu painel.
               </Typography>
             </Box>
 
             {error && (
-              <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
+              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError('')}>
                 {error}
               </Alert>
             )}
@@ -237,7 +166,7 @@ export function LoginPage() {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Email ou Usuário *"
+                label="Usuário ou Email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -257,7 +186,7 @@ export function LoginPage() {
 
               <TextField
                 fullWidth
-                label="Senha *"
+                label="Senha"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -274,29 +203,14 @@ export function LoginPage() {
                   ),
                   endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                        disabled={loading}
-                      >
+                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" disabled={loading}>
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
                     </InputAdornment>
                   ),
                 }}
-                sx={{ mb: 1 }}
+                sx={{ mb: 4 }}
               />
-
-              <Box sx={{ textAlign: 'right', mb: 3 }}>
-                <Button
-                  size="small"
-                  sx={{ textTransform: 'none' }}
-                  onClick={() => alert('Contate o administrador do sistema')}
-                  disabled={loading}
-                >
-                  Esqueceu a senha?
-                </Button>
-              </Box>
 
               <Button
                 fullWidth
@@ -305,20 +219,17 @@ export function LoginPage() {
                 size="large"
                 disabled={!isFormValid || loading}
                 sx={{
-                  py: 1.5,
+                  py: 2,
                   mb: 2,
                   borderRadius: 2,
-                  background: 'linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%)',
-                  '&:hover': {
-                    background: 'linear-gradient(90deg, #1d4ed8 0%, #1e40af 100%)',
-                  },
+                  fontWeight: 'bold',
+                  fontSize: '1rem',
+                  textTransform: 'none',
+                  boxShadow: '0 10px 20px -5px rgba(59, 130, 246, 0.5)',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                 }}
               >
-                {loading ? (
-                  <CircularProgress size={24} color="inherit" />
-                ) : (
-                  'ENTRAR NO SISTEMA'
-                )}
+                {loading ? <CircularProgress size={26} color="inherit" /> : 'Entrar no Painel'}
               </Button>
 
               {showBootstrap && !loading && (
@@ -326,7 +237,6 @@ export function LoginPage() {
                   fullWidth
                   variant="outlined"
                   size="large"
-                  disabled={!isFormValid}
                   onClick={async () => {
                     setLoading(true);
                     setError('');
@@ -337,68 +247,41 @@ export function LoginPage() {
                         window.dispatchEvent(new Event('auth-change'));
                         return;
                       }
-                      if (bootstrap.code && bootstrap.code !== 'BOOTSTRAP_DISABLED') {
-                        setError(bootstrap.error || 'Falha no bootstrap');
-                      }
                       const response: LoginApiResponse = await authService.login(identifier, password);
-                      if (!response.success) {
-                        throw new Error(response.error || 'Falha no login');
-                      }
-                      window.dispatchEvent(new Event('auth-change'));
+                      if (response.success) window.dispatchEvent(new Event('auth-change'));
                     } catch (e) {
-                      console.error(e);
                       setError('Credenciais inválidas');
                     } finally {
                       setLoading(false);
                     }
                   }}
-                  sx={{
-                    py: 1.5,
-                    mb: 2,
-                    borderRadius: 2,
-                  }}
+                  sx={{ py: 1.5, mb: 2, borderRadius: 2, textTransform: 'none' }}
                 >
-                  Primeiro acesso: criar admin e entrar
+                  Criar administrador inicial
                 </Button>
               )}
 
-              {/* Login demo sempre disponível */}
               {import.meta.env.DEV && (
                 <Button
                   fullWidth
-                  variant="outlined"
-                  size="large"
+                  variant="text"
                   onClick={handleDemoLogin}
                   disabled={loading}
-                  sx={{
-                    py: 1.5,
-                    borderRadius: 2,
-                    borderColor: '#10b981',
-                    color: '#10b981',
-                    '&:hover': {
-                      borderColor: '#059669',
-                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                    },
-                  }}
+                  sx={{ py: 1, color: '#10b981', fontWeight: 'bold' }}
                 >
-                  Login Automático (Admin)
+                  Acesso Rápido (Demo Admin)
                 </Button>
               )}
             </form>
 
-            <Box sx={{ mt: 4, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Instruções:</strong>
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                • Email ou usuário: admin
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                • Senha padrão: admin123
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                • Certifique-se que o backend está rodando na porta 5000
-              </Typography>
+            <Box sx={{ mt: 6, textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.05)', pt: 4 }}>
+              <Button
+                onClick={() => window.location.href = '/'}
+                variant="text"
+                sx={{ color: 'text.secondary', textTransform: 'none', fontWeight: 'bold' }}
+              >
+                ← Voltar para o Site Principal
+              </Button>
             </Box>
           </Paper>
         </Box>
