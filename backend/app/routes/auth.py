@@ -191,29 +191,36 @@ def login():
         )
 
         if not funcionario:
+            # TENTATIVA DE AUTO-BOOTSTRAP (Apenas se o banco estiver vazio e for admin)
+            try:
+                if identifier.lower() == 'admin' and Funcionario.query.first() is None:
+                    current_app.logger.info("[LOGIN] Banco vazio detectado. Iniciando auto-bootstrap para 'admin'...")
+                    from flask import request as flask_request
+                    # Mocking data for bootstrap
+                    with current_app.test_request_context(json={'username': 'admin', 'password': 'admin123'}):
+                        bootstrap_admin()
+                    # Re-buscar funcionário após bootstrap
+                    funcionario = Funcionario.query.filter_by(username='admin').first()
+            except Exception as be:
+                current_app.logger.error(f"[LOGIN] Falha no auto-bootstrap: {be}")
+
+        if not funcionario:
             current_app.logger.warning(
                 f"Tentativa de login com credencial não encontrada: {identifier} "
                 f"de IP: {ip_address}"
             )
 
-            login_history.observacoes = "Usuário não encontrado"
-
-            # Tentar encontrar algum estabelecimento para associar
             try:
+                login_history.observacoes = "Usuário não encontrado"
+                # Tentar encontrar algum estabelecimento para associar
                 estabelecimento_default = Estabelecimento.query.first()
                 if estabelecimento_default:
                     login_history.estabelecimento_id = estabelecimento_default.id
-            except Exception:
-                pass  # Ignora se não conseguir
-
-                try:
-                    db.session.add(login_history)
-                    db.session.commit()
-                except Exception as e:
-                    db.session.rollback()
-                    current_app.logger.warning(f"Não foi possível salvar histórico de login (tabela pode estar ausente): {str(e)}")
-            else:
-                current_app.logger.warning("Não foi possível registrar histórico de login: nenhum estabelecimento encontrado.")
+                db.session.add(login_history)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Não foi possível salvar histórico de login (tabela ausente?): {str(e)}")
 
             current_app.logger.warning("[LOGIN] Retornando 401 - Credenciais inválidas (usuário não encontrado)")
             return (

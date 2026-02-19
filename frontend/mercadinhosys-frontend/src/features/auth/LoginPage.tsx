@@ -27,7 +27,7 @@ export function LoginPage() {
   const mode = theme.palette.mode;
 
   // Estados do formulário
-  const [identifier, setIdentifier] = useState('rafaelmaldivas@gmail.com');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -83,14 +83,7 @@ export function LoginPage() {
     }
   };
 
-  const handleDemoLogin = useCallback(() => {
-    setIdentifier('rafaelmaldivas@gmail.com');
-    setPassword('admin123');
-    setTimeout(() => {
-      const fakeEvent = { preventDefault: () => { } } as React.FormEvent;
-      handleSubmit(fakeEvent);
-    }, 100);
-  }, [handleSubmit]);
+
 
   const isFormValid = identifier.trim().length > 0 && password.length >= 6;
 
@@ -261,17 +254,7 @@ export function LoginPage() {
                 </Button>
               )}
 
-              {import.meta.env.DEV && (
-                <Button
-                  fullWidth
-                  variant="text"
-                  onClick={handleDemoLogin}
-                  disabled={loading}
-                  sx={{ py: 1, color: '#10b981', fontWeight: 'bold' }}
-                >
-                  Acesso Rápido (Demo Admin)
-                </Button>
-              )}
+
             </form>
 
             <Box sx={{ mt: 6, textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.05)', pt: 4 }}>

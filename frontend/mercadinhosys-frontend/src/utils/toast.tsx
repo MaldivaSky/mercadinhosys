@@ -90,7 +90,7 @@ const Icon = {
 export const showToast = {
     success: (message: string, options?: ToastOptions) => {
         toast.success(message, {
-            duration: 2000, # Ultra - rápido para UX fluida
+            duration: 2000, // Ultra-rápido para UX fluida
             style: themes.success.style as React.CSSProperties,
             icon: Icon.success(themes.success.iconColor),
             ...options,

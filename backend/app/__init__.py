@@ -173,7 +173,7 @@ def create_app(config_name=None):
     is_production = config_name == "production"
     is_cloud = os.environ.get("VERCEL") == "1" or os.environ.get("RENDER") == "1"
     
-    if not skip_db_setup and not (is_production and is_cloud):
+    if not skip_db_setup:
         with app.app_context():
             try:
                 # Testar conexão se for Postgres
@@ -184,6 +184,12 @@ def create_app(config_name=None):
                 
                 logger.info("VERIFICANDO: Tabelas no banco de dados...")
                 db.create_all()
+                
+                # Garantir que a tabela de histórico de login também seja criada explicitamente se omitida
+                from sqlalchemy import text
+                db.session.execute(text("CREATE TABLE IF NOT EXISTS login_history (id SERIAL PRIMARY KEY, username VARCHAR(150), ip_address VARCHAR(45), dispositivo VARCHAR(200), success BOOLEAN, observacoes TEXT, token_hash INTEGER, funcionario_id INTEGER, estabelecimento_id INTEGER, data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+                db.session.commit()
+                
                 logger.info("SUCESSO: Tabelas verificadas/criadas.")
             except Exception as e:
                 logger.error(f"ERRO: Falha ao conectar na Nuvem: {e}")
