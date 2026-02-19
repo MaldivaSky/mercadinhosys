@@ -25,6 +25,7 @@ const LandingPage: React.FC = () => {
     const [leadEmail, setLeadEmail] = useState('');
     const [leadWhatsApp, setLeadWhatsApp] = useState('');
     const [loadingLead, setLoadingLead] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const handleLeadSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -160,9 +161,34 @@ const LandingPage: React.FC = () => {
                                 ACESSAR PAINEL
                             </button>
                         </div>
-                        <div className="lg:hidden">
-                            <button onClick={() => navigate('/login')} className="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm">LOGIN</button>
+                        <div className="lg:hidden flex items-center gap-4">
+                            <button
+                                onClick={() => navigate('/login')}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs"
+                            >
+                                LOGIN
+                            </button>
+                            <button
+                                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                                className="p-2 text-gray-600"
+                            >
+                                <div className="w-6 h-5 flex flex-col justify-between">
+                                    <span className={`h-0.5 w-full bg-current transform transition-all duration-300 ${mobileMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
+                                    <span className={`h-0.5 w-full bg-current transition-all duration-300 ${mobileMenuOpen ? 'opacity-0' : ''}`}></span>
+                                    <span className={`h-0.5 w-full bg-current transform transition-all duration-300 ${mobileMenuOpen ? '-rotate-45 -translate-y-2' : ''}`}></span>
+                                </div>
+                            </button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Mobile Menu Content */}
+                <div className={`lg:hidden overflow-hidden transition-all duration-300 bg-white border-b border-gray-100 ${mobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="px-4 py-6 space-y-4">
+                        <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-lg font-bold text-gray-600">Recursos</a>
+                        <a href="#testimonials" onClick={() => setMobileMenuOpen(false)} className="block text-lg font-bold text-gray-600">Depoimentos</a>
+                        <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-lg font-bold text-gray-600">Planos</a>
+                        <a href="#contact" onClick={() => setMobileMenuOpen(false)} className="block text-lg font-bold text-gray-600">Contato</a>
                     </div>
                 </div>
             </nav>
@@ -178,12 +204,12 @@ const LandingPage: React.FC = () => {
                                 <img src="/assets/logo.png" className="w-5 h-5 object-contain" alt="mini-logo" />
                                 O ERP Nº 1 PARA PEQUENOS VAREJISTAS
                             </div>
-                            <h1 className="text-5xl lg:text-8xl font-black text-gray-900 tracking-tight leading-[0.9] mb-8">
-                                Transforme seu <br />
-                                <span className="text-blue-600">Mercadinho</span> em uma <br />
+                            <h1 className="text-4xl sm:text-5xl lg:text-8xl font-black text-gray-900 tracking-tight leading-[1.1] lg:leading-[0.9] mb-8">
+                                Transforme seu <br className="hidden sm:block" />
+                                <span className="text-blue-600">Mercadinho</span> em uma <br className="hidden sm:block" />
                                 <span className="bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent underline decoration-blue-200 underline-offset-8">Potência.</span>
                             </h1>
-                            <p className="text-xl lg:text-2xl text-gray-600 leading-relaxed mb-12 font-medium max-w-xl">
+                            <p className="text-lg lg:text-2xl text-gray-600 leading-relaxed mb-10 lg:mb-12 font-medium max-w-xl">
                                 Esqueça as planilhas. Gerencie estoque, vendas e lucro com inteligência artificial e o PDV mais rápido do Brasil.
                             </p>
                             <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -237,7 +263,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* PAS SECTION (IDENTIFICANDO A DOR) */}
-            <section className="py-24 bg-rose-50/30">
+            <section className="py-16 lg:py-24 bg-rose-50/30">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-16">
                         <h2 className="text-rose-600 font-black tracking-widest text-sm uppercase mb-4">O Preço do Amadorismo</h2>
@@ -273,14 +299,40 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* COMPARISON TABLE (POR QUE SOMOS MELHORES) */}
-            <section className="py-24 bg-white">
+            <section className="py-16 lg:py-24 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-16">
                         <h2 className="text-blue-600 font-black tracking-widest text-sm uppercase mb-4">Diferenciação Real</h2>
                         <h3 className="text-4xl lg:text-5xl font-black text-gray-900">MercadinhoSys vs. <span className="text-gray-400">Sistemas Antigos</span></h3>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* Mobile Card Layout for Comparison */}
+                    <div className="lg:hidden space-y-4">
+                        {[
+                            ["Velocidade de Venda", "Lento, pesado e trava toda hora", "Ultra-rápido, otimizado para o dia a dia"],
+                            ["Inteligência de Dados", "Relatórios complexos que ninguém entende", "IA que te diz onde investir e onde economizar"],
+                            ["Mobilidade", "Preso ao balcão e ao servidor local", "Acesse tudo de onde quiser (Nuvem Real)"],
+                            ["Facilidade de Uso", "Dias de treinamento obrigatório", "Seus funcionários aprendem em 15 minutos"],
+                            ["WhatsApp Integrado", "Não possui ou custa uma fortuna", "Nativo. Cupom e atendimento direto no zap"]
+                        ].map((row, i) => (
+                            <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                                <h4 className="text-lg font-black text-gray-800 mb-4 pb-2 border-b border-gray-50">{row[0]}</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sistemas Antigos</p>
+                                        <p className="text-xs text-gray-500 font-medium">{row[1]}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">MercadinhoSys</p>
+                                        <p className="text-xs text-blue-700 font-bold">{row[2]}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop Table Layout */}
+                    <div className="hidden lg:block overflow-x-auto">
                         <table className="w-full text-left border-separate border-spacing-y-4">
                             <thead>
                                 <tr className="text-gray-400 text-sm font-bold uppercase tracking-widest">
@@ -310,7 +362,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* O SISTEMA EM AÇÃO - GALERIA REAL */}
-            <section className="py-24 bg-white overflow-hidden">
+            <section className="py-16 lg:py-24 bg-white overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-20 whitespace-normal">
                         <h2 className="text-blue-600 font-black tracking-widest text-sm uppercase mb-4">Interface de Alta Performance</h2>
@@ -399,7 +451,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* FEATURES DETALHADAS */}
-            <section id="features" className="py-32 bg-slate-50">
+            <section id="features" className="py-20 lg:py-32 bg-slate-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-20">
                         <h2 className="text-blue-600 font-black tracking-[0.2em] text-sm uppercase mb-4">O que oferecemos</h2>
@@ -458,7 +510,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* SOCIAL PROOF / DEPOIMENTOS */}
-            <section id="testimonials" className="py-32 bg-white">
+            <section id="testimonials" className="py-20 lg:py-32 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex flex-col lg:flex-row justify-between items-end mb-20 gap-10">
                         <div className="max-w-2xl text-left">
@@ -497,7 +549,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* TECHNICAL ARCHITECTURE Section */}
-            <section className="py-32 bg-gray-900 text-white overflow-hidden">
+            <section className="py-20 lg:py-32 bg-gray-900 text-white overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
                     <div className="grid lg:grid-cols-2 gap-20 items-center">
                         <div>
@@ -553,7 +605,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* PRICING Section */}
-            <section id="pricing" className="py-32 bg-slate-50">
+            <section id="pricing" className="py-20 lg:py-32 bg-slate-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-20 whitespace-normal">
                         <h2 className="text-blue-600 font-black tracking-widest text-sm uppercase mb-4">Investimento</h2>
@@ -565,7 +617,7 @@ const LandingPage: React.FC = () => {
                         {tiers.map((tier, idx) => (
                             <div
                                 key={idx}
-                                className={`relative flex flex-col p-12 rounded-[3.5rem] border-2 transition-all duration-500 hover:shadow-2xl ${tier.highlight
+                                className={`relative flex flex-col p-8 md:p-12 rounded-[3.5rem] border-2 transition-all duration-500 hover:shadow-2xl ${tier.highlight
                                     ? 'border-blue-600 bg-white scale-105 z-10'
                                     : 'border-transparent bg-white shadow-lg'
                                     }`}
@@ -608,7 +660,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* FAQ / OBJEÇÕES Section */}
-            <section className="py-24 bg-white">
+            <section className="py-16 lg:py-24 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-20 whitespace-normal">
                         <h2 className="text-blue-600 font-black tracking-widest text-sm uppercase mb-4">Dúvidas Frequentes</h2>
@@ -650,14 +702,14 @@ const LandingPage: React.FC = () => {
                     </div>
                 </div>
             </section>
-            <section id="contact" className="py-32 bg-white">
+            <section id="contact" className="py-20 lg:py-32 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="bg-gray-900 rounded-[4rem] overflow-hidden shadow-2xl relative">
                         {/* DECOR */}
                         <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-blue-600/20 rounded-full blur-[100px]"></div>
 
                         <div className="grid lg:grid-cols-2">
-                            <div className="p-12 lg:p-24 border-b lg:border-b-0 lg:border-r border-white/10 relative z-10">
+                            <div className="p-8 md:p-12 lg:p-24 border-b lg:border-b-0 lg:border-r border-white/10 relative z-10">
                                 <h3 className="text-4xl lg:text-6xl font-black text-white mb-8">Fale com um Especialista.</h3>
                                 <p className="text-xl text-gray-400 font-medium mb-12 leading-relaxed">
                                     Quer entender como o **MercadinhoSys** pode ser adaptado especificamente para o seu modelo de negócio? Preencha os dados e retornamos em minutos.
@@ -683,7 +735,7 @@ const LandingPage: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="p-12 lg:p-24 bg-white/5 backdrop-blur-sm relative z-10">
+                            <div className="p-8 md:p-12 lg:p-24 bg-white/5 backdrop-blur-sm relative z-10">
                                 <form onSubmit={handleLeadSubmit} className="space-y-6">
                                     <div>
                                         <label className="block text-gray-400 text-sm font-bold mb-3 uppercase tracking-widest">Nome Completo</label>
