@@ -106,7 +106,9 @@ class Config:
     # ==================== JWT ====================
     # JWT_SECRET_KEY: manter estável entre restarts; se mudar, tokens em uso passam a retornar 401.
     JWT_ACCESS_TOKEN_EXPIRES = 3600
-    JWT_REFRESH_TOKEN_EXPIRES = 604800  # 7 dias
+    # ==================== CACHE ====================
+    CACHE_TYPE = os.environ.get("CACHE_TYPE", "SimpleCache")
+    CACHE_DEFAULT_TIMEOUT = 300
 
 
 class DevelopmentConfig(Config):
