@@ -149,7 +149,7 @@ export function LoginPage() {
             }}
           >
             <Box sx={{ textAlign: 'center', mb: 5 }}>
-              <Typography variant="h4" fontWeight="900" gutterBottom tracking="-0.03em">
+              <Typography variant="h4" gutterBottom sx={{ fontWeight: 900, letterSpacing: '-0.03em' }}>
                 Entrar
               </Typography>
               <Typography variant="body1" color="text.secondary" fontWeight="medium">
