@@ -47,6 +47,7 @@ class AuthService {
                 localStorage.setItem('refresh_token', data.data.refresh_token);
             }
             localStorage.setItem('user_data', JSON.stringify(data.data.user));
+            localStorage.setItem('estabelecimento_data', JSON.stringify(data.data.estabelecimento));
 
             // Dispara evento para atualizar estado de autenticação
             window.dispatchEvent(new Event('auth-change'));
@@ -173,10 +174,11 @@ class AuthService {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_data');
-        
+        localStorage.removeItem('estabelecimento_data');
+
         // Dispara evento para atualizar estado de autenticação
         window.dispatchEvent(new Event('auth-change'));
-        
+
         console.log('🗑️ Sessão limpa');
     }
 

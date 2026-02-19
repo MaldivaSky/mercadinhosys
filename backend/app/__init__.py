@@ -386,6 +386,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar pedidos_compra: {e}")
 
+    # SaaS & Planos
+    try:
+        from app.routes.saas import saas_bp
+        app.register_blueprint(saas_bp, url_prefix="/api/saas")
+        logger.info("✅ Blueprint SaaS registrado em /api/saas")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar saas: {e}")
+
     # Dashboard Científico - verifica se existe a pasta
     dashboard_cientifico_disponivel = False
     try:

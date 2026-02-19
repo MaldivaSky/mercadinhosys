@@ -13,7 +13,9 @@ import {
     Truck,
     Clock,
     Briefcase,
+    TrendingUp
 } from 'lucide-react';
+import { authService } from '../../features/auth/authService';
 
 const menuItems = [
     { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -28,6 +30,7 @@ const menuItems = [
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/settings', icon: Settings, label: 'Configurações' },
+    { to: '/leads', icon: TrendingUp, label: 'Gestão de Leads', adminOnly: true },
 ];
 
 const Sidebar: React.FC = () => {
@@ -35,7 +38,7 @@ const Sidebar: React.FC = () => {
         <aside className="hidden md:block w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-[calc(100vh-4rem)]">
             <nav className="p-4">
                 <ul className="space-y-2">
-                    {menuItems.map((item) => (
+                    {menuItems.filter(item => !item.adminOnly || authService.getCurrentUser()?.role === 'admin').map((item) => (
                         <li key={item.to}>
                             <NavLink
                                 to={item.to}

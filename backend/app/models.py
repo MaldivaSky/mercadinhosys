@@ -58,6 +58,12 @@ class Estabelecimento(db.Model, EnderecoMixin):
     data_abertura = db.Column(db.Date, nullable=False)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # SaaS / Assinatura
+    plano = db.Column(db.String(20), default="Basic")  # Basic, Advanced, Premium
+    plano_status = db.Column(db.String(20), default="experimental")  # experimental, ativo, atrasado, cancelado
+    vencimento_assinatura = db.Column(db.DateTime)
+    pagarme_id = db.Column(db.String(100))
+
     __table_args__ = (
         db.Index("idx_estabelecimento_cnpj", "cnpj"),
         db.UniqueConstraint("cnpj", name="uq_estabelecimento_cnpj"),
@@ -72,6 +78,31 @@ class Estabelecimento(db.Model, EnderecoMixin):
             "email": self.email,
             "endereco_completo": self.endereco_completo(),
             "ativo": self.ativo,
+            "plano": self.plano,
+            "plano_status": self.plano_status,
+            "vencimento_assinatura": self.vencimento_assinatura.isoformat() if self.vencimento_assinatura else None,
+        }
+
+
+class Lead(db.Model):
+    __tablename__ = "leads"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(150), nullable=False)
+    email = db.Column(db.String(100), nullable=False)
+    whatsapp = db.Column(db.String(30), nullable=False)
+    origem = db.Column(db.String(100), default="landing_page")
+    observacao = db.Column(db.Text)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "email": self.email,
+            "whatsapp": self.whatsapp,
+            "origem": self.origem,
+            "data_cadastro": self.data_cadastro.isoformat() if self.data_cadastro else None,
         }
 
 

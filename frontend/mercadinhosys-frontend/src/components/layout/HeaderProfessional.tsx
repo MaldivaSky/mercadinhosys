@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
-import { 
-    User, LogOut, Settings, Moon, Sun, ChevronDown, 
-    Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3, 
-    CreditCard, FileText, UserCog, Briefcase, Clock, Truck
+import {
+    User, LogOut, Settings, Moon, Sun, ChevronDown,
+    Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3,
+    CreditCard, FileText, UserCog, Briefcase, Clock, Truck, TrendingUp
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import logo from '../../../logoprincipal.png';
@@ -23,6 +23,7 @@ const mobileMenuItems = [
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/settings', icon: Settings, label: 'Configurações' },
+    { to: '/leads', icon: TrendingUp, label: 'Gestão de Leads', adminOnly: true },
 ];
 
 const HeaderProfessional = () => {
@@ -81,17 +82,17 @@ const HeaderProfessional = () => {
         if (!config?.logo_url) {
             return logo;
         }
-        
+
         // Se for base64 (preview), usar direto
         if (config.logo_url.startsWith('data:')) {
             return config.logo_url;
         }
-        
+
         // Se for URL do servidor
         if (config.logo_url.startsWith('http')) {
             return config.logo_url;
         }
-        
+
         // Se for caminho relativo, anexar à origem do backend (sem /api)
         const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api$/, '');
         return `${apiOrigin}${config.logo_url}`;
@@ -178,431 +179,442 @@ const HeaderProfessional = () => {
 
     return (
         <>
-        <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm safe-area-top" style={{ paddingTop: 'env(safe-area-inset-top)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
-            <div className="container mx-auto px-4 max-w-full">
-                <div className="flex h-16 items-center justify-between">
-                    {/* Logo */}
-                    <div className="flex items-center gap-3">
-                        <img 
-                            src={logoUrl} 
-                            alt="Logo" 
-                            className="h-10 w-auto rounded-lg object-contain"
-                            onError={(e) => {
-                                e.currentTarget.src = logo;
-                            }}
-                        />
-                        <span className="hidden md:block text-xl font-bold text-gray-900 dark:text-white">
-                            MercadinhoSys
-                        </span>
-                    </div>
+            <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm safe-area-top" style={{ paddingTop: 'env(safe-area-inset-top)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
+                <div className="container mx-auto px-4 max-w-full">
+                    <div className="flex h-16 items-center justify-between">
+                        {/* Logo */}
+                        <div className="flex items-center gap-3">
+                            <img
+                                src={logoUrl}
+                                alt="Logo"
+                                className="h-10 w-auto rounded-lg object-contain"
+                                onError={(e) => {
+                                    e.currentTarget.src = logo;
+                                }}
+                            />
+                            <span className="hidden md:block text-xl font-bold text-gray-900 dark:text-white">
+                                MercadinhoSys
+                            </span>
+                        </div>
 
-                    {/* Desktop Actions */}
-                    <div className="hidden md:flex items-center gap-3">
-                        {/* Theme Toggle */}
+                        {/* Desktop Actions */}
+                        <div className="hidden md:flex items-center gap-3">
+                            {/* Theme Toggle */}
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                title="Alternar tema"
+                            >
+                                {config?.tema_escuro ? (
+                                    <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                                ) : (
+                                    <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                                )}
+                            </button>
+
+                            {/* User Menu */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                >
+                                    {user.foto_url ? (
+                                        <img
+                                            src={user.foto_url}
+                                            alt={user.nome}
+                                            className="w-8 h-8 rounded-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
+                                            {userInitial}
+                                        </div>
+                                    )}
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        {user.nome || 'Usuário'}
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {/* Dropdown Menu */}
+                                {userMenuOpen && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setUserMenuOpen(false)}
+                                        />
+                                        <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                                            {/* User Info */}
+                                            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                                                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {user.nome || 'Usuário'}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {user.email || user.usuario || 'Sem email'}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {user.cargo || user.role || 'Cargo não definido'}
+                                                </p>
+                                            </div>
+
+                                            {/* Menu Items */}
+                                            <button
+                                                onClick={() => {
+                                                    setUserMenuOpen(false);
+                                                    navigate('/settings');
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                            >
+                                                <Settings className="w-4 h-4" />
+                                                Configurações
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setUserMenuOpen(false);
+                                                    setProfileModalOpen(true);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                            >
+                                                <User className="w-4 h-4" />
+                                                Meu Perfil
+                                            </button>
+
+                                            <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+
+                                            <button
+                                                onClick={handleLogout}
+                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                            >
+                                                <LogOut className="w-4 h-4" />
+                                                Sair
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Mobile Menu Button */}
                         <button
-                            onClick={toggleTheme}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                            title="Alternar tema"
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                         >
-                            {config?.tema_escuro ? (
-                                <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                            {mobileMenuOpen ? (
+                                <X className="w-6 h-6 text-gray-600 dark:text-gray-300" />
                             ) : (
-                                <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                                <MenuIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />
                             )}
                         </button>
+                    </div>
 
-                        {/* User Menu */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                            >
+                    {/* Mobile Menu */}
+                    {mobileMenuOpen && (
+                        <div className="md:hidden border-t border-gray-200 dark:border-gray-800 py-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
+                            {/* Navegação principal - igual ao Sidebar */}
+                            <nav className="px-2 py-2">
+                                <p className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Menu</p>
+                                <ul className="space-y-0.5">
+                                    {mobileMenuItems.filter(item => !item.adminOnly || user.role === 'admin').map((item) => (
+                                        <li key={item.to}>
+                                            <NavLink
+                                                to={item.to}
+                                                onClick={() => setMobileMenuOpen(false)}
+                                                className={({ isActive }) =>
+                                                    `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                    }`
+                                                }
+                                            >
+                                                <item.icon className="w-5 h-5 shrink-0" />
+                                                <span className="font-medium">{item.label}</span>
+                                            </NavLink>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </nav>
+                            <div className="border-t border-gray-200 dark:border-gray-800 my-2" />
+                            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
                                 {user.foto_url ? (
-                                    <img 
-                                        src={user.foto_url} 
+                                    <img
+                                        src={user.foto_url}
                                         alt={user.nome}
-                                        className="w-8 h-8 rounded-full object-cover"
+                                        className="w-10 h-10 rounded-full object-cover"
                                     />
                                 ) : (
-                                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
+                                    <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
                                         {userInitial}
                                     </div>
                                 )}
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    {user.nome || 'Usuário'}
-                                </span>
-                                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            {userMenuOpen && (
-                                <>
-                                    <div 
-                                        className="fixed inset-0 z-40" 
-                                        onClick={() => setUserMenuOpen(false)}
-                                    />
-                                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                                        {/* User Info */}
-                                        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                                {user.nome || 'Usuário'}
-                                            </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                {user.email || user.usuario || 'Sem email'}
-                                            </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {user.cargo || user.role || 'Cargo não definido'}
-                                            </p>
-                                        </div>
-
-                                        {/* Menu Items */}
-                                        <button
-                                            onClick={() => {
-                                                setUserMenuOpen(false);
-                                                navigate('/settings');
-                                            }}
-                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                        >
-                                            <Settings className="w-4 h-4" />
-                                            Configurações
-                                        </button>
-
-                                        <button
-                                            onClick={() => {
-                                                setUserMenuOpen(false);
-                                                setProfileModalOpen(true);
-                                            }}
-                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                        >
-                                            <User className="w-4 h-4" />
-                                            Meu Perfil
-                                        </button>
-
-                                        <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-
-                                        <button
-                                            onClick={handleLogout}
-                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                        >
-                                            <LogOut className="w-4 h-4" />
-                                            Sair
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Mobile Menu Button */}
-                    <button
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                    >
-                        {mobileMenuOpen ? (
-                            <X className="w-6 h-6 text-gray-600 dark:text-gray-300" />
-                        ) : (
-                            <MenuIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />
-                        )}
-                    </button>
-                </div>
-
-                {/* Mobile Menu */}
-                {mobileMenuOpen && (
-                    <div className="md:hidden border-t border-gray-200 dark:border-gray-800 py-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
-                        {/* Navegação principal - igual ao Sidebar */}
-                        <nav className="px-2 py-2">
-                            <p className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Menu</p>
-                            <ul className="space-y-0.5">
-                                {mobileMenuItems.map((item) => (
-                                    <li key={item.to}>
-                                        <NavLink
-                                            to={item.to}
-                                            onClick={() => setMobileMenuOpen(false)}
-                                            className={({ isActive }) =>
-                                                `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                }`
-                                            }
-                                        >
-                                            <item.icon className="w-5 h-5 shrink-0" />
-                                            <span className="font-medium">{item.label}</span>
-                                        </NavLink>
-                                    </li>
-                                ))}
-                            </ul>
-                        </nav>
-                        <div className="border-t border-gray-200 dark:border-gray-800 my-2" />
-                        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                            {user.foto_url ? (
-                                <img 
-                                    src={user.foto_url} 
-                                    alt={user.nome}
-                                    className="w-10 h-10 rounded-full object-cover"
-                                />
-                            ) : (
-                                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
-                                    {userInitial}
+                                <div>
+                                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {user.nome || 'Usuário'}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {user.cargo || user.role || 'Cargo não definido'}
+                                    </p>
                                 </div>
-                            )}
-                            <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {user.nome || 'Usuário'}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {user.cargo || user.role || 'Cargo não definido'}
-                                </p>
+                            </div>
+
+                            <div className="py-2">
+                                <button
+                                    onClick={toggleTheme}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    {config?.tema_escuro ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                                    {config?.tema_escuro ? 'Tema Claro' : 'Tema Escuro'}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setMobileMenuOpen(false);
+                                        navigate('/settings');
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    <Settings className="w-5 h-5" />
+                                    Configurações
+                                </button>
+
+                                {user.role === 'admin' && (
+                                    <button
+                                        onClick={() => {
+                                            setMobileMenuOpen(false);
+                                            navigate('/leads');
+                                        }}
+                                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold text-blue-600 dark:text-blue-400"
+                                    >
+                                        <TrendingUp className="w-5 h-5" />
+                                        Gestão de Leads
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => {
+                                        setMobileMenuOpen(false);
+                                        setProfileModalOpen(true);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    <User className="w-5 h-5" />
+                                    Meu Perfil
+                                </button>
+
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                    <LogOut className="w-5 h-5" />
+                                    Sair
+                                </button>
                             </div>
                         </div>
-
-                        <div className="py-2">
+                    )}
+                </div>
+            </header>
+            {/* Modal de Perfil */}
+            {profileModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meu Perfil</h3>
                             <button
-                                onClick={toggleTheme}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                onClick={() => setProfileModalOpen(false)}
+                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                aria-label="Fechar"
                             >
-                                {config?.tema_escuro ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                                {config?.tema_escuro ? 'Tema Claro' : 'Tema Escuro'}
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    setMobileMenuOpen(false);
-                                    navigate('/settings');
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                                <Settings className="w-5 h-5" />
-                                Configurações
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    setMobileMenuOpen(false);
-                                    setProfileModalOpen(true);
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                                <User className="w-5 h-5" />
-                                Meu Perfil
-                            </button>
-
-                            <button
-                                onClick={handleLogout}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            >
-                                <LogOut className="w-5 h-5" />
-                                Sair
+                                <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                             </button>
                         </div>
-                    </div>
-                )}
-            </div>
-        </header>
-        {/* Modal de Perfil */}
-        {profileModalOpen && (  
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meu Perfil</h3>
-                        <button
-                            onClick={() => setProfileModalOpen(false)}
-                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            aria-label="Fechar"
-                        >
-                            <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                        </button>
-                    </div>
-                    <div className="px-5 py-4 space-y-4">
-                        <div className="flex items-center gap-3">
-                            {user.foto_url ? (
-                                <img src={user.foto_url} alt={user.nome} className="w-12 h-12 rounded-full object-cover" />
-                            ) : (
-                                <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
-                                    {userInitial}
+                        <div className="px-5 py-4 space-y-4">
+                            <div className="flex items-center gap-3">
+                                {user.foto_url ? (
+                                    <img src={user.foto_url} alt={user.nome} className="w-12 h-12 rounded-full object-cover" />
+                                ) : (
+                                    <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
+                                        {userInitial}
+                                    </div>
+                                )}
+                                <div>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Nome</p>
+                                    <p className="font-medium text-gray-900 dark:text-white">{user.nome || '-'}</p>
                                 </div>
-                            )}
+                            </div>
                             <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Nome</p>
-                                <p className="font-medium text-gray-900 dark:text-white">{user.nome || '-'}</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Username</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user.username || user.usuario || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user.email || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Nível de Permissão</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user.role || user.cargo || '-'}</p>
+                            </div>
+
+                            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={() => setShowEditProfile(!showEditProfile)}
+                                    className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-sm font-medium text-gray-800 dark:text-gray-200 transition"
+                                >
+                                    Editar Dados
+                                </button>
+                                {showEditProfile && (
+                                    <div className="mt-3 space-y-3">
+                                        {profileError && (
+                                            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
+                                                {profileError}
+                                            </div>
+                                        )}
+                                        {profileSuccess && (
+                                            <div className="px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm">
+                                                {profileSuccess}
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nome</label>
+                                                <input
+                                                    type="text"
+                                                    value={editNome}
+                                                    onChange={(e) => setEditNome(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Email</label>
+                                                <input
+                                                    type="email"
+                                                    value={editEmail}
+                                                    onChange={(e) => setEditEmail(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Telefone</label>
+                                                <input
+                                                    type="text"
+                                                    value={editTelefone}
+                                                    onChange={(e) => setEditTelefone(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Foto URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={editFotoUrl}
+                                                    onChange={(e) => setEditFotoUrl(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={() => setShowEditProfile(false)}
+                                                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={handleUpdateProfile}
+                                                disabled={savingProfile}
+                                                className={`px-4 py-2 rounded-lg font-medium transition ${savingProfile
+                                                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                    }`}
+                                            >
+                                                {savingProfile ? 'Salvando...' : 'Salvar'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={() => setShowChangePassword(!showChangePassword)}
+                                    className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-sm font-medium text-gray-800 dark:text-gray-200 transition"
+                                >
+                                    Alterar Senha
+                                </button>
+                                {showChangePassword && (
+                                    <div className="mt-3 space-y-3">
+                                        {passwordError && (
+                                            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
+                                                {passwordError}
+                                            </div>
+                                        )}
+                                        {passwordSuccess && (
+                                            <div className="px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm">
+                                                {passwordSuccess}
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Senha Atual</label>
+                                            <input
+                                                type="password"
+                                                value={currentPassword}
+                                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nova Senha</label>
+                                                <input
+                                                    type="password"
+                                                    value={newPassword}
+                                                    onChange={(e) => setNewPassword(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Confirmar Nova Senha</label>
+                                                <input
+                                                    type="password"
+                                                    value={confirmPassword}
+                                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="text-xs space-y-1">
+                                            <div className={`${passwordChecks.length ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• 8+ caracteres</div>
+                                            <div className={`${passwordChecks.upper ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Letra maiúscula</div>
+                                            <div className={`${passwordChecks.lower ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Letra minúscula</div>
+                                            <div className={`${passwordChecks.number ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Número</div>
+                                            <div className={`${passwordChecks.special ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Símbolo</div>
+                                            <div className={`${passwordChecks.match ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Confirmação coincide</div>
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <button
+                                                onClick={handleChangePassword}
+                                                disabled={changingPassword || !(passwordChecks.length && passwordChecks.upper && passwordChecks.lower && passwordChecks.number && passwordChecks.special && passwordChecks.match)}
+                                                className={`px-4 py-2 rounded-lg font-medium transition ${changingPassword
+                                                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                    }`}
+                                            >
+                                                {changingPassword ? 'Alterando...' : 'Salvar nova senha'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Username</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{user.username || user.usuario || '-'}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{user.email || '-'}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Nível de Permissão</p>
-                            <p className="font-medium text-gray-900 dark:text-white">{user.role || user.cargo || '-'}</p>
-                        </div>
-
-                        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                             <button
-                                onClick={() => setShowEditProfile(!showEditProfile)}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-sm font-medium text-gray-800 dark:text-gray-200 transition"
+                                onClick={() => setProfileModalOpen(false)}
+                                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                             >
-                                Editar Dados
+                                Fechar
                             </button>
-                            {showEditProfile && (
-                                <div className="mt-3 space-y-3">
-                                    {profileError && (
-                                        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
-                                            {profileError}
-                                        </div>
-                                    )}
-                                    {profileSuccess && (
-                                        <div className="px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm">
-                                            {profileSuccess}
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nome</label>
-                                            <input
-                                                type="text"
-                                                value={editNome}
-                                                onChange={(e) => setEditNome(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Email</label>
-                                            <input
-                                                type="email"
-                                                value={editEmail}
-                                                onChange={(e) => setEditEmail(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Telefone</label>
-                                            <input
-                                                type="text"
-                                                value={editTelefone}
-                                                onChange={(e) => setEditTelefone(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Foto URL</label>
-                                            <input
-                                                type="text"
-                                                value={editFotoUrl}
-                                                onChange={(e) => setEditFotoUrl(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-end gap-2">
-                                        <button
-                                            onClick={() => setShowEditProfile(false)}
-                                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            onClick={handleUpdateProfile}
-                                            disabled={savingProfile}
-                                            className={`px-4 py-2 rounded-lg font-medium transition ${
-                                                savingProfile
-                                                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
-                                            }`}
-                                        >
-                                            {savingProfile ? 'Salvando...' : 'Salvar'}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
-
-                        <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                            <button
-                                onClick={() => setShowChangePassword(!showChangePassword)}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-sm font-medium text-gray-800 dark:text-gray-200 transition"
-                            >
-                                Alterar Senha
-                            </button>
-                            {showChangePassword && (
-                                <div className="mt-3 space-y-3">
-                                    {passwordError && (
-                                        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
-                                            {passwordError}
-                                        </div>
-                                    )}
-                                    {passwordSuccess && (
-                                        <div className="px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm">
-                                            {passwordSuccess}
-                                        </div>
-                                    )}
-                                    <div>
-                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Senha Atual</label>
-                                        <input
-                                            type="password"
-                                            value={currentPassword}
-                                            onChange={(e) => setCurrentPassword(e.target.value)}
-                                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nova Senha</label>
-                                            <input
-                                                type="password"
-                                                value={newPassword}
-                                                onChange={(e) => setNewPassword(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Confirmar Nova Senha</label>
-                                            <input
-                                                type="password"
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="text-xs space-y-1">
-                                        <div className={`${passwordChecks.length ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• 8+ caracteres</div>
-                                        <div className={`${passwordChecks.upper ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Letra maiúscula</div>
-                                        <div className={`${passwordChecks.lower ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Letra minúscula</div>
-                                        <div className={`${passwordChecks.number ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Número</div>
-                                        <div className={`${passwordChecks.special ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Símbolo</div>
-                                        <div className={`${passwordChecks.match ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`}>• Confirmação coincide</div>
-                                    </div>
-                                    <div className="flex justify-end">
-                                        <button
-                                            onClick={handleChangePassword}
-                                            disabled={changingPassword || !(passwordChecks.length && passwordChecks.upper && passwordChecks.lower && passwordChecks.number && passwordChecks.special && passwordChecks.match)}
-                                            className={`px-4 py-2 rounded-lg font-medium transition ${
-                                                changingPassword
-                                                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
-                                            }`}
-                                        >
-                                            {changingPassword ? 'Alterando...' : 'Salvar nova senha'}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-                        <button
-                            onClick={() => setProfileModalOpen(false)}
-                            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        >
-                            Fechar
-                        </button>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
         </>
     );
 };

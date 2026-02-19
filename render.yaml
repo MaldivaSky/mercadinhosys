@@ -8,8 +8,11 @@ services:
     branch: main
     rootDir: backend
     buildCommand: bash build.sh
+    preDeployCommand: flask db upgrade
     startCommand: bash start.sh
     envVars:
+      - key: FLASK_APP
+        value: run:app
       - key: FLASK_ENV
         value: production
       - key: NEON_DATABASE_URL
@@ -40,7 +43,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://mercadinhosys.onrender.com/api
+        value: https://mercadinhosys-backend.onrender.com/api
     routes:
       - type: rewrite
         source: /*
