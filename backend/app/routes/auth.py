@@ -60,6 +60,121 @@ def ping():
     return jsonify({"status": "ok", "message": "Servidor ativo!"}), 200
 
 
+@auth_bp.route("/setup-db", methods=["GET", "POST"])
+def setup_db():
+    """
+    Endpoint de emergência para criar todas as tabelas e o admin padrão
+    no banco de produção vazio. Use apenas uma vez e remova depois.
+    """
+    import traceback as _tb
+    result = {"steps": [], "success": False}
+    try:
+        # 1. Criar todas as tabelas
+        db.create_all()
+        result["steps"].append("db.create_all() OK")
+
+        # 2. Adicionar colunas extras que podem não existir
+        from sqlalchemy import text as _t, inspect as _insp
+        inspector = _insp(db.engine)
+        extra_cols = {
+            "estabelecimentos": [
+                ("plano", "VARCHAR(20) DEFAULT 'Basic'"),
+                ("plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
+                ("stripe_customer_id", "VARCHAR(100)"),
+                ("stripe_subscription_id", "VARCHAR(100)"),
+                ("vencimento_assinatura", "TIMESTAMP"),
+            ],
+        }
+        for tname, cols in extra_cols.items():
+            if tname in inspector.get_table_names():
+                existing = [c["name"] for c in inspector.get_columns(tname)]
+                for cname, ctype in cols:
+                    if cname not in existing:
+                        try:
+                            db.session.execute(_t(f"ALTER TABLE {tname} ADD COLUMN {cname} {ctype}"))
+                            db.session.commit()
+                            result["steps"].append(f"ADD COLUMN {tname}.{cname} OK")
+                        except Exception as ce:
+                            db.session.rollback()
+                            result["steps"].append(f"SKIP {tname}.{cname}: {str(ce)[:80]}")
+
+        # 3. Criar login_history se necessário
+        try:
+            db.session.execute(_t("""
+                CREATE TABLE IF NOT EXISTS login_history (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(150),
+                    ip_address VARCHAR(45),
+                    dispositivo VARCHAR(200),
+                    success BOOLEAN,
+                    observacoes TEXT,
+                    token_hash INTEGER,
+                    funcionario_id INTEGER,
+                    estabelecimento_id INTEGER,
+                    data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.session.commit()
+            result["steps"].append("login_history OK")
+        except Exception as lhe:
+            db.session.rollback()
+            result["steps"].append(f"login_history SKIP: {str(lhe)[:80]}")
+
+        # 4. Criar admin padrão se banco vazio
+        if Funcionario.query.count() == 0:
+            estab = Estabelecimento.query.first()
+            if not estab:
+                estab = Estabelecimento(
+                    nome_fantasia="MercadinhoSys",
+                    razao_social="MercadinhoSys LTDA",
+                    cnpj="00.000.000/0001-00",
+                    telefone="(00) 0000-0000",
+                    email="admin@mercadinhosys.com",
+                    cep="00000-000",
+                    logradouro="Rua do Sistema",
+                    numero="0",
+                    bairro="Centro",
+                    cidade="Cloud",
+                    estado="SP",
+                    data_abertura=datetime.utcnow().date()
+                )
+                db.session.add(estab)
+                db.session.flush()
+                result["steps"].append(f"Estabelecimento criado id={estab.id}")
+
+            admin = Funcionario(
+                estabelecimento_id=estab.id,
+                nome="Administrador",
+                username="admin",
+                email="admin@mercadinhosys.com",
+                cpf="000.000.000-00",
+                data_nascimento=datetime(1990, 1, 1).date(),
+                celular="(00) 00000-0000",
+                cargo="Gerente",
+                data_admissao=datetime.utcnow().date(),
+                role="ADMIN",
+                status="ativo",
+                ativo=True
+            )
+            admin.set_senha("admin123")
+            db.session.add(admin)
+            db.session.commit()
+            result["steps"].append("Admin criado: username=admin, senha=admin123")
+        else:
+            result["steps"].append(f"Banco já tem {Funcionario.query.count()} funcionários - seed ignorado")
+
+        result["success"] = True
+        return jsonify(result), 200
+
+    except Exception as e:
+        db.session.rollback()
+        result["error"] = str(e)
+        result["traceback"] = _tb.format_exc()
+        return jsonify(result), 500
+
+
+
+
 @auth_bp.route("/db-schema", methods=["GET"])
 def db_schema_check():
     """
