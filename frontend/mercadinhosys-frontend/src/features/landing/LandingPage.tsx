@@ -24,7 +24,7 @@ import {
     ArrowUpRight,
     CheckCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { API_CONFIG } from '../../api/apiConfig';
 
