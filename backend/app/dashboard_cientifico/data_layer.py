@@ -248,6 +248,64 @@ class DataLayer:
             return []
 
     @staticmethod
+    def get_all_products_performance(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
+        """
+        Retorna TODOS os produtos ativos com sua performance de vendas no período.
+        Essencial para análise ABC correta (incluindo produtos sem vendas).
+        """
+        try:
+            # 🔥 CORREÇÃO: Usar datetime completo
+            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Subquery para vendas filtradas por data
+            # Necessário para não filtrar os produtos quando fizermos o LEFT JOIN
+            vendas_periodo = db.session.query(
+                VendaItem.produto_id,
+                func.sum(VendaItem.quantidade).label('qtd'),
+                func.sum(VendaItem.total_item).label('total')
+            ).join(Venda, Venda.id == VendaItem.venda_id).filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= start_date,
+                Venda.status == 'finalizada'
+            ).group_by(VendaItem.produto_id).subquery()
+
+            # Query principal: Produtos LEFT JOIN Vendas
+            results = db.session.query(
+                Produto.id,
+                Produto.nome,
+                Produto.preco_custo,
+                Produto.preco_venda,
+                Produto.quantidade.label('estoque_atual'),
+                vendas_periodo.c.qtd,
+                vendas_periodo.c.total
+            ).outerjoin(
+                vendas_periodo, Produto.id == vendas_periodo.c.produto_id
+            ).filter(
+                Produto.estabelecimento_id == estabelecimento_id,
+                Produto.ativo == True
+            ).all()
+
+            return [
+                {
+                    "id": r.id,
+                    "nome": r.nome,
+                    "preco_custo": float(r.preco_custo or 0),
+                    "preco_venda": float(r.preco_venda or 0),
+                    "estoque_atual": float(r.estoque_atual or 0),
+                    "quantidade_vendida": float(r.qtd or 0),
+                    "faturamento": float(r.total or 0),
+                    "valor_total": float(r.total or 0), # Alias para compatibilidade ABC
+                    "margem": ((float(r.preco_venda or 0) - float(r.preco_custo or 0)) / float(r.preco_custo or 0) * 100) if r.preco_custo and r.preco_custo > 0 else 0
+                }
+                for r in results
+            ]
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro em get_all_products_performance: {e}")
+            return []
+
+    @staticmethod
     def get_expense_details(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Detalhamento de despesas por categoria (período específico)"""
         try:

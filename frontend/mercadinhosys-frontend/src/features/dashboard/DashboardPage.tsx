@@ -1113,6 +1113,10 @@ const DashboardPage: React.FC = () => {
                     <span className="font-bold text-emerald-600">R$ {(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Total Despesas:</span>
+                    <span className="font-bold text-red-600">R$ {(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-700">Lucro Líquido:</span>
                     <span className="font-bold text-blue-600">R$ {(mes?.lucro_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -1136,15 +1140,19 @@ const DashboardPage: React.FC = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Produtos Estrela (Classe A):</span>
-                    <span className="font-bold text-green-600">{analise_produtos?.produtos_estrela?.length || 0}</span>
+                    <span className="font-bold text-green-600">{analise_produtos?.curva_abc?.resumo?.A?.quantidade || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Produtos Regulares (Classe B):</span>
+                    <span className="font-bold text-yellow-600">{analise_produtos?.curva_abc?.resumo?.B?.quantidade || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Produtos Lentos (Classe C):</span>
-                    <span className="font-bold text-red-600">{analise_produtos?.produtos_lentos?.length || 0}</span>
+                    <span className="font-bold text-red-600">{analise_produtos?.curva_abc?.resumo?.C?.quantidade || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Total de Produtos ABC:</span>
-                    <span className="font-bold text-blue-600">{analise_produtos?.curva_abc?.produtos?.length || 0}</span>
+                    <span className="text-gray-700">Total de Produtos Analisados:</span>
+                    <span className="font-bold text-blue-600">{analise_produtos?.curva_abc?.resumo?.TODOS?.quantidade || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Ticket Médio:</span>
@@ -3191,6 +3199,51 @@ const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* SEÇÃO 4: CORRELAÇÕES & INSIGHTS DE MERCADO */}
+          {/* SEÇÃO 4: CORRELAÇÕES & INSIGHTS DE MERCADO */}
+          {data.data.insights_cientificos?.correlações && data.data.insights_cientificos.correlações.length > 0 && (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-6 border border-indigo-200">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <GitMerge className="w-8 h-8 text-indigo-600" />
+                🔗 Correlações & Insights de Mercado
+              </h2>
+              <p className="text-gray-600 mb-6">Padrões ocultos descobertos nos seus dados (Correlação de Pearson).</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {data.data.insights_cientificos.correlações.map((corr: any, idx: number) => {
+                  const strength = Math.abs(corr.correlacao);
+                  const isPositive = corr.correlacao > 0;
+                  const colorClass = strength > 0.6 ? (isPositive ? 'text-green-600' : 'text-red-600') : 'text-gray-600';
+                  const bgColor = strength > 0.6 ? (isPositive ? 'bg-green-50' : 'bg-red-50') : 'bg-gray-50';
+
+                  return (
+                    <div key={idx} className={`rounded-xl p-5 border border-indigo-100 bg-white hover:shadow-lg transition-shadow`}>
+                      <div className="flex justify-between items-start mb-4">
+                        <h4 className="font-bold text-gray-900 text-sm">
+                          {corr.variavel1} <span className="text-gray-400 mx-1">vs</span> {corr.variavel2}
+                        </h4>
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${bgColor} ${colorClass}`}>
+                          {corr.correlacao > 0 ? '+' : ''}{corr.correlacao.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <p className="text-sm text-gray-700 italic border-l-2 border-indigo-300 pl-3">
+                        "{corr.insight}"
+                      </p>
+
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+                        <span>Força da Relação:</span>
+                        <span className="font-semibold text-gray-900">
+                          {strength > 0.7 ? 'Muito Forte' : strength > 0.4 ? 'Moderada' : 'Fraca'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

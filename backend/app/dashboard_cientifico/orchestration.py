@@ -155,7 +155,7 @@ class DashboardOrchestrator:
             },
         }
 
-    @cache_response(ttl_seconds=300, require_db_check=False)  # 5 minutos de cache (otimizado)
+    @cache_response(ttl_seconds=5, require_db_check=False)  # 🔥 CACHE REDUZIDO PARA DEBUG (Era 300)
     def get_scientific_dashboard(
         self,
         days: int = 30,
@@ -281,9 +281,10 @@ class DashboardOrchestrator:
                                   self.establishment_id, max(days, 90))
         
         # Análises mais pesadas
+        # 🔥 CORREÇÃO: Usar get_all_products_performance para incluir produtos sem vendas na análise ABC
         abc_analysis = safe_get(self.get_abc_analysis, "abc", 
                               {"produtos": [], "resumo": {}, "total_value": 0}, 
-                              days=days, limit=500)
+                              days=days, limit=None) # Limit None para pegar tudo
                               
         customer_metrics = safe_get(DataLayer.get_customer_metrics, "cust_metrics", 
                                   {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}, 
@@ -421,7 +422,7 @@ class DashboardOrchestrator:
         
         # 🔥 NOVO: Calcular correlações estatísticas
         try:
-            correlations = _PM.calculate_correlations(sales_timeseries, expense_details)
+            correlations = _PM.calculate_correlations(sales_timeseries, expense_details, establishment_id=self.establishment_id)
         except Exception as e:
             _logger.warning(f"Erro ao calcular correlações: {e}")
             correlations = []
@@ -800,22 +801,19 @@ class DashboardOrchestrator:
         }
         return res
 
-    @cache_response(ttl_seconds=900, require_db_check=True)
+    # 🔥 CACHE DESATIVADO PARA DEBUG (era 900s)
+    @cache_response(ttl_seconds=1, require_db_check=False)
     def get_abc_analysis(self, days: int = 30, limit: int = 500) -> Dict[str, Any]:
         from app.models import db
+        import logging
+        _logger = logging.getLogger(__name__)
         try:
-            top_products = DataLayer.get_top_products(self.establishment_id, days, int(limit))
+            # 🔥 CORREÇÃO: Usar get_all_products_performance para incluir TUDO (mesmo sem vendas)
+            all_products_perf = DataLayer.get_all_products_performance(self.establishment_id, days)
+            _logger.info(f"ABC Analysis: Processing {len(all_products_perf)} active products (Target: ~203)")
+            
             return PracticalModels.analyze_inventory_abc(
-                [
-                    {
-                        "id": p.get("id", 0),
-                        "nome": p.get("nome", ""),
-                        "valor_total": p.get("faturamento", 0),
-                        "quantidade": p.get("quantidade_vendida", 0),
-                        "preco_custo": p.get("preco_custo", 0),
-                    }
-                    for p in top_products
-                ],
+                all_products_perf,
                 top_n=None,  # Retornar TODOS os produtos, não limitar
                 return_all_products=True,  # Forçar retorno de todos
             )
