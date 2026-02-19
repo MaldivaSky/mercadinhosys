@@ -222,70 +222,45 @@ def create_app(config_name=None):
             # Rodar sync via código em cada boot é lento.
             force_sync = os.environ.get("FORCE_SCHEMA_SYNC", "false").lower() == "true"
             
-            # Lógica otimizada de sincronização de schema (Versão Ultra-Resiliente)
+            # Sincronização de Schema Crítica (SQL Direto - Anti-Erro 500)
             try:
-                from sqlalchemy import text, inspect
-                inspector = inspect(db.engine)
+                # Comandos SQL compatíveis com Postgres e SQLite para garantir colunas vitais
+                # Nota: SQLite não suporta 'IF NOT EXISTS' em ADD COLUMN, então usamos try/except por coluna
+                is_sqlite = db.engine.name == 'sqlite'
                 
-                # Lista exaustiva de colunas para garantir estabilidade no Render/Postgres
-                schema_sync = {
-                    "estabelecimentos": [
-                        ("stripe_customer_id", "VARCHAR(100)"),
-                        ("stripe_subscription_id", "VARCHAR(100)"),
-                        ("plano", "VARCHAR(20)"),
-                        ("plano_status", "VARCHAR(20)"),
-                        ("vencimento_assinatura", "TIMESTAMP")
-                    ],
-                    "configuracoes": [
-                        ("logo_base64", "TEXT"),
-                        ("tema_escuro", "BOOLEAN DEFAULT FALSE"),
-                        ("cor_principal", "VARCHAR(7) DEFAULT '#2563eb'"),
-                        ("emitir_nfe", "BOOLEAN DEFAULT FALSE"),
-                        ("emitir_nfce", "BOOLEAN DEFAULT TRUE"),
-                        ("impressao_automatica", "BOOLEAN DEFAULT FALSE"),
-                        ("tipo_impressora", "VARCHAR(20) DEFAULT 'termica_80mm'"),
-                        ("exibir_preco_tela", "BOOLEAN DEFAULT TRUE"),
-                        ("permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
-                        ("desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
-                        ("desconto_maximo_funcionario", "NUMERIC(5,2) DEFAULT 10.00"),
-                        ("arredondamento_valores", "BOOLEAN DEFAULT TRUE"),
-                        ("formas_pagamento", "TEXT"),
-                        ("controlar_validade", "BOOLEAN DEFAULT TRUE"),
-                        ("alerta_estoque_minimo", "BOOLEAN DEFAULT TRUE"),
-                        ("dias_alerta_validade", "INTEGER DEFAULT 30"),
-                        ("estoque_minimo_padrao", "INTEGER DEFAULT 10"),
-                        ("tempo_sessao_minutos", "INTEGER DEFAULT 30"),
-                        ("tentativas_senha_bloqueio", "INTEGER DEFAULT 3"),
-                        ("alertas_email", "BOOLEAN DEFAULT FALSE"),
-                        ("alertas_whatsapp", "BOOLEAN DEFAULT FALSE"),
-                        ("horas_extras_percentual", "NUMERIC(5,2) DEFAULT 50.00")
-                    ]
-                }
+                sqls = [
+                    ("estabelecimentos", "plano", "VARCHAR(20) DEFAULT 'Basic'"),
+                    ("estabelecimentos", "plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
+                    ("estabelecimentos", "stripe_customer_id", "VARCHAR(100)"),
+                    ("estabelecimentos", "stripe_subscription_id", "VARCHAR(100)"),
+                    ("estabelecimentos", "vencimento_assinatura", "TIMESTAMP"),
+                    ("configuracoes", "logo_base64", "TEXT"),
+                    ("configuracoes", "tema_escuro", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "cor_principal", "VARCHAR(7) DEFAULT '#2563eb'"),
+                    ("configuracoes", "emitir_nfe", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "emitir_nfce", "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "impressao_automatica", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "formas_pagamento", "TEXT"),
+                    ("configuracoes", "alertas_email", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "alertas_whatsapp", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "horas_extras_percentual", "NUMERIC(5,2) DEFAULT 50.00")
+                ]
 
-                for table, cols in schema_sync.items():
-                    if inspector.has_table(table):
-                        existing = {c['name'] for c in inspector.get_columns(table)}
-                        for col_name, col_type in cols:
-                            if col_name not in existing:
-                                try:
-                                    # Correção de tipos para SQLite se necessário
-                                    final_type = col_type
-                                    if db.engine.name == 'sqlite':
-                                        if "BOOLEAN" in col_type: final_type = "INTEGER DEFAULT 0"
-                                        if "TRUE" in col_type: final_type = "INTEGER DEFAULT 1"
-                                        if "TIMESTAMP" in col_type: final_type = "DATETIME"
-                                        if "NUMERIC" in col_type: final_type = "FLOAT"
-
-                                    db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {final_type}"))
-                                    db.session.commit()
-                                    logger.info(f"Coluna sincronizada: {table}.{col_name}")
-                                except Exception as inner_e:
-                                    db.session.rollback()
-                                    logger.debug(f"Falha ao adicionar {col_name}: {inner_e}")
+                for table, col, col_type in sqls:
+                    try:
+                        # No Postgres (Render), o 'ADD COLUMN IF NOT EXISTS' é o ideal
+                        if not is_sqlite:
+                            db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"))
+                        else:
+                            # No SQLite, tentamos adicionar. Se falhar (já existe), o except cuida.
+                            db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
                 
-                logger.info("Sincronização de schema vital concluída.")
+                logger.info("Auto-reparo de schema concluído no boot.")
             except Exception as e:
-                logger.error(f"Erro crítico no bootstrap do schema: {e}")
+                logger.error(f"Falha no auto-reparo de schema: {e}")
     else:
         logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
 
@@ -430,8 +405,15 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar saas: {e}")
 
+    # Debug Tool (Temporário)
+    try:
+        from app.routes.debug import debug_bp
+        app.register_blueprint(debug_bp)
+        logger.info("⚠️ Blueprint DEBUG registrado")
+    except Exception as e:
+        logger.error(f"Erro debug bp: {e}")
+
     # Dashboard Científico - verifica se existe a pasta
-    dashboard_cientifico_disponivel = False
     try:
         dashboard_cientifico_path = os.path.join(
             os.path.dirname(__file__), "dashboard_cientifico"
