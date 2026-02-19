@@ -1,8 +1,11 @@
 import os
 
-# DEFINIR CLARAMENTE O BANCO DE PRODUÇÃO (Render/Aiven)
-# Isso garante que a correção vá para onde o usuário está vendo o erro.
-PROD_DB_URL = "postgres://REDACTED_USER:REDACTED@REDACTED_HOST:10662/defaultdb?sslmode=require"
+# BANCO DE PRODUÇÃO lido da variável de ambiente (configurada no Render/Aiven dashboard)
+# NUNCA coloque credenciais diretamente no código!
+PROD_DB_URL = os.getenv("DATABASE_URL")
+
+if not PROD_DB_URL:
+    raise RuntimeError("DATABASE_URL não está definida. Configure no Render Dashboard.")
 
 # Ajuste para SQLAlchemy (postgres -> postgresql)
 if PROD_DB_URL.startswith("postgres://"):
