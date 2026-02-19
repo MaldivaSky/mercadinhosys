@@ -80,53 +80,39 @@ def listar_leads():
 @saas_bp.route("/assinatura/status", methods=["GET"])
 @jwt_required()
 def get_assinatura_status():
-    """Retorna o status do plano do estabelecimento atual via SQL direto"""
+    """Retorna o status do plano do estabelecimento atual via utilitário safe"""
     try:
-        from sqlalchemy import text as _t
+        from app.utils.query_helpers import get_estabelecimento_safe
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
 
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
-        # SQL direto - busca apenas colunas que certamente existem
-        row = db.session.execute(
-            _t("SELECT id, nome_fantasia FROM estabelecimentos WHERE id = :eid LIMIT 1"),
-            {"eid": estabelecimento_id}
-        ).fetchone()
+        # Usa o utilitário centralizado que é blindado contra colunas ausentes
+        dados = get_estabelecimento_safe(estabelecimento_id)
 
-        if not row:
+        if not dados:
             return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
 
-        # Busca colunas opcionais individualmente
-        def _col(c, default=None):
-            try:
-                r = db.session.execute(
-                    _t(f"SELECT {c} FROM estabelecimentos WHERE id = :eid LIMIT 1"),
-                    {"eid": estabelecimento_id}
-                ).fetchone()
-                return r[0] if r else default
-            except Exception:
-                return default
-
-        plano            = _col("plano", "Basic")
-        plano_status_val = _col("plano_status", "experimental")
-        vencimento       = _col("vencimento_assinatura")
+        vencimento = dados.get("vencimento_assinatura")
+        plano_status_val = dados.get("plano_status", "experimental")
 
         return jsonify({
             "success": True,
             "data": {
-                "plano": plano,
+                "plano": dados.get("plano", "Basic"),
                 "status": plano_status_val,
-                "vencimento": vencimento.isoformat() if vencimento else None,
+                "vencimento": vencimento.isoformat() if vencimento and hasattr(vencimento, 'isoformat') else None,
                 "is_active": plano_status_val in ["ativo", "experimental"],
-                "nome_estabelecimento": row[1],
+                "nome_estabelecimento": dados.get("nome_fantasia"),
             }
         }), 200
 
     except Exception as e:
         logger.error(f"Erro ao buscar status de assinatura: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 

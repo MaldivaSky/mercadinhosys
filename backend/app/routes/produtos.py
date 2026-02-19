@@ -1859,9 +1859,10 @@ def obter_estatisticas_produtos():
         claims = get_jwt()
         raw_est_id = claims.get("estabelecimento_id")
         if raw_est_id is None:
-            # Fallback para o primeiro estabelecimento se não houver no token (apenas para teste)
-            est = Estabelecimento.query.first()
-            estabelecimento_id = est.id if est else 1
+            # Fallback seguro para o primeiro estabelecimento
+            from app.utils.query_helpers import get_first_estabelecimento_id_safe
+            f_id = get_first_estabelecimento_id_safe()
+            estabelecimento_id = f_id if f_id else 1
         else:
             estabelecimento_id = int(raw_est_id)
         

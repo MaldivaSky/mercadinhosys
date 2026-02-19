@@ -18,6 +18,8 @@ def _get_stripe_service():
 @jwt_required()
 def create_checkout():
     try:
+        from app.utils.query_helpers import get_estabelecimento_safe, get_funcionario_safe
+        
         # JWT identity é string com o ID do funcionário (ex: "1")
         current_user_id = get_jwt_identity()
         claims = get_jwt()
@@ -29,19 +31,20 @@ def create_checkout():
         estabelecimento_id = claims.get('estabelecimento_id')
 
         if not estabelecimento_id:
-            # Fallback: buscar via Funcionario
-            funcionario = Funcionario.query.get(int(current_user_id))
-            if not funcionario:
+            # Fallback safe: buscar via Funcionario
+            funcionario_data = get_funcionario_safe(int(current_user_id))
+            if not funcionario_data:
                 return jsonify({'success': False, 'message': 'Usuário não encontrado'}), 404
-            estabelecimento_id = funcionario.estabelecimento_id
-            user_email = funcionario.email
+            estabelecimento_id = funcionario_data.get('estabelecimento_id')
+            user_email = funcionario_data.get('email')
         else:
-            # Buscar email do funcionário
-            funcionario = Funcionario.query.get(int(current_user_id))
-            user_email = funcionario.email if funcionario else claims.get('email', '')
+            # Buscar email do funcionário de forma safe
+            funcionario_data = get_funcionario_safe(int(current_user_id))
+            user_email = funcionario_data.get('email') if funcionario_data else claims.get('email', '')
 
-        estab = Estabelecimento.query.get(estabelecimento_id)
-        if not estab:
+        # Busca estabelecimento de forma safe (blindado contra colunas ausentes)
+        estab_data = get_estabelecimento_safe(estabelecimento_id)
+        if not estab_data:
             return jsonify({'success': False, 'message': 'Estabelecimento não encontrado'}), 404
 
         stripe_svc = _get_stripe_service()
@@ -77,18 +80,21 @@ def webhook():
 def customer_portal():
     """Redireciona para o portal do cliente Stripe para gerenciar assinatura."""
     try:
+        from app.utils.query_helpers import get_estabelecimento_safe, get_funcionario_safe
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
         estabelecimento_id = claims.get('estabelecimento_id')
         if not estabelecimento_id:
-            funcionario = Funcionario.query.get(int(current_user_id))
-            if not funcionario:
+            funcionario_data = get_funcionario_safe(int(current_user_id))
+            if not funcionario_data:
                 return jsonify({'success': False, 'message': 'Usuário não encontrado'}), 404
-            estabelecimento_id = funcionario.estabelecimento_id
+            estabelecimento_id = funcionario_data.get('estabelecimento_id')
 
-        estab = Estabelecimento.query.get(estabelecimento_id)
-        if not estab or not estab.stripe_customer_id:
+        estab_data = get_estabelecimento_safe(estabelecimento_id)
+        if not estab_data or not estab_data.get('stripe_customer_id'):
+            # Tenta buscar o stripe_customer_id isoladamente se não veio no safe (pode ser coluna nova que falhou no fetch_col generico)
+            # Mas o get_estabelecimento_safe já tenta isso.
             return jsonify({'success': False, 'message': 'Nenhuma assinatura Stripe ativa encontrada'}), 404
 
         import os
@@ -97,7 +103,7 @@ def customer_portal():
 
         return_url = os.getenv('FRONTEND_URL', 'http://localhost:5173') + '/configuracoes'
         portal_session = stripe_lib.billing_portal.Session.create(
-            customer=estab.stripe_customer_id,
+            customer=estab_data.get('stripe_customer_id'),
             return_url=return_url,
         )
         return jsonify({'success': True, 'portal_url': portal_session.url})
