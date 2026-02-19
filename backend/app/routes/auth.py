@@ -1404,3 +1404,92 @@ def get_permissions_for_role(role, permissoes_db=None):
 
     # Remover duplicatas
     return list(set(permissions))
+
+
+@auth_bp.route("/demo", methods=["POST"])
+def guest_demo():
+    """Access the system in demo mode with a single click"""
+    try:
+        from datetime import date
+        from werkzeug.security import generate_password_hash
+        
+        # 1. Encontrar ou criar o estabelecimento demo
+        demo_est = Estabelecimento.query.filter_by(cnpj="00.000.000/0000-00").first()
+        if not demo_est:
+            demo_est = Estabelecimento(
+                nome_fantasia="Supermercado Fictício (Demo)",
+                razao_social="Demo Mercadinho Sys LTDA",
+                cnpj="00.000.000/0000-00",
+                telefone="(11) 99999-9999",
+                email="demo@mercadinhosys.com",
+                data_abertura=date(2020, 1, 1),
+                cep="01001-000",
+                logradouro="Praça da Sé",
+                numero="1",
+                bairro="Sé",
+                cidade="São Paulo",
+                estado="SP",
+                plano="Advanced",
+                plano_status="active"
+            )
+            db.session.add(demo_est)
+            db.session.flush() # Pegar ID
+
+        # 2. Encontrar ou criar o admin demo
+        demo_admin = Funcionario.query.filter_by(estabelecimento_id=demo_est.id, username="demo").first()
+        if not demo_admin:
+            demo_admin = Funcionario(
+                estabelecimento_id=demo_est.id,
+                nome="Administrador Demo",
+                cpf="000.000.000-00",
+                data_nascimento=date(1990, 1, 1),
+                celular="(11) 99999-9999",
+                email="demo@mercadinhosys.com",
+                cargo="admin",
+                data_admissao=date(2020, 1, 1),
+                username="demo",
+                senha_hash=generate_password_hash("demo123"),
+                ativo=True
+            )
+            db.session.add(demo_admin)
+            db.session.commit()
+
+        # 3. Gerar tokens
+        access_token = create_access_token(identity=demo_admin.id)
+        refresh_token = create_refresh_token(identity=demo_admin.id)
+
+        # 4. Registrar histórico
+        try:
+            history = LoginHistory(
+                funcionario_id=demo_admin.id,
+                estabelecimento_id=demo_est.id,
+                ip_address=request.remote_addr,
+                user_agent=request.user_agent.string
+            )
+            db.session.add(history)
+            db.session.commit()
+        except Exception as e:
+            current_app.logger.warning(f"Erro ao registrar histórico demo: {e}")
+            db.session.rollback()
+
+        return jsonify({
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user": {
+                "id": demo_admin.id,
+                "nome": demo_admin.nome,
+                "cargo": demo_admin.cargo,
+                "estabelecimento": demo_est.nome_fantasia,
+                "estabelecimento_id": demo_est.id,
+                "is_demo": True
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro no Login Demo: {traceback.format_exc()}")
+        return jsonify({
+            "error": "Falha ao acessar modo demo",
+            "details": str(e),
+            "code": "DEMO_ACCESS_ERROR"
+        }), 500
