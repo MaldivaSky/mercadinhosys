@@ -263,6 +263,7 @@ def create_app(config_name=None):
                     ("configuracoes", "horas_extras_percentual", "NUMERIC(5,2) DEFAULT 50.00")
                 ]
 
+                import traceback
                 for table, col, col_type in sqls:
                     try:
                         # No Postgres (Render), o 'ADD COLUMN IF NOT EXISTS' é o ideal
@@ -272,12 +273,14 @@ def create_app(config_name=None):
                             # No SQLite, tentamos adicionar. Se falhar (já existe), o except cuida.
                             db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
                         db.session.commit()
-                    except Exception:
+                    except Exception as inner_e:
                         db.session.rollback()
+                        logger.critical(f"❌ FALHA EM COLUNA {table}.{col}: {str(inner_e)}\n{traceback.format_exc()}")
                 
-                logger.info("Auto-reparo de schema concluído no boot.")
+                logger.info("✅ Auto-reparo de schema concluído no boot.")
             except Exception as e:
-                logger.error(f"Falha no auto-reparo de schema: {e}")
+                import traceback
+                logger.critical(f"🔴 ERRO FATAL NO BOOTSTRAP DO SCHEMA: {str(e)}\n{traceback.format_exc()}")
     else:
         logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
 
