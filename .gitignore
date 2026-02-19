@@ -73,3 +73,8 @@ backups/
 tmp/
 temp/
 *.tmp
+
+# ==================== Output / Debug files ====================
+benchmark_output.txt
+*_output.txt
+debug_request.py

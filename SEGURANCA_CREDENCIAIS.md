@@ -150,10 +150,10 @@ git commit -m "add config"
 ### ❌ NUNCA coloque credenciais em código
 
 ```python
-# ERRADO:
-MAIL_PASSWORD = "sua-senha-aqui"
+# ERRADO: nunca hardcode credenciais no código
+# MAIL_PASS = "..."  ← NUNCA FAÇA ISSO
 
-# CERTO:
+# CERTO: use variáveis de ambiente
 MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
 ```
 
