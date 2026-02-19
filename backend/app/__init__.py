@@ -169,11 +169,11 @@ def create_app(config_name=None):
     # Otimização para Vercel/Render: Pular setup se SKIP_DB_SETUP=true ou se em produção após primeiro deploy
     skip_db_setup = os.environ.get("SKIP_DB_SETUP", "false").lower() == "true"
     
-    # Em produção, só rodamos o setup se explicitamente solicitado ou se não for um ambiente serverless
-    # No Vercel/Render, o setup pesado em cada requisição causa timeouts.
+    # Em produção, o setup pesado em cada requisição causa timeouts (Render/Vercel).
     is_production = config_name == "production"
+    is_cloud = os.environ.get("VERCEL") == "1" or os.environ.get("RENDER") == "1"
     
-    if not skip_db_setup and not (is_production and os.environ.get("VERCEL") == "1"):
+    if not skip_db_setup and not (is_production and is_cloud):
         with app.app_context():
             try:
                 # Testar conexão se for Postgres
@@ -218,8 +218,11 @@ def create_app(config_name=None):
                 else:
                     logger.error(f"ERRO: Criar tabelas no bootstrap: {e}")
     
-            # Postgres: garantir colunas críticas (produtos.tipo, margem_lucro_real, etc.)
-            if app.config.get("USING_POSTGRES"):
+            # Em produção, sugerimos usar migrations (Flask-Migrate)
+            # Rodar sync via código em cada boot é lento.
+            force_sync = os.environ.get("FORCE_SCHEMA_SYNC", "false").lower() == "true"
+            
+            if app.config.get("USING_POSTGRES") and (not is_production or force_sync):
                 try:
                     from sqlalchemy import text
                     alteras = [
