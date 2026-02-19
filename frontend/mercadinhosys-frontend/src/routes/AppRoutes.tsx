@@ -22,6 +22,7 @@ const RelatoriosPontoPage = lazy(() => import('../features/ponto/RelatoriosPonto
 const DiagnosticoFotos = lazy(() => import('../features/ponto/DiagnosticoFotos'));
 const ReportsPage = lazy(() => import('../features/reports/ReportsPage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
+const LeadDashboard = lazy(() => import('../features/saas/LeadDashboard'));
 
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 
@@ -77,6 +78,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="ponto-diagnostico" element={<DiagnosticoFotos />} />
                     <Route path="reports" element={<ReportsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
+                    <Route path="leads" element={<LeadDashboard />} />
                 </Route>
 
                 {/* Fallback - se alguém acessar uma rota não definida */}

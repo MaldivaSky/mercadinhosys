@@ -84,6 +84,7 @@ from app.models import (
     FuncionarioBeneficio,
     BancoHoras,
     JustificativaPonto,
+    Lead,
 )
 
 DEFAULT_ESTABELECIMENTO_ID = 1
@@ -156,6 +157,9 @@ def ensure_estabelecimento(fake: Faker, estabelecimento_id: int = 1) -> Estabele
         pais="Brasil",
         regime_tributario="SIMPLES NACIONAL",
         ativo=True,
+        plano="Premium",
+        plano_status="ativo",
+        vencimento_assinatura=datetime.now() + timedelta(days=365),
         data_abertura=date.today() - timedelta(days=365 * 3),
         data_cadastro=datetime.now() - timedelta(days=180),
     )
@@ -499,6 +503,37 @@ def seed_fornecedores(
     return fornecedores
 
 
+def seed_leads(fake: Faker, n: int = 15) -> List[Lead]:
+    """Cria leads realistas para o dashboard admin."""
+    print("📈 Criando leads de interessados...")
+    
+    status_leads = [
+        "Aguardando Contato",
+        "Aguardando Contato",
+        "Em Negociação",
+        "Demonstração Agendada",
+        "Convertido",
+        "Sem Interesse"
+    ]
+    
+    leads = []
+    for _ in range(n):
+        l = Lead(
+            nome=fake.name(),
+            email=fake.email(),
+            whatsapp=f"55{random.randint(11, 99)}{random.randint(980000000, 999999999)}",
+            origem=random.choice(["landing_page", "indicacao", "facebook", "instagram"]),
+            observacao=fake.text(max_nb_chars=120) if random.random() > 0.5 else "Interesse no plano Advanced.",
+            data_cadastro=datetime.now() - timedelta(days=random.randint(0, 30))
+        )
+        db.session.add(l)
+        leads.append(l)
+        
+    db.session.commit()
+    print(f"✅ {len(leads)} leads criados para o Dashboard Admin")
+    return leads
+
+
 def seed_categorias_produto(
     fake: Faker, estabelecimento_id: int
 ) -> List[CategoriaProduto]:
@@ -789,6 +824,7 @@ def seed_produtos(
         # Produtos Finais para completar 200 (2)
         ("Refrigerante Sprite Zero 2L", "Bebidas", "SPR-002", "7894900012033", "Coca-Cola", 6.50, 10.50),
         ("Biscoito Recheado Bono 126g", "Mercearia", "BIS-006", "7896004700312", "Nestlé", 3.80, 6.50),
+        
     ]
 
     # Mapear categorias por nome
@@ -3511,6 +3547,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             # 9.6. Criar histórico de preços (alterações ao longo do tempo)
             seed_historico_precos(fake, est.id, produtos, funcionarios, dias_historico=args.dias)
 
+            # 9.7. Criar Leads para o Dashboard Admin (SaaS)
+            leads = seed_leads(fake, n=20)
+
             # 10. Criar despesas + contas a pagar (módulo financeiro ERP)
             seed_despesas(fake, est.id, fornecedores)
 
@@ -3762,6 +3801,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("\n📊 DADOS GERADOS:")
                 print(f"  • {len(clientes)} clientes")
                 print(f"  • {len(fornecedores)} fornecedores")
+                print(f"  • {len(leads)} leads prospectados (Novo Módulo SaaS)")
                 print(f"  • {len(produtos)} produtos (100% oriundos de pedidos de compra)")
                 print(f"  • Vendas dos últimos {args.dias} dias")
                 print(f"  • {total_hist_precos} registros de histórico de preços")

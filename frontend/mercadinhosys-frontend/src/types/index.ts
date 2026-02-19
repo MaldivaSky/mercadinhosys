@@ -35,6 +35,8 @@ export interface LoginApiResponse {
             endereco?: string;
             cidade?: string;
             estado?: string;
+            plano?: string;
+            plano_status?: string;
         };
     };
     error?: string;
@@ -54,6 +56,18 @@ export interface Estabelecimento {
     estado?: string;
     data_cadastro: string;
     ativo: boolean;
+    plano?: string;
+    plano_status?: string;
+}
+
+export interface Lead {
+    id: number;
+    nome: string;
+    email: string;
+    whatsapp: string;
+    origem: string;
+    observacao?: string;
+    data_cadastro: string;
 }
 
 // Tipos de autenticação (baseado no models.py - Funcionario)

@@ -18,6 +18,7 @@ import {
     PlayCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { API_CONFIG } from '../../api/apiConfig';
 
 const LandingPage: React.FC = () => {
     const navigate = useNavigate();
@@ -27,19 +28,45 @@ const LandingPage: React.FC = () => {
     const [loadingLead, setLoadingLead] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    const handleLeadSubmit = (e: React.FormEvent) => {
+    const handleLeadSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoadingLead(true);
-        // Simulação de salvamento de lead
-        setTimeout(() => {
+
+        try {
+            const response = await fetch(`${API_CONFIG.BASE_URL}/saas/leads/registrar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    nome: leadName,
+                    email: leadEmail,
+                    whatsapp: leadWhatsApp,
+                    origem: 'landing_page'
+                }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                toast.success('Informações enviadas! Entraremos em contato em breve.');
+                setLeadName('');
+                setLeadEmail('');
+                setLeadWhatsApp('');
+
+                // Pequeno delay antes de abrir o zap para o usuário ler o toast
+                setTimeout(() => {
+                    window.open(`https://wa.me/5511919889233?text=Olá! Acabei de me cadastrar no site e gostaria de saber mais sobre o MercadinhoSys. Meu e-mail é ${leadEmail}.`, '_blank');
+                }, 1000);
+            } else {
+                toast.error(result.error || 'Ocorreu um erro ao enviar seus dados.');
+            }
+        } catch (error) {
+            console.error('Erro ao enviar lead:', error);
+            toast.error('Erro de conexão com o servidor.');
+        } finally {
             setLoadingLead(false);
-            toast.success('Informações enviadas! Entraremos em contato em breve.');
-            setLeadName('');
-            setLeadEmail('');
-            setLeadWhatsApp('');
-            // Abrir WhatsApp após cadastro
-            window.open('https://wa.me/5511919889233?text=Olá! Acabei de me cadastrar no site e gostaria de saber mais sobre o MercadinhoSys.', '_blank');
-        }, 1500);
+        }
     };
 
     const tiers = [

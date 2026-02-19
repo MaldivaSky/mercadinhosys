@@ -12,6 +12,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LineChart, Line, Cell, AreaChart, Area, Legend
 } from 'recharts';
+import { usePlanGate } from '../../hooks/usePlanGate';
+import { toast } from 'react-hot-toast';
 
 // API Client
 import { apiClient } from '../../api/apiClient';
@@ -266,6 +268,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { hasAdvancedDashboard, hasRHTools, plano } = usePlanGate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -360,10 +363,22 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     if (viewMode === 'rh') {
+      if (!hasRHTools) {
+        toast.error(`O Plano ${plano} não inclui acesso às ferramentas de RH.`);
+        setViewMode('visao-geral');
+        return;
+      }
       loadRhSupportData();
       loadRhPontoHistorico(1);
     }
-  }, [viewMode]);
+    if (viewMode === 'avancado' || viewMode === 'detalhado') {
+      if (!hasAdvancedDashboard) {
+        toast.error(`O Plano ${plano} não inclui acesso ao Dashboard Científico.`);
+        setViewMode('visao-geral');
+        return;
+      }
+    }
+  }, [viewMode, hasRHTools, hasAdvancedDashboard, plano]);
 
   // 🔥 NOVO: Aplicar filtro personalizado
   const aplicarFiltroPersonalizado = () => {

@@ -424,6 +424,8 @@ def login():
                             "endereco": estabelecimento.endereco_completo(),
                             "cidade": estabelecimento.cidade,
                             "estado": estabelecimento.estado,
+                            "plano": estabelecimento.plano,
+                            "plano_status": estabelecimento.plano_status,
                         },
                     },
                 }
