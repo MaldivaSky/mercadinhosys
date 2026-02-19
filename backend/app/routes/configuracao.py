@@ -104,30 +104,39 @@ def obter_configuracoes():
     try:
         estabelecimento_id = request.args.get("estabelecimento_id", 1, type=int)
 
-        # Garantir que o estabelecimento exista
+        # Garantir que o estabelecimento exista de forma resiliente
         estabelecimento = Estabelecimento.query.get(estabelecimento_id)
         if not estabelecimento:
-            # Gerar CNPJ placeholder único com 14 dígitos e formato válido (18 caracteres com pontuação)
-            raw = datetime.now().strftime("%H%M%S%f")  # ex: 141523123456
-            digits = (raw + "00000000000000")[:14]
-            cnpj_placeholder = f"{digits[0:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
-            estabelecimento = Estabelecimento(
-                id=estabelecimento_id,
-                nome_fantasia="Empresa Padrão",
-                razao_social="Empresa Padrão LTDA",
-                cnpj=cnpj_placeholder,
-                telefone="(00) 0000-0000",
-                email="contato@empresa.com",
-                cep="00000-000",
-                logradouro="Rua Exemplo",
-                numero="100",
-                bairro="Centro",
-                cidade="Cidade",
-                estado="SP",
-                data_abertura=datetime.now().date(),
-            )
-            db.session.add(estabelecimento)
-            db.session.commit()
+            try:
+                # CNPJ Único para evitar erros de constraint em bancos compartilhados
+                import time
+                unique_suffix = str(int(time.time()))[-8:]
+                cnpj_placeholder = f"00.000.000/0001-{unique_suffix[:2]}" # Simples mas único o suficiente
+                
+                estabelecimento = Estabelecimento(
+                    id=estabelecimento_id,
+                    nome_fantasia="MaldivaSky Tech",
+                    razao_social="MaldivaSky Tech Solutions LTDA",
+                    cnpj=f"99.888.777/0001-{unique_suffix[:2]}",
+                    telefone="(00) 00000-0000",
+                    email="rafaelmaldivas@gmail.com",
+                    cep="00000-000",
+                    logradouro="Área Restrita",
+                    numero="1",
+                    bairro="Centro",
+                    cidade="Maldivas",
+                    estado="MS",
+                    data_abertura=datetime.now().date(),
+                )
+                db.session.add(estabelecimento)
+                db.session.commit()
+            except Exception as e_estab:
+                db.session.rollback()
+                current_app.logger.warning(f"⚠️ Falha ao criar estabelecimento auto: {e_estab}")
+                # Tenta buscar novamente caso outra instância tenha criado
+                estabelecimento = Estabelecimento.query.get(estabelecimento_id)
+                if not estabelecimento:
+                   raise Exception("Não foi possível localizar ou criar o estabelecimento padrão.")
 
         config = Configuracao.query.filter_by(
             estabelecimento_id=estabelecimento_id
