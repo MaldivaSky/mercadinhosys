@@ -61,6 +61,101 @@ def create_checkout():
         return jsonify({'success': False, 'message': f'Erro ao iniciar checkout: {str(e)}'}), 500
 
 
+@stripe_bp.route('/public-checkout', methods=['POST'])
+def public_checkout():
+    """
+    Cria uma conta e inicia o checkout para novos clientes da Landing Page.
+    """
+    try:
+        from app.models import Estabelecimento, Funcionario, db
+        from datetime import datetime
+
+        data = request.get_json() or {}
+        email = data.get('email')
+        whatsapp = data.get('whatsapp')
+        nome_loja = data.get('nome_loja')
+        plan_name = data.get('plan_name', 'Basic')
+
+        if not email or not nome_loja:
+            return jsonify({'success': False, 'message': 'Email e nome da loja são obrigatórios'}), 400
+
+        # 1. Verificar se usuário já existe
+        if Funcionario.query.filter_by(email=email).first():
+            return jsonify({'success': False, 'message': 'Este e-mail já está cadastrado. Por favor, faça login.'}), 409
+
+        # 2. Criar Estabelecimento
+        novo_estab = Estabelecimento(
+            nome_fantasia=nome_loja,
+            razao_social=nome_loja,
+            cnpj="00.000.000/0001-00", # Placeholder
+            telefone=whatsapp or "(00) 0000-0000",
+            email=email,
+            cep="00000-000",           # Placeholder
+            logradouro="Pendente",     # Placeholder
+            numero="0",                # Placeholder
+            bairro="Pendente",         # Placeholder
+            cidade="Pendente",         # Placeholder
+            estado="AM",               # Placeholder (Amazonas, target region)
+            plano=plan_name,
+            plano_status='pendente',
+            data_abertura=datetime.utcnow().date()
+        )
+        db.session.add(novo_estab)
+        db.session.flush()
+
+        # 3. Criar Funcionario Admin
+        novo_admin = Funcionario(
+            estabelecimento_id=novo_estab.id,
+            nome="Proprietário",
+            username=email.split('@')[0],
+            email=email,
+            cpf="000.000.000-00",        # Placeholder
+            data_nascimento=datetime(1990, 1, 1).date(), # Placeholder
+            celular=whatsapp or "(00) 00000-0000",
+            role="ADMIN",
+            cargo="Gerente",
+            status="ativo",
+            ativo=True,
+            data_admissao=datetime.utcnow().date(),
+            cep="00000-000",             # Placeholder
+            logradouro="Pendente",       # Placeholder
+            numero="0",                  # Placeholder
+            bairro="Pendente",           # Placeholder
+            cidade="Pendente",           # Placeholder
+            estado="AM"                  # Placeholder
+        )
+        novo_admin.set_senha("Trocar@123")
+        db.session.add(novo_admin)
+        db.session.commit()
+        
+        # 4. Notificar Lead (Log & Email)
+        logger.info(f"📍 NOVO LEAD CAPTURADO NO CHECKOUT: {email} | Loja: {nome_loja} | WhatsApp: {whatsapp}")
+        try:
+            from app.services.email_service import email_service
+            email_service.send_welcome_email(email, "Proprietário")
+        except Exception as email_err:
+            logger.error(f"Não foi possível enviar email de boas-vindas para o lead: {email_err}")
+
+        # 5. Iniciar Checkout Stripe
+        stripe_svc = _get_stripe_service()
+        checkout_url = stripe_svc.create_checkout_session(
+            estabelecimento_id=novo_estab.id,
+            plan_name=plan_name,
+            user_email=email
+        )
+
+        return jsonify({
+            'success': True, 
+            'checkout_url': checkout_url,
+            'message': 'Conta criada. Redirecionando para o pagamento seguro.'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro no public-checkout: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Erro ao processar: {str(e)}'}), 500
+
+
 @stripe_bp.route('/webhook', methods=['POST'])
 def webhook():
     payload = request.get_data(as_text=True)

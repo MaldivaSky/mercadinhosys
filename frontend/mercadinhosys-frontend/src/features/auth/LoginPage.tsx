@@ -34,6 +34,11 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [showBootstrap, setShowBootstrap] = useState(false);
 
+  // Detectar sucesso vindo do Stripe
+  const queryParams = new URLSearchParams(window.location.search);
+  const isStripeSuccess = queryParams.get('status') === 'success';
+  const [stripeSuccess, setStripeSuccess] = useState(isStripeSuccess);
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -149,6 +154,18 @@ export function LoginPage() {
                 Bem-vindo de volta ao seu painel.
               </Typography>
             </Box>
+
+            {stripeSuccess && (
+              <Alert
+                severity="success"
+                sx={{ mb: 3, borderRadius: 2 }}
+                onClose={() => setStripeSuccess(false)}
+              >
+                <strong>Assinatura realizada com sucesso!</strong><br />
+                Faça login com seu e-mail para começar. <br />
+                Sua senha temporária é: <strong>Trocar@123</strong>
+              </Alert>
+            )}
 
             {error && (
               <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError('')}>
