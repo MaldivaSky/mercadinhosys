@@ -27,10 +27,10 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
         const buscarProdutos = async () => {
             setLoading(true);
             setErro(null);
-            
+
             try {
-                // Se for código numérico LONGO (13 dígitos - EAN), buscar por código de barras
-                if (/^\d{13}$/.test(query.trim())) {
+                // Se for um código numérico (EAN-8, UPC, EAN-13, etc.), buscar por código de barras
+                if (/^\d{8,14}$/.test(query.trim())) {
                     const produto = await pdvService.buscarPorCodigoBarras(query.trim());
                     if (produto) {
                         const validacao = await pdvService.validarProduto({
@@ -52,7 +52,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                     // Buscar por nome, marca, categoria
                     const produtos = await pdvService.buscarProduto(query);
                     console.log('📦 Produtos encontrados:', produtos.length, produtos);
-                    
+
                     if (Array.isArray(produtos)) {
                         setResultados(produtos.slice(0, 20));
                     } else {
@@ -63,7 +63,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                 }
             } catch (error: any) {
                 console.error('❌ Erro ao buscar produtos:', error);
-                
+
                 // Mensagens de erro mais específicas
                 if (error.code === 'ERR_NETWORK') {
                     setErro('⚠️ Servidor offline. Verifique se o backend está rodando.');
@@ -74,7 +74,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                 } else {
                     setErro(error.response?.data?.error || error.message || 'Erro ao buscar produtos');
                 }
-                
+
                 setResultados([]);
             } finally {
                 setLoading(false);
@@ -94,7 +94,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     // Handler para click em produto da lista
     const handleProdutoClick = async (produto: Produto) => {
         setErro(null);
-        
+
         try {
             // Validar produto antes de adicionar
             const validacao = await pdvService.validarProduto({
@@ -200,13 +200,12 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                         R$ {((produto as { preco_venda_efetivo?: number }).preco_venda_efetivo ?? produto.preco_venda ?? 0).toFixed(2)}
                                     </p>
                                     <div className="flex items-center justify-end space-x-2 mt-1">
-                                        <span className={`text-xs px-2 py-0.5 rounded ${
-                                            (produto.quantidade_estoque || 0) > 10
+                                        <span className={`text-xs px-2 py-0.5 rounded ${(produto.quantidade_estoque || 0) > 10
                                                 ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                                                 : (produto.quantidade_estoque || 0) > 0
-                                                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                                : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                        }`}>
+                                                    ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+                                                    : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                            }`}>
                                             Estoque: {produto.quantidade_estoque || 0}
                                         </span>
                                     </div>
