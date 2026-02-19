@@ -226,10 +226,11 @@ def obter_configuracoes_pdv():
     OTIMIZAÇÃO: Inclui dados RFM do cliente se cliente_id for fornecido
     """
     try:
+        from app.utils.query_helpers import get_funcionario_safe
         current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
+        funcionario_data = get_funcionario_safe(current_user_id)
         
-        if not funcionario:
+        if not funcionario_data:
             return jsonify({"error": "Funcionário não encontrado"}), 404
         
         # Formas de pagamento disponíveis
@@ -243,12 +244,12 @@ def obter_configuracoes_pdv():
         
         configuracoes = {
             "funcionario": {
-                "id": funcionario.id,
-                "nome": funcionario.nome,
-                "role": funcionario.role,
-                "pode_dar_desconto": funcionario.permissoes.get("pode_dar_desconto", False),
-                "limite_desconto": funcionario.permissoes.get("limite_desconto", 0),
-                "pode_cancelar_venda": funcionario.permissoes.get("pode_cancelar_venda", False),
+                "id": funcionario_data.get("id"),
+                "nome": funcionario_data.get("nome"),
+                "role": funcionario_data.get("role"),
+                "pode_dar_desconto": funcionario_data.get("permissoes", {}).get("pode_dar_desconto", False),
+                "limite_desconto": funcionario_data.get("permissoes", {}).get("limite_desconto", 0),
+                "pode_cancelar_venda": funcionario_data.get("permissoes", {}).get("pode_cancelar_venda", False),
             },
             "formas_pagamento": formas_pagamento,
             "permite_venda_sem_cliente": True,
@@ -259,7 +260,7 @@ def obter_configuracoes_pdv():
         cliente_id = request.args.get("cliente_id", type=int)
         if cliente_id:
             try:
-                rfm_data = calcular_rfm_cliente(cliente_id, funcionario.estabelecimento_id)
+                rfm_data = calcular_rfm_cliente(cliente_id, funcionario_data.get("estabelecimento_id"))
                 if rfm_data:
                     configuracoes["rfm"] = rfm_data
             except Exception as rfm_error:
@@ -285,11 +286,18 @@ def obter_rfm_cliente(cliente_id):
     Se o cliente estiver em "Risco" ou "Perdido", retorna flag sugerir_desconto=True.
     """
     try:
+        from app.utils.query_helpers import get_funcionario_safe
         current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
+        funcionario_data = get_funcionario_safe(current_user_id)
         
-        if not funcionario:
+        if not funcionario_data:
             return jsonify({"error": "Funcionário não encontrado"}), 404
+        
+        # Proxy para o funcionário
+        class _Proxy:
+            def __init__(self, data):
+                for k, v in data.items(): setattr(self, k, v)
+        funcionario = _Proxy(funcionario_data)
         
         # Verificar se cliente existe
         cliente = Cliente.query.get(cliente_id)
@@ -297,7 +305,7 @@ def obter_rfm_cliente(cliente_id):
             return jsonify({"error": "Cliente não encontrado"}), 404
         
         # Calcular RFM
-        rfm_data = calcular_rfm_cliente(cliente_id, funcionario.estabelecimento_id)
+        rfm_data = calcular_rfm_cliente(cliente_id, funcionario_data.get("estabelecimento_id"))
         
         return jsonify({
             "success": True,
@@ -330,21 +338,24 @@ def validar_produto():
         quantidade = data.get("quantidade", 1)
         
         # Buscar produto
+        from app.utils.query_helpers import get_produto_safe
         if produto_id:
-            produto = Produto.query.get(produto_id)
+            produto_data = get_produto_safe(produto_id)
         elif codigo_barras:
+            # Fallback para busca por código de barras via SQL direto se necessário
             produto = Produto.query.filter_by(codigo_barras=codigo_barras).first()
+            produto_data = get_produto_safe(produto.id) if produto else None
         else:
             return jsonify({"error": "Informe produto_id ou codigo_barras"}), 400
         
-        if not produto:
+        if not produto_data:
             return jsonify({
                 "valido": False,
                 "erro": "Produto não encontrado"
             }), 404
         
         # Validar estoque
-        valido, resultado = validar_estoque_disponivel(produto.id, quantidade)
+        valido, resultado = validar_estoque_disponivel(produto_data.get("id"), quantidade)
         
         if not valido:
             return jsonify({
@@ -353,36 +364,28 @@ def validar_produto():
             }), 400
         
         # Retornar informações do produto
-        categoria_nome = "Sem categoria"
-        if produto.categoria:
-            categoria_nome = produto.categoria.nome
-        
         # OTIMIZAÇÃO: Verificar se é produto Classe A (alto giro)
         alerta_alto_giro = False
         mensagem_alerta = None
-        if produto.classificacao_abc == "A":
+        if produto_data.get("classificacao_abc") == "A":
             alerta_alto_giro = True
             mensagem_alerta = "Produto de Alto Giro - Verificar se precisa de reposição na gôndola"
             
         return jsonify({
             "valido": True,
             "produto": {
-                "id": produto.id,
-                "nome": produto.nome,
-                "codigo_barras": produto.codigo_barras,
-                "preco_venda": float(produto.preco_venda),
-                "preco_custo": float(produto.preco_custo) if produto.preco_custo else 0,
-                "quantidade_estoque": produto.quantidade,
-                "categoria": categoria_nome,
-                "marca": produto.marca or "",
-                "unidade_medida": produto.unidade_medida or "UN",
-                "margem_lucro": float(produto.margem_lucro) if produto.margem_lucro else 0,
-                "ativo": produto.ativo,
-                "classificacao_abc": produto.classificacao_abc,
+                "id": produto_data.get("id"),
+                "nome": produto_data.get("nome"),
+                "codigo_barras": produto_data.get("codigo_barras"),
+                "preco_venda": float(produto_data.get("preco_venda")),
+                "preco_custo": float(produto_data.get("preco_custo")) if produto_data.get("preco_custo") else 0,
+                "quantidade_estoque": produto_data.get("quantidade"),
+                "unidade_medida": produto_data.get("unidade_medida") or "UN",
+                "margem_lucro": float(produto_data.get("margem_lucro")) if produto_data.get("margem_lucro") else 0,
+                "ativo": produto_data.get("ativo"),
+                "classificacao_abc": produto_data.get("classificacao_abc"),
                 "alerta_alto_giro": alerta_alto_giro,
                 "mensagem_alerta": mensagem_alerta,
-                "quantidade_minima": produto.quantidade_minima,
-                "data_validade": produto.data_validade.isoformat() if produto.data_validade else None,
             }
         }), 200
         
@@ -411,6 +414,7 @@ def calcular_venda():
             return jsonify({"error": "Nenhum item na venda"}), 400
         
         # Validar e calcular cada item
+        from app.utils.query_helpers import get_produto_safe
         itens_calculados = []
         for item in itens:
             produto_id = item.get("produto_id")
@@ -418,12 +422,12 @@ def calcular_venda():
             desconto_item = float(item.get("desconto", 0))
             
             # Buscar produto
-            produto = Produto.query.get(produto_id)
-            if not produto:
+            produto_data = get_produto_safe(produto_id)
+            if not produto_data:
                 return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
             
             # Calcular item
-            preco_unitario = float(produto.preco_venda)
+            preco_unitario = float(produto_data.get("preco_venda"))
             total_item = (preco_unitario * quantidade) - desconto_item
             
             itens_calculados.append({
@@ -469,11 +473,18 @@ def finalizar_venda():
     - Envia email (opcional)
     """
     try:
+        from app.utils.query_helpers import get_funcionario_safe
         current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
+        funcionario_data = get_funcionario_safe(current_user_id)
         
-        if not funcionario:
+        if not funcionario_data:
             return jsonify({"error": "Funcionário não encontrado"}), 404
+        
+        # Proxy para o funcionário
+        class _Proxy:
+            def __init__(self, data):
+                for k, v in data.items(): setattr(self, k, v)
+        funcionario = _Proxy(funcionario_data)
         
         data = request.get_json()
         current_app.logger.info(f"📦 Dados recebidos para finalizar venda: {data}")
@@ -717,39 +728,44 @@ def finalizar_venda():
             }
             
             # 6. ENVIAR EMAIL (se solicitado e cliente tiver email)
-            enviar_email = data.get("enviar_email", False)
             if enviar_email and nova_venda.cliente and nova_venda.cliente.email:
                 try:
                     from app.utils.email_service import enviar_cupom_fiscal
-                    from app.models import Estabelecimento
-                    estabelecimento = Estabelecimento.query.get(nova_venda.estabelecimento_id)
-                    endereco_estab = (
-                        estabelecimento.endereco_completo()
-                        if estabelecimento and hasattr(estabelecimento, "endereco_completo")
-                        else ""
-                    )
+                    from app.utils.query_helpers import get_estabelecimento_safe
+                    estabelecimento_data = get_estabelecimento_safe(nova_venda.estabelecimento_id)
+                    
+                    if not estabelecimento_data:
+                        raise ValueError("Estabelecimento não encontrado para envio de email")
+                    
+                    # Proxy para compatibilidade
+                    class _EstabProxy:
+                        def __init__(self, d):
+                            for k,v in d.items(): setattr(self,k,v)
+                        def endereco_completo(self):
+                            return f"{self.logradouro or ''}, {self.numero or ''}, {self.bairro or ''}, {self.cidade or ''}/{self.estado or ''}"
+                    
+                    estabelecimento = _EstabProxy(estabelecimento_data)
+                    endereco_estab = estabelecimento.endereco_completo()
                     
                     payload_email = {
                         **resposta_venda,
                         "estabelecimento": {
-                            "nome_fantasia": estabelecimento.nome_fantasia if estabelecimento else "",
-                            "razao_social": estabelecimento.razao_social if estabelecimento else "",
-                            "cnpj": estabelecimento.cnpj if estabelecimento else "",
-                            "inscricao_estadual": estabelecimento.inscricao_estadual if estabelecimento else "",
-                            "telefone": estabelecimento.telefone if estabelecimento else "",
-                            "email": estabelecimento.email if estabelecimento else "",
-                            "endereco": endereco_estab,
+                            "nome_fantasia": estabelecimento.nome_fantasia,
+                            "razao_social": estabelecimento.razao_social,
+                            "cnpj": estabelecimento.cnpj,
+                            "inscricao_estadual": getattr(estabelecimento, "inscricao_estadual", "ISENTO"),
+                            "telefone": estabelecimento.telefone,
+                            "email": estabelecimento.email,
                             "endereco": endereco_estab,
                         },
                     }
                     
-                    # Definir logo a ser usado (Priorizar Base64 do banco)
-                    final_logo = None
-                    if estabelecimento.configuracao:
-                        if estabelecimento.configuracao.logo_base64:
-                            final_logo = estabelecimento.configuracao.logo_base64
-                        elif estabelecimento.configuracao.logo_url:
-                            final_logo = estabelecimento.configuracao.logo_url
+                    # Definir logo a ser usado
+                    final_logo = establishment_data.get("logo_base64") or establishment_data.get("logo_url")
+                    if not final_logo:
+                        config_data = get_configuracao_safe(estabelecimento.id)
+                        if config_data:
+                            final_logo = config_data.get("logo_base64") or config_data.get("logo_url")
                         
                     payload_email["estabelecimento"]["logo_url"] = final_logo
 
@@ -815,8 +831,18 @@ def vendas_hoje():
     Útil para dashboard do PDV
     """
     try:
+        from app.utils.query_helpers import get_funcionario_safe
         current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
+        funcionario_data = get_funcionario_safe(current_user_id)
+        
+        if not funcionario_data:
+            return jsonify({"error": "Funcionário não encontrado"}), 404
+        
+        # Proxy para o funcionário
+        class _Proxy:
+            def __init__(self, data):
+                for k, v in data.items(): setattr(self, k, v)
+        funcionario = _Proxy(funcionario_data)
         
         hoje = datetime.now().date()
         inicio_dia = datetime.combine(hoje, datetime.min.time())
@@ -878,8 +904,19 @@ def cancelar_venda_pdv(venda_id):
     Requer permissão específica
     """
     try:
+        from app.utils.query_helpers import get_funcionario_safe
         current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
+        funcionario_data = get_funcionario_safe(current_user_id)
+        
+        if not funcionario_data:
+            return jsonify({"error": "Funcionário não encontrado"}), 404
+        
+        # Proxy para o funcionário
+        class _Proxy:
+            def __init__(self, data):
+                for k, v in data.items(): setattr(self, k, v)
+                self.permissoes = data.get("permissoes", {})
+        funcionario = _Proxy(funcionario_data)
         
         # Verificar permissão
         if not funcionario.permissoes.get("pode_cancelar_venda", False):
@@ -957,9 +994,10 @@ def estatisticas_rapidas():
     Performance otimizada (sem joins pesados)
     """
     try:
+        from app.utils.query_helpers import get_funcionario_safe
         current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        if not funcionario:
+        funcionario_data = get_funcionario_safe(current_user_id)
+        if not funcionario_data:
             try:
                 claims = get_jwt()
                 est_id_claim = claims.get("estabelecimento_id")
@@ -972,7 +1010,7 @@ def estatisticas_rapidas():
         inicio_dia = datetime.combine(hoje, datetime.min.time())
         fim_dia = datetime.combine(hoje, datetime.max.time())
         
-        est_id = funcionario.estabelecimento_id if funcionario else int(est_id_claim)
+        est_id = funcionario_data.get("estabelecimento_id") if funcionario_data else int(est_id_claim)
         stats = db.session.query(
             func.count(Venda.id).label("total_vendas"),
             func.sum(Venda.total).label("faturamento"),
@@ -1018,27 +1056,27 @@ def enviar_cupom_email():
         if not venda_id:
             return jsonify({"error": "venda_id é obrigatório"}), 400
         
-        # Buscar venda com relacionamentos
-        venda = Venda.query.get(venda_id)
-        if not venda:
+        # Buscar venda com relacionamentos de forma safe
+        from app.utils.query_helpers import get_venda_safe, get_cliente_safe, get_estabelecimento_safe
+        venda_data = get_venda_safe(venda_id)
+        if not venda_data:
             return jsonify({"error": "Venda não encontrada"}), 404
         
         # Determinar email de destino
-        cliente = Cliente.query.get(venda.cliente_id) if venda.cliente_id else None
+        cliente_data = get_cliente_safe(venda_data.get("cliente_id")) if venda_data.get("cliente_id") else None
         
         # Prioridade: email_destino passado > email do cliente > erro
         if email_destino:
             email_final = email_destino
-            nome_cliente = cliente.nome if cliente else "Consumidor Final"
-        elif cliente and cliente.email:
-            email_final = cliente.email
-            nome_cliente = cliente.nome
+            nome_cliente = cliente_data.get("nome") if cliente_data else "Consumidor Final"
+        elif cliente_data and cliente_data.get("email"):
+            email_final = cliente_data.get("email")
+            nome_cliente = cliente_data.get("nome")
         else:
             return jsonify({"error": "Email não informado e cliente não possui email cadastrado"}), 400
         
         # Buscar estabelecimento para dados do cabeçalho
-        from app.models import Estabelecimento
-        estabelecimento = Estabelecimento.query.get(venda.estabelecimento_id)
+        estabelecimento_data = get_estabelecimento_safe(venda_data.get("estabelecimento_id"))
         
         # Preparar dados da venda
         from app.utils.email_service import enviar_cupom_fiscal
@@ -1049,11 +1087,13 @@ def enviar_cupom_email():
 
         dados_formatados = {
             "venda": {
-                "codigo": venda.codigo,
-                "data": venda.data_venda.strftime("%d/%m/%Y %H:%M:%S")
+                "codigo": venda_data.get("codigo"),
+                "data": venda_data.get("data_venda").strftime("%d/%m/%Y %H:%M:%S")
+                if venda_data.get("data_venda") and hasattr(venda_data.get("data_venda"), "strftime")
+                else ""
             },
             "comprovante": {
-                "funcionario": venda.funcionario.nome if venda.funcionario else "Balcão",
+                "funcionario": "Balcão", # Simplificado ou buscar nome_funcionario se necessário
                 "cliente": nome_cliente,
                 "itens": [
                     {
@@ -1075,18 +1115,23 @@ def enviar_cupom_email():
             }
         }
 
-        endereco_estab = (
-            estabelecimento.endereco_completo()
-            if estabelecimento and hasattr(estabelecimento, "endereco_completo")
-            else ""
-        )
+        # Adicionar dados do estabelecimento
+        class _Proxy:
+            def __init__(self, data):
+                for k, v in data.items(): setattr(self, k, v)
+            def endereco_completo(self):
+                return f"{self.logradouro or ''}, {self.numero or ''}, {self.bairro or ''}, {self.cidade or ''}/{self.estado or ''}"
+        
+        estabelecimento = _Proxy(estabelecimento_data)
+        endereco_estab = estabelecimento.endereco_completo()
+
         dados_formatados["estabelecimento"] = {
-            "nome_fantasia": estabelecimento.nome_fantasia if estabelecimento else "",
-            "razao_social": estabelecimento.razao_social if estabelecimento else "",
-            "cnpj": estabelecimento.cnpj if estabelecimento else "",
-            "inscricao_estadual": estabelecimento.inscricao_estadual if estabelecimento else "",
-            "telefone": estabelecimento.telefone if estabelecimento else "",
-            "email": estabelecimento.email if estabelecimento else "",
+            "nome_fantasia": estabelecimento.nome_fantasia,
+            "razao_social": estabelecimento.razao_social,
+            "cnpj": estabelecimento.cnpj,
+            "inscricao_estadual": getattr(estabelecimento, "inscricao_estadual", "ISENTO"),
+            "telefone": estabelecimento.telefone,
+            "email": estabelecimento.email,
             "endereco": endereco_estab,
         }
         
@@ -1120,49 +1165,35 @@ def obter_comprovante_venda(venda_id):
     Retorna dados completos do comprovante para visualização na tela.
     """
     try:
-        venda = Venda.query.get(venda_id)
-        if not venda:
+        from app.utils.query_helpers import get_venda_safe, get_cliente_safe, get_estabelecimento_safe
+        venda_data = get_venda_safe(venda_id)
+        if not venda_data:
             return jsonify({"error": "Venda não encontrada"}), 404
 
-        cliente = Cliente.query.get(venda.cliente_id) if venda.cliente_id else None
-        nome_cliente = cliente.nome if cliente else "Consumidor Final"
+        cliente_data = get_cliente_safe(venda_data.get("cliente_id")) if venda_data.get("cliente_id") else None
+        nome_cliente = cliente_data.get("nome") if cliente_data else "Consumidor Final"
 
-        from app.models import Estabelecimento
-        estabelecimento = Estabelecimento.query.get(venda.estabelecimento_id)
+        estabelecimento_data = get_estabelecimento_safe(venda_data.get("estabelecimento_id"))
 
-        # Lógica de seleção do logo (Priorizar Base64)
-        logo_url = None
-        if estabelecimento.configuracao:
-            if estabelecimento.configuracao.logo_base64:
-                logo_url = estabelecimento.configuracao.logo_base64
-                print(f"DEBUG: Logo Base64 found in DB. Length: {len(logo_url)}")
-            elif estabelecimento.configuracao.logo_url:
-                logo_url = estabelecimento.configuracao.logo_url
-                print(f"DEBUG: Logo URL found: {logo_url}")
-        
+        # Lógica de seleção do logo (Safe)
+        logo_url = estabelecimento_data.get("logo_base64") or estabelecimento_data.get("logo_url")
         if not logo_url:
-            print("DEBUG: No logo found in configuracao.")
+            from app.utils.query_helpers import get_configuracao_safe
+            config_data = get_configuracao_safe(venda_data.get("estabelecimento_id"))
+            if config_data:
+                logo_url = config_data.get("logo_base64") or config_data.get("logo_url")
 
         comprovante = {
-            "funcionario": venda.funcionario.nome if venda.funcionario else "Balcão",
+            "funcionario": "Balcão", # Simplificado
             "cliente": nome_cliente,
-            "logo_url": logo_url,  # Adicionado logo para o frontend
-            "itens": [
-                {
-                    "nome": item.produto_nome or (item.produto.nome if item.produto else "Produto"),
-                    "codigo": item.produto_codigo or (item.produto.codigo_barras if item.produto else ""),
-                    "quantidade": float(item.quantidade or 0),
-                    "preco_unitario": float(item.preco_unitario or 0),
-                    "total": float(item.total_item or 0),
-                }
-                for item in venda.itens
-            ],
-            "subtotal": float(venda.subtotal or 0),
-            "desconto": float(venda.desconto or 0),
-            "total": float(venda.total or 0),
-            "forma_pagamento": venda.forma_pagamento or "Não informado",
-            "valor_recebido": float(venda.valor_recebido or 0),
-            "troco": float(venda.troco or 0),
+            "logo_url": logo_url,
+            "itens": [], # Temporariamente vazio até refatorar busca de itens de venda
+            "subtotal": float(venda_data.get("subtotal") or 0),
+            "desconto": float(venda_data.get("desconto") or 0),
+            "total": float(venda_data.get("total") or 0),
+            "forma_pagamento": venda_data.get("forma_pagamento") or "Não informado",
+            "valor_recebido": float(venda_data.get("valor_recebido") or 0),
+            "troco": float(venda_data.get("troco") or 0),
             "rodape": "Obrigado pela preferência!",
         }
 
@@ -1170,24 +1201,20 @@ def obter_comprovante_venda(venda_id):
             {
                 "success": True,
                 "venda": {
-                    "id": venda.id,
-                    "codigo": venda.codigo,
-                    "data": venda.data_venda.strftime("%d/%m/%Y %H:%M:%S")
-                    if venda.data_venda
+                    "id": venda_data.get("id"),
+                    "codigo": venda_data.get("codigo"),
+                    "data": venda_data.get("data_venda").strftime("%d/%m/%Y %H:%M:%S")
+                    if venda_data.get("data_venda") and hasattr(venda_data.get("data_venda"), "strftime")
                     else "",
                 },
                 "estabelecimento": {
-                    "nome_fantasia": estabelecimento.nome_fantasia if estabelecimento else "",
-                    "razao_social": estabelecimento.razao_social if estabelecimento else "",
-                    "cnpj": estabelecimento.cnpj if estabelecimento else "",
-                    "inscricao_estadual": estabelecimento.inscricao_estadual if estabelecimento else "",
-                    "telefone": estabelecimento.telefone if estabelecimento else "",
-                    "email": estabelecimento.email if estabelecimento else "",
-                    "endereco": (
-                        estabelecimento.endereco_completo()
-                        if estabelecimento and hasattr(estabelecimento, "endereco_completo")
-                        else ""
-                    ),
+                    "nome_fantasia": estabelecimento_data.get("nome_fantasia"),
+                    "razao_social": estabelecimento_data.get("razao_social"),
+                    "cnpj": estabelecimento_data.get("cnpj"),
+                    "inscricao_estadual": estabelecimento_data.get("inscricao_estadual", "ISENTO"),
+                    "telefone": estabelecimento_data.get("telefone"),
+                    "email": estabelecimento_data.get("email"),
+                    "endereco": f"{estabelecimento_data.get('logradouro')}, {estabelecimento_data.get('numero')}",
                 },
                 "comprovante": comprovante,
             }

@@ -464,44 +464,36 @@ def login():
         # Identity como string (user_id)
         identity = str(funcionario.id)
 
-        # Buscar estabelecimento via SQL DIRETO (evita falha se banco tiver colunas desatualizadas)
-        # O ORM geraria SELECT com TODAS as colunas do modelo, quebrando se alguma não existir no banco.
-        from sqlalchemy import text as _text
-        estab_row = None
-        try:
-            estab_result = db.session.execute(
-                _text("""
-                    SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, ativo
-                    FROM estabelecimentos
-                    WHERE id = :eid
-                    LIMIT 1
-                """),
-                {"eid": funcionario.estabelecimento_id}
-            ).fetchone()
-            if estab_row is None:
-                estab_row = estab_result
-        except Exception as eq:
-            current_app.logger.error(f"[LOGIN] Erro ao buscar estabelecimento (SQL direto): {eq}")
-            estab_row = None
+        # Buscar estabelecimento via utilitário safe (blindado contra colunas ausentes)
+        from app.utils.query_helpers import get_estabelecimento_safe
+        dados_estab = get_estabelecimento_safe(funcionario.estabelecimento_id)
 
-        # Fallback para ORM se SQL direto falhar por qualquer motivo
-        if estab_row is None:
+        if not dados_estab:
+            login_history.observacoes = "Estabelecimento não encontrado"
             try:
-                estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
-            except Exception:
-                estabelecimento = None
-        else:
-            # Simula o objeto com um namespace simples para não mudar o código downstream
-            class _EstabProxy:
-                pass
-            estabelecimento = _EstabProxy()
-            estabelecimento.id = estab_row[0]
-            estabelecimento.nome_fantasia = estab_row[1]
-            estabelecimento.razao_social = estab_row[2]
-            estabelecimento.cnpj = estab_row[3]
-            estabelecimento.telefone = estab_row[4]
-            estabelecimento.email = estab_row[5]
-            estabelecimento.ativo = estab_row[6]
+                db.session.add(login_history)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Erro ao salvar histórico (sem estab): {e}")
+
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": "Estabelecimento não configurado",
+                        "code": "ESTABLISHMENT_NOT_FOUND",
+                    }
+                ),
+                404,
+            )
+        
+        # Simula objeto para compatibilidade downstream se necessário (embora usemos dados_estab direto agora)
+        class _EstabProxy:
+            pass
+        estabelecimento = _EstabProxy()
+        for k, v in dados_estab.items():
+            setattr(estabelecimento, k, v)
 
         if not estabelecimento:
             login_history.observacoes = "Estabelecimento não encontrado"
@@ -875,10 +867,11 @@ def validate_token():
                     401,
                 )
 
-        # Buscar funcionário para garantir que ainda existe
-        funcionario = Funcionario.query.get(int(current_user_id))
+        # Buscar funcionário de forma safe
+        from app.utils.query_helpers import get_funcionario_safe, get_estabelecimento_safe
+        funcionario_data = get_funcionario_safe(int(current_user_id))
 
-        if not funcionario:
+        if not funcionario_data:
             return (
                 jsonify(
                     {
@@ -891,7 +884,7 @@ def validate_token():
             )
 
         # Verificar se usuário ainda está ativo
-        if funcionario.status != "ativo" or not funcionario.ativo:
+        if funcionario_data.get("status") != "ativo" or not funcionario_data.get("ativo"):
             return (
                 jsonify(
                     {
@@ -903,8 +896,8 @@ def validate_token():
                 403,
             )
 
-        # Buscar informações do estabelecimento
-        estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
+        # Buscar informações do estabelecimento de forma safe
+        estabelecimento_data = get_estabelecimento_safe(funcionario_data.get("estabelecimento_id"))
 
         # Usar dados do token e do banco
         user_data = {
@@ -914,13 +907,13 @@ def validate_token():
             "estabelecimento_id": claims.get("estabelecimento_id"),
             "estabelecimento_nome": claims.get("estabelecimento_nome"),
             "role": claims.get("role"),
-            "status": funcionario.status,
+            "status": funcionario_data.get("status"),
             "cargo": claims.get("cargo"),
-            "email": funcionario.email,
-            "foto_url": funcionario.foto_url,
-            "telefone": funcionario.telefone,
-            "cpf": funcionario.cpf,
-            "permissoes": funcionario.permissoes,
+            "email": funcionario_data.get("email"),
+            "foto_url": funcionario_data.get("foto_url"),
+            "telefone": funcionario_data.get("telefone"),
+            "cpf": funcionario_data.get("cpf"),
+            "permissoes": funcionario_data.get("permissoes"),
         }
 
         return (
@@ -1019,9 +1012,10 @@ def get_profile():
     try:
         current_user_id = get_jwt_identity()
 
-        funcionario = Funcionario.query.get(int(current_user_id))
+        from app.utils.query_helpers import get_funcionario_safe, get_estabelecimento_safe
+        funcionario_data = get_funcionario_safe(int(current_user_id))
 
-        if not funcionario:
+        if not funcionario_data:
             return (
                 jsonify(
                     {
@@ -1033,7 +1027,7 @@ def get_profile():
                 404,
             )
 
-        estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
+        estabelecimento_data = get_estabelecimento_safe(funcionario_data.get("estabelecimento_id"))
 
         # Estatísticas do usuário (se aplicável)
         hoje = datetime.utcnow().date()
@@ -1044,40 +1038,40 @@ def get_profile():
             )
 
         profile_data = {
-            "id": funcionario.id,
-            "nome": funcionario.nome,
-            "username": funcionario.username,
-            "email": funcionario.email,
-            "cpf": funcionario.cpf,
-            "telefone": funcionario.telefone,
-            "foto_url": funcionario.foto_url,
-            "cargo": funcionario.cargo,
-            "role": funcionario.role,
-            "status": funcionario.status,
-            "ativo": funcionario.ativo,
+            "id": funcionario_data.get("id"),
+            "nome": funcionario_data.get("nome"),
+            "username": funcionario_data.get("username"),
+            "email": funcionario_data.get("email"),
+            "cpf": funcionario_data.get("cpf"),
+            "telefone": funcionario_data.get("telefone"),
+            "foto_url": funcionario_data.get("foto_url"),
+            "cargo": funcionario_data.get("cargo"),
+            "role": funcionario_data.get("role"),
+            "status": funcionario_data.get("status"),
+            "ativo": funcionario_data.get("ativo"),
             "data_admissao": (
-                funcionario.data_admissao.isoformat()
-                if funcionario.data_admissao
-                else None
+                funcionario_data.get("data_admissao").isoformat()
+                if funcionario_data.get("data_admissao") and hasattr(funcionario_data.get("data_admissao"), "isoformat")
+                else funcionario_data.get("data_admissao")
             ),
             "data_demissao": (
-                funcionario.data_demissao.isoformat()
-                if funcionario.data_demissao
-                else None
+                funcionario_data.get("data_demissao").isoformat()
+                if funcionario_data.get("data_demissao") and hasattr(funcionario_data.get("data_demissao"), "isoformat")
+                else funcionario_data.get("data_demissao")
             ),
-            "permissoes": funcionario.permissoes,
+            "permissoes": funcionario_data.get("permissoes"),
             "estabelecimento": {
-                "id": estabelecimento.id if estabelecimento else None,
-                "nome": estabelecimento.nome_fantasia if estabelecimento else None,
-                "cnpj": estabelecimento.cnpj if estabelecimento else None,
-                "telefone": estabelecimento.telefone if estabelecimento else None,
-                "email": estabelecimento.email if estabelecimento else None,
-                "endereco": estabelecimento.endereco_completo() if estabelecimento else None,
-                "cidade": estabelecimento.cidade if estabelecimento else None,
-                "estado": estabelecimento.estado if estabelecimento else None,
+                "id": estabelecimento_data.get("id") if estabelecimento_data else None,
+                "nome": estabelecimento_data.get("nome_fantasia") if estabelecimento_data else None,
+                "cnpj": estabelecimento_data.get("cnpj") if estabelecimento_data else None,
+                "telefone": estabelecimento_data.get("telefone") if estabelecimento_data else None,
+                "email": estabelecimento_data.get("email") if estabelecimento_data else None,
+                "endereco": estabelecimento_data.get("logradouro") if estabelecimento_data else None,
+                "cidade": estabelecimento_data.get("cidade") if estabelecimento_data else None,
+                "estado": estabelecimento_data.get("estado") if estabelecimento_data else None,
             },
             "permissions": get_permissions_for_role(
-                funcionario.role, funcionario.permissoes
+                funcionario_data.get("role"), funcionario_data.get("permissoes")
             ),
             "estatisticas": {
                 "total_vendas_hoje": total_vendas_hoje,
