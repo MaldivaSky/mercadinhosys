@@ -289,8 +289,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose }) => {
 
             <style dangerouslySetInnerHTML={{
                 __html: `
-                #scanner-container video { width: 100%; height: 100%; object-fit: cover; }
-                #scanner-container canvas { display: none; }
+                /* scanner-container video { width: 100%; height: 100%; object-fit: cover; } */
+                /* scanner-container canvas { display: none; } */
                 .drawingBuffer { position: absolute; top: 0; left: 0; pointer-events: none; }
             `}} />
         </div>
