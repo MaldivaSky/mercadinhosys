@@ -80,33 +80,54 @@ def listar_leads():
 @saas_bp.route("/assinatura/status", methods=["GET"])
 @jwt_required()
 def get_assinatura_status():
-    """
-    Retorna o status do plano do estabelecimento atual
-    """
+    """Retorna o status do plano do estabelecimento atual via SQL direto"""
     try:
+        from sqlalchemy import text as _t
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
-        
+
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
-            
-        estabelecimento = Estabelecimento.query.get(estabelecimento_id)
-        if not estabelecimento:
+
+        # SQL direto - busca apenas colunas que certamente existem
+        row = db.session.execute(
+            _t("SELECT id, nome_fantasia FROM estabelecimentos WHERE id = :eid LIMIT 1"),
+            {"eid": estabelecimento_id}
+        ).fetchone()
+
+        if not row:
             return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
-            
+
+        # Busca colunas opcionais individualmente
+        def _col(c, default=None):
+            try:
+                r = db.session.execute(
+                    _t(f"SELECT {c} FROM estabelecimentos WHERE id = :eid LIMIT 1"),
+                    {"eid": estabelecimento_id}
+                ).fetchone()
+                return r[0] if r else default
+            except Exception:
+                return default
+
+        plano            = _col("plano", "Basic")
+        plano_status_val = _col("plano_status", "experimental")
+        vencimento       = _col("vencimento_assinatura")
+
         return jsonify({
             "success": True,
             "data": {
-                "plano": estabelecimento.plano,
-                "status": estabelecimento.plano_status,
-                "vencimento": estabelecimento.vencimento_assinatura.isoformat() if estabelecimento.vencimento_assinatura else None,
-                "is_active": estabelecimento.plano_status in ["ativo", "experimental"]
+                "plano": plano,
+                "status": plano_status_val,
+                "vencimento": vencimento.isoformat() if vencimento else None,
+                "is_active": plano_status_val in ["ativo", "experimental"],
+                "nome_estabelecimento": row[1],
             }
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Erro ao buscar status de assinatura: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 @saas_bp.route("/assinatura/webhook", methods=["POST"])

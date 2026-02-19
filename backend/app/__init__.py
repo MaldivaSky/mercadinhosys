@@ -213,74 +213,87 @@ def create_app(config_name=None):
                         logger.error(f"ERRO FATAL: Nem o banco local pode ser inicializado: {le}")
                 else:
                     logger.error(f"ERRO: Criar tabelas no bootstrap: {e}")
-    
-            # Em produção, sugerimos usar migrations (Flask-Migrate)
-            # Rodar sync via código em cada boot é lento.
-            force_sync = os.environ.get("FORCE_SCHEMA_SYNC", "false").lower() == "true"
-            
-            # Sincronização de Schema Crítica (SQL Direto - Aiven/Postgres)
-            try:
-                is_sqlite = db.engine.name == 'sqlite'
-                
-                sqls = [
-                    # Estabelecimento - Identificação e SaaS
-                    ("estabelecimentos", "plano", "VARCHAR(20) DEFAULT 'Basic'"),
-                    ("estabelecimentos", "plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
-                    ("estabelecimentos", "stripe_customer_id", "VARCHAR(100)"),
-                    ("estabelecimentos", "stripe_subscription_id", "VARCHAR(100)"),
-                    ("estabelecimentos", "vencimento_assinatura", "TIMESTAMP"),
-                    # Estabelecimento - Endereço (Causa raiz do Erro 500 no Render/Aiven)
-                    ("estabelecimentos", "cep", "VARCHAR(9) DEFAULT '00000-000'"),
-                    ("estabelecimentos", "logradouro", "VARCHAR(200) DEFAULT 'Não Informado'"),
-                    ("estabelecimentos", "numero", "VARCHAR(10) DEFAULT 'S/N'"),
-                    ("estabelecimentos", "complemento", "VARCHAR(100)"),
-                    ("estabelecimentos", "bairro", "VARCHAR(100) DEFAULT 'Centro'"),
-                    ("estabelecimentos", "cidade", "VARCHAR(100) DEFAULT 'Cidade'"),
-                    ("estabelecimentos", "estado", "VARCHAR(2) DEFAULT 'SP'"),
-                    
-                    # Configurações - Visuais e Vendas
-                    ("configuracoes", "logo_base64", "TEXT"),
-                    ("configuracoes", "tema_escuro", "BOOLEAN DEFAULT FALSE"),
-                    ("configuracoes", "cor_principal", "VARCHAR(7) DEFAULT '#2563eb'"),
-                    ("configuracoes", "emitir_nfe", "BOOLEAN DEFAULT FALSE"),
-                    ("configuracoes", "emitir_nfce", "BOOLEAN DEFAULT TRUE"),
-                    ("configuracoes", "impressao_automatica", "BOOLEAN DEFAULT FALSE"),
-                    ("configuracoes", "tipo_impressora", "VARCHAR(20) DEFAULT 'termica_80mm'"),
-                    ("configuracoes", "exibir_preco_tela", "BOOLEAN DEFAULT TRUE"),
-                    ("configuracoes", "permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
-                    ("configuracoes", "desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
-                    ("configuracoes", "desconto_maximo_funcionario", "NUMERIC(5,2) DEFAULT 10.00"),
-                    ("configuracoes", "arredondamento_valores", "BOOLEAN DEFAULT TRUE"),
-                    ("configuracoes", "formas_pagamento", "TEXT"),
-                    ("configuracoes", "controlar_validade", "BOOLEAN DEFAULT TRUE"),
-                    ("configuracoes", "alerta_estoque_minimo", "BOOLEAN DEFAULT TRUE"),
-                    ("configuracoes", "dias_alerta_validade", "INTEGER DEFAULT 30"),
-                    ("configuracoes", "estoque_minimo_padrao", "INTEGER DEFAULT 10"),
-                    ("configuracoes", "tempo_sessao_minutos", "INTEGER DEFAULT 30"),
-                    ("configuracoes", "tentativas_senha_bloqueio", "INTEGER DEFAULT 3"),
-                    ("configuracoes", "alertas_email", "BOOLEAN DEFAULT FALSE"),
-                    ("configuracoes", "alertas_whatsapp", "BOOLEAN DEFAULT FALSE"),
-                    ("configuracoes", "horas_extras_percentual", "NUMERIC(5,2) DEFAULT 50.00")
-                ]
 
-                import traceback
-                for table, col, col_type in sqls:
-                    try:
-                        if not is_sqlite:
-                            db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"))
-                        else:
-                            db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
-                        db.session.commit()
-                    except Exception as inner_e:
-                        db.session.rollback()
-                        logger.debug(f"ℹ️ Coluna {table}.{col} já existe ou erro ignorado.")
-                
-                logger.info("✅ Sincronização Real de Schema concluída.")
-            except Exception as e:
-                import traceback
-                logger.critical(f"🔴 ERRO NO SYNC DE SCHEMA: {str(e)}\n{traceback.format_exc()}")
     else:
-        logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
+        logger.info("INFO: db.create_all() pulado (SKIP_DB_SETUP=true). Schema sync ainda sera executado.")
+
+    # ==================== SCHEMA SYNC SEMPRE RODA ====================
+    # Independente do SKIP_DB_SETUP, garantimos que todas as colunas existam.
+    # Isso corrige o banco de producao sem precisar de flask db upgrade manual.
+    with app.app_context():
+        try:
+            from sqlalchemy import text as _sync_text
+            is_sqlite = db.engine.name == 'sqlite'
+
+            schema_sqls = [
+                # Estabelecimento - SaaS
+                ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Basic'"),
+                ("estabelecimentos", "plano_status",            "VARCHAR(20)  DEFAULT 'experimental'"),
+                ("estabelecimentos", "stripe_customer_id",      "VARCHAR(100)"),
+                ("estabelecimentos", "stripe_subscription_id",  "VARCHAR(100)"),
+                ("estabelecimentos", "vencimento_assinatura",   "TIMESTAMP"),
+                ("estabelecimentos", "pagarme_id",              "VARCHAR(100)"),
+                # Estabelecimento - Endereço completo
+                ("estabelecimentos", "cep",                     "VARCHAR(9)   DEFAULT '00000-000'"),
+                ("estabelecimentos", "logradouro",              "VARCHAR(200) DEFAULT 'Nao Informado'"),
+                ("estabelecimentos", "numero",                  "VARCHAR(10)  DEFAULT 'S/N'"),
+                ("estabelecimentos", "complemento",             "VARCHAR(100)"),
+                ("estabelecimentos", "bairro",                  "VARCHAR(100) DEFAULT 'Centro'"),
+                ("estabelecimentos", "cidade",                  "VARCHAR(100) DEFAULT 'Cidade'"),
+                ("estabelecimentos", "estado",                  "VARCHAR(2)   DEFAULT 'SP'"),
+                ("estabelecimentos", "pais",                    "VARCHAR(50)  DEFAULT 'Brasil'"),
+                # Configurações - completo
+                ("configuracoes", "logo_base64",                "TEXT"),
+                ("configuracoes", "tema_escuro",                "BOOLEAN DEFAULT FALSE"),
+                ("configuracoes", "cor_principal",              "VARCHAR(7) DEFAULT '#2563eb'"),
+                ("configuracoes", "emitir_nfe",                 "BOOLEAN DEFAULT FALSE"),
+                ("configuracoes", "emitir_nfce",                "BOOLEAN DEFAULT TRUE"),
+                ("configuracoes", "impressao_automatica",       "BOOLEAN DEFAULT FALSE"),
+                ("configuracoes", "tipo_impressora",            "VARCHAR(20) DEFAULT 'termica_80mm'"),
+                ("configuracoes", "exibir_preco_tela",          "BOOLEAN DEFAULT TRUE"),
+                ("configuracoes", "permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
+                ("configuracoes", "desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
+                ("configuracoes", "desconto_maximo_funcionario","NUMERIC(5,2) DEFAULT 10.00"),
+                ("configuracoes", "arredondamento_valores",     "BOOLEAN DEFAULT TRUE"),
+                ("configuracoes", "formas_pagamento",           "TEXT"),
+                ("configuracoes", "controlar_validade",         "BOOLEAN DEFAULT TRUE"),
+                ("configuracoes", "alerta_estoque_minimo",      "BOOLEAN DEFAULT TRUE"),
+                ("configuracoes", "dias_alerta_validade",       "INTEGER DEFAULT 30"),
+                ("configuracoes", "estoque_minimo_padrao",      "INTEGER DEFAULT 10"),
+                ("configuracoes", "tempo_sessao_minutos",       "INTEGER DEFAULT 30"),
+                ("configuracoes", "tentativas_senha_bloqueio",  "INTEGER DEFAULT 3"),
+                ("configuracoes", "alertas_email",              "BOOLEAN DEFAULT FALSE"),
+                ("configuracoes", "alertas_whatsapp",           "BOOLEAN DEFAULT FALSE"),
+                ("configuracoes", "horas_extras_percentual",    "NUMERIC(5,2) DEFAULT 50.00"),
+                # Funcionarios - campos extras
+                ("funcionarios", "data_demissao",               "DATE"),
+                ("funcionarios", "salario",                     "NUMERIC(10,2)"),
+                ("funcionarios", "observacoes",                 "TEXT"),
+                ("funcionarios", "foto_url",                    "TEXT"),
+                # Produtos
+                ("produtos", "margem_lucro",                    "NUMERIC(5,2)"),
+                ("produtos", "fornecedor_id",                   "INTEGER"),
+                ("produtos", "codigo_barras",                   "VARCHAR(50)"),
+                ("produtos", "ativo",                          "BOOLEAN DEFAULT TRUE"),
+            ]
+
+            added = 0
+            for table, col, col_type in schema_sqls:
+                try:
+                    if is_sqlite:
+                        db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                    else:
+                        db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"))
+                    db.session.commit()
+                    added += 1
+                except Exception:
+                    db.session.rollback()
+
+            logger.info(f"✅ Schema sync concluido: {added} colunas verificadas/adicionadas.")
+        except Exception as sync_err:
+            db.session.rollback()
+            logger.error(f"⚠️ Schema sync falhou (nao critico): {sync_err}")
+
 
     # ==================== REGISTRO DE BLUEPRINTS ====================
 
