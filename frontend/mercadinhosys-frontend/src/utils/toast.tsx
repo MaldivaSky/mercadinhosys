@@ -1,100 +1,85 @@
 import React from 'react';
 import toast, { ToastOptions } from 'react-hot-toast';
 
-/*
- * MercadinhoSys — Toast Profissional
- * Design adaptado para dark mode (padrão do sistema).
- * Cores sólidas, alto contraste, ícones SVG inline sem dependência de classes Tailwind.
+/**
+ * MercadinhoSys — Toast Premium (Apple Style)
+ * Design com Glassmorphism, Blur e alta velocidade.
+ * Foco exclusivo em performance e estética moderna.
  */
 
-// ─── Estilos base ─────────────────────────────────────────────────────────────
-const base: React.CSSProperties = {
-    padding: '14px 18px',
-    borderRadius: '10px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+const glassBase: React.CSSProperties = {
+    padding: '12px 20px',
+    borderRadius: '14px',
+    fontFamily: '"Outfit", "Inter", system-ui, sans-serif',
     fontSize: '14px',
-    fontWeight: 500,
-    lineHeight: '1.4',
-    maxWidth: '420px',
-    minWidth: '280px',
+    fontWeight: 600,
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-    border: '1px solid',
+    gap: '12px',
+    backdropFilter: 'blur(12px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+    color: '#ffffff',
 };
 
 const themes = {
     success: {
         style: {
-            ...base,
-            background: '#0f4c2a',
-            color: '#86efac',
-            borderColor: '#166534',
+            ...glassBase,
+            background: 'rgba(22, 101, 52, 0.7)',
+            borderColor: 'rgba(74, 222, 128, 0.2)',
         },
         iconColor: '#4ade80',
     },
     error: {
         style: {
-            ...base,
-            background: '#4c0f0f',
-            color: '#fca5a5',
-            borderColor: '#7f1d1d',
+            ...glassBase,
+            background: 'rgba(127, 29, 29, 0.7)',
+            borderColor: 'rgba(248, 113, 113, 0.2)',
         },
         iconColor: '#f87171',
     },
     warning: {
         style: {
-            ...base,
-            background: '#4a3000',
-            color: '#fde68a',
-            borderColor: '#78350f',
+            ...glassBase,
+            background: 'rgba(120, 53, 15, 0.7)',
+            borderColor: 'rgba(251, 191, 36, 0.2)',
         },
         iconColor: '#fbbf24',
     },
     info: {
         style: {
-            ...base,
-            background: '#0f2f4c',
-            color: '#93c5fd',
-            borderColor: '#1e3a5f',
+            ...glassBase,
+            background: 'rgba(30, 58, 138, 0.7)',
+            borderColor: 'rgba(96, 165, 250, 0.2)',
         },
         iconColor: '#60a5fa',
-    },
-    loading: {
-        style: {
-            ...base,
-            background: '#1e293b',
-            color: '#cbd5e1',
-            borderColor: '#334155',
-        },
-        iconColor: '#94a3b8',
-    },
+    }
 };
 
-// ─── Ícones SVG inline (sem Tailwind) ─────────────────────────────────────────
 const Icon = {
     success: (c: string) => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <path d="M20 6L9 17l-5-5" />
         </svg>
     ),
     error: (c: string) => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" />
             <line x1="15" y1="9" x2="9" y2="15" />
             <line x1="9" y1="9" x2="15" y2="15" />
         </svg>
     ),
     warning: (c: string) => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
     ),
     info: (c: string) => (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -102,66 +87,63 @@ const Icon = {
     ),
 };
 
-// ─── API pública ───────────────────────────────────────────────────────────────
 export const showToast = {
     success: (message: string, options?: ToastOptions) => {
-        const t = themes.success;
         toast.success(message, {
-            duration: 3500,
-            style: t.style as React.CSSProperties,
-            icon: Icon.success(t.iconColor),
+            duration: 2000, # Ultra - rápido para UX fluida
+            style: themes.success.style as React.CSSProperties,
+            icon: Icon.success(themes.success.iconColor),
             ...options,
         });
     },
-
     error: (message: string, options?: ToastOptions) => {
-        const t = themes.error;
         toast.error(message, {
-            duration: 5000,
-            style: t.style as React.CSSProperties,
-            icon: Icon.error(t.iconColor),
+            duration: 4000,
+            style: themes.error.style as React.CSSProperties,
+            icon: Icon.error(themes.error.iconColor),
             ...options,
         });
     },
-
     warning: (message: string, options?: ToastOptions) => {
-        const t = themes.warning;
         toast(message, {
-            duration: 4500,
-            style: t.style as React.CSSProperties,
-            icon: Icon.warning(t.iconColor),
+            duration: 3000,
+            style: themes.warning.style as React.CSSProperties,
+            icon: Icon.warning(themes.warning.iconColor),
             ...options,
         });
     },
-
     info: (message: string, options?: ToastOptions) => {
-        const t = themes.info;
         toast(message, {
-            duration: 3500,
-            style: t.style as React.CSSProperties,
-            icon: Icon.info(t.iconColor),
+            duration: 2500,
+            style: themes.info.style as React.CSSProperties,
+            icon: Icon.info(themes.info.iconColor),
             ...options,
         });
     },
-
     loading: (message: string, options?: ToastOptions) => {
         return toast.loading(message, {
-            style: themes.loading.style as React.CSSProperties,
+            style: { ...glassBase, background: 'rgba(30, 41, 59, 0.7)' },
             ...options,
         });
     },
-
     dismiss: (toastId?: string) => toast.dismiss(toastId),
-
     promise: <T,>(
         promise: Promise<T>,
         msgs: { loading: string; success: string; error: string },
         options?: ToastOptions
     ) => {
         return toast.promise(promise, msgs, {
-            style: themes.loading.style as React.CSSProperties,
-            success: { style: themes.success.style as React.CSSProperties, icon: Icon.success(themes.success.iconColor) },
-            error: { style: themes.error.style as React.CSSProperties, icon: Icon.error(themes.error.iconColor) },
+            style: glassBase,
+            success: {
+                style: themes.success.style as React.CSSProperties,
+                icon: Icon.success(themes.success.iconColor),
+                duration: 2000
+            },
+            error: {
+                style: themes.error.style as React.CSSProperties,
+                icon: Icon.error(themes.error.iconColor),
+                duration: 4000
+            },
             ...options,
         });
     },

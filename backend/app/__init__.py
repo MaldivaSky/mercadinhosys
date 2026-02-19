@@ -222,24 +222,30 @@ def create_app(config_name=None):
             # Rodar sync via código em cada boot é lento.
             force_sync = os.environ.get("FORCE_SCHEMA_SYNC", "false").lower() == "true"
             
-            # Sincronização de Schema Crítica (SQL Direto - Anti-Erro 500)
+            # Sincronização de Schema Crítica (SQL Direto - Aiven/Postgres)
             try:
-                # Comandos SQL compatíveis com Postgres e SQLite para garantir colunas vitais
-                # Nota: SQLite não suporta 'IF NOT EXISTS' em ADD COLUMN, então usamos try/except por coluna
                 is_sqlite = db.engine.name == 'sqlite'
                 
                 sqls = [
-                    # Estabelecimento
+                    # Estabelecimento - Identificação e SaaS
                     ("estabelecimentos", "plano", "VARCHAR(20) DEFAULT 'Basic'"),
                     ("estabelecimentos", "plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
                     ("estabelecimentos", "stripe_customer_id", "VARCHAR(100)"),
                     ("estabelecimentos", "stripe_subscription_id", "VARCHAR(100)"),
                     ("estabelecimentos", "vencimento_assinatura", "TIMESTAMP"),
-                    # Configurações - Visuais
+                    # Estabelecimento - Endereço (Causa raiz do Erro 500 no Render/Aiven)
+                    ("estabelecimentos", "cep", "VARCHAR(9) DEFAULT '00000-000'"),
+                    ("estabelecimentos", "logradouro", "VARCHAR(200) DEFAULT 'Não Informado'"),
+                    ("estabelecimentos", "numero", "VARCHAR(10) DEFAULT 'S/N'"),
+                    ("estabelecimentos", "complemento", "VARCHAR(100)"),
+                    ("estabelecimentos", "bairro", "VARCHAR(100) DEFAULT 'Centro'"),
+                    ("estabelecimentos", "cidade", "VARCHAR(100) DEFAULT 'Cidade'"),
+                    ("estabelecimentos", "estado", "VARCHAR(2) DEFAULT 'SP'"),
+                    
+                    # Configurações - Visuais e Vendas
                     ("configuracoes", "logo_base64", "TEXT"),
                     ("configuracoes", "tema_escuro", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "cor_principal", "VARCHAR(7) DEFAULT '#2563eb'"),
-                    # Configurações - Vendas
                     ("configuracoes", "emitir_nfe", "BOOLEAN DEFAULT FALSE"),
                     ("configuracoes", "emitir_nfce", "BOOLEAN DEFAULT TRUE"),
                     ("configuracoes", "impressao_automatica", "BOOLEAN DEFAULT FALSE"),
@@ -250,12 +256,10 @@ def create_app(config_name=None):
                     ("configuracoes", "desconto_maximo_funcionario", "NUMERIC(5,2) DEFAULT 10.00"),
                     ("configuracoes", "arredondamento_valores", "BOOLEAN DEFAULT TRUE"),
                     ("configuracoes", "formas_pagamento", "TEXT"),
-                    # Configurações - Estoque
                     ("configuracoes", "controlar_validade", "BOOLEAN DEFAULT TRUE"),
                     ("configuracoes", "alerta_estoque_minimo", "BOOLEAN DEFAULT TRUE"),
                     ("configuracoes", "dias_alerta_validade", "INTEGER DEFAULT 30"),
                     ("configuracoes", "estoque_minimo_padrao", "INTEGER DEFAULT 10"),
-                    # Configurações - Sistema
                     ("configuracoes", "tempo_sessao_minutos", "INTEGER DEFAULT 30"),
                     ("configuracoes", "tentativas_senha_bloqueio", "INTEGER DEFAULT 3"),
                     ("configuracoes", "alertas_email", "BOOLEAN DEFAULT FALSE"),
@@ -266,21 +270,19 @@ def create_app(config_name=None):
                 import traceback
                 for table, col, col_type in sqls:
                     try:
-                        # No Postgres (Render), o 'ADD COLUMN IF NOT EXISTS' é o ideal
                         if not is_sqlite:
                             db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"))
                         else:
-                            # No SQLite, tentamos adicionar. Se falhar (já existe), o except cuida.
                             db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
                         db.session.commit()
                     except Exception as inner_e:
                         db.session.rollback()
-                        logger.critical(f"❌ FALHA EM COLUNA {table}.{col}: {str(inner_e)}\n{traceback.format_exc()}")
+                        logger.debug(f"ℹ️ Coluna {table}.{col} já existe ou erro ignorado.")
                 
-                logger.info("✅ Auto-reparo de schema concluído no boot.")
+                logger.info("✅ Sincronização Real de Schema concluída.")
             except Exception as e:
                 import traceback
-                logger.critical(f"🔴 ERRO FATAL NO BOOTSTRAP DO SCHEMA: {str(e)}\n{traceback.format_exc()}")
+                logger.critical(f"🔴 ERRO NO SYNC DE SCHEMA: {str(e)}\n{traceback.format_exc()}")
     else:
         logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
 
@@ -424,14 +426,6 @@ def create_app(config_name=None):
         logger.info("✅ Blueprint SaaS registrado em /api/saas")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar saas: {e}")
-
-    # Debug Tool (Temporário)
-    try:
-        from app.routes.debug import debug_bp
-        app.register_blueprint(debug_bp)
-        logger.info("⚠️ Blueprint DEBUG registrado")
-    except Exception as e:
-        logger.error(f"Erro debug bp: {e}")
 
     # Dashboard Científico - verifica se existe a pasta
     try:
