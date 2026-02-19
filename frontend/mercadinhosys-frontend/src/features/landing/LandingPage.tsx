@@ -107,7 +107,7 @@ const LandingPage: React.FC = () => {
         {
             name: "Ricardo Mendes",
             role: "Empresário MEI",
-            comment: "O plano Basic cabe no bolso e me deu profissionalismo. Meus clientes adoram receber o cupom fiscal direto no WhatsApp.",
+            comment: "O plano Basic cabe no bolso e me deu profissionalismo. Meus clientes adoram receber o cupom fiscal direto no Email.",
             stars: 5,
             image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150"
         }
