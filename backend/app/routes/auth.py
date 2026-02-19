@@ -349,8 +349,44 @@ def login():
         # Identity como string (user_id)
         identity = str(funcionario.id)
 
-        # Buscar estabelecimento do funcionário
-        estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
+        # Buscar estabelecimento via SQL DIRETO (evita falha se banco tiver colunas desatualizadas)
+        # O ORM geraria SELECT com TODAS as colunas do modelo, quebrando se alguma não existir no banco.
+        from sqlalchemy import text as _text
+        estab_row = None
+        try:
+            estab_result = db.session.execute(
+                _text("""
+                    SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, ativo
+                    FROM estabelecimentos
+                    WHERE id = :eid
+                    LIMIT 1
+                """),
+                {"eid": funcionario.estabelecimento_id}
+            ).fetchone()
+            if estab_row is None:
+                estab_row = estab_result
+        except Exception as eq:
+            current_app.logger.error(f"[LOGIN] Erro ao buscar estabelecimento (SQL direto): {eq}")
+            estab_row = None
+
+        # Fallback para ORM se SQL direto falhar por qualquer motivo
+        if estab_row is None:
+            try:
+                estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
+            except Exception:
+                estabelecimento = None
+        else:
+            # Simula o objeto com um namespace simples para não mudar o código downstream
+            class _EstabProxy:
+                pass
+            estabelecimento = _EstabProxy()
+            estabelecimento.id = estab_row[0]
+            estabelecimento.nome_fantasia = estab_row[1]
+            estabelecimento.razao_social = estab_row[2]
+            estabelecimento.cnpj = estab_row[3]
+            estabelecimento.telefone = estab_row[4]
+            estabelecimento.email = estab_row[5]
+            estabelecimento.ativo = estab_row[6]
 
         if not estabelecimento:
             login_history.observacoes = "Estabelecimento não encontrado"
