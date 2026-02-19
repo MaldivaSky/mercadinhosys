@@ -31,7 +31,10 @@ import {
     ChevronLeft,
     ChevronRight,
     Layers,
-    ListOrdered
+    ListOrdered,
+    ArrowUp,
+    ArrowDown,
+    ArrowUpDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
