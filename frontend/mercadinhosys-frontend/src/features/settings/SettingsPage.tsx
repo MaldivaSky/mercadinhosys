@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { 
-    Settings, Building, ShoppingCart, Package, Shield, Save, 
+import {
+    Settings, Building, ShoppingCart, Package, Shield, Save,
     Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon,
-    Clock, MapPin
+    Clock, MapPin, CreditCard
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { toast } from 'react-hot-toast';
@@ -10,6 +10,7 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
 import { API_CONFIG } from '../../api/apiConfig';
 import { apiClient } from '../../api/apiClient';
+import SubscriptionSettings from './SubscriptionSettings';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 type SectionTitleProps = {
@@ -45,11 +46,11 @@ const SectionTitle = ({ title, icon: Icon }: SectionTitleProps) => (
 const InputField = ({ label, value, onChange, type = "text", step, placeholder = "", disabled = false, onBlur }: InputFieldProps) => (
     <div className="flex flex-col space-y-1">
         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-        <input 
-            type={type} 
+        <input
+            type={type}
             step={step}
-            value={value} 
-            onChange={onChange} 
+            value={value}
+            onChange={onChange}
             onBlur={onBlur}
             disabled={disabled}
             placeholder={placeholder}
@@ -64,7 +65,7 @@ const SwitchField = ({ label, checked, onChange, description }: SwitchFieldProps
             <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</span>
             {description && <span className="text-xs text-gray-500 dark:text-gray-400">{description}</span>}
         </div>
-        <button 
+        <button
             onClick={() => onChange(!checked)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
         >
@@ -96,7 +97,7 @@ const SettingsPage: React.FC = () => {
     const [loadingGeolocation, setLoadingGeolocation] = useState(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const { config: globalConfig, loading: configLoading, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
-    
+
     const [config, setConfig] = useState<Configuracao>(defaultConfig);
     const [estab, setEstab] = useState<Estabelecimento>(defaultEstab);
 
@@ -147,34 +148,34 @@ const SettingsPage: React.FC = () => {
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            
+
             // Validar tamanho (5MB)
             if (file.size > 5 * 1024 * 1024) {
                 toast.error("Imagem muito grande! Tamanho máximo: 5MB");
                 return;
             }
-            
+
             // Validar tipo
             if (!file.type.startsWith('image/')) {
                 toast.error("Arquivo inválido! Envie apenas imagens.");
                 return;
             }
-            
+
             try {
                 // Preview imediato com base64
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                     const base64 = reader.result as string;
-                    
+
                     // Atualizar preview local
                     setConfig({ ...config, logo_url: base64 });
                 };
                 reader.readAsDataURL(file);
-                
+
                 // Upload para o servidor em background
                 toast.loading("Fazendo upload da logo...", { id: 'upload-logo' });
                 await settingsService.uploadLogo(file);
-                
+
                 setLogoPreview(null);
                 await refreshConfig();
                 toast.success("Logo atualizada com sucesso!", { id: 'upload-logo' });
@@ -228,13 +229,13 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleCorChange = async (cor: string) => {
-        setConfig({...config, cor_principal: cor});
+        setConfig({ ...config, cor_principal: cor });
         // Aplicar imediatamente
         await updateGlobalConfig({ cor_principal: cor });
     };
 
     const handleTemaChange = async (tema: boolean) => {
-        setConfig({...config, tema_escuro: tema});
+        setConfig({ ...config, tema_escuro: tema });
         // Aplicar imediatamente
         await updateGlobalConfig({ tema_escuro: tema });
     };
@@ -242,7 +243,7 @@ const SettingsPage: React.FC = () => {
     const handleCepBlur = async () => {
         const cepLimpo = estab.cep?.replace(/\D/g, '') ?? '';
         if (cepLimpo.length !== 8) return;
-        
+
         setLoadingCep(true);
         try {
             const dados = await buscarCep(estab.cep);
@@ -267,6 +268,7 @@ const SettingsPage: React.FC = () => {
         { id: 'estoque', label: 'Estoque', icon: Package },
         { id: 'ponto', label: 'Ponto & RH', icon: Clock },
         { id: 'sistema', label: 'Sistema & Segurança', icon: Shield },
+        { id: 'assinatura', label: 'Assinatura', icon: CreditCard },
     ];
 
     const loading = configLoading || loadingEstab;
@@ -281,7 +283,7 @@ const SettingsPage: React.FC = () => {
 
     return (
         <div className="container mx-auto p-4 max-w-6xl">
-            
+
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
@@ -290,8 +292,8 @@ const SettingsPage: React.FC = () => {
                     </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Gerencie todos os parâmetros do seu ERP</p>
                 </div>
-                <button 
-                    onClick={handleSave} 
+                <button
+                    onClick={handleSave}
                     disabled={saving}
                     className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-lg"
                 >
@@ -308,11 +310,10 @@ const SettingsPage: React.FC = () => {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`w-full flex items-center gap-3 px-4 py-4 text-left transition-colors border-l-4 ${
-                                    activeTab === tab.id 
-                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-600' 
+                                className={`w-full flex items-center gap-3 px-4 py-4 text-left transition-colors border-l-4 ${activeTab === tab.id
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-600'
                                     : 'text-gray-600 dark:text-gray-400 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
-                                }`}
+                                    }`}
                             >
                                 <tab.icon className="w-5 h-5" />
                                 <span className="font-medium">{tab.label}</span>
@@ -323,26 +324,26 @@ const SettingsPage: React.FC = () => {
 
                 {/* Conteúdo Principal */}
                 <div className="flex-1 space-y-6">
-                    
+
                     {/* ABA GERAL */}
                     {activeTab === 'geral' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Aparência e Identidade" icon={Settings} />
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="col-span-2 flex items-center gap-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
                                     <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-300 dark:border-gray-600 relative group">
                                         {logoPreview || config.logo_base64 || config.logo_url ? (
-                                            <img 
+                                            <img
                                                 src={
                                                     logoPreview ||
                                                     config.logo_base64 ||
                                                     (config.logo_url?.startsWith('data:') === true
                                                         ? (config.logo_url as string)
                                                         : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}${config.logo_url || ''}`)
-                                                } 
-                                                alt="Logo" 
-                                                className="w-full h-full object-contain" 
+                                                }
+                                                alt="Logo"
+                                                className="w-full h-full object-contain"
                                             />
                                         ) : (
                                             <Building className="w-8 h-8 text-gray-400" />
@@ -375,11 +376,10 @@ const SettingsPage: React.FC = () => {
                                                 key={cor.valor}
                                                 type="button"
                                                 onClick={() => handleCorChange(cor.valor)}
-                                                className={`relative p-4 rounded-lg border-2 transition-all hover:scale-105 ${
-                                                    config.cor_principal === cor.valor 
-                                                    ? 'border-gray-900 dark:border-white shadow-lg' 
+                                                className={`relative p-4 rounded-lg border-2 transition-all hover:scale-105 ${config.cor_principal === cor.valor
+                                                    ? 'border-gray-900 dark:border-white shadow-lg'
                                                     : 'border-gray-200 dark:border-gray-700'
-                                                }`}
+                                                    }`}
                                                 style={{ backgroundColor: cor.valor }}
                                             >
                                                 <div className="absolute inset-0 flex items-center justify-center">
@@ -399,8 +399,8 @@ const SettingsPage: React.FC = () => {
                                 </div>
 
                                 <div className="col-span-2">
-                                    <SwitchField 
-                                        label="Modo Escuro" 
+                                    <SwitchField
+                                        label="Modo Escuro"
                                         description="Ativar tema escuro por padrão"
                                         checked={config.tema_escuro}
                                         onChange={handleTemaChange}
@@ -418,19 +418,19 @@ const SettingsPage: React.FC = () => {
                                 Preencha o CEP para buscar endereço automaticamente via ViaCEP.
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField label="Nome Fantasia" value={estab.nome_fantasia} onChange={(e) => setEstab({...estab, nome_fantasia: e.target.value})} placeholder="Ex: Mercado do João" />
-                                <InputField label="Razão Social" value={estab.razao_social} onChange={(e) => setEstab({...estab, razao_social: e.target.value})} placeholder="Ex: João Comércio Ltda" />
-                                <InputField label="CNPJ" value={estab.cnpj} onChange={(e) => setEstab({...estab, cnpj: formatCnpj(e.target.value)})} placeholder="00.000.000/0000-00" />
-                                <InputField label="Inscrição Estadual" value={estab.inscricao_estadual || ''} onChange={(e) => setEstab({...estab, inscricao_estadual: e.target.value})} placeholder="Opcional" />
-                                <InputField label="Telefone" value={estab.telefone} onChange={(e) => setEstab({...estab, telefone: formatPhone(e.target.value)})} placeholder="(00) 00000-0000" />
-                                <InputField label="E-mail" value={estab.email} onChange={(e) => setEstab({...estab, email: e.target.value})} type="email" placeholder="contato@empresa.com" />
+                                <InputField label="Nome Fantasia" value={estab.nome_fantasia} onChange={(e) => setEstab({ ...estab, nome_fantasia: e.target.value })} placeholder="Ex: Mercado do João" />
+                                <InputField label="Razão Social" value={estab.razao_social} onChange={(e) => setEstab({ ...estab, razao_social: e.target.value })} placeholder="Ex: João Comércio Ltda" />
+                                <InputField label="CNPJ" value={estab.cnpj} onChange={(e) => setEstab({ ...estab, cnpj: formatCnpj(e.target.value) })} placeholder="00.000.000/0000-00" />
+                                <InputField label="Inscrição Estadual" value={estab.inscricao_estadual || ''} onChange={(e) => setEstab({ ...estab, inscricao_estadual: e.target.value })} placeholder="Opcional" />
+                                <InputField label="Telefone" value={estab.telefone} onChange={(e) => setEstab({ ...estab, telefone: formatPhone(e.target.value) })} placeholder="(00) 00000-0000" />
+                                <InputField label="E-mail" value={estab.email} onChange={(e) => setEstab({ ...estab, email: e.target.value })} type="email" placeholder="contato@empresa.com" />
                             </div>
 
                             <SectionTitle title="Endereço" icon={MapPin} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
                                     <div className="relative">
-                                        <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e) => setEstab({...estab, cep: formatCep(e.target.value)})} />
+                                        <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e) => setEstab({ ...estab, cep: formatCep(e.target.value) })} />
                                         {loadingCep && (
                                             <div className="absolute right-3 top-9 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
                                                 <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
@@ -440,13 +440,13 @@ const SettingsPage: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="md:col-span-2">
-                                    <InputField label="Logradouro" value={estab.logradouro} onChange={(e) => setEstab({...estab, logradouro: e.target.value})} placeholder="Rua, Avenida..." />
+                                    <InputField label="Logradouro" value={estab.logradouro} onChange={(e) => setEstab({ ...estab, logradouro: e.target.value })} placeholder="Rua, Avenida..." />
                                 </div>
-                                <InputField label="Número" value={estab.numero} onChange={(e) => setEstab({...estab, numero: e.target.value})} placeholder="Nº" />
-                                <InputField label="Complemento" value={estab.complemento || ''} onChange={(e) => setEstab({...estab, complemento: e.target.value})} placeholder="Sala, Loja, etc." />
-                                <InputField label="Bairro" value={estab.bairro} onChange={(e) => setEstab({...estab, bairro: e.target.value})} placeholder="Preenchido pelo CEP" />
-                                <InputField label="Cidade" value={estab.cidade} onChange={(e) => setEstab({...estab, cidade: e.target.value})} placeholder="Preenchido pelo CEP" />
-                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({...estab, estado: e.target.value.toUpperCase().slice(0, 2)})} placeholder="UF" />
+                                <InputField label="Número" value={estab.numero} onChange={(e) => setEstab({ ...estab, numero: e.target.value })} placeholder="Nº" />
+                                <InputField label="Complemento" value={estab.complemento || ''} onChange={(e) => setEstab({ ...estab, complemento: e.target.value })} placeholder="Sala, Loja, etc." />
+                                <InputField label="Bairro" value={estab.bairro} onChange={(e) => setEstab({ ...estab, bairro: e.target.value })} placeholder="Preenchido pelo CEP" />
+                                <InputField label="Cidade" value={estab.cidade} onChange={(e) => setEstab({ ...estab, cidade: e.target.value })} placeholder="Preenchido pelo CEP" />
+                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({ ...estab, estado: e.target.value.toUpperCase().slice(0, 2) })} placeholder="UF" />
                             </div>
                         </div>
                     )}
@@ -455,7 +455,7 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'vendas' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Ponto de Venda (PDV)" icon={ShoppingCart} />
-                            
+
                             <div className="flex justify-end">
                                 <button
                                     type="button"
@@ -468,64 +468,64 @@ const SettingsPage: React.FC = () => {
                             </div>
 
                             <div className="space-y-4">
-                                <SwitchField 
-                                    label="Impressão Automática" 
+                                <SwitchField
+                                    label="Impressão Automática"
                                     description="Imprimir cupom automaticamente ao finalizar venda"
                                     checked={config.impressao_automatica}
-                                    onChange={(val: boolean) => setConfig({...config, impressao_automatica: val})}
-                                />
-                                
-                                <SwitchField 
-                                    label="Exibir Preço na Tela" 
-                                    description="Mostrar preço unitário grande na tela de venda"
-                                    checked={config.exibir_preco_tela}
-                                    onChange={(val: boolean) => setConfig({...config, exibir_preco_tela: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, impressao_automatica: val })}
                                 />
 
-                                <SwitchField 
-                                    label="Permitir Venda Sem Estoque" 
+                                <SwitchField
+                                    label="Exibir Preço na Tela"
+                                    description="Mostrar preço unitário grande na tela de venda"
+                                    checked={config.exibir_preco_tela}
+                                    onChange={(val: boolean) => setConfig({ ...config, exibir_preco_tela: val })}
+                                />
+
+                                <SwitchField
+                                    label="Permitir Venda Sem Estoque"
                                     description="Autorizar vendas mesmo com estoque zerado ou negativo"
                                     checked={config.permitir_venda_sem_estoque}
-                                    onChange={(val: boolean) => setConfig({...config, permitir_venda_sem_estoque: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, permitir_venda_sem_estoque: val })}
                                 />
-                                
-                                <SwitchField 
-                                    label="Arredondamento de Valores" 
+
+                                <SwitchField
+                                    label="Arredondamento de Valores"
                                     description="Arredondar centavos automaticamente no total"
                                     checked={config.arredondamento_valores}
-                                    onChange={(val: boolean) => setConfig({...config, arredondamento_valores: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, arredondamento_valores: val })}
                                 />
                             </div>
 
                             <SectionTitle title="Notas Fiscais" icon={Printer} />
                             <div className="space-y-4">
-                                <SwitchField 
-                                    label="Emitir NFC-e" 
+                                <SwitchField
+                                    label="Emitir NFC-e"
                                     description="Habilitar emissão de Nota Fiscal de Consumidor Eletrônica"
                                     checked={config.emitir_nfce}
-                                    onChange={(val: boolean) => setConfig({...config, emitir_nfce: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, emitir_nfce: val })}
                                 />
-                                <SwitchField 
-                                    label="Emitir NF-e" 
+                                <SwitchField
+                                    label="Emitir NF-e"
                                     description="Habilitar emissão de Nota Fiscal Eletrônica (Grande porte)"
                                     checked={config.emitir_nfe}
-                                    onChange={(val: boolean) => setConfig({...config, emitir_nfe: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, emitir_nfe: val })}
                                 />
                             </div>
 
                             <SectionTitle title="Limites e Descontos" icon={DollarSign} />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField 
-                                    label="Desconto Máximo (%)" 
-                                    type="number" 
-                                    value={config.desconto_maximo_percentual} 
-                                    onChange={(e) => setConfig({...config, desconto_maximo_percentual: parseFloat(e.target.value)})} 
+                                <InputField
+                                    label="Desconto Máximo (%)"
+                                    type="number"
+                                    value={config.desconto_maximo_percentual}
+                                    onChange={(e) => setConfig({ ...config, desconto_maximo_percentual: parseFloat(e.target.value) })}
                                 />
-                                <InputField 
-                                    label="Desconto Máx. Funcionário (%)" 
-                                    type="number" 
-                                    value={config.desconto_maximo_funcionario} 
-                                    onChange={(e) => setConfig({...config, desconto_maximo_funcionario: parseFloat(e.target.value)})} 
+                                <InputField
+                                    label="Desconto Máx. Funcionário (%)"
+                                    type="number"
+                                    value={config.desconto_maximo_funcionario}
+                                    onChange={(e) => setConfig({ ...config, desconto_maximo_funcionario: parseFloat(e.target.value) })}
                                 />
                             </div>
                         </div>
@@ -535,35 +535,35 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'estoque' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Controle de Estoque" icon={Package} />
-                            
+
                             <div className="space-y-4">
-                                <SwitchField 
-                                    label="Controlar Validade" 
+                                <SwitchField
+                                    label="Controlar Validade"
                                     description="Exigir data de validade para produtos perecíveis"
                                     checked={config.controlar_validade}
-                                    onChange={(val: boolean) => setConfig({...config, controlar_validade: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, controlar_validade: val })}
                                 />
-                                
-                                <SwitchField 
-                                    label="Alerta de Estoque Mínimo" 
+
+                                <SwitchField
+                                    label="Alerta de Estoque Mínimo"
                                     description="Notificar quando produtos atingirem nível crítico"
                                     checked={config.alerta_estoque_minimo}
-                                    onChange={(val: boolean) => setConfig({...config, alerta_estoque_minimo: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, alerta_estoque_minimo: val })}
                                 />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <InputField 
-                                    label="Dias para Alerta de Validade" 
+                                <InputField
+                                    label="Dias para Alerta de Validade"
                                     type="number"
-                                    value={config.dias_alerta_validade} 
-                                    onChange={(e) => setConfig({...config, dias_alerta_validade: parseInt(e.target.value)})} 
+                                    value={config.dias_alerta_validade}
+                                    onChange={(e) => setConfig({ ...config, dias_alerta_validade: parseInt(e.target.value) })}
                                 />
-                                <InputField 
-                                    label="Estoque Mínimo Padrão" 
+                                <InputField
+                                    label="Estoque Mínimo Padrão"
                                     type="number"
-                                    value={config.estoque_minimo_padrao} 
-                                    onChange={(e) => setConfig({...config, estoque_minimo_padrao: parseInt(e.target.value)})} 
+                                    value={config.estoque_minimo_padrao}
+                                    onChange={(e) => setConfig({ ...config, estoque_minimo_padrao: parseInt(e.target.value) })}
                                 />
                             </div>
                         </div>
@@ -573,27 +573,27 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'ponto' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Configurações de Ponto e Frequência" icon={Clock} />
-                            
+
                             <div className="space-y-4">
-                                <SwitchField 
-                                    label="Exigir Foto no Ponto" 
+                                <SwitchField
+                                    label="Exigir Foto no Ponto"
                                     description="Obrigatório tirar foto no registro de entrada/saída"
                                     checked={config.exigir_foto_ponto ?? false}
-                                    onChange={(val: boolean) => setConfig({...config, exigir_foto_ponto: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, exigir_foto_ponto: val })}
                                 />
-                                
-                                <SwitchField 
-                                    label="Exigir Localização no Ponto" 
+
+                                <SwitchField
+                                    label="Exigir Localização no Ponto"
                                     description="Validar localização do funcionário via GPS"
                                     checked={config.exigir_localizacao_ponto ?? false}
-                                    onChange={(val: boolean) => setConfig({...config, exigir_localizacao_ponto: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, exigir_localizacao_ponto: val })}
                                 />
-                                
-                                <InputField 
-                                    label="Tolerância de Atraso (minutos)" 
+
+                                <InputField
+                                    label="Tolerância de Atraso (minutos)"
                                     type="number"
-                                    value={config.tolerancia_atraso_minutos || 5} 
-                                    onChange={(e) => setConfig({...config, tolerancia_atraso_minutos: parseInt(e.target.value)})} 
+                                    value={config.tolerancia_atraso_minutos || 5}
+                                    onChange={(e) => setConfig({ ...config, tolerancia_atraso_minutos: parseInt(e.target.value) })}
                                 />
                             </div>
 
@@ -604,31 +604,31 @@ const SettingsPage: React.FC = () => {
                                         Localização do Estabelecimento
                                     </p>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <InputField 
-                                            label="Latitude" 
+                                        <InputField
+                                            label="Latitude"
                                             type="number"
                                             step="0.000001"
-                                            value={config.latitude_estabelecimento || ''} 
-                                            onChange={(e) => setConfig({...config, latitude_estabelecimento: parseFloat(e.target.value)})} 
+                                            value={config.latitude_estabelecimento || ''}
+                                            onChange={(e) => setConfig({ ...config, latitude_estabelecimento: parseFloat(e.target.value) })}
                                             placeholder="-23.550"
                                         />
-                                        <InputField 
-                                            label="Longitude" 
+                                        <InputField
+                                            label="Longitude"
                                             type="number"
                                             step="0.000001"
-                                            value={config.longitude_estabelecimento || ''} 
-                                            onChange={(e) => setConfig({...config, longitude_estabelecimento: parseFloat(e.target.value)})} 
+                                            value={config.longitude_estabelecimento || ''}
+                                            onChange={(e) => setConfig({ ...config, longitude_estabelecimento: parseFloat(e.target.value) })}
                                             placeholder="-46.633"
                                         />
-                                        <InputField 
-                                            label="Raio de Validação (metros)" 
+                                        <InputField
+                                            label="Raio de Validação (metros)"
                                             type="number"
-                                            value={config.raio_validacao_metros || 100} 
-                                            onChange={(e) => setConfig({...config, raio_validacao_metros: parseInt(e.target.value)})} 
+                                            value={config.raio_validacao_metros || 100}
+                                            onChange={(e) => setConfig({ ...config, raio_validacao_metros: parseInt(e.target.value) })}
                                             placeholder="100"
                                         />
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={handleGetCurrentLocation}
                                         disabled={loadingGeolocation}
                                         className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
@@ -648,7 +648,7 @@ const SettingsPage: React.FC = () => {
                             )}
 
                             <SectionTitle title="Horários de Trabalho" icon={Clock} />
-                            
+
                             <div className="space-y-6">
                                 <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
                                     <div className="flex items-center justify-between">
@@ -656,10 +656,10 @@ const SettingsPage: React.FC = () => {
                                             <p className="font-semibold text-gray-900 dark:text-gray-100">Horário de Entrada</p>
                                             <p className="text-xs text-gray-600 dark:text-gray-400">Início do expediente</p>
                                         </div>
-                                        <input 
-                                            type="time" 
+                                        <input
+                                            type="time"
                                             value={config.hora_entrada_ponto || '08:00'}
-                                            onChange={(e) => setConfig({...config, hora_entrada_ponto: e.target.value})}
+                                            onChange={(e) => setConfig({ ...config, hora_entrada_ponto: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -671,10 +671,10 @@ const SettingsPage: React.FC = () => {
                                             <p className="font-semibold text-gray-900 dark:text-gray-100">Saída para Almoço</p>
                                             <p className="text-xs text-gray-600 dark:text-gray-400">Horário de pausa</p>
                                         </div>
-                                        <input 
-                                            type="time" 
+                                        <input
+                                            type="time"
                                             value={config.hora_saida_almoco_ponto || '12:00'}
-                                            onChange={(e) => setConfig({...config, hora_saida_almoco_ponto: e.target.value})}
+                                            onChange={(e) => setConfig({ ...config, hora_saida_almoco_ponto: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -686,10 +686,10 @@ const SettingsPage: React.FC = () => {
                                             <p className="font-semibold text-gray-900 dark:text-gray-100">Retorno do Almoço</p>
                                             <p className="text-xs text-gray-600 dark:text-gray-400">Volta da pausa</p>
                                         </div>
-                                        <input 
-                                            type="time" 
+                                        <input
+                                            type="time"
                                             value={config.hora_retorno_almoco_ponto || '13:00'}
-                                            onChange={(e) => setConfig({...config, hora_retorno_almoco_ponto: e.target.value})}
+                                            onChange={(e) => setConfig({ ...config, hora_retorno_almoco_ponto: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -701,10 +701,10 @@ const SettingsPage: React.FC = () => {
                                             <p className="font-semibold text-gray-900 dark:text-gray-100">Horário de Saída</p>
                                             <p className="text-xs text-gray-600 dark:text-gray-400">Fim do expediente</p>
                                         </div>
-                                        <input 
-                                            type="time" 
+                                        <input
+                                            type="time"
                                             value={config.hora_saida_ponto || '18:00'}
-                                            onChange={(e) => setConfig({...config, hora_saida_ponto: e.target.value})}
+                                            onChange={(e) => setConfig({ ...config, hora_saida_ponto: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -722,40 +722,48 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'sistema' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Segurança" icon={Shield} />
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField 
-                                    label="Tempo de Sessão (minutos)" 
+                                <InputField
+                                    label="Tempo de Sessão (minutos)"
                                     type="number"
-                                    value={config.tempo_sessao_minutos} 
-                                    onChange={(e) => setConfig({...config, tempo_sessao_minutos: parseInt(e.target.value)})} 
+                                    value={config.tempo_sessao_minutos}
+                                    onChange={(e) => setConfig({ ...config, tempo_sessao_minutos: parseInt(e.target.value) })}
                                 />
-                                <InputField 
-                                    label="Tentativas de Senha antes do Bloqueio" 
+                                <InputField
+                                    label="Tentativas de Senha antes do Bloqueio"
                                     type="number"
-                                    value={config.tentativas_senha_bloqueio} 
-                                    onChange={(e) => setConfig({...config, tentativas_senha_bloqueio: parseInt(e.target.value)})} 
+                                    value={config.tentativas_senha_bloqueio}
+                                    onChange={(e) => setConfig({ ...config, tentativas_senha_bloqueio: parseInt(e.target.value) })}
                                 />
                             </div>
 
                             <SectionTitle title="Notificações" icon={Bell} />
                             <div className="space-y-4">
-                                <SwitchField 
-                                    label="Alertas por E-mail" 
+                                <SwitchField
+                                    label="Alertas por E-mail"
                                     description="Receber relatórios e alertas críticos por e-mail"
                                     checked={config.alertas_email}
-                                    onChange={(val: boolean) => setConfig({...config, alertas_email: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, alertas_email: val })}
                                 />
-                                <SwitchField 
-                                    label="Alertas via WhatsApp" 
+                                <SwitchField
+                                    label="Alertas via WhatsApp"
                                     description="Integração para envio de alertas via WhatsApp"
                                     checked={config.alertas_whatsapp}
-                                    onChange={(val: boolean) => setConfig({...config, alertas_whatsapp: val})}
+                                    onChange={(val: boolean) => setConfig({ ...config, alertas_whatsapp: val })}
                                 />
                             </div>
 
                             <SectionTitle title="Banco & Replicação" icon={DatabaseIcon} />
                             <SyncPanel />
+                        </div>
+                    )}
+
+                    {/* ABA ASSINATURA */}
+                    {activeTab === 'assinatura' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
+                            <SectionTitle title="Assinatura & Plano" icon={CreditCard} />
+                            <SubscriptionSettings />
                         </div>
                     )}
 
@@ -828,7 +836,7 @@ const SettingsPage: React.FC = () => {
 };
 
 export default SettingsPage;
- 
+
 const SyncPanel: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [replicating, setReplicating] = useState(false);

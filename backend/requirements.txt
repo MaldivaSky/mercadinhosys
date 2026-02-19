@@ -81,3 +81,4 @@ wrapt==2.0.1
 psycopg2-binary==2.9.11
 statsmodels==0.14.6
 plotly==6.5.1
+stripe==11.4.0

@@ -6,7 +6,6 @@ import {
     Calendar,
     ArrowRight,
     Search,
-    Filter,
     RefreshCw
 } from 'lucide-react';
 import { Lead } from '../../types';

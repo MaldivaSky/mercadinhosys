@@ -595,4 +595,7 @@ def create_app(config_name=None):
     """
     )
 
+    from app.routes.stripe_routes import stripe_bp
+    app.register_blueprint(stripe_bp)
+    
     return app
