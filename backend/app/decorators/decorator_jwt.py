@@ -22,7 +22,7 @@ def funcionario_required(f):
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
         # Verifica se não está bloqueado - agora usa claims
-        if claims.get("status") != "ativo":
+        if claims.get("status") not in ["ativo", "active"]:
             from flask import current_app
             current_app.logger.warning(f"Acesso bloqueado: user={current_user_id}, status={claims.get('status')}")
             return (
@@ -68,7 +68,7 @@ def admin_required(f):
 
         # Verifica se não está bloqueado - agora usa claims
         status = claims.get("status", "").lower()
-        if status != "ativo":
+        if status not in ["ativo", "active"]:
             return jsonify({"error": "Acesso bloqueado"}), 403
 
         return f(*args, **kwargs)

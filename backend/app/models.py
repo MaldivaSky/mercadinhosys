@@ -62,6 +62,8 @@ class Estabelecimento(db.Model, EnderecoMixin):
     plano = db.Column(db.String(20), default="Basic")  # Basic, Advanced, Premium
     plano_status = db.Column(db.String(20), default="experimental")  # experimental, ativo, atrasado, cancelado
     vencimento_assinatura = db.Column(db.DateTime)
+    stripe_customer_id = db.Column(db.String(100))
+    stripe_subscription_id = db.Column(db.String(100))
     pagarme_id = db.Column(db.String(100))
 
     __table_args__ = (
@@ -70,6 +72,8 @@ class Estabelecimento(db.Model, EnderecoMixin):
     )
 
     def to_dict(self):
+        # Versão otimizada e blindada
+        vencimento = getattr(self, "vencimento_assinatura", None)
         return {
             "id": self.id,
             "nome_fantasia": self.nome_fantasia,
@@ -78,9 +82,11 @@ class Estabelecimento(db.Model, EnderecoMixin):
             "email": self.email,
             "endereco_completo": self.endereco_completo(),
             "ativo": self.ativo,
-            "plano": self.plano,
-            "plano_status": self.plano_status,
-            "vencimento_assinatura": self.vencimento_assinatura.isoformat() if self.vencimento_assinatura else None,
+            "plano": getattr(self, "plano", "Basic"),
+            "plano_status": getattr(self, "plano_status", "experimental"),
+            "vencimento_assinatura": vencimento.isoformat() if vencimento and hasattr(vencimento, 'isoformat') else None,
+            "stripe_customer_id": getattr(self, "stripe_customer_id", None),
+            "stripe_subscription_id": getattr(self, "stripe_subscription_id", None),
         }
 
 
@@ -166,36 +172,38 @@ class Configuracao(db.Model):
     )
 
     def to_dict(self):
+        # Versão otimizada e blindada
         try:
-            formas_pagamento_list = json.loads(self.formas_pagamento) if self.formas_pagamento else []
+            formas_raw = getattr(self, "formas_pagamento", None)
+            formas_pagamento_list = json.loads(formas_raw) if formas_raw else ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX"]
         except:
             formas_pagamento_list = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX"]
 
         return {
             "id": self.id,
             "estabelecimento_id": self.estabelecimento_id,
-            "logo_url": self.logo_base64 if self.logo_base64 else self.logo_url,
-            "cor_principal": self.cor_principal,
-            "tema_escuro": self.tema_escuro,
-            "emitir_nfe": self.emitir_nfe,
-            "emitir_nfce": self.emitir_nfce,
-            "impressao_automatica": self.impressao_automatica,
-            "tipo_impressora": self.tipo_impressora,
-            "exibir_preco_tela": self.exibir_preco_tela,
-            "permitir_venda_sem_estoque": self.permitir_venda_sem_estoque,
-            "desconto_maximo_percentual": float(self.desconto_maximo_percentual) if self.desconto_maximo_percentual else 0.0,
-            "desconto_maximo_funcionario": float(self.desconto_maximo_funcionario) if self.desconto_maximo_funcionario else 0.0,
-            "arredondamento_valores": self.arredondamento_valores,
+            "logo_url": getattr(self, "logo_base64", None) or getattr(self, "logo_url", None),
+            "cor_principal": getattr(self, "cor_principal", "#2563eb"),
+            "tema_escuro": bool(getattr(self, "tema_escuro", False)),
+            "emitir_nfe": bool(getattr(self, "emitir_nfe", False)),
+            "emitir_nfce": bool(getattr(self, "emitir_nfce", True)),
+            "impressao_automatica": bool(getattr(self, "impressao_automatica", False)),
+            "tipo_impressora": getattr(self, "tipo_impressora", "termica_80mm"),
+            "exibir_preco_tela": bool(getattr(self, "exibir_preco_tela", True)),
+            "permitir_venda_sem_estoque": bool(getattr(self, "permitir_venda_sem_estoque", False)),
+            "desconto_maximo_percentual": float(getattr(self, "desconto_maximo_percentual", 10.0)),
+            "desconto_maximo_funcionario": float(getattr(self, "desconto_maximo_funcionario", 10.0)),
+            "arredondamento_valores": bool(getattr(self, "arredondamento_valores", True)),
             "formas_pagamento": formas_pagamento_list,
-            "controlar_validade": self.controlar_validade,
-            "alerta_estoque_minimo": self.alerta_estoque_minimo,
-            "dias_alerta_validade": self.dias_alerta_validade,
-            "estoque_minimo_padrao": self.estoque_minimo_padrao,
-            "tempo_sessao_minutos": self.tempo_sessao_minutos,
-            "tentativas_senha_bloqueio": self.tentativas_senha_bloqueio,
-            "alertas_email": self.alertas_email,
-            "alertas_whatsapp": self.alertas_whatsapp,
-            "horas_extras_percentual": float(self.horas_extras_percentual) if self.horas_extras_percentual else 50.0
+            "controlar_validade": bool(getattr(self, "controlar_validade", True)),
+            "alerta_estoque_minimo": bool(getattr(self, "alerta_estoque_minimo", True)),
+            "dias_alerta_validade": int(getattr(self, "dias_alerta_validade", 30)),
+            "estoque_minimo_padrao": int(getattr(self, "estoque_minimo_padrao", 10)),
+            "tempo_sessao_minutos": int(getattr(self, "tempo_sessao_minutos", 30)),
+            "tentativas_senha_bloqueio": int(getattr(self, "tentativas_senha_bloqueio", 3)),
+            "alertas_email": bool(getattr(self, "alertas_email", False)),
+            "alertas_whatsapp": bool(getattr(self, "alertas_whatsapp", False)),
+            "horas_extras_percentual": float(getattr(self, "horas_extras_percentual", 50.0))
         }
 
 

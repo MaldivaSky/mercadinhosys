@@ -114,6 +114,11 @@ const settingsService = {
     createCheckoutSession: async (planName: string) => {
         const response = await apiClient.post<{ success: boolean; checkout_url: string }>('/stripe/checkout', { plan_name: planName });
         return response.data;
+    },
+
+    openPortal: async () => {
+        const response = await apiClient.post<{ success: boolean; portal_url: string }>('/stripe/portal', {});
+        return response.data;
     }
 };
 

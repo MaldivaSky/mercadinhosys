@@ -104,8 +104,6 @@ def obter_configuracoes():
     try:
         estabelecimento_id = request.args.get("estabelecimento_id", 1, type=int)
 
-        ensure_configuracoes_schema()
-
         # Garantir que o estabelecimento exista
         estabelecimento = Estabelecimento.query.get(estabelecimento_id)
         if not estabelecimento:
@@ -165,7 +163,6 @@ def obter_configuracoes():
 def atualizar_configuracoes():
     """Atualiza as configurações do estabelecimento"""
     try:
-        ensure_configuracoes_schema()
         data = request.get_json() or {}
         estabelecimento_id = int(data.get("estabelecimento_id", 1))
 

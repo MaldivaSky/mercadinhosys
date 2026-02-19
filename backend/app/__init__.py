@@ -222,34 +222,34 @@ def create_app(config_name=None):
             # Rodar sync via código em cada boot é lento.
             force_sync = os.environ.get("FORCE_SCHEMA_SYNC", "false").lower() == "true"
             
-            if app.config.get("USING_POSTGRES") and (not is_production or force_sync):
-                try:
-                    from sqlalchemy import text
-                    alteras = [
-                        "ALTER TABLE venda_itens ADD COLUMN IF NOT EXISTS margem_lucro_real NUMERIC(10,2)",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS margem_lucro NUMERIC(10,2)",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo VARCHAR(50)",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS classificacao_abc VARCHAR(1)",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS total_vendido FLOAT DEFAULT 0",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS quantidade_vendida INTEGER DEFAULT 0",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ultima_venda TIMESTAMP",
-                        "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS fabricante VARCHAR(100)",
-                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS valor_total_comprado NUMERIC(12,2) DEFAULT 0",
-                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS total_compras INTEGER DEFAULT 0",
-                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS classificacao VARCHAR(20) DEFAULT 'REGULAR'",
-                        "ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS prazo_entrega INTEGER DEFAULT 7",
+            # Lógica otimizada de sincronização de schema
+            try:
+                from sqlalchemy import text, inspect
+                inspector = inspect(db.engine)
+                
+                # Sincronização vital: Stripe e SaaS
+                vital_sync = {
+                    "estabelecimentos": [
+                        ("stripe_customer_id", "VARCHAR(100)"),
+                        ("stripe_subscription_id", "VARCHAR(100)"),
+                        ("plano", "VARCHAR(20)"),
+                        ("plano_status", "VARCHAR(20)"),
+                        ("vencimento_assinatura", "TIMESTAMP")
                     ]
-                    for sql in alteras:
-                        try:
-                            # Executa apenas se não for produção ou se o log indicar necessidade
-                            db.session.execute(text(sql))
-                            db.session.commit()
-                        except Exception as e:
-                            db.session.rollback()
-                            logger.debug("Schema sync col: %s", str(e)[:80])
-                    logger.info("SUCESSO: Schema sync aplicado.")
-                except Exception as e:
-                    logger.warning("AVISO: Schema sync falhou: %s", str(e)[:120])
+                }
+
+                for table, cols in vital_sync.items():
+                    if inspector.has_table(table):
+                        existing = {c['name'] for c in inspector.get_columns(table)}
+                        for col_name, col_type in cols:
+                            if col_name not in existing:
+                                try:
+                                    db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                                    db.session.commit()
+                                except Exception:
+                                    db.session.rollback()
+            except Exception as e:
+                logger.debug(f"Schema sync skip: {e}")
     else:
         logger.info("INFO: Bootstrap de DB pulado (otimizacao).")
 
