@@ -27,7 +27,7 @@ export function LoginPage() {
   const mode = theme.palette.mode;
 
   // Estados do formulário
-  const [identifier, setIdentifier] = useState('admin');
+  const [identifier, setIdentifier] = useState('rafaelmaldivas@gmail.com');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -84,7 +84,7 @@ export function LoginPage() {
   };
 
   const handleDemoLogin = useCallback(() => {
-    setIdentifier('admin');
+    setIdentifier('rafaelmaldivas@gmail.com');
     setPassword('admin123');
     setTimeout(() => {
       const fakeEvent = { preventDefault: () => { } } as React.FormEvent;

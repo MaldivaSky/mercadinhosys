@@ -72,7 +72,7 @@ const LandingPage: React.FC = () => {
     const tiers = [
         {
             name: 'Basic',
-            price: 'R$ 29,90',
+            price: 'R$ 49,90',
             period: '/mês',
             description: 'Perfeito para quem está começando e quer fugir das planilhas.',
             features: [

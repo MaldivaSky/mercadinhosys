@@ -191,19 +191,19 @@ class Configuracao(db.Model):
             "tipo_impressora": getattr(self, "tipo_impressora", "termica_80mm"),
             "exibir_preco_tela": bool(getattr(self, "exibir_preco_tela", True)),
             "permitir_venda_sem_estoque": bool(getattr(self, "permitir_venda_sem_estoque", False)),
-            "desconto_maximo_percentual": float(getattr(self, "desconto_maximo_percentual", 10.0)),
-            "desconto_maximo_funcionario": float(getattr(self, "desconto_maximo_funcionario", 10.0)),
+            "desconto_maximo_percentual": float(getattr(self, "desconto_maximo_percentual", 10.0) or 10.0),
+            "desconto_maximo_funcionario": float(getattr(self, "desconto_maximo_funcionario", 10.0) or 10.0),
             "arredondamento_valores": bool(getattr(self, "arredondamento_valores", True)),
             "formas_pagamento": formas_pagamento_list,
             "controlar_validade": bool(getattr(self, "controlar_validade", True)),
             "alerta_estoque_minimo": bool(getattr(self, "alerta_estoque_minimo", True)),
-            "dias_alerta_validade": int(getattr(self, "dias_alerta_validade", 30)),
-            "estoque_minimo_padrao": int(getattr(self, "estoque_minimo_padrao", 10)),
-            "tempo_sessao_minutos": int(getattr(self, "tempo_sessao_minutos", 30)),
-            "tentativas_senha_bloqueio": int(getattr(self, "tentativas_senha_bloqueio", 3)),
+            "dias_alerta_validade": int(getattr(self, "dias_alerta_validade", 30) or 30),
+            "estoque_minimo_padrao": int(getattr(self, "estoque_minimo_padrao", 10) or 10),
+            "tempo_sessao_minutos": int(getattr(self, "tempo_sessao_minutos", 30) or 30),
+            "tentativas_senha_bloqueio": int(getattr(self, "tentativas_senha_bloqueio", 3) or 3),
             "alertas_email": bool(getattr(self, "alertas_email", False)),
             "alertas_whatsapp": bool(getattr(self, "alertas_whatsapp", False)),
-            "horas_extras_percentual": float(getattr(self, "horas_extras_percentual", 50.0))
+            "horas_extras_percentual": float(getattr(self, "horas_extras_percentual", 50.0) or 50.0)
         }
 
 

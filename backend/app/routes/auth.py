@@ -492,7 +492,7 @@ def bootstrap_admin():
             username = identifier.split("@", 1)[0]
         else:
             username = identifier
-            email = "admin@empresa.com"
+            email = "rafaelmaldivas@gmail.com"
 
         estabelecimento = Estabelecimento.query.first()
         if estabelecimento is None:

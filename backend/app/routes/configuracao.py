@@ -143,16 +143,16 @@ def obter_configuracoes():
         return jsonify({"success": True, "config": config_dict}), 200
 
     except Exception as e:
-        current_app.logger.error(f"Erro ao obter configurações: {str(e)}")
         import traceback
-        current_app.logger.error(traceback.format_exc())
+        error_details = traceback.format_exc()
+        current_app.logger.error(f"❌ CRITICAL ERROR [obter_configuracoes]: {str(e)}\n{error_details}")
         db.session.rollback()
         return (
             jsonify(
                 {
                     "success": False,
-                    "error": "Erro ao obter configurações",
-                    "message": str(e),
+                    "error": "Erro interno ao processar configurações.",
+                    "message": str(e) if current_app.debug else "Consulte os logs do servidor.",
                 }
             ),
             500,
@@ -418,14 +418,16 @@ def gerenciar_estabelecimento():
             )
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        current_app.logger.error(f"❌ CRITICAL ERROR [gerenciar_estabelecimento]: {str(e)}\n{error_details}")
         db.session.rollback()
-        current_app.logger.error(f"Erro ao gerenciar estabelecimento: {str(e)}")
         return (
             jsonify(
                 {
                     "success": False,
-                    "error": "Erro ao gerenciar estabelecimento",
-                    "message": str(e),
+                    "error": "Erro interno ao gerenciar estabelecimento.",
+                    "message": str(e) if current_app.debug else "Consulte os logs do servidor.",
                 }
             ),
             500,
