@@ -57,6 +57,20 @@ def create_app(config_name=None):
         if runtime_db_url.startswith("postgres://"):
             runtime_db_url = runtime_db_url.replace("postgres://", "postgresql://", 1)
         app.config["SQLALCHEMY_DATABASE_URI"] = runtime_db_url
+        
+        # OTIMIZAÇÃO DE ELITE: Connection Pooling para Postgres/Neon
+        # Evita "Too many connections" e timeouts em produção
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_recycle": 1800,
+            "pool_pre_ping": True,
+            "connect_args": {
+                "connect_timeout": 10,
+                "application_name": "mercadinhosys_elite_backend"
+            }
+        }
+        
         for key in ["DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL", "AIVEN_DATABASE_URL"]:
             if os.environ.get(key):
                 db_source = key
@@ -96,8 +110,29 @@ def create_app(config_name=None):
             "msg": error_string or "Token não informado.",
         }), 401
 
-    cache.init_app(app)
     mail.init_app(app)
+
+    # ERROR HANDLER GLOBAL (Resiliência de Elite)
+    @app.errorhandler(500)
+    def handle_500_error(e):
+        import traceback
+        error_details = traceback.format_exc() if not app.config.get("PRODUCTION") else "Erro interno no servidor"
+        logger.error(f"💥 ERRO 500: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            "success": False,
+            "error": "Erro interno do servidor",
+            "message": "Ocorreu um erro inesperado. Nossa equipe de elite já foi notificada.",
+            "details": error_details if not os.environ.get("FLASK_ENV") == "production" else None
+        }), 500
+
+    @app.errorhandler(404)
+    def handle_404_error(e):
+        return jsonify({
+            "success": False,
+            "error": "Rota não encontrada",
+            "path": request.path,
+            "method": request.method
+        }), 404
 
     db_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
     redacted_db_uri = db_uri
@@ -406,16 +441,14 @@ def create_app(config_name=None):
     # Configuração
     try:
         from app.routes.configuracao import configuracao_bp
-
-        app.register_blueprint(configuracao_bp)
-        logger.info("✅ Blueprint configuracao registrado com prefixo próprio (/api/configuracao)")
+        app.register_blueprint(configuracao_bp, url_prefix="/api/configuracao")
+        logger.info("✅ Blueprint configuracao registrado em /api/configuracao")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar configuracao: {e}")
 
     # Dashboard
     try:
         from app.routes.dashboard import dashboard_bp
-
         app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
         logger.info("✅ Blueprint dashboard registrado em /api/dashboard")
     except Exception as e:

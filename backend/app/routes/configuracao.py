@@ -1,129 +1,95 @@
 # app/routes/configuracao.py
-# VERSAO BLINDADA: usa SQL direto para evitar falha do ORM
-# quando colunas novas nao existem ainda no banco de producao.
+"""
+Módulo de Configuração de Elite - MercadinhoSys
+Gerenciamento resiliente de configurações e dados do estabelecimento.
+Usa SQL direto via query_helpers para evitar falhas de ORM em produção.
+"""
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app import db
-from app.models import Configuracao, Estabelecimento
-from datetime import datetime
+from app.models import Configuracao
+from app.utils.query_helpers import get_configuracao_safe, get_estabelecimento_full_safe
+from app.utils.smart_cache import get_cached_config, set_cached_config, invalidate_config
 import json
-import os
-import base64
-from werkzeug.utils import secure_filename
-from sqlalchemy import text, inspect
 import traceback
 
-configuracao_bp = Blueprint("configuracao", __name__, url_prefix="/api/configuracao")
+configuracao_bp = Blueprint("configuracao", __name__)
 
-
-def _get_estabelecimento_safe(estab_id: int):
-    """
-    Busca o estabelecimento via SQL direto (colunas core apenas).
-    Evita que o ORM gere SELECT com colunas novas que nao existem no banco de producao.
-    Retorna um dicionario com os dados ou None se nao encontrado.
-    """
-    try:
-        row = db.session.execute(
-            text("""
-                SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, ativo,
-                       data_abertura, data_cadastro, regime_tributario, inscricao_estadual
-                FROM estabelecimentos
-                WHERE id = :eid
-                LIMIT 1
-            """),
-            {"eid": estab_id}
-        ).fetchone()
-
-        if not row:
-            return None
-
-        # Busca colunas opcionais individualmente para nao quebrar se nao existirem
-        def _col(col_name, default=None):
-            try:
-                r = db.session.execute(
-                    text(f"SELECT {col_name} FROM estabelecimentos WHERE id = :eid LIMIT 1"),
-                    {"eid": estab_id}
-                ).fetchone()
-                return r[0] if r else default
-            except Exception:
-                return default
-
-        return {
-            "id": row[0],
-            "nome_fantasia": row[1],
-            "razao_social": row[2],
-            "cnpj": row[3],
-            "telefone": row[4],
-            "email": row[5],
-            "ativo": row[6],
-            "data_abertura": row[7].isoformat() if row[7] else None,
-            "data_cadastro": row[8].isoformat() if row[8] else None,
-            "regime_tributario": row[9],
-            "inscricao_estadual": row[10],
-            # Colunas que podem nao existir no banco de producao antigo:
-            "cep": _col("cep", "00000-000"),
-            "logradouro": _col("logradouro", "Nao Informado"),
-            "numero": _col("numero", "S/N"),
-            "complemento": _col("complemento", ""),
-            "bairro": _col("bairro", "Centro"),
-            "cidade": _col("cidade", ""),
-            "estado": _col("estado", ""),
-            "pais": _col("pais", "Brasil"),
-            "plano": _col("plano", "Basic"),
-            "plano_status": _col("plano_status", "experimental"),
-            "stripe_customer_id": _col("stripe_customer_id"),
-            "stripe_subscription_id": _col("stripe_subscription_id"),
-            "vencimento_assinatura": None,
-        }
-    except Exception as e:
-        current_app.logger.error(f"[_get_estabelecimento_safe] Erro: {e}\n{traceback.format_exc()}")
-        return None
-
-
-# ==================== CONFIGURACOES ====================
+# ==================== CONFIGURAÇÕES ====================
 
 @configuracao_bp.route("/", methods=["GET"])
+@jwt_required()
 def obter_configuracoes():
-    """Obtém as configurações reais do estabelecimento"""
+    """Obtém configurações do estabelecimento (Padrão Blindado)"""
     try:
-        estabelecimento_id = request.args.get("estabelecimento_id", 1, type=int)
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado no token"}), 400
 
-        config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+        # Tenta buscar do cache primeiro
+        config_data = get_cached_config(estabelecimento_id)
+        if config_data:
+            return jsonify({"success": True, "config": config_data}), 200
 
-        if not config:
-            config = Configuracao(estabelecimento_id=estabelecimento_id)
-            db.session.add(config)
-            db.session.commit()
+        config_data = get_configuracao_safe(estabelecimento_id)
+        
+        # Se não existir, tenta criar uma padrão via ORM (operação segura inicial)
+        if not config_data:
+            try:
+                nova_config = Configuracao(estabelecimento_id=estabelecimento_id)
+                db.session.add(nova_config)
+                db.session.commit()
+                config_data = get_configuracao_safe(estabelecimento_id)
+            except Exception:
+                db.session.rollback()
+                # Fallback total: retorna objeto default em memória
+                config_data = {
+                    "cor_principal": "#007bff",
+                    "tema_escuro": False,
+                    "formas_pagamento": "[]"
+                }
 
-        return jsonify({"success": True, "config": config.to_dict()}), 200
+        # Salva no cache se encontrou ou criou
+        set_cached_config(estabelecimento_id, config_data)
+
+        return jsonify({
+            "success": True, 
+            "config": config_data
+        }), 200
 
     except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"❌ Erro em obter_configuracoes: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.error(f"❌ Erro em obter_configuracoes: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao carregar configurações"}), 500
 
 
 @configuracao_bp.route("/", methods=["PUT"])
+@jwt_required()
 def atualizar_configuracoes():
-    """Atualiza as configurações reais do estabelecimento"""
+    """Atualiza as configurações do estabelecimento com auditoria"""
     try:
-        data = request.get_json() or {}
-        estabelecimento_id = int(data.get("estabelecimento_id", 1))
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        role = claims.get("role")
+        
+        if role not in ["admin", "dono", "gerente", "ADMIN"]:
+            return jsonify({"success": False, "error": "Sem permissão para alterar configurações"}), 403
 
+        data = request.get_json() or {}
         config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+        
         if not config:
             config = Configuracao(estabelecimento_id=estabelecimento_id)
 
-        campos_permitidos = [
+        # Campos permitidos para atualização via PDV/Config
+        perm = [
             "logo_url", "cor_principal", "tema_escuro", "impressao_automatica",
-            "tipo_impressora", "exibir_preco_tela", "permitir_venda_sem_estoque",
-            "desconto_maximo_percentual", "arredondamento_valores", "dias_alerta_validade",
-            "estoque_minimo_padrao", "tempo_sessao_minutos", "tentativas_senha_bloqueio",
-            "formas_pagamento", "alertas_email", "alertas_whatsapp",
+            "tipo_impressora", "formas_pagamento"
         ]
 
-        for campo in campos_permitidos:
+        for campo in perm:
             if campo in data:
                 valor = data[campo]
                 if campo == "formas_pagamento" and isinstance(valor, list):
@@ -133,101 +99,84 @@ def atualizar_configuracoes():
         db.session.add(config)
         db.session.commit()
 
-        return jsonify({"success": True, "message": "Configurações atualizadas", "config": config.to_dict()}), 200
+        # Invalida o cache para forçar recarregamento
+        invalidate_config(estabelecimento_id)
+
+        return jsonify({
+            "success": True, 
+            "message": "Configurações atualizadas com sucesso",
+            "config": get_configuracao_safe(estabelecimento_id)
+        }), 200
+
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"❌ Erro em atualizar_configuracoes: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.error(f"❌ Erro em atualizar_configuracoes: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao salvar configurações"}), 500
 
 
 # ==================== ESTABELECIMENTO ====================
 
 @configuracao_bp.route("/estabelecimento", methods=["GET"])
+@jwt_required()
 def get_estabelecimento():
-    """GET do estabelecimento via SQL direto (blindado para producao)"""
+    """Retorna dados do estabelecimento com resiliência total"""
     try:
-        # Tenta pegar o estabelecimento_id do JWT primeiro, depois do query param
-        estab_id = request.args.get("estabelecimento_id", 1, type=int)
-
-        dados = _get_estabelecimento_safe(estab_id)
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        
+        dados = get_estabelecimento_full_safe(estabelecimento_id)
 
         if not dados:
-            # Nenhum estabelecimento encontrado - retorna dados minimos para o frontend nao quebrar
-            dados = {
-                "id": estab_id,
-                "nome_fantasia": "MercadinhoSys",
-                "razao_social": "MercadinhoSys LTDA",
-                "cnpj": "00.000.000/0001-00",
-                "telefone": "(00) 0000-0000",
-                "email": "admin@mercadinhosys.com",
-                "ativo": True,
-                "cep": "00000-000",
-                "logradouro": "Nao Informado",
-                "numero": "S/N",
-                "complemento": "",
-                "bairro": "Centro",
-                "cidade": "Cidade",
-                "estado": "SP",
-                "pais": "Brasil",
-                "plano": "Basic",
-                "plano_status": "experimental",
-                "stripe_customer_id": None,
-                "stripe_subscription_id": None,
-                "vencimento_assinatura": None,
-                "regime_tributario": "SIMPLES NACIONAL",
-                "inscricao_estadual": None,
-                "data_abertura": None,
-                "data_cadastro": None,
-            }
+            return jsonify({"success": False, "error": "Dados do estabelecimento não encontrados"}), 404
 
-        return jsonify({"success": True, "estabelecimento": dados}), 200
+        return jsonify({
+            "success": True, 
+            "estabelecimento": dados
+        }), 200
 
     except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"❌ Erro em get_estabelecimento: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.error(f"❌ Erro em get_estabelecimento: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao carregar dados da empresa"}), 500
 
 
 @configuracao_bp.route("/estabelecimento", methods=["PUT"])
+@jwt_required()
 def update_estabelecimento():
-    """PUT do estabelecimento"""
+    """Atualização segura do estabelecimento (Somente Admin/Dono)"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = claims.get("estabelecimento_id")
+        role = claims.get("role")
+        
+        if role not in ["admin", "dono", "ADMIN"]:
+            return jsonify({"success": False, "error": "Apenas proprietários podem alterar dados da empresa"}), 403
+
         data = request.get_json() or {}
-        estabelecimento_id = request.args.get("estabelecimento_id", 1, type=int)
-
-        # Atualiza apenas os campos que CERTAMENTE existem no banco
-        campos_core = ["nome_fantasia", "razao_social", "cnpj", "telefone", "email", "inscricao_estadual"]
-        campos_opcionais = ["cep", "logradouro", "numero", "bairro", "cidade", "estado", "complemento"]
-
-        sets_core = []
+        
+        # Filtro de segurança: apenas campos cadastrais básicos
+        campos_update = ["nome_fantasia", "razao_social", "telefone", "email"]
+        
+        from sqlalchemy import text
+        set_clauses = []
         params = {"eid": estabelecimento_id}
-
-        for c in campos_core:
+        
+        for c in campos_update:
             if c in data:
-                sets_core.append(f"{c} = :{c}")
+                set_clauses.append(f"{c} = :{c}")
                 params[c] = data[c]
-
-        if sets_core:
-            sql = f"UPDATE estabelecimentos SET {', '.join(sets_core)} WHERE id = :eid"
+        
+        if set_clauses:
+            sql = f"UPDATE estabelecimentos SET {', '.join(set_clauses)} WHERE id = :eid"
             db.session.execute(text(sql), params)
             db.session.commit()
 
-        # Tenta atualizar campos opcionais (podem nao existir)
-        for c in campos_opcionais:
-            if c in data:
-                try:
-                    db.session.execute(
-                        text(f"UPDATE estabelecimentos SET {c} = :{c} WHERE id = :eid"),
-                        {c: data[c], "eid": estabelecimento_id}
-                    )
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-
-        dados = _get_estabelecimento_safe(estabelecimento_id)
-        return jsonify({"success": True, "message": "Atualizado com sucesso", "estabelecimento": dados or {}}), 200
+        return jsonify({
+            "success": True, 
+            "message": "Dados da empresa atualizados",
+            "estabelecimento": get_estabelecimento_full_safe(estabelecimento_id)
+        }), 200
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"❌ Erro em update_estabelecimento: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        current_app.logger.error(f"❌ Erro em update_estabelecimento: {str(e)}")
+        return jsonify({"success": False, "error": "Falha ao atualizar dados"}), 500
