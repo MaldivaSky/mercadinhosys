@@ -84,6 +84,8 @@ export interface Funcionario {
     role: string;   // Não restringir a valores fixos
     status: string; // Não restringir a valores fixos
     comissao_percentual: number;
+    salario_base?: number;
+    horas_extras?: number;
     data_admissao: string;
     data_demissao?: string;
     ativo: boolean;

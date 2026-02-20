@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Lock, X, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { ShieldCheck, Lock, X, AlertTriangle, KeyRound } from 'lucide-react';
 import { pdvService } from '../pdvService';
+import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 
 interface GerenteAuthModalProps {
     acao: 'desconto' | 'cancelamento';
@@ -9,12 +10,12 @@ interface GerenteAuthModalProps {
     onCancelar: () => void;
 }
 
-const GerenteAuthModal: React.FC<GerenteAuthModalProps> = ({
+const GerenteAuthModal = ({
     acao,
     valorDesconto,
     onAutorizado,
     onCancelar,
-}) => {
+}: GerenteAuthModalProps) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -38,8 +39,9 @@ const GerenteAuthModal: React.FC<GerenteAuthModalProps> = ({
             } else {
                 setErro('Usuário sem permissão para esta ação');
             }
-        } catch (error: any) {
-            setErro(error.response?.data?.error || 'Credenciais inválidas');
+        } catch (error: unknown) {
+            const err = error as any;
+            setErro(err.response?.data?.error || 'Credenciais inválidas');
         } finally {
             setLoading(false);
         }
@@ -48,9 +50,9 @@ const GerenteAuthModal: React.FC<GerenteAuthModalProps> = ({
     const getTitulo = () => {
         switch (acao) {
             case 'desconto':
-                return 'Autorização Necessária - Desconto';
+                return 'Autorizar Desconto';
             case 'cancelamento':
-                return 'Autorização Necessária - Cancelamento';
+                return 'Autorizar Cancelamento';
             default:
                 return 'Autorização de Gerente';
         }
@@ -59,151 +61,108 @@ const GerenteAuthModal: React.FC<GerenteAuthModalProps> = ({
     const getDescricao = () => {
         switch (acao) {
             case 'desconto':
-                return `Desconto de R$ ${valorDesconto?.toFixed(2)} requer autorização de gerente`;
+                return `Valor: R$ ${valorDesconto?.toFixed(2)}`;
             case 'cancelamento':
-                return 'Cancelamento de venda requer autorização de gerente';
+                return 'Esta ação excluirá o registro da venda';
             default:
-                return 'Esta ação requer autorização';
+                return 'Credenciais de nível superior necessárias';
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
-                {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center space-x-3">
-                        <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-lg">
-                            <ShieldCheck className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-800 dark:text-white">
-                                {getTitulo()}
-                            </h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Credenciais de gerente necessárias
-                            </p>
-                        </div>
-                    </div>
+        <ResponsiveModal
+            isOpen={true}
+            onClose={onCancelar}
+            title={getTitulo()}
+            subtitle="Apenas gerentes ou administradores"
+            headerIcon={<ShieldCheck className="w-6 h-6" />}
+            headerColor="red"
+            size="md"
+            footer={
+                <div className="flex w-full gap-3">
                     <button
+                        type="button"
                         onClick={onCancelar}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                        className="flex-1 py-3 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all border border-gray-200 dark:border-gray-600"
                     >
-                        <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={loading || !username || !password}
+                        className={`flex-1 py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${loading || !username || !password
+                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                            : 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20'
+                            }`}
+                    >
+                        {loading ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        ) : (
+                            <>
+                                <KeyRound className="w-5 h-5" />
+                                <span>Autorizar</span>
+                            </>
+                        )}
                     </button>
                 </div>
-
-                {/* Alerta */}
-                <div className="p-6 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800">
-                    <div className="flex items-start space-x-3">
-                        <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
+            }
+        >
+            <div className="space-y-6">
+                {/* Banner de Info */}
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
                         <div>
-                            <h4 className="font-medium text-orange-800 dark:text-orange-300 mb-1">
-                                Autorização Requerida
-                            </h4>
-                            <p className="text-sm text-orange-700 dark:text-orange-400">
-                                {getDescricao()}
-                            </p>
+                            <h4 className="font-bold text-red-800 dark:text-red-300 text-sm">Ação Restrita</h4>
+                            <p className="text-xs text-red-700 dark:text-red-400 mt-0.5">{getDescricao()}</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <div className="space-y-4">
                     {erro && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                            <div className="flex items-center space-x-2">
-                                <X className="w-5 h-5 text-red-600 dark:text-red-400" />
-                                <p className="text-sm text-red-700 dark:text-red-400">{erro}</p>
-                            </div>
+                        <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                            <X className="w-4 h-4 flex-shrink-0" />
+                            <p className="text-xs font-semibold">{erro}</p>
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Usuário do Gerente
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">
+                            Usuário
                         </label>
                         <input
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Digite o username"
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                            required
+                            placeholder="Username do gerente"
+                            className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none"
                             autoFocus
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">
                             Senha
                         </label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Digite a senha"
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                                required
+                                placeholder="••••••••"
+                                className="w-full px-4 py-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none"
                             />
+                            <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300 pointer-events-none" />
                         </div>
                     </div>
-
-                    {/* Informações */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                        <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2 text-sm">
-                            👤 Quem pode autorizar?
-                        </h4>
-                        <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
-                            <li>✅ Gerente da loja</li>
-                            <li>✅ Dono do estabelecimento</li>
-                            <li>✅ Funcionários com permissão específica</li>
-                        </ul>
-                    </div>
-
-                    {/* Botões */}
-                    <div className="flex space-x-3 pt-4">
-                        <button
-                            type="button"
-                            onClick={onCancelar}
-                            className="flex-1 py-3 px-4 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading || !username || !password}
-                            className={`flex-1 py-3 px-4 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${
-                                loading || !username || !password
-                                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
-                                    : 'bg-orange-500 hover:bg-orange-600 text-white'
-                            }`}
-                        >
-                            {loading ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                    <span>Verificando...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <ShieldCheck className="w-5 h-5" />
-                                    <span>Autorizar</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </form>
-
-                {/* Footer */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 rounded-b-xl">
-                    <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-                        🔒 Todas as autorizações são registradas no sistema para auditoria
-                    </p>
                 </div>
+
+                <p className="text-[10px] text-center text-gray-400 dark:text-gray-500 italic pb-2">
+                    Esta autorização será registrada nos logs de segurança do sistema.
+                </p>
             </div>
-        </div>
+        </ResponsiveModal>
     );
 };
 

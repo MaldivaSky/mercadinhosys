@@ -18,21 +18,6 @@ export interface FormaPagamento {
     permite_troco: boolean;
 }
 
-export interface DetalhesVenda {
-    items: {
-        id: number;
-        quantity: number;
-        discount: number;
-    }[];
-    subtotal: number;
-    desconto: number;
-    total: number;
-    paymentMethod: string;
-    valor_recebido: number;
-    troco: number;
-    cliente_id?: number;
-    observacoes?: string;
-}
 
 export const usePDV = () => {
     // Estado do PDV

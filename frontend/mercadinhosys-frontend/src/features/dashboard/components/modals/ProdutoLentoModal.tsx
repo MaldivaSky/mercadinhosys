@@ -1,8 +1,23 @@
 import React from 'react';
-import { X, AlertTriangle, DollarSign, Target, ChartBar, Lightbulb } from 'lucide-react';
+import { AlertTriangle, DollarSign, Target, ChartBar, Lightbulb, Clock } from 'lucide-react';
+import { Button } from '../../../../components/ui/button';
+import ResponsiveModal from '../../../../components/ui/ResponsiveModal';
+
+interface ProdutoLentoData {
+  id: number;
+  nome: string;
+  quantidade: number;
+  total_vendido: number;
+  dias_estoque: number;
+  giro_estoque: number;
+  custo_parado: number;
+  perda_mensal: number;
+  estoque_atual: number;
+  margem: number;
+}
 
 interface ProdutoLentoModalProps {
-  produto: any;
+  produto: ProdutoLentoData | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -12,238 +27,164 @@ export const ProdutoLentoModal: React.FC<ProdutoLentoModalProps> = ({
   isOpen,
   onClose
 }) => {
-  if (!isOpen || !produto) return null;
+  if (!produto) return null;
 
   const recuperacao70 = produto.custo_parado * 0.7;
   const beneficioLiquido = recuperacao70 - produto.perda_mensal;
 
+  const handleCopyMessage = () => {
+    const mensagem = `🔥 OFERTA ESPECIAL VIP!\n\n${produto.nome}\n💰 30% OFF - Só hoje!\n\nEstoque limitado. Aproveite!`;
+    navigator.clipboard.writeText(mensagem);
+    alert('Mensagem copiada! Cole no WhatsApp dos seus clientes VIP.');
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-pink-50 sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">⚠️ {produto.nome}</h2>
-              <p className="text-sm text-gray-600">Produto Lento - Requer Ação Imediata</p>
-            </div>
+    <ResponsiveModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={produto.nome}
+      subtitle="Produto Lento - Requer Ação Imediata"
+      headerIcon={<AlertTriangle className="w-6 h-6 text-white" />}
+      headerColor="red"
+      size="xl"
+      footer={
+        <div className="flex gap-3 w-full">
+          <Button variant="outline" onClick={onClose} className="flex-1">
+            Fechar
+          </Button>
+          <Button onClick={handleCopyMessage} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+            📱 Copiar Mensagem WhatsApp
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-8">
+        {/* Diagnóstico de Risco Capital */}
+        <div className="bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800/50 rounded-2xl p-6 shadow-sm">
+          <h3 className="font-black text-rose-900 dark:text-rose-400 mb-6 flex items-center gap-2 uppercase tracking-tighter text-lg">
+            <AlertTriangle className="w-6 h-6" />
+            Vulnerabilidade de Caixa
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { label: 'Estoque Parado', val: `${produto.estoque_atual} un`, color: 'text-red-700 dark:text-red-400' },
+              { label: 'Capital Preso', val: `R$ ${produto.custo_parado.toFixed(2)}`, color: 'text-orange-700 dark:text-orange-400' },
+              { label: 'Dreno Mensal', val: `R$ ${produto.perda_mensal.toFixed(2)}`, color: 'text-rose-700 dark:text-rose-400' },
+              { label: 'Giro (KPI)', val: `${produto.giro_estoque.toFixed(2)}x`, color: 'text-purple-700 dark:text-purple-400' }
+            ].map((item, i) => (
+              <div key={i} className="space-y-1">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{item.label}</p>
+                <p className={`text-xl font-black tabular-nums ${item.color}`}>{item.val}</p>
+              </div>
+            ))}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6 text-gray-600" />
-          </button>
+          <div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-xl border border-rose-200 dark:border-rose-900 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-900 flex items-center justify-center flex-shrink-0">
+              <Clock className="w-6 h-6 text-rose-600" />
+            </div>
+            <p className="text-sm font-bold text-gray-700 dark:text-gray-300">
+              Tempo estimado para escoar estoque atual: <span className="text-rose-600 font-black">{produto.dias_estoque} dias</span> no ritmo atual.
+            </p>
+          </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Diagnóstico do Problema */}
-          <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
-            <h3 className="font-bold text-red-900 mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              🔍 Diagnóstico do Problema
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Estoque Parado</p>
-                <p className="text-2xl font-bold text-red-700">{produto.estoque_atual} un</p>
+        {/* Matriz de Decisão Estratégica */}
+        <div className="space-y-4">
+          <h3 className="font-black text-gray-900 dark:text-gray-100 flex items-center gap-2 text-lg uppercase tracking-tighter">
+            <Target className="w-6 h-6 text-orange-500" />
+            Iniciativas de Liquidez
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-gray-800/50 p-5 rounded-2xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <p className="font-black text-xs uppercase tracking-widest text-red-600">Flash Sale (Crítico)</p>
               </div>
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Capital Parado</p>
-                <p className="text-2xl font-bold text-orange-700">R$ {produto.custo_parado.toFixed(2)}</p>
-              </div>
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Perda Mensal</p>
-                <p className="text-2xl font-bold text-red-700">R$ {produto.perda_mensal.toFixed(2)}</p>
-              </div>
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Giro de Estoque</p>
-                <p className="text-2xl font-bold text-purple-700">{produto.giro_estoque.toFixed(2)}x</p>
-              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 font-medium leading-relaxed">
+                Aplicar desconto de <strong className="text-gray-900 dark:text-white">35% OFF</strong> por 72h. Foco em clientes da Curva C que buscam preço baixo.
+              </p>
             </div>
-            <div className="mt-4 bg-red-100 border border-red-300 rounded-lg p-4">
-              <p className="text-sm text-red-900">
-                <strong>⚠️ Alerta:</strong> Este produto está consumindo capital que poderia ser investido em produtos mais rentáveis. 
-                Tempo estimado para vender estoque atual: <strong>{produto.dias_estoque} dias</strong>
+            <div className="bg-white dark:bg-gray-800/50 p-5 rounded-2xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <p className="font-black text-xs uppercase tracking-widest text-orange-600">Product Bundling</p>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 font-medium leading-relaxed">
+                Criar kit "Essentials" com produto <strong className="text-gray-900 dark:text-white">Estrela</strong>. Escoamento por associação de demanda.
               </p>
             </div>
           </div>
+        </div>
 
-          {/* Estratégias de Liquidação */}
-          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-6 border border-orange-200">
-            <h3 className="font-bold text-orange-900 mb-4 flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              🎯 Estratégias de Liquidação (Prioridade Alta)
-            </h3>
-            <div className="space-y-3">
-              <div className="bg-white/70 p-4 rounded-lg border-l-4 border-red-500">
-                <p className="font-semibold text-red-900 mb-2">1. Promoção Relâmpago (Ação Imediata)</p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Desconto Sugerido:</strong> 30-40% OFF por 7 dias
-                </p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Comunicação:</strong> "Queima de Estoque - Últimas Unidades!"
-                </p>
-                <p className="text-sm text-gray-700">
-                  • <strong>Meta:</strong> Vender pelo menos 50% do estoque em 1 semana
-                </p>
-              </div>
-              
-              <div className="bg-white/70 p-4 rounded-lg border-l-4 border-orange-500">
-                <p className="font-semibold text-orange-900 mb-2">2. Combos Estratégicos</p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Combo 1:</strong> "Leve este produto + Produto Estrela" com 20% OFF
-                </p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Combo 2:</strong> "Leve 2, Pague 1,5" (50% OFF na 2ª unidade)
-                </p>
-                <p className="text-sm text-gray-700">
-                  • <strong>Posicionamento:</strong> Coloque ao lado de produtos de alta rotação
-                </p>
-              </div>
-              
-              <div className="bg-white/70 p-4 rounded-lg border-l-4 border-yellow-500">
-                <p className="font-semibold text-yellow-900 mb-2">3. Programa de Fidelidade</p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Pontos Dobrados:</strong> Ganhe 2x pontos comprando este produto
-                </p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Brinde:</strong> Na compra de 3 unidades, ganhe 1 grátis
-                </p>
-                <p className="text-sm text-gray-700">
-                  • <strong>Sorteio:</strong> Cada compra = 1 cupom para sorteio mensal
-                </p>
-              </div>
-              
-              <div className="bg-white/70 p-4 rounded-lg border-l-4 border-green-500">
-                <p className="font-semibold text-green-900 mb-2">4. Venda para Clientes VIP</p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>WhatsApp:</strong> Envie oferta exclusiva para top 20 clientes
-                </p>
-                <p className="text-sm text-gray-700 mb-2">
-                  • <strong>Mensagem:</strong> "Oferta VIP só para você: {produto.nome} com 35% OFF"
-                </p>
-                <p className="text-sm text-gray-700">
-                  • <strong>Urgência:</strong> "Válido apenas hoje até 18h"
-                </p>
-              </div>
+        {/* Análise de Recuperação */}
+        <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-6 border border-blue-100 dark:border-blue-800">
+          <h3 className="font-black text-blue-900 dark:text-blue-300 mb-6 flex items-center gap-2 uppercase tracking-tighter text-lg">
+            <DollarSign className="w-6 h-6" />
+            Recuperação de Fluxo
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-blue-600 uppercase">Cenário Inércia</p>
+              <p className="text-xl font-black text-rose-600">- R$ {produto.perda_mensal.toFixed(2)}/mês</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase italic">Custo de oportunidade</p>
             </div>
-          </div>
-
-          {/* Análise Financeira da Liquidação */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-            <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
-              💰 Análise Financeira da Liquidação
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">Cenário Atual (Sem Ação)</p>
-                <p className="text-xl font-bold text-red-700">
-                  - R$ {produto.perda_mensal.toFixed(2)}/mês
-                </p>
-                <p className="text-xs text-gray-600 mt-1">Perda de oportunidade</p>
-              </div>
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">Com Desconto 30%</p>
-                <p className="text-xl font-bold text-orange-700">
-                  R$ {recuperacao70.toFixed(2)}
-                </p>
-                <p className="text-xs text-gray-600 mt-1">Recuperação de 70% do capital</p>
-              </div>
-              <div className="bg-white/70 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">Benefício Líquido</p>
-                <p className="text-xl font-bold text-green-700">
-                  + R$ {beneficioLiquido.toFixed(2)}
-                </p>
-                <p className="text-xs text-gray-600 mt-1">Vs. manter estoque parado</p>
-              </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-blue-600 uppercase">Cenário Ação (30% DESC)</p>
+              <p className="text-xl font-black text-orange-600">R$ {recuperacao70.toFixed(2)}</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase italic">Capital Rejetado</p>
             </div>
-          </div>
-
-          {/* Plano de Ação Passo a Passo */}
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
-            <h3 className="font-bold text-purple-900 mb-4 flex items-center gap-2">
-              <ChartBar className="w-5 h-5" />
-              📋 Plano de Ação - Próximos 7 Dias
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 bg-white/70 p-3 rounded-lg">
-                <div className="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">1</div>
-                <div>
-                  <p className="font-semibold text-gray-900">Dia 1-2: Preparação</p>
-                  <p className="text-sm text-gray-700">Crie material de divulgação, defina desconto, treine equipe</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-white/70 p-3 rounded-lg">
-                <div className="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">2</div>
-                <div>
-                  <p className="font-semibold text-gray-900">Dia 3-5: Lançamento</p>
-                  <p className="text-sm text-gray-700">Envie WhatsApp para clientes VIP, coloque cartazes na loja</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-white/70 p-3 rounded-lg">
-                <div className="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">3</div>
-                <div>
-                  <p className="font-semibold text-gray-900">Dia 6-7: Intensificação</p>
-                  <p className="text-sm text-gray-700">Se não atingir meta, aumente desconto para 40-50%</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Decisão Final */}
-          <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl p-6 border border-gray-300">
-            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              ⚖️ Decisão Final (Se Não Vender)
-            </h3>
-            <div className="space-y-2 text-sm text-gray-700">
-              <p>• <strong>Doação:</strong> Doe para instituições e obtenha benefício fiscal</p>
-              <p>• <strong>Troca com Fornecedor:</strong> Negocie troca por produtos de maior giro</p>
-              <p>• <strong>Venda em Lote:</strong> Venda todo estoque para outro comerciante com desconto maior</p>
-              <p>• <strong>Última Opção:</strong> Descarte responsável e aprenda com o erro</p>
-            </div>
-          </div>
-
-          {/* Lições Aprendidas */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
-            <h3 className="font-bold text-green-900 mb-4 flex items-center gap-2">
-              <Lightbulb className="w-5 h-5" />
-              💡 Lições para Evitar no Futuro
-            </h3>
-            <div className="space-y-2 text-sm text-gray-700">
-              <p>• <strong>Teste Pequeno:</strong> Ao comprar produto novo, comece com quantidade mínima</p>
-              <p>• <strong>Análise de Demanda:</strong> Pesquise se clientes realmente querem o produto</p>
-              <p>• <strong>Monitoramento:</strong> Acompanhe vendas semanalmente, não mensalmente</p>
-              <p>• <strong>Fornecedor Flexível:</strong> Prefira fornecedores que aceitem devolução</p>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-blue-600 uppercase">Benefício Líquido</p>
+              <p className="text-xl font-black text-green-600">+ R$ {beneficioLiquido.toFixed(2)}</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase italic">Fluxo de Caixa Liberado</p>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium border border-gray-300"
-          >
-            Fechar
-          </button>
-          <button
-            onClick={() => {
-              const mensagem = `🔥 OFERTA ESPECIAL VIP!\n\n${produto.nome}\n💰 30% OFF - Só hoje!\n\nEstoque limitado. Aproveite!`;
-              navigator.clipboard.writeText(mensagem);
-              alert('Mensagem copiada! Cole no WhatsApp dos seus clientes VIP.');
-            }}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-          >
-            📱 Copiar Mensagem WhatsApp
-          </button>
+        {/* Roadmap de Desmobilização */}
+        <div className="space-y-4">
+          <h3 className="font-black text-gray-900 dark:text-gray-100 flex items-center gap-2 text-lg uppercase tracking-tighter">
+            <ChartBar className="w-6 h-6 text-purple-500" />
+            Plano de Escoamento (7 Dias)
+          </h3>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { d: '48h', t: 'Preparação', s: 'Re-etiquetagem e sinalização' },
+              { d: '72h', t: 'Divulgação', s: 'CRM & WhatsApp Marketing' },
+              { d: '24h', t: 'Fechamento', s: 'Ajuste de margem agressiva' }
+            ].map((step, i) => (
+              <div key={i} className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 text-center">
+                <span className="text-purple-600 font-black text-xl">{step.d}</span>
+                <p className="text-xs font-black uppercase text-gray-900 dark:text-gray-100 mt-1">{step.t}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-1 leading-tight">{step.s}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Mentoria Preditiva */}
+        <div className="bg-emerald-50/50 dark:bg-emerald-900/10 rounded-2xl p-6 border border-emerald-100 dark:border-emerald-800">
+          <h3 className="font-black text-emerald-900 dark:text-emerald-400 mb-4 flex items-center gap-2 text-sm uppercase tracking-widest">
+            <Lightbulb className="w-5 h-5" />
+            Insights de Prevenção
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
+            {[
+              { t: 'Pilotagem', d: 'Produtos novos devem entrar com 25% da carga normal.' },
+              { t: 'Ciclo Audit', d: 'Auditoria de giro deve ser semanal, não mensal.' },
+              { t: 'Vendor Logic', d: 'Dar preferência para fornecedores com política de devolução.' },
+              { t: 'Focus ABC', d: 'Concentrar 80% do capital no topo da Curva A.' }
+            ].map((tip, i) => (
+              <div key={i} className="flex gap-3">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                  <strong className="text-emerald-900 dark:text-emerald-400">{tip.t}:</strong> {tip.d}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 };

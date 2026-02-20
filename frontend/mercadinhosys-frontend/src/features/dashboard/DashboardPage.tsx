@@ -26,6 +26,8 @@ import {
   ProdutoEstrelaModal,
   ProdutoLentoModal
 } from './components/modals';
+import ResponsiveModal from '../../components/ui/ResponsiveModal';
+import { Button } from '../../components/ui/button';
 
 // TIPOS CIENTÍFICOS
 type ProdutoPrevisao = {
@@ -4410,206 +4412,170 @@ const DashboardPage: React.FC = () => {
         />
       )}
 
-      {/* 🔥 NOVO: MODAL DE HISTÓRICO DE KPI - SIMPLIFICADO */}
-      {kpiModalAberto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  📊 Histórico: {kpiModalAberto}
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Análise temporal detalhada
+      {/* 🔥 MODAL DE HISTÓRICO DE KPI - REATORADO PARA RESPONSIVEMODAL */}
+      <ResponsiveModal
+        isOpen={!!kpiModalAberto}
+        onClose={() => {
+          setKpiModalAberto(null);
+          setVisualizacaoModal('dias');
+        }}
+        title={`Histórico: ${kpiModalAberto}`}
+        subtitle="Análise temporal detalhada"
+        headerIcon={<ChartBar className="w-6 h-6 text-white" />}
+        headerColor="blue"
+        size="2xl"
+        footer={
+          <Button
+            onClick={() => {
+              setKpiModalAberto(null);
+              setVisualizacaoModal('dias');
+            }}
+            className="w-full"
+          >
+            Fechar Análise
+          </Button>
+        }
+      >
+        <div className="space-y-6">
+          {/* Toggle Simples: Dias vs Meses */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setVisualizacaoModal('dias')}
+              className={`flex-1 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${visualizacaoModal === 'dias'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+            >
+              📅 30 Dias
+            </button>
+            <button
+              onClick={() => setVisualizacaoModal('meses')}
+              className={`flex-1 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${visualizacaoModal === 'meses'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+            >
+              📊 12 Meses
+            </button>
+          </div>
+
+          {/* Gráfico */}
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-inner">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+              {visualizacaoModal === 'dias' ? '📈 Evolução Preditiva (Daily)' : '🏛️ Consolidado Histórico (Monthly)'}
+            </h3>
+
+            {analise_temporal?.tendencia_vendas && analise_temporal.tendencia_vendas.length > 0 ? (
+              <div className="h-[350px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={
+                      visualizacaoModal === 'dias'
+                        ? analise_temporal.tendencia_vendas.slice(-30)
+                        : (() => {
+                          const vendasPorMes: Record<string, { mes: string; total: number; count: number }> = {};
+                          analise_temporal.tendencia_vendas.forEach((item: any) => {
+                            if (item.data) {
+                              const mesAno = item.data.substring(0, 7);
+                              if (!vendasPorMes[mesAno]) {
+                                vendasPorMes[mesAno] = { mes: mesAno, total: 0, count: 0 };
+                              }
+                              vendasPorMes[mesAno].total += item.vendas || 0;
+                              vendasPorMes[mesAno].count += 1;
+                            }
+                          });
+                          const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                          return Object.keys(vendasPorMes)
+                            .sort()
+                            .slice(-12)
+                            .map(mesAno => {
+                              const [ano, mes] = mesAno.split('-');
+                              const mesNumero = parseInt(mes);
+                              return {
+                                data: `${mesesNomes[mesNumero - 1]}/${ano.substring(2)}`,
+                                vendas: vendasPorMes[mesAno].total
+                              };
+                            });
+                        })()
+                    }
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={false} />
+                    <XAxis
+                      dataKey="data"
+                      tick={{ fontSize: 10, fill: '#9CA3AF', fontWeight: 600 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(value) => {
+                        if (visualizacaoModal === 'dias') {
+                          const date = new Date(value);
+                          return `${date.getDate()}/${date.getMonth() + 1}`;
+                        }
+                        return value;
+                      }}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#9CA3AF', fontWeight: 600 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip
+                      content={({ payload, label }) => {
+                        if (!payload || payload.length === 0) return null;
+                        return (
+                          <div className="bg-white dark:bg-slate-900 p-4 shadow-2xl rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <p className="font-black text-[10px] text-gray-400 uppercase mb-2">
+                              {visualizacaoModal === 'dias'
+                                ? new Date(label).toLocaleDateString('pt-BR')
+                                : label
+                              }
+                            </p>
+                            <p className="text-xl font-black text-blue-600 dark:text-blue-400">
+                              R$ {payload[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="vendas"
+                      stroke={visualizacaoModal === 'dias' ? '#3B82F6' : '#6366F1'}
+                      strokeWidth={4}
+                      dot={{ fill: '#fff', stroke: visualizacaoModal === 'dias' ? '#3B82F6' : '#6366F1', strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6, stroke: '#fff', strokeWidth: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[350px] flex items-center justify-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                <div className="text-center opacity-40">
+                  <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  <p className="text-xs font-black uppercase tracking-widest text-gray-500">Fluxo de Dados Insuficiente</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Estatísticas Resumidas */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Valor Total', val: kpiModalAberto === 'Faturamento' ? (mes?.total_vendas || 0) : kpiModalAberto === 'Lucro Líquido' ? (mes?.lucro_bruto || 0) : kpiModalAberto === 'Ticket Médio' ? (hoje?.ticket_medio || 0) : (mes?.total_despesas || 0), type: 'currency', color: 'bg-blue-50 text-blue-700 border-blue-100' },
+              { label: 'Crescimento', val: (mes?.crescimento_mensal || 0), type: 'perc', color: 'bg-green-50 text-green-700 border-green-100' },
+              { label: 'Janela Período', val: periodoDias, type: 'days', color: 'bg-purple-50 text-purple-700 border-purple-100' },
+              { label: 'Média/Dia', val: kpiModalAberto === 'Faturamento' ? ((mes?.total_vendas || 0) / periodoDias) : kpiModalAberto === 'Lucro Líquido' ? ((mes?.lucro_bruto || 0) / periodoDias) : kpiModalAberto === 'Ticket Médio' ? (hoje?.ticket_medio || 0) : ((mes?.total_despesas || 0) / periodoDias), type: 'currency', color: 'bg-orange-50 text-orange-700 border-orange-100' }
+            ].map((stat, i) => (
+              <div key={i} className={`${stat.color} rounded-2xl p-4 border shadow-sm`}>
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">{stat.label}</p>
+                <p className="text-lg font-black tabular-nums">
+                  {stat.type === 'currency' ? `R$ ${stat.val?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : stat.type === 'perc' ? `${stat.val >= 0 ? '+' : ''}${stat.val.toFixed(1)}%` : `${stat.val} dias`}
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setKpiModalAberto(null);
-                  setVisualizacaoModal('dias');
-                }}
-                className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {/* Toggle Simples: Dias vs Meses */}
-              <div className="flex gap-3 mb-6">
-                <button
-                  onClick={() => setVisualizacaoModal('dias')}
-                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${visualizacaoModal === 'dias'
-                    ? 'bg-blue-600 text-white shadow-lg scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                >
-                  📅 Últimos 30 Dias
-                </button>
-                <button
-                  onClick={() => setVisualizacaoModal('meses')}
-                  className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all ${visualizacaoModal === 'meses'
-                    ? 'bg-purple-600 text-white shadow-lg scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                >
-                  📊 Últimos 12 Meses
-                </button>
-              </div>
-
-              {/* Gráfico */}
-              <div className="bg-gradient-to-br from-gray-50 to-blue-50 dark:from-slate-800 dark:to-slate-900 rounded-xl p-6 shadow-inner">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                  {visualizacaoModal === 'dias' ? '📈 Evolução Diária (30 dias)' : '📊 Evolução Mensal (12 meses)'}
-                </h3>
-
-                {analise_temporal?.tendencia_vendas && analise_temporal.tendencia_vendas.length > 0 ? (
-                  <div className="h-[400px] bg-white dark:bg-slate-900 rounded-lg p-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={
-                          visualizacaoModal === 'dias'
-                            ? analise_temporal.tendencia_vendas.slice(-30) // Últimos 30 dias
-                            : (() => {
-                              // Agrupar por mês para visualização mensal
-                              const vendasPorMes: Record<string, { mes: string; total: number; count: number }> = {};
-
-                              analise_temporal.tendencia_vendas.forEach((item: any) => {
-                                if (item.data) {
-                                  const mesAno = item.data.substring(0, 7); // "2026-02"
-                                  if (!vendasPorMes[mesAno]) {
-                                    vendasPorMes[mesAno] = { mes: mesAno, total: 0, count: 0 };
-                                  }
-                                  vendasPorMes[mesAno].total += item.vendas || 0;
-                                  vendasPorMes[mesAno].count += 1;
-                                }
-                              });
-
-                              const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-                              return Object.keys(vendasPorMes)
-                                .sort()
-                                .slice(-12) // Últimos 12 meses
-                                .map(mesAno => {
-                                  const [ano, mes] = mesAno.split('-');
-                                  const mesNumero = parseInt(mes);
-                                  return {
-                                    data: `${mesesNomes[mesNumero - 1]}/${ano.substring(2)}`,
-                                    vendas: vendasPorMes[mesAno].total
-                                  };
-                                });
-                            })()
-                        }
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                        <XAxis
-                          dataKey="data"
-                          tick={{ fontSize: 12, fill: '#6B7280' }}
-                          tickFormatter={(value) => {
-                            if (visualizacaoModal === 'dias') {
-                              const date = new Date(value);
-                              return `${date.getDate()}/${date.getMonth() + 1}`;
-                            }
-                            return value; // Já formatado para meses
-                          }}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 12, fill: '#6B7280' }}
-                          tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
-                        />
-                        <Tooltip
-                          content={({ payload, label }) => {
-                            if (!payload || payload.length === 0) return null;
-                            return (
-                              <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-lg border-2 border-blue-200 dark:border-blue-700">
-                                <p className="font-bold text-gray-900 dark:text-gray-100 mb-1">
-                                  {visualizacaoModal === 'dias'
-                                    ? new Date(label).toLocaleDateString('pt-BR')
-                                    : label
-                                  }
-                                </p>
-                                <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                                  R$ {payload[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                            );
-                          }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="vendas"
-                          stroke={visualizacaoModal === 'dias' ? '#3B82F6' : '#9333EA'}
-                          strokeWidth={3}
-                          dot={{ fill: visualizacaoModal === 'dias' ? '#3B82F6' : '#9333EA', r: 4 }}
-                          activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="h-[400px] flex items-center justify-center bg-white dark:bg-slate-900 rounded-lg">
-                    <div className="text-center">
-                      <AlertTriangle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500 dark:text-gray-400">Dados insuficientes para gerar gráfico</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Estatísticas Resumidas */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-700 dark:text-blue-400 mb-1 font-medium">💰 Valor Total</p>
-                  <p className="text-xl font-bold text-blue-900 dark:text-blue-300">
-                    {kpiModalAberto === 'Faturamento' && `R$ ${(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                    {kpiModalAberto === 'Lucro Líquido' && `R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                    {kpiModalAberto === 'Ticket Médio' && `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`}
-                    {kpiModalAberto === 'Despesas' && `R$ ${(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-                  <p className="text-sm text-green-700 dark:text-green-400 mb-1 font-medium">📈 Crescimento</p>
-                  <p className={`text-xl font-bold ${(mes?.crescimento_mensal || 0) >= 0 ? 'text-green-900 dark:text-green-300' : 'text-red-900 dark:text-red-300'}`}>
-                    {(mes?.crescimento_mensal || 0) >= 0 ? '+' : ''}{(mes?.crescimento_mensal || 0).toFixed(1)}%
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
-                  <p className="text-sm text-purple-700 dark:text-purple-400 mb-1 font-medium">📅 Período</p>
-                  <p className="text-xl font-bold text-purple-900 dark:text-purple-300">
-                    {periodoDias} dias
-                  </p>
-                </div>
-
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl p-4 border border-orange-200 dark:border-orange-800">
-                  <p className="text-sm text-orange-700 dark:text-orange-400 mb-1 font-medium">📊 Média Diária</p>
-                  <p className="text-xl font-bold text-orange-900 dark:text-orange-300">
-                    {kpiModalAberto === 'Faturamento' && `R$ ${((mes?.total_vendas || 0) / periodoDias).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                    {kpiModalAberto === 'Lucro Líquido' && `R$ ${((mes?.lucro_bruto || 0) / periodoDias).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                    {kpiModalAberto === 'Ticket Médio' && `R$ ${(hoje?.ticket_medio || 0).toFixed(2)}`}
-                    {kpiModalAberto === 'Despesas' && `R$ ${((mes?.total_despesas || 0) / periodoDias).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
-              <button
-                onClick={() => {
-                  setKpiModalAberto(null);
-                  setVisualizacaoModal('dias');
-                }}
-                className="px-6 py-2 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors font-medium border border-gray-300 dark:border-slate-600"
-              >
-                Fechar
-              </button>
-            </div>
+            ))}
           </div>
         </div>
-      )}
+      </ResponsiveModal>
     </div>
   );
 };
