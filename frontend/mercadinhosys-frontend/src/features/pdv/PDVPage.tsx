@@ -6,7 +6,6 @@ import {
     CreditCard,
     DollarSign,
     Smartphone,
-    Trash2,
     User,
     Tag,
     Mail,
