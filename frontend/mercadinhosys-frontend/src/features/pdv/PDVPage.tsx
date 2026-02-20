@@ -7,7 +7,6 @@ import {
     DollarSign,
     Smartphone,
     TrendingUp,
-    Tag,
     Search,
     Trash2,
     User
@@ -59,7 +58,6 @@ const PDVPage: React.FC = () => {
         subtotal,
         descontoItens,
         descontoGeralCalculado,
-        descontoTotal,
         total,
         troco,
         adicionarProduto,
@@ -71,7 +69,6 @@ const PDVPage: React.FC = () => {
         finalizarVenda,
     } = usePDV();
 
-    const [formaPagamentoAberta, setFormaPagamentoAberta] = useState(false);
     const [mostrarAutorizacao, setMostrarAutorizacao] = useState(false);
     const [descontoAprovado, setDescontoAprovado] = useState(false);
     const [ultimaVendaId, setUltimaVendaId] = useState<number | null>(null);
@@ -604,12 +601,6 @@ const PDVPage: React.FC = () => {
                         setTimeout(() => {
                             document.getElementById('cliente-search-input')?.focus();
                         }, 50);
-                    }
-                    break;
-                case 'F4':
-                    e.preventDefault();
-                    {
-                        setFormaPagamentoAberta((prev) => !prev);
                     }
                     break;
                 default:
