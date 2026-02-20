@@ -9,11 +9,23 @@ jwt_required = jwt_required_flask
 
 
 def funcionario_required(f):
-    """Decorator para exigir autenticação de funcionário"""
+    """Decorator para exigir autenticação de funcionário with CORS support"""
 
     @wraps(f)
-    @jwt_required()
     def decorated_function(*args, **kwargs):
+        # BYPASS CORS OPTIONS (Preflight)
+        # Garante que o navegador receba 200 OK para o handshake CORS antes de validar o token
+        from flask import request
+        if request.method == "OPTIONS":
+            return jsonify({"success": True}), 200
+
+        # Verificação Manual do JWT
+        from flask_jwt_extended import verify_jwt_in_request
+        try:
+            verify_jwt_in_request()
+        except Exception as e:
+             return jsonify({"error": "Token inválido ou expirado", "details": str(e)}), 401
+
         current_user_id = get_jwt_identity()
         claims = get_jwt()  # ✅ Agora pega os claims adicionais
 

@@ -2,15 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { showToast } from '../../utils/toast';
 import {
     ShoppingCart,
-    Printer,
-    X,
     Check,
     CreditCard,
     DollarSign,
     Smartphone,
     TrendingUp,
     Tag,
-    AlertTriangle,
     Search,
     Trash2,
     User
@@ -641,488 +638,323 @@ const PDVPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-gray-50 dark:bg-gray-900">
-            <div className="flex-1 p-2 sm:p-4 lg:p-6 overflow-y-auto lg:overflow-hidden">
-                <div className="max-w-[1600px] mx-auto">
-                    {/* Header com informações do caixa (refreshKey atualiza stats após venda) */}
+        <div className="flex flex-col lg:grid lg:grid-cols-12 min-h-screen lg:h-screen w-full bg-gray-50 dark:bg-gray-900 transition-colors duration-200 lg:overflow-hidden">
+
+            {/* LEFT COLUMN: Header + Search + Cart / Scrollable on mobile, Fixed on Desktop */}
+            <div className="flex-1 lg:col-span-8 flex flex-col min-h-0 lg:h-full bg-gray-50 dark:bg-gray-900">
+                {/* Header Section - Fixed Top */}
+                <div className="p-2 sm:p-4 lg:p-6 flex-shrink-0 z-30 bg-gray-50 dark:bg-gray-900">
                     <CaixaHeader
                         funcionarioNome={configuracoes?.funcionario.nome}
                         funcionarioRole={configuracoes?.funcionario.role}
                         refreshKey={ultimaVendaId ?? undefined}
                     />
+                </div>
 
-                    {/* Layout Principal */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8">
-                        {/* Coluna 1: Busca e Carrinho */}
-                        <div className="lg:col-span-8 flex flex-col space-y-4 min-h-[500px] lg:min-h-0">
-                            {/* Busca de Produtos */}
-                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-4 sm:p-6 flex flex-col flex-shrink-0">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white flex items-center">
-                                        <Search className="w-5 h-5 sm:w-6 sm:h-6 mr-2 text-blue-500" />
-                                        Vender Produto
-                                    </h2>
-                                    <span className="hidden sm:inline-block text-xs font-semibold px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded border border-gray-200 dark:border-gray-600">
-                                        F1 ou ESC para foco
+                {/* Main Content Area (Items) - Scrollable list */}
+                <div className="flex-1 flex flex-col px-2 sm:px-4 lg:px-6 pb-4 lg:pb-6 min-h-0 lg:overflow-hidden">
+                    <div className="flex flex-col h-full space-y-4 lg:overflow-y-auto custom-scrollbar lg:pr-2">
+
+                        {/* Busca de Produtos */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6 flex-shrink-0">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white flex items-center">
+                                    <Search className="w-5 h-5 sm:w-6 sm:h-6 mr-3 text-blue-600" />
+                                    Vender Produto
+                                </h2>
+                                <div className="hidden sm:flex space-x-2">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                        F1: Busca
                                     </span>
                                 </div>
-                                <ErrorBoundary name="Busca de Produtos">
-                                    <ProdutoSearch onProdutoSelecionado={handleProdutoSelecionado} />
-                                </ErrorBoundary>
                             </div>
-
-                            {/* Carrinho */}
-                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col flex-1 min-h-[400px]">
-                                <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="p-2 bg-blue-500 rounded-lg text-white">
-                                            <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">
-                                                Carrinho
-                                            </h2>
-                                            <p className="hidden sm:block text-xs text-gray-500 dark:text-gray-400">
-                                                Itens para checkout
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center space-x-3 sm:space-x-4">
-                                        <span className="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-xl font-bold text-base sm:text-lg">
-                                            {carrinho.length}
-                                        </span>
-                                        {carrinho.length > 0 && (
-                                            <button
-                                                onClick={handleLimparCarrinho}
-                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-                                                title="Limpar carrinho"
-                                            >
-                                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-gray-50/30 dark:bg-gray-900/10">
-                                    {carrinho.length === 0 ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-center py-12">
-                                            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
-                                                <ShoppingCart className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-600" />
-                                            </div>
-                                            <h3 className="text-base sm:text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">
-                                                Seu carrinho está vazio
-                                            </h3>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            {carrinho.map((item) => (
-                                                <ErrorBoundary key={item.produto.id} name={`Item Carrinho: ${item.produto.nome}`}>
-                                                    <CarrinhoItem
-                                                        produto={item.produto}
-                                                        quantidade={item.quantidade}
-                                                        precoUnitario={item.precoUnitario}
-                                                        desconto={item.desconto}
-                                                        total={item.total}
-                                                        onAtualizarQuantidade={(qtd) => {
-                                                            const estoque = item.produto.quantidade_estoque ?? item.produto.quantidade ?? 0;
-                                                            if (qtd > estoque) {
-                                                                showToast.error(`Estoque insuficiente`, {
-                                                                    id: TOAST_IDS.estoqueInsuficiente,
-                                                                });
-                                                                return;
-                                                            }
-                                                            atualizarQuantidade(item.produto.id, qtd);
-                                                        }}
-                                                        onRemover={() => removerProduto(item.produto.id)}
-                                                        onAplicarDesconto={(desc, perc) =>
-                                                            aplicarDescontoItem(item.produto.id, desc, perc)
-                                                        }
-                                                    />
-                                                </ErrorBoundary>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <ErrorBoundary name="Busca de Produtos">
+                                <ProdutoSearch onProdutoSelecionado={handleProdutoSelecionado} />
+                            </ErrorBoundary>
                         </div>
 
-                        {/* Coluna 2: Resumo e Pagamento (Ocupa 4/12 no desktop) */}
-                        <div className="lg:col-span-4 flex flex-col space-y-4 lg:space-y-6 lg:overflow-y-auto lg:custom-scrollbar pb-20 lg:pb-6">
-                            {/* Cliente */}
-                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center">
-                                        <User className="w-5 h-5 mr-2 text-blue-500" />
-                                        Identificar Cliente
-                                    </h2>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
-                                        F2
-                                    </span>
+                        {/* Carrinho Section */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col flex-1 min-h-[350px] lg:min-h-0">
+                            <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between flex-shrink-0">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-600/20">
+                                        <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-base sm:text-xl font-bold text-gray-800 dark:text-white">
+                                            Carrinho
+                                        </h2>
+                                        <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">
+                                            {carrinho.length} {carrinho.length === 1 ? 'item' : 'itens'}
+                                        </p>
+                                    </div>
                                 </div>
-                                <ClienteSelect
-                                    cliente={cliente}
-                                    onClienteSelecionado={setCliente}
-                                />
-                            </div>
-
-                            {/* Resumo da Venda */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                                <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                                    Resumo da Venda
-                                </h2>
-
-                                <div className="space-y-3">
-                                    <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                                        <span>Subtotal</span>
-                                        <span className="font-medium text-gray-800 dark:text-white">
-                                            {formatCurrency(subtotal)}
-                                        </span>
-                                    </div>
-
-                                    {descontoItens > 0 && (
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-yellow-600 dark:text-yellow-400">Desconto em itens</span>
-                                            <span className="text-yellow-600 dark:text-yellow-400">
-                                                -{formatCurrency(descontoItens)}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-gray-600 dark:text-gray-400">Desconto Geral</span>
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() => setDescontoPercentual(!descontoPercentual)}
-                                                    className={`px-3 py-1 text-xs rounded transition ${descontoPercentual
-                                                        ? 'bg-blue-500 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                        }`}
-                                                >
-                                                    {descontoPercentual ? '%' : 'R$'}
-                                                </button>
-                                                <input
-                                                    type="number"
-                                                    value={descontoGeral}
-                                                    onChange={(e) => setDescontoGeral(parseFloat(e.target.value) || 0)}
-                                                    onBlur={handleAplicarDesconto}
-                                                    className="w-24 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-right bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                                                    step="0.01"
-                                                    min="0"
-                                                    max={descontoPercentual ? "100" : subtotal.toString()}
-                                                />
-                                            </div>
-                                        </div>
-                                        {descontoGeralCalculado > 0 && (
-                                            <div className="text-right">
-                                                <span className="text-sm text-red-500">
-                                                    -{formatCurrency(descontoGeralCalculado)}
-                                                </span>
-                                                {descontoAprovado && (
-                                                    <span className="ml-2 text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
-                                                        ✓ Aprovado
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {descontoTotal > 0 && (
-                                        <div className="flex justify-between text-sm font-medium text-red-600 dark:text-red-400">
-                                            <span>Total em Descontos</span>
-                                            <span>-{formatCurrency(descontoTotal)}</span>
-                                        </div>
-                                    )}
-
-                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-lg font-semibold text-gray-800 dark:text-white">
-                                                Total a Pagar
-                                            </span>
-                                            <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                                                {formatCurrency(total)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Indicador de permissões */}
-                                    {configuracoes && (
-                                        <div className={`mt-4 p-3 rounded-lg ${configuracoes.funcionario.role === 'ADMIN'
-                                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                                            : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
-                                            }`}>
-                                            <div className="flex items-center justify-between text-xs">
-                                                <div className="flex items-center space-x-2">
-                                                    <Tag className="w-4 h-4" />
-                                                    <span className={
-                                                        configuracoes.funcionario.role === 'ADMIN'
-                                                            ? 'text-green-700 dark:text-green-300 font-semibold'
-                                                            : 'text-blue-700 dark:text-blue-300'
-                                                    }>
-                                                        {configuracoes.funcionario.role === 'ADMIN'
-                                                            ? '👑 Admin - Desconto Ilimitado'
-                                                            : `Limite de desconto: ${configuracoes.funcionario.limite_desconto}%`
-                                                        }
-                                                    </span>
-                                                </div>
-                                                {configuracoes.funcionario.role === 'ADMIN' && (
-                                                    <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-xs font-bold">
-                                                        ✓ Sem Limite
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {configuracoes.funcionario.role !== 'ADMIN' && descontoGeralCalculado > 0 && (
-                                                <div className="mt-2">
-                                                    <div className="flex justify-between text-xs mb-1">
-                                                        <span className="text-gray-600 dark:text-gray-400">
-                                                            Desconto usado: {((descontoGeralCalculado / subtotal) * 100).toFixed(1)}%
-                                                        </span>
-                                                        <span className={`font-semibold ${((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
-                                                            ? 'text-red-600 dark:text-red-400'
-                                                            : 'text-green-600 dark:text-green-400'
-                                                            }`}>
-                                                            {((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
-                                                                ? '⚠️ Requer autorização'
-                                                                : '✓ Dentro do limite'
-                                                            }
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                                        <div
-                                                            className={`h-2 rounded-full transition-all ${((descontoGeralCalculado / subtotal) * 100) > configuracoes.funcionario.limite_desconto
-                                                                ? 'bg-red-500'
-                                                                : 'bg-green-500'
-                                                                }`}
-                                                            style={{
-                                                                width: `${Math.min(100, ((descontoGeralCalculado / subtotal) * 100 / configuracoes.funcionario.limite_desconto) * 100)}%`
-                                                            }}
-                                                        ></div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Forma de Pagamento */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
-                                        Forma de Pagamento
-                                    </h2>
+                                {carrinho.length > 0 && (
                                     <button
-                                        onClick={() => setFormaPagamentoAberta(!formaPagamentoAberta)}
-                                        className="text-sm text-blue-500 hover:text-blue-600 font-medium"
+                                        onClick={handleLimparCarrinho}
+                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                     >
-                                        {formaPagamentoAberta ? 'Fechar' : 'Alterar'} <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">F4</span>
+                                        <Trash2 className="w-5 h-5" />
                                     </button>
-                                </div>
+                                )}
+                            </div>
 
-                                {formaPagamentoAberta ? (
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar p-1">
-                                        {(formasPagamento.length > 0 ? formasPagamento : [
-                                            { tipo: 'dinheiro', label: 'Dinheiro', taxa: 0, permite_troco: true },
-                                            { tipo: 'credito', label: 'Cartão de Crédito', taxa: 0, permite_troco: false },
-                                            { tipo: 'debito', label: 'Cartão de Débito', taxa: 0, permite_troco: false },
-                                            { tipo: 'pix', label: 'PIX', taxa: 0, permite_troco: false }
-                                        ]).map((forma) => (
-                                            <button
-                                                key={forma.tipo}
-                                                onClick={() => {
-                                                    setFormaPagamentoSelecionada(forma.tipo);
-                                                    setFormaPagamentoAberta(false);
-                                                    if (!forma.permite_troco) {
-                                                        setValorRecebido(0);
-                                                    }
-                                                }}
-                                                className={`w-full p-4 rounded-xl flex items-center justify-between transition-all duration-200 ${formaPagamentoSelecionada === forma.tipo
-                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500 shadow-md transform scale-[1.01]'
-                                                    : 'bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center space-x-3">
-                                                    <div className={`p-2 rounded-lg ${formaPagamentoSelecionada === forma.tipo ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
-                                                        {renderIconPagamento(forma.tipo)}
-                                                    </div>
-                                                    <span className={`font-bold ${formaPagamentoSelecionada === forma.tipo ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                                                        {forma.label}
-                                                    </span>
-                                                </div>
-                                                {forma.taxa > 0 ? (
-                                                    <span className="text-xs font-semibold px-2 py-1 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 rounded-full">
-                                                        +{forma.taxa}%
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">Sem taxa</span>
-                                                )}
-                                            </button>
-                                        ))}
+                            <div className="flex-1 overflow-y-auto p-2 sm:p-4 custom-scrollbar bg-gray-50/30 dark:bg-gray-900/10">
+                                {carrinho.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-center py-10 opacity-60">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                                            <ShoppingCart className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400" />
+                                        </div>
+                                        <h3 className="text-base font-medium text-gray-900 dark:text-white">Carrinho Vazio</h3>
+                                        <p className="text-xs text-gray-500 max-w-[200px] mx-auto mt-1">Pesquise produtos para começar a venda.</p>
                                     </div>
                                 ) : (
-                                    <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="p-2 bg-blue-500 rounded-lg">
-                                                    {renderIconPagamento(formaPagamentoSelecionada)}
-                                                    <span className="sr-only">Ícone</span>
-                                                </div>
-                                                <div>
-                                                    <span className="font-semibold text-gray-800 dark:text-white block">
-                                                        {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.label || formaPagamentoSelecionada}
-                                                    </span>
-                                                    {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
-                                                        <span className="text-xs text-blue-600 dark:text-blue-400">
-                                                            Aceita troco
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {(() => {
-                                                const forma = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
-                                                return forma && forma.taxa > 0 ? (
-                                                    <span className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full">
-                                                        Taxa: {forma.taxa}%
-                                                    </span>
-                                                ) : null;
-                                            })()}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Campo de Valor Recebido para Dinheiro */}
-                                {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
-                                    <div className="mt-4 p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            💵 Valor Recebido
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={valorRecebido}
-                                            onChange={(e) => setValorRecebido(parseFloat(e.target.value) || 0)}
-                                            className="w-full px-4 py-3 border-2 border-yellow-300 dark:border-yellow-700 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent font-bold text-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                                            step="0.01"
-                                            min="0"
-                                            placeholder="0.00"
-                                        />
-                                        {troco > 0 && (
-                                            <div className="mt-3 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-300 dark:border-green-700">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                                                        Troco a devolver:
-                                                    </span>
-                                                    <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                                                        {formatCurrency(troco)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {valorRecebido > 0 && valorRecebido < total && (
-                                            <div className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
-                                                <AlertTriangle className="w-4 h-4" />
-                                                <span>
-                                                    Faltam {formatCurrency(total - valorRecebido)}
-                                                </span>
-                                            </div>
-                                        )}
+                                    <div className="space-y-2 sm:space-y-3">
+                                        {carrinho.map((item) => (
+                                            <ErrorBoundary key={item.produto.id} name={`Item Carrinho: ${item.produto.nome}`}>
+                                                <CarrinhoItem
+                                                    produto={item.produto}
+                                                    quantidade={item.quantidade}
+                                                    precoUnitario={item.precoUnitario}
+                                                    desconto={item.desconto}
+                                                    total={item.total}
+                                                    onAtualizarQuantidade={(qtd) => {
+                                                        const estoque = item.produto.quantidade_estoque ?? item.produto.quantidade ?? 0;
+                                                        if (qtd > estoque) {
+                                                            showToast.error(`Estoque insuficiente`, { id: TOAST_IDS.estoqueInsuficiente });
+                                                            return;
+                                                        }
+                                                        atualizarQuantidade(item.produto.id, qtd);
+                                                    }}
+                                                    onRemover={() => removerProduto(item.produto.id)}
+                                                    onAplicarDesconto={(desc, perc) => aplicarDescontoItem(item.produto.id, desc, perc)}
+                                                />
+                                            </ErrorBoundary>
+                                        ))}
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                            {/* Observações */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                                <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                                    Observações
-                                </h2>
-                                <textarea
-                                    value={observacoes}
-                                    onChange={(e) => setObservacoes(e.target.value)}
-                                    placeholder="Observações sobre a venda..."
-                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[100px]"
-                                    rows={3}
+            {/* RIGHT COLUMN: Summary & Payment / Fixed on Desktop, Flowing/Sticky on Mobile */}
+            <div className="lg:col-span-4 flex flex-col bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 h-auto lg:h-full lg:overflow-hidden shadow-2xl z-20 pb-20 lg:pb-0">
+                {/* Scrollable Summary Section */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-6">
+                    {/* Cliente Selection */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center">
+                                <User className="w-3.5 h-3.5 mr-2" />
+                                Cliente
+                            </label>
+                            <span className="hidden sm:block text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded dark:bg-gray-700 dark:text-gray-300">F2</span>
+                        </div>
+                        <ClienteSelect cliente={cliente} onClienteSelecionado={setCliente} />
+                    </div>
+
+                    <div className="border-t border-gray-100 dark:border-gray-700 my-4"></div>
+
+                    {/* Resumo Financeiro */}
+                    <div className="space-y-3">
+                        <div className="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
+                            <span>Subtotal</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
+                        </div>
+                        {descontoItens > 0 && (
+                            <div className="flex justify-between text-xs text-green-600 dark:text-green-400">
+                                <span>Descontos em Itens</span>
+                                <span>-{formatCurrency(descontoItens)}</span>
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Desconto Extra</span>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setDescontoPercentual(!descontoPercentual)}
+                                    className={`px-2 py-0.5 text-[10px] rounded font-bold transition-colors ${descontoPercentual ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}`}
+                                >
+                                    {descontoPercentual ? '%' : 'R$'}
+                                </button>
+                                <input
+                                    type="number"
+                                    value={descontoGeral || ''}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setDescontoGeral(isNaN(val) ? 0 : val);
+                                        setDescontoAprovado(false);
+                                    }}
+                                    onBlur={handleAplicarDesconto}
+                                    className={`w-20 sm:w-24 px-2 py-1 text-right text-sm border rounded-md focus:ring-2 focus:ring-blue-500 outline-none ${!descontoAprovado && descontoGeral > 0 && !validarDescontoPermitido(descontoGeralCalculado) ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10' : 'border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-gray-900 dark:text-white'}`}
+                                    min="0"
+                                    step="0.01"
                                 />
-                            </div>
-
-                            {/* Botões de Ação */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                                <div className="space-y-4">
-                                    <button
-                                        onClick={handleFinalizarVenda}
-                                        disabled={carrinho.length === 0 || loading || enviandoEmail}
-                                        className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center space-x-3 transition shadow-lg ${carrinho.length === 0 || loading || enviandoEmail
-                                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-                                            }`}
-                                    >
-                                        {loading || enviandoEmail ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                                                <span>{enviandoEmail ? 'Enviando email...' : 'Processando...'}</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Check className="w-6 h-6" />
-                                                <span>FINALIZAR VENDA</span>
-                                                <span className="ml-2 text-xs px-2 py-0.5 bg-white/20 rounded">F10/F9</span>
-                                            </>
-                                        )}
-                                    </button>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            onClick={handleLimparCarrinho}
-                                            disabled={carrinho.length === 0 || loading || enviandoEmail}
-                                            className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${carrinho.length === 0 || loading || enviandoEmail
-                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
-                                                }`}
-                                        >
-                                            <X className="w-5 h-5" />
-                                            <span>Cancelar</span>
-                                            <span className="ml-2 text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded">ESC</span>
-                                        </button>
-
-                                        <button
-                                            disabled={carrinho.length === 0}
-                                            className={`py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition ${carrinho.length === 0
-                                                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                                : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
-                                                }`}
-                                        >
-                                            <Printer className="w-5 h-5" />
-                                            <span>Imprimir</span>
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Modal de Autorização de Gerente */}
-                    {mostrarAutorizacao && (
-                        <GerenteAuthModal
-                            acao="desconto"
-                            valorDesconto={descontoGeralCalculado}
-                            onAutorizado={handleAutorizacaoAprovada}
-                            onCancelar={() => {
-                                setMostrarAutorizacao(false);
-                                setDescontoGeral(0);
-                            }}
-                        />
+                    <div className="border-t border-gray-100 dark:border-gray-700 my-4"></div>
+
+                    {/* Desktop Total Display (Hidden on Mobile Sticky) */}
+                    <div className="hidden lg:block bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+                        <div className="flex justify-between items-end mb-1">
+                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase">Total a Pagar</span>
+                        </div>
+                        <div className="flex justify-between items-center text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+                            <span>R$</span>
+                            <span>{Number(total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+
+                    {/* Payment Methods */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center">
+                                <CreditCard className="w-3.5 h-3.5 mr-2" />
+                                Pagamento
+                            </label>
+                            <span className="hidden sm:block text-[10px] font-bold px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded dark:bg-gray-700 dark:text-gray-300">F4</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            {formasPagamento.map((forma) => (
+                                <button
+                                    key={forma.tipo}
+                                    onClick={() => setFormaPagamentoSelecionada(forma.tipo)}
+                                    className={`
+                                        relative p-2.5 sm:p-3 rounded-xl border text-left transition-all duration-200 group flex flex-col justify-between min-h-[70px] sm:min-h-[80px]
+                                        ${formaPagamentoSelecionada === forma.tipo
+                                            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 dark:bg-blue-900/20 dark:border-blue-500'
+                                            : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600'
+                                        }
+                                    `}
+                                >
+                                    <div className="flex items-center justify-between mb-1.5 w-full">
+                                        <span className={`${formaPagamentoSelecionada === forma.tipo ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-400'}`}>
+                                            {renderIconPagamento(forma.tipo)}
+                                        </span>
+                                        {forma.taxa > 0 && (
+                                            <span className="text-[9px] font-bold px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 rounded-full">
+                                                +{forma.taxa}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className={`font-bold text-[11px] sm:text-xs leading-tight ${formaPagamentoSelecionada === forma.tipo ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
+                                        {forma.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Change / Received Display */}
+                    {formasPagamento.find(f => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
+                        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-3 sm:p-4 space-y-3 border border-gray-100 dark:border-gray-700">
+                            <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">
+                                Valor Recebido
+                            </label>
+                            <input
+                                type="number"
+                                value={valorRecebido || ''}
+                                onChange={(e) => setValorRecebido(parseFloat(e.target.value) || 0)}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xl font-bold text-right outline-none focus:border-blue-500 transition-colors text-gray-900 dark:text-white"
+                                placeholder="0,00"
+                                step="0.01"
+                            />
+                            {valorRecebido > 0 && (
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-100 dark:border-gray-700">
+                                    <span className="text-xs font-medium text-gray-500 italic">Troco</span>
+                                    <span className={`text-lg font-black ${troco >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {formatCurrency(troco)}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     )}
 
-                    {/* Modal Profissional de Nota Fiscal */}
-                    <NotaFiscalModal
-                        mostrar={mostrarModalNotaFiscal}
-                        emailCliente={cliente?.email}
-                        onEnviarEmail={handleEnviarEmail}
-                        onVisualizar={handleVisualizarNota}
-                        onImprimir={handleImprimirNota}
-                        onFechar={handleFecharModalNota}
-                        enviando={enviandoEmail}
-                    />
+                    {/* Observações */}
+                    <div>
+                        <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-2">
+                            Notas da Venda
+                        </label>
+                        <textarea
+                            value={observacoes}
+                            onChange={(e) => setObservacoes(e.target.value)}
+                            className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-xs outline-none focus:border-blue-500 transition-colors text-gray-900 dark:text-white"
+                            rows={2}
+                            placeholder="Ex: Entrega rápida..."
+                        />
+                    </div>
+                </div>
+
+                {/* STICKY BOTTOM BAR (Mobile) / FIXED FOOTER (Desktop) */}
+                <div className="fixed bottom-0 left-0 right-0 lg:static p-3 sm:p-4 lg:p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex flex-col space-y-2 z-50 shadow-[0_-8px_30px_rgb(0,0,0,0.1)] lg:shadow-none">
+
+                    {/* Mobile-only Summary Bar */}
+                    <div className="flex lg:hidden justify-between items-center mb-1 px-1">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase">Total</span>
+                            <span className="text-xl font-black text-gray-900 dark:text-white">{formatCurrency(total)}</span>
+                        </div>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={handleLimparCarrinho}
+                                className="p-3 rounded-lg text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30"
+                            >
+                                <Trash2 className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleFinalizarVenda}
+                        disabled={carrinho.length === 0 || loading}
+                        className={`
+                            w-full h-12 sm:h-14 rounded-xl flex items-center justify-center space-x-2 text-white font-bold text-base sm:text-lg shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all
+                            ${carrinho.length === 0 || loading
+                                ? 'bg-gray-400 cursor-not-allowed shadow-none'
+                                : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400'
+                            }
+                        `}
+                    >
+                        {loading ? (
+                            <div className="flex items-center">
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                                <span>Processando...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <Check className="w-5 h-5 sm:w-6 sm:h-6" />
+                                <span>FINALIZAR VENDA {carrinho.length > 0 && <span className="hidden sm:inline">(F9)</span>}</span>
+                            </>
+                        )}
+                    </button>
                 </div>
             </div>
+
+            {/* Modals */}
+            {mostrarAutorizacao && (
+                <GerenteAuthModal
+                    acao="desconto"
+                    valorDesconto={descontoGeralCalculado}
+                    onAutorizado={handleAutorizacaoAprovada}
+                    onCancelar={() => {
+                        setMostrarAutorizacao(false);
+                        setDescontoGeral(0);
+                    }}
+                />
+            )}
+
+            <NotaFiscalModal
+                mostrar={mostrarModalNotaFiscal}
+                emailCliente={cliente?.email}
+                onEnviarEmail={handleEnviarEmail}
+                onVisualizar={handleVisualizarNota}
+                onImprimir={handleImprimirNota}
+                onFechar={handleFecharModalNota}
+                enviando={enviandoEmail}
+            />
         </div>
     );
 };
