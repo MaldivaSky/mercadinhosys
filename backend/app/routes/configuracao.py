@@ -68,7 +68,7 @@ def obter_configuracoes():
 @configuracao_bp.route("/", methods=["PUT"])
 @jwt_required()
 def atualizar_configuracoes():
-    """Atualiza as configurações do estabelecimento com auditoria"""
+    """Atualiza as configurações do estabelecimento com SQL Puro (Blindado contra Schema Drift)"""
     try:
         claims = get_jwt()
         estabelecimento_id = claims.get("estabelecimento_id")
@@ -78,28 +78,56 @@ def atualizar_configuracoes():
             return jsonify({"success": False, "error": "Sem permissão para alterar configurações"}), 403
 
         data = request.get_json() or {}
-        config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
         
-        if not config:
-            config = Configuracao(estabelecimento_id=estabelecimento_id)
-
-        # Campos permitidos para atualização via PDV/Config
-        perm = [
+        # Campos permitidos para atualização
+        allowed_fields = [
             "logo_url", "cor_principal", "tema_escuro", "impressao_automatica",
-            "tipo_impressora", "formas_pagamento"
+            "tipo_impressora", "formas_pagamento", "emitir_nfe", "emitir_nfce"
         ]
 
-        for campo in perm:
-            if campo in data:
-                valor = data[campo]
-                if campo == "formas_pagamento" and isinstance(valor, list):
-                    valor = json.dumps(valor, ensure_ascii=False)
-                setattr(config, campo, valor)
+        # 1. Verifica se já existe configuração para este estabelecimento
+        from sqlalchemy import text
+        check_sql = "SELECT id FROM configuracoes WHERE estabelecimento_id = :eid LIMIT 1"
+        existing = db.session.execute(text(check_sql), {"eid": estabelecimento_id}).fetchone()
 
-        db.session.add(config)
-        db.session.commit()
+        params = {"eid": estabelecimento_id}
+        set_clauses = []
+        
+        # Prepara campos para Update/Insert
+        for field in allowed_fields:
+            if field in data:
+                val = data[field]
+                if field == "formas_pagamento" and isinstance(val, list):
+                    val = json.dumps(val, ensure_ascii=False)
+                
+                params[field] = val
+                set_clauses.append(f"{field} = :{field}")
 
-        # Invalida o cache para forçar recarregamento
+        if not set_clauses:
+             return jsonify({"success": True, "message": "Nada a atualizar"}), 200
+
+        try:
+            if existing:
+                # UPDATE
+                sql = f"UPDATE configuracoes SET {', '.join(set_clauses)} WHERE estabelecimento_id = :eid"
+                db.session.execute(text(sql), params)
+            else:
+                # INSERT
+                # Para insert precisamos garantir que colunas obrigatórias tenham valor ou default do banco assuma
+                cols = ["estabelecimento_id"] + [k for k in params.keys() if k != "eid"]
+                vals = [":eid"] + [f":{k}" for k in params.keys() if k != "eid"]
+                
+                sql = f"INSERT INTO configuracoes ({', '.join(cols)}) VALUES ({', '.join(vals)})"
+                db.session.execute(text(sql), params)
+            
+            db.session.commit()
+        except Exception as e_sql:
+            # Se der erro (ex: coluna não existe), tentamos ignorar a coluna problemática?
+            # Por enquanto, logamos e damos rollback. O try-catch externo pega.
+            db.session.rollback()
+            raise e_sql
+
+        # Invalida o cache
         invalidate_config(estabelecimento_id)
 
         return jsonify({
@@ -110,8 +138,9 @@ def atualizar_configuracoes():
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"❌ Erro em atualizar_configuracoes: {str(e)}")
-        return jsonify({"success": False, "error": "Erro ao salvar configurações"}), 500
+        current_app.logger.error(f"❌ Erro em atualizar_configuracoes (SQL): {str(e)}")
+        # Tenta retornar erro legível
+        return jsonify({"success": False, "error": "Não foi possível salvar as configurações. Verifique o banco de dados."}), 500
 
 
 # ==================== ESTABELECIMENTO ====================

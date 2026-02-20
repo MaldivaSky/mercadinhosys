@@ -23,7 +23,7 @@ import uuid
 import random
 import string
 from sqlalchemy import func
-from app.utils.smart_cache import smart_cache, get_cached_config, set_cached_config
+from app.utils.smart_cache import get_cached_config, set_cached_config
 from app.utils.query_helpers import get_funcionario_safe, get_produto_safe, get_venda_safe, get_venda_itens_safe
 
 pdv_bp = Blueprint("pdv", __name__)

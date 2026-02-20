@@ -58,18 +58,31 @@ def create_app(config_name=None):
             runtime_db_url = runtime_db_url.replace("postgres://", "postgresql://", 1)
         app.config["SQLALCHEMY_DATABASE_URI"] = runtime_db_url
         
-        # OTIMIZAÇÃO DE ELITE: Connection Pooling para Postgres/Neon
-        # Evita "Too many connections" e timeouts em produção
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-            "pool_size": 10,
-            "max_overflow": 20,
-            "pool_recycle": 1800,
-            "pool_pre_ping": True,
-            "connect_args": {
-                "connect_timeout": 10,
-                "application_name": "mercadinhosys_elite_backend"
+        # OTIMIZAÇÃO DE ELITE: Connection Pooling para Aiven (Postgres Cloud)
+        # Ajustado para evitar "SSL connection has been closed unexpectedly" e timeouts
+        # OTIMIZAÇÃO DE ELITE: Connection Pooling (Somente para Postgres/Aiven)
+        # Se for SQLite (Local/Docker sem env), não aplica configs de pool do Postgres
+        if "postgres" in runtime_db_url:
+            app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                "pool_size": 5, # Aiven tem limites estritos de conexão
+                "max_overflow": 10,
+                "pool_recycle": 3600, # 1 hora
+                "pool_pre_ping": True,
+                "connect_args": {
+                    "connect_timeout": 30,
+                    "application_name": "mercadinhosys_backend_prod",
+                    "keepalives": 1,
+                    "keepalives_idle": 30,
+                    "keepalives_interval": 10,
+                    "keepalives_count": 5,
+                    "sslmode": "require" # CRÍTICO PARA AIVEN
+                }
             }
-        }
+        else:
+             # Configuração simples para SQLite (evita erros de SSL/Pool)
+             app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+                 "pool_pre_ping": True
+             }
         
         for key in ["DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL", "AIVEN_DATABASE_URL"]:
             if os.environ.get(key):
@@ -513,6 +526,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar saas: {e}")
 
+    # Stripe
+    try:
+        from app.routes.stripe_routes import stripe_bp
+        app.register_blueprint(stripe_bp)
+        logger.info("✅ Blueprint Stripe registrado")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar stripe: {e}")
+
     # Dashboard Científico - verifica se existe a pasta
     try:
         dashboard_cientifico_path = os.path.join(
@@ -726,7 +747,4 @@ def create_app(config_name=None):
     """
     )
 
-    from app.routes.stripe_routes import stripe_bp
-    app.register_blueprint(stripe_bp)
-    
     return app

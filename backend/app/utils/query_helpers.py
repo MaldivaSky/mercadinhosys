@@ -99,10 +99,53 @@ def get_estabelecimento_safe(estab_id):
 
 def get_configuracao_safe(estab_id):
     """
-    Busca configurações via SQL direto, evitando colunas ausentes.
+    Busca configurações via SQL direto.
+    Estratégia Híbrida (Elite):
+    1. Tenta buscar TUDO em uma única query (Performance Máxima).
+    2. Se falhar (ex: coluna nova não existe), busca item a item (Resiliência Máxima).
     """
     try:
         if not estab_id: return None
+        
+        # --- TENTATIVA 1: FAST PATH (1 Query) ---
+        try:
+            # Tenta buscar todas as colunas conhecidas de uma vez
+            sql_fast = """
+                SELECT 
+                    id, estabelecimento_id, 
+                    logo_url, logo_base64, cor_principal, tema_escuro, 
+                    emitir_nfe, emitir_nfce, formas_pagamento
+                FROM configuracoes 
+                WHERE estabelecimento_id = :eid 
+                LIMIT 1
+            """
+            row = db.session.execute(text(sql_fast), {"eid": estab_id}).fetchone()
+            
+            if row:
+                # Se sucesso, monta o dict direto (Fast!)
+                import json
+                formas_pagamento = row[8]
+                if isinstance(formas_pagamento, str):
+                    try: formas_pagamento = json.loads(formas_pagamento)
+                    except: pass
+
+                return {
+                    "id": row[0],
+                    "estabelecimento_id": row[1],
+                    "logo_url": row[2],
+                    "logo_base64": row[3],
+                    "cor_principal": row[4] or "#007bff", # Azul padrão
+                    "tema_escuro": bool(row[5]),
+                    "emitir_nfe": bool(row[6]),
+                    "emitir_nfce": bool(row[7]),
+                    "formas_pagamento": formas_pagamento
+                }
+        except Exception as e_fast:
+            # logger.debug(f"Fast path config falhou (provável schema drift): {e_fast}")
+            pass
+
+        # --- TENTATIVA 2: SAFE PATH (Fallback Resiliente) ---
+        # Se chegou aqui, a query completa falhou.
         
         row = db.session.execute(
             text("SELECT id, estabelecimento_id FROM configuracoes WHERE estabelecimento_id = :eid"),
@@ -122,19 +165,25 @@ def get_configuracao_safe(estab_id):
                     text(f"SELECT {col} FROM configuracoes WHERE estabelecimento_id = :eid"),
                     {"eid": estab_id}
                 ).fetchone()
-                return r[0] if r else default
+                return r[0] if r and r[0] is not None else default
             except:
                 return default
 
         res["logo_url"] = _fetch_col("logo_url")
         res["logo_base64"] = _fetch_col("logo_base64")
-        res["cor_principal"] = _fetch_col("cor_principal", "#2563eb")
+        res["cor_principal"] = _fetch_col("cor_principal", "#007bff")
         res["tema_escuro"] = _fetch_col("tema_escuro", False)
         res["emitir_nfe"] = _fetch_col("emitir_nfe", False)
         res["emitir_nfce"] = _fetch_col("emitir_nfce", True)
         res["formas_pagamento"] = _fetch_col("formas_pagamento")
         
+        if isinstance(res["formas_pagamento"], str):
+            import json
+            try: res["formas_pagamento"] = json.loads(res["formas_pagamento"])
+            except: pass
+        
         return res
+
     except Exception as e:
         logger.error(f"Erro em get_configuracao_safe: {e}")
         return None
@@ -343,26 +392,7 @@ def get_venda_itens_safe(venda_id):
         logger.error(f"Erro em get_venda_itens_safe: {e}")
         return []
 
-def get_configuracao_safe(estabelecimento_id):
-    """
-    Busca as configurações do estabelecimento via SQL direto (blindado).
-    """
-    try:
-        sql = "SELECT id, logo_url, cor_principal, tema_escuro, formas_pagamento FROM configuracoes WHERE estabelecimento_id = :eid LIMIT 1"
-        row = db.session.execute(text(sql), {"eid": estabelecimento_id}).fetchone()
-        
-        if not row: return None
-        
-        return {
-            "id": row[0],
-            "logo_url": row[1],
-            "cor_principal": row[2] or "#007bff",
-            "tema_escuro": bool(row[3]),
-            "formas_pagamento": row[4]
-        }
-    except Exception as e:
-        logger.error(f"Erro em get_configuracao_safe: {e}")
-        return None
+
 
 def get_estabelecimento_full_safe(estabelecimento_id):
     """
