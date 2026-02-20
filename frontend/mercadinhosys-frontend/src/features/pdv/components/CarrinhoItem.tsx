@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Trash2, Minus, Plus, Tag } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Produto } from '../../../types';
+import { formatCurrency } from '../../../utils/formatters';
 
 interface CarrinhoItemProps {
     produto: Produto;
@@ -37,130 +39,137 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-4 mb-3 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                <div className="flex-1 w-full min-w-0">
-                    <div className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                                {quantidade}x
-                            </span>
+        <motion.div
+            layout
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="group bg-white dark:bg-gray-800 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-all duration-150"
+        >
+            <div className="p-2 sm:p-3">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+
+                    {/* Qtd & Name: Compacted but sharp */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 flex-shrink-0 bg-red-600 dark:bg-red-700 rounded-xl text-white font-black flex items-center justify-center text-lg shadow-sm">
+                            {quantidade}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-gray-800 dark:text-white text-base sm:text-lg leading-tight break-words" title={produto.nome}>
+                            <h4 className="font-bold text-slate-800 dark:text-white text-base sm:text-lg leading-tight uppercase tracking-tight truncate">
                                 {produto.nome}
                             </h4>
-                            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                                {produto.codigo_barras || 'Sem código'} • {produto.unidade_medida || 'UN'}
-                            </p>
-
-                            <div className="flex flex-wrap items-center gap-3 mt-3">
-                                <div className="flex items-center bg-gray-50 dark:bg-gray-700/50 rounded-lg p-1 border border-gray-100 dark:border-gray-600">
-                                    <button
-                                        onClick={() => onAtualizarQuantidade(Math.max(1, quantidade - 1))}
-                                        className="p-1.5 text-gray-500 hover:text-blue-500 hover:bg-white dark:hover:bg-gray-600 rounded-md transition-all"
-                                    >
-                                        <Minus className="w-3.5 h-3.5" />
-                                    </button>
-
-                                    <input
-                                        type="number"
-                                        value={quantidade}
-                                        onChange={(e) => onAtualizarQuantidade(parseInt(e.target.value) || 1)}
-                                        className="w-10 sm:w-12 px-1 text-sm font-bold border-none text-center bg-transparent text-gray-800 dark:text-white focus:ring-0"
-                                        min="1"
-                                    />
-
-                                    <button
-                                        onClick={() => onAtualizarQuantidade(quantidade + 1)}
-                                        className="p-1.5 text-gray-500 hover:text-blue-500 hover:bg-white dark:hover:bg-gray-600 rounded-md transition-all"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-
-                                <button
-                                    onClick={() => setMostrarDesconto(!mostrarDesconto)}
-                                    className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${desconto > 0
-                                            ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                                            : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400'
-                                        }`}
-                                >
-                                    <Tag className="w-3.5 h-3.5" />
-                                    <span>{desconto > 0 ? 'Ajustar Desc.' : 'Add Desconto'}</span>
-                                </button>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase">
+                                    {produto.codigo_barras || 'SEM EAN'}
+                                </span>
+                                <span className="text-xs font-bold text-slate-500">
+                                    {formatCurrency(precoUnitario)} <span className="text-[10px] opacity-50">/un</span>
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    {mostrarDesconto && (
-                        <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl border border-yellow-100 dark:border-yellow-900/30">
-                            <div className="flex items-center space-x-2 mb-2">
+                    {/* Interactive Controls & Price Breakdown */}
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+                        {/* Quantity Adjusters - Compacted */}
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                            <button
+                                onClick={() => onAtualizarQuantidade(Math.max(1, quantidade - 1))}
+                                className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
+                            >
+                                <Minus className="w-4 h-4" />
+                            </button>
+                            <input
+                                type="number"
+                                value={quantidade}
+                                onChange={(e) => onAtualizarQuantidade(parseInt(e.target.value) || 1)}
+                                className="w-10 text-center bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-900 dark:text-white"
+                            />
+                            <button
+                                onClick={() => {
+                                    const estoqueMax = produto.estoque_atual ?? 0;
+                                    if (quantidade < estoqueMax) {
+                                        onAtualizarQuantidade(quantidade + 1);
+                                    }
+                                }}
+                                disabled={quantidade >= (produto.estoque_atual ?? 0)}
+                                className={`w-8 h-8 flex items-center justify-center rounded-md transition-all ${quantidade >= (produto.estoque_atual ?? 0)
+                                        ? 'text-slate-300 cursor-not-allowed opacity-50'
+                                        : 'text-slate-500 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700'
+                                    }`}
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Totals Section: High impact, less height */}
+                        <div className="text-right min-w-[100px]">
+                            <p className="text-xl sm:text-2xl font-black text-red-600 dark:text-red-400 tabular-nums tracking-tighter leading-none">
+                                {formatCurrency(total)}
+                            </p>
+                            <div className="flex items-center justify-end gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {desconto > 0 && (
+                                    <span className="text-[9px] font-black text-red-500 bg-red-50 dark:bg-red-900/10 px-1.5 py-0.5 rounded uppercase">
+                                        -{formatCurrency(desconto)}
+                                    </span>
+                                )}
                                 <button
-                                    onClick={() => setTipoDesconto('valor')}
-                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${tipoDesconto === 'valor'
-                                        ? 'bg-yellow-500 text-white shadow-sm'
-                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                                        }`}
+                                    onClick={() => setMostrarDesconto(!mostrarDesconto)}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+                                    title="Desconto"
                                 >
-                                    R$ Fixo
+                                    <Tag className="w-4 h-4" />
                                 </button>
                                 <button
-                                    onClick={() => setTipoDesconto('percentual')}
-                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${tipoDesconto === 'percentual'
-                                        ? 'bg-yellow-500 text-white shadow-sm'
-                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                                        }`}
+                                    onClick={onRemover}
+                                    className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                                    title="Remover"
                                 >
-                                    % Percentual
+                                    <Trash2 className="w-4 h-4" />
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
 
-                            <div className="flex space-x-2">
+                {/* Animated Compact Discount Panel */}
+                <AnimatePresence>
+                    {mostrarDesconto && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="mt-3 flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                                <div className="flex bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <button
+                                        onClick={() => setTipoDesconto('valor')}
+                                        className={`px-3 py-1.5 text-[10px] font-black rounded-md transition-all ${tipoDesconto === 'valor' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400'}`}
+                                    >R$</button>
+                                    <button
+                                        onClick={() => setTipoDesconto('percentual')}
+                                        className={`px-3 py-1.5 text-[10px] font-black rounded-md transition-all ${tipoDesconto === 'percentual' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400'}`}
+                                    >%</button>
+                                </div>
                                 <input
                                     type="number"
                                     value={valorDesconto}
                                     onChange={(e) => setValorDesconto(e.target.value)}
-                                    placeholder={tipoDesconto === 'valor' ? 'R$ 0,00' : '0 %'}
-                                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                                    step="0.01"
+                                    placeholder="0,00"
+                                    className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-blue-500"
+                                    autoFocus
                                 />
                                 <button
                                     onClick={handleAplicarDesconto}
-                                    className="px-4 py-2 bg-yellow-500 text-white text-sm font-bold rounded-lg hover:bg-yellow-600 transition-colors shadow-sm"
-                                >
-                                    Ok
-                                </button>
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition-all uppercase tracking-widest"
+                                >Aplicar</button>
                             </div>
-                        </div>
+                        </motion.div>
                     )}
-                </div>
-
-                <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto sm:min-w-[140px] border-t sm:border-t-0 pt-3 sm:pt-0 mt-1 sm:mt-0">
-                    <button
-                        onClick={onRemover}
-                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors order-2 sm:order-1"
-                        title="Remover item"
-                    >
-                        <Trash2 className="w-5 h-5" />
-                    </button>
-
-                    <div className="text-left sm:text-right order-1 sm:order-2">
-                        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                            {quantidade} × {precoUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </p>
-                        {desconto > 0 && (
-                            <p className="text-xs sm:text-sm text-red-500 font-medium tabular-nums">
-                                -{desconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </p>
-                        )}
-                        <p className="font-black text-xl sm:text-2xl text-blue-600 dark:text-blue-400 tabular-nums leading-none">
-                            {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </p>
-                    </div>
-                </div>
+                </AnimatePresence>
             </div>
-        </div>
+        </motion.div>
     );
 };
 

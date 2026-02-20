@@ -114,7 +114,11 @@ def get_configuracao_safe(estab_id):
                 SELECT 
                     id, estabelecimento_id, 
                     logo_url, logo_base64, cor_principal, tema_escuro, 
-                    emitir_nfe, emitir_nfce, formas_pagamento
+                    emitir_nfe, emitir_nfce, formas_pagamento,
+                    controlar_validade, alerta_estoque_minimo, dias_alerta_validade, estoque_minimo_padrao,
+                    exibir_preco_tela, permitir_venda_sem_estoque, desconto_maximo_percentual,
+                    desconto_maximo_funcionario, arredondamento_valores, tempo_sessao_minutos,
+                    tentativas_senha_bloqueio, alertas_email, alertas_whatsapp
                 FROM configuracoes 
                 WHERE estabelecimento_id = :eid 
                 LIMIT 1
@@ -134,11 +138,24 @@ def get_configuracao_safe(estab_id):
                     "estabelecimento_id": row[1],
                     "logo_url": row[2],
                     "logo_base64": row[3],
-                    "cor_principal": row[4] or "#007bff", # Azul padrão
+                    "cor_principal": row[4] or "#007bff",
                     "tema_escuro": bool(row[5]),
                     "emitir_nfe": bool(row[6]),
                     "emitir_nfce": bool(row[7]),
-                    "formas_pagamento": formas_pagamento
+                    "formas_pagamento": formas_pagamento,
+                    "controlar_validade": bool(row[9]),
+                    "alerta_estoque_minimo": bool(row[10]),
+                    "dias_alerta_validade": row[11],
+                    "estoque_minimo_padrao": row[12],
+                    "exibir_preco_tela": bool(row[13]),
+                    "permitir_venda_sem_estoque": bool(row[14]),
+                    "desconto_maximo_percentual": float(row[15]) if row[15] is not None else 10.0,
+                    "desconto_maximo_funcionario": float(row[16]) if row[16] is not None else 10.0,
+                    "arredondamento_valores": bool(row[17]),
+                    "tempo_sessao_minutos": row[18],
+                    "tentativas_senha_bloqueio": row[19],
+                    "alertas_email": bool(row[20]),
+                    "alertas_whatsapp": bool(row[21])
                 }
         except Exception as e_fast:
             # logger.debug(f"Fast path config falhou (provável schema drift): {e_fast}")
@@ -176,6 +193,25 @@ def get_configuracao_safe(estab_id):
         res["emitir_nfe"] = _fetch_col("emitir_nfe", False)
         res["emitir_nfce"] = _fetch_col("emitir_nfce", True)
         res["formas_pagamento"] = _fetch_col("formas_pagamento")
+        
+        # Campos de Estoque
+        res["controlar_validade"] = _fetch_col("controlar_validade", True)
+        res["alerta_estoque_minimo"] = _fetch_col("alerta_estoque_minimo", True)
+        res["dias_alerta_validade"] = _fetch_col("dias_alerta_validade", 30)
+        res["estoque_minimo_padrao"] = _fetch_col("estoque_minimo_padrao", 10)
+        
+        # PDV
+        res["exibir_preco_tela"] = _fetch_col("exibir_preco_tela", True)
+        res["permitir_venda_sem_estoque"] = _fetch_col("permitir_venda_sem_estoque", False)
+        res["desconto_maximo_percentual"] = float(_fetch_col("desconto_maximo_percentual", 10.0))
+        res["desconto_maximo_funcionario"] = float(_fetch_col("desconto_maximo_funcionario", 10.0))
+        res["arredondamento_valores"] = _fetch_col("arredondamento_valores", True)
+        
+        # Sistema
+        res["tempo_sessao_minutos"] = _fetch_col("tempo_sessao_minutos", 30)
+        res["tentativas_senha_bloqueio"] = _fetch_col("tentativas_senha_bloqueio", 3)
+        res["alertas_email"] = _fetch_col("alertas_email", False)
+        res["alertas_whatsapp"] = _fetch_col("alertas_whatsapp", False)
         
         if isinstance(res["formas_pagamento"], str):
             import json
@@ -340,7 +376,7 @@ def get_venda_safe(venda_id):
     try:
         if not venda_id: return None
         row = db.session.execute(
-            text("SELECT id, codigo, total, subtotal, desconto, forma_pagamento, cliente_id, funcionario_id, estabelecimento_id, data_venda FROM vendas WHERE id = :vid"),
+            text("SELECT id, codigo, total, subtotal, desconto, forma_pagamento, cliente_id, funcionario_id, estabelecimento_id, data_venda, valor_recebido, troco FROM vendas WHERE id = :vid"),
             {"vid": venda_id}
         ).fetchone()
         if not row: return None
@@ -354,7 +390,9 @@ def get_venda_safe(venda_id):
             "cliente_id": row[6],
             "funcionario_id": row[7],
             "estabelecimento_id": row[8],
-            "data_venda": row[9]
+            "data_venda": row[9],
+            "valor_recebido": row[10],
+            "troco": row[11]
         }
     except Exception as e:
         logger.error(f"Erro em get_venda_safe: {e}")
@@ -397,17 +435,24 @@ def get_venda_itens_safe(venda_id):
 def get_estabelecimento_full_safe(estabelecimento_id):
     """
     Busca dados completos do estabelecimento via SQL direto, com fallbacks para colunas opcionais.
+    Ensina o sistema a retornar a verdade completa (CEP, Complemento, Estado) para o Frontend.
     """
     try:
+        # Busca dinâmica de colunas para evitar erros de schema e garantir todos os campos
+        # Incluímos um LEFT JOIN com configuracoes para pegar a logo_base64 oficial
         sql = """
-            SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, logradouro, numero, bairro, cidade, estado
-            FROM estabelecimentos 
-            WHERE id = :eid LIMIT 1
+            SELECT e.id, e.nome_fantasia, e.razao_social, e.cnpj, e.telefone, e.email, 
+                   e.logradouro, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento, e.inscricao_estadual,
+                   c.logo_base64
+            FROM estabelecimentos e
+            LEFT JOIN configuracoes c ON c.estabelecimento_id = e.id
+            WHERE e.id = :eid LIMIT 1
         """
         row = db.session.execute(text(sql), {"eid": estabelecimento_id}).fetchone()
         
         if not row: return None
         
+        # Mapeamento robusto por índice (baseado no SELECT acima)
         return {
             "id": row[0],
             "nome_fantasia": row[1],
@@ -419,11 +464,17 @@ def get_estabelecimento_full_safe(estabelecimento_id):
             "numero": row[7],
             "bairro": row[8],
             "cidade": row[9],
-            "estado": row[10]
+            "estado": row[10],
+            "cep": row[11],
+            "complemento": row[12],
+            "inscricao_estadual": row[13],
+            "logo_base64": row[14]
         }
     except Exception as e:
-        logger.error(f"Erro em get_estabelecimento_full_safe: {e}")
-        return None
+        # Fallback de emergência caso alguma coluna (ex: cep) ainda não esteja no banco
+        from flask import current_app
+        current_app.logger.error(f"⚠️ SQL Full Safe falhou: {e}. Tentando modo resiliente.")
+        return get_estabelecimento_safe(estabelecimento_id)
 
 def get_first_estabelecimento_id_safe():
     """

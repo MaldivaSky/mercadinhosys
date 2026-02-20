@@ -148,6 +148,7 @@ export interface Produto {
     unidade_medida: string;
     quantidade: number;
     quantidade_estoque?: number; // Alias para quantidade
+    estoque_atual?: number;      // REAL-TIME: Estoque atômico vindo do backend
     quantidade_minima: number;
     estoque_minimo?: number; // Alias para quantidade_minima
     estoque_status?: 'normal' | 'baixo' | 'esgotado';

@@ -17,6 +17,7 @@ import { toast } from 'react-hot-toast';
 
 // API Client
 import { apiClient } from '../../api/apiClient';
+import { useConfig } from '../../contexts/ConfigContext';
 
 // 🔥 RESTAURADO: Importar modais
 import {
@@ -269,8 +270,9 @@ interface DashboardData {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 const DashboardPage: React.FC = () => {
+  const { config } = useConfig();
   const navigate = useNavigate();
-  const { hasAdvancedDashboard, hasRHTools, plano } = usePlanGate();
+  const { plano, hasAdvancedDashboard, hasRHTools } = usePlanGate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -574,6 +576,53 @@ const DashboardPage: React.FC = () => {
         }))
         : [];
 
+      // 🔥 FILTRAGEM INTELIGENTE BASEADA EM CONFIGURAÇÕES
+      const mostrarAlertaEstoque = config?.alerta_estoque_minimo ?? true;
+      const mostrarValidade = config?.controlar_validade ?? true;
+
+      // Filtrar anomalias
+      const anomaliasFiltradas = (backendData?.anomalies || []).filter((anom: any) => {
+        const desc = (anom.descricao || '').toLowerCase();
+        const tipo = (anom.tipo || '').toLowerCase();
+        if (!mostrarAlertaEstoque && (desc.includes('estoque') || desc.includes('ruptura') || tipo.includes('estoque') || tipo.includes('ruptura'))) return false;
+        if (!mostrarValidade && (desc.includes('validade') || desc.includes('vencimento') || tipo.includes('validade') || tipo.includes('vencimento'))) return false;
+        return true;
+      });
+
+      // Filtrar recomendações
+      const recomendacoesBase = (backendData?.recomendacoes && backendData.recomendacoes.length > 0)
+        ? backendData.recomendacoes
+        : [
+          { area: 'Estoque', acao: 'Revisar produtos com baixo giro e considerar promoções para liberar capital', impacto_esperado: 15, complexidade: 'baixa' },
+          { area: 'Vendas', acao: 'Focar nos produtos Classe A que representam 80% do faturamento', impacto_esperado: 25, complexidade: 'baixa' },
+          { area: 'Margem', acao: 'Analisar produtos com margem abaixo de 20% e ajustar precificação', impacto_esperado: 18, complexidade: 'media' }
+        ];
+
+      const recomendacoesFiltradas = recomendacoesBase.filter((rec: any) => {
+        const acao = (rec.acao || '').toLowerCase();
+        const area = (rec.area || '').toLowerCase();
+        if (!mostrarAlertaEstoque && (acao.includes('estoque') || acao.includes('ruptura') || area.includes('estoque'))) return false;
+        if (!mostrarValidade && (acao.includes('validade') || acao.includes('vencimento') || area.includes('validade'))) return false;
+        return true;
+      }).map((rec: any) => ({
+        area: rec.tipo || rec.area || 'Geral',
+        acao: rec.mensagem || rec.acao || '',
+        impacto_esperado: rec.impacto_esperado || 10,
+        complexidade: rec.complexidade || 'media'
+      }));
+
+      // Filtrar previsões de demanda
+      const previsoesFiltradas = previsaoDemanda.filter((p: any) => {
+        const estoqueAtual = p.estoque_atual || 0;
+        const demandaDiaria = p.demanda_diaria_prevista || 0;
+        const diasAteAcabar = demandaDiaria > 0 ? Math.floor(estoqueAtual / demandaDiaria) : 999;
+        const riscoRuptura = diasAteAcabar < 7;
+
+        // Se for risco de ruptura e o alerta de estoque estiver desligado, ocultar
+        if (!mostrarAlertaEstoque && riscoRuptura) return false;
+        return true;
+      });
+
       const mappedData = {
         ...response.data,
         data: {
@@ -607,7 +656,7 @@ const DashboardPage: React.FC = () => {
             curva_abc: backendData?.abc || { produtos: [], resumo: { A: { quantidade: 0, faturamento_total: 0, percentual: 0 }, B: { quantidade: 0, faturamento_total: 0, percentual: 0 }, C: { quantidade: 0, faturamento_total: 0, percentual: 0 } }, pareto_80_20: false },
             produtos_estrela: produtosEstrela,
             produtos_lentos: produtosLentos,
-            previsao_demanda: previsaoDemanda,
+            previsao_demanda: previsoesFiltradas,
             produtos_margem: []
           },
           analise_financeira: {
@@ -676,35 +725,9 @@ const DashboardPage: React.FC = () => {
           },
           insights_cientificos: {
             correlações: backendData?.correlations || [],
-            anomalias: backendData?.anomalies || [],
-            previsoes: backendData?.previsao_demanda || [],
-            recomendacoes_otimizacao: (backendData?.recomendacoes && backendData.recomendacoes.length > 0)
-              ? backendData.recomendacoes.map((rec: any) => ({
-                area: rec.tipo || rec.area || 'Geral',
-                acao: rec.mensagem || rec.acao || '',
-                impacto_esperado: rec.impacto_esperado || 10,
-                complexidade: rec.complexidade || 'media'
-              }))
-              : [
-                {
-                  area: 'Estoque',
-                  acao: 'Revisar produtos com baixo giro e considerar promoções para liberar capital',
-                  impacto_esperado: 15,
-                  complexidade: 'baixa'
-                },
-                {
-                  area: 'Vendas',
-                  acao: 'Focar nos produtos Classe A que representam 80% do faturamento',
-                  impacto_esperado: 25,
-                  complexidade: 'baixa'
-                },
-                {
-                  area: 'Margem',
-                  acao: 'Analisar produtos com margem abaixo de 20% e ajustar precificação',
-                  impacto_esperado: 18,
-                  complexidade: 'media'
-                }
-              ]
+            anomalias: anomaliasFiltradas,
+            previsoes: previsoesFiltradas,
+            recomendacoes_otimizacao: recomendacoesFiltradas
           },
           alertas_cientificos: []
         }

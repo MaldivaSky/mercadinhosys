@@ -99,50 +99,68 @@ def _resolve_mail_setting(key: str, default=None):
 from email.mime.image import MIMEImage
 import uuid
 
-def _embed_images_cid(html_content, logo_url):
+def _prepare_logo_cid(logo_b64):
     """
-    Detects if logo_url is base64. If so, prepares a MIMEImage part with a Content-ID (cid)
-    and returns the modified HTML (using src="cid:...") and the image part to attach.
-    
-    Returns:
-        tuple: (modified_html, image_part_or_none)
+    Decodifica o base64 e prepara o objeto MIMEImage com CID fixo.
+    Reforçado para compatibilidade total com Gmail e Outlook.
     """
-    import base64
-    
-    if not logo_url or not logo_url.startswith("data:image"):
-        return html_content, None
+    from flask import current_app
+    if not logo_b64:
+        return None, None
         
     try:
-        # Extract metadata and data
-        # Format: data:image/png;base64,.....
-        header, encoded = logo_url.split(",", 1)
+        import base64
+        import re
+        from email.mime.image import MIMEImage
         
-        # Generate unique Content-ID
-        cid = str(uuid.uuid4()) + "@mercadinhosys.logo"
-        
-        # Decode image
+        # 1. Extração Cirúrgica do Base64
+        if "," in logo_b64:
+            encoded = logo_b64.split(",")[1]
+        else:
+            encoded = logo_b64
+            
+        encoded = re.sub(r'[^A-Za-z0-9+/=]', '', encoded)
         image_data = base64.b64decode(encoded)
         
-        # Create MIMEImage part
-        image_part = MIMEImage(image_data)
+        # 2. Detecção de Subtipo
+        subtype = "png"
+        if image_data.startswith(b'\xff\xd8'): subtype = "jpeg"
+        elif image_data.startswith(b'GIF8'): subtype = "gif"
+        elif image_data.startswith(b'\x89PNG'): subtype = "png"
+            
+        # 3. Construção do Objeto MIMEImage
+        image_part = MIMEImage(image_data, _subtype=subtype)
         
-        # Define Content-ID header (must be enclosed in angle brackets)
+        # 4. Cabeçalhos de Elite (Vital para aparecer no Gmail)
+        cid = "logo_img" 
         image_part.add_header('Content-ID', f'<{cid}>')
-        image_part.add_header('Content-Disposition', 'inline', filename='logo.png')
+        image_part.add_header('Content-Type', f'image/{subtype}; name="logo.{subtype}"')
+        image_part.add_header('Content-Disposition', 'inline', filename=f'logo.{subtype}')
         
-        # Replace src in HTML
-        # We need to be careful to replace the EXACT string that was put in the template
-        
-        if logo_url in html_content:
-            modified_html = html_content.replace(logo_url, f"cid:{cid}")
-            return modified_html, image_part
-        else:
-            current_app.logger.warning("⚠️ _embed_images_cid: URL do logo NÃO encontrada no HTML renderizado! A substituição falhou.")
-            return html_content, None
-        
+        current_app.logger.info(f"✅ [LOGO SUCCESS] CID <{cid}> criado ({subtype})")
+        return image_part, cid
     except Exception as e:
-        current_app.logger.warning(f"Erro ao processar imagem base64 para CID: {e}")
-        return html_content, None
+        from flask import current_app
+        current_app.logger.error(f"❌ [LOGO CRITICAL ERROR] {e}")
+        return None, None
+
+
+def _get_official_logo_b64():
+    """Busca o logo oficial do projeto e retorna em Base64"""
+    try:
+        # Tenta localizar o logo no projeto (Estrutura: backend/app -> ../../frontend)
+        logo_path = os.path.abspath(os.path.join(current_app.root_path, "..", "..", "frontend", "mercadinhosys-frontend", "logoprincipal.png"))
+        if not os.path.exists(logo_path):
+            # Fallback path alternativa
+            logo_path = os.path.abspath("frontend/mercadinhosys-frontend/logoprincipal.png")
+            
+        if os.path.exists(logo_path):
+            import base64
+            with open(logo_path, "rb") as f:
+                return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+    except Exception:
+        pass
+    return None
 
 
 def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
@@ -168,6 +186,17 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
         comprovante = venda_data.get("comprovante", {})
         estabelecimento = venda_data.get("estabelecimento", {})
 
+        # Prioridade de Logo: 1. Logo Customizada do Estabelcimento (Base64) 2. Logo Oficial do Sistema
+        # Blindagem: Garantir que comece com data:image
+        logo_b64 = estabelecimento.get("logo_base64")
+        image_part, _ = _prepare_logo_cid(logo_b64)
+            
+        # Fallback: Se não tem logo customizada ou falhou no processamento, usa a oficial
+        if not image_part:
+            current_app.logger.info("Tentando fallback para logo oficial...")
+            logo_b64 = _get_official_logo_b64()
+            image_part, _ = _prepare_logo_cid(logo_b64)
+
         # Simulação de dados fiscais (Elite Experience)
         import random
         chave_acesso = "".join([str(random.randint(0, 9)) for _ in range(44)])
@@ -175,173 +204,154 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
         data_protocolo = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         html_template = """
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <meta charset="utf-8">
-    <title>DANFE Simulado - {{ venda.codigo }}</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 0; padding: 40px; }
-        .danfe-container { max-width: 800px; margin: 0 auto; background: #fff; border: 1px solid #000; padding: 0; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
-        .section-box { border-bottom: 1px solid #000; display: flex; }
-        .header-logo { width: 30%; border-right: 1px solid #000; padding: 15px; text-align: center; }
-        .header-ident { width: 40%; border-right: 1px solid #000; padding: 15px; font-size: 11px; line-height: 1.4; }
-        .header-danfe { width: 30%; padding: 15px; text-align: center; font-weight: bold; }
-        .label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #333; display: block; margin-bottom: 2px; }
-        .value { font-size: 12px; font-weight: normal; color: #000; word-break: break-all; }
-        .grid-box { border-bottom: 1px solid #000; display: flex; flex-wrap: wrap; }
-        .grid-item { border-right: 1px solid #000; padding: 8px 12px; flex: 1; min-width: 100px; }
-        .grid-item:last-child { border-right: none; }
-        .table-items { width: 100%; border-collapse: collapse; font-size: 10px; }
-        .table-items th { background: #f0f0f0; border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 5px; text-align: left; font-size: 9px; }
-        .table-items td { border-bottom: 1px dotted #ccc; border-right: 1px solid #000; padding: 5px; }
-        .table-items th:last-child, .table-items td:last-child { border-right: none; }
-        .total-box { display: flex; justify-content: flex-end; padding: 15px; background: #fafafa; border-bottom: 1px solid #000; }
-        .total-item { margin-left: 30px; text-align: right; }
-        .footer-note { padding: 10px; font-size: 10px; text-align: center; font-style: italic; color: #555; }
-        .access-key-box { background: #eee; padding: 5px; font-family: 'Courier New', monospace; font-size: 11px; margin-top: 5px; }
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comprovante de Venda</title>
+    <style type="text/css">
+        body { 
+            margin: 0; padding: 0; min-width: 100%; font-family: 'Segoe UI', Arial, sans-serif; 
+            background-color: #f4f6f8; color: #334155; 
+        }
+        table { border-spacing: 0; }
+        td { padding: 0; }
+        img { border: 0; }
+        .wrapper { width: 100%; table-layout: fixed; background-color: #f4f6f8; padding-bottom: 40px; }
+        .main { 
+            background-color: #ffffff; margin: 0 auto; width: 100%; max-width: 600px; 
+            border-spacing: 0; color: #334155; border-radius: 16px; overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .header { background-color: #ffffff; padding: 40px 30px; text-align: center; }
+        .logo { width: 120px; margin-bottom: 20px; }
+        .store-name { font-size: 24px; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase; }
+        .store-info { font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 8px; }
+        
+        .content { padding: 0 30px 30px 30px; }
+        .section-title { 
+            font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; 
+            letter-spacing: 1px; margin: 30px 0 15px 0; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;
+        }
+
+        .item-table { width: 100%; margin-bottom: 30px; }
+        .item-row td { padding: 12px 0; vertical-align: top; border-bottom: 1px solid #f8fafc; }
+        .item-name { font-size: 14px; font-weight: 600; color: #334155; }
+        .item-meta { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+        .item-price { font-size: 14px; font-weight: 700; color: #0f172a; text-align: right; }
+
+        .totals-table { width: 100%; background-color: #f8fafc; border-radius: 12px; padding: 20px; }
+        .total-row td { padding: 5px 0; font-size: 13px; color: #64748b; }
+        .total-value { text-align: right; font-weight: 600; }
+        .grand-total td { padding-top: 15px; border-top: 1px solid #e2e8f0; margin-top: 10px; }
+        .grand-label { font-size: 16px; font-weight: 800; color: #0f172a; }
+        .grand-price { font-size: 24px; font-weight: 800; color: #ef4444; text-align: right; }
+
+        .footer { background-color: #0f172a; padding: 40px 30px; text-align: center; color: #94a3b8; }
+        .footer-text { font-size: 12px; line-height: 1.6; }
+        .brand { font-size: 14px; font-weight: 800; color: #ffffff; margin-top: 10px; }
+        
+        .status-accent { height: 6px; background: #dc2626; }
     </style>
 </head>
 <body>
-    <div class="danfe-container">
-        <!-- HEADER / IDENTIFICACAO -->
-        <div class="section-box">
-            <div class="header-logo">
-                {% if comprovante.logo_url %}
-                    <img src="{{ comprovante.logo_url }}" style="max-width: 100%; max-height: 90px;">
-                {% else %}
-                    <div style="font-weight: bold; font-size: 16px;">{{ estabelecimento.nome_fantasia or 'MERCADINHOSYS' }}</div>
-                {% endif %}
-            </div>
-            <div class="header-ident">
-                <span class="label">Emitente</span>
-                <div class="value" style="font-weight: bold;">{{ estabelecimento.razao_social or estabelecimento.nome_fantasia }}</div>
-                <div class="value">{{ estabelecimento.endereco }}</div>
-                <div class="value">CNPJ: {{ estabelecimento.cnpj }} | Tel: {{ estabelecimento.telefone }}</div>
-            </div>
-            <div class="header-danfe">
-                <div style="font-size: 18px; margin-bottom: 5px;">DANFE</div>
-                <div style="font-size: 10px; font-weight: normal;">Documento Auxiliar da Nota Fiscal Eletrônica</div>
-                <div style="margin-top: 10px; border: 1px solid #000; padding: 5px;">
-                    <span class="label">Nº Venda: {{ venda.codigo }}</span>
-                </div>
-            </div>
-        </div>
+    <center class="wrapper">
+        <table class="main" width="100%">
+            <tr><td class="status-accent"></td></tr>
+            <tr>
+                <td class="header">
+                    {% if has_logo %}
+                    <img src="cid:logo_img" alt="Logo" class="logo" />
+                    {% endif %}
+                    <h1 class="store-name">{{ estabelecimento.nome_fantasia or 'MercadinhoSys' }}</h1>
+                    <div class="store-info">
+                        {{ estabelecimento.razao_social }}<br />
+                        CNPJ: {{ estabelecimento.cnpj }}<br />
+                        {% if estabelecimento.inscricao_estadual %}
+                        IE: {{ estabelecimento.inscricao_estadual }}<br />
+                        {% endif %}
+                        {{ estabelecimento.endereco }}<br />
+                        Tel: {{ estabelecimento.telefone }}
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="content">
+                    <table width="100%">
+                        <tr>
+                            <td class="section-title">DETALHES DA VENDA #{{ venda.codigo }}</td>
+                            <td align="right" style="font-size: 11px; color: #94a3b8; font-weight: 700;">{{ venda.data }}</td>
+                        </tr>
+                    </table>
 
-        <!-- CHAVE DE ACESSO SIMULADA -->
-        <div class="grid-box">
-            <div class="grid-item" style="flex: 2;">
-                <span class="label">Chave de Acesso (Simulada)</span>
-                <div class="access-key-box">{{ chave_acesso[:4] }} {{ chave_acesso[4:8] }} {{ chave_acesso[8:12] }} {{ chave_acesso[12:16] }} {{ chave_acesso[16:20] }} {{ chave_acesso[20:24] }} {{ chave_acesso[24:28] }} {{ chave_acesso[28:32] }} {{ chave_acesso[32:36] }} {{ chave_acesso[36:40] }} {{ chave_acesso[40:] }}</div>
-            </div>
-            <div class="grid-item">
-                <span class="label">Protocolo de Autorização</span>
-                <div class="value">{{ protocolo }} - {{ data_protocolo }}</div>
-            </div>
-        </div>
+                    <table class="item-table" width="100%">
+                        {% for item in comprovante.itens %}
+                        <tr class="item-row">
+                            <td>
+                                <div class="item-name">{{ item.nome }}</div>
+                                <div class="item-meta">{{ item.quantidade }} UN x R$ {{ fmt(item.preco_unitario) }}</div>
+                            </td>
+                            <td class="item-price">R$ {{ fmt(item.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
 
-        <!-- DADOS DA OPERACAO -->
-        <div class="grid-box">
-            <div class="grid-item">
-                <span class="label">Natureza da Operação</span>
-                <div class="value">VENDA DE MERCADORIA ADQ. DE TERCEIROS</div>
-            </div>
-            <div class="grid-item">
-                <span class="label">Inscrição Estadual</span>
-                <div class="value">ISENTO</div>
-            </div>
-        </div>
+                    <table class="totals-table" width="100%">
+                        <tr class="total-row">
+                            <td>Subtotal</td>
+                            <td class="total-value">R$ {{ fmt(comprovante.subtotal) }}</td>
+                        </tr>
+                        {% if comprovante.desconto > 0 %}
+                        <tr class="total-row" style="color: #10b981;">
+                            <td>Descontos (-)</td>
+                            <td class="total-value">R$ {{ fmt(comprovante.desconto) }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="grand-total">
+                            <td class="grand-label">TOTAL LÍQUIDO</td>
+                            <td class="grand-price">R$ {{ fmt(comprovante.total) }}</td>
+                        </tr>
+                        
+                        {# Exibição de Recebido e Troco (Extreme Transparency) #}
+                        {% if comprovante.forma_pagamento|lower == 'dinheiro' or (comprovante.valor_recebido and comprovante.valor_recebido > 0) %}
+                        <tr><td colspan="2" style="padding-top: 15px;"></td></tr>
+                        <tr class="total-row">
+                            <td style="font-weight: bold; color: #475569;">Valor Recebido</td>
+                            <td class="total-value" style="color: #475569;">R$ {{ fmt(comprovante.valor_recebido or comprovante.total) }}</td>
+                        </tr>
+                        {% if comprovante.troco and comprovante.troco > 0 %}
+                        <tr class="total-row">
+                            <td style="font-weight: bold; color: #dc2626;">Troco</td>
+                            <td class="total-value" style="color: #dc2626;">R$ {{ fmt(comprovante.troco) }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endif %}
+                    </table>
 
-        <!-- DESTINATARIO -->
-        <div class="section-box" style="background: #f0f0f0;">
-            <div style="padding: 5px 15px; font-weight: bold; font-size: 10px;">DESTINATÁRIO / REMETENTE</div>
-        </div>
-        <div class="grid-box">
-            <div class="grid-item" style="flex: 2;">
-                <span class="label">Nome / Razão Social</span>
-                <div class="value">{{ comprovante.cliente or 'CONSUMIDOR FINAL' }}</div>
-            </div>
-            <div class="grid-item">
-                <span class="label">Data de Emissão</span>
-                <div class="value">{{ venda.data }}</div>
-            </div>
-        </div>
-
-        <!-- ITENS -->
-        <div class="section-box" style="background: #f0f0f0;">
-            <div style="padding: 5px 15px; font-weight: bold; font-size: 10px;">DADOS DOS PRODUTOS / SERVIÇOS</div>
-        </div>
-        <table class="table-items">
-            <thead>
-                <tr>
-                    <th width="10%">CÓDIGO</th>
-                    <th width="40%">DESCRIÇÃO</th>
-                    <th width="10%">NCM/SH</th>
-                    <th width="5%">UN.</th>
-                    <th width="10%">QTD</th>
-                    <th width="10%">V. UNIT</th>
-                    <th width="15%">V. TOTAL</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in comprovante.itens %}
-                <tr>
-                    <td>{{ item.codigo or '000' }}</td>
-                    <td>{{ item.nome }}</td>
-                    <td>8517.12.31</td> <!-- Mock NCM for ELITE feel -->
-                    <td>UN</td>
-                    <td>{{ item.quantidade }}</td>
-                    <td>{{ fmt(item.preco_unitario) }}</td>
-                    <td>{{ fmt(item.total) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
+                    <div style="margin-top: 30px; text-align: center;">
+                        <span style="background-color: #f1f5f9; padding: 6px 15px; border-radius: 20px; font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase;">
+                            PAGAMENTO: {{ comprovante.forma_pagamento }}
+                        </span>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="footer">
+                    <div class="footer-text">
+                        Obrigado por comprar conosco!<br />
+                        Nossas ofertas são pensadas em você.
+                    </div>
+                    <div class="brand">MercadinhoSys.io</div>
+                </td>
+            </tr>
         </table>
-
-        <!-- TOTAIS -->
-        <div class="total-box">
-            <div class="total-item">
-                <span class="label">Valor Total Bruto</span>
-                <div class="value">R$ {{ fmt(comprovante.subtotal) }}</div>
-            </div>
-            {% if comprovante.desconto > 0 %}
-            <div class="total-item">
-                <span class="label">Descontos (-)</span>
-                <div class="value">R$ {{ fmt(comprovante.desconto) }}</div>
-            </div>
-            {% endif %}
-            <div class="total-item" style="border-left: 1px solid #ccc; padding-left: 20px;">
-                <span class="label" style="color: #000; font-size: 11px;">VALOR TOTAL DA NOTA</span>
-                <div class="value" style="font-size: 20px; font-weight: bold;">R$ {{ fmt(comprovante.total) }}</div>
-            </div>
-        </div>
-
-        <!-- PAGAMENTO -->
-        <div class="grid-box">
-            <div class="grid-item">
-                <span class="label">Forma de Pagamento</span>
-                <div class="value" style="text-transform: uppercase;">{{ comprovante.forma_pagamento }}</div>
-            </div>
-            <div class="grid-item">
-                <span class="label">Valor Recebido</span>
-                <div class="value">R$ {{ fmt(comprovante.valor_recebido) }}</div>
-            </div>
-            <div class="grid-item">
-                <span class="label">Troco</span>
-                <div class="value">R$ {{ fmt(comprovante.troco) }}</div>
-            </div>
-        </div>
-
-        <!-- RODAPE ADICIONAL -->
-        <div class="footer-note">
-            <p style="margin: 5px 0;">ESTE É UM SIMULACRO DE NF-E PARA FINS DE DEMONSTRAÇÃO DO SISTEMA MERCADINHOSYS.</p>
-            <p style="margin: 5px 0;">OBSERVAÇÕES: {{ comprovante.rodape or 'Obrigado pela preferência!' }}</p>
-            <p style="font-weight: bold; margin-top: 10px;">POWERED BY ELITE-PDV ENGINE v3.0</p>
-        </div>
-    </div>
+    </center>
 </body>
 </html>
 """
+
+        # 2. Preparar Logo CID (Já feito acima com fallback)
 
         html_content = render_template_string(
             html_template,
@@ -349,58 +359,57 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
             comprovante=comprovante,
             estabelecimento=estabelecimento,
             fmt=_format_moeda,
+            has_logo=True if image_part else False
         )
-        
-        # PROCESS IMAGE EMBEDDING (CID)
-        image_part = None
-        logo_url = comprovante.get("logo_url")
-        if logo_url and logo_url.startswith("data:image"):
-            html_content, image_part = _embed_images_cid(html_content, logo_url)
 
-        # Configurar mensagem MIME
-        msg = MIMEMultipart("related") # Changed from 'alternative' to 'related' for inline images
-        msg["Subject"] = f"Comprovante de Venda - {venda.get('codigo', '')}"
-        msg["From"] = mail_sender
-        msg["To"] = cliente_email
-        
-        # Encapsulate the plain and HTML versions of the message body in an
-        # 'alternative' part, so message agents can decide which they want to display.
-        msg_alternative = MIMEMultipart('alternative')
-        msg.attach(msg_alternative)
+        # Simulação de envio com blindagem contra Erro 500
+        try:
+            # Configurar mensagem MIME
+            msg = MIMEMultipart("related")
+            msg["Subject"] = f"★ [Comprovante] {estabelecimento.get('nome_fantasia', 'Mercadinho')} - #{venda.get('codigo', '')}"
+            msg["From"] = mail_sender
+            msg["To"] = cliente_email
+            
+            msg_alternative = MIMEMultipart('alternative')
+            msg.attach(msg_alternative)
 
-        # Create the plain-text and HTML version of your message
-        text_content = f"""
-Comprovante de Venda #{venda.get('codigo', '')}
+            text_content = f"Comprovante {venda.get('codigo', '')} - Total: R$ {venda.get('total', '0.00')}"
+            
+            msg_alternative.attach(MIMEText(text_content, "plain"))
+            msg_alternative.attach(MIMEText(html_content, "html"))
+            
+            # Se tiver imagem para embedar (CID), anexa ao MIME principal (related)
+            # Ordem: alternative (text/html) -> image
+            if image_part:
+                msg.attach(image_part)
+                current_app.logger.info("📎 [EMAIL] Logo CID anexada com sucesso.")
+            else:
+                current_app.logger.warning("⚠️ [EMAIL] Nenhuma logo anexada (has_logo era False).")
+            
+            # Enviar email com timeout para evitar travamento da API
+            if mail_port == 465 or mail_use_ssl:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(mail_server, mail_port, context=context, timeout=10) as server:
+                    server.login(mail_username, mail_password)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(mail_server, mail_port, timeout=10) as server:
+                    if mail_use_tls:
+                        server.starttls()
+                    server.login(mail_username, mail_password)
+                    server.send_message(msg)
 
-Estabelecimento: {estabelecimento.get("nome_fantasia", "")}
-Data: {venda.get("data", "")}
-Total: R$ {venda.get("total", "0.00")}
+            current_app.logger.info(f"✅ Cupom enviado com sucesso para {cliente_email}")
+            return True, ""
 
-Obrigado pela preferência!
-        """
-        
-        msg_alternative.attach(MIMEText(text_content, "plain"))
-        msg_alternative.attach(MIMEText(html_content, "html"))
-        
-        # Anexar imagem inline ao ROOT 'related' (apenas uma vez)
-        if image_part:
-            msg.attach(image_part)
-
-        # Enviar email
-        if mail_port == 465 or mail_use_ssl:
-            context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(mail_server, mail_port, context=context) as server:
-                server.login(mail_username, mail_password)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(mail_server, mail_port) as server:
-                if mail_use_tls:
-                    server.starttls()
-                server.login(mail_username, mail_password)
-                server.send_message(msg)
-
-        current_app.logger.info(f"✅ Cupom enviado para {cliente_email} - Venda {venda.get('codigo', '')}")
-        return True, ""
+        except smtplib.SMTPException as smtp_err:
+            erro_msg = f"Rejeição do servidor de e-mail: {str(smtp_err)}"
+            current_app.logger.error(f"❌ SMTP Error: {erro_msg}")
+            return False, erro_msg
+        except Exception as generic_err:
+            erro_msg = f"Falha técnica no serviço de e-mail: {str(generic_err)}"
+            current_app.logger.error(f"❌ Email Delivery Error: {erro_msg}")
+            return False, erro_msg
 
     except smtplib.SMTPAuthenticationError as e:
         msg_erro = str(e)

@@ -13,6 +13,12 @@ export interface ConfiguracoesPDV {
     };
     formas_pagamento: FormaPagamentoPDV[];
     permite_venda_sem_cliente: boolean;
+    permitir_venda_sem_estoque: boolean;
+    controlar_validade: boolean;
+    alerta_estoque_minimo: boolean;
+    dias_alerta_validade: number;
+    estoque_minimo_padrao: number;
+    exibe_preco_tela: boolean;
     exige_observacao_desconto: boolean;
 }
 
@@ -72,6 +78,7 @@ export interface FinalizarVendaRequest {
     valor_recebido: number;
     troco: number;
     cliente_id?: number;
+    email_destino?: string;
     observacoes?: string;
 }
 
@@ -282,11 +289,16 @@ export const pdvService = {
     /**
      * Imprime comprovante da venda
      */
-    imprimirComprovante: async (vendaId: number): Promise<Blob> => {
-        const response = await apiClient.get(`/vendas/${vendaId}/comprovante`, {
-            responseType: 'blob',
-        });
-        return response.data;
+    imprimirComprovante: async (vendaId: number): Promise<string> => {
+        // Redireciona para o endpoint HTML que renderiza a nota Masterclass
+        // O baseURL do apiClient já contém o prefixo /api
+        const baseUrl = apiClient.defaults.baseURL || '';
+        const token = localStorage.getItem('token');
+
+        // Como o window.open não envia headers customizados facilmente, 
+        // passamos o token via query param ou usamos uma rota que o frontend autentica
+        // MAS como já temos o token, vamos montar a URL com o token para que o backend autorize via @jwt_required
+        return `${baseUrl}/pdv/imprimir-html/${vendaId}?token=${token}`;
     },
 
     // ==================== EMAIL ====================

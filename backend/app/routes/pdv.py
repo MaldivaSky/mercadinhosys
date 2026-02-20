@@ -285,7 +285,13 @@ def obter_configuracoes_pdv():
                 "pode_cancelar_venda": funcionario_data.get("permissoes", {}).get("pode_cancelar_venda", False),
             },
             "formas_pagamento": formas_pagamento,
-            "permite_venda_sem_cliente": True,
+            "permite_venda_sem_cliente": bool(cached_config.get("permite_venda_sem_cliente", True)) if cached_config else True,
+            "permitir_venda_sem_estoque": bool(cached_config.get("permitir_venda_sem_estoque", False)) if cached_config else False,
+            "controlar_validade": bool(cached_config.get("controlar_validade", True)) if cached_config else True,
+            "alerta_estoque_minimo": bool(cached_config.get("alerta_estoque_minimo", True)) if cached_config else True,
+            "dias_alerta_validade": cached_config.get("dias_alerta_validade", 30) if cached_config else 30,
+            "estoque_minimo_padrao": cached_config.get("estoque_minimo_padrao", 10) if cached_config else 10,
+            "exibe_preco_tela": bool(cached_config.get("exibir_preco_tela", True)) if cached_config else True,
             "exige_observacao_desconto": True,
         }
         
@@ -423,6 +429,8 @@ def validar_produto():
                 "classificacao_abc": produto_data.get("classificacao_abc"),
                 "alerta_alto_giro": alerta_alto_giro,
                 "mensagem_alerta": mensagem_alerta,
+                "data_validade": str(produto_data.get("data_validade")) if produto_data.get("data_validade") else None,
+                "vencido": False # Lógica de cálculo será feita no frontend ou aqui se necessário
             }
         }), 200
         
@@ -516,8 +524,11 @@ def buscar_produtos_pdv():
 
         busca_termo = f"%{busca}%"
 
+        engine_name = str(db.engine.name).lower()
+        like_op = "ILIKE" if 'sqlite' not in engine_name else "LIKE"
+
         from sqlalchemy import text as sql_text
-        resultado = db.session.execute(sql_text("""
+        resultado = db.session.execute(sql_text(f"""
             SELECT
                 id,
                 nome,
@@ -526,39 +537,45 @@ def buscar_produtos_pdv():
                 marca,
                 preco_venda,
                 quantidade AS quantidade_estoque,
-                unidade_medida
+                unidade_medida,
+                data_validade
             FROM produtos
             WHERE estabelecimento_id = :estab_id
               AND ativo = true
               AND quantidade > 0
               AND (
-                  nome ILIKE :busca
-                  OR codigo_barras ILIKE :busca
-                  OR codigo_interno ILIKE :busca
-                  OR marca ILIKE :busca
+                  nome {like_op} :busca
+                  OR codigo_barras {like_op} :busca
+                  OR codigo_interno {like_op} :busca
+                  OR marca {like_op} :busca
               )
             ORDER BY nome ASC
             LIMIT 20
         """), {"estab_id": estabelecimento_id, "busca": busca_termo}).fetchall()
 
+
         produtos = []
         for row in resultado:
+            row_map = row._mapping
             produtos.append({
-                "id": row.id,
-                "nome": row.nome,
-                "codigo_barras": row.codigo_barras or "",
-                "codigo_interno": row.codigo_interno or "",
-                "marca": row.marca or "",
-                "preco_venda": float(row.preco_venda) if row.preco_venda else 0.0,
-                "preco_venda_efetivo": float(row.preco_venda) if row.preco_venda else 0.0,
-                "quantidade_estoque": int(row.quantidade_estoque) if row.quantidade_estoque else 0,
-                "unidade_medida": row.unidade_medida or "UN",
+                "id": row_map["id"],
+                "nome": row_map["nome"],
+                "codigo_barras": row_map["codigo_barras"] or "",
+                "codigo_interno": row_map["codigo_interno"] or "",
+                "marca": row_map["marca"] or "",
+                "preco_venda": float(row_map["preco_venda"]) if row_map["preco_venda"] else 0.0,
+                "preco_venda_efetivo": float(row_map["preco_venda"]) if row_map["preco_venda"] else 0.0,
+                "quantidade_estoque": int(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0,
+                "estoque_atual": int(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0,
+                "unidade_medida": row_map["unidade_medida"] or "UN",
+                "data_validade": str(row_map["data_validade"]) if row_map.get("data_validade") else None,
             })
 
         return jsonify({"success": True, "produtos": produtos}), 200
 
     except Exception as e:
-        current_app.logger.error(f"Erro na busca turbo PDV: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Erro na busca turbo PDV: {str(e)}\n{traceback.format_exc()}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -595,6 +612,7 @@ def finalizar_venda():
         forma_pagamento = data.get("paymentMethod", "dinheiro")
         valor_recebido = to_decimal(data.get("valor_recebido", total))
         troco = to_decimal(data.get("troco", 0))
+        email_destino = data.get("email_destino")
 
         # Início do processo atômico
         try:
@@ -674,6 +692,8 @@ def finalizar_venda():
                     "preco_unitario": float(preco_unitario),
                     "total": float(total_item)
                 })
+
+            db.session.commit()
 
             db.session.commit()
 
@@ -961,19 +981,66 @@ def enviar_cupom_email():
         else:
             return jsonify({"error": "Email não informado e cliente não possui email cadastrado"}), 400
         
-        estabelecimento_data = get_estabelecimento_safe(venda_data.get("estabelecimento_id"))
+        from app.utils.query_helpers import get_estabelecimento_full_safe, get_configuracao_safe
+        estabelecimento_data = get_estabelecimento_full_safe(venda_data.get("estabelecimento_id"))
+        if not estabelecimento_data:
+            return jsonify({"error": "Dados do estabelecimento não encontrados para esta venda"}), 404
+            
+        # Busca logo das configurações (Já incluída no full_safe via query_helpers)
+        logo_base64 = estabelecimento_data.get("logo_base64")
+            
         itens_venda = get_venda_itens_safe(venda_id)
         
         # Preparar dados estruturados para o email_service
         from app.utils.email_service import enviar_cupom_fiscal
         
+        # Melhoria na extração e formatação da data (Extreme Precision)
+        data_venda = venda_data.get("data_venda")
+        data_str = ""
+        
+        try:
+            if data_venda:
+                # Se for string (fallback), tenta converter ou usa direto
+                if isinstance(data_venda, str):
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(data_venda.replace("Z", "+00:00"))
+                        data_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+                    except:
+                        data_str = data_venda
+                # Se for objeto datetime (ideal)
+                elif hasattr(data_venda, "strftime"):
+                    data_str = data_venda.strftime("%d/%m/%Y %H:%M:%S")
+                else:
+                    data_str = str(data_venda)
+            else:
+                # Fallback final: Data atual
+                from datetime import datetime
+                data_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        except Exception as dt_err:
+            current_app.logger.warning(f"Erro ao formatar data da venda {venda_id}: {dt_err}")
+            from datetime import datetime
+            data_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        # Construção de endereço completo (Resiliente e Profissional)
+        end_parts = [
+            estabelecimento_data.get('logradouro', ''),
+            estabelecimento_data.get('numero', ''),
+            estabelecimento_data.get('complemento', ''),
+            estabelecimento_data.get('bairro', ''),
+            f"{estabelecimento_data.get('cidade', '')} - {estabelecimento_data.get('estado', '')}",
+            estabelecimento_data.get('cep', '')
+        ]
+        endereco_completo = " - ".join([p for p in end_parts if p and str(p).strip()])
+
         dados_formatados = {
             "venda": {
-                "codigo": venda_data.get("codigo"),
-                "data": venda_data.get("data_venda").strftime("%d/%m/%Y %H:%M:%S") if venda_data.get("data_venda") else ""
+                "codigo": venda_data.get("codigo", "V-0000"),
+                "data": data_str
             },
+
             "comprovante": {
-                "funcionario": "Atendente PDV",
+                "funcionario": "Operador Balcão",
                 "cliente": nome_cliente,
                 "itens": [
                     {
@@ -988,32 +1055,42 @@ def enviar_cupom_email():
                 "subtotal": float(venda_data.get("subtotal") or 0),
                 "desconto": float(venda_data.get("desconto") or 0),
                 "total": float(venda_data.get("total") or 0),
-                "forma_pagamento": venda_data.get("forma_pagamento") or "Não informado",
+                "forma_pagamento": (venda_data.get("forma_pagamento") or "Dinheiro").replace("_", " ").title(),
                 "valor_recebido": float(venda_data.get("valor_recebido") or 0),
                 "troco": float(venda_data.get("troco") or 0),
                 "rodape": "Obrigado pela preferência!"
             },
             "estabelecimento": {
-                "nome_fantasia": estabelecimento_data.get("nome_fantasia"),
-                "razao_social": estabelecimento_data.get("razao_social"),
-                "cnpj": estabelecimento_data.get("cnpj"),
-                "inscricao_estadual": estabelecimento_data.get("inscricao_estadual", "ISENTO"),
-                "telefone": estabelecimento_data.get("telefone"),
-                "email": estabelecimento_data.get("email"),
-                "endereco": f"{estabelecimento_data.get('logradouro')}, {estabelecimento_data.get('numero')}"
+                "nome_fantasia": estabelecimento_data.get("nome_fantasia", "MercadinhoSys"),
+                "razao_social": estabelecimento_data.get("razao_social", ""),
+                "cnpj": estabelecimento_data.get("cnpj", ""),
+                "inscricao_estadual": estabelecimento_data.get("inscricao_estadual", ""),
+                "telefone": estabelecimento_data.get("telefone", ""),
+                "email": estabelecimento_data.get("email", ""),
+                "endereco": endereco_completo,
+                "logo_base64": logo_base64
             }
         }
+        
+        current_app.logger.info(f"🚀 [EMAIL DEBUG] Destino: {email_final}")
+        current_app.logger.info(f"🚀 [EMAIL DEBUG] Endereço Final: {endereco_completo}")
+        current_app.logger.info(f"🚀 [EMAIL DEBUG] Has Logo? {'Sim' if logo_base64 else 'Não'} (Size: {len(logo_base64) if logo_base64 else 0})")
         
         sucesso, erro_email = enviar_cupom_fiscal(dados_formatados, email_final)
         
         if sucesso:
             return jsonify({"success": True, "message": f"Cupom enviado para {email_final}!"}), 200
         else:
-            return jsonify({"error": "Erro ao enviar email", "details": erro_email}), 500
+            return jsonify({
+                "error": "Erro no servidor de e-mail", 
+                "details": erro_email,
+                "hint": "Verifique se a 'Senha de App' do Gmail está configurada em mail.env"
+            }), 500
             
     except Exception as e:
-        current_app.logger.error(f"ERRO ENVIAR CUPOM: {str(e)}")
-        return jsonify({"error": "Erro interno ao processar envio de cupom"}), 500
+        import traceback
+        current_app.logger.error(f"ERRO ENVIAR CUPOM: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({"error": "Falha crítica ao processar cupom", "details": str(e)}), 500
 
 
 @pdv_bp.route("/comprovante/<int:venda_id>", methods=["GET"])
@@ -1064,28 +1141,187 @@ def obter_comprovante_venda(venda_id):
             "rodape": "Obrigado pela preferência!",
         }
 
-        return jsonify(
-            {
-                "success": True,
-                "venda": {
-                    "id": venda_data.get("id"),
-                    "codigo": venda_data.get("codigo"),
-                    "data": venda_data.get("data_venda").strftime("%d/%m/%Y %H:%M:%S")
-                    if venda_data.get("data_venda") and hasattr(venda_data.get("data_venda"), "strftime")
-                    else "",
-                },
-                "estabelecimento": {
-                    "nome_fantasia": estabelecimento_data.get("nome_fantasia"),
-                    "razao_social": estabelecimento_data.get("razao_social"),
-                    "cnpj": estabelecimento_data.get("cnpj"),
-                    "inscricao_estadual": estabelecimento_data.get("inscricao_estadual", "ISENTO"),
-                    "telefone": estabelecimento_data.get("telefone"),
-                    "email": estabelecimento_data.get("email"),
-                    "endereco": f"{estabelecimento_data.get('logradouro')}, {estabelecimento_data.get('numero')}",
-                },
-                "comprovante": comprovante,
-            }
-        ), 200
+        # Melhoria na extração e formatação da data (Paridade Masterclass)
+        data_venda = venda_data.get("data_venda")
+        data_str = ""
+        try:
+            if data_venda:
+                if isinstance(data_venda, str):
+                    try:
+                        dt = datetime.fromisoformat(data_venda.replace("Z", "+00:00"))
+                        data_str = dt.strftime("%d/%m/%Y %H:%M:%S")
+                    except:
+                        data_str = data_venda
+                elif hasattr(data_venda, "strftime"):
+                    data_str = data_venda.strftime("%d/%m/%Y %H:%M:%S")
+                else:
+                    data_str = str(data_venda)
+            else:
+                data_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        except:
+            data_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        return jsonify({
+            "success": True,
+            "venda": {
+                "id": venda_data.get("id"),
+                "codigo": venda_data.get("codigo", "V-0000"),
+                "data": data_str
+            },
+            "estabelecimento": {
+                "nome_fantasia": estabelecimento_data.get("nome_fantasia", "MercadinhoSys"),
+                "razao_social": estabelecimento_data.get("razao_social", ""),
+                "cnpj": estabelecimento_data.get("cnpj", ""),
+                "inscricao_estadual": estabelecimento_data.get("inscricao_estadual", "ISENTO"),
+                "telefone": estabelecimento_data.get("telefone", ""),
+                "email": estabelecimento_data.get("email", ""),
+                "endereco": f"{estabelecimento_data.get('logradouro', '')}, {estabelecimento_data.get('numero', '')} - {estabelecimento_data.get('cidade', '')}/{estabelecimento_data.get('estado', '')}",
+            },
+            "comprovante": comprovante,
+        }), 200
     except Exception as e:
         current_app.logger.error(f"Erro ao obter comprovante da venda {venda_id}: {str(e)}")
         return jsonify({"error": "Erro ao obter comprovante"}), 500
+
+
+@pdv_bp.route("/imprimir-html/<int:venda_id>", methods=["GET"])
+def imprimir_venda_html(venda_id):
+    """
+    Retorna a nota fiscal renderizada em HTML Masterclass UI pronto para impressão.
+    Blindagem: Tenta extrair o token do query param se não estiver nos headers.
+    """
+    try:
+        # Tenta autenticar manualmente se o header estiver ausente (comum em window.open)
+        token = request.args.get('token')
+        if token:
+            from flask_jwt_extended import decode_token
+            try:
+                decode_token(token)
+            except:
+                return "Acesso Negado: Token Inválido", 401
+        else:
+            # Fallback para o comportamento padrão do jwt_required
+            try:
+                from flask_jwt_extended import verify_jwt_in_request
+                verify_jwt_in_request()
+            except:
+                return "Acesso Negado: Autenticação Necessária", 401
+        from app.utils.query_helpers import get_venda_safe, get_cliente_safe, get_estabelecimento_safe, get_venda_itens_safe
+        venda_data = get_venda_safe(venda_id)
+        if not venda_data:
+            return "Venda não encontrada", 404
+
+        estabelecimento_data = get_estabelecimento_safe(venda_data.get("estabelecimento_id"))
+        itens_venda = get_venda_itens_safe(venda_id)
+        cliente_data = get_cliente_safe(venda_data.get("cliente_id")) if venda_data.get("cliente_id") else None
+        nome_cliente = cliente_data.get("nome") if cliente_data else "Consumidor Final"
+
+        # Formatação de Moeda e Data (Padrão Elite)
+        from app.utils.email_service import _format_moeda, render_template_string
+        
+        data_venda = venda_data.get("data_venda")
+        data_str = data_venda.strftime("%d/%m/%Y %H:%M:%S") if hasattr(data_venda, "strftime") else str(data_venda)
+
+        # Usar o mesmo template Masterclass do email_service para garantir branding perfeito
+        from app.utils.email_service import EmailService
+        # Aqui podemos importar o template ou simplesmente reutilizar a lógica
+        # Para ser ultra-profissional, vamos garantir que o CSS seja otimizado para PRINT
+        
+        from app.utils.email_service import _format_moeda
+        
+        dados_formatados = {
+            "venda": {"codigo": venda_data.get("codigo"), "data": data_str, "total": float(venda_data.get("total") or 0)},
+            "comprovante": {
+                "funcionario": "Operador Balcão",
+                "cliente": nome_cliente,
+                "itens": [
+                    {
+                        "nome": it.get("produto_nome"),
+                        "quantidade": float(it.get("quantidade")),
+                        "preco_unitario": float(it.get("preco_unitario")),
+                        "total": float(it.get("total_item"))
+                    } for it in itens_venda
+                ],
+                "subtotal": float(venda_data.get("subtotal") or 0),
+                "desconto": float(venda_data.get("desconto") or 0),
+                "total": float(venda_data.get("total") or 0),
+                "forma_pagamento": (venda_data.get("forma_pagamento") or "Dinheiro").replace("_", " ").title(),
+                "valor_recebido": float(venda_data.get("valor_recebido") or 0),
+                "troco": float(venda_data.get("troco") or 0),
+            },
+            "estabelecimento": {
+                "nome_fantasia": estabelecimento_data.get("nome_fantasia"),
+                "razao_social": estabelecimento_data.get("razao_social"),
+                "cnpj": estabelecimento_data.get("cnpj"),
+                "telefone": estabelecimento_data.get("telefone"),
+                "endereco": f"{estabelecimento_data.get('logradouro')}, {estabelecimento_data.get('numero')} - {estabelecimento_data.get('cidade')}"
+            }
+        }
+
+        # REUTILIZAR O TEMPLATE MASTERCLASS (Injetando script de auto-print)
+        from app.utils.email_service import email_service # Se tivermos um método que retorne apenas o HTML
+        # Vou copiar o template aqui para garantir controle total sobre o layout de IMPRESSÃO
+        
+        html_masterclass = """
+        <!DOCTYPE html>
+        <html lang="pt-br">
+        <head>
+            <meta charset="utf-8">
+            <style>
+                @media print { @page { margin: 0; } body { padding: 0 !important; } .container { border-radius: 0 !important; box-shadow: none !important; width: 80mm !important; } .no-print { display: none; } }
+                body { font-family: 'Inter', sans-serif; background: #f0f2f5; margin: 0; padding: 40px; }
+                .container { max-width: 400px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 1px solid #eee; }
+                .store-name { font-size: 20px; font-weight: 900; text-align: center; text-transform: uppercase; margin-bottom: 4px; }
+                .store-info { font-size: 10px; color: #666; text-align: center; margin-bottom: 20px; }
+                .divider { border-top: 1px dashed #ddd; margin: 16px 0; }
+                .item { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
+                .total-box { margin-top: 20px; padding: 16px; background: #f9f9f9; border-radius: 16px; }
+                .total-row { display: flex; justify-content: space-between; font-weight: bold; }
+                .big-total { font-size: 24px; color: #ef4444; margin-top: 8px; }
+                .qr-code { text-align: center; margin-top: 24px; }
+                .btn-print { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; background: #ef4444; color: #fff; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(239,68,68,0.3); }
+            </style>
+        </head>
+        <body>
+            <button class="no-print btn-print" onclick="window.print()">IMPRIMIR AGORA</button>
+            <div class="container">
+                <div class="store-name">{{ est.nome_fantasia }}</div>
+                <div class="store-info">{{ est.razao_social }}<br>CNPJ: {{ est.cnpj }}<br>{{ est.endereco }}</div>
+                <div class="divider"></div>
+                <div style="font-size: 10px; font-weight: bold; color: #888; margin-bottom: 12px;">CUPOM: {{ venda.codigo }} | {{ venda.data }}</div>
+                {% for item in items %}
+                <div class="item">
+                    <span>{{ item.nome }}<br><small>{{ item.quantidade }}x {{ fmt(item.preco_unitario) }}</small></span>
+                    <span>R$ {{ fmt(item.total) }}</span>
+                </div>
+                {% endfor %}
+                <div class="divider"></div>
+                <div class="total-box">
+                    <div class="total-row"><span>Subtotal:</span><span>R$ {{ fmt(comp.subtotal) }}</span></div>
+                    {% if comp.desconto > 0 %}<div class="total-row" style="color:#10b981"><span>Desconto:</span><span>-R$ {{ fmt(comp.desconto) }}</span></div>{% endif %}
+                    <div class="total-row big-total"><span>TOTAL:</span><span>R$ {{ fmt(comp.total) }}</span></div>
+                </div>
+                <div style="margin-top:12px; font-size:10px; font-weight:bold; color:#666">PAGO VIA: {{ comp.forma_pagamento }}</div>
+                <div class="qr-code">
+                    <div style="width:100px; height:100px; background:#f0f0f0; margin:0 auto; display:flex; align-items:center; justify-content:center; border-radius:12px; font-size:8px; color:#aaa">QR CODE AUTENTICIDADE</div>
+                </div>
+                <div style="text-align:center; font-size:9px; color:#aaa; margin-top:16px;">Obrigado pela preferência!<br>Powered by MercadinhoSys Profissional</div>
+            </div>
+            <script>window.onload = () => { if(window.innerWidth < 800) setTimeout(() => window.print(), 1000); }</script>
+        </body>
+        </html>
+        """
+        
+        from flask import render_template_string
+        return render_template_string(
+            html_masterclass,
+            est=dados_formatados["estabelecimento"],
+            venda=dados_formatados["venda"],
+            comp=dados_formatados["comprovante"],
+            items=dados_formatados["comprovante"]["itens"],
+            fmt=_format_moeda
+        )
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f"Erro na impressão HTML: {str(e)}\n{traceback.format_exc()}")
+        return f"Erro ao gerar impressão: {str(e)}", 500
