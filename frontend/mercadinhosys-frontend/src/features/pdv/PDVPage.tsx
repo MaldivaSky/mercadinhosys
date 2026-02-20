@@ -26,6 +26,7 @@ import { Produto } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import PDVSkeleton from './components/PDVSkeleton';
 
 const PDVPage: React.FC = () => {
     const TOAST_IDS = {
@@ -634,6 +635,10 @@ const PDVPage: React.FC = () => {
                 return <TrendingUp className="w-5 h-5" />;
         }
     };
+
+    if (loading && !configuracoes) {
+        return <PDVSkeleton />;
+    }
 
     return (
         <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-gray-50 dark:bg-gray-900">

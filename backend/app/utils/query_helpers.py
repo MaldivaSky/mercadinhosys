@@ -142,16 +142,33 @@ def get_configuracao_safe(estab_id):
 def get_funcionario_safe(func_id):
     """
     Busca o funcionário via SQL direto, evitando colunas ausentes.
+    Blindagem de Elite: Aceita func_id como ID (int/str) ou Username.
     """
     try:
         if not func_id: return None
         
-        row = db.session.execute(
-            text("SELECT id, nome, email, username, estabelecimento_id, cargo FROM funcionarios WHERE id = :fid"),
-            {"fid": func_id}
-        ).fetchone()
+        # Tentativa 1: Por ID (Assume que func_id pode ser um ID numérico)
+        row = None
+        try:
+            # Força cast para int se for puramente numérico para evitar erros de tipo no Postgres
+            if str(func_id).isdigit():
+                row = db.session.execute(
+                    text("SELECT id, nome, email, username, estabelecimento_id, cargo FROM funcionarios WHERE id = :fid"),
+                    {"fid": int(func_id)}
+                ).fetchone()
+        except Exception:
+            row = None
 
-        if not row: return None
+        # Tentativa 2: Por Username (Se a primeira falhou ou func_id é string literal)
+        if not row:
+            row = db.session.execute(
+                text("SELECT id, nome, email, username, estabelecimento_id, cargo FROM funcionarios WHERE username = :funame"),
+                {"funame": str(func_id)}
+            ).fetchone()
+
+        if not row:
+            logger.warning(f"[get_funcionario_safe] Funcionário não encontrado: {func_id}")
+            return None
 
         res = {
             "id": row[0],
@@ -292,6 +309,90 @@ def get_venda_safe(venda_id):
         }
     except Exception as e:
         logger.error(f"Erro em get_venda_safe: {e}")
+        return None
+
+def get_venda_itens_safe(venda_id):
+    """
+    Busca os itens de uma venda via SQL direto com dados básicos do produto.
+    """
+    try:
+        if not venda_id: return []
+        
+        sql = """
+            SELECT vi.id, vi.produto_id, vi.quantidade, vi.preco_unitario, vi.total_item,
+                   p.nome as produto_nome, p.codigo_barras
+            FROM venda_itens vi
+            JOIN produtos p ON vi.produto_id = p.id
+            WHERE vi.venda_id = :vid
+        """
+        rows = db.session.execute(text(sql), {"vid": venda_id}).fetchall()
+        
+        return [
+            {
+                "id": r[0],
+                "produto_id": r[1],
+                "quantidade": r[2],
+                "preco_unitario": r[3],
+                "total_item": r[4],
+                "produto_nome": r[5],
+                "produto_codigo": r[6]
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.error(f"Erro em get_venda_itens_safe: {e}")
+        return []
+
+def get_configuracao_safe(estabelecimento_id):
+    """
+    Busca as configurações do estabelecimento via SQL direto (blindado).
+    """
+    try:
+        sql = "SELECT id, logo_url, cor_principal, tema_escuro, formas_pagamento FROM configuracoes WHERE estabelecimento_id = :eid LIMIT 1"
+        row = db.session.execute(text(sql), {"eid": estabelecimento_id}).fetchone()
+        
+        if not row: return None
+        
+        return {
+            "id": row[0],
+            "logo_url": row[1],
+            "cor_principal": row[2] or "#007bff",
+            "tema_escuro": bool(row[3]),
+            "formas_pagamento": row[4]
+        }
+    except Exception as e:
+        logger.error(f"Erro em get_configuracao_safe: {e}")
+        return None
+
+def get_estabelecimento_full_safe(estabelecimento_id):
+    """
+    Busca dados completos do estabelecimento via SQL direto, com fallbacks para colunas opcionais.
+    """
+    try:
+        sql = """
+            SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, logradouro, numero, bairro, cidade, estado
+            FROM estabelecimentos 
+            WHERE id = :eid LIMIT 1
+        """
+        row = db.session.execute(text(sql), {"eid": estabelecimento_id}).fetchone()
+        
+        if not row: return None
+        
+        return {
+            "id": row[0],
+            "nome_fantasia": row[1],
+            "razao_social": row[2],
+            "cnpj": row[3],
+            "telefone": row[4],
+            "email": row[5],
+            "logradouro": row[6],
+            "numero": row[7],
+            "bairro": row[8],
+            "cidade": row[9],
+            "estado": row[10]
+        }
+    except Exception as e:
+        logger.error(f"Erro em get_estabelecimento_full_safe: {e}")
         return None
 
 def get_first_estabelecimento_id_safe():
