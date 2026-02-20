@@ -168,175 +168,177 @@ def enviar_cupom_fiscal(venda_data: dict, cliente_email: str):
         comprovante = venda_data.get("comprovante", {})
         estabelecimento = venda_data.get("estabelecimento", {})
 
+        # Simulação de dados fiscais (Elite Experience)
+        import random
+        chave_acesso = "".join([str(random.randint(0, 9)) for _ in range(44)])
+        protocolo = f"{random.randint(100000000, 999999999)}"
+        data_protocolo = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
         html_template = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Comprovante de Venda</title>
+    <title>DANFE Simulado - {{ venda.codigo }}</title>
     <style>
-        body, table, td, p, div, span {
-            font-family: 'Courier New', Courier, monospace; 
-            color: #000000;
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 0; padding: 40px; }
+        .danfe-container { max-width: 800px; margin: 0 auto; background: #fff; border: 1px solid #000; padding: 0; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .section-box { border-bottom: 1px solid #000; display: flex; }
+        .header-logo { width: 30%; border-right: 1px solid #000; padding: 15px; text-align: center; }
+        .header-ident { width: 40%; border-right: 1px solid #000; padding: 15px; font-size: 11px; line-height: 1.4; }
+        .header-danfe { width: 30%; padding: 15px; text-align: center; font-weight: bold; }
+        .label { font-size: 9px; font-weight: bold; text-transform: uppercase; color: #333; display: block; margin-bottom: 2px; }
+        .value { font-size: 12px; font-weight: normal; color: #000; word-break: break-all; }
+        .grid-box { border-bottom: 1px solid #000; display: flex; flex-wrap: wrap; }
+        .grid-item { border-right: 1px solid #000; padding: 8px 12px; flex: 1; min-width: 100px; }
+        .grid-item:last-child { border-right: none; }
+        .table-items { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .table-items th { background: #f0f0f0; border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 5px; text-align: left; font-size: 9px; }
+        .table-items td { border-bottom: 1px dotted #ccc; border-right: 1px solid #000; padding: 5px; }
+        .table-items th:last-child, .table-items td:last-child { border-right: none; }
+        .total-box { display: flex; justify-content: flex-end; padding: 15px; background: #fafafa; border-bottom: 1px solid #000; }
+        .total-item { margin-left: 30px; text-align: right; }
+        .footer-note { padding: 10px; font-size: 10px; text-align: center; font-style: italic; color: #555; }
+        .access-key-box { background: #eee; padding: 5px; font-family: 'Courier New', monospace; font-size: 11px; margin-top: 5px; }
     </style>
 </head>
-<body style="margin: 0; padding: 20px; background-color: #f4f4f4;">
-    <center>
-        <!-- Container Principal: Largura ~80mm (300-320px) simula impressora térmica -->
-            <!-- Cabeçalho / Logo -->
-            <tr>
-                <td align="center" style="padding-bottom: 10px;">
-                    {% if comprovante.logo_url %}
-                        <!-- Usa CID se for anexo, ou URL se for externa -->
-                        <!-- O Python substitui o src por cid:... antes de enviar -->
-                        <img src="{{ comprovante.logo_url }}" style="max-width: 120px; max-height: 80px; display: block;" alt="Logo">
-                        <br>
-                    {% endif %}
-                    
-                    <div style="font-size: 14px; font-weight: bold; text-transform: uppercase;">
-                        {{ estabelecimento.nome_fantasia or 'MERCADINHO' }}
-                    </div>
-                    <div style="font-size: 11px;">
-                        {{ estabelecimento.razao_social }}<br>
-                        CNPJ: {{ estabelecimento.cnpj }}<br>
-                        {{ estabelecimento.endereco }}<br>
-                        Tel: {{ estabelecimento.telefone }}
-                    </div>
-                </td>
-            </tr>
+<body>
+    <div class="danfe-container">
+        <!-- HEADER / IDENTIFICACAO -->
+        <div class="section-box">
+            <div class="header-logo">
+                {% if comprovante.logo_url %}
+                    <img src="{{ comprovante.logo_url }}" style="max-width: 100%; max-height: 90px;">
+                {% else %}
+                    <div style="font-weight: bold; font-size: 16px;">{{ estabelecimento.nome_fantasia or 'MERCADINHOSYS' }}</div>
+                {% endif %}
+            </div>
+            <div class="header-ident">
+                <span class="label">Emitente</span>
+                <div class="value" style="font-weight: bold;">{{ estabelecimento.razao_social or estabelecimento.nome_fantasia }}</div>
+                <div class="value">{{ estabelecimento.endereco }}</div>
+                <div class="value">CNPJ: {{ estabelecimento.cnpj }} | Tel: {{ estabelecimento.telefone }}</div>
+            </div>
+            <div class="header-danfe">
+                <div style="font-size: 18px; margin-bottom: 5px;">DANFE</div>
+                <div style="font-size: 10px; font-weight: normal;">Documento Auxiliar da Nota Fiscal Eletrônica</div>
+                <div style="margin-top: 10px; border: 1px solid #000; padding: 5px;">
+                    <span class="label">Nº Venda: {{ venda.codigo }}</span>
+                </div>
+            </div>
+        </div>
 
-            <!-- Divisor -->
-            <tr>
-                <td style="border-bottom: 1px dashed #000; padding: 5px 0;"></td>
-            </tr>
+        <!-- CHAVE DE ACESSO SIMULADA -->
+        <div class="grid-box">
+            <div class="grid-item" style="flex: 2;">
+                <span class="label">Chave de Acesso (Simulada)</span>
+                <div class="access-key-box">{{ chave_acesso[:4] }} {{ chave_acesso[4:8] }} {{ chave_acesso[8:12] }} {{ chave_acesso[12:16] }} {{ chave_acesso[16:20] }} {{ chave_acesso[20:24] }} {{ chave_acesso[24:28] }} {{ chave_acesso[28:32] }} {{ chave_acesso[32:36] }} {{ chave_acesso[36:40] }} {{ chave_acesso[40:] }}</div>
+            </div>
+            <div class="grid-item">
+                <span class="label">Protocolo de Autorização</span>
+                <div class="value">{{ protocolo }} - {{ data_protocolo }}</div>
+            </div>
+        </div>
 
-            <!-- Dados da Venda -->
-            <tr>
-                <td style="padding: 10px 0; font-size: 11px;">
-                    <div><strong>VENDA:</strong> {{ venda.codigo }}</div>
-                    <div><strong>DATA:</strong> {{ venda.data }}</div>
-                    <div><strong>CLIENTE:</strong> {{ comprovante.cliente }}</div>
-                    <div><strong>OPERADOR:</strong> {{ comprovante.funcionario }}</div>
-                </td>
-            </tr>
+        <!-- DADOS DA OPERACAO -->
+        <div class="grid-box">
+            <div class="grid-item">
+                <span class="label">Natureza da Operação</span>
+                <div class="value">VENDA DE MERCADORIA ADQ. DE TERCEIROS</div>
+            </div>
+            <div class="grid-item">
+                <span class="label">Inscrição Estadual</span>
+                <div class="value">ISENTO</div>
+            </div>
+        </div>
 
-            <!-- Divisor -->
-            <tr>
-                <td style="border-bottom: 1px dashed #000; padding: 5px 0;"></td>
-            </tr>
+        <!-- DESTINATARIO -->
+        <div class="section-box" style="background: #f0f0f0;">
+            <div style="padding: 5px 15px; font-weight: bold; font-size: 10px;">DESTINATÁRIO / REMETENTE</div>
+        </div>
+        <div class="grid-box">
+            <div class="grid-item" style="flex: 2;">
+                <span class="label">Nome / Razão Social</span>
+                <div class="value">{{ comprovante.cliente or 'CONSUMIDOR FINAL' }}</div>
+            </div>
+            <div class="grid-item">
+                <span class="label">Data de Emissão</span>
+                <div class="value">{{ venda.data }}</div>
+            </div>
+        </div>
 
-            <!-- Itens -->
-            <tr>
-                <td style="padding: 5px 0;">
-                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                        <!-- Cabeçalho Itens -->
-                        <tr>
-                            <td align="left" style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #000;">ITEM</td>
-                            <td align="center" style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #000;">QTD</td>
-                            <td align="right" style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #000;">VL</td>
-                        </tr>
-                        
-                        <!-- Lista de Itens -->
-                        {% for item in comprovante.itens %}
-                        <tr>
-                            <td colspan="3" style="font-size: 11px; font-weight: bold; padding-top: 4px;">
-                                {{ item.nome }}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td align="left" style="font-size: 11px; color: #333;">
-                                {{ item.codigo }}
-                            </td>
-                            <td align="center" style="font-size: 11px;">
-                                {{ item.quantidade }}
-                            </td>
-                            <td align="right" style="font-size: 11px;">
-                                R$ {{ fmt(item.total) }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Divisor -->
-            <tr>
-                <td style="border-bottom: 1px dashed #000; padding: 5px 0;"></td>
-            </tr>
-
-            <!-- Totais -->
-            <tr>
-                <td style="padding: 5px 0;">
-                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                        <tr>
-                            <td align="left" style="font-size: 12px;">QTD TOTAL:</td>
-                            <td align="right" style="font-size: 12px;">{{ comprovante.itens|length }}</td>
-                        </tr>
-                        <tr>
-                            <td align="left" style="font-size: 12px;">SUBTOTAL:</td>
-                            <td align="right" style="font-size: 12px;">R$ {{ fmt(comprovante.subtotal) }}</td>
-                        </tr>
-                        {% if comprovante.desconto > 0 %}
-                        <tr>
-                            <td align="left" style="font-size: 12px;">DESCONTO:</td>
-                            <td align="right" style="font-size: 12px;">- R$ {{ fmt(comprovante.desconto) }}</td>
-                        </tr>
-                        {% endif %}
-                        <tr>
-                            <td colspan="2" style="padding-top: 5px;">
-                                <div style="border-top: 1px dashed #000;"></div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td align="left" style="font-size: 16px; font-weight: bold; padding-top: 5px;">TOTAL:</td>
-                            <td align="right" style="font-size: 16px; font-weight: bold; padding-top: 5px;">R$ {{ fmt(comprovante.total) }}</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Divisor -->
-            <tr>
-                <td style="border-bottom: 1px dashed #000; padding: 5px 0;"></td>
-            </tr>
-
-            <!-- Pagamento -->
-            <tr>
-                <td style="padding: 5px 0;">
-                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                        <tr>
-                            <td align="left" style="font-size: 11px;">Forma Pagto:</td>
-                            <td align="right" style="font-size: 11px; text-transform: uppercase;">{{ comprovante.forma_pagamento }}</td>
-                        </tr>
-                        <tr>
-                            <td align="left" style="font-size: 11px;">Valor Recebido:</td>
-                            <td align="right" style="font-size: 11px;">R$ {{ fmt(comprovante.valor_recebido) }}</td>
-                        </tr>
-                        <tr>
-                            <td align="left" style="font-size: 11px;">Troco:</td>
-                            <td align="right" style="font-size: 11px;">R$ {{ fmt(comprovante.troco) }}</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-
-            <!-- Divisor -->
-            <tr>
-                <td style="border-bottom: 1px dashed #000; padding: 5px 0;"></td>
-            </tr>
-
-            <!-- Rodapé -->
-            <tr>
-                <td align="center" style="padding-top: 10px; font-size: 10px;">
-                    <p style="margin: 0;">{{ comprovante.rodape or 'Obrigado pela preferência!' }}</p>
-                    <p style="margin: 5px 0 0 0;">*** Documento Não Fiscal ***</p>
-                    <p style="margin: 5px 0 0 0;">Sistema: MercadinhoSys</p>
-                </td>
-            </tr>
-            
+        <!-- ITENS -->
+        <div class="section-box" style="background: #f0f0f0;">
+            <div style="padding: 5px 15px; font-weight: bold; font-size: 10px;">DADOS DOS PRODUTOS / SERVIÇOS</div>
+        </div>
+        <table class="table-items">
+            <thead>
+                <tr>
+                    <th width="10%">CÓDIGO</th>
+                    <th width="40%">DESCRIÇÃO</th>
+                    <th width="10%">NCM/SH</th>
+                    <th width="5%">UN.</th>
+                    <th width="10%">QTD</th>
+                    <th width="10%">V. UNIT</th>
+                    <th width="15%">V. TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in comprovante.itens %}
+                <tr>
+                    <td>{{ item.codigo or '000' }}</td>
+                    <td>{{ item.nome }}</td>
+                    <td>8517.12.31</td> <!-- Mock NCM for ELITE feel -->
+                    <td>UN</td>
+                    <td>{{ item.quantidade }}</td>
+                    <td>{{ fmt(item.preco_unitario) }}</td>
+                    <td>{{ fmt(item.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
-    </center>
+
+        <!-- TOTAIS -->
+        <div class="total-box">
+            <div class="total-item">
+                <span class="label">Valor Total Bruto</span>
+                <div class="value">R$ {{ fmt(comprovante.subtotal) }}</div>
+            </div>
+            {% if comprovante.desconto > 0 %}
+            <div class="total-item">
+                <span class="label">Descontos (-)</span>
+                <div class="value">R$ {{ fmt(comprovante.desconto) }}</div>
+            </div>
+            {% endif %}
+            <div class="total-item" style="border-left: 1px solid #ccc; padding-left: 20px;">
+                <span class="label" style="color: #000; font-size: 11px;">VALOR TOTAL DA NOTA</span>
+                <div class="value" style="font-size: 20px; font-weight: bold;">R$ {{ fmt(comprovante.total) }}</div>
+            </div>
+        </div>
+
+        <!-- PAGAMENTO -->
+        <div class="grid-box">
+            <div class="grid-item">
+                <span class="label">Forma de Pagamento</span>
+                <div class="value" style="text-transform: uppercase;">{{ comprovante.forma_pagamento }}</div>
+            </div>
+            <div class="grid-item">
+                <span class="label">Valor Recebido</span>
+                <div class="value">R$ {{ fmt(comprovante.valor_recebido) }}</div>
+            </div>
+            <div class="grid-item">
+                <span class="label">Troco</span>
+                <div class="value">R$ {{ fmt(comprovante.troco) }}</div>
+            </div>
+        </div>
+
+        <!-- RODAPE ADICIONAL -->
+        <div class="footer-note">
+            <p style="margin: 5px 0;">ESTE É UM SIMULACRO DE NF-E PARA FINS DE DEMONSTRAÇÃO DO SISTEMA MERCADINHOSYS.</p>
+            <p style="margin: 5px 0;">OBSERVAÇÕES: {{ comprovante.rodape or 'Obrigado pela preferência!' }}</p>
+            <p style="font-weight: bold; margin-top: 10px;">POWERED BY ELITE-PDV ENGINE v3.0</p>
+        </div>
+    </div>
 </body>
 </html>
 """
