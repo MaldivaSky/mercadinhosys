@@ -99,44 +99,44 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
             {/* Estatísticas do Dia */}
             {stats && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mt-6">
-                    <div className="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-lg group hover:bg-white/15 transition-all">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-blue-100 text-sm">Vendas Hoje</p>
-                                <p className="text-2xl font-bold mt-1">
+                                <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Vendas Hoje</p>
+                                <p className="text-2xl lg:text-3xl font-black mt-1">
                                     {stats.total_vendas || 0}
                                 </p>
                             </div>
-                            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
-                                <ShoppingBag className="w-6 h-6" />
+                            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
+                                <ShoppingBag className="w-6 h-6 text-white" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-lg group hover:bg-white/15 transition-all">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-blue-100 text-sm">Faturamento</p>
-                                <p className="text-2xl font-bold mt-1">
+                                <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Faturamento</p>
+                                <p className="text-2xl lg:text-3xl font-black mt-1">
                                     {formatCurrency(stats.faturamento || 0)}
                                 </p>
                             </div>
-                            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
-                                <DollarSign className="w-6 h-6" />
+                            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
+                                <DollarSign className="w-6 h-6 text-white" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white bg-opacity-10 rounded-lg p-4 backdrop-blur-sm">
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-lg group hover:bg-white/15 transition-all">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-blue-100 text-sm">Ticket Médio</p>
-                                <p className="text-2xl font-bold mt-1">
+                                <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Ticket Médio</p>
+                                <p className="text-2xl lg:text-3xl font-black mt-1">
                                     {formatCurrency(stats.ticket_medio || 0)}
                                 </p>
                             </div>
-                            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
-                                <TrendingUp className="w-6 h-6" />
+                            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
+                                <TrendingUp className="w-6 h-6 text-white" />
                             </div>
                         </div>
                     </div>

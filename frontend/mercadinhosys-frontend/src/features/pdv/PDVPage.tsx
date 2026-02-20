@@ -10,7 +10,10 @@ import {
     Smartphone,
     TrendingUp,
     Tag,
-    AlertTriangle
+    AlertTriangle,
+    Search,
+    Trash2,
+    User
 } from 'lucide-react';
 import ProdutoSearch from './components/ProdutoSearch';
 import CarrinhoItem from './components/CarrinhoItem';
@@ -633,9 +636,9 @@ const PDVPage: React.FC = () => {
     };
 
     return (
-        <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
-                <div className="max-w-7xl mx-auto pb-12">
+        <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-gray-50 dark:bg-gray-900">
+            <div className="flex-1 p-2 sm:p-4 lg:p-6 overflow-y-auto lg:overflow-hidden">
+                <div className="max-w-[1600px] mx-auto">
                     {/* Header com informações do caixa (refreshKey atualiza stats após venda) */}
                     <CaixaHeader
                         funcionarioNome={configuracoes?.funcionario.nome}
@@ -644,45 +647,69 @@ const PDVPage: React.FC = () => {
                     />
 
                     {/* Layout Principal */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8">
                         {/* Coluna 1: Busca e Carrinho */}
-                        <div className="lg:col-span-2 space-y-6">
+                        <div className="lg:col-span-8 flex flex-col space-y-4 min-h-[500px] lg:min-h-0">
                             {/* Busca de Produtos */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                                <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                                    Buscar Produtos
-                                </h2>
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-4 sm:p-6 flex flex-col flex-shrink-0">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white flex items-center">
+                                        <Search className="w-5 h-5 sm:w-6 sm:h-6 mr-2 text-blue-500" />
+                                        Vender Produto
+                                    </h2>
+                                    <span className="hidden sm:inline-block text-xs font-semibold px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded border border-gray-200 dark:border-gray-600">
+                                        F1 ou ESC para foco
+                                    </span>
+                                </div>
                                 <ErrorBoundary name="Busca de Produtos">
                                     <ProdutoSearch onProdutoSelecionado={handleProdutoSelecionado} />
                                 </ErrorBoundary>
                             </div>
 
                             {/* Carrinho */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow">
-                                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                                    <div className="flex items-center justify-between">
-                                        <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
-                                            Carrinho de Vendas
-                                        </h2>
-                                        <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 rounded-full">
-                                            {carrinho.length} {carrinho.length === 1 ? 'item' : 'itens'}
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col flex-1 min-h-[400px]">
+                                <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="p-2 bg-blue-500 rounded-lg text-white">
+                                            <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">
+                                                Carrinho
+                                            </h2>
+                                            <p className="hidden sm:block text-xs text-gray-500 dark:text-gray-400">
+                                                Itens para checkout
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-3 sm:space-x-4">
+                                        <span className="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-xl font-bold text-base sm:text-lg">
+                                            {carrinho.length}
                                         </span>
+                                        {carrinho.length > 0 && (
+                                            <button
+                                                onClick={handleLimparCarrinho}
+                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                                                title="Limpar carrinho"
+                                            >
+                                                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="p-6">
+                                <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-gray-50/30 dark:bg-gray-900/10">
                                     {carrinho.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <ShoppingCart className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                            <p className="text-gray-500 dark:text-gray-400">
-                                                Nenhum produto no carrinho
-                                            </p>
-                                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                                                Busque e adicione produtos para começar uma venda
-                                            </p>
+                                        <div className="h-full flex flex-col items-center justify-center text-center py-12">
+                                            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
+                                                <ShoppingCart className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-600" />
+                                            </div>
+                                            <h3 className="text-base sm:text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">
+                                                Seu carrinho está vazio
+                                            </h3>
                                         </div>
                                     ) : (
-                                        <div className="space-y-4">
+                                        <div className="space-y-3">
                                             {carrinho.map((item) => (
                                                 <ErrorBoundary key={item.produto.id} name={`Item Carrinho: ${item.produto.nome}`}>
                                                     <CarrinhoItem
@@ -694,7 +721,7 @@ const PDVPage: React.FC = () => {
                                                         onAtualizarQuantidade={(qtd) => {
                                                             const estoque = item.produto.quantidade_estoque ?? item.produto.quantidade ?? 0;
                                                             if (qtd > estoque) {
-                                                                showToast.error(`Estoque insuficiente — máximo ${estoque} un.`, {
+                                                                showToast.error(`Estoque insuficiente`, {
                                                                     id: TOAST_IDS.estoqueInsuficiente,
                                                                 });
                                                                 return;
@@ -714,13 +741,19 @@ const PDVPage: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Coluna 2: Resumo e Pagamento */}
-                        <div className="space-y-6">
+                        {/* Coluna 2: Resumo e Pagamento (Ocupa 4/12 no desktop) */}
+                        <div className="lg:col-span-4 flex flex-col space-y-4 lg:space-y-6 lg:overflow-y-auto lg:custom-scrollbar pb-20 lg:pb-6">
                             {/* Cliente */}
-                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                                <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                                    Cliente
-                                </h2>
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center">
+                                        <User className="w-5 h-5 mr-2 text-blue-500" />
+                                        Identificar Cliente
+                                    </h2>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                                        F2
+                                    </span>
+                                </div>
                                 <ClienteSelect
                                     cliente={cliente}
                                     onClienteSelecionado={setCliente}
@@ -882,8 +915,13 @@ const PDVPage: React.FC = () => {
                                 </div>
 
                                 {formaPagamentoAberta ? (
-                                    <div className="space-y-2">
-                                        {formasPagamento.map((forma) => (
+                                    <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar p-1">
+                                        {(formasPagamento.length > 0 ? formasPagamento : [
+                                            { tipo: 'dinheiro', label: 'Dinheiro', taxa: 0, permite_troco: true },
+                                            { tipo: 'credito', label: 'Cartão de Crédito', taxa: 0, permite_troco: false },
+                                            { tipo: 'debito', label: 'Cartão de Débito', taxa: 0, permite_troco: false },
+                                            { tipo: 'pix', label: 'PIX', taxa: 0, permite_troco: false }
+                                        ]).map((forma) => (
                                             <button
                                                 key={forma.tipo}
                                                 onClick={() => {
@@ -893,21 +931,25 @@ const PDVPage: React.FC = () => {
                                                         setValorRecebido(0);
                                                     }
                                                 }}
-                                                className={`w-full p-4 rounded-lg flex items-center justify-between transition ${formaPagamentoSelecionada === forma.tipo
-                                                    ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500'
-                                                    : 'border-2 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                className={`w-full p-4 rounded-xl flex items-center justify-between transition-all duration-200 ${formaPagamentoSelecionada === forma.tipo
+                                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500 shadow-md transform scale-[1.01]'
+                                                    : 'bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                                     }`}
                                             >
                                                 <div className="flex items-center space-x-3">
-                                                    {renderIconPagamento(forma.tipo)}
-                                                    <span className="font-medium text-gray-800 dark:text-white">
+                                                    <div className={`p-2 rounded-lg ${formaPagamentoSelecionada === forma.tipo ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                                                        {renderIconPagamento(forma.tipo)}
+                                                    </div>
+                                                    <span className={`font-bold ${formaPagamentoSelecionada === forma.tipo ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
                                                         {forma.label}
                                                     </span>
                                                 </div>
-                                                {forma.taxa > 0 && (
-                                                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                        Taxa: {forma.taxa}%
+                                                {forma.taxa > 0 ? (
+                                                    <span className="text-xs font-semibold px-2 py-1 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400 rounded-full">
+                                                        +{forma.taxa}%
                                                     </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">Sem taxa</span>
                                                 )}
                                             </button>
                                         ))}

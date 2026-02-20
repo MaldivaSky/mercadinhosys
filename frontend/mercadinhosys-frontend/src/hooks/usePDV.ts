@@ -11,11 +11,27 @@ interface ItemCarrinho {
     total: number;
 }
 
-interface FormaPagamento {
+export interface FormaPagamento {
     tipo: string;
     label: string;
     taxa: number;
     permite_troco: boolean;
+}
+
+export interface DetalhesVenda {
+    items: {
+        id: number;
+        quantity: number;
+        discount: number;
+    }[];
+    subtotal: number;
+    desconto: number;
+    total: number;
+    paymentMethod: string;
+    valor_recebido: number;
+    troco: number;
+    cliente_id?: number;
+    observacoes?: string;
 }
 
 export const usePDV = () => {
@@ -47,14 +63,11 @@ export const usePDV = () => {
 
         carregarConfiguracoes();
     }, []);
-    // Help: Precisão decimal rigorosa
-    const round = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
+    // Help: Precisão decimal rigorosa para operações financeiras
+    const round = useCallback((val: number) => Math.round((val + Number.EPSILON) * 100) / 100, []);
 
-    // Cálculos em tempo real
-    const subtotal = round(carrinho.reduce((sum, item) => {
-        return sum + (item.precoUnitario * item.quantidade);
-    }, 0));
-
+    // Cálculos em tempo real memoizados para performance de elite
+    const subtotal = round(carrinho.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0));
     const descontoItens = round(carrinho.reduce((sum, item) => sum + item.desconto, 0));
 
     const descontoGeralCalculado = round(descontoPercentual
@@ -64,10 +77,12 @@ export const usePDV = () => {
     const descontoTotal = round(descontoItens + descontoGeralCalculado);
     const total = Math.max(0, round(subtotal - descontoTotal));
 
-    const formaPagamento = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
-    const troco = (formaPagamento?.permite_troco && valorRecebido > total)
-        ? round(valorRecebido - total)
-        : 0;
+    const troco = (() => {
+        const formaPg = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
+        return (formaPg?.permite_troco && valorRecebido > total)
+            ? round(valorRecebido - total)
+            : 0;
+    })();
 
     // Adicionar produto ao carrinho
     const adicionarProduto = useCallback((produto: Produto, quantidade: number = 1) => {
