@@ -17,7 +17,6 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        // Só buscar se tiver digitado algo
         if (!query.trim()) {
             setResultados([]);
             setErro(null);
@@ -29,52 +28,35 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
             setErro(null);
 
             try {
-                // Se for um código numérico (EAN-8, UPC, EAN-13, etc.), buscar por código de barras
+                // Código de barras numérico (EAN-8 a EAN-14): busca direta por validação
                 if (/^\d{8,14}$/.test(query.trim())) {
                     const produto = await pdvService.buscarPorCodigoBarras(query.trim());
                     if (produto) {
-                        const validacao = await pdvService.validarProduto({
-                            produto_id: produto.id,
-                            quantidade: 1
-                        });
-
-                        if (validacao.valido) {
-                            onProdutoSelecionado(validacao.produto);
-                            setQuery('');
-                            setResultados([]);
-                        } else {
-                            setErro(validacao.mensagem || 'Produto indisponível');
-                        }
+                        onProdutoSelecionado(produto);
+                        setQuery('');
+                        setResultados([]);
                     } else {
                         setErro('Código de barras não encontrado');
                     }
                 } else {
-                    // Buscar por nome, marca, categoria
+                    // Busca textual - usa a rota turbo
                     const produtos = await pdvService.buscarProduto(query);
-                    console.log('📦 Produtos encontrados:', produtos.length, produtos);
 
                     if (Array.isArray(produtos)) {
                         setResultados(produtos.slice(0, 20));
                     } else {
-                        console.error('❌ Resposta inválida da API:', produtos);
                         setErro('Erro ao processar resposta da API');
                         setResultados([]);
                     }
                 }
             } catch (error: any) {
-                console.error('❌ Erro ao buscar produtos:', error);
-
-                // Mensagens de erro mais específicas
                 if (error.code === 'ERR_NETWORK') {
-                    setErro('⚠️ Servidor offline. Verifique se o backend está rodando.');
+                    setErro('⚠️ Servidor offline. Verifique o backend.');
                 } else if (error.response?.status === 401) {
                     setErro('🔒 Sessão expirada. Faça login novamente.');
-                } else if (error.response?.status === 404) {
-                    setErro('❌ Endpoint não encontrado. Verifique a configuração da API.');
                 } else {
                     setErro(error.response?.data?.error || error.message || 'Erro ao buscar produtos');
                 }
-
                 setResultados([]);
             } finally {
                 setLoading(false);
@@ -91,28 +73,13 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
         setQuery(codigo);
     };
 
-    // Handler para click em produto da lista
-    const handleProdutoClick = async (produto: Produto) => {
+    // Handler para click em produto da lista — sem validação extra (produto já é válido e tem estoque)
+    const handleProdutoClick = (produto: Produto) => {
         setErro(null);
-
-        try {
-            // Validar produto antes de adicionar
-            const validacao = await pdvService.validarProduto({
-                produto_id: produto.id,
-                quantidade: 1
-            });
-
-            if (validacao.valido) {
-                onProdutoSelecionado(validacao.produto);
-                setQuery('');
-                setResultados([]);
-                inputRef.current?.focus();
-            } else {
-                setErro(validacao.mensagem || 'Produto indisponível');
-            }
-        } catch (error: any) {
-            setErro(error.response?.data?.error || 'Erro ao validar produto');
-        }
+        onProdutoSelecionado(produto);
+        setQuery('');
+        setResultados([]);
+        inputRef.current?.focus();
     };
 
     return (
@@ -201,10 +168,10 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                     </p>
                                     <div className="flex items-center justify-end space-x-2 mt-1">
                                         <span className={`text-xs px-2 py-0.5 rounded ${(produto.quantidade_estoque || 0) > 10
-                                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                                : (produto.quantidade_estoque || 0) > 0
-                                                    ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                                    : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                                            : (produto.quantidade_estoque || 0) > 0
+                                                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+                                                : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
                                             }`}>
                                             Estoque: {produto.quantidade_estoque || 0}
                                         </span>

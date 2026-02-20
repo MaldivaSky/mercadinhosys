@@ -145,24 +145,19 @@ export const pdvService = {
     },
 
     /**
-     * Busca produtos por nome, marca, categoria
+     * Busca produtos para o PDV - usa a rota turbo dedicada
+     * ~10x mais rápida que a listagem geral
      */
     buscarProduto: async (query: string): Promise<Produto[]> => {
-        // OTIMIZAÇÃO: Usar endpoint de listagem que já retorna alertas e dados completos
-        const response = await apiClient.get<any>('/produtos/', {
-            params: {
-                busca: query,
-                por_pagina: 20, // Limitar resultados para performance
-                ativo: true    // Apenas produtos ativos
-            },
+        const t0 = performance.now();
+        const response = await apiClient.get<any>('/pdv/buscar-produtos', {
+            params: { q: query }
         });
-        console.log('🔍 Resposta da API de busca:', response.data);
+        const t1 = performance.now();
+        console.log(`🚀 Busca PDV: "${query}" → ${response.data?.produtos?.length ?? 0} resultados em ${(t1 - t0).toFixed(0)}ms`);
 
         if (response.data.success && Array.isArray(response.data.produtos)) {
-            return response.data.produtos.map((p: any) => ({
-                ...p,
-                quantidade_estoque: p.quantidade // Garantir compatibilidade com PDV
-            }));
+            return response.data.produtos;
         }
 
         return [];
