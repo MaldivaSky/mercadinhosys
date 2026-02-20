@@ -1462,9 +1462,12 @@ def guest_demo():
         try:
             history = LoginHistory(
                 funcionario_id=demo_admin.id,
+                username=demo_admin.username,
                 estabelecimento_id=demo_est.id,
                 ip_address=request.remote_addr,
-                user_agent=request.user_agent.string
+                user_agent=request.user_agent.string,
+                success=True,
+                observacoes="Acesso via Modo Demo Instantâneo"
             )
             db.session.add(history)
             db.session.commit()

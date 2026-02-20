@@ -521,7 +521,10 @@ def finalizar_venda():
         observacoes = data.get("observacoes", "")
         
         current_app.logger.info(
-            f"💰 Finalizando venda | Total: R$ {decimal_to_float(total):.2f} | "
+            f"💰 Finalizando venda | Subtotal: R$ {decimal_to_float(subtotal):.2f} | "
+            f"Desconto: R$ {decimal_to_float(desconto_geral):.2f} | "
+            f"Total: R$ {decimal_to_float(total):.2f} | "
+            f"Pago: R$ {decimal_to_float(valor_recebido):.2f} | "
             f"Itens: {len(items)} | Funcionário: {funcionario.nome}"
         )
         
