@@ -147,7 +147,7 @@ def get_funcionario_safe(func_id):
         if not func_id: return None
         
         row = db.session.execute(
-            text("SELECT id, nome, email, login, estabelecimento_id, cargo, role, ativo FROM funcionarios WHERE id = :fid"),
+            text("SELECT id, nome, email, username, estabelecimento_id, cargo FROM funcionarios WHERE id = :fid"),
             {"fid": func_id}
         ).fetchone()
 
@@ -157,26 +157,42 @@ def get_funcionario_safe(func_id):
             "id": row[0],
             "nome": row[1],
             "email": row[2],
-            "login": row[3],
+            "login": row[3], # Mantido para compatibilidade interna
+            "username": row[3],
             "estabelecimento_id": row[4],
-            "cargo": row[5],
-            "role": row[6],
-            "ativo": row[7]
+            "cargo": row[5]
         }
 
         def _fetch_col(col, default=None):
             try:
+                # Se col for login, tenta username primeiro
+                target_col = col
+                if col == "login": target_col = "username"
+                
                 r = db.session.execute(
-                    text(f"SELECT {col} FROM funcionarios WHERE id = :fid"),
+                    text(f"SELECT {target_col} FROM funcionarios WHERE id = :fid"),
                     {"fid": func_id}
                 ).fetchone()
                 return r[0] if r else default
             except:
                 return default
 
+        res["role"] = _fetch_col("role", "FUNCIONARIO")
+        res["ativo"] = _fetch_col("ativo", True)
+        res["permissoes_json"] = _fetch_col("permissoes_json")
+
         res["salario"] = _fetch_col("salario")
         res["data_demissao"] = _fetch_col("data_demissao")
         res["foto_url"] = _fetch_col("foto_url")
+        
+        # Parse permissoes_json if exists
+        try:
+            import json
+            res["permissoes"] = json.loads(res["permissoes_json"]) if res.get("permissoes_json") else {
+                "pdv": True, "estoque": True, "compras": False, "financeiro": False, "configuracoes": False
+            }
+        except:
+            res["permissoes"] = {"pdv": True, "estoque": True, "compras": False, "financeiro": False, "configuracoes": False}
         
         return res
     except Exception as e:

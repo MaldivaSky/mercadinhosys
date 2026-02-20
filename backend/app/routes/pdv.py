@@ -231,7 +231,25 @@ def obter_configuracoes_pdv():
         funcionario_data = get_funcionario_safe(current_user_id)
         
         if not funcionario_data:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+            # Fallback para modo Demo ou token com claims
+            try:
+                claims = get_jwt()
+                funcionario_data = {
+                    "id": current_user_id,
+                    "nome": claims.get("nome", "Usuário Demo"),
+                    "role": claims.get("role", "FUNCIONARIO"),
+                    "estabelecimento_id": claims.get("estabelecimento_id"),
+                    "permissoes": {
+                        "pode_dar_desconto": claims.get("role") in ["gerente", "admin", "dono", "ADMIN"],
+                        "limite_desconto": 100 if claims.get("role") in ["admin", "ADMIN"] else 10,
+                        "pode_cancelar_venda": claims.get("role") in ["gerente", "admin", "dono", "ADMIN"]
+                    }
+                }
+            except Exception:
+                return jsonify({"error": "Funcionário não encontrado"}), 404
+        
+        if not funcionario_data or not funcionario_data.get("id"):
+            return jsonify({"error": "Funcionário não encontrado ou token inválido"}), 404
         
         # Formas de pagamento disponíveis
         formas_pagamento = [
@@ -1014,6 +1032,13 @@ def estatisticas_rapidas():
         fim_dia = datetime.combine(hoje, datetime.max.time())
         
         est_id = funcionario_data.get("estabelecimento_id") if funcionario_data else int(est_id_claim)
+        
+        # Proxy para o funcionário (para evitar NameError e garantir consistência)
+        class _Proxy:
+            def __init__(self, data):
+                for k, v in data.items(): setattr(self, k, v)
+        funcionario = _Proxy(funcionario_data) if funcionario_data else None
+
         stats = db.session.query(
             func.count(Venda.id).label("total_vendas"),
             func.sum(Venda.total).label("faturamento"),

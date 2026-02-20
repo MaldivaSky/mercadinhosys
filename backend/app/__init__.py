@@ -270,29 +270,73 @@ def create_app(config_name=None):
                 ("funcionarios", "salario",                     "NUMERIC(10,2)"),
                 ("funcionarios", "observacoes",                 "TEXT"),
                 ("funcionarios", "foto_url",                    "TEXT"),
+                ("funcionarios", "role",                        "VARCHAR(30)  DEFAULT 'FUNCIONARIO'"),
+                ("funcionarios", "ativo",                       "BOOLEAN      DEFAULT TRUE"),
+                ("funcionarios", "permissoes_json",              "TEXT"),
                 # Produtos
                 ("produtos", "margem_lucro",                    "NUMERIC(5,2)"),
                 ("produtos", "fornecedor_id",                   "INTEGER"),
                 ("produtos", "codigo_barras",                   "VARCHAR(50)"),
                 ("produtos", "ativo",                          "BOOLEAN DEFAULT TRUE"),
+                ("produtos", "fabricante",                      "VARCHAR(100)"),
+                ("produtos", "tipo",                            "VARCHAR(50)"),
+                ("produtos", "ncm",                             "VARCHAR(8)"),
+                ("produtos", "origem",                          "INTEGER DEFAULT 0"),
+                ("produtos", "controlar_validade",              "BOOLEAN DEFAULT FALSE"),
+                ("produtos", "data_validade",                   "DATE"),
+                ("produtos", "lote",                            "VARCHAR(50)"),
+                ("produtos", "imagem_url",                      "VARCHAR(255)"),
+                ("produtos", "classificacao_abc",               "VARCHAR(1)"),
+                # Vendas
+                ("vendas", "valor_recebido",                    "NUMERIC(10,2) DEFAULT 0"),
+                ("vendas", "troco",                             "NUMERIC(10,2) DEFAULT 0"),
+                ("vendas", "data_cancelamento",                 "TIMESTAMP"),
+                ("vendas", "motivo_cancelamento",               "VARCHAR(255)"),
+                ("vendas", "quantidade_itens",                  "INTEGER DEFAULT 0"),
+                ("vendas", "observacoes",                       "TEXT"),
+                # Venda Itens
+                ("venda_itens", "custo_unitario",               "NUMERIC(10,2)"),
+                ("venda_itens", "margem_item",                  "NUMERIC(5,2)"),
+                ("venda_itens", "margem_lucro_real",             "NUMERIC(10,2)"),
             ]
 
+            # Otimização: Agrupar por tabela e verificar colunas existentes via Inspector
+            from sqlalchemy import inspect as _insp
+            inspector = _insp(db.engine)
+            
+            # Cache de tabelas e colunas (evita round-trips repetitivos)
+            logger.info("⚡ Iniciando Schema Sync Otimizado...")
+            
+            table_columns_cache = {}
+            existing_tables = inspector.get_table_names()
+            
             added = 0
             for table, col, col_type in schema_sqls:
-                try:
-                    if is_sqlite:
-                        db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
-                    else:
-                        db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"))
-                    db.session.commit()
-                    added += 1
-                except Exception:
-                    db.session.rollback()
+                if table not in existing_tables:
+                    continue
+                    
+                if table not in table_columns_cache:
+                    table_columns_cache[table] = [c['name'] for c in inspector.get_columns(table)]
+                
+                if col not in table_columns_cache[table]:
+                    try:
+                        logger.info(f"➕ Adicionando coluna {col} na tabela {table}...")
+                        if is_sqlite:
+                            db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                        else:
+                            # Postgres/Neon suporta IF NOT EXISTS mas o Inspector ja resolve o check aqui
+                            db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+                        db.session.commit()
+                        table_columns_cache[table].append(col)
+                        added += 1
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.warning(f"⚠️ Erro ao adicionar {table}.{col}: {e}")
 
-            logger.info(f"✅ Schema sync concluido: {added} colunas verificadas/adicionadas.")
+            logger.info(f"✅ Schema sync concluido: {added} colunas novas adicionadas.")
         except Exception as sync_err:
             db.session.rollback()
-            logger.error(f"⚠️ Schema sync falhou (nao critico): {sync_err}")
+            logger.error(f"⚠️ Schema sync falhou: {sync_err}")
 
 
     # ==================== REGISTRO DE BLUEPRINTS ====================

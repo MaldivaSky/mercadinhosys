@@ -106,6 +106,7 @@ def setup_db():
                     username VARCHAR(150),
                     ip_address VARCHAR(45),
                     dispositivo VARCHAR(200),
+                    user_agent TEXT,
                     success BOOLEAN,
                     observacoes TEXT,
                     token_hash INTEGER,
@@ -1461,9 +1462,10 @@ def guest_demo():
             db.session.add(demo_admin)
             db.session.commit()
 
-        # 3. Gerar tokens
-        access_token = create_access_token(identity=demo_admin.id)
-        refresh_token = create_refresh_token(identity=demo_admin.id)
+        # 3. Gerar tokens (Identidade como string para consistência)
+        identity = str(demo_admin.id)
+        access_token = create_access_token(identity=identity)
+        refresh_token = create_refresh_token(identity=identity)
 
         # 4. Registrar histórico
         try:
