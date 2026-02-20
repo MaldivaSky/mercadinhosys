@@ -182,7 +182,8 @@ export const usePDV = () => {
             throw new Error('Adicione produtos ao carrinho');
         }
 
-        if (!configuracoes?.permite_venda_sem_cliente && !cliente) {
+        const permiteVendaSemCliente = configuracoes?.permite_venda_sem_cliente ?? true;
+        if (!permiteVendaSemCliente && !cliente) {
             throw new Error('Selecione um cliente para continuar');
         }
 

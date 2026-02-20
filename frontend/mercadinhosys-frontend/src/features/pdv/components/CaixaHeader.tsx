@@ -70,17 +70,18 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                         <User className="w-8 h-8" />
                     </div>
                     <div>
-                        <div className="flex items-center space-x-2">
-                            <h2 className="text-xl md:text-2xl font-bold truncate max-w-[150px] md:max-w-none">
-                                {funcionarioNome || 'Caixa PDV'}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-xl md:text-2xl font-bold truncate max-w-[200px] md:max-w-none">
+                                {funcionarioNome || 'Carregando...'}
                             </h2>
                             {funcionarioRole && (
-                                <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm font-medium">
+                                <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs md:text-sm font-medium uppercase tracking-wider">
                                     {funcionarioRole}
                                 </span>
                             )}
                         </div>
-                        <p className="text-blue-100 mt-1 text-sm">
+                        <p className="text-blue-100 mt-1 text-xs md:text-sm flex items-center">
+                            <Clock className="w-3 h-3 mr-1 md:hidden" />
                             {formatarData(horaAtual)}
                         </p>
                     </div>
