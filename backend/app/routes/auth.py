@@ -1449,7 +1449,14 @@ def guest_demo():
                 data_admissao=date(2020, 1, 1),
                 username="demo",
                 senha_hash=generate_password_hash("demo123"),
-                ativo=True
+                ativo=True,
+                # Campos de endereço obrigatórios (EnderecoMixin)
+                cep="01001-000",
+                logradouro="Praça da Sé",
+                numero="1",
+                bairro="Sé",
+                cidade="São Paulo",
+                estado="SP"
             )
             db.session.add(demo_admin)
             db.session.commit()
@@ -1460,12 +1467,14 @@ def guest_demo():
 
         # 4. Registrar histórico
         try:
+            user_agent = request.headers.get("User-Agent", "Desconhecido")
             history = LoginHistory(
                 funcionario_id=demo_admin.id,
                 username=demo_admin.username,
                 estabelecimento_id=demo_est.id,
                 ip_address=request.remote_addr,
-                user_agent=request.user_agent.string,
+                dispositivo=user_agent[:200],
+                user_agent=user_agent,
                 success=True,
                 observacoes="Acesso via Modo Demo Instantâneo"
             )

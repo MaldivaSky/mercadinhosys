@@ -147,7 +147,7 @@ def get_funcionario_safe(func_id):
         if not func_id: return None
         
         row = db.session.execute(
-            text("SELECT id, nome, email, login, estabelecimento_id, cargo, ativo FROM funcionarios WHERE id = :fid"),
+            text("SELECT id, nome, email, login, estabelecimento_id, cargo, role, ativo FROM funcionarios WHERE id = :fid"),
             {"fid": func_id}
         ).fetchone()
 
@@ -160,7 +160,8 @@ def get_funcionario_safe(func_id):
             "login": row[3],
             "estabelecimento_id": row[4],
             "cargo": row[5],
-            "ativo": row[6]
+            "role": row[6],
+            "ativo": row[7]
         }
 
         def _fetch_col(col, default=None):
