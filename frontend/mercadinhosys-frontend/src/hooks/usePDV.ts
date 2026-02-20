@@ -47,23 +47,27 @@ export const usePDV = () => {
 
         carregarConfiguracoes();
     }, []);
+    // Help: Precisão decimal rigorosa
+    const round = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
 
     // Cálculos em tempo real
-    const subtotal = carrinho.reduce((sum, item) => {
+    const subtotal = round(carrinho.reduce((sum, item) => {
         return sum + (item.precoUnitario * item.quantidade);
-    }, 0);
+    }, 0));
 
-    const descontoItens = carrinho.reduce((sum, item) => sum + item.desconto, 0);
+    const descontoItens = round(carrinho.reduce((sum, item) => sum + item.desconto, 0));
 
-    const descontoGeralCalculado = descontoPercentual
+    const descontoGeralCalculado = round(descontoPercentual
         ? (subtotal - descontoItens) * (descontoGeral / 100)
-        : descontoGeral;
+        : descontoGeral);
 
-    const descontoTotal = descontoItens + descontoGeralCalculado;
-    const total = Math.max(0, subtotal - descontoTotal);
+    const descontoTotal = round(descontoItens + descontoGeralCalculado);
+    const total = Math.max(0, round(subtotal - descontoTotal));
 
     const formaPagamento = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
-    const troco = (formaPagamento?.permite_troco && valorRecebido > total) ? valorRecebido - total : 0;
+    const troco = (formaPagamento?.permite_troco && valorRecebido > total)
+        ? round(valorRecebido - total)
+        : 0;
 
     // Adicionar produto ao carrinho
     const adicionarProduto = useCallback((produto: Produto, quantidade: number = 1) => {

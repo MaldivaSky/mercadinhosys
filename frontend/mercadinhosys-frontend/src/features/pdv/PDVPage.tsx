@@ -22,6 +22,7 @@ import { usePDV } from '../../hooks/usePDV';
 import { Produto } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 const PDVPage: React.FC = () => {
     const TOAST_IDS = {
@@ -255,13 +256,13 @@ const PDVPage: React.FC = () => {
         const { venda, comprovante, estabelecimento } = ultimoComprovante;
         const itensHtml = (comprovante.itens || [])
             .map((item: any) => `
-                <tr>
-                    <td class="item-desc">${item.nome}</td>
-                </tr>
-                <tr>
-                    <td class="item-details">
-                        ${item.quantidade} x R$ ${Number(item.preco_unitario || 0).toFixed(2)} 
-                        <span style="float:right;">R$ ${Number(item.total || 0).toFixed(2)}</span>
+                <tr class="item-row">
+                    <td>
+                        <div class="item-name">${item.nome}</div>
+                        <div class="item-meta">
+                            ${item.quantidade} x R$ ${Number(item.preco_unitario || 0).toFixed(2)}
+                            <span style="float: right">R$ ${Number(item.total || 0).toFixed(2)}</span>
+                        </div>
                     </td>
                 </tr>
             `)
@@ -269,118 +270,199 @@ const PDVPage: React.FC = () => {
 
         const html = `
             <!doctype html>
-            <html>
+            <html lang="pt-BR">
                 <head>
                     <meta charset="utf-8" />
-                    <title>Comprovante - ${venda.codigo}</title>
+                    <title>Cupom - BR-${venda.codigo}</title>
                     <style>
+                        /* ELITE THERMAL ENGINE V2 - 80MM OPTIMIZED */
+                        @page {
+                            margin: 0;
+                            size: 80mm auto;
+                        }
+                        
+                        * {
+                            box-sizing: border-box;
+                            -webkit-print-color-adjust: exact;
+                        }
+
                         body {
                             margin: 0;
-                            padding: 0;
-                            font-family: 'Consolas', 'Courier New', monospace;
-                            font-size: 12px;
+                            padding: 15px 10px;
+                            width: 80mm;
+                            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                            font-size: 11px;
+                            line-height: 1.4;
                             color: #000;
-                            line-height: 1.2;
+                            background-color: #fff;
                         }
-                        .page {
-                            width: 302px; /* ~80mm */
+
+                        .ticket {
+                            width: 100%;
+                            max-width: 72mm;
                             margin: 0 auto;
-                            padding: 10px 0;
                         }
+
                         .text-center { text-align: center; }
                         .text-right { text-align: right; }
-                        .fw-bold { font-weight: bold; }
-                        .divider { border-top: 1px dashed #000; margin: 8px 0; }
-                        .header { margin-bottom: 10px; }
-                        .logo { max-width: 120px; max-height: 80px; margin-bottom: 5px; }
-                        table { width: 100%; border-collapse: collapse; }
-                        .item-desc { font-weight: bold; padding-top: 4px; }
-                        .item-details { padding-bottom: 4px; font-size: 11px; }
-                        .totals { margin-top: 10px; }
-                        .footer { margin-top: 20px; font-size: 10px; text-align: center; }
+                        .bold { font-weight: bold; }
+                        .italic { font-style: italic; }
+                        .text-xl { font-size: 16px; letter-spacing: 1px; }
+                        .text-lg { font-size: 14px; }
+                        .text-xs { font-size: 9px; }
                         
+                        .divider { 
+                            border-top: 1px dashed #000; 
+                            margin: 10px 0; 
+                            width: 100%;
+                        }
+
+                        .double-divider {
+                            border-top: 2px solid #000;
+                            margin: 10px 0;
+                            width: 100%;
+                        }
+
+                        .header { margin-bottom: 15px; }
+                        .brand-box {
+                            border: 2px solid #000;
+                            padding: 8px;
+                            margin-bottom: 10px;
+                            font-size: 16px;
+                            font-weight: 900;
+                            text-transform: uppercase;
+                        }
+
+                        table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                        }
+
+                        .item-row td { padding: 6px 0; border-bottom: 1px dotted #ccc; }
+                        .item-name { font-weight: bold; text-transform: uppercase; font-size: 11px; }
+                        .item-meta { font-size: 10px; color: #111; margin-top: 2px; }
+
+                        .total-section {
+                            margin-top: 15px;
+                            font-size: 12px;
+                        }
+
+                        .total-row {
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 3px 0;
+                        }
+
+                        .total-highlight {
+                            font-size: 18px;
+                            font-weight: 900;
+                            border-top: 2px solid #000;
+                            border-bottom: 2px solid #000;
+                            padding: 8px 0;
+                            margin: 8px 0;
+                        }
+                        
+                        .footer { 
+                            margin-top: 30px; 
+                            font-size: 9px; 
+                            text-align: center; 
+                            padding-top: 10px;
+                        }
+
+                        .barcode-stub {
+                            margin: 15px 0;
+                            font-family: 'Libre Barcode 39', 'Courier', monospace;
+                            font-size: 30px;
+                        }
+
                         @media print {
-                            @page { margin: 0; }
-                            body { margin: 0; }
+                            .no-print { display: none; }
                         }
                     </style>
                 </head>
-                <body onload="${imprimirAutomaticamente ? 'window.print()' : ''}">
-                    <div class="page">
+                <body onload="${imprimirAutomaticamente ? 'window.print(); setTimeout(() => window.close(), 1000);' : ''}">
+                    <div class="ticket">
+                        <!-- BRANDING SEGMENT -->
                         <div class="text-center header">
                             ${comprovante.logo_url ?
-                `<img src="${comprovante.logo_url}" class="logo" />` :
-                // SVG Fallback Simples (Carrinho)
-                `<svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>`
+                `<img src="${comprovante.logo_url}" style="max-width: 180px; margin-bottom: 10px; filter: grayscale(1);" />` :
+                `<div class="brand-box">${estabelecimento?.nome_fantasia || 'MERCADINHOSYS'}</div>`
             }
-                            <div class="fw-bold" style="font-size: 14px;">${estabelecimento?.nome_fantasia || 'MercadinhoSys'}</div>
-                            <div>${estabelecimento?.razao_social || ''}</div>
-                            <div>CNPJ: ${estabelecimento?.cnpj || 'Não informado'}</div>
-                            <div>${estabelecimento?.endereco || ''}</div>
-                            <div>Tel: ${estabelecimento?.telefone || ''}</div>
+                            <div class="bold text-lg">${estabelecimento?.nome_fantasia || 'MercadinhoSys'}</div>
+                            ${estabelecimento?.razao_social ? `<div class="text-xs italic">${estabelecimento.razao_social}</div>` : ''}
+                            <div class="text-xs">CNPJ: ${estabelecimento?.cnpj || '00.000.000/0001-00'}</div>
+                            <div class="text-xs">${estabelecimento?.endereco || 'LOGRADOURO NÃO INFORMADO'}</div>
+                            <div class="text-xs">TEL: ${estabelecimento?.telefone || '(00) 0000-0000'}</div>
+                        </div>
+
+                        <div class="double-divider"></div>
+
+                        <!-- SALES INTEL -->
+                        <div style="font-size: 10px; line-height: 1.5;">
+                            <div class="total-row"><strong>PEDIDO #:</strong> <span>${venda.codigo}</span></div>
+                            <div class="total-row"><strong>DATA/HORA:</strong> <span>${venda.data}</span></div>
+                            <div class="total-row"><strong>CLIENTE:</strong> <span>${comprovante.cliente?.toUpperCase() || 'CONSUMIDOR FINAL'}</span></div>
+                            <div class="total-row"><strong>TERMINAL:</strong> <span>${comprovante.funcionario?.toUpperCase() || 'CX-01'}</span></div>
                         </div>
 
                         <div class="divider"></div>
 
-                        <div>
-                            <div><strong>Venda:</strong> ${venda.codigo}</div>
-                            <div><strong>Data:</strong> ${venda.data}</div>
-                            <div><strong>Cliente:</strong> ${comprovante.cliente}</div>
-                            <div><strong>Operador:</strong> ${comprovante.funcionario}</div>
+                        <!-- ITEMIZATION -->
+                        <div class="bold text-xs" style="margin-bottom: 5px; border-bottom: 1px solid #000; padding-bottom: 3px;">
+                            ITENS DA VENDA
                         </div>
-
-                        <div class="divider"></div>
 
                         <table>
                             ${itensHtml}
                         </table>
 
-                        <div class="divider"></div>
-
-                        <div class="totals">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Qtd Itens:</span>
-                                <span>${(comprovante.itens || []).length}</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Subtotal:</span>
+                        <!-- TOTALIZATION FLOW -->
+                        <div class="total-section">
+                            <div class="total-row">
+                                <span>SUBTOTAL BRUTO:</span>
                                 <span>R$ ${Number(comprovante.subtotal || 0).toFixed(2)}</span>
                             </div>
                             ${comprovante.desconto > 0 ? `
-                                <div style="display:flex; justify-content:space-between;">
-                                    <span>Desconto:</span>
-                                    <span>- R$ ${Number(comprovante.desconto || 0).toFixed(2)}</span>
+                                <div class="total-row" style="color: #000;">
+                                    <span>DESCONTOS (-) :</span>
+                                    <span>R$ ${Number(comprovante.desconto || 0).toFixed(2)}</span>
                                 </div>
                             ` : ''}
-                            <div style="display:flex; justify-content:space-between; font-weight:bold; font-size: 16px; margin-top: 5px;">
-                                <span>TOTAL:</span>
-                                <span>R$ ${Number(comprovante.total || 0).toFixed(2)}</span>
+                            
+                            <div class="total-highlight">
+                                <div class="total-row">
+                                    <span>TOTAL:</span>
+                                    <span>R$ ${Number(comprovante.total || 0).toFixed(2)}</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="divider"></div>
-
-                        <div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Forma Pagto:</span>
-                                <span>${comprovante.forma_pagamento}</span>
+                        <!-- SETTLEMENT -->
+                        <div style="padding: 5px; border: 1px solid #000; margin-top: 10px;">
+                            <div class="total-row">
+                                <span class="bold">FORMA:</span>
+                                <span class="bold">${comprovante.forma_pagamento?.toUpperCase() || 'DINHEIRO'}</span>
                             </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Valor Recebido:</span>
+                            <div class="total-row">
+                                <span>VALOR PAGO:</span>
                                 <span>R$ ${Number(comprovante.valor_recebido || 0).toFixed(2)}</span>
                             </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span>Troco:</span>
-                                <span>R$ ${Number(comprovante.troco || 0).toFixed(2)}</span>
+                            <div class="total-row" style="font-size: 14px; margin-top: 4px; border-top: 1px dotted #000; padding-top: 4px;">
+                                <span class="bold">TROCO:</span>
+                                <span class="bold">R$ ${Number(comprovante.troco || 0).toFixed(2)}</span>
                             </div>
                         </div>
 
                         <div class="divider"></div>
 
+                        <!-- FOOTER & LEGAL -->
                         <div class="footer">
-                            ${comprovante.rodape || 'Obrigado pela preferência!'}<br/>
-                            *** Documento Não Fiscal ***<br/>
-                            Sistema: MercadinhoSys
+                            <div class="bold text-lg">${comprovante.rodape || 'OBRIGADO PELA PREFERÊNCIA!'}</div>
+                            <div class="barcode-stub">${venda.codigo.replace(/[^0-9]/g, '').slice(-8)}</div>
+                            <div style="margin-top: 10px; border-top: 1px solid #000; padding-top: 5px;">
+                                *** ESTE NÃO É UM DOCUMENTO FISCAL ***
+                            </div>
+                            <div class="italic" style="margin-top: 5px;">POWERED BY ELITE-PDV ENGINE</div>
                         </div>
                     </div>
                 </body>
@@ -397,7 +479,10 @@ const PDVPage: React.FC = () => {
 
         if (imprimirAutomaticamente) {
             novaJanela.focus();
-            setTimeout(() => novaJanela.print(), 300);
+            // Pequeno delay para garantir carregamento do DOM antes do print
+            setTimeout(() => {
+                novaJanela.print();
+            }, 500);
         }
     };
 
@@ -566,7 +651,9 @@ const PDVPage: React.FC = () => {
                             <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
                                 Buscar Produtos
                             </h2>
-                            <ProdutoSearch onProdutoSelecionado={handleProdutoSelecionado} />
+                            <ErrorBoundary name="Busca de Produtos">
+                                <ProdutoSearch onProdutoSelecionado={handleProdutoSelecionado} />
+                            </ErrorBoundary>
                         </div>
 
                         {/* Carrinho */}
@@ -596,28 +683,29 @@ const PDVPage: React.FC = () => {
                                 ) : (
                                     <div className="space-y-4">
                                         {carrinho.map((item) => (
-                                            <CarrinhoItem
-                                                key={item.produto.id}
-                                                produto={item.produto}
-                                                quantidade={item.quantidade}
-                                                precoUnitario={item.precoUnitario}
-                                                desconto={item.desconto}
-                                                total={item.total}
-                                                onAtualizarQuantidade={(qtd) => {
-                                                    const estoque = item.produto.quantidade_estoque ?? item.produto.quantidade ?? 0;
-                                                    if (qtd > estoque) {
-                                                        showToast.error(`Estoque insuficiente — máximo ${estoque} un.`, {
-                                                            id: TOAST_IDS.estoqueInsuficiente,
-                                                        });
-                                                        return;
+                                            <ErrorBoundary key={item.produto.id} name={`Item Carrinho: ${item.produto.nome}`}>
+                                                <CarrinhoItem
+                                                    produto={item.produto}
+                                                    quantidade={item.quantidade}
+                                                    precoUnitario={item.precoUnitario}
+                                                    desconto={item.desconto}
+                                                    total={item.total}
+                                                    onAtualizarQuantidade={(qtd) => {
+                                                        const estoque = item.produto.quantidade_estoque ?? item.produto.quantidade ?? 0;
+                                                        if (qtd > estoque) {
+                                                            showToast.error(`Estoque insuficiente — máximo ${estoque} un.`, {
+                                                                id: TOAST_IDS.estoqueInsuficiente,
+                                                            });
+                                                            return;
+                                                        }
+                                                        atualizarQuantidade(item.produto.id, qtd);
+                                                    }}
+                                                    onRemover={() => removerProduto(item.produto.id)}
+                                                    onAplicarDesconto={(desc, perc) =>
+                                                        aplicarDescontoItem(item.produto.id, desc, perc)
                                                     }
-                                                    atualizarQuantidade(item.produto.id, qtd);
-                                                }}
-                                                onRemover={() => removerProduto(item.produto.id)}
-                                                onAplicarDesconto={(desc, perc) =>
-                                                    aplicarDescontoItem(item.produto.id, desc, perc)
-                                                }
-                                            />
+                                                />
+                                            </ErrorBoundary>
                                         ))}
                                     </div>
                                 )}
