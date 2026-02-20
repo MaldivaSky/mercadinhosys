@@ -206,14 +206,9 @@ export const usePDV = () => {
 
         // Se permite troco (dinheiro), valida valor recebido
         if (formaPg?.permite_troco) {
-            if (valorRecebido < total) {
+            // Pequena tolerância para erros de ponto flutuante
+            if (valorRecebido < (total - 0.01)) {
                 throw new Error(`Valor recebido insuficiente. Faltam R$ ${(total - valorRecebido).toFixed(2)}`);
-            }
-        } else {
-            // Se não permite troco (cartão/pix), assume valor exato se não informado
-            if (valorRecebido <= 0) {
-                // Opcional: setValorRecebido(total) aqui não funcionaria pois é state, 
-                // mas podemos considerar o valor recebido como total para fins de registro
             }
         }
 
@@ -225,6 +220,7 @@ export const usePDV = () => {
                     id: item.produto.id,
                     quantity: item.quantidade,
                     discount: item.desconto,
+                    price: item.precoUnitario // Importante enviar o preço praticado caso tenha mudado
                 })),
                 subtotal,
                 desconto: descontoTotal,
@@ -236,8 +232,12 @@ export const usePDV = () => {
                 observacoes: observacoes.trim() || undefined,
             };
 
+            // pdvService.finalizarVenda já retorna response.data.venda (o objeto venda completo com ID)
             const venda = await pdvService.finalizarVenda(vendaData);
             return venda;
+        } catch (error: any) {
+            console.error("Erro ao finalizar venda:", error);
+            throw error; // Repassa erro para a UI tratar
         } finally {
             setLoading(false);
         }
