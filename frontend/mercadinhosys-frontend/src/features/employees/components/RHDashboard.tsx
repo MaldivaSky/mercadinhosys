@@ -361,10 +361,7 @@ export default function RHDashboard() {
           isOpen={holeriteModalOpen}
           onClose={() => setHoleriteModalOpen(false)}
           funcionario={selectedFuncionarioHolerite}
-          periodo={{
-            inicio: rhData.resumo_mes.inicio || '',
-            fim: rhData.resumo_mes.fim || ''
-          }}
+          periodo={`${rhData.resumo_mes.inicio || ''} - ${rhData.resumo_mes.fim || ''}`}
         />
       )}
     </div>
