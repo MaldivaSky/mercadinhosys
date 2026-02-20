@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { X, Camera, Sparkles } from 'lucide-react';
+﻿import { useState, useEffect } from 'react';
+import { Camera, Sparkles } from 'lucide-react';
+import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 import { toast } from 'react-hot-toast';
-import { Produto, Fornecedor } from '../../../types';
+import { Fornecedor, Produto } from '../../../types';
 import { productsService } from '../productsService';
 import { cosmosService } from '../../../services/cosmosService';
 import BarcodeScanner from '../../pdv/components/BarcodeScanner';
@@ -16,7 +17,7 @@ interface ProductFormModalProps {
     onSuccess: () => void;
 }
 
-const ProductFormModal: React.FC<ProductFormModalProps> = ({
+const ProductFormModal = ({
     show,
     editMode,
     produto,
@@ -24,7 +25,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
     fornecedores,
     onClose,
     onSuccess
-}) => {
+}: ProductFormModalProps) => {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         nome: '',
@@ -108,13 +109,13 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 descricao: data.ncm?.full_description || data.description || prev.descricao,
                 marca: data.brand?.name || prev.marca,
                 imagem_url: data.thumbnail || prev.imagem_url,
-                // Mapear categoria se possível ou focar no nome/marca
+                // Mapear categoria se possÃ­vel ou focar no nome/marca
             }));
 
             toast.success('Dados preenchidos automaticamente!', { id: loadingToast });
         } catch (error) {
             console.error('Erro na consulta Cosmos:', error);
-            toast.error('Produto não encontrado no banco de dados geral.', { id: loadingToast });
+            toast.error('Produto nÃ£o encontrado no banco de dados geral.', { id: loadingToast });
         } finally {
             setIsSearchingCosmos(false);
         }
@@ -134,8 +135,9 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 toast.success('Produto criado!');
             }
             onSuccess();
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || 'Erro ao salvar');
+        } catch (error: unknown) {
+            const err = error as any;
+            toast.error(err.response?.data?.error || 'Erro ao salvar');
         } finally {
             setLoading(false);
         }
@@ -156,109 +158,180 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (!show) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-                <div className="flex items-center justify-between p-4 border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-900">
-                    <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-bold">{editMode ? 'Editar Produto' : 'Novo Produto'}</h3>
-                        {!editMode && (
-                            <button
-                                type="button"
-                                onClick={() => setShowScanner(true)}
-                                className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-full shadow-sm hover:shadow-md transition-all border border-blue-200 dark:border-blue-700 animate-pulse"
-                            >
-                                <Sparkles className="w-3.5 h-3.5" />
-                                CADASTRO INTELIGENTE
-                            </button>
-                        )}
-                    </div>
-                    <button onClick={onClose} className="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded"><X className="w-5 h-5" /></button>
-                </div>
-                <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Nome *</label>
-                            <input type="text" value={formData.nome} onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Codigo de Barras</label>
-                            <div className="flex gap-2">
-                                <input type="text" value={formData.codigo_barras} onChange={(e) => setFormData(prev => ({ ...prev, codigo_barras: e.target.value }))} className="flex-1 px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowScanner(true)}
-                                    className="p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                    title="Escanear com a camera"
-                                >
-                                    <Camera className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                                </button>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Categoria *</label>
-                            <input type="text" list="categorias-list" value={formData.categoria} onChange={(e) => setFormData(prev => ({ ...prev, categoria: e.target.value }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" required />
-                            <datalist id="categorias-list">{categorias.map(c => <option key={c} value={c} />)}</datalist>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Marca</label>
-                            <input type="text" value={formData.marca} onChange={(e) => setFormData(prev => ({ ...prev, marca: e.target.value }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Fornecedor</label>
-                            <select value={formData.fornecedor_id || ''} onChange={(e) => setFormData(prev => ({ ...prev, fornecedor_id: e.target.value ? parseInt(e.target.value) : undefined }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                                <option value="">Selecione</option>
-                                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Unidade</label>
-                            <select value={formData.unidade_medida} onChange={(e) => setFormData(prev => ({ ...prev, unidade_medida: e.target.value }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                                <option value="un">Unidade</option>
-                                <option value="kg">Quilograma</option>
-                                <option value="g">Grama</option>
-                                <option value="l">Litro</option>
-                                <option value="ml">Mililitro</option>
-                                <option value="cx">Caixa</option>
-                                <option value="pct">Pacote</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Preco Custo</label>
-                            <input type="number" step="0.01" value={formData.preco_custo} onChange={(e) => setFormData(prev => ({ ...prev, preco_custo: parseFloat(e.target.value) || 0 }))} onBlur={calcularPrecoVenda} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Margem (%)</label>
-                            <input type="number" step="0.1" value={formData.margem_lucro} onChange={(e) => setFormData(prev => ({ ...prev, margem_lucro: parseFloat(e.target.value) || 0 }))} onBlur={calcularPrecoVenda} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Preco Venda</label>
-                            <input type="number" step="0.01" value={formData.preco_venda} onChange={(e) => setFormData(prev => ({ ...prev, preco_venda: parseFloat(e.target.value) || 0 }))} onBlur={calcularMargem} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Quantidade</label>
-                            <input type="number" value={formData.quantidade} onChange={(e) => setFormData(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Quantidade Minima</label>
-                            <input type="number" value={formData.quantidade_minima} onChange={(e) => setFormData(prev => ({ ...prev, quantidade_minima: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Descricao</label>
-                        <textarea value={formData.descricao} onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))} rows={2} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                    </div>
-                </form>
-                <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700">
-                    <button type="button" onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                    <button onClick={handleSubmit} disabled={loading || isSearchingCosmos} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                        {loading ? 'Salvando...' : 'Salvar'}
+        <ResponsiveModal
+            isOpen={show}
+            onClose={onClose}
+            title={editMode ? 'Editar Produto' : 'Novo Produto'}
+            subtitle={editMode ? `ID: ${produto?.id}` : 'Cadastre um novo item no estoque'}
+            headerIcon={<Sparkles className="w-6 h-6" />}
+            headerColor="blue"
+            size="xl"
+            footer={
+                <div className="flex w-full sm:w-auto gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 sm:flex-none px-6 py-3 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={loading || isSearchingCosmos}
+                        className="flex-1 sm:flex-none px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                    >
+                        {loading ? 'Salvando...' : 'Salvar Produto'}
                     </button>
                 </div>
-            </div>
+            }
+        >
+            <form onSubmit={handleSubmit} className="space-y-8">
+                {/* Banner de Cadastro Inteligente */}
+                {!editMode && (
+                    <button
+                        type="button"
+                        onClick={() => setShowScanner(true)}
+                        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl shadow-md hover:shadow-xl transition-all group overflow-hidden relative"
+                    >
+                        <div className="flex items-center gap-4 relative z-10">
+                            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md">
+                                <Camera className="w-6 h-6" />
+                            </div>
+                            <div className="text-left">
+                                <h4 className="font-bold text-lg">Cadastro Inteligente</h4>
+                                <p className="text-xs text-blue-100">Escanear cÃ³digo e buscar dados na nuvem</p>
+                            </div>
+                        </div>
+                        <Sparkles className="w-8 h-8 opacity-20 group-hover:scale-125 transition-transform duration-500" />
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                    </button>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* IdentificaÃ§Ã£o Principal */}
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">IdentificaÃ§Ã£o</h4>
+                        <div className="space-y-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Nome do Produto *</label>
+                                <input
+                                    type="text"
+                                    value={formData.nome}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
+                                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">CÃ³digo de Barras</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={formData.codigo_barras}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, codigo_barras: e.target.value }))}
+                                        className="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowScanner(true)}
+                                        className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors text-blue-600 shadow-sm"
+                                    >
+                                        <Camera className="w-6 h-6" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* OrganizaÃ§Ã£o */}
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">OrganizaÃ§Ã£o</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Categoria *</label>
+                                <input type="text" list="categorias-list" value={formData.categoria} onChange={(e) => setFormData(prev => ({ ...prev, categoria: e.target.value }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" required />
+                                <datalist id="categorias-list">{categorias.map(c => <option key={c} value={c} />)}</datalist>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Unidade</label>
+                                <select value={formData.unidade_medida} onChange={(e) => setFormData(prev => ({ ...prev, unidade_medida: e.target.value }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="un">Unidade (un)</option>
+                                    <option value="kg">Quilograma (kg)</option>
+                                    <option value="g">Grama (g)</option>
+                                    <option value="l">Litro (l)</option>
+                                    <option value="ml">Mililitro (ml)</option>
+                                    <option value="cx">Caixa (cx)</option>
+                                    <option value="pct">Pacote (pct)</option>
+                                </select>
+                            </div>
+                            <div className="sm:col-span-2 space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Marca/Fabricante</label>
+                                <input type="text" value={formData.marca} onChange={(e) => setFormData(prev => ({ ...prev, marca: e.target.value }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div className="sm:col-span-2 space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Fornecedor Principal</label>
+                                <select
+                                    value={formData.fornecedor_id || ''}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, fornecedor_id: e.target.value ? Number(e.target.value) : undefined }))}
+                                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">Nenhum Fornecedor</option>
+                                    {fornecedores.map(f => (
+                                        <option key={f.id} value={f.id}>{f.nome_fantasia || f.nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* PrecificaÃ§Ã£o */}
+                <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">PrecificaÃ§Ã£o e Lucro</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100/50 dark:border-blue-900/30">
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">PreÃ§o de Custo (R$)</label>
+                            <input type="number" step="0.01" value={formData.preco_custo} onChange={(e) => setFormData(prev => ({ ...prev, preco_custo: parseFloat(e.target.value) || 0 }))} onBlur={calcularPrecoVenda} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">Margem (%)</label>
+                            <input type="number" step="0.1" value={formData.margem_lucro} onChange={(e) => setFormData(prev => ({ ...prev, margem_lucro: parseFloat(e.target.value) || 0 }))} onBlur={calcularPrecoVenda} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">PreÃ§o de Venda (R$)</label>
+                            <input type="number" step="0.01" value={formData.preco_venda} onChange={(e) => setFormData(prev => ({ ...prev, preco_venda: parseFloat(e.target.value) || 0 }))} onBlur={calcularMargem} className="w-full px-4 py-3 bg-blue-600 text-white border-transparent rounded-xl outline-none focus:ring-4 focus:ring-blue-500/30 text-lg font-bold shadow-lg shadow-blue-500/20" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Estoque */}
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Controle de Estoque</h4>
+                        <div className="grid grid-cols-2 gap-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Qtd. Atual</label>
+                                <input type="number" value={formData.quantidade} onChange={(e) => setFormData(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Qtd. MÃ­nima</label>
+                                <input type="number" value={formData.quantidade_minima} onChange={(e) => setFormData(prev => ({ ...prev, quantidade_minima: parseInt(e.target.value) || 0 }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Detalhes Adicionais */}
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Metadados</h4>
+                        <div className="space-y-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">DescriÃ§Ã£o/ObervaÃ§Ãµes</label>
+                                <textarea value={formData.descricao} onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))} rows={2} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Opcional..." />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
 
             {showScanner && (
                 <BarcodeScanner
@@ -266,7 +339,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     onClose={() => setShowScanner(false)}
                 />
             )}
-        </div>
+        </ResponsiveModal>
     );
 };
 

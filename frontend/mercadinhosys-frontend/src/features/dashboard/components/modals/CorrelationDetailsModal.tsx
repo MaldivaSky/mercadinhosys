@@ -1,10 +1,19 @@
 import React from 'react';
-import { X, TrendingUp, TrendingDown, Link2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Link2 } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { Badge } from '../../../../components/ui/badge';
+import ResponsiveModal from '../../../../components/ui/ResponsiveModal';
+
+interface CorrelationData {
+  variavel1: string;
+  variavel2: string;
+  forca: number;
+  implicacoes?: string;
+  exemplos?: string[];
+}
 
 interface CorrelationDetailsModalProps {
-  correlation: any;
+  correlation: CorrelationData | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -14,7 +23,7 @@ export const CorrelationDetailsModal: React.FC<CorrelationDetailsModalProps> = (
   isOpen,
   onClose
 }) => {
-  if (!isOpen || !correlation) return null;
+  if (!correlation) return null;
 
   const getCorrelationStrength = (forca: number) => {
     if (Math.abs(forca) >= 0.7) return 'Forte';
@@ -30,131 +39,125 @@ export const CorrelationDetailsModal: React.FC<CorrelationDetailsModalProps> = (
   };
 
   const getDirectionIcon = (forca: number) => {
-    return forca > 0 ? 
-      <TrendingUp className="w-4 h-4 text-green-600" /> : 
+    return forca > 0 ?
+      <TrendingUp className="w-4 h-4 text-green-600" /> :
       <TrendingDown className="w-4 h-4 text-red-600" />;
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700">
-          <div className="flex items-center gap-3">
-            <Link2 className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              Detalhes da Correlação
-            </h2>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="h-8 w-8"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Variáveis Correlacionadas</h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-slate-700">
-                  <span className="text-sm font-medium">Variável 1</span>
-                  <span className="text-sm text-gray-600 dark:text-gray-300">{correlation.variavel1}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-slate-700">
-                  <span className="text-sm font-medium">Variável 2</span>
-                  <span className="text-sm text-gray-600 dark:text-gray-300">{correlation.variavel2}</span>
-                </div>
+    <ResponsiveModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Detalhes da Correlação"
+      headerIcon={<Link2 className="w-6 h-6 text-white" />}
+      headerColor="blue"
+      footer={
+        <Button onClick={onClose} className="w-full">
+          Entendido
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+              Variáveis Analisadas
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Variável Principal</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{correlation.variavel1}</span>
               </div>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Métrica da Correlação</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Força</span>
-                  <Badge className={getCorrelationColor(correlation.forca)}>
-                    {getCorrelationStrength(correlation.forca)}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Coeficiente (r)</span>
-                  <div className="flex items-center gap-2">
-                    {getDirectionIcon(correlation.forca)}
-                    <span className="text-sm font-mono">{correlation.forca.toFixed(3)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Direção</span>
-                  <span className="text-sm">
-                    {correlation.forca > 0 ? 'Positiva' : 'Negativa'}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Variável Relacionada</span>
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{correlation.variavel2}</span>
               </div>
             </div>
           </div>
 
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Interpretação</h3>
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                {correlation.forca > 0 ? (
-                  <>Quando <strong>{correlation.variavel1}</strong> aumenta, <strong>{correlation.variavel2}</strong> tende a aumentar também.</>
-                ) : (
-                  <>Quando <strong>{correlation.variavel1}</strong> aumenta, <strong>{correlation.variavel2}</strong> tende a diminuir.</>
-                )}
-              </p>
-              <p className="text-xs text-blue-600 dark:text-blue-300 mt-2">
-                Força da relação: {getCorrelationStrength(correlation.forca).toLowerCase()}
-              </p>
-            </div>
-          </div>
-
-          {correlation.implicacoes && (
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Implicações Práticas</h3>
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  {correlation.implicacoes}
-                </p>
+          <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
+              Métrica Científica
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Força do Elo</span>
+                <Badge className={getCorrelationColor(correlation.forca)}>
+                  {getCorrelationStrength(correlation.forca)}
+                </Badge>
               </div>
-            </div>
-          )}
-
-          {correlation.exemplos && correlation.exemplos.length > 0 && (
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Exemplos Observados</h3>
-              <div className="space-y-2">
-                {correlation.exemplos.slice(0, 3).map((exemplo: any, index: number) => (
-                  <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    <p className="text-sm text-gray-700 dark:text-gray-300">{exemplo}</p>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Coeficiente (r)</span>
+                <div className="flex items-center gap-2">
+                  {getDirectionIcon(correlation.forca)}
+                  <span className="text-sm font-mono font-bold">{correlation.forca.toFixed(3)}</span>
+                </div>
               </div>
-            </div>
-          )}
-
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Recomendações</h3>
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-              <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1">
-                <li>• Utilize esta correlação para prever comportamentos futuros</li>
-                <li>• Considere esta relação no planejamento de estoque e promoções</li>
-                <li>• Monitore ambas as variáveis para detectar mudanças no padrão</li>
-              </ul>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Direção</span>
+                <span className={`text-sm font-bold ${correlation.forca > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {correlation.forca > 0 ? 'Positiva (Direta)' : 'Negativa (Inversa)'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6 border-t border-gray-200 dark:border-slate-700">
-          <Button onClick={onClose} className="w-full">
-            Fechar
-          </Button>
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-5 shadow-sm">
+          <h3 className="font-bold text-blue-900 dark:text-blue-300 mb-2 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Interpretação do Expert
+          </h3>
+          <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed font-medium">
+            {correlation.forca > 0 ? (
+              <>A análise indica que quando <strong>{correlation.variavel1}</strong> sobe, há uma tendência científica de que <strong>{correlation.variavel2}</strong> acompanhe esse crescimento.</>
+            ) : (
+              <>Observamos uma relação inversa: quando <strong>{correlation.variavel1}</strong> aumenta, <strong>{correlation.variavel2}</strong> tende a recuar.</>
+            )}
+          </p>
+        </div>
+
+        {correlation.implicacoes && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-5 shadow-sm">
+            <h3 className="font-bold text-green-900 dark:text-green-300 mb-2 flex items-center gap-2">
+              <Link2 className="w-5 h-5" />
+              Implicações Práticas
+            </h3>
+            <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed font-medium">
+              {correlation.implicacoes}
+            </p>
+          </div>
+        )}
+
+        {correlation.exemplos && correlation.exemplos.length > 0 && (
+          <div>
+            <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-3 ml-1">Observações Reais</h3>
+            <div className="space-y-2">
+              {correlation.exemplos.slice(0, 3).map((exemplo, index) => (
+                <div key={index} className="bg-gray-50/50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-100 dark:border-gray-700 italic text-sm text-gray-600 dark:text-gray-400">
+                  "{exemplo}"
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-xl p-5">
+          <h3 className="font-bold text-amber-900 dark:text-amber-300 mb-3 text-sm uppercase tracking-wider">Ações Recomendadas</h3>
+          <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-2">
+            <li className="flex items-start gap-2">
+              <span className="text-amber-500 mt-1">•</span>
+              <span>Use este padrão para prever a demanda futura e ajustar seu estoque preventivamente.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-amber-500 mt-1">•</span>
+              <span>Alinhe suas promoções baseando-se no comportamento dessas variáveis correlacionadas.</span>
+            </li>
+          </ul>
         </div>
       </div>
-    </div>
+    </ResponsiveModal>
   );
 };

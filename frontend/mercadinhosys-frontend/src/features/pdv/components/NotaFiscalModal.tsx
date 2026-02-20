@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Mail, Printer, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Mail, Printer, X, ChevronRight } from 'lucide-react';
+import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 
 interface NotaFiscalModalProps {
     mostrar: boolean;
@@ -11,7 +12,7 @@ interface NotaFiscalModalProps {
     enviando?: boolean;
 }
 
-const NotaFiscalModal: React.FC<NotaFiscalModalProps> = ({
+const NotaFiscalModal = ({
     mostrar,
     emailCliente,
     onEnviarEmail,
@@ -19,7 +20,7 @@ const NotaFiscalModal: React.FC<NotaFiscalModalProps> = ({
     onImprimir,
     onFechar,
     enviando = false
-}) => {
+}: NotaFiscalModalProps) => {
     const [email, setEmail] = useState(emailCliente || '');
     const [emailValido, setEmailValido] = useState(!!emailCliente);
 
@@ -45,123 +46,111 @@ const NotaFiscalModal: React.FC<NotaFiscalModalProps> = ({
         }
     };
 
-    if (!mostrar) return null;
-
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 relative animate-scaleIn">
-                {/* Botão Fechar */}
+        <ResponsiveModal
+            isOpen={mostrar}
+            onClose={onFechar}
+            title="Enviar Nota Fiscal"
+            subtitle="Como deseja receber o comprovante?"
+            headerIcon={<Mail className="w-6 h-6" />}
+            headerColor="blue"
+            size="md"
+            footer={
                 <button
                     onClick={onFechar}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
+                    disabled={enviando}
+                    className="w-full sm:w-auto px-8 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all border border-gray-200 dark:border-gray-600 flex items-center justify-center gap-2"
                 >
-                    <X className="w-5 h-5" />
+                    <span>Concluir</span>
+                    <ChevronRight className="w-5 h-5" />
                 </button>
-
-                {/* Header */}
-                <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                        <Mail className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-                        Enviar Nota Fiscal
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                        Como deseja receber o comprovante?
-                    </p>
-                </div>
-
-                {/* Input de Email */}
-                <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        📧 Email para envio:
-                    </label>
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => handleEmailChange(e.target.value)}
-                        placeholder="cliente@exemplo.com"
-                        className={`w-full px-4 py-3 rounded-lg border-2 transition focus:outline-none focus:ring-2 ${
-                            email && !emailValido
-                                ? 'border-red-300 focus:border-red-500 focus:ring-red-200'
-                                : 'border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:ring-blue-200'
-                        } bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400`}
-                        disabled={enviando}
-                    />
-                    {email && !emailValido && (
-                        <p className="text-red-500 text-sm mt-1">⚠️ Email inválido</p>
-                    )}
-                    {!emailCliente && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            💡 Deixe em branco se não quiser enviar por email
-                        </p>
-                    )}
-                </div>
-
-                {/* Botões de Ação */}
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                    <button
-                        onClick={handleEnviar}
-                        disabled={!emailValido || !email || enviando}
-                        className="px-6 py-3 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed
-                            bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 
-                            text-white shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95
-                            flex items-center justify-center space-x-2"
-                    >
-                        {enviando ? (
-                            <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                <span>Enviando...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Mail className="w-5 h-5" />
-                                <span>Enviar Email</span>
-                            </>
+            }
+        >
+            <div className="space-y-6">
+                {/* Opção de Email */}
+                <div className="space-y-4">
+                    <div className="relative">
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                            Email para envio
+                        </label>
+                        <div className="flex gap-2">
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => handleEmailChange(e.target.value)}
+                                placeholder="cliente@exemplo.com"
+                                className={`flex-1 px-4 py-3.5 bg-gray-50 dark:bg-gray-900 border-2 rounded-xl focus:ring-2 transition-all outline-none ${email && !emailValido
+                                    ? 'border-red-200 focus:ring-red-500'
+                                    : 'border-gray-100 dark:border-gray-700 focus:ring-blue-500'
+                                    }`}
+                                disabled={enviando}
+                            />
+                            <button
+                                onClick={handleEnviar}
+                                disabled={!emailValido || !email || enviando}
+                                className={`px-4 rounded-xl font-bold transition-all flex items-center gap-2 ${!emailValido || !email || enviando
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20'
+                                    }`}
+                            >
+                                {enviando ? (
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                ) : (
+                                    <>
+                                        <Mail className="w-5 h-5" />
+                                        <span className="hidden sm:inline">Enviar</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                        {email && !emailValido && (
+                            <p className="text-[10px] text-red-500 font-bold mt-1 ml-1 flex items-center gap-1">
+                                <X className="w-3 h-3" /> Email inválido
+                            </p>
                         )}
-                    </button>
+                    </div>
+                </div>
 
+                <div className="h-px bg-gray-100 dark:bg-gray-700 my-2"></div>
+
+                {/* Opções Físicas e Visualização */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                         onClick={onImprimir}
                         disabled={enviando}
-                        className="px-6 py-3 rounded-lg font-semibold transition
-                            bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 
-                            text-white shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95
-                            flex items-center justify-center space-x-2 disabled:opacity-50"
+                        className="p-4 bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl flex items-center gap-3 hover:border-blue-500 hover:bg-blue-50/30 transition-all group"
                     >
-                        <Printer className="w-5 h-5" />
-                        <span>Imprimir</span>
+                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <Printer className="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:text-white" />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-black text-gray-800 dark:text-white text-sm">Imprimir Ticket</p>
+                            <p className="text-[10px] text-gray-500 font-medium">Impressora Térmica 80mm</p>
+                        </div>
                     </button>
 
                     <button
                         onClick={onVisualizar}
                         disabled={enviando}
-                        className="px-6 py-3 rounded-lg font-semibold transition
-                            bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700
-                            text-white shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95
-                            flex items-center justify-center space-x-2 disabled:opacity-50"
+                        className="p-4 bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl flex items-center gap-3 hover:border-purple-500 hover:bg-purple-50/30 transition-all group"
                     >
-                        <span>Visualizar</span>
+                        <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                            <Mail className="w-6 h-6 text-purple-600 dark:text-purple-400 group-hover:text-white" />
+                        </div>
+                        <div className="text-left">
+                            <p className="font-black text-gray-800 dark:text-white text-sm">Visualizar</p>
+                            <p className="text-[10px] text-gray-500 font-medium">Ver PDF no navegador</p>
+                        </div>
                     </button>
                 </div>
 
-                {/* Botão Pular */}
-                <button
-                    onClick={onFechar}
-                    disabled={enviando}
-                    className="w-full px-6 py-2.5 rounded-lg font-medium transition
-                        bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 
-                        text-gray-700 dark:text-gray-300 disabled:opacity-50"
-                >
-                    Pular e Finalizar
-                </button>
-
-                {/* Info */}
-                <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-4">
-                    ℹ️ A nota fiscal é um documento não fiscal para controle interno
-                </p>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                    <p className="text-[10px] text-center text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest leading-loose">
+                        ℹ️ Comprovante de venda para fins de simples conferência. Documento não fiscal.
+                    </p>
+                </div>
             </div>
-        </div>
+        </ResponsiveModal>
     );
 };
 

@@ -45,22 +45,26 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full ${sizeClasses[size]} max-h-[95vh] overflow-hidden flex flex-col my-auto`}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-0 sm:p-4 overflow-hidden animate-in fade-in duration-200">
+      <div
+        className={`bg-white dark:bg-gray-800 shadow-2xl w-full ${sizeClasses[size]} 
+          h-full sm:h-auto sm:max-h-[95vh] sm:rounded-xl overflow-hidden flex flex-col 
+          animate-in zoom-in-95 duration-200`}
+      >
         {/* Header */}
-        <div className={`bg-gradient-to-r ${headerColorClasses[headerColor]} px-4 sm:px-6 py-4 flex justify-between items-center flex-shrink-0`}>
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        <div className={`bg-gradient-to-r ${headerColorClasses[headerColor] || 'from-blue-600 to-blue-700'} px-5 sm:px-6 py-4 flex justify-between items-center flex-shrink-0 shadow-sm z-10`}>
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {headerIcon && (
-              <div className="text-white flex-shrink-0">
+              <div className="text-white flex-shrink-0 bg-white/20 p-2 rounded-lg">
                 {headerIcon}
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-white truncate">
+              <h2 className="text-lg sm:text-xl font-bold text-white truncate leading-tight">
                 {title}
               </h2>
               {subtitle && (
-                <p className="text-xs sm:text-sm text-blue-100 truncate">
+                <p className="text-xs sm:text-sm text-white/80 truncate mt-0.5">
                   {subtitle}
                 </p>
               )}
@@ -69,22 +73,22 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
           {closeButton && (
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors flex-shrink-0 ml-2"
+              className="p-2.5 hover:bg-white/20 active:bg-white/30 rounded-xl transition-all flex-shrink-0 ml-2 text-white"
               aria-label="Fechar"
             >
-              <X className="w-5 h-5 text-white" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           )}
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 bg-white dark:bg-gray-800">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 px-4 sm:px-6 py-4 flex-shrink-0">
+          <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50 backdrop-blur-md px-5 sm:px-6 py-4 flex-shrink-0 flex items-center justify-end gap-3 translate-z-0">
             {footer}
           </div>
         )}

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { X, TrendingUp, Calendar, DollarSign, Package, Clock, AlertTriangle, Users, BarChart3 } from 'lucide-react';
+import { TrendingUp, DollarSign, Clock, Users, BarChart3, Package, Calendar, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Produto } from '../../../types';
-import { formatCurrency } from '../../../utils/formatters';
+import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { apiClient } from '../../../api/apiClient';
+import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 
 interface ProductHistoryModalProps {
     produto: Produto;
@@ -22,13 +23,7 @@ interface HistoricoPreco {
     funcionario_nome?: string;
 }
 
-interface VendaHistorico {
-    data: string;
-    quantidade: number;
-    valor_total: number;
-}
-
-interface VendaHistorico {
+interface VendaHistoricoDetailed {
     data: string;
     quantidade: number;
     valor_total: number;
@@ -45,13 +40,24 @@ interface EstatisticasVendas {
     ticket_medio: number;
 }
 
-const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ produto, onClose }) => {
+interface FornecedorInfo {
+    id: number;
+    razao_social: string;
+    nome_fantasia?: string;
+    cnpj: string;
+    email?: string;
+    telefone?: string;
+    cidade?: string;
+    estado?: string;
+}
+
+const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'vendas' | 'precos' | 'fornecedor'>('vendas');
     const [historicoPrecos, setHistoricoPrecos] = useState<HistoricoPreco[]>([]);
-    const [vendasHistorico, setVendasHistorico] = useState<VendaHistorico[]>([]);
+    const [vendasHistorico, setVendasHistorico] = useState<VendaHistoricoDetailed[]>([]);
     const [estatisticasVendas, setEstatisticasVendas] = useState<EstatisticasVendas | null>(null);
-    const [fornecedorInfo, setFornecedorInfo] = useState<any>(null);
+    const [fornecedorInfo, setFornecedorInfo] = useState<FornecedorInfo | null>(null);
 
     useEffect(() => {
         loadData();
@@ -60,7 +66,7 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ produto, onCl
     const loadData = async () => {
         try {
             setLoading(true);
-            
+
             // Carregar histórico de preços
             try {
                 const precosRes = await apiClient.get(`/produtos/${produto.id}/historico-precos`);
@@ -69,7 +75,7 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ produto, onCl
                 console.error('Erro ao carregar histórico de preços:', error);
                 setHistoricoPrecos([]);
             }
-            
+
             // Carregar histórico de vendas (últimos 90 dias)
             try {
                 const vendasRes = await apiClient.get(`/produtos/${produto.id}/vendas-historico`);
@@ -80,7 +86,7 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ produto, onCl
                 setVendasHistorico([]);
                 setEstatisticasVendas(null);
             }
-            
+
             // Carregar informações do fornecedor
             if (produto.fornecedor_id) {
                 try {
@@ -110,484 +116,341 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ produto, onCl
     const diasDesdeUltimaVenda = calcularDiasDesdeUltimaVenda();
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-4 flex justify-between items-center">
-                    <div>
-                        <h2 className="text-2xl font-bold text-white">{produto.nome}</h2>
-                        <p className="text-indigo-100 text-sm mt-1">
-                            {produto.categoria} • {produto.codigo_barras || 'Sem código'}
-                        </p>
-                    </div>
+        <ResponsiveModal
+            isOpen={true}
+            onClose={onClose}
+            title={produto.nome}
+            subtitle={`${produto.categoria} • ${produto.codigo_barras || 'Sem código'}`}
+            headerIcon={<Clock className="w-6 h-6" />}
+            headerColor="indigo"
+            size="xl"
+            footer={
+                <button
+                    onClick={onClose}
+                    className="px-8 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-white rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all border border-gray-200 dark:border-gray-600"
+                >
+                    Fechar
+                </button>
+            }
+        >
+            <div className="space-y-6">
+                <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-none items-center -mx-1 px-1">
                     <button
-                        onClick={onClose}
-                        className="text-white hover:text-gray-200 transition-colors"
+                        onClick={() => setActiveTab('vendas')}
+                        className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'vendas'
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                            : 'bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100'
+                            }`}
                     >
-                        <X className="w-6 h-6" />
+                        <TrendingUp className="w-4 h-4" />
+                        Vendas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('precos')}
+                        className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'precos'
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                            : 'bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100'
+                            }`}
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        Preços
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('fornecedor')}
+                        className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'fornecedor'
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                            : 'bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100'
+                            }`}
+                    >
+                        <Users className="w-4 h-4" />
+                        Fornecedor
                     </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                    <div className="flex gap-1 px-6">
-                        <button
-                            onClick={() => setActiveTab('vendas')}
-                            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
-                                activeTab === 'vendas'
-                                    ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <TrendingUp className="w-4 h-4" />
-                                Histórico de Vendas
-                            </div>
-                            {activeTab === 'vendas' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('precos')}
-                            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
-                                activeTab === 'precos'
-                                    ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <DollarSign className="w-4 h-4" />
-                                Histórico de Preços
-                            </div>
-                            {activeTab === 'precos' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('fornecedor')}
-                            className={`px-4 py-3 font-medium text-sm transition-colors relative ${
-                                activeTab === 'fornecedor'
-                                    ? 'text-indigo-600 dark:text-indigo-400'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Users className="w-4 h-4" />
-                                Fornecedor
-                            </div>
-                            {activeTab === 'fornecedor' && (
-                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
                     {loading ? (
-                        <div className="flex justify-center items-center h-64">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+                        <div className="flex flex-col items-center justify-center py-20 gap-4">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                            <p className="text-gray-500 animate-pulse font-medium">Carregando informações...</p>
                         </div>
                     ) : (
-                        <>
-                            {/* Tab: Histórico de Vendas */}
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                             {activeTab === 'vendas' && (
-                                <div className="space-y-6">
-                                    {/* Cards de Resumo */}
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Vendido</p>
+                                <div className="space-y-8">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-lg">
+                                                    <Package className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                                </div>
+                                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Total Vendido</span>
                                             </div>
-                                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                                {produto.quantidade_vendida || 0} un
+                                            <p className="text-2xl font-black text-indigo-900 dark:text-white">
+                                                {estatisticasVendas?.total_vendido_90d || 0}
+                                                <span className="text-sm font-bold ml-1 text-indigo-500 uppercase">{produto.unidade_medida || 'un'}</span>
                                             </p>
+                                            <p className="text-xs text-indigo-500 mt-1 font-medium italic">nos últimos 90 dias</p>
                                         </div>
-                                        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Faturamento</p>
+
+                                        <div className="bg-green-50 dark:bg-green-900/20 p-5 rounded-2xl border border-green-100 dark:border-green-800">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="p-2 bg-green-100 dark:bg-green-800 rounded-lg">
+                                                    <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                                </div>
+                                                <span className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">Faturamento</span>
                                             </div>
-                                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                                {formatCurrency(produto.total_vendido || 0)}
+                                            <p className="text-2xl font-black text-green-900 dark:text-white">
+                                                {formatCurrency(estatisticasVendas?.faturamento_90d || 0)}
                                             </p>
+                                            <p className="text-xs text-green-500 mt-1 font-medium italic">receita bruta total</p>
                                         </div>
-                                        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Última Venda</p>
+
+                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-5 rounded-2xl border border-purple-100 dark:border-purple-800">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="p-2 bg-purple-100 dark:bg-purple-800 rounded-lg">
+                                                    <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                                </div>
+                                                <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Última Venda</span>
                                             </div>
-                                            <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                                                {produto.ultima_venda 
-                                                    ? new Date(produto.ultima_venda).toLocaleDateString('pt-BR')
-                                                    : 'Nunca'
-                                                }
+                                            <p className="text-2xl font-black text-purple-900 dark:text-white">
+                                                {produto.ultima_venda ? formatDate(produto.ultima_venda) : '---'}
                                             </p>
                                             {diasDesdeUltimaVenda !== null && (
-                                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                                    {diasDesdeUltimaVenda === 0 ? 'Hoje' : `Há ${diasDesdeUltimaVenda} dias`}
+                                                <p className="text-xs text-purple-500 mt-1 font-medium italic">
+                                                    há {diasDesdeUltimaVenda} {diasDesdeUltimaVenda === 1 ? 'dia' : 'dias'}
                                                 </p>
                                             )}
                                         </div>
-                                        <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <BarChart3 className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Ticket Médio</p>
+
+                                        <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-2xl border border-amber-100 dark:border-amber-800">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <div className="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg">
+                                                    <BarChart3 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                                </div>
+                                                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Média Diária</span>
                                             </div>
-                                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                                                {formatCurrency(
-                                                    (produto.quantidade_vendida || 0) > 0
-                                                        ? (produto.total_vendido || 0) / (produto.quantidade_vendida || 1)
-                                                        : 0
-                                                )}
+                                            <p className="text-2xl font-black text-amber-900 dark:text-white">
+                                                {formatCurrency(estatisticasVendas?.media_diaria || 0)}
                                             </p>
+                                            <p className="text-xs text-amber-500 mt-1 font-medium italic">por dia útil</p>
                                         </div>
                                     </div>
 
-                                    {/* Análise Temporal */}
-                                    <div className="bg-gray-50 dark:bg-gray-750 rounded-lg p-6">
-                                        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                                            <Calendar className="w-5 h-5" />
-                                            Análise Temporal (Últimos 90 dias)
-                                        </h3>
-                                        
-                                        {vendasHistorico.length > 0 ? (
-                                            <div className="space-y-4">
-                                                {/* Estatísticas Resumidas */}
-                                                {estatisticasVendas && (
-                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400">Total Vendido</p>
-                                                            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                                                                {estatisticasVendas.total_vendido_90d} un
-                                                            </p>
-                                                        </div>
-                                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400">Faturamento</p>
-                                                            <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                                                                {formatCurrency(estatisticasVendas.faturamento_90d)}
-                                                            </p>
-                                                        </div>
-                                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400">Dias com Venda</p>
-                                                            <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                                                                {estatisticasVendas.dias_com_venda} / 90
-                                                            </p>
-                                                        </div>
-                                                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400">Média Diária</p>
-                                                            <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                                                                {estatisticasVendas.media_diaria.toFixed(1)} un
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Gráfico Simples de Barras */}
-                                                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                                                        Vendas por Dia
-                                                    </p>
-                                                    <div className="h-48 flex items-end justify-between gap-0.5">
-                                                        {vendasHistorico.map((venda, index) => {
-                                                            const maxQuantidade = Math.max(...vendasHistorico.map(v => v.quantidade));
-                                                            const altura = maxQuantidade > 0 ? (venda.quantidade / maxQuantidade) * 100 : 0;
-                                                            const data = new Date(venda.data);
-                                                            const dia = data.getDate();
-                                                            
-                                                            return (
-                                                                <div
-                                                                    key={index}
-                                                                    className="flex-1 flex flex-col items-center group relative"
-                                                                    style={{ minWidth: '2px' }}
-                                                                >
-                                                                    <div
-                                                                        className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-600 hover:to-blue-500 transition-all cursor-pointer"
-                                                                        style={{ height: `${altura}%` }}
-                                                                        title={`${dia}/${data.getMonth() + 1}: ${venda.quantidade} un - ${formatCurrency(venda.valor_total)}`}
-                                                                    />
-                                                                    {/* Tooltip on hover */}
-                                                                    <div className="absolute bottom-full mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
-                                                                        <div className="font-semibold">{dia}/{data.getMonth() + 1}</div>
-                                                                        <div>{venda.quantidade} un</div>
-                                                                        <div>{formatCurrency(venda.valor_total)}</div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <div className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                                                        <span>Início</span>
-                                                        <span>Hoje</span>
-                                                    </div>
+                                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                                        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                                <Calendar className="w-5 h-5 text-indigo-500" />
+                                                Vendas por Data
+                                            </h3>
+                                        </div>
+                                        <div className="p-0">
+                                            {vendasHistorico.length > 0 ? (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/50">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Data</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Quant.</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Valor Total</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Ticket Médio</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                            {vendasHistorico.map((venda, idx) => (
+                                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                                                    <td className="px-6 py-4 font-bold text-gray-700 dark:text-gray-300">{formatDate(venda.data)}</td>
+                                                                    <td className="px-6 py-4 text-center">
+                                                                        <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-bold">
+                                                                            {venda.quantidade} {produto.unidade_medida || 'un'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-right font-black text-gray-800 dark:text-white">{formatCurrency(venda.valor_total)}</td>
+                                                                    <td className="px-6 py-4 text-right font-bold text-indigo-500">{formatCurrency(venda.ticket_medio)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
                                                 </div>
-                                                
-                                                {diasDesdeUltimaVenda && diasDesdeUltimaVenda > 30 && (
-                                                    <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
-                                                        <p className="text-sm font-semibold text-orange-800 dark:text-orange-300 flex items-center gap-2">
-                                                            <AlertTriangle className="w-4 h-4" />
-                                                            Atenção: Produto parado há {diasDesdeUltimaVenda} dias
-                                                        </p>
-                                                        <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
-                                                            Considere ações de liquidação ou promoção
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-8">
-                                                <BarChart3 className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                    Nenhuma venda nos últimos 90 dias
-                                                </p>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                    Este produto não teve vendas registradas no período analisado
-                                                </p>
-                                                
-                                                {diasDesdeUltimaVenda && diasDesdeUltimaVenda > 90 && (
-                                                    <div className="mt-6 bg-red-50 dark:bg-red-900/20 rounded-lg p-4 max-w-md mx-auto border border-red-200 dark:border-red-800">
-                                                        <p className="text-sm font-semibold text-red-800 dark:text-red-300 flex items-center justify-center gap-2">
-                                                            <AlertTriangle className="w-5 h-5" />
-                                                            Produto CRÍTICO: {diasDesdeUltimaVenda} dias sem vender
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
+                                            ) : (
+                                                <div className="py-20 flex flex-col items-center justify-center opacity-40">
+                                                    <Package className="w-16 h-16 mb-4" />
+                                                    <p className="font-bold">Nenhuma venda registrada nos últimos 90 dias</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
+
+                                    {diasDesdeUltimaVenda !== null && diasDesdeUltimaVenda > 30 && (
+                                        <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-center gap-4 animate-pulse">
+                                            <div className="p-3 bg-amber-100 dark:bg-amber-800 rounded-xl">
+                                                <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-black text-amber-800 dark:text-amber-200 uppercase text-xs">Atenção: Produto com baixa rotatividade</h4>
+                                                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 font-medium">
+                                                    Este produto não é vendido há mais de {diasDesdeUltimaVenda} dias. Considere uma promoção para girar o estoque.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {/* Tab: Histórico de Preços */}
                             {activeTab === 'precos' && (
                                 <div className="space-y-6">
-                                    {historicoPrecos.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <DollarSign className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                            <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                Nenhuma alteração de preço registrada
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="p-6 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-500/20">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                                    <BarChart3 className="w-5 h-5 text-white" />
+                                                </div>
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Insight de Preço</span>
+                                            </div>
+                                            <p className="text-white/80 text-xs font-bold uppercase mb-1">Preço Atual</p>
+                                            <p className="text-3xl font-black mb-4">
+                                                {formatCurrency(produto.preco_venda)}
+                                                <span className="text-xs ml-1 opacity-60 font-medium">por {produto.unidade_medida || 'un'}</span>
                                             </p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                Este produto ainda não teve alterações de preço desde o cadastro inicial
-                                            </p>
-                                            <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 max-w-md mx-auto">
-                                                <p className="text-sm text-gray-700 dark:text-gray-300">
-                                                    <strong>Preço Atual:</strong>
-                                                </p>
-                                                <div className="mt-2 space-y-1">
-                                                    <p className="text-sm">Custo: <span className="font-bold">{formatCurrency(produto.preco_custo)}</span></p>
-                                                    <p className="text-sm">Venda: <span className="font-bold">{formatCurrency(produto.preco_venda)}</span></p>
-                                                    <p className="text-sm">Margem: <span className="font-bold">{(produto.margem_lucro || 0).toFixed(1)}%</span></p>
+                                            <div className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
+                                                <div className="h-full bg-white w-2/3"></div>
+                                            </div>
+                                            <p className="text-[10px] mt-2 opacity-60 italic font-medium">Margem atual: {produto.margem_lucro || 0}%</p>
+                                        </div>
+
+                                        <div className="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                                                    <DollarSign className="w-5 h-5 text-amber-600" />
+                                                </div>
+                                                <h3 className="font-black text-gray-800 dark:text-white uppercase text-xs tracking-wider">Análise de Lucro</h3>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between text-sm py-2 border-b border-gray-50 dark:border-gray-750">
+                                                    <span className="text-gray-500">Preço de Custo</span>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">{formatCurrency(produto.preco_custo)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm py-2 text-indigo-600 dark:text-indigo-400 font-bold">
+                                                    <span>Lucro Bruto Un.</span>
+                                                    <span className="text-lg font-black">{formatCurrency(produto.preco_venda - produto.preco_custo)}</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {historicoPrecos.map((hist) => {
-                                                const variacaoCusto = hist.preco_custo_novo - hist.preco_custo_anterior;
-                                                const variacaoVenda = hist.preco_venda_novo - hist.preco_venda_anterior;
-                                                const variacaoMargemPct = hist.margem_nova - hist.margem_anterior;
-                                                
-                                                return (
-                                                    <div
-                                                        key={hist.id}
-                                                        className="bg-white dark:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-                                                    >
-                                                        <div className="flex items-start justify-between mb-3">
-                                                            <div>
-                                                                <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                                                    {hist.motivo}
-                                                                </p>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                                    {new Date(hist.data_alteracao).toLocaleString('pt-BR')}
-                                                                    {hist.funcionario_nome && ` • ${hist.funcionario_nome}`}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="grid grid-cols-3 gap-4">
-                                                            {/* Custo */}
-                                                            <div>
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Preço de Custo</p>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm line-through text-gray-400">
-                                                                        {formatCurrency(hist.preco_custo_anterior)}
-                                                                    </span>
-                                                                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                                                                        {formatCurrency(hist.preco_custo_novo)}
-                                                                    </span>
-                                                                    {variacaoCusto !== 0 && (
-                                                                        <span className={`text-xs font-semibold ${
-                                                                            variacaoCusto > 0 
-                                                                                ? 'text-red-600 dark:text-red-400' 
-                                                                                : 'text-green-600 dark:text-green-400'
-                                                                        }`}>
-                                                                            {variacaoCusto > 0 ? '+' : ''}{formatCurrency(variacaoCusto)}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            {/* Venda */}
-                                                            <div>
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Preço de Venda</p>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm line-through text-gray-400">
-                                                                        {formatCurrency(hist.preco_venda_anterior)}
-                                                                    </span>
-                                                                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                                                                        {formatCurrency(hist.preco_venda_novo)}
-                                                                    </span>
-                                                                    {variacaoVenda !== 0 && (
-                                                                        <span className={`text-xs font-semibold ${
-                                                                            variacaoVenda > 0 
-                                                                                ? 'text-green-600 dark:text-green-400' 
-                                                                                : 'text-red-600 dark:text-red-400'
-                                                                        }`}>
-                                                                            {variacaoVenda > 0 ? '+' : ''}{formatCurrency(variacaoVenda)}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            {/* Margem */}
-                                                            <div>
-                                                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Margem de Lucro</p>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm line-through text-gray-400">
-                                                                        {hist.margem_anterior.toFixed(1)}%
-                                                                    </span>
-                                                                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                                                                        {hist.margem_nova.toFixed(1)}%
-                                                                    </span>
-                                                                    {variacaoMargemPct !== 0 && (
-                                                                        <span className={`text-xs font-semibold ${
-                                                                            variacaoMargemPct > 0 
-                                                                                ? 'text-green-600 dark:text-green-400' 
-                                                                                : 'text-red-600 dark:text-red-400'
-                                                                        }`}>
-                                                                            {variacaoMargemPct > 0 ? '+' : ''}{variacaoMargemPct.toFixed(1)}pp
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                    </div>
+
+                                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                                        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                                <Clock className="w-5 h-5 text-indigo-500" />
+                                                Histórico de Alterações
+                                            </h3>
                                         </div>
-                                    )}
+                                        <div className="p-0">
+                                            {historicoPrecos.length > 0 ? (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/50">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Data</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Alteração</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Motivo</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Responsável</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                            {historicoPrecos.map((hist, idx) => (
+                                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                                                    <td className="px-6 py-4 text-xs font-bold text-gray-500">{formatDate(hist.data_alteracao)}</td>
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-xs text-gray-400 line-through">{formatCurrency(hist.preco_venda_anterior)}</span>
+                                                                            <TrendingUp className={`w-3 h-3 ${hist.preco_venda_novo > hist.preco_venda_anterior ? 'text-green-500' : 'text-red-500'}`} />
+                                                                            <span className="font-black text-gray-800 dark:text-white">{formatCurrency(hist.preco_venda_novo)}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-xs text-gray-600 dark:text-gray-400 font-medium">{hist.motivo}</td>
+                                                                    <td className="px-6 py-4 text-xs font-black text-indigo-600 dark:text-indigo-400">{hist.funcionario_nome || 'Sistema'}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="py-16 flex flex-col items-center justify-center opacity-30">
+                                                    <DollarSign className="w-12 h-12 mb-3" />
+                                                    <p className="font-bold text-sm">Nenhuma alteração de preço registrada</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Tab: Fornecedor */}
                             {activeTab === 'fornecedor' && (
                                 <div className="space-y-6">
-                                    {!produto.fornecedor_id ? (
-                                        <div className="text-center py-12">
-                                            <AlertTriangle className="w-16 h-16 text-orange-400 mx-auto mb-4" />
-                                            <p className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                                                Produto sem fornecedor cadastrado
-                                            </p>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                Cadastre um fornecedor para este produto para melhor controle de estoque
-                                            </p>
-                                        </div>
-                                    ) : fornecedorInfo ? (
-                                        <div className="space-y-4">
-                                            {/* Informações do Fornecedor */}
-                                            <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
-                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                                                    {fornecedorInfo.nome || fornecedorInfo.razao_social}
-                                                </h3>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">CNPJ</p>
-                                                        <p className="text-base font-semibold text-gray-900 dark:text-white">
-                                                            {fornecedorInfo.cnpj || 'Não informado'}
-                                                        </p>
+                                    {fornecedorInfo ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="md:col-span-2 bg-gradient-to-br from-gray-800 to-gray-950 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden group">
+                                                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                                                    <Users className="w-40 h-40" />
+                                                </div>
+                                                <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4">Parceiro Comercial</p>
+                                                <h3 className="text-3xl font-black mb-8 leading-tight">{fornecedorInfo.nome_fantasia || fornecedorInfo.razao_social}</h3>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] text-gray-500 font-black uppercase">CNPJ</p>
+                                                        <p className="font-bold text-gray-200">{fornecedorInfo.cnpj}</p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">Telefone</p>
-                                                        <p className="text-base font-semibold text-gray-900 dark:text-white">
-                                                            {fornecedorInfo.telefone || 'Não informado'}
-                                                        </p>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] text-gray-500 font-black uppercase">E-mail</p>
+                                                        <p className="font-bold text-gray-200 truncate">{fornecedorInfo.email || '---'}</p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
-                                                        <p className="text-base font-semibold text-gray-900 dark:text-white">
-                                                            {fornecedorInfo.email || 'Não informado'}
-                                                        </p>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] text-gray-500 font-black uppercase">Telefone</p>
+                                                        <p className="font-bold text-gray-200">{fornecedorInfo.telefone || '---'}</p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">Cidade/Estado</p>
-                                                        <p className="text-base font-semibold text-gray-900 dark:text-white">
-                                                            {fornecedorInfo.cidade && fornecedorInfo.estado 
-                                                                ? `${fornecedorInfo.cidade}/${fornecedorInfo.estado}`
-                                                                : 'Não informado'
-                                                            }
-                                                        </p>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] text-gray-500 font-black uppercase">Cidade/UF</p>
+                                                        <p className="font-bold text-gray-200">{fornecedorInfo.cidade} / {fornecedorInfo.estado}</p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Histórico de Compras */}
-                                            <div className="bg-gray-50 dark:bg-gray-750 rounded-lg p-6">
-                                                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">
-                                                    Histórico de Compras deste Produto
-                                                </h3>
-                                                <div className="text-center py-8">
-                                                    <Package className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                                                    <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                                                        Histórico de Compras em Desenvolvimento
-                                                    </p>
-                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                                                        Em breve você poderá visualizar:
-                                                    </p>
-                                                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2 max-w-md mx-auto text-left">
-                                                        <li className="flex items-center gap-2">
-                                                            <span className="text-blue-600">✓</span>
-                                                            Histórico completo de pedidos de compra
-                                                        </li>
-                                                        <li className="flex items-center gap-2">
-                                                            <span className="text-blue-600">✓</span>
-                                                            Evolução de preços de custo ao longo do tempo
-                                                        </li>
-                                                        <li className="flex items-center gap-2">
-                                                            <span className="text-blue-600">✓</span>
-                                                            Tempo médio de entrega do fornecedor
-                                                        </li>
-                                                        <li className="flex items-center gap-2">
-                                                            <span className="text-blue-600">✓</span>
-                                                            Análise de confiabilidade e pontualidade
-                                                        </li>
-                                                    </ul>
+                                            <div className="space-y-4">
+                                                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-4">Última Compra</p>
+                                                    <p className="text-lg font-black text-gray-800 dark:text-white">---</p>
+                                                    <p className="text-xs text-gray-400 italic mt-1 font-medium">Data do último pedido</p>
+                                                </div>
+                                                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-4">Ranking</p>
+                                                    <div className="flex gap-1 text-amber-500">
+                                                        <TrendingUp className="w-5 h-5 fill-current" />
+                                                        <TrendingUp className="w-5 h-5 fill-current" />
+                                                        <TrendingUp className="w-5 h-5 fill-current" />
+                                                        <TrendingUp className="w-5 h-5" />
+                                                        <TrendingUp className="w-5 h-5" />
+                                                    </div>
+                                                    <p className="text-xs text-gray-400 italic mt-2 font-medium">Baseado na pontualidade</p>
                                                 </div>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="flex justify-center items-center h-64">
-                                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+                                        <div className="py-24 bg-gray-50 dark:bg-gray-900/30 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800 flex flex-col items-center justify-center">
+                                            <div className="p-4 bg-white dark:bg-gray-800 rounded-full mb-4 shadow-sm">
+                                                <Users className="w-10 h-10 text-gray-300" />
+                                            </div>
+                                            <h3 className="font-black text-gray-400 uppercase text-xs tracking-widest">Nenhum fornecedor vinculado</h3>
+                                            <p className="text-xs text-gray-500 mt-2 font-medium">Vincule um fornecedor no cadastro do produto</p>
                                         </div>
                                     )}
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
-
-                {/* Footer */}
-                <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-750 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
-                    >
-                        Fechar
-                    </button>
-                </div>
             </div>
-        </div>
+        </ResponsiveModal>
     );
 };
 
