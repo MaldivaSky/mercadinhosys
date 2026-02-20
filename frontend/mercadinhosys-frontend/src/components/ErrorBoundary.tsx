@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 
 interface Props {
@@ -56,7 +56,7 @@ class ErrorBoundary extends Component<Props, State> {
               <RefreshCw size={20} />
               Recarregar Módulo
             </button>
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <div className="mt-8 p-4 bg-gray-100 dark:bg-black/50 rounded-lg text-left overflow-auto max-h-40">
                 <code className="text-xs text-red-500 font-mono">
                   {this.state.error.toString()}
