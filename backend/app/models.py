@@ -82,14 +82,28 @@ class Estabelecimento(db.Model, EnderecoMixin):
     )
 
     def to_dict(self):
-        # Versão otimizada e blindada
+        # Versão otimizada e blindada com endereço completo
         vencimento = getattr(self, "vencimento_assinatura", None)
         return {
             "id": self.id,
             "nome_fantasia": self.nome_fantasia,
+            "razao_social": self.razao_social,
             "cnpj": self.cnpj,
             "telefone": self.telefone,
             "email": self.email,
+            "razao_social": getattr(self, "razao_social", ""),
+            "inscricao_estadual": getattr(self, "inscricao_estadual", ""),
+            
+            # Dados de Endereço Individuais (Essencial para o Frontend)
+            "cep": self.cep,
+            "logradouro": self.logradouro,
+            "numero": self.numero,
+            "complemento": self.complemento,
+            "bairro": self.bairro,
+            "cidade": self.cidade,
+            "estado": self.estado,
+            "pais": self.pais,
+            
             "endereco_completo": self.endereco_completo(),
             "ativo": self.ativo,
             "plano": getattr(self, "plano", "Basic"),

@@ -19,11 +19,10 @@ const App: React.FC = () => {
             <Toaster
               position="top-right"
               reverseOrder={false}
-              gutter={10}
-              containerStyle={{ zIndex: 99999, top: '16px', right: '16px' }}
+              gutter={12}
+              containerStyle={{ zIndex: 99999, top: '24px', right: '24px' }}
               toastOptions={{
-                duration: 4000,
-                // Sem style global — cada toast define o seu próprio
+                duration: 3500,
               }}
             />
           </Router>

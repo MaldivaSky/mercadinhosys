@@ -20,12 +20,12 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                 setResultados([]);
                 return;
             }
-            
+
             setLoading(true);
             try {
                 const clientes = await pdvService.buscarClientes(query);
                 console.log('👥 Clientes encontrados:', clientes.length, clientes);
-                
+
                 if (Array.isArray(clientes)) {
                     setResultados(clientes.slice(0, 10));
                 } else {
@@ -34,12 +34,12 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                 }
             } catch (error: any) {
                 console.error('❌ Erro ao buscar clientes:', error);
-                
+
                 // Não mostrar erro se for problema de rede (servidor offline)
                 if (error.code !== 'ERR_NETWORK') {
                     console.warn('Busca de clientes indisponível:', error.message);
                 }
-                
+
                 setResultados([]);
             } finally {
                 setLoading(false);
@@ -101,8 +101,8 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
             )}
 
             {mostrarBusca && !cliente && (
-                <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
-                    <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="absolute z-[110] w-[calc(100%+2rem)] -left-4 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
                         <div className="relative">
                             <input
                                 id="cliente-search-input"
@@ -127,18 +127,18 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                                 <div
                                     key={cliente.id}
                                     onClick={() => handleClienteClick(cliente)}
-                                    className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                                    className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer border-b border-slate-50 dark:border-slate-800/50 last:border-b-0 transition-colors"
                                 >
                                     <div className="flex items-center space-x-3">
                                         <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                                             <User className="w-4 h-4 text-blue-500" />
                                         </div>
                                         <div className="flex-1">
-                                            <h4 className="font-medium text-gray-800 dark:text-white">
+                                            <h4 className="font-bold text-slate-800 dark:text-white text-sm uppercase">
                                                 {cliente.nome}
                                             </h4>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                {cliente.cpf || 'N/A'} • {cliente.telefone || cliente.celular || 'N/A'}
+                                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                                {cliente.cpf || 'CPF não informado'} • {cliente.telefone || cliente.celular || 'Sem contato'}
                                             </p>
                                         </div>
                                         <div className="text-right">

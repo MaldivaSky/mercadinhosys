@@ -136,7 +136,12 @@ const SettingsPage: React.FC = () => {
                 updateGlobalConfig(config),
                 settingsService.updateEstabelecimento(estab)
             ]);
+
+            // Sincronização Absoluta: Atualiza o localStorage para garantir que o resto do app veja a mudança
+            localStorage.setItem('estabelecimento_data', JSON.stringify(updatedEstab));
+
             setEstab(updatedEstab);
+            toast.success("Configurações salvas com sucesso!");
         } catch (error) {
             console.error("Erro ao salvar:", error);
             toast.error("Erro ao salvar alterações.");
@@ -429,14 +434,27 @@ const SettingsPage: React.FC = () => {
                             <SectionTitle title="Endereço" icon={MapPin} />
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
-                                    <div className="relative">
-                                        <InputField label="CEP" onBlur={handleCepBlur} placeholder="00000-000" value={estab.cep} onChange={(e) => setEstab({ ...estab, cep: formatCep(e.target.value) })} />
-                                        {loadingCep && (
-                                            <div className="absolute right-3 top-9 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                                                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                                Buscando...
-                                            </div>
-                                        )}
+                                    <div className="flex flex-col space-y-1">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">CEP</label>
+                                        <div className="relative flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="00000-000"
+                                                value={estab.cep}
+                                                onChange={(e) => setEstab({ ...estab, cep: formatCep(e.target.value) })}
+                                                onBlur={handleCepBlur}
+                                                className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white transition-colors"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleCepBlur}
+                                                disabled={loadingCep || !estab.cep || estab.cep.replace(/\D/g, '').length !== 8}
+                                                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm text-sm font-medium whitespace-nowrap flex items-center gap-1"
+                                            >
+                                                {loadingCep ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <ShoppingCart className="w-4 h-4 rotate-90" />}
+                                                Buscar
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="md:col-span-2">
@@ -446,7 +464,7 @@ const SettingsPage: React.FC = () => {
                                 <InputField label="Complemento" value={estab.complemento || ''} onChange={(e) => setEstab({ ...estab, complemento: e.target.value })} placeholder="Sala, Loja, etc." />
                                 <InputField label="Bairro" value={estab.bairro} onChange={(e) => setEstab({ ...estab, bairro: e.target.value })} placeholder="Preenchido pelo CEP" />
                                 <InputField label="Cidade" value={estab.cidade} onChange={(e) => setEstab({ ...estab, cidade: e.target.value })} placeholder="Preenchido pelo CEP" />
-                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({ ...estab, estado: e.target.value.toUpperCase().slice(0, 2) })} placeholder="UF" />
+                                <InputField label="Estado (UF)" value={estab.estado} onChange={(e) => setEstab({ ...estab, estado: e.target.value.toUpperCase() })} placeholder="UF ou Estado" />
                             </div>
                         </div>
                     )}

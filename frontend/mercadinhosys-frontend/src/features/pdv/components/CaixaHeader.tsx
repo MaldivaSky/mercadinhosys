@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, TrendingUp, DollarSign, ShoppingBag, Clock } from 'lucide-react';
-import { pdvService } from '../pdvService';
-import { formatCurrency } from '../../../utils/formatters';
+import { User, Clock } from 'lucide-react';
 
 interface CaixaHeaderProps {
     funcionarioNome?: string;
@@ -10,8 +8,7 @@ interface CaixaHeaderProps {
     refreshKey?: number | string;
 }
 
-const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioRole, refreshKey }) => {
-    const [stats, setStats] = useState<any>(null);
+const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioRole }) => {
     const [horaAtual, setHoraAtual] = useState(new Date());
 
     // Atualizar relógio a cada segundo
@@ -23,26 +20,6 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
         return () => clearInterval(interval);
     }, []);
 
-    // Carregar estatísticas do dia (e quando refreshKey muda, ex: após venda)
-    useEffect(() => {
-        const carregarStats = async () => {
-            try {
-                const data = await pdvService.getEstatisticasRapidas();
-                setStats(data);
-            } catch (error: any) {
-                console.error('❌ Erro ao carregar estatísticas:', error);
-                if (error.code !== 'ERR_NETWORK') {
-                    console.warn('Estatísticas indisponíveis:', error.message);
-                }
-            }
-        };
-
-        carregarStats();
-
-        // Atualizar a cada 30 segundos
-        const interval = setInterval(carregarStats, 30000);
-        return () => clearInterval(interval);
-    }, [refreshKey]);
 
     const formatarHora = (data: Date) => {
         return data.toLocaleTimeString('pt-BR', {
@@ -96,52 +73,7 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                 </div>
             </div>
 
-            {/* Estatísticas do Dia */}
-            {stats && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mt-6">
-                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-lg group hover:bg-white/15 transition-all">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Vendas Hoje</p>
-                                <p className="text-2xl lg:text-3xl font-black mt-1">
-                                    {stats.total_vendas || 0}
-                                </p>
-                            </div>
-                            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
-                                <ShoppingBag className="w-6 h-6 text-white" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-lg group hover:bg-white/15 transition-all">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Faturamento</p>
-                                <p className="text-2xl lg:text-3xl font-black mt-1">
-                                    {formatCurrency(stats.faturamento || 0)}
-                                </p>
-                            </div>
-                            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
-                                <DollarSign className="w-6 h-6 text-white" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-lg group hover:bg-white/15 transition-all">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-blue-100 text-xs font-bold uppercase tracking-wider">Ticket Médio</p>
-                                <p className="text-2xl lg:text-3xl font-black mt-1">
-                                    {formatCurrency(stats.ticket_medio || 0)}
-                                </p>
-                            </div>
-                            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
-                                <TrendingUp className="w-6 h-6 text-white" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Cabeçalho Limpo: Somente Identificação e Relógio */}
         </div>
     );
 };

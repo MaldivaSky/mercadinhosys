@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Barcode, Package, Camera, AlertCircle } from 'lucide-react';
+import { Search, Package, Barcode, Camera, AlertCircle } from 'lucide-react';
 import { Produto } from '../../../types';
 import { pdvService } from '../pdvService';
+import { useConfig } from '../../../contexts/ConfigContext';
 import BarcodeScanner from './BarcodeScanner';
 
 interface ProdutoSearchProps {
@@ -15,6 +16,14 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const [erro, setErro] = useState<string | null>(null);
     const [scannerAberto, setScannerAberto] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const { config } = useConfig();
+
+    // Configurações de Elite
+    const estoqueMinimo = config?.estoque_minimo_padrao ?? 10;
+    const mostrarValidade = config?.controlar_validade ?? true;
+    const mostrarAlertaEstoque = config?.alerta_estoque_minimo ?? true;
+    const diasAlertaValidade = config?.dias_alerta_validade ?? 30;
 
     useEffect(() => {
         if (!query.trim()) {
@@ -73,7 +82,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
         setQuery(codigo);
     };
 
-    // Handler para click em produto da lista — sem validação extra (produto já é válido e tem estoque)
+    // Handler para click em produto da lista
     const handleProdutoClick = (produto: Produto) => {
         setErro(null);
         onProdutoSelecionado(produto);
@@ -167,14 +176,54 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                         R$ {((produto as { preco_venda_efetivo?: number }).preco_venda_efetivo ?? produto.preco_venda ?? 0).toFixed(2)}
                                     </p>
                                     <div className="flex items-center justify-end space-x-2 mt-1">
-                                        <span className={`text-xs px-2 py-0.5 rounded ${(produto.quantidade_estoque || 0) > 10
-                                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                            : (produto.quantidade_estoque || 0) > 0
-                                                ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                                : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                            }`}>
-                                            Estoque: {produto.quantidade_estoque || 0}
-                                        </span>
+                                        {mostrarAlertaEstoque && (
+                                            <span className={`text-xs px-2 py-0.5 rounded ${(produto.quantidade_estoque || 0) > estoqueMinimo
+                                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                                                : (produto.quantidade_estoque || 0) > 0
+                                                    ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
+                                                    : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                                }`}>
+                                                Estoque: {produto.quantidade_estoque || 0}
+                                            </span>
+                                        )}
+                                        {mostrarValidade && produto.data_validade && (() => {
+                                            // Parse robusto: suporta YYYY-MM-DD e DD/MM/YYYY
+                                            let y, m, d;
+                                            if (produto.data_validade.includes('-')) {
+                                                [y, m, d] = produto.data_validade.split('-').map(Number);
+                                            } else {
+                                                [d, m, y] = produto.data_validade.split('/').map(Number);
+                                            }
+
+                                            const dataVal = new Date(y, m - 1, d);
+                                            const hoje = new Date();
+                                            hoje.setHours(0, 0, 0, 0);
+
+                                            const dateLimite = new Date(hoje);
+                                            dateLimite.setDate(hoje.getDate() + diasAlertaValidade);
+
+                                            if (dataVal < hoje) {
+                                                return (
+                                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-red-500 text-white animate-pulse">
+                                                        Vencido
+                                                    </span>
+                                                );
+                                            } else if (dataVal <= dateLimite) {
+                                                const diffTime = dataVal.getTime() - hoje.getTime();
+                                                const dias = Math.round(diffTime / (1000 * 3600 * 24));
+                                                return (
+                                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500 text-white" title={`Vence em ${dias} dias`}>
+                                                        Vence Logo
+                                                    </span>
+                                                );
+                                            } else {
+                                                return (
+                                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-green-100 text-green-700">
+                                                        Validade OK
+                                                    </span>
+                                                );
+                                            }
+                                        })()}
                                     </div>
                                 </div>
                             </div>

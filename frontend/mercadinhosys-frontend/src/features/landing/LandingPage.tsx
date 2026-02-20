@@ -141,11 +141,13 @@ const LandingPage: React.FC = () => {
 
             const result = await response.json();
 
-            if (response.ok && result.access_token) {
-                // Salvar credenciais no localStorage
-                localStorage.setItem('token', result.access_token);
-                localStorage.setItem('refresh_token', result.refresh_token);
-                localStorage.setItem('user', JSON.stringify(result.user));
+            if (response.ok && result.success && result.data) {
+                const { access_token, refresh_token, user, estabelecimento } = result.data;
+                localStorage.setItem('access_token', access_token);
+                if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
+                localStorage.setItem('user_data', JSON.stringify(user));
+                localStorage.setItem('estabelecimento_data', JSON.stringify(estabelecimento));
+                window.dispatchEvent(new Event('auth-change'));
 
                 toast.dismiss();
                 toast.success('Entrando como Convidado Específicio...', { icon: '✨' });

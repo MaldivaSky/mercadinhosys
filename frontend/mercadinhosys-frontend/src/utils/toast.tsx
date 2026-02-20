@@ -8,34 +8,35 @@ import toast, { ToastOptions } from 'react-hot-toast';
  */
 
 const glassBase: React.CSSProperties = {
-    padding: '12px 20px',
-    borderRadius: '14px',
+    padding: '16px 24px',
+    borderRadius: '24px',
     fontFamily: '"Outfit", "Inter", system-ui, sans-serif',
-    fontSize: '14px',
-    fontWeight: 600,
+    fontSize: '15px',
+    fontWeight: 700,
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    backdropFilter: 'blur(12px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+    gap: '14px',
+    backdropFilter: 'blur(20px) saturate(160%)',
+    WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05)',
     color: '#ffffff',
+    letterSpacing: '-0.3px',
 };
 
 const themes = {
     success: {
         style: {
             ...glassBase,
-            background: 'rgba(22, 101, 52, 0.7)',
-            borderColor: 'rgba(74, 222, 128, 0.2)',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.15) 100%)',
+            borderColor: 'rgba(52, 211, 153, 0.2)',
         },
-        iconColor: '#4ade80',
+        iconColor: '#34d399',
     },
     error: {
         style: {
             ...glassBase,
-            background: 'rgba(127, 29, 29, 0.7)',
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.15) 100%)',
             borderColor: 'rgba(248, 113, 113, 0.2)',
         },
         iconColor: '#f87171',
@@ -43,7 +44,7 @@ const themes = {
     warning: {
         style: {
             ...glassBase,
-            background: 'rgba(120, 53, 15, 0.7)',
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.15) 100%)',
             borderColor: 'rgba(251, 191, 36, 0.2)',
         },
         iconColor: '#fbbf24',
@@ -51,7 +52,7 @@ const themes = {
     info: {
         style: {
             ...glassBase,
-            background: 'rgba(30, 58, 138, 0.7)',
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.15) 100%)',
             borderColor: 'rgba(96, 165, 250, 0.2)',
         },
         iconColor: '#60a5fa',

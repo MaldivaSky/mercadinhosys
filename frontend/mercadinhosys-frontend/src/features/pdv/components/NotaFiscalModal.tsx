@@ -118,28 +118,28 @@ const NotaFiscalModal = ({
                     <button
                         onClick={onImprimir}
                         disabled={enviando}
-                        className="p-4 bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl flex items-center gap-3 hover:border-blue-500 hover:bg-blue-50/30 transition-all group"
+                        className="p-4 bg-white dark:bg-gray-800 border-2 border-slate-100 dark:border-slate-800 rounded-2xl flex items-center gap-3 hover:border-red-500 hover:bg-red-50/30 transition-all group"
                     >
-                        <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                            <Printer className="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:text-white" />
+                        <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl group-hover:bg-red-600 group-hover:text-white transition-colors">
+                            <Printer className="w-6 h-6 text-red-600 dark:text-red-400 group-hover:text-white" />
                         </div>
                         <div className="text-left">
-                            <p className="font-black text-gray-800 dark:text-white text-sm">Imprimir Ticket</p>
-                            <p className="text-[10px] text-gray-500 font-medium">Impressora Térmica 80mm</p>
+                            <p className="font-black text-slate-800 dark:text-white text-sm">Imprimir Ticket</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Layout Masterclass Elite</p>
                         </div>
                     </button>
 
                     <button
                         onClick={onVisualizar}
                         disabled={enviando}
-                        className="p-4 bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl flex items-center gap-3 hover:border-purple-500 hover:bg-purple-50/30 transition-all group"
+                        className="p-4 bg-white dark:bg-gray-800 border-2 border-slate-100 dark:border-slate-800 rounded-2xl flex items-center gap-3 hover:border-slate-400 hover:bg-slate-50 transition-all group"
                     >
-                        <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                            <Mail className="w-6 h-6 text-purple-600 dark:text-purple-400 group-hover:text-white" />
+                        <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl group-hover:bg-slate-600 group-hover:text-white transition-colors">
+                            <Mail className="w-6 h-6 text-slate-600 dark:text-slate-400 group-hover:text-white" />
                         </div>
                         <div className="text-left">
-                            <p className="font-black text-gray-800 dark:text-white text-sm">Visualizar</p>
-                            <p className="text-[10px] text-gray-500 font-medium">Ver PDF no navegador</p>
+                            <p className="font-black text-slate-800 dark:text-white text-sm">Visualizar</p>
+                            <p className="text-[10px] text-slate-500 font-medium">Digital Masterclass</p>
                         </div>
                     </button>
                 </div>
