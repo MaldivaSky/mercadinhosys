@@ -203,8 +203,24 @@ def calcular_estatisticas_vendas(query):
     valor_recebido = float(stats.valor_recebido or 0)
     ticket_medio = total / quantidade if quantidade > 0 else 0
 
+    # Calcular lucro total juntando com VendaItem
+    # Subquery para pegar as vendas filtradas
+    try:
+        from sqlalchemy import select
+        vendas_base_query = query.with_entities(Venda.id).distinct().subquery()
+        vendas_ids_select = select(vendas_base_query.c.id)
+        
+        lucro_stats = db.session.query(
+            func.sum(VendaItem.margem_lucro_real).label("total_lucro")
+        ).filter(VendaItem.venda_id.in_(vendas_ids_select)).first()
+        total_lucro = float(lucro_stats.total_lucro or 0)
+    except Exception as e:
+        print(f"Erro ao calcular lucro total nas estatísticas: {e}")
+        total_lucro = 0.0
+
     estatisticas = {
-        "total_vendas": total,
+        "total_valor": total,
+        "total_lucro": total_lucro,
         "quantidade_vendas": quantidade,
         "ticket_medio": ticket_medio,
         "total_descontos": descontos,
@@ -371,7 +387,8 @@ def listar_vendas():
 
         # Adicionar estatísticas à resposta
         metadados["estatisticas"] = {
-            "total_vendas": float(estatisticas["total_vendas"]),
+            "total_valor": float(estatisticas["total_valor"]),
+            "total_lucro": float(estatisticas["total_lucro"]),
             "quantidade_vendas": estatisticas["quantidade_vendas"],
             "ticket_medio": float(estatisticas["ticket_medio"]),
             "total_descontos": float(estatisticas["total_descontos"]),

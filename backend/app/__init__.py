@@ -452,6 +452,15 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar pdv: {e}")
 
+    # Caixas
+    try:
+        from app.routes.caixas import caixas_bp
+
+        app.register_blueprint(caixas_bp, url_prefix="/api/caixas")
+        logger.info("✅ Blueprint caixas registrado em /api/caixas")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar caixas: {e}")
+
     # Configuração
     try:
         from app.routes.configuracao import configuracao_bp

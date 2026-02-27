@@ -80,6 +80,7 @@ export interface FinalizarVendaRequest {
     cliente_id?: number;
     email_destino?: string;
     observacoes?: string;
+    data_vencimento_fiado?: string; // YYYY-MM-DD - data prevista de pagamento do fiado
 }
 
 export interface AutorizarGerenteRequest {
@@ -123,6 +124,23 @@ export interface ComprovanteVendaResponse {
         troco: number;
         rodape?: string;
     };
+}
+
+export interface CaixaPDV {
+    id: number;
+    numero_caixa: string;
+    saldo_inicial: number;
+    saldo_atual: number;
+    data_abertura: string;
+    data_fechamento?: string;
+    status: string;
+}
+
+export interface MovimentacaoCaixaRequest {
+    tipo: 'sangria' | 'suprimento';
+    valor: number;
+    descricao: string;
+    forma_pagamento?: string;
 }
 
 export const pdvService = {
@@ -293,7 +311,7 @@ export const pdvService = {
         // Redireciona para o endpoint HTML que renderiza a nota Masterclass
         // O baseURL do apiClient já contém o prefixo /api
         const baseUrl = apiClient.defaults.baseURL || '';
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
 
         // Como o window.open não envia headers customizados facilmente, 
         // passamos o token via query param ou usamos uma rota que o frontend autentica
@@ -335,6 +353,62 @@ export const pdvService = {
      */
     obterComprovante: async (vendaId: number): Promise<ComprovanteVendaResponse> => {
         const response = await apiClient.get<ComprovanteVendaResponse>(`/pdv/comprovante/${vendaId}`);
+        return response.data;
+    },
+
+    // ==================== CAIXAS ====================
+
+    getCaixaAtual: async (): Promise<CaixaPDV | null> => {
+        try {
+            const res = await apiClient.get('/caixas/atual');
+            return res.data?.data || null;
+        } catch (error) {
+            console.error('Erro ao verificar caixa:', error);
+            return null;
+        }
+    },
+
+    getMovimentacoesCaixa: async (): Promise<any[]> => {
+        try {
+            const res = await apiClient.get('/caixas/atual/movimentacoes');
+            return res.data?.data || [];
+        } catch (error) {
+            console.error('Erro ao carregar auditoria do caixa:', error);
+            throw error;
+        }
+    },
+
+    getResumoCaixa: async (): Promise<any> => {
+        try {
+            const res = await apiClient.get('/caixas/atual/resumo');
+            return res.data?.data || null;
+        } catch (error) {
+            console.error('Erro ao carregar resumo do caixa:', error);
+            throw error;
+        }
+    },
+
+    abrirCaixa: async (saldo_inicial: number, observacoes?: string): Promise<CaixaPDV> => {
+        const response = await apiClient.post<any>('/caixas/abrir', { saldo_inicial, observacoes });
+        return response.data.caixa;
+    },
+
+    fecharCaixa: async (valor_informado: number, observacoes?: string): Promise<any> => {
+        const response = await apiClient.post<any>('/caixas/fechar', { valor_informado, observacoes });
+        return response.data;
+    },
+
+    registrarMovimentacao: async (data: MovimentacaoCaixaRequest): Promise<any> => {
+        const response = await apiClient.post<any>('/caixas/movimentacao', data);
+        return response.data;
+    },
+
+    pagarFiado: async (clienteId: number, valor: number, forma_pagamento: string, observacoes?: string): Promise<any> => {
+        const response = await apiClient.post<any>(`/clientes/${clienteId}/pagar_fiado`, {
+            valor,
+            forma_pagamento,
+            observacoes
+        });
         return response.data;
     },
 };

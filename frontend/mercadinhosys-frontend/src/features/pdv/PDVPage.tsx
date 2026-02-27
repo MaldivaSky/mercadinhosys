@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { showToast } from '../../utils/toast';
 import {
     ShoppingCart,
@@ -9,6 +10,7 @@ import {
     User,
     Tag,
     X,
+    Plus,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -20,10 +22,16 @@ import { usePDV } from '../../hooks/usePDV';
 import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
 import PDVSkeleton from './components/PDVSkeleton';
+import CaixaManager from './components/CaixaManager';
 
 const PDVPage: React.FC = () => {
 
     const {
+        sessoes,
+        sessaoAtivaId,
+        adicionarSessao,
+        alternarSessao,
+        removerSessao,
         carrinho,
         cliente,
         setCliente,
@@ -43,6 +51,8 @@ const PDVPage: React.FC = () => {
         aplicarDescontoItem,
         limparCarrinho,
         finalizarVenda,
+        caixaAberto,
+        setCaixaAberto,
     } = usePDV();
 
     const [formaPagamentoAberta, setFormaPagamentoAberta] = useState(false);
@@ -50,6 +60,22 @@ const PDVPage: React.FC = () => {
     const [enviandoEmail, setEnviandoEmail] = useState(false);
     const [mostrarModalNotaFiscal, setMostrarModalNotaFiscal] = useState(false);
     const [vendaFinalizada, setVendaFinalizada] = useState<{ id: number; codigo: string } | null>(null);
+    const [managerCaixaAberto, setManagerCaixaAberto] = useState(false);
+    const [dataVencimentoFiado, setDataVencimentoFiado] = useState('');  // data prevista pagamento do fiado
+
+    const isFiado = formaPagamentoSelecionada === 'fiado';
+
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('manage') === 'true') {
+            setManagerCaixaAberto(true);
+            // Optionally remove the parameter from the URL so it doesn't stay
+            navigate('/pdv', { replace: true });
+        }
+    }, [location.search, navigate]);
 
     const handleFinalizarVenda = async () => {
         if (carrinho.length === 0) return showToast.error('Carrinho vazio');
@@ -59,18 +85,28 @@ const PDVPage: React.FC = () => {
             setFormaPagamentoAberta(true);
             return;
         }
+        // Validação de Fiado: cliente obrigatório
+        if (isFiado && !cliente) {
+            showToast.error('Selecione um cliente cadastrado para vender no Fiado!');
+            setActiveSection('cliente');
+            return;
+        }
 
         try {
-            const venda = await showToast.promise(finalizarVenda(), {
-                loading: 'Finalizando venda...',
-                success: 'Venda concluída com sucesso!',
-                error: (err: any) => err.message || 'Erro ao finalizar venda'
-            });
+            const venda = await showToast.promise(
+                finalizarVenda({ data_vencimento_fiado: isFiado && dataVencimentoFiado ? dataVencimentoFiado : undefined }),
+                {
+                    loading: 'Finalizando venda...',
+                    success: 'Venda concluída com sucesso!',
+                    error: (err: any) => err.message || 'Erro ao finalizar venda'
+                }
+            );
 
             if (venda) {
                 setVendaFinalizada(venda);
                 setFormaPagamentoAberta(false);
                 setMostrarModalNotaFiscal(true);
+                setDataVencimentoFiado('');
             }
         } catch (error) {
             // Erro tratado pelo promise
@@ -98,14 +134,58 @@ const PDVPage: React.FC = () => {
 
     return (
         <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100">
+            <CaixaManager
+                caixaAtual={caixaAberto}
+                setCaixaAtual={setCaixaAberto}
+                isOpen={managerCaixaAberto}
+                onClose={() => setManagerCaixaAberto(false)}
+            />
+
             <CaixaHeader
                 funcionarioNome={configuracoes?.funcionario.nome}
                 funcionarioRole={configuracoes?.funcionario.role}
+                onOpenCaixaManager={() => setManagerCaixaAberto(true)}
             />
 
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden border-t border-slate-200 dark:border-slate-800">
                 {/* 🛒 LISTAGEM DE ITENS (FOCO TOTAL) */}
                 <div className="lg:col-span-9 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+                    {/* 📑 TABS DE SESSÃO */}
+                    <div className="flex items-center gap-1 px-4 pt-3 bg-slate-200/50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 overflow-x-auto custom-scrollbar">
+                        {sessoes.map((sessao: any, index: number) => (
+                            <button
+                                key={sessao.id}
+                                onClick={() => alternarSessao(sessao.id)}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-2xl transition-all ${sessaoAtivaId === sessao.id ? 'bg-white dark:bg-slate-900 shadow-[0_-4px_10px_rgba(0,0,0,0.02)] text-blue-600 dark:text-blue-400 font-black' : 'bg-transparent text-slate-500 hover:bg-slate-300/50 dark:hover:bg-slate-900/50 font-bold'}`}
+                            >
+                                <span className="text-xs uppercase tracking-wider whitespace-nowrap">Cx. {index + 1}</span>
+                                {sessao.carrinho.length > 0 && (
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${sessaoAtivaId === sessao.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30' : 'bg-slate-300/50 text-slate-600 dark:bg-slate-800'}`}>
+                                        {sessao.carrinho.length}
+                                    </span>
+                                )}
+                                {sessoes.length > 1 && (
+                                    <div
+                                        className={`ml-1 rounded-full p-1 transition-colors ${sessaoAtivaId === sessao.id ? 'hover:bg-red-100 hover:text-red-600' : 'hover:bg-slate-300 hover:text-slate-700'}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            removerSessao(sessao.id);
+                                        }}
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                        <button
+                            onClick={adicionarSessao}
+                            className="ml-2 mb-1 p-2 bg-slate-300/50 dark:bg-slate-800 hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white text-slate-500 rounded-xl transition-all shadow-sm"
+                            title="Nova Sessão (Caixa Zerado)"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
                         <ProdutoSearch onProdutoSelecionado={adicionarProduto} />
                     </div>
@@ -259,19 +339,43 @@ const PDVPage: React.FC = () => {
                                                         <button
                                                             key={forma.tipo}
                                                             onClick={() => setFormaPagamentoSelecionada(forma.tipo)}
-                                                            className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${formaPagamentoSelecionada === forma.tipo ? 'border-blue-600 bg-white dark:bg-slate-900 shadow-lg' : 'border-transparent bg-slate-200/50 dark:bg-slate-700/50 hover:bg-slate-200'}`}
+                                                            className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${formaPagamentoSelecionada === forma.tipo
+                                                                ? forma.tipo === 'fiado' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 shadow-lg' : 'border-blue-600 bg-white dark:bg-slate-900 shadow-lg'
+                                                                : 'border-transparent bg-slate-200/50 dark:bg-slate-700/50 hover:bg-slate-200'
+                                                                }`}
                                                         >
-                                                            <div className={formaPagamentoSelecionada === forma.tipo ? 'text-blue-600' : 'text-slate-400'}>
-                                                                {renderIconPagamento(forma.tipo)}
+                                                            <div className={formaPagamentoSelecionada === forma.tipo ? (forma.tipo === 'fiado' ? 'text-orange-500' : 'text-blue-600') : 'text-slate-400'}>
+                                                                {forma.tipo === 'fiado' ? <span className="text-2xl">🤝</span> : renderIconPagamento(forma.tipo)}
                                                             </div>
-                                                            <span className={`text-[10px] font-black uppercase tracking-wider text-center ${formaPagamentoSelecionada === forma.tipo ? 'text-blue-600' : 'text-slate-500'}`}>
+                                                            <span className={`text-[10px] font-black uppercase tracking-wider text-center ${formaPagamentoSelecionada === forma.tipo ? (forma.tipo === 'fiado' ? 'text-orange-500' : 'text-blue-600') : 'text-slate-500'
+                                                                }`}>
                                                                 {forma.label}
                                                             </span>
                                                         </button>
                                                     ))}
                                                 </div>
 
-                                                {formasPagamento.find((f: any) => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
+                                                {/* Campo de Data de Vencimento - Visível apenas para Fiado */}
+                                                {formaPagamentoSelecionada === 'fiado' && (
+                                                    <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-2xl border border-orange-500/20">
+                                                        {!cliente && (
+                                                            <p className="text-xs text-orange-700 font-bold mb-3 text-center">
+                                                                ⚠️ Fiado requer um Cliente cadastrado! Selecione acima.
+                                                            </p>
+                                                        )}
+                                                        <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2">
+                                                            📅 Data Prevista de Pagamento
+                                                        </label>
+                                                        <input
+                                                            type="date"
+                                                            value={dataVencimentoFiado}
+                                                            onChange={e => setDataVencimentoFiado(e.target.value)}
+                                                            min={new Date().toISOString().split('T')[0]}
+                                                            className="w-full p-3 rounded-xl border border-orange-300 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                                                        />
+                                                        <p className="text-[10px] text-orange-500 mt-1">Opcional. Padrão: 30 dias.</p>
+                                                    </div>
+                                                )}                               {formasPagamento.find((f: any) => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
                                                     <div className="mt-6 p-6 bg-white dark:bg-slate-900 rounded-3xl border border-blue-500/10 shadow-2xl">
                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Cédula / Valor Recebido</span>
                                                         <input

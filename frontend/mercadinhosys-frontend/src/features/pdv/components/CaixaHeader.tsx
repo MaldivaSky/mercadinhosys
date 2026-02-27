@@ -1,14 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { User, Clock } from 'lucide-react';
+import {
+    Wifi,
+    WifiOff,
+    Clock,
+    User,
+    Home,
+    Settings,
+    Store
+} from 'lucide-react';
 
 interface CaixaHeaderProps {
     funcionarioNome?: string;
     funcionarioRole?: string;
     /** Quando muda, força novo carregamento das estatísticas (ex: após finalizar venda) */
     refreshKey?: number | string;
+    onOpenCaixaManager?: () => void;
 }
 
-const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioRole }) => {
+const CaixaHeader: React.FC<CaixaHeaderProps> = ({
+    funcionarioNome = 'Operador',
+    funcionarioRole = 'Caixa',
+    refreshKey // Keep refreshKey as it was in the original component
+}) => {
     const [horaAtual, setHoraAtual] = useState(new Date());
 
     // Atualizar relógio a cada segundo
@@ -19,7 +32,6 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
 
         return () => clearInterval(interval);
     }, []);
-
 
     const formatarHora = (data: Date) => {
         return data.toLocaleTimeString('pt-BR', {
@@ -49,7 +61,7 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
                             <h2 className="text-xl md:text-2xl font-bold truncate max-w-[200px] md:max-w-none">
-                                {funcionarioNome || 'Carregando...'}
+                                {funcionarioNome}
                             </h2>
                             {funcionarioRole && (
                                 <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs md:text-sm font-medium uppercase tracking-wider">
@@ -64,12 +76,14 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({ funcionarioNome, funcionarioR
                     </div>
                 </div>
 
-                {/* Relógio */}
-                <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-4 md:px-6 py-2 md:py-3 rounded-xl backdrop-blur-sm w-full md:w-auto justify-center md:justify-start">
-                    <Clock className="w-5 h-5 md:w-6 md:h-6" />
-                    <span className="text-2xl md:text-3xl font-bold font-mono">
-                        {formatarHora(horaAtual)}
-                    </span>
+                <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end flex-wrap md:flex-nowrap">
+                    {/* Relógio */}
+                    <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-4 md:px-6 py-2 md:py-3 rounded-xl backdrop-blur-sm">
+                        <Clock className="w-5 h-5 md:w-6 md:h-6" />
+                        <span className="text-2xl md:text-3xl font-bold font-mono">
+                            {formatarHora(horaAtual)}
+                        </span>
+                    </div>
                 </div>
             </div>
 

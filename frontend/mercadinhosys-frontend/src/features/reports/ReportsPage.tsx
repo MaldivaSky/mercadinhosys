@@ -1331,9 +1331,11 @@ const ReportsPage: React.FC = () => {
                         <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Média</span>
                     </div>
                     <p className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
-                        {paginationInfo?.estatisticas?.total_vendas && paginationInfo?.estatisticas?.total_valor
-                            ? fmtBRL(paginationInfo.estatisticas.total_valor / paginationInfo.estatisticas.total_vendas)
-                            : 'R$ 0,00'}
+                        {paginationInfo?.estatisticas?.ticket_medio
+                            ? fmtBRL(paginationInfo.estatisticas.ticket_medio)
+                            : (paginationInfo?.estatisticas?.quantidade_vendas && paginationInfo?.estatisticas?.total_valor)
+                                ? fmtBRL(paginationInfo.estatisticas.total_valor / paginationInfo.estatisticas.quantidade_vendas)
+                                : 'R$ 0,00'}
                     </p>
                     <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mt-1">Ticket Médio</p>
                 </div>

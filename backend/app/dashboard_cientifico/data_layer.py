@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     db, Venda, VendaItem, Produto, Cliente,
     Funcionario, FuncionarioBeneficio, Beneficio, BancoHoras, RegistroPonto, ConfiguracaoHorario,
-    Despesa, ContaPagar
+    Despesa, ContaPagar, ContaReceber
 )
 import logging
 
@@ -1467,3 +1467,180 @@ class DataLayer:
             db.session.rollback()
             logger.error(f"Erro GERAL em get_consolidated_financial_summary: {e}")
             return result # Retorna estrutura vazia/zerada em caso de catástrofe
+
+    @staticmethod
+    def get_fiado_metrics(estabelecimento_id: int) -> Dict[str, Any]:
+        """
+        Métricas de Carteira de Fiado/Crédito.
+        Retorna dados reais de exposição de crédito a partir de Cliente.saldo_devedor.
+        Usado no Dashboard Principal e no módulo de Inteligência de Negócio.
+        """
+        try:
+            # Agrega totais de saldo_devedor e limite_credito de clientes ativos
+            agg = db.session.query(
+                func.coalesce(func.sum(Cliente.saldo_devedor), 0).label('total_aberto'),
+                func.coalesce(func.sum(Cliente.limite_credito), 0).label('total_limite'),
+                func.count(case((Cliente.saldo_devedor > 0, 1))).label('clientes_com_fiado'),
+                func.count(Cliente.id).label('total_clientes'),
+            ).filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.ativo == True
+            ).first()
+
+            total_aberto = float(agg.total_aberto or 0)
+            total_limite = float(agg.total_limite or 0)
+            clientes_com_fiado = int(agg.clientes_com_fiado or 0)
+            total_clientes = int(agg.total_clientes or 0)
+
+            # Maior devedor — busca separada por clareza
+            maior_devedor = db.session.query(
+                Cliente.id,
+                Cliente.nome,
+                Cliente.celular,
+                Cliente.saldo_devedor,
+                Cliente.limite_credito
+            ).filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.ativo == True,
+                Cliente.saldo_devedor > 0
+            ).order_by(Cliente.saldo_devedor.desc()).first()
+
+            # Top 5 devedores para ranking
+            top_devedores = db.session.query(
+                Cliente.id,
+                Cliente.nome,
+                Cliente.celular,
+                Cliente.saldo_devedor,
+                Cliente.limite_credito,
+                Cliente.ultima_compra
+            ).filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.ativo == True,
+                Cliente.saldo_devedor > 0
+            ).order_by(Cliente.saldo_devedor.desc()).limit(5).all()
+
+            # % de utilização do limite total
+            percentual_limite_utilizado = (total_aberto / total_limite * 100) if total_limite > 0 else 0.0
+
+            # % de clientes com fiado vs total
+            percentual_clientes_com_fiado = (clientes_com_fiado / total_clientes * 100) if total_clientes > 0 else 0.0
+
+            # Ticket médio de fiado por devedor
+            ticket_medio_fiado = (total_aberto / clientes_com_fiado) if clientes_com_fiado > 0 else 0.0
+
+            return {
+                "total_aberto": round(total_aberto, 2),
+                "total_limite": round(total_limite, 2),
+                "clientes_com_fiado": clientes_com_fiado,
+                "total_clientes": total_clientes,
+                "percentual_limite_utilizado": round(percentual_limite_utilizado, 1),
+                "percentual_clientes_com_fiado": round(percentual_clientes_com_fiado, 1),
+                "ticket_medio_fiado": round(ticket_medio_fiado, 2),
+                "maior_devedor_id": maior_devedor.id if maior_devedor else None,
+                "maior_devedor_nome": maior_devedor.nome if maior_devedor else "",
+                "maior_devedor_celular": maior_devedor.celular if maior_devedor else "",
+                "maior_devedor_valor": float(maior_devedor.saldo_devedor) if maior_devedor else 0.0,
+                "top_devedores": [
+                    {
+                        "id": d.id,
+                        "nome": d.nome,
+                        "celular": d.celular or "",
+                        "saldo_devedor": float(d.saldo_devedor or 0),
+                        "limite_credito": float(d.limite_credito or 0),
+                        "percentual_limite": (
+                            float(d.saldo_devedor or 0) / float(d.limite_credito or 1) * 100
+                            if d.limite_credito and d.limite_credito > 0 else 0.0
+                        ),
+                        "ultima_compra": d.ultima_compra.isoformat() if d.ultima_compra else None,
+                    }
+                    for d in top_devedores
+                ]
+            }
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro em get_fiado_metrics: {e}")
+            return {
+                "total_aberto": 0.0,
+                "total_limite": 0.0,
+                "clientes_com_fiado": 0,
+                "total_clientes": 0,
+                "percentual_limite_utilizado": 0.0,
+                "percentual_clientes_com_fiado": 0.0,
+                "ticket_medio_fiado": 0.0,
+                "maior_devedor_id": None,
+                "maior_devedor_nome": "",
+                "maior_devedor_celular": "",
+                "maior_devedor_valor": 0.0,
+                "top_devedores": []
+            }
+
+    @staticmethod
+    def get_receivables_metrics(estabelecimento_id: int) -> Dict[str, Any]:
+        """
+        Métricas de Contas a Receber (Vencidos vs A Receber).
+        Diferente de get_fiado_metrics (que olha o saldo total do cliente),
+        esta foca nos títulos (ContaReceber) individuais.
+        """
+        try:
+            hoje = datetime.utcnow().date()
+            
+            # Agrega por status de vencimento
+            stats = db.session.query(
+                func.sum(case((and_(ContaReceber.status == 'aberto', ContaReceber.data_vencimento < hoje), ContaReceber.valor_atual), else_=0)).label('total_vencido'),
+                func.sum(case((and_(ContaReceber.status == 'aberto', ContaReceber.data_vencimento >= hoje), ContaReceber.valor_atual), else_=0)).label('total_a_vencer'),
+                func.count(case((and_(ContaReceber.status == 'aberto', ContaReceber.data_vencimento < hoje), 1))).label('titulos_vencidos'),
+            ).filter(
+                ContaReceber.estabelecimento_id == estabelecimento_id
+            ).first()
+
+            total_vencido = float(stats.total_vencido or 0)
+            total_a_vencer = float(stats.total_a_vencer or 0)
+            total_recebível = total_vencido + total_a_vencer
+            
+            taxa_inadimplencia = (total_vencido / total_recebível * 100) if total_recebível > 0 else 0.0
+
+            # Ranking de Devedores (por valor vencido)
+            ranking_overdue = db.session.query(
+                Cliente.id,
+                Cliente.nome,
+                func.sum(ContaReceber.valor_atual).label('valor_vencido'),
+                func.min(ContaReceber.data_vencimento).label('mais_antigo')
+            ).join(
+                ContaReceber, Cliente.id == ContaReceber.cliente_id
+            ).filter(
+                ContaReceber.estabelecimento_id == estabelecimento_id,
+                ContaReceber.status == 'aberto',
+                ContaReceber.data_vencimento < hoje
+            ).group_by(
+                Cliente.id, Cliente.nome
+            ).order_by(
+                desc('valor_vencido')
+            ).limit(10).all()
+
+            return {
+                "total_vencido": round(total_vencido, 2),
+                "total_a_vencer": round(total_a_vencer, 2),
+                "total_recebivel": round(total_recebível, 2),
+                "taxa_inadimplencia": round(taxa_inadimplencia, 1),
+                "titulos_vencidos": int(stats.titulos_vencidos or 0),
+                "ranking_atraso": [
+                    {
+                        "cliente_id": r.id,
+                        "nome": r.nome,
+                        "valor_vencido": float(r.valor_vencido),
+                        "dias_atraso": (hoje - r.mais_antigo).days if r.mais_antigo else 0
+                    }
+                    for r in ranking_overdue
+                ]
+            }
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro em get_receivables_metrics: {e}")
+            return {
+                "total_vencido": 0.0,
+                "total_a_vencer": 0.0,
+                "total_recebivel": 0.0,
+                "taxa_inadimplencia": 0.0,
+                "titulos_vencidos": 0,
+                "ranking_atraso": []
+            }

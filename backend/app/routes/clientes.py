@@ -873,6 +873,87 @@ def buscar_clientes():
         )
 
 
+@clientes_bp.route("/<int:id>/pagar_fiado", methods=["POST"])
+@funcionario_required
+def pagar_fiado(id):
+    """Registra pagamento (parcial ou total) de dívida de fiado do cliente.
+    Gera automaticamente um Suprimento no caixa aberto."""
+    try:
+        jwt_data = get_jwt()
+        funcionario_id = int(get_jwt_identity())
+
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+        ).first_or_404()
+
+        data = request.get_json()
+        valor_pago = float(data.get("valor", 0))
+        forma_pagamento = data.get("forma_pagamento", "Dinheiro")
+        observacoes = data.get("observacoes", f"Pagamento de fiado - Cliente {cliente.nome}")
+
+        if valor_pago <= 0:
+            return jsonify({"success": False, "message": "O valor deve ser maior que zero"}), 400
+
+        saldo_atual = float(cliente.saldo_devedor or 0)
+        if valor_pago > saldo_atual:
+            return jsonify({
+                "success": False,
+                "message": f"Valor informado (R$ {valor_pago:.2f}) é maior que o saldo devedor (R$ {saldo_atual:.2f})"
+            }), 400
+
+        # Buscar caixa aberto para o funcionário logado
+        from app.models import Caixa, MovimentacaoCaixa
+        caixa_aberto = Caixa.query.filter_by(
+            funcionario_id=funcionario_id,
+            status="aberto"
+        ).order_by(Caixa.data_abertura.desc()).first()
+
+        if not caixa_aberto:
+            return jsonify({
+                "success": False,
+                "message": "É necessário ter um caixa aberto para registrar o recebimento de fiado."
+            }), 403
+
+        # Abater do saldo devedor do cliente
+        cliente.saldo_devedor = max(0, saldo_atual - valor_pago)
+
+        # Registrar como Suprimento no Caixa (dinheiro entrou na gaveta)
+        mov_caixa = MovimentacaoCaixa(
+            caixa_id=caixa_aberto.id,
+            estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            tipo="suprimento",
+            valor=valor_pago,
+            forma_pagamento=forma_pagamento,
+            descricao=f"Receb. Fiado - {cliente.nome}",
+            observacoes=observacoes
+        )
+        db.session.add(mov_caixa)
+
+        # Atualizar saldo do caixa se for dinheiro
+        if forma_pagamento.lower() == "dinheiro":
+            caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual or 0) + valor_pago
+
+        db.session.commit()
+
+        current_app.logger.info(
+            f"Fiado pago: Cliente {id} pagou R$ {valor_pago:.2f} via {forma_pagamento}. "
+            f"Saldo restante: R$ {float(cliente.saldo_devedor):.2f}"
+        )
+
+        return jsonify({
+            "success": True,
+            "message": f"Pagamento de R$ {valor_pago:.2f} registrado com sucesso!",
+            "saldo_devedor_anterior": saldo_atual,
+            "saldo_devedor_atual": float(cliente.saldo_devedor),
+            "valor_pago": valor_pago
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao registrar pagamento de fiado: {str(e)}")
+        return jsonify({"success": False, "message": "Erro interno ao registrar pagamento"}), 500
+
+
 @clientes_bp.route("/estatisticas", methods=["GET"])
 @funcionario_required
 def estatisticas_clientes():
