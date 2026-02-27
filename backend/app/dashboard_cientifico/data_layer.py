@@ -385,18 +385,29 @@ class DataLayer:
 
             results = db.session.query(
                 hour_extract.label('hora'),
-                func.count(Venda.id).label('qtd'),
-                func.sum(Venda.total).label('total')
-            ).filter(
+                func.count(func.distinct(Venda.id)).label('qtd'),
+                func.sum(VendaItem.total_item).label('total'),
+                func.sum(VendaItem.quantidade * VendaItem.custo_unitario).label('cogs')
+            ).join(VendaItem, VendaItem.venda_id == Venda.id).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
             ).group_by(hour_extract).order_by(hour_extract).all()
 
-            return [
-                {"hora": int(r.hora) if r.hora is not None else 0, "qtd": r.qtd, "total": float(r.total or 0)}
-                for r in results
-            ]
+            out = []
+            for r in results:
+                total_sale = float(r.total or 0)
+                total_cogs = float(r.cogs or 0)
+                lucro = total_sale - total_cogs
+                margem = (lucro / total_sale * 100) if total_sale > 0 else 0
+                out.append({
+                    "hora": int(r.hora) if r.hora is not None else 0,
+                    "qtd": r.qtd,
+                    "total": total_sale,
+                    "lucro": float(lucro),
+                    "margem": float(margem)
+                })
+            return out
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro em get_sales_by_hour: {e}")
@@ -404,9 +415,50 @@ class DataLayer:
 
     @staticmethod
     def get_top_products_by_hour(estabelecimento_id: int, days: int, top_n: int = 5) -> List[Dict[str, Any]]:
-        """Top produtos por faixa horária (Manhã, Tarde, Noite)"""
-        # Simplificação: Retorna top global por enquanto para não complicar query
-        return DataLayer.get_top_products(estabelecimento_id, days, top_n)
+        """Top produtos por faixa horária (Manhã, Tarde, Noite) agrupados dinamicamente"""
+        try:
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+            
+            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            results = db.session.query(
+                hour_extract.label('hora'),
+                Produto.id,
+                Produto.nome,
+                func.sum(VendaItem.quantidade).label('quantidade_vendida'),
+                func.sum(VendaItem.total_item).label('faturamento')
+            ).join(VendaItem, VendaItem.produto_id == Produto.id)\
+             .join(Venda, Venda.id == VendaItem.venda_id)\
+             .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= start_date,
+                Venda.status == 'finalizada'
+             ).group_by(hour_extract, Produto.id, Produto.nome).all()
+             
+            grouped = {}
+            for r in results:
+                hr = int(r.hora) if r.hora is not None else 0
+                if hr not in grouped:
+                    grouped[hr] = []
+                grouped[hr].append({
+                    "hora": hr,
+                    "produto_id": r.id,
+                    "produto_nome": r.nome,
+                    "quantidade_vendida": float(r.quantidade_vendida or 0),
+                    "faturamento": float(r.faturamento or 0)
+                })
+                
+            final_list = []
+            for hr, items in grouped.items():
+                items.sort(key=lambda x: x["quantidade_vendida"], reverse=True)
+                final_list.extend(items[:top_n])
+            return final_list
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro em get_top_products_by_hour: {e}")
+            return []
 
     @staticmethod
     def get_customer_temporal_patterns(estabelecimento_id: int, days: int) -> Dict[str, Any]:

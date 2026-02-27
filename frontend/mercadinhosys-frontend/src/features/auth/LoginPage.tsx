@@ -168,6 +168,11 @@ export function LoginPage() {
               </Alert>
             )}
 
+            {error && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
 
             <form onSubmit={handleSubmit}>
               <TextField
