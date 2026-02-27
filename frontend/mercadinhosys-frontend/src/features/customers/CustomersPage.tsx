@@ -6,20 +6,24 @@ import CustomerForm from './components/CustomerForm';
 import CustomerDashboard from './components/CustomerDashboard';
 import { customerService } from './customerService';
 import { apiClient } from '../../api/apiClient';
-import { Button, Typography, CircularProgress, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu } from '@mui/material';
+import { pdvService } from '../pdv/pdvService';
+import { Button, Typography, CircularProgress, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment as InputAd, Divider } from '@mui/material';
 import { showToast } from '../../utils/toast';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
+import HandshakeIcon from '@mui/icons-material/Handshake';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
+
 const CustomersPage: React.FC = () => {
     const [clientes, setClientes] = useState<Cliente[]>([]);
-    //
     const [loading, setLoading] = useState(false);
     const [formOpen, setFormOpen] = useState(false);
     const [editData, setEditData] = useState<Partial<Cliente> | undefined>(undefined);
@@ -27,12 +31,25 @@ const CustomersPage: React.FC = () => {
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [clienteDetalhado, setClienteDetalhado] = useState<Cliente | null>(null);
     const [detalheLoading, setDetalheLoading] = useState(false);
-    // Snackbar state removed
     const [dashboard, setDashboard] = useState<{ total: number, ativos: number, inativos: number, novos: number, vip: number }>({ total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0 });
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
+    const [fiadoFilter, setFiadoFilter] = useState(false);
     const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
     const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
+
+    // Estado do Modal de Fiado
+    const [fiadoModal, setFiadoModal] = useState<{ open: boolean; cliente: Cliente | null }>({ open: false, cliente: null });
+    const [fiadoValor, setFiadoValor] = useState('');
+    const [fiadoForma, setFiadoForma] = useState('Dinheiro');
+    const [fiadoLoading, setFiadoLoading] = useState(false);
+
+    // Indicadores de Fiado
+    const clientesComFiado = clientes.filter(c => (c.saldo_devedor ?? 0) > 0);
+    const totalFiadoAberto = clientesComFiado.reduce((acc, c) => acc + (c.saldo_devedor ?? 0), 0);
+    const maiorDevedor = clientesComFiado.length > 0
+        ? clientesComFiado.reduce((prev, curr) => (curr.saldo_devedor ?? 0) > (prev.saldo_devedor ?? 0) ? curr : prev)
+        : null;
 
     const fetchDashboard = async () => {
         try {
@@ -106,7 +123,6 @@ const CustomersPage: React.FC = () => {
     useEffect(() => {
         let filtered = clientes;
 
-        // Filtro por status
         if (statusFilter !== 'todos') {
             filtered = filtered.filter(cliente => {
                 if (statusFilter === 'ativos') return cliente.ativo === true;
@@ -115,7 +131,10 @@ const CustomersPage: React.FC = () => {
             });
         }
 
-        // Busca por termo
+        if (fiadoFilter) {
+            filtered = filtered.filter(c => (c.saldo_devedor ?? 0) > 0);
+        }
+
         if (searchTerm.trim()) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(cliente =>
@@ -127,7 +146,35 @@ const CustomersPage: React.FC = () => {
         }
 
         setFilteredClientes(filtered);
-    }, [clientes, searchTerm, statusFilter]);
+    }, [clientes, searchTerm, statusFilter, fiadoFilter]);
+
+    const handleAbrirModalFiado = (cliente: Cliente) => {
+        setFiadoModal({ open: true, cliente });
+        setFiadoValor('');
+        setFiadoForma('Dinheiro');
+    };
+
+    const handlePagarFiado = async () => {
+        const { cliente } = fiadoModal;
+        if (!cliente?.id) return;
+        const valor = parseFloat(fiadoValor.replace(',', '.'));
+        if (isNaN(valor) || valor <= 0) {
+            showToast.error('Informe um valor válido');
+            return;
+        }
+        setFiadoLoading(true);
+        try {
+            const res = await pdvService.pagarFiado(cliente.id, valor, fiadoForma);
+            showToast.success(res.message || 'Pagamento registrado!');
+            setFiadoModal({ open: false, cliente: null });
+            fetchClientes();
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || 'Erro ao registrar pagamento';
+            showToast.error(msg);
+        } finally {
+            setFiadoLoading(false);
+        }
+    };
 
     const handleAdd = () => {
         setEditData(undefined);
@@ -384,6 +431,62 @@ const CustomersPage: React.FC = () => {
 
     return (
         <div className="max-w-6xl mx-auto p-4">
+
+            {/* ===== PAINEL DE INDICADORES DE FIADO ===== */}
+            {clientesComFiado.length > 0 && (
+                <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+                    gap: 2,
+                    mb: 3,
+                    p: 2.5,
+                    borderRadius: 2,
+                    border: '1.5px solid #f57c00',
+                    background: 'linear-gradient(135deg, #fff8f0 0%, #fff3e0 100%)'
+                }}>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Total Fiado em Aberto</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#bf360c' }}>
+                            {totalFiadoAberto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </Typography>
+                    </Box>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Clientes com Fiado</Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#bf360c' }}>
+                            {clientesComFiado.length}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            de {clientes.length} cadastrados
+                        </Typography>
+                    </Box>
+                    {maiorDevedor && (
+                        <Box>
+                            <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Maior Devedor</Typography>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#bf360c' }}>{maiorDevedor.nome}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {(maiorDevedor.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </Typography>
+                        </Box>
+                    )}
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Button
+                            variant={fiadoFilter ? 'contained' : 'outlined'}
+                            size="small"
+                            startIcon={<HandshakeIcon />}
+                            onClick={() => setFiadoFilter(!fiadoFilter)}
+                            sx={{
+                                borderColor: '#f57c00',
+                                color: fiadoFilter ? '#fff' : '#f57c00',
+                                bgcolor: fiadoFilter ? '#f57c00' : 'transparent',
+                                '&:hover': { bgcolor: fiadoFilter ? '#e65100' : '#fff3e0' }
+                            }}
+                        >
+                            {fiadoFilter ? 'Ver Todos' : 'Só com Fiado'}
+                        </Button>
+                    </Box>
+                </Box>
+            )}
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography
                     variant="h4"
@@ -518,6 +621,7 @@ const CustomersPage: React.FC = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 selectedClienteId={selectedCliente?.id}
+                onReceberFiado={handleAbrirModalFiado}
             />
             <CustomerForm open={formOpen} onClose={() => setFormOpen(false)} onSave={handleSave} initialData={editData} loading={saving} />
             <CustomerDetailsModal
@@ -528,12 +632,71 @@ const CustomersPage: React.FC = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
             />
-            {/* Snackbar unificado em showToast */}
 
-            {/* Dicas de atalhos */}
-            <Box sx={{ mt: 4, p: 2, bgcolor: 'grey.50', dark: { bgcolor: 'grey.900' }, borderRadius: 1, textAlign: 'center' }}>
+            {/* ===== MODAL DE RECEBIMENTO DE FIADO ===== */}
+            <Dialog open={fiadoModal.open} onClose={() => setFiadoModal({ open: false, cliente: null })} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#e65100', fontWeight: 700 }}>
+                    <AttachMoneyIcon /> Receber Fiado
+                </DialogTitle>
+                <DialogContent>
+                    {fiadoModal.cliente && (
+                        <Box>
+                            <Box sx={{ mb: 2, p: 1.5, bgcolor: '#fff8f0', borderRadius: 1, border: '1px solid #ffe0b2' }}>
+                                <Typography variant="subtitle2" sx={{ color: '#e65100', fontWeight: 700 }}>
+                                    {fiadoModal.cliente.nome}
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                    <WarningAmberIcon sx={{ color: '#f57c00', fontSize: 16 }} />
+                                    <Typography variant="body2" sx={{ color: '#bf360c', fontWeight: 600 }}>
+                                        Saldo Devedor: {(fiadoModal.cliente.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </Typography>
+                                </Box>
+                            </Box>
+
+                            <TextField
+                                label="Valor a Pagar (R$)"
+                                value={fiadoValor}
+                                onChange={e => setFiadoValor(e.target.value)}
+                                fullWidth
+                                type="number"
+                                inputProps={{ min: 0, step: '0.01', max: fiadoModal.cliente.saldo_devedor ?? 0 }}
+                                sx={{ mb: 2, mt: 1 }}
+                                helperText={`Máximo: ${(fiadoModal.cliente.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+                            />
+
+                            <FormControl fullWidth sx={{ mb: 1 }}>
+                                <InputLabel>Forma de Pagamento</InputLabel>
+                                <Select value={fiadoForma} label="Forma de Pagamento" onChange={e => setFiadoForma(e.target.value)}>
+                                    <MenuItem value="Dinheiro">💵 Dinheiro</MenuItem>
+                                    <MenuItem value="PIX">📱 PIX</MenuItem>
+                                    <MenuItem value="Cartão de Débito">💳 Cartão de Débito</MenuItem>
+                                    <MenuItem value="Cartão de Crédito">💳 Cartão de Crédito</MenuItem>
+                                </Select>
+                            </FormControl>
+
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                ⓘ O valor será registrado como entrada no Caixa aberto.
+                            </Typography>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setFiadoModal({ open: false, cliente: null })} color="inherit">Cancelar</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handlePagarFiado}
+                        disabled={fiadoLoading || !fiadoValor}
+                        sx={{ bgcolor: '#f57c00', '&:hover': { bgcolor: '#e65100' } }}
+                    >
+                        {fiadoLoading ? 'Registrando...' : 'Confirmar Recebimento'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Box sx={{ mt: 4, p: 2, bgcolor: 'grey.50', borderRadius: 1, textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                     💡 <strong>Dicas:</strong> Pressione <kbd>N</kbd> para novo cliente • <kbd>Esc</kbd> para fechar modais • Clique na linha para ver detalhes
+                    {clientesComFiado.length > 0 && <> • <HandshakeIcon sx={{ fontSize: 14, verticalAlign: 'middle', color: '#f57c00' }} /> {clientesComFiado.length} clientes com fiado em aberto</>}
                 </Typography>
             </Box>
             {loading && <div className="flex justify-center mt-4"><CircularProgress /></div>}

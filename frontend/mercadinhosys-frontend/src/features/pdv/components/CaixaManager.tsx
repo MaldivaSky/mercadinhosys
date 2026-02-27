@@ -1,0 +1,453 @@
+import React, { useState, useEffect } from 'react';
+import { showToast } from '../../../utils/toast';
+import { pdvService, CaixaPDV } from '../pdvService';
+import {
+    Lock, Unlock, DollarSign, ArrowDownCircle, ArrowUpCircle, X,
+    History, TrendingDown, TrendingUp, AlertTriangle, BarChart3,
+    RefreshCw, Wallet
+} from 'lucide-react';
+import { formatCurrency } from '../../../utils/formatters';
+
+interface CaixaManagerProps {
+    caixaAtual: CaixaPDV | null;
+    setCaixaAtual: (caixa: CaixaPDV | null) => void;
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+const FORMA_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
+    dinheiro: { label: 'Dinheiro', emoji: '💵', color: 'text-green-600' },
+    cartao_debito: { label: 'Débito', emoji: '💳', color: 'text-blue-600' },
+    cartao_credito: { label: 'Crédito', emoji: '💳', color: 'text-purple-600' },
+    pix: { label: 'PIX', emoji: '📱', color: 'text-teal-600' },
+    fiado: { label: 'Fiado', emoji: '🤝', color: 'text-orange-600' },
+    outros: { label: 'Outros', emoji: '📦', color: 'text-slate-500' },
+};
+
+const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, isOpen, onClose }) => {
+    const [loading, setLoading] = useState(false);
+    const [saldoInicial, setSaldoInicial] = useState('');
+    const [valorFechamento, setValorFechamento] = useState('');
+    const [valorMovimentacao, setValorMovimentacao] = useState('');
+    const [descricaoMovimentacao, setDescricaoMovimentacao] = useState('');
+    const [activeTab, setActiveTab] = useState<'movimentacao' | 'fechar' | 'auditoria'>('movimentacao');
+    const [tipoMovimentacao, setTipoMovimentacao] = useState<'sangria' | 'suprimento'>('sangria');
+    const [movimentacoes, setMovimentacoes] = useState<any[]>([]);
+    const [loadingAuditoria, setLoadingAuditoria] = useState(false);
+    const [resumoCaixa, setResumoCaixa] = useState<any>(null);
+    const [loadingResumo, setLoadingResumo] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === 'auditoria' && caixaAtual) carregarAuditoria();
+        if (activeTab === 'fechar' && caixaAtual) carregarResumoCaixa();
+    }, [activeTab, caixaAtual]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        if (isOpen || !caixaAtual) window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, caixaAtual, onClose]);
+
+    if (!caixaAtual && !isOpen) return null;
+    if (!isOpen && caixaAtual) return null;
+
+    const carregarAuditoria = async () => {
+        try { setLoadingAuditoria(true); setMovimentacoes(await pdvService.getMovimentacoesCaixa()); }
+        catch (e) { console.error(e); } finally { setLoadingAuditoria(false); }
+    };
+
+    const carregarResumoCaixa = async () => {
+        try { setLoadingResumo(true); setResumoCaixa(await pdvService.getResumoCaixa()); }
+        catch (e) { console.error(e); } finally { setLoadingResumo(false); }
+    };
+
+    const handleAbertura = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(saldoInicial.replace(',', '.'));
+        if (isNaN(val) || val < 0) return showToast.error('Informe um valor de abertura válido.');
+        try {
+            setLoading(true);
+            setCaixaAtual(await pdvService.abrirCaixa(val));
+            showToast.success('Caixa aberto com sucesso!');
+            onClose();
+        } catch (err: any) {
+            showToast.error(err.response?.data?.error || 'Erro ao abrir caixa');
+        } finally { setLoading(false); }
+    };
+
+    const handleFechamento = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(valorFechamento.replace(',', '.'));
+        if (isNaN(val) || valorFechamento.trim() === '') return showToast.error('Informe o valor em dinheiro no caixa.');
+        try {
+            setLoading(true);
+            await pdvService.fecharCaixa(val);
+            setCaixaAtual(null);
+            showToast.success('Caixa fechado com sucesso!');
+            onClose();
+        } catch (err: any) {
+            showToast.error(err.response?.data?.error || 'Erro ao fechar caixa');
+        } finally { setLoading(false); }
+    };
+
+    const handleMovimentacao = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(valorMovimentacao.replace(',', '.'));
+        if (isNaN(val) || val <= 0) return showToast.error('Informe um valor válido.');
+        if (!descricaoMovimentacao.trim()) return showToast.error('A descrição é obrigatória.');
+        try {
+            setLoading(true);
+            await pdvService.registrarMovimentacao({ tipo: tipoMovimentacao, valor: val, descricao: descricaoMovimentacao });
+            const delta = tipoMovimentacao === 'suprimento' ? val : -val;
+            if (caixaAtual) setCaixaAtual({ ...caixaAtual, saldo_atual: parseFloat(caixaAtual.saldo_atual as any) + delta });
+            showToast.success(`${tipoMovimentacao === 'sangria' ? 'Sangria' : 'Suprimento'} registrado!`);
+            setValorMovimentacao(''); setDescricaoMovimentacao('');
+            onClose();
+        } catch (err: any) {
+            showToast.error(err.response?.data?.error || 'Erro ao registrar movimentação');
+        } finally { setLoading(false); }
+    };
+
+    // ────────────────────────────────────────────────────────
+    // ABERTURA (modal bloqueante)
+    // ────────────────────────────────────────────────────────
+    if (!caixaAtual) {
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6"
+                style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.85) 0%, rgba(30,27,75,0.85) 100%)', backdropFilter: 'blur(16px)' }}>
+                <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
+                    style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(99,102,241,0.3)' }}>
+
+                    {/* Fundo decorativo */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full opacity-10"
+                            style={{ background: 'radial-gradient(circle, #6366f1, transparent)' }} />
+                        <div className="absolute -bottom-16 -right-16 w-48 h-48 rounded-full opacity-10"
+                            style={{ background: 'radial-gradient(circle, #14b8a6, transparent)' }} />
+                    </div>
+
+                    {/* Header */}
+                    <div className="relative px-8 pt-8 pb-6 text-center">
+                        <button onClick={onClose} title="Fechar (ESC)"
+                            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                            style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 32px rgba(99,102,241,0.4)' }}>
+                            <Unlock className="w-10 h-10 text-white" />
+                        </div>
+                        <h2 className="text-2xl font-black text-white tracking-tight">Abertura de Caixa</h2>
+                        <p className="text-slate-400 text-sm mt-1">Informe o troco disponível na gaveta</p>
+                    </div>
+
+                    {/* Form */}
+                    <form onSubmit={handleAbertura} className="relative px-6 pb-8 space-y-5">
+                        <div className="rounded-2xl overflow-hidden"
+                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <div className="flex items-center px-4 py-1 border-b"
+                                style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Saldo Inicial (R$)</span>
+                            </div>
+                            <div className="relative">
+                                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-indigo-400" />
+                                <input
+                                    type="number" step="0.01" min="0" required autoFocus
+                                    className="w-full pl-12 pr-4 py-5 text-3xl font-black bg-transparent text-white outline-none tabular-nums"
+                                    placeholder="0,00"
+                                    value={saldoInicial}
+                                    onChange={e => setSaldoInicial(e.target.value)}
+                                    disabled={loading}
+                                    style={{ caretColor: '#6366f1' }}
+                                />
+                            </div>
+                        </div>
+
+                        <button type="submit" disabled={loading || !saldoInicial}
+                            className="w-full py-4 rounded-2xl font-black text-white tracking-widest uppercase transition-all active:scale-95 disabled:opacity-40"
+                            style={{ background: loading || !saldoInicial ? undefined : 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 8px 24px rgba(99,102,241,0.35)' }}>
+                            {loading ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <RefreshCw className="w-5 h-5 animate-spin" /> Abrindo...
+                                </span>
+                            ) : '🔓 Confirmar Abertura'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        );
+    }
+
+    // ────────────────────────────────────────────────────────
+    // GERENCIAMENTO (Aberto)
+    // ────────────────────────────────────────────────────────
+    const tabs = [
+        { key: 'movimentacao', label: 'Ações', icon: <DollarSign className="w-4 h-4" />, accent: '#6366f1' },
+        { key: 'fechar', label: 'Fechar', icon: <Lock className="w-4 h-4" />, accent: '#ef4444' },
+        { key: 'auditoria', label: 'Extrato', icon: <History className="w-4 h-4" />, accent: '#f59e0b' },
+    ] as const;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }}
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+
+            <div className="w-full sm:max-w-md flex flex-col rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
+                style={{
+                    maxHeight: 'calc(100dvh - 12px)',
+                    background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+                    border: '1px solid rgba(255,255,255,0.08)'
+                }}>
+
+                {/* ── Header fixo ── */}
+                <div className="shrink-0 flex items-center justify-between px-5 py-4"
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)' }}>
+                            <Wallet className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <p className="text-white font-black text-base leading-none">Gerenciar Caixa</p>
+                            <p className="text-slate-400 text-xs mt-0.5 font-mono">
+                                Saldo: <span className="text-green-400 font-bold">{formatCurrency(caixaAtual.saldo_atual)}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} disabled={loading}
+                        className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* ── Tabs ── */}
+                <div className="shrink-0 flex gap-1 px-3 py-2"
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.2)' }}>
+                    {tabs.map(tab => (
+                        <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold text-xs transition-all"
+                            style={activeTab === tab.key ? {
+                                background: `${tab.accent}22`,
+                                color: tab.accent,
+                                border: `1px solid ${tab.accent}44`,
+                            } : { color: '#94a3b8', background: 'transparent', border: '1px solid transparent' }}>
+                            {tab.icon}
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* ── Conteúdo com scroll ── */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-4">
+                    {/* ═══ ABA: AÇÕES (Sangria / Suprimento) ═══ */}
+                    {activeTab === 'movimentacao' && (
+                        <form onSubmit={handleMovimentacao} className="space-y-4">
+                            {/* Tipo */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => setTipoMovimentacao('sangria')}
+                                    className="flex flex-col items-center gap-2 py-4 rounded-2xl font-bold text-sm transition-all"
+                                    style={tipoMovimentacao === 'sangria' ? {
+                                        background: 'rgba(239,68,68,0.15)', color: '#f87171',
+                                        border: '1.5px solid rgba(239,68,68,0.4)'
+                                    } : { background: 'rgba(255,255,255,0.04)', color: '#64748b', border: '1.5px solid rgba(255,255,255,0.07)' }}>
+                                    <TrendingDown className="w-6 h-6" />
+                                    Sangria (Saída)
+                                </button>
+                                <button type="button" onClick={() => setTipoMovimentacao('suprimento')}
+                                    className="flex flex-col items-center gap-2 py-4 rounded-2xl font-bold text-sm transition-all"
+                                    style={tipoMovimentacao === 'suprimento' ? {
+                                        background: 'rgba(34,197,94,0.15)', color: '#4ade80',
+                                        border: '1.5px solid rgba(34,197,94,0.4)'
+                                    } : { background: 'rgba(255,255,255,0.04)', color: '#64748b', border: '1.5px solid rgba(255,255,255,0.07)' }}>
+                                    <TrendingUp className="w-6 h-6" />
+                                    Suprimento (Entrada)
+                                </button>
+                            </div>
+
+                            {/* Valor */}
+                            <div className="rounded-2xl overflow-hidden"
+                                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4 pt-3">Valor (R$)</p>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                    <input type="number" step="0.01" min="0.01" required
+                                        className="w-full pl-12 pr-4 py-4 text-2xl font-black bg-transparent text-white outline-none tabular-nums"
+                                        placeholder="0,00"
+                                        value={valorMovimentacao}
+                                        onChange={e => setValorMovimentacao(e.target.value)}
+                                        style={{ caretColor: '#6366f1' }} />
+                                </div>
+                            </div>
+
+                            {/* Descrição */}
+                            <input type="text" required
+                                className="w-full px-4 py-3 rounded-2xl text-sm font-medium text-white outline-none transition-all"
+                                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                                placeholder="Motivo / Descrição (obrigatório)"
+                                value={descricaoMovimentacao}
+                                onChange={e => setDescricaoMovimentacao(e.target.value)}
+                            />
+
+                            <button type="submit" disabled={loading || !valorMovimentacao || !descricaoMovimentacao}
+                                className="w-full py-4 rounded-2xl font-black text-white tracking-wider uppercase transition-all active:scale-95 disabled:opacity-40"
+                                style={{
+                                    background: loading ? undefined : tipoMovimentacao === 'sangria'
+                                        ? 'linear-gradient(135deg,#ef4444,#dc2626)'
+                                        : 'linear-gradient(135deg,#22c55e,#16a34a)',
+                                    boxShadow: tipoMovimentacao === 'sangria' ? '0 8px 24px rgba(239,68,68,0.3)' : '0 8px 24px rgba(34,197,94,0.3)'
+                                }}>
+                                {loading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <RefreshCw className="w-5 h-5 animate-spin" /> Processando...
+                                    </span>
+                                ) : `✓ Confirmar ${tipoMovimentacao === 'sangria' ? 'Sangria' : 'Suprimento'}`}
+                            </button>
+                        </form>
+                    )}
+
+                    {/* ═══ ABA: FECHAR CAIXA ═══ */}
+                    {activeTab === 'fechar' && (
+                        <form onSubmit={handleFechamento} className="space-y-4">
+                            {/* Resumo por forma de pagamento */}
+                            {loadingResumo ? (
+                                <div className="flex items-center justify-center gap-2 py-6 text-slate-500 text-sm">
+                                    <RefreshCw className="w-4 h-4 animate-spin" /> Carregando resumo do turno...
+                                </div>
+                            ) : resumoCaixa && (
+                                <div className="rounded-2xl overflow-hidden"
+                                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                    <div className="flex items-center gap-2 px-4 py-3"
+                                        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                        <BarChart3 className="w-4 h-4 text-indigo-400" />
+                                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Resumo do Turno</span>
+                                    </div>
+                                    {Object.entries(resumoCaixa.por_forma_pagamento || {}).map(([forma, dados]: any) => {
+                                        const info = FORMA_LABELS[forma] || { label: forma, emoji: '📦', color: 'text-slate-400' };
+                                        const isFiado = forma === 'fiado';
+                                        return (
+                                            <div key={forma}
+                                                className="flex justify-between items-center px-4 py-3 transition-colors"
+                                                style={{
+                                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                                    background: isFiado ? 'rgba(234,88,12,0.08)' : undefined
+                                                }}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg leading-none">{info.emoji}</span>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">{info.label}</p>
+                                                        <p className="text-[11px] text-slate-500">{dados.quantidade} venda{dados.quantidade !== 1 ? 's' : ''}</p>
+                                                    </div>
+                                                </div>
+                                                <span className={`font-black text-base tabular-nums ${isFiado ? 'text-orange-400' : 'text-white'}`}>
+                                                    {dados.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                    {/* Esperado na gaveta */}
+                                    <div className="flex justify-between items-center px-4 py-3"
+                                        style={{ background: 'rgba(245,158,11,0.12)', borderTop: '1px solid rgba(245,158,11,0.2)' }}>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg">💰</span>
+                                            <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Esperado na Gaveta</span>
+                                        </div>
+                                        <span className="text-xl font-black text-amber-400 tabular-nums">
+                                            {resumoCaixa.saldo_esperado_gaveta?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Aviso */}
+                            <div className="flex gap-3 p-4 rounded-2xl"
+                                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                                <div className="text-sm text-red-300">
+                                    <p className="font-bold mb-0.5">Atenção — operação irreversível</p>
+                                    <p className="text-red-400/80">O caixa será encerrado e um relatório gerado. Confirme o dinheiro físico abaixo.</p>
+                                </div>
+                            </div>
+
+                            {/* Valor da Gaveta */}
+                            <div className="rounded-2xl overflow-hidden"
+                                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                                <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest px-4 pt-3">Valor Contado na Gaveta (R$)</p>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400/60" />
+                                    <input type="number" step="0.01" min="0" required
+                                        className="w-full pl-12 pr-4 py-4 text-2xl font-black bg-transparent text-white outline-none tabular-nums"
+                                        placeholder="0,00"
+                                        value={valorFechamento}
+                                        onChange={e => setValorFechamento(e.target.value)}
+                                        style={{ caretColor: '#ef4444' }} />
+                                </div>
+                            </div>
+
+                            <button type="submit" disabled={loading || valorFechamento.trim() === ''}
+                                className="w-full py-4 rounded-2xl font-black text-white tracking-wider uppercase transition-all active:scale-95 disabled:opacity-40"
+                                style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow: '0 8px 24px rgba(239,68,68,0.35)' }}>
+                                {loading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <RefreshCw className="w-5 h-5 animate-spin" /> Fechando...
+                                    </span>
+                                ) : '🔒 Confirmar Fechamento'}
+                            </button>
+                        </form>
+                    )}
+
+                    {/* ═══ ABA: EXTRATO / AUDITORIA ═══ */}
+                    {activeTab === 'auditoria' && (
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center px-4 py-3 rounded-2xl"
+                                style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                                <span className="text-sm font-bold text-amber-400">Saldo Caixa (Dinheiro)</span>
+                                <span className="text-xl font-black text-amber-400 tabular-nums">{formatCurrency(caixaAtual.saldo_atual)}</span>
+                            </div>
+
+                            <div className="space-y-2">
+                                {loadingAuditoria ? (
+                                    <div className="flex items-center justify-center gap-2 py-8 text-slate-500 text-sm">
+                                        <RefreshCw className="w-4 h-4 animate-spin" /> Carregando extrato...
+                                    </div>
+                                ) : movimentacoes.length === 0 ? (
+                                    <div className="text-center py-10 text-slate-600 text-sm">
+                                        <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                        Nenhuma movimentação neste turno
+                                    </div>
+                                ) : movimentacoes.map((mov) => {
+                                    const isSaida = mov.tipo === 'sangria' || (mov.valor && mov.valor < 0);
+                                    return (
+                                        <div key={mov.id}
+                                            className="flex items-center justify-between px-4 py-3 rounded-2xl transition-all"
+                                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                                                    style={{ background: isSaida ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)' }}>
+                                                    {isSaida
+                                                        ? <ArrowDownCircle className="w-5 h-5 text-red-400" />
+                                                        : <ArrowUpCircle className="w-5 h-5 text-green-400" />}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-white capitalize">
+                                                        {mov.descricao || mov.tipo}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 font-mono">
+                                                        {new Date(mov.created_at || mov.data).toLocaleString('pt-BR')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className={`font-black text-base tabular-nums ${isSaida ? 'text-red-400' : 'text-green-400'}`}>
+                                                {isSaida ? '−' : '+'}{formatCurrency(Math.abs(parseFloat(mov.valor || 0)))}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>{/* /scroll area */}
+            </div>
+        </div>
+    );
+};
+
+export default CaixaManager;

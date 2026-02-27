@@ -279,6 +279,19 @@ class DashboardOrchestrator:
                             
         sales_timeseries = safe_get(DataLayer.get_sales_timeseries, "sales_series", [], 
                                   self.establishment_id, max(days, 90))
+
+        # 🔥 FIADO: Métricas de Carteira de Crédito (dados reais de exposição)
+        fiado_metrics = safe_get(DataLayer.get_fiado_metrics, "fiado_metrics",
+                                {"total_aberto": 0.0, "total_limite": 0.0, "clientes_com_fiado": 0,
+                                 "percentual_limite_utilizado": 0.0, "maior_devedor_nome": "",
+                                 "maior_devedor_valor": 0.0, "ticket_medio_fiado": 0.0,
+                                 "percentual_clientes_com_fiado": 0.0, "top_devedores": []},
+                                self.establishment_id)
+
+        receivables_metrics = safe_get(DataLayer.get_receivables_metrics, "receivables",
+                                     {"total_vencido": 0.0, "total_a_vencer": 0.0, "total_recebivel": 0.0,
+                                      "taxa_inadimplencia": 0.0, "titulos_vencidos": 0, "ranking_atraso": []},
+                                     self.establishment_id)
         
         # Análises mais pesadas
         # 🔥 CORREÇÃO: Usar get_all_products_performance para incluir produtos sem vendas na análise ABC
@@ -626,96 +639,203 @@ class DashboardOrchestrator:
             segments.get("Perdido", 0) or 0
         )
 
+        # ============================================================
+        # 🧠 MOTOR DE INTELIGÊNCIA DE NEGÓCIO (BI ENGINE)
+        # 8 cenários profissionais com impacto financeiro quantificado,
+        # linguagem contextual e CTAs acionáveis.
+        # Prioridade: 1=crítico, 2=urgente, 3=oportunidade
+        # ============================================================
         recomendacoes = []
-        if count_risco > 0:
-            recomendacoes.append(
-                {
-                    "tipo": "retencao",
-                    "mensagem": f"{count_risco} clientes em risco de abandono identificados.",
-                    "cta": "Clique para gerar lista de WhatsApp",
-                    "alvo": "clientes",
-                    "segmentos": ["Risco", "Perdido"],
-                    "clientes": clientes_risco,
-                }
-            )
 
-        baixo_estoque = int(inventory_summary.get("baixo_estoque", 0) or 0)
-        if baixo_estoque > 0:
-            recomendacoes.append(
-                {
-                    "tipo": "estoque",
-                    "mensagem": f"{baixo_estoque} produtos com estoque baixo. Repor para evitar ruptura.",
-                    "cta": "Ver lista de estoque baixo",
-                    "alvo": "produtos",
-                }
-            )
+        _ticket_medio = float(sales_current_summary.get("ticket_medio", 0))
+        _fiado_total = float(fiado_metrics.get("total_aberto", 0))
+        _fiado_clientes = int(fiado_metrics.get("clientes_com_fiado", 0))
+        _fiado_perc_fat = (_fiado_total / revenue * 100) if revenue > 0 else 0.0
+        _baixo_estoque = int(inventory_summary.get("baixo_estoque", 0) or 0)
+        _margem_a = float(abc_analysis.get("resumo", {}).get("A", {}).get("margem_media", 0) or 0)
+        _margem_b = float(abc_analysis.get("resumo", {}).get("B", {}).get("margem_media", 0) or 0)
+        # growth_period usa chave 'value' (de StatsValidator.calculate_growth)
+        _growth_val = float(growth_period.get("value", 0) or 0)
+        # previous_faturado já foi calculado acima na seção de comparação (linha ~377)
 
-        if growth_period.get("growth") is not None and growth_period.get("growth") < -10:
-            recomendacoes.append(
-                {
-                    "tipo": "vendas",
-                    "mensagem": "Queda relevante no faturamento versus período equivalente.",
-                    "cta": "Analisar produtos e clientes por período",
-                    "alvo": "dashboard",
-                }
-            )
-
-        margem_a = float(abc_analysis.get("resumo", {}).get("A", {}).get("margem_media", 0) or 0)
-        margem_b = float(abc_analysis.get("resumo", {}).get("B", {}).get("margem_media", 0) or 0)
-        if margem_b > margem_a + 5:
-            recomendacoes.append(
-                {
-                    "tipo": "margem",
-                    "mensagem": "Classe B com margem média maior que a Classe A. Priorize reposição e exposição dos B rentáveis.",
-                    "cta": "Filtrar produtos por margem",
-                    "alvo": "produtos",
-                }
-            )
-
-        # 🔥 NOVO: "PLANO DE RESGATE FINANCEIRO" (Expert Advice for Negative Profit)
+        # --- CENÁRIO 1: PREJUÍZO OPERACIONAL ---------------------------
         if net_profit < 0:
-            # Cenário 1: Despesas Operacionais engolindo o Lucro Bruto
+            causa = ""
             if total_despesas_periodo > gross_profit:
-                recomendacoes.append({
-                    "tipo": "financeiro_critico",
-                    "mensagem": f"⚠️ ALERTA DE PREJUÍZO: Suas despesas operacionais (R$ {total_despesas_periodo:,.2f}) superam todo o seu Lucro Bruto. Você precisa cortar custos fixos urgentemente.",
-                    "cta": "Auditar despesas agora",
-                    "alvo": "financeiro",
-                     "prioridade": 1
-                })
-            
-            # Cenário 2: Margem Bruta muito baixa (Preço errado ou Custo alto)
-            if gross_margin < 25: # Limite de alerta para varejo geral
-                recomendacoes.append({
-                    "tipo": "precificacao",
-                    "mensagem": f"⚠️ MARGEM BRUTA CRÍTICA ({gross_margin:.1f}%): Você está vendendo quase a preço de custo. Revise o markup dos produtos Classe A.",
-                    "cta": "Ver produtos com margem baixa",
-                    "alvo": "produtos",
-                    "prioridade": 1
-                })
-            
-            # Fallback: Se prejuízo existe mas não caiu nos if acima (ex: margem ok mas volume baixo vs custos fixos)
-            if not any(r['tipo'] == 'financeiro_critico' for r in recomendacoes):
-                 recomendacoes.append({
-                    "tipo": "financeiro_critico",
-                    "mensagem": f"Diagnóstico: O negócio operou com prejuízo de R$ {abs(net_profit):,.2f}. A estrutura de custos está incompatível com o faturamento atual.",
-                    "cta": "Análise detalhada de DRE",
-                    "alvo": "financeiro",
-                     "prioridade": 1
-                })
-        
-        elif net_margin < 5 and net_margin > 0:
-             recomendacoes.append({
-                "tipo": "eficiencia",
-                "mensagem": f"💡 ALERTA DE RISCO: Sua operação está no azul, mas a margem líquida é baixa ({net_margin:.1f}%). Qualquer imprevisto pode gerar prejuízo.",
-                "cta": "Otimizar custos operacionais",
-                "alvo": "financeiro",
-                "prioridade": 2
+                causa = (f"Suas despesas (R$ {total_despesas_periodo:,.2f}) "
+                         f"consumiram {(total_despesas_periodo/gross_profit*100 if gross_profit > 0 else 0):.0f}% "
+                         f"do Lucro Bruto (R$ {gross_profit:,.2f}).")
+            elif gross_margin < 20:
+                causa = (f"A Margem Bruta de {gross_margin:.1f}% está muito baixa "
+                         f"— você está vendendo quase a preço de custo.")
+            else:
+                causa = f"A estrutura de custos superou o faturamento em R$ {abs(net_profit):,.2f}."
+            recomendacoes.append({
+                "tipo": "financeiro_critico",
+                "prioridade": 1,
+                "mensagem": (
+                    f"🚨 PREJUÍZO DE R$ {abs(net_profit):,.2f} no período. {causa} "
+                    f"Corte pelo menos R$ {abs(net_profit):,.2f} em custos para zerar o prejuízo."
+                ),
+                "impacto_estimado": round(abs(net_profit), 2),
+                "cta": "Auditar Despesas",
+                "alvo": "despesas",
+                "icone": "🚨"
             })
 
-        # 🔥 CORREÇÃO: Calcular total de despesas para o período
-        total_despesas_periodo = sum([float(exp.get("valor", 0)) for exp in expense_details])
-        
+        # --- CENÁRIO 2: MARGEM LÍQUIDA EM ZONA DE RISCO ----------------
+        elif 0 < net_margin < 5:
+            recomendacoes.append({
+                "tipo": "eficiencia",
+                "prioridade": 2,
+                "mensagem": (
+                    f"⚠️ MARGEM LÍQUIDA FRÁGIL: {net_margin:.1f}% — qualquer imprevisto coloca o negócio no vermelho. "
+                    f"Com faturamento de R$ {revenue:,.2f}, você tem apenas R$ {net_profit:,.2f} de colchão. "
+                    f"Meta recomendada para varejo: margem líquida ≥ 8%."
+                ),
+                "impacto_estimado": round((0.08 - net_margin / 100) * revenue, 2),
+                "cta": "Ver Análise de Margens",
+                "alvo": "analise-financeira",
+                "icone": "⚠️"
+            })
+
+        # --- CENÁRIO 3: MARKUP ABAIXO DO PADRÃO VAREJO ----------------
+        if gross_margin < 25 and revenue > 0 and net_profit >= 0:
+            # Projetar aumento real considerando ganho marginal de 5 pontos
+            # Impacto não deve exceder 15% do faturamento total para ser realista
+            impacto_markup = min(revenue * 0.05, revenue * 0.15)
+            recomendacoes.append({
+                "tipo": "precificacao",
+                "prioridade": 1 if gross_margin < 15 else 2,
+                "mensagem": (
+                    f"💰 MARKUP ABAIXO DO MERCADO: Margem Bruta {gross_margin:.1f}% "
+                    f"(referência saudável: 25-35% para supermercado). "
+                    f"Aumentar o markup médio em 5 p.p. geraria "
+                    f"+R$ {revenue * 0.05:,.2f} adicionais por período."
+                ),
+                "impacto_estimado": round(impacto_markup, 2),
+                "cta": "Revisar Precificação",
+                "alvo": "produtos",
+                "icone": "💰"
+            })
+
+        # --- CENÁRIO 4: CLIENTES EM RISCO DE CHURN (RFM) ---------------
+        if count_risco > 0:
+            # Impacto estimado: recuperacao de 30% do faturado medio desses clientes
+            # Capamos a receita_risco para nao gerar valores astronomicos em dados de teste
+            base_calculo = min(revenue * 0.3, _ticket_medio * count_risco)
+            impacto_retencao = base_calculo * 0.5 # Projetamos recuperar 50% do risco plausivel
+            
+            recomendacoes.append({
+                "tipo": "retencao",
+                "prioridade": 2,
+                "mensagem": (
+                    f"👥 {count_risco} CLIENTES EM RISCO DE ABANDONO identificados pelo modelo RFM. "
+                    f"Ticket médio deles: R$ {_ticket_medio:,.2f}. "
+                    f"Recuperar metade deste grupo geraria ~R$ {impacto_retencao:,.2f} adicionais. "
+                    f"Consulte a lista de nomes nos detalhes para ação direta."
+                ),
+                "impacto_estimado": round(impacto_retencao, 2),
+                "cta": "Ver Clientes em Risco",
+                "alvo": "clientes",
+                "segmentos": ["Risco", "Perdido"],
+                "clientes": clientes_risco[:20], # Limitar a 20 para o modal
+                "icone": "👥"
+            })
+
+        # --- CENÁRIO 5: EXPOSIÇÃO DE FIADO / CRÉDITO --------------------
+        if _fiado_total > 0:
+            if _fiado_perc_fat >= 10:
+                recomendacoes.append({
+                    "tipo": "fiado_critico",
+                    "prioridade": 1,
+                    "mensagem": (
+                        f"🤝 ALERTA DE CRÉDITO: R$ {_fiado_total:,.2f} de fiado em aberto "
+                        f"({_fiado_perc_fat:.1f}% do seu faturamento) com {_fiado_clientes} clientes. "
+                        f"Maior devedor: {fiado_metrics.get('maior_devedor_nome', 'N/A')} "
+                        f"(R$ {fiado_metrics.get('maior_devedor_valor', 0):,.2f}). "
+                        f"Fiado excessivo compromete o fluxo de caixa."
+                    ),
+                    "impacto_estimado": round(_fiado_total, 2),
+                    "cta": "Ver Clientes com Fiado",
+                    "alvo": "clientes",
+                    "top_devedores": fiado_metrics.get("top_devedores", []),
+                    "icone": "🤝"
+                })
+            else:
+                recomendacoes.append({
+                    "tipo": "fiado_atencao",
+                    "prioridade": 3,
+                    "mensagem": (
+                        f"🤝 Carteira de fiado: R$ {_fiado_total:,.2f} em aberto "
+                        f"({_fiado_perc_fat:.1f}% do faturamento) com {_fiado_clientes} clientes. "
+                        f"Monitore para evitar crescimento da inadimplência."
+                    ),
+                    "impacto_estimado": round(_fiado_total, 2),
+                    "cta": "Gestão de Fiado",
+                    "alvo": "clientes",
+                    "top_devedores": fiado_metrics.get("top_devedores", []),
+                    "icone": "🤝"
+                })
+
+        # --- CENÁRIO 6: ESTOQUE BAIXO -----------------------------------
+        if _baixo_estoque > 0:
+            perda_potencial = _ticket_medio * _baixo_estoque * 0.3
+            recomendacoes.append({
+                "tipo": "estoque",
+                "prioridade": 2 if _baixo_estoque > 5 else 3,
+                "mensagem": (
+                    f"📦 {_baixo_estoque} produto{'s' if _baixo_estoque > 1 else ''} abaixo do estoque mínimo. "
+                    f"Ruptura em itens Classe A pode gerar perda estimada de "
+                    f"R$ {perda_potencial:,.2f} em vendas. Priorize a reposição imediata."
+                ),
+                "impacto_estimado": round(perda_potencial, 2),
+                "cta": "Ver Estoque Baixo",
+                "alvo": "produtos",
+                "icone": "📦"
+            })
+
+        # --- CENÁRIO 7: QUEDA NO FATURAMENTO ---------------------------
+        if _growth_val < -10:
+            delta_receita = abs(_growth_val / 100 * previous_faturado)
+            recomendacoes.append({
+                "tipo": "vendas_queda",
+                "prioridade": 2,
+                "mensagem": (
+                    f"📉 QUEDA DE {abs(_growth_val):.1f}% NO FATURAMENTO vs período anterior. "
+                    f"Isso representa R$ {delta_receita:,.2f} a menos em receita. "
+                    f"Verifique produtos Classe A em falta, promoções da concorrência ou sazonalidade."
+                ),
+                "impacto_estimado": round(delta_receita, 2),
+                "cta": "Analisar Tendência",
+                "alvo": "dashboard",
+                "icone": "📉"
+            })
+
+        # --- CENÁRIO 8: CLASSE B MAIS RENTÁVEL QUE A -------------------
+        if _margem_b > _margem_a + 5 and _margem_a > 0:
+            recomendacoes.append({
+                "tipo": "margem_oportunidade",
+                "prioridade": 3,
+                "mensagem": (
+                    f"💡 OPORTUNIDADE DE MARGEM: Produtos Classe B rendem {_margem_b:.1f}% "
+                    f"de margem vs {_margem_a:.1f}% da Classe A. "
+                    f"Aumentar o mix de B pode melhorar a rentabilidade "
+                    f"sem depender de maior volume de vendas."
+                ),
+                "impacto_estimado": round(revenue * (_margem_b - _margem_a) / 100 * 0.1, 2),
+                "cta": "Ver Análise ABC",
+                "alvo": "analise-detalhada",
+                "icone": "💡"
+            })
+
+        # Ordenar: críticos primeiro
+        recomendacoes.sort(key=lambda x: x.get("prioridade", 99))
+
+
+        # 🔥 NOTA: total_despesas_periodo já foi calculado via DataLayer.get_total_expenses_value acima.
+        # NÃO recalcular aqui para evitar divergência com o DRE (a soma dos detalhes pode diferir).
+
         # 🔥 NOVO: "LINK EACH PRODUCT TO AN ORDER"
         # Coletar todos os IDs de produtos em destaque para buscar última compra de forma eficiente (1 única query)
         todos_mais_vendidos_ids = set()
@@ -766,6 +886,8 @@ class DashboardOrchestrator:
                     "status": "high_confidence",
                 },
                 "unique_customers": customer_metrics.get("clientes_unicos", 0),
+                "fiado_aberto": fiado_metrics.get("total_aberto", 0.0), # SSD: Real exposure
+                "fiado_vencido": receivables_metrics.get("total_vencido", 0.0), # SSD: Real overdue
             },
             "financials": financials_consolidated,
             "timeseries": sales_timeseries,
@@ -789,12 +911,30 @@ class DashboardOrchestrator:
             "recomendacoes": recomendacoes,
             "correlations": correlations,
             "anomalies": anomalies,
-            "produtos_estrela": produtos_estrela,
-            "produtos_lentos": produtos_lentos,
-            "previsao_demanda": previsao_demanda,
+            "analise_produtos": {
+                "produtos_estrela": produtos_estrela,
+                "produtos_lentos": produtos_lentos,
+                "previsao_demanda": previsao_demanda,
+            },
             "rh": rh_metrics,
             "inventory": inventory_summary,
             "trend": sales_trend,
+            # 🔥 FIADO: Dados completos de carteira de crédito
+            "fiado": {
+                "total_aberto": fiado_metrics.get("total_aberto", 0.0),
+                "total_limite": fiado_metrics.get("total_limite", 0.0),
+                "clientes_com_fiado": fiado_metrics.get("clientes_com_fiado", 0),
+                "percentual_limite_utilizado": fiado_metrics.get("percentual_limite_utilizado", 0.0),
+                "percentual_do_faturamento": round(_fiado_perc_fat, 1),
+                "ticket_medio_fiado": fiado_metrics.get("ticket_medio_fiado", 0.0),
+                "percentual_clientes_com_fiado": fiado_metrics.get("percentual_clientes_com_fiado", 0.0),
+                "maior_devedor_id": fiado_metrics.get("maior_devedor_id"),
+                "maior_devedor_nome": fiado_metrics.get("maior_devedor_nome", ""),
+                "maior_devedor_celular": fiado_metrics.get("maior_devedor_celular", ""),
+                "maior_devedor_valor": fiado_metrics.get("maior_devedor_valor", 0.0),
+                "top_devedores": fiado_metrics.get("top_devedores", []),
+            },
+            "receivables": receivables_metrics, # NEW: Dados detalhados para a nova aba financeira
             "_performance": {
                 "total_time": time.time() - start_exec
             }

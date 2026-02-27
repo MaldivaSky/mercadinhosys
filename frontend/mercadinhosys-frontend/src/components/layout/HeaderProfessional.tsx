@@ -314,7 +314,12 @@ const HeaderProfessional = () => {
                             <nav className="px-2 py-2">
                                 <p className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Menu</p>
                                 <ul className="space-y-0.5">
-                                    {mobileMenuItems.filter(item => !item.adminOnly || user.role === 'admin').map((item) => (
+                                    {mobileMenuItems.filter(item => {
+                                        const role = user.role?.toLowerCase();
+                                        if (item.adminOnly && role !== 'admin') return false;
+                                        if (role === 'caixa' && item.to !== '/pdv' && item.to !== '/settings') return false;
+                                        return true;
+                                    }).map((item) => (
                                         <li key={item.to}>
                                             <NavLink
                                                 to={item.to}

@@ -4,7 +4,6 @@ import MainLayout from '../components/layout/MainLayout';
 import ConnectionTest from '../components/ConnectionTest';
 import { LoginPage } from '../features/auth/LoginPage';
 import { authService } from '../features/auth/authService';
-import ErrorBoundary from '../components/ErrorBoundary';
 
 // Lazy loading das páginas
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -25,6 +24,19 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const LeadDashboard = lazy(() => import('../features/saas/LeadDashboard'));
 
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
+
+// Componente para proteção de rotas por role
+const RoleGuard = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
+    const userRole = authService.getCurrentUser()?.role?.toLowerCase() || '';
+
+    // Se a rota for restrita a certos perfis (ex: admin)
+    // Permite se não houver allowedRoles definido (rota pública logada) ou se o role estiver na lista
+    if (allowedRoles && !allowedRoles.includes(userRole)) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    return <>{children}</>;
+};
 
 const AppRoutes: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
@@ -59,26 +71,22 @@ const AppRoutes: React.FC = () => {
 
                 {/* Rotas protegidas (sem prefixo /app para evitar quebrar links) */}
                 <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />}>
-                    <Route path="dashboard" element={
-                        <ErrorBoundary>
-                            <DashboardPage />
-                        </ErrorBoundary>
-                    } />
+                    <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><DashboardPage /></RoleGuard>} />
                     <Route path="pdv" element={<PDVPage />} />
-                    <Route path="products" element={<ProductsPage />} />
-                    <Route path="suppliers" element={<SuppliersPage />} />
-                    <Route path="customers" element={<CustomersPage />} />
-                    <Route path="sales" element={<SalesPage />} />
-                    <Route path="expenses" element={<ExpensesPage />} />
-                    <Route path="employees" element={<EmployeesPage />} />
-                    <Route path="rh" element={<RHPage />} />
-                    <Route path="ponto" element={<PontoPage />} />
-                    <Route path="ponto-historico" element={<PontoHistoricoPage />} />
-                    <Route path="ponto-relatorios" element={<RelatoriosPontoPage />} />
-                    <Route path="ponto-diagnostico" element={<DiagnosticoFotos />} />
-                    <Route path="reports" element={<ReportsPage />} />
-                    <Route path="settings" element={<SettingsPage />} />
-                    <Route path="leads" element={<LeadDashboard />} />
+                    <Route path="products" element={<RoleGuard allowedRoles={['admin', 'gerente', 'estoquista']}><ProductsPage /></RoleGuard>} />
+                    <Route path="suppliers" element={<RoleGuard allowedRoles={['admin', 'gerente', 'estoquista']}><SuppliersPage /></RoleGuard>} />
+                    <Route path="customers" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><CustomersPage /></RoleGuard>} />
+                    <Route path="sales" element={<RoleGuard allowedRoles={['admin', 'gerente']}><SalesPage /></RoleGuard>} />
+                    <Route path="expenses" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ExpensesPage /></RoleGuard>} />
+                    <Route path="employees" element={<RoleGuard allowedRoles={['admin', 'gerente']}><EmployeesPage /></RoleGuard>} />
+                    <Route path="rh" element={<RoleGuard allowedRoles={['admin', 'gerente']}><RHPage /></RoleGuard>} />
+                    <Route path="ponto" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><PontoPage /></RoleGuard>} />
+                    <Route path="ponto-historico" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><PontoHistoricoPage /></RoleGuard>} />
+                    <Route path="ponto-relatorios" element={<RoleGuard allowedRoles={['admin', 'gerente']}><RelatoriosPontoPage /></RoleGuard>} />
+                    <Route path="ponto-diagnostico" element={<RoleGuard allowedRoles={['admin', 'gerente']}><DiagnosticoFotos /></RoleGuard>} />
+                    <Route path="reports" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ReportsPage /></RoleGuard>} />
+                    <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><SettingsPage /></RoleGuard>} />
+                    <Route path="leads" element={<RoleGuard allowedRoles={['admin']}><LeadDashboard /></RoleGuard>} />
                 </Route>
 
                 {/* Fallback - se alguém acessar uma rota não definida */}

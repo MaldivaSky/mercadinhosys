@@ -244,37 +244,48 @@ def obter_configuracoes_pdv():
 
         # Busca formas de pagamento do cache de configurações se disponível
         cached_config = get_cached_config(funcionario_data.get("estabelecimento_id"))
-        
-        # Formas de pagamento (Fallback Elite se não houver cache)
+
+        # Formas de pagamento base canônicas (sempre presentes)
+        FORMAS_PADRAO = [
+            {"tipo": "dinheiro",       "label": "Dinheiro",           "taxa": 0,   "permite_troco": True},
+            {"tipo": "cartao_debito",  "label": "Cartão de Débito",   "taxa": 0,   "permite_troco": False},
+            {"tipo": "cartao_credito", "label": "Cartão de Crédito",  "taxa": 2.5, "permite_troco": False},
+            {"tipo": "pix",            "label": "PIX",                "taxa": 0,   "permite_troco": False},
+            {"tipo": "fiado",          "label": "Fiado",              "taxa": 0,   "permite_troco": False},
+        ]
+
         if cached_config and cached_config.get("formas_pagamento"):
             import json
             try:
                 raw_fp = cached_config.get("formas_pagamento")
-                # Converter de lista de strings para o formato esperado pelo PDV se necessário
-                # Aqui o PDV espera lista de objetos. Se o cache tiver apenas nomes, mapeamos.
                 if isinstance(raw_fp, str):
                     raw_fp = json.loads(raw_fp)
-                
+
+                # Normaliza para o formato de objeto esperado pelo PDV
                 formas_pagamento = []
                 for f in raw_fp:
                     if isinstance(f, dict):
                         formas_pagamento.append(f)
                     else:
-                        formas_pagamento.append({"tipo": f.lower().replace(" ", "_"), "label": f, "taxa": 0, "permite_troco": f.lower() == "dinheiro"})
+                        tipo = f.lower().replace(" ", "_").replace("ã", "a").replace("é", "e").replace("ê", "e")
+                        formas_pagamento.append({
+                            "tipo": tipo,
+                            "label": f,
+                            "taxa": 0,
+                            "permite_troco": tipo == "dinheiro"
+                        })
+
+                # ─── Garantir Fiado sempre presente ───────────────────────────
+                tipos_existentes = {fp["tipo"] for fp in formas_pagamento}
+                for fp_padrao in FORMAS_PADRAO:
+                    if fp_padrao["tipo"] not in tipos_existentes:
+                        formas_pagamento.append(fp_padrao)
             except:
-                formas_pagamento = [
-                    {"tipo": "dinheiro", "label": "Dinheiro", "taxa": 0, "permite_troco": True},
-                    {"tipo": "pix", "label": "PIX", "taxa": 0, "permite_troco": False},
-                ]
+                formas_pagamento = FORMAS_PADRAO
         else:
-            formas_pagamento = [
-                {"tipo": "dinheiro", "label": "Dinheiro", "taxa": 0, "permite_troco": True},
-                {"tipo": "cartao_debito", "label": "Cartão de Débito", "taxa": 0, "permite_troco": False},
-                {"tipo": "cartao_credito", "label": "Cartão de Crédito", "taxa": 2.5, "permite_troco": False},
-                {"tipo": "pix", "label": "PIX", "taxa": 0, "permite_troco": False},
-                {"tipo": "outros", "label": "Outros", "taxa": 0, "permite_troco": False},
-            ]
-        
+            formas_pagamento = FORMAS_PADRAO
+
+
         configuracoes = {
             "funcionario": {
                 "id": funcionario_data.get("id"),
@@ -616,6 +627,20 @@ def finalizar_venda():
 
         # Início do processo atômico
         try:
+            # 1. VERIFICAR CAIXA ABERTO OBRIGATÓRIO (RBAC/CASHIER)
+            from app.models import Caixa, MovimentacaoCaixa
+            caixa_aberto = Caixa.query.filter_by(
+                funcionario_id=funcionario_data.get("id"),
+                status="aberto"
+            ).order_by(Caixa.data_abertura.desc()).first()
+
+            if not caixa_aberto:
+                return jsonify({
+                    "success": False, 
+                    "error": "CAIXA_FECHADO", 
+                    "message": "Você precisa realizar a Abertura de Caixa para registrar vendas."
+                }), 403
+
             codigo_venda = gerar_codigo_venda()
             manaus_tz = pytz.timezone('America/Manaus')
             data_venda = datetime.now(manaus_tz)
@@ -696,7 +721,71 @@ def finalizar_venda():
                     "total": float(total_item)
                 })
 
-            db.session.commit()
+            # Registrar Movimentação no Caixa
+            mov_caixa = MovimentacaoCaixa(
+                caixa_id=caixa_aberto.id,
+                estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                tipo="venda",
+                valor=total,
+                forma_pagamento=forma_pagamento,
+                venda_id=nova_venda.id,
+                descricao=f"Venda PDV {codigo_venda}"
+            )
+            db.session.add(mov_caixa)
+
+            # ========================
+            # LÓGICA DE FIADO
+            # ========================
+            forma_lower = str(forma_pagamento).lower()
+            if forma_lower == "fiado":
+                # Fiado exige cliente cadastrado
+                if not cliente_id:
+                    db.session.rollback()
+                    return jsonify({
+                        "success": False,
+                        "error": "CLIENTE_OBRIGATORIO",
+                        "message": "Para vender no FIADO é obrigatório selecionar um cliente cadastrado."
+                    }), 400
+
+                cliente = Cliente.query.get(cliente_id)
+                if not cliente:
+                    db.session.rollback()
+                    return jsonify({"success": False, "error": "Cliente não encontrado"}), 404
+
+                # Incrementar saldo devedor
+                cliente.saldo_devedor = float(cliente.saldo_devedor or 0) + float(total)
+
+                # Criar ContaReceber para rastreabilidade financeira
+                data_vencimento_str = data.get("data_vencimento_fiado")
+                data_vencimento = None
+                if data_vencimento_str:
+                    try:
+                        data_vencimento = datetime.strptime(data_vencimento_str, "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                if not data_vencimento:
+                    from datetime import timedelta
+                    data_vencimento = (data_venda + timedelta(days=30)).date()
+
+                from app.models import ContaReceber
+                conta = ContaReceber(
+                    estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                    cliente_id=cliente_id,
+                    venda_id=nova_venda.id,
+                    numero_documento=codigo_venda,
+                    descricao=f"Fiado PDV - {cliente.nome}",
+                    valor_original=total,
+                    valor_atual=total,
+                    data_emissao=data_venda.date(),
+                    data_vencimento=data_vencimento,
+                    status="aberto",
+                    observacoes=f"Venda fiado em {data_venda.strftime('%d/%m/%Y')}"
+                )
+                db.session.add(conta)
+                # Não entra dinheiro no caixa (é fiado)
+            elif forma_lower == "dinheiro":
+                # Atualizar saldo apenas se for dinheiro (caixa físico)
+                caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual) + float(total)
 
             db.session.commit()
 

@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Produto, Cliente } from '../types';
-import { pdvService, ConfiguracoesPDV } from '../features/pdv/pdvService';
+import { pdvService, ConfiguracoesPDV, CaixaPDV } from '../features/pdv/pdvService';
 import { showToast } from '../utils/toast';
 
-interface ItemCarrinho {
+export interface ItemCarrinho {
     produto: Produto;
     quantidade: number;
     precoUnitario: number;
@@ -19,21 +19,122 @@ export interface FormaPagamento {
     permite_troco: boolean;
 }
 
-export const usePDV = () => {
-    // Estado do PDV
-    const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
-    const [cliente, setCliente] = useState<Cliente | null>(null);
-    const [emailRecibo, setEmailRecibo] = useState<string>('');
-    const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
-    const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string>('dinheiro');
-    const [valorRecebido, setValorRecebido] = useState<number>(0);
-    const [observacoes, setObservacoes] = useState<string>('');
-    const [descontoGeral, setDescontoGeral] = useState<number>(0);
-    const [descontoPercentual, setDescontoPercentual] = useState<boolean>(false);
+export interface PDVSession {
+    id: string;
+    carrinho: ItemCarrinho[];
+    cliente: Cliente | null;
+    emailRecibo: string;
+    formaPagamentoSelecionada: string;
+    valorRecebido: number;
+    observacoes: string;
+    descontoGeral: number;
+    descontoPercentual: boolean;
+}
 
-    // Configurações e permissões
+const createInitialSession = (): PDVSession => ({
+    id: Date.now().toString(),
+    carrinho: [],
+    cliente: null,
+    emailRecibo: '',
+    formaPagamentoSelecionada: 'dinheiro',
+    valorRecebido: 0,
+    observacoes: '',
+    descontoGeral: 0,
+    descontoPercentual: false,
+});
+
+export const usePDV = () => {
+    // Configurações e permissões globais
     const [configuracoes, setConfiguracoes] = useState<ConfiguracoesPDV | null>(null);
+    const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
     const [loading, setLoading] = useState(false);
+    const [caixaAberto, setCaixaAberto] = useState<CaixaPDV | null>(null);
+
+    // Múltiplas Sessões do PDV
+    const [sessoes, setSessoes] = useState<PDVSession[]>([createInitialSession()]);
+    const [sessaoAtivaId, setSessaoAtivaId] = useState<string>(sessoes[0].id);
+
+    const sessaoAtiva = sessoes.find(s => s.id === sessaoAtivaId) || sessoes[0];
+
+    // Getters da sessão atual
+    const carrinho = sessaoAtiva.carrinho;
+    const cliente = sessaoAtiva.cliente;
+    const emailRecibo = sessaoAtiva.emailRecibo;
+    const formaPagamentoSelecionada = sessaoAtiva.formaPagamentoSelecionada;
+    const valorRecebido = sessaoAtiva.valorRecebido;
+    const observacoes = sessaoAtiva.observacoes;
+    const descontoGeral = sessaoAtiva.descontoGeral;
+    const descontoPercentual = sessaoAtiva.descontoPercentual;
+
+    const updateSessao = useCallback((updates: Partial<PDVSession>) => {
+        setSessoes(prev => prev.map(s => s.id === sessaoAtivaId ? { ...s, ...updates } : s));
+    }, [sessaoAtivaId]);
+
+    const setCarrinho = useCallback((value: ItemCarrinho[] | ((prev: ItemCarrinho[]) => ItemCarrinho[])) => {
+        setSessoes(prev => prev.map(s => {
+            if (s.id !== sessaoAtivaId) return s;
+            const newValue = typeof value === 'function' ? value(s.carrinho) : value;
+            return { ...s, carrinho: newValue };
+        }));
+    }, [sessaoAtivaId]);
+
+    const setCliente = useCallback((c: Cliente | null) => {
+        setSessoes(prev => prev.map(s => {
+            if (s.id !== sessaoAtivaId) return s;
+            return { ...s, cliente: c, emailRecibo: c?.email || '' };
+        }));
+    }, [sessaoAtivaId]);
+
+    const setEmailRecibo = useCallback((e: string) => updateSessao({ emailRecibo: e }), [updateSessao]);
+    const setFormaPagamentoSelecionada = useCallback((f: string) => updateSessao({ formaPagamentoSelecionada: f }), [updateSessao]);
+    const setValorRecebido = useCallback((v: number | ((prev: number) => number)) => {
+        setSessoes(prev => prev.map(s => {
+            if (s.id !== sessaoAtivaId) return s;
+            const n = typeof v === 'function' ? v(s.valorRecebido) : v;
+            return { ...s, valorRecebido: n };
+        }));
+    }, [sessaoAtivaId]);
+    const setObservacoes = useCallback((o: string) => updateSessao({ observacoes: o }), [updateSessao]);
+    const setDescontoGeral = useCallback((d: number | ((prev: number) => number)) => {
+        setSessoes(prev => prev.map(s => {
+            if (s.id !== sessaoAtivaId) return s;
+            const n = typeof d === 'function' ? d(s.descontoGeral) : d;
+            return { ...s, descontoGeral: n };
+        }));
+    }, [sessaoAtivaId]);
+    const setDescontoPercentual = useCallback((dp: boolean | ((prev: boolean) => boolean)) => {
+        setSessoes(prev => prev.map(s => {
+            if (s.id !== sessaoAtivaId) return s;
+            const n = typeof dp === 'function' ? dp(s.descontoPercentual) : dp;
+            return { ...s, descontoPercentual: n };
+        }));
+    }, [sessaoAtivaId]);
+
+    // Gestão de Sessões
+    const adicionarSessao = useCallback(() => {
+        const nova = createInitialSession();
+        setSessoes(prev => [...prev, nova]);
+        setSessaoAtivaId(nova.id);
+    }, []);
+
+    const alternarSessao = useCallback((id: string) => {
+        setSessaoAtivaId(id);
+    }, []);
+
+    const removerSessao = useCallback((id: string) => {
+        setSessoes(prev => {
+            if (prev.length <= 1) {
+                const nova = createInitialSession();
+                setSessaoAtivaId(nova.id);
+                return [nova];
+            }
+            const novas = prev.filter(s => s.id !== id);
+            if (sessaoAtivaId === id && novas.length > 0) {
+                setSessaoAtivaId(novas[novas.length - 1].id);
+            }
+            return novas;
+        });
+    }, [sessaoAtivaId]);
 
     // Carregar configurações do PDV
     useEffect(() => {
@@ -42,11 +143,14 @@ export const usePDV = () => {
                 const config = await pdvService.getConfiguracoes();
                 setConfiguracoes(config);
                 setFormasPagamento(config.formas_pagamento);
+
+                // Verificar Caixa Aberto
+                const caixa = await pdvService.getCaixaAtual();
+                setCaixaAberto(caixa);
             } catch (error) {
-                console.error('Erro ao carregar configurações do PDV:', error);
+                console.error('Erro ao carregar configurações/caixa do PDV:', error);
             }
         };
-
         carregarConfiguracoes();
     }, []);
 
@@ -73,11 +177,9 @@ export const usePDV = () => {
 
     // Adicionar produto ao carrinho
     const adicionarProduto = useCallback((produto: Produto, quantidade: number = 1) => {
-        // Inteligência de Validade (Elite Accuracy - Timezone Shield)
         const controlarValidade = configuracoes?.controlar_validade ?? true;
 
         if (controlarValidade && produto.data_validade) {
-            // Parse robusto: suporta YYYY-MM-DD e DD/MM/YYYY
             let y, m, d;
             if (produto.data_validade.includes('-')) {
                 [y, m, d] = produto.data_validade.split('-').map(Number);
@@ -90,13 +192,11 @@ export const usePDV = () => {
             hoje.setHours(0, 0, 0, 0);
 
             if (dataValidade < hoje) {
-                // Produto REALMENTE vencido (data anterior a hoje)
                 showToast.error(`BLOQUEIO: O produto ${produto.nome} está VENCIDO!`, {
                     duration: 8000,
                     icon: '🚫'
                 });
             } else {
-                // Verificar se está próximo ao vencimento conforme config
                 const diasAlerta = configuracoes?.dias_alerta_validade ?? 30;
                 const dataLimiteAlerta = new Date(hoje);
                 dataLimiteAlerta.setDate(hoje.getDate() + diasAlerta);
@@ -173,11 +273,11 @@ export const usePDV = () => {
                 return [...prev, novoItem];
             }
         });
-    }, [configuracoes, round]);
+    }, [configuracoes, round, setCarrinho]);
 
     const removerProduto = useCallback((produtoId: number) => {
         setCarrinho(prev => prev.filter(item => item.produto.id !== produtoId));
-    }, []);
+    }, [setCarrinho]);
 
     const atualizarQuantidade = useCallback((produtoId: number, quantidade: number) => {
         if (quantidade <= 0) {
@@ -204,7 +304,7 @@ export const usePDV = () => {
                 return item;
             })
         );
-    }, [removerProduto, configuracoes, round]);
+    }, [removerProduto, configuracoes, round, setCarrinho]);
 
     const aplicarDescontoItem = useCallback((produtoId: number, desconto: number, percentual: boolean = false) => {
         setCarrinho(prev =>
@@ -224,37 +324,31 @@ export const usePDV = () => {
                 return item;
             })
         );
-    }, []);
+    }, [setCarrinho]);
 
     const validarDescontoPermitido = useCallback((valorDesconto: number): boolean => {
         if (!configuracoes) return false;
-
-        if (configuracoes.funcionario.role === 'ADMIN') {
-            return true;
-        }
+        if (configuracoes.funcionario.role === 'ADMIN') return true;
 
         const percentualDesconto = (valorDesconto / subtotal) * 100;
         const limiteDesconto = configuracoes.funcionario.limite_desconto || 0;
-
-        if (percentualDesconto > limiteDesconto) {
-            return false;
-        }
-
-        return true;
+        return percentualDesconto <= limiteDesconto;
     }, [configuracoes, subtotal]);
 
     const limparCarrinho = useCallback(() => {
-        setCarrinho([]);
-        setCliente(null);
-        setEmailRecibo('');
-        setValorRecebido(0);
-        setDescontoGeral(0);
-        setDescontoPercentual(false);
-        setObservacoes('');
-        setFormaPagamentoSelecionada('dinheiro');
-    }, []);
+        updateSessao({
+            carrinho: [],
+            cliente: null,
+            emailRecibo: '',
+            formaPagamentoSelecionada: 'dinheiro',
+            valorRecebido: 0,
+            observacoes: '',
+            descontoGeral: 0,
+            descontoPercentual: false,
+        });
+    }, [updateSessao]);
 
-    const finalizarVenda = async () => {
+    const finalizarVenda = async (extraData?: { data_vencimento_fiado?: string }) => {
         if (carrinho.length === 0) {
             throw new Error('Adicione produtos ao carrinho');
         }
@@ -291,6 +385,7 @@ export const usePDV = () => {
                 cliente_id: cliente?.id,
                 email_destino: emailRecibo.trim() || undefined,
                 observacoes: observacoes.trim() || undefined,
+                ...(extraData || {}),
             };
 
             const venda = await pdvService.finalizarVenda(vendaData);
@@ -304,12 +399,17 @@ export const usePDV = () => {
     };
 
     return {
+        // Multi-Session Utilities
+        sessoes,
+        sessaoAtivaId,
+        adicionarSessao,
+        alternarSessao,
+        removerSessao,
+
+        // Current Session Data
         carrinho,
         cliente,
-        setCliente: (c: Cliente | null) => {
-            setCliente(c);
-            if (c?.email) setEmailRecibo(c.email);
-        },
+        setCliente,
         emailRecibo,
         setEmailRecibo,
         formasPagamento,
@@ -338,5 +438,7 @@ export const usePDV = () => {
         validarDescontoPermitido,
         limparCarrinho,
         finalizarVenda,
+        caixaAberto,
+        setCaixaAberto
     };
 };

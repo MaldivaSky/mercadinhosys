@@ -15,13 +15,15 @@ import {
     Briefcase,
     TrendingUp,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    DollarSign
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 
 const menuItems = [
     { to: '/dashboard', icon: Home, label: 'Dashboard' },
     { to: '/pdv', icon: ShoppingCart, label: 'PDV' },
+    { to: '/pdv?manage=true', icon: DollarSign, label: 'Gerenciar Caixa' },
     { to: '/products', icon: Package, label: 'Produtos' },
     { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
     { to: '/customers', icon: Users, label: 'Clientes' },
@@ -54,7 +56,29 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
             </div>
             <nav className="px-4 pb-4">
                 <ul className="space-y-2">
-                    {menuItems.filter(item => !item.adminOnly || authService.getCurrentUser()?.role === 'admin').map((item) => (
+                    {menuItems.filter(item => {
+                        const role = authService.getCurrentUser()?.role?.toLowerCase();
+                        if (item.adminOnly && role !== 'admin') return false;
+
+                        // Se for caixa ou estoquista, aplicamos o filtro seletivo a áreas estritas
+                        if (role === 'caixa') {
+                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/customers', '/ponto', '/settings'];
+                            return permitidos.includes(item.to);
+                        }
+
+                        if (role === 'estoquista') {
+                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings'];
+                            return permitidos.includes(item.to);
+                        }
+
+                        // Funcionário genérico?
+                        if (role === 'funcionario') {
+                            const bloqueados = ['/sales', '/expenses', '/employees', '/rh', '/ponto-relatorios', '/ponto-diagnostico', '/reports', '/leads'];
+                            return !bloqueados.includes(item.to);
+                        }
+
+                        return true;
+                    }).map((item) => (
                         <li key={item.to}>
                             <NavLink
                                 to={item.to}
