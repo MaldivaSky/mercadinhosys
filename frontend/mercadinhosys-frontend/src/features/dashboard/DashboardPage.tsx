@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
   ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
-  DollarSign as DollarIcon, Target as TargetIcon, AlertCircle,
+  DollarSign as DollarIcon, Target as TargetIcon, AlertCircle, Shield, CheckCircle, UsbProxy, Pickaxe, BookText, Fingerprint, Focus, Ghost, GlassWater, Hammer, HeartPulse, HeartHandshake, Home, Locate, Lock, LogOut, FileText,
   TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
-  LineChart as LineChartIcon, RefreshCw, X, Clock, Lightbulb, Users, ArrowRight
+  LineChart as LineChartIcon, TrendingDown, RefreshCw, X, Clock, Lightbulb, Users, ArrowRight
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -145,6 +145,20 @@ interface InsightsCientificos {
     impacto_esperado: number;
     complexidade: 'baixa' | 'media' | 'alta';
   }>;
+  // 🔥 NOVO: Interface para Fiados do Backend
+  fiados_ativos?: Array<{
+    cliente_id: number;
+    cliente_nome: string;
+    total_debitos: number;
+    dias_atraso: number;
+    limite_credito: number;
+  }>;
+  fiado_summary?: {
+    total_fiado: number;
+    quantidade_clientes: number;
+    vencido: number;
+    a_vencer: number;
+  };
 }
 
 // 🔥 NOVO: Interface para Métricas de RH
@@ -264,6 +278,19 @@ interface DashboardData {
       acao_recomendada: string;
     }>;
     rh?: RHMetrics; // 🔥 NOVO: Dados de RH
+    fiados_ativos?: Array<{
+      cliente_id: number;
+      cliente_nome: string;
+      total_debitos: number;
+      dias_atraso: number;
+      limite_credito: number;
+    }>;
+    fiado_summary?: {
+      total_fiado: number;
+      quantidade_clientes: number;
+      vencido: number;
+      a_vencer: number;
+    };
   };
 }
 
@@ -283,7 +310,7 @@ const DashboardPage: React.FC = () => {
     'insights': true
   });
   const [selectedABC, setSelectedABC] = useState<'A' | 'B' | 'C' | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'avancado' | 'rh'>('visao-geral'); // 🔥 Inicia em Visão Geral
+  const [viewMode, setViewMode] = useState<'visao-geral' | 'detalhado' | 'avancado' | 'rh' | 'financeiro'>('visao-geral'); // 🔥 Inicia em Visão Geral
   const [hoveredKPI, setHoveredKPI] = useState<number | null>(null);
   const [expandedKPI, setExpandedKPI] = useState<number | null>(null);
 
@@ -652,6 +679,15 @@ const DashboardPage: React.FC = () => {
             roi_mensal: roiMensal
           },
           rh: backendData?.rh, // 🔥 NOVO: Dados de RH mapeados
+          fiado: backendData?.fiado, // 🔥 NOVO: Dados Avançados de Fiado
+          receivables: backendData?.receivables, // 🔥 NOVO: Dados de Recebíveis Avançados
+          fiados_ativos: backendData?.fiados_ativos || [],
+          fiado_summary: backendData?.fiado_summary || {
+            total_fiado: 0,
+            quantidade_clientes: 0,
+            vencido: 0,
+            a_vencer: 0
+          },
           analise_produtos: {
             curva_abc: backendData?.abc || { produtos: [], resumo: { A: { quantidade: 0, faturamento_total: 0, percentual: 0 }, B: { quantidade: 0, faturamento_total: 0, percentual: 0 }, C: { quantidade: 0, faturamento_total: 0, percentual: 0 } }, pareto_80_20: false },
             produtos_estrela: produtosEstrela,
@@ -1034,6 +1070,7 @@ const DashboardPage: React.FC = () => {
                 <option value="visao-geral">📊 Visão Geral</option>
                 <option value="detalhado">📈 Análise Detalhada</option>
                 <option value="avancado">🔬 Análise Avançada</option>
+                <option value="financeiro">💰 Financeiro & Crédito</option>
                 <option value="rh">👥 Análise de RH</option>
               </select>
             </div>
@@ -3297,6 +3334,275 @@ const DashboardPage: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* 🔥 NOVO: PAINEL FINANCEIRO & CRÉDITO (Incluindo Fiado AI Metrics) */}
+      {viewMode === 'financeiro' && (
+        <div className="space-y-6">
+          {/* Cabeçalho Financeiro */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-800 rounded-xl shadow-lg p-6 text-white flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md border border-white/20">
+                <DollarIcon className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold">Inteligência Financeira e Crédito</h2>
+                <p className="text-emerald-100">Análise de recebíveis, gestão avançada de fiados e risco de crédito</p>
+              </div>
+            </div>
+            {/* Quick Stats - Recebíveis Gerais */}
+            <div className="flex gap-6 bg-black/20 p-4 rounded-xl border border-white/10 w-full md:w-auto">
+              <div>
+                <p className="text-sm text-emerald-100 font-medium">A Receber</p>
+                <p className="text-xl font-bold">R$ {(data?.data?.receivables?.total_recebivel || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-px bg-white/20"></div>
+              <div>
+                <p className="text-sm text-red-200 font-medium">Vencidos</p>
+                <p className="text-xl font-bold text-red-100">R$ {(data?.data?.receivables?.total_vencido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="w-px bg-white/20"></div>
+              <div>
+                <p className="text-sm text-yellow-200 font-medium">Inadimplência</p>
+                <p className="text-xl font-bold text-yellow-100">{(data?.data?.receivables?.taxa_inadimplencia || 0).toFixed(1)}%</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid Principal do Financeiro */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            {/* COLUNA ESQUERDA: Exposição de Risco (Fiado Geral) */}
+            <div className="lg:col-span-4 space-y-6">
+              <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-indigo-500" />
+                  Risco Exposto: Fiados
+                </h3>
+
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-sm text-gray-500 font-medium mb-1">Total em Aberto na Praça</p>
+                    <p className="text-4xl font-black text-rose-600">
+                      R$ {(data?.data?.fiado?.total_aberto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-gray-600 flex items-center gap-2 text-sm"><Users className="w-4 h-4" /> Clientes com Fiado</span>
+                      <span className="font-bold">{data?.data?.fiado?.clientes_com_fiado || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-gray-600 text-sm">Do Faturamento Total</span>
+                      <span className="font-bold text-amber-600">{data?.data?.fiado?.percentual_do_faturamento || 0}%</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-gray-600 text-sm">Ticket Médio (Dívida)</span>
+                      <span className="font-bold text-indigo-600">R$ {(data?.data?.fiado?.ticket_medio_fiado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-gray-600 text-sm">Comprometimento de Limite</span>
+                      <span className="font-bold">{data?.data?.fiado?.percentual_limite_utilizado || 0}%</span>
+                    </div>
+                    {/* Barra de comprometimento */}
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${(data?.data?.fiado?.percentual_limite_utilizado || 0) > 80 ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                        style={{ width: `${Math.min(data?.data?.fiado?.percentual_limite_utilizado || 0, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => navigate('/caixa')}
+                    className="w-full mt-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold py-3 rounded-lg border border-indigo-200 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ArrowRight className="w-4 h-4" /> Centro de Comando de Crédito
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUNA DIREITA: Tendências, Previsões e Top Clientes */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Trends AI Card */}
+              <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-xl shadow-md p-6 border border-indigo-800 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <Brain className="w-32 h-32 text-indigo-300" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2 relative z-10">
+                  <Cpu className="w-5 h-5 text-indigo-400" />
+                  Gêmeo Digital: Comportamento da Dívida (30 Dias)
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                  <div className="bg-white/10 backdrop-blur-md rounded-lg p-5 border border-white/10">
+                    <p className="text-indigo-200 text-sm mb-2 flex items-center gap-1"><TrendingUpFill className="w-4 h-4" /> Novos Créditos Tomados</p>
+                    <p className="text-2xl font-bold text-white">R$ {(data?.data?.fiado?.tendencias?.novos_fiados_30d || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-md rounded-lg p-5 border border-white/10">
+                    <p className="text-emerald-300 text-sm mb-2 flex items-center gap-1"><TrendingDown className="w-4 h-4" /> Dívidas Quitas</p>
+                    <p className="text-2xl font-bold text-white">R$ {(data?.data?.fiado?.tendencias?.pagamentos_fiado_30d || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className={`backdrop-blur-md rounded-lg p-5 border border-white/10 ${(data?.data?.fiado?.tendencias?.taxa_recuperacao_percentual || 0) < 50 ? 'bg-rose-500/20 border-rose-500/30' :
+                    (data?.data?.fiado?.tendencias?.taxa_recuperacao_percentual || 0) >= 80 ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-amber-500/20 border-amber-500/30'
+                    }`}>
+                    <p className="text-white text-sm mb-2 opacity-90">Taxa de Recuperação (Saúde)</p>
+                    <p className="text-3xl font-black text-white">
+                      {(data?.data?.fiado?.tendencias?.taxa_recuperacao_percentual || 0).toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-white/70 mt-1">Acima de 80% indica carteira saudável.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid Secundário: Bons Pagadores vs Produtos Mais Fiados */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                {/* Bons Pagadores */}
+                <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                  <h3 className="text-[14px] font-bold text-gray-800 mb-4 flex items-center justify-between">
+                    <span className="flex items-center gap-2"><TargetIcon className="w-4 h-4 text-emerald-500" /> Melhores Pagadores</span>
+                    <span className="text-xs font-normal bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">Saldo Quitado + Alto Volume</span>
+                  </h3>
+                  <div className="space-y-3">
+                    {data?.data?.fiado?.bons_pagadores?.length > 0 ? (
+                      data?.data?.fiado?.bons_pagadores?.map((cliente: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg transition-colors border border-gray-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs">
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-800 text-sm truncate max-w-[120px] sm:max-w-xs">{cliente.nome}</p>
+                              <p className="text-xs text-gray-500">{cliente.celular}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-emerald-600 text-sm">R$ {cliente.volume_credito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-[10px] text-gray-400 uppercase">Volume Histórico</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center py-4 italic">Sem dados suficientes de pagadores.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Produtos Top no Fiado */}
+                <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                  <h3 className="text-[14px] font-bold text-gray-800 mb-4 flex items-center justify-between">
+                    <span className="flex items-center gap-2"><Package className="w-4 h-4 text-amber-500" /> Top Produtos na Caderneta</span>
+                    <span className="text-xs font-normal bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Itens mais fiados</span>
+                  </h3>
+                  <div className="space-y-3">
+                    {data?.data?.fiado?.top_produtos?.length > 0 ? (
+                      data?.data?.fiado?.top_produtos?.map((prod: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg transition-colors border border-gray-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 font-bold text-xs">
+                              <Package className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-800 text-sm truncate max-w-[120px] sm:max-w-[180px]" title={prod.nome}>{prod.nome}</p>
+                              <p className="text-xs text-gray-500">{prod.quantidade} unidades vendidas no fiado</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-700 text-sm">R$ {prod.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center py-4 italic">Sem produtos vendidos no fiado.</p>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+          {/* Ranking General de Devedores e Atrasos em Larga Escala (Tabelão) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <div className="bg-white rounded-xl shadow-md p-6 border border-red-100">
+              <h3 className="text-[15px] font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                Top Devedores (Maior Risco Absoluto)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-4 py-3">Cliente</th>
+                      <th className="px-4 py-3 text-right">Saldo Devedor</th>
+                      <th className="px-4 py-3 text-right">Limite Usado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data?.data?.fiado?.top_devedores?.map((dev: any, i: number) => (
+                      <tr key={i} className="border-b hover:bg-red-50/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900">{dev.nome}</td>
+                        <td className="px-4 py-3 text-right font-bold text-red-600">R$ {dev.saldo_devedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className={dev.percentual_limite > 90 ? 'text-red-600 font-bold' : ''}>
+                              {dev.percentual_limite.toFixed(1)}%
+                            </span>
+                            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full ${dev.percentual_limite > 90 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(dev.percentual_limite, 100)}%` }}></div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-md p-6 border border-orange-100">
+              <h3 className="text-[15px] font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-orange-500" />
+                Títulos Atrasados (Contas a Receber)
+              </h3>
+              {data?.data?.receivables?.ranking_atraso?.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                      <tr>
+                        <th className="px-4 py-3">Cliente</th>
+                        <th className="px-4 py-3 text-right">Valor Vencido</th>
+                        <th className="px-4 py-3 text-right">Dias de Atraso</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data?.data?.receivables?.ranking_atraso?.map((tit: any, i: number) => (
+                        <tr key={i} className="border-b hover:bg-orange-50/50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900">{tit.nome}</td>
+                          <td className="px-4 py-3 text-right font-bold text-orange-600">R$ {tit.valor_vencido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-red-500">
+                            {tit.dias_atraso} dias
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-8 flex flex-col items-center justify-center text-gray-400">
+                  <CheckCircle className="w-12 h-12 text-emerald-300 mb-2" />
+                  <p>Nenhum título em atraso encontrado.</p>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+      {/* 🔥 FIM DO NOVO PAINEL FINANCEIRO */}
 
       {/* 🔥 NOVO: PAINEL DE RH */}
       {viewMode === 'rh' && rh && (
