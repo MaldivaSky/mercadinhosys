@@ -30,6 +30,9 @@ def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
         if not data.get(campo):
             erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
 
+    # Log para depuração
+    current_app.logger.info(f"Validando cliente: CPF={data.get('cpf')}, ID={cliente_id}, Estab={estabelecimento_id}")
+
     # Validação de CPF
     if data.get("cpf"):
         cpf = re.sub(r"\D", "", data["cpf"])
@@ -52,6 +55,7 @@ def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
         )
 
         if cliente_existente and cliente_existente.id != cliente_id:
+            current_app.logger.warning(f"CPF DUPLICADO DETECTADO: CPF={cpf}, Existente_ID={cliente_existente.id}, Novo_ID={cliente_id}")
             erros.append("CPF já cadastrado para outro cliente")
 
     # Validação de email
@@ -93,44 +97,11 @@ def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
     # Validação de endereço
     campos_endereco = ["cep", "logradouro", "numero", "bairro", "cidade", "estado"]
     for campo in campos_endereco:
-        if campo in data and not data.get(campo):
+        if not data.get(campo):
+            # Se for obrigatório na tabela, deve ser obrigatório aqui
             erros.append(
-                f'O campo {campo.replace("_", " ").title()} é obrigatório quando informado'
+                f'O campo {campo.replace("_", " ").title()} é obrigatório'
             )
-
-    # Validação de estado
-    if data.get("estado"):
-        estados_brasil = [
-            "AC",
-            "AL",
-            "AP",
-            "AM",
-            "BA",
-            "CE",
-            "DF",
-            "ES",
-            "GO",
-            "MA",
-            "MT",
-            "MS",
-            "MG",
-            "PA",
-            "PB",
-            "PR",
-            "PE",
-            "PI",
-            "RJ",
-            "RN",
-            "RS",
-            "RO",
-            "RR",
-            "SC",
-            "SP",
-            "SE",
-            "TO",
-        ]
-        if data["estado"].upper() not in estados_brasil:
-            erros.append("Estado inválido. Use a sigla de 2 letras (ex: SP)")
 
     return erros
 
@@ -186,8 +157,8 @@ def listar_clientes():
         ativo = request.args.get("ativo", None, type=str)
         classificacao = request.args.get("classificacao", None, type=str)
         busca = request.args.get("busca", "", type=str).strip()
-        ordenar_por = request.args.get("ordenar_por", "nome")
-        direcao = request.args.get("direcao", "asc")
+        ordenar_por = request.args.get("ordenar_por", "id")
+        direcao = request.args.get("direcao", "desc")
 
         # Query base
         query = Cliente.query.filter_by(
@@ -527,7 +498,7 @@ def criar_cliente():
             bairro=data.get("bairro", "").strip(),
             cidade=data.get("cidade", "").strip(),
             estado=(
-                data.get("estado", "").strip().upper() if data.get("estado") else None
+                data.get("estado", "").strip().upper() if data.get("estado") else ""
             ),
             pais=data.get("pais", "Brasil").strip(),
             ativo=data.get("ativo", True),
@@ -539,6 +510,9 @@ def criar_cliente():
 
         db.session.add(cliente)
         db.session.commit()
+        
+        # Recarregar do banco para garantir persistência real
+        db.session.refresh(cliente)
 
         # Log de auditoria
         current_app.logger.info(
@@ -556,13 +530,24 @@ def criar_cliente():
             201,
         )
 
-    except IntegrityError:
+    except IntegrityError as e:
         db.session.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        current_app.logger.error(f"IntegrityError ao criar cliente: {error_msg}")
+        
+        # Tenta identificar se é realmente CPF duplicado
+        if "cpf" in error_msg.lower() or "uq_cliente_estab_cpf" in error_msg.lower():
+            return (
+                jsonify({"success": False, "message": "Este CPF já está cadastrado para outro cliente deste estabelecimento."}),
+                400,
+            )
+        
         return (
             jsonify(
                 {
                     "success": False,
-                    "message": "CPF já cadastrado para outro cliente",
+                    "message": "Erro de integridade nos dados. Verifique se todos os campos obrigatórios foram preenchidos corretamente.",
+                    "details": error_msg if current_app.debug else None
                 }
             ),
             400,

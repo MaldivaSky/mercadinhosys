@@ -15,3 +15,9 @@ export function maskPhone(value: string): string {
     .replace(/(\d{5})(\d{1,4})$/, '$1-$2')
     .slice(0, 14);
 }
+export function maskCEP(value: string): string {
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .slice(0, 9);
+}

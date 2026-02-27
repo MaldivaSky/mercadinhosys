@@ -588,6 +588,12 @@ class Cliente(db.Model, EnderecoMixin):
             "cpf": self.cpf,
             "celular": self.celular,
             "email": self.email,
+            "cep": self.cep,
+            "logradouro": self.logradouro,
+            "numero": self.numero,
+            "bairro": self.bairro,
+            "cidade": self.cidade,
+            "estado": self.estado,
             "endereco_completo": self.endereco_completo(),
             "limite_credito": (
                 float(self.limite_credito) if self.limite_credito else 0.0
@@ -892,6 +898,7 @@ class Produto(db.Model):
     marca = db.Column(db.String(50))
     fabricante = db.Column(db.String(100))  # Adicionado campo fabricante
     tipo = db.Column(db.String(50))  # Tipo do produto: Higiene, Limpeza, Alimentos, etc.
+    subcategoria = db.Column(db.String(50))  # Adicionado campo subcategoria
 
     unidade_medida = db.Column(db.String(20), default="UN")
 
@@ -1325,6 +1332,7 @@ class Produto(db.Model):
             "marca": self.marca,
             "fabricante": self.fabricante,
             "tipo": self.tipo,
+            "subcategoria": self.subcategoria,
             "unidade_medida": self.unidade_medida,
             "categoria": self.categoria.nome if self.categoria else None,
             "categoria_id": self.categoria_id,
@@ -1638,7 +1646,7 @@ class VendaItem(db.Model):
     total_item = db.Column(db.Numeric(10, 2), nullable=False)
 
     custo_unitario = db.Column(db.Numeric(10, 2))
-    margem_item = db.Column(db.Numeric(5, 2))
+    margem_item = db.Column(db.Numeric(10, 2))
     margem_lucro_real = db.Column(db.Numeric(10, 2))  # Lucro real: (preco_venda - custo_atual) * quantidade
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1819,12 +1827,12 @@ class HistoricoPrecos(db.Model):
     # Valores anteriores
     preco_custo_anterior = db.Column(db.Numeric(10, 2), nullable=False)
     preco_venda_anterior = db.Column(db.Numeric(10, 2), nullable=False)
-    margem_anterior = db.Column(db.Numeric(5, 2), nullable=False)
+    margem_anterior = db.Column(db.Numeric(10, 2), nullable=False)
 
     # Valores novos
     preco_custo_novo = db.Column(db.Numeric(10, 2), nullable=False)
     preco_venda_novo = db.Column(db.Numeric(10, 2), nullable=False)
-    margem_nova = db.Column(db.Numeric(5, 2), nullable=False)
+    margem_nova = db.Column(db.Numeric(10, 2), nullable=False)
 
     # Metadados
     motivo = db.Column(db.String(100), nullable=False)

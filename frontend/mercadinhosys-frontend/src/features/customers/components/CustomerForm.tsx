@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { maskCPF, maskPhone } from './inputMasks';
+import { maskCPF, maskPhone, maskCEP } from './inputMasks';
+import { buscarCep } from '../../../utils/cepUtils';
 import { Cliente } from '../../../types';
 import { apiClient } from '../../../api/apiClient';
 import {
@@ -26,7 +27,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
 
   React.useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
-      setForm({...initialData});
+      setForm({ ...initialData });
     } else {
       setForm({});
     }
@@ -78,6 +79,26 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
 
     if (name === 'cpf' && value.length <= 14) {
       value = maskCPF(value);
+    }
+    if (name === 'cep' && typeof value === 'string') {
+      value = maskCEP(value);
+      if (value.length === 9) {
+        // Buscar CEP automaticamente
+        const fetchData = async () => {
+          const data = await buscarCep(value as string);
+          if (data) {
+            setForm(prev => ({
+              ...prev,
+              logradouro: data.logradouro,
+              bairro: data.bairro,
+              cidade: data.localidade,
+              estado: data.uf,
+              cep: data.cep
+            }));
+          }
+        };
+        fetchData();
+      }
     }
     if (name === 'celular') {
       value = maskPhone(value);
@@ -162,18 +183,18 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
           }
         }
       }
-      
+
       // Filtrar campos que não devem ser enviados na atualização
-      const camposNaoEnviar = ['id', 'saldo_devedor', 'total_compras', 'data_cadastro', 'ultima_compra', 'valor_total_gasto'];
+      const camposNaoEnviar = ['id', 'saldo_devedor', 'total_compras', 'data_cadastro', 'ultima_compra', 'valor_total_gasto', 'endereco_completo'];
       const cleanData = Object.fromEntries(
-        Object.entries(dataToSave).filter(([key, value]) => 
-          value !== undefined && 
-          value !== null && 
+        Object.entries(dataToSave).filter(([key, value]) =>
+          value !== undefined &&
+          value !== null &&
           value !== "" &&
           !camposNaoEnviar.includes(key)
         )
       );
-      
+
       onSave(cleanData);
     }
   };
@@ -260,15 +281,76 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
                 InputLabelProps={{ style: { color: '#bdbdbd' } }}
               />
             </Box>
-            <Box flex="1 1 100%" minWidth={220} maxWidth={800}>
+            <Box flex="1 1 120px" minWidth={120} maxWidth={200}>
               <TextField
-                label="Endereço"
-                name="endereco_completo"
-                value={form.endereco_completo || ''}
+                label="CEP"
+                name="cep"
+                value={form.cep || ''}
                 onChange={handleChange}
                 fullWidth
                 variant="outlined"
                 size="medium"
+                InputLabelProps={{ style: { color: '#bdbdbd' } }}
+              />
+            </Box>
+            <Box flex="1 1 300px" minWidth={300} maxWidth={600}>
+              <TextField
+                label="Logradouro"
+                name="logradouro"
+                value={form.logradouro || ''}
+                onChange={handleChange}
+                fullWidth
+                variant="outlined"
+                size="medium"
+                InputLabelProps={{ style: { color: '#bdbdbd' } }}
+              />
+            </Box>
+            <Box flex="1 1 100px" minWidth={100} maxWidth={150}>
+              <TextField
+                label="Número"
+                name="numero"
+                value={form.numero || ''}
+                onChange={handleChange}
+                fullWidth
+                variant="outlined"
+                size="medium"
+                InputLabelProps={{ style: { color: '#bdbdbd' } }}
+              />
+            </Box>
+            <Box flex="1 1 200px" minWidth={200} maxWidth={300}>
+              <TextField
+                label="Bairro"
+                name="bairro"
+                value={form.bairro || ''}
+                onChange={handleChange}
+                fullWidth
+                variant="outlined"
+                size="medium"
+                InputLabelProps={{ style: { color: '#bdbdbd' } }}
+              />
+            </Box>
+            <Box flex="1 1 200px" minWidth={200} maxWidth={300}>
+              <TextField
+                label="Cidade"
+                name="cidade"
+                value={form.cidade || ''}
+                onChange={handleChange}
+                fullWidth
+                variant="outlined"
+                size="medium"
+                InputLabelProps={{ style: { color: '#bdbdbd' } }}
+              />
+            </Box>
+            <Box flex="1 1 80px" minWidth={80} maxWidth={100}>
+              <TextField
+                label="UF"
+                name="estado"
+                value={form.estado || ''}
+                onChange={handleChange}
+                fullWidth
+                variant="outlined"
+                size="medium"
+                inputProps={{ maxLength: 2 }}
                 InputLabelProps={{ style: { color: '#bdbdbd' } }}
               />
             </Box>
@@ -305,15 +387,15 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'space-between' }}>
-          <Button 
-            onClick={onClose} 
-            variant="outlined" 
-            disabled={loading} 
+          <Button
+            onClick={onClose}
+            variant="outlined"
+            disabled={loading}
             startIcon={<CloseIcon />}
-            sx={{ 
-              color: '#757575', 
+            sx={{
+              color: '#757575',
               borderColor: '#e0e0e0',
-              '&:hover': { 
+              '&:hover': {
                 borderColor: '#bdbdbd',
                 bgcolor: '#f5f5f5'
               }
@@ -321,15 +403,15 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ open, onClose, onSave, init
           >
             Cancelar
           </Button>
-          <Button 
-            type="submit" 
-            variant="contained" 
+          <Button
+            type="submit"
+            variant="contained"
             disabled={loading}
-            startIcon={form.id ? <SaveIcon /> : <PersonAddAlt1Icon />} 
-            sx={{ 
+            startIcon={form.id ? <SaveIcon /> : <PersonAddAlt1Icon />}
+            sx={{
               minWidth: 120,
               bgcolor: '#1976d2',
-              '&:hover': { 
+              '&:hover': {
                 bgcolor: '#1565c0'
               }
             }}

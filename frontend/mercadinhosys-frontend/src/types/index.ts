@@ -117,6 +117,12 @@ export interface Cliente {
     celular?: string;
     email?: string;
     endereco_completo?: string;
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
     limite_credito?: number;
     saldo_devedor?: number;
     total_compras?: number;

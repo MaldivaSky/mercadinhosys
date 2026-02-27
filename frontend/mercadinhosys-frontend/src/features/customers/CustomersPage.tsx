@@ -6,7 +6,8 @@ import CustomerForm from './components/CustomerForm';
 import CustomerDashboard from './components/CustomerDashboard';
 import { customerService } from './customerService';
 import { apiClient } from '../../api/apiClient';
-import { Button, Typography, CircularProgress, Snackbar, Alert, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu } from '@mui/material';
+import { Button, Typography, CircularProgress, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu } from '@mui/material';
+import { showToast } from '../../utils/toast';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -26,7 +27,7 @@ const CustomersPage: React.FC = () => {
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [clienteDetalhado, setClienteDetalhado] = useState<Cliente | null>(null);
     const [detalheLoading, setDetalheLoading] = useState(false);
-    const [snackbar, setSnackbar] = useState<{ open: boolean, message: string, severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+    // Snackbar state removed
     const [dashboard, setDashboard] = useState<{ total: number, ativos: number, inativos: number, novos: number, vip: number }>({ total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0 });
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -46,7 +47,7 @@ const CustomersPage: React.FC = () => {
                 });
             }
         } catch {
-            setSnackbar({ open: true, message: 'Erro ao carregar métricas do dashboard', severity: 'error' });
+            showToast.error('Erro ao carregar métricas do dashboard');
         }
     };
 
@@ -56,7 +57,7 @@ const CustomersPage: React.FC = () => {
             const data = await customerService.list();
             setClientes(data);
         } catch {
-            setSnackbar({ open: true, message: 'Erro ao carregar clientes', severity: 'error' });
+            showToast.error('Erro ao carregar clientes');
         } finally {
             setLoading(false);
         }
@@ -135,7 +136,7 @@ const CustomersPage: React.FC = () => {
 
     const handleEdit = async (cliente: Cliente) => {
         if (!cliente || !cliente.id) {
-            setSnackbar({ open: true, message: 'Erro: Cliente inválido para edição', severity: 'error' });
+            showToast.error('Erro: Cliente inválido para edição');
             return;
         }
 
@@ -146,18 +147,8 @@ const CustomersPage: React.FC = () => {
             setEditData(clienteData);
             setFormOpen(true);
             setSelectedCliente(null);
-        } catch (err: unknown) {
-            if (
-                typeof err === 'object' &&
-                err !== null &&
-                'response' in err &&
-                typeof (err as { response?: { status?: number } }).response === 'object' &&
-                (err as { response?: { status?: number } }).response?.status === 404
-            ) {
-                setSnackbar({ open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error' });
-            } else {
-                setSnackbar({ open: true, message: 'Erro ao buscar dados do cliente para edição', severity: 'error' });
-            }
+        } catch (err: any) {
+            showToast.error('Erro ao buscar dados do cliente para edição');
         } finally {
             setSaving(false);
         }
@@ -174,20 +165,10 @@ const CustomersPage: React.FC = () => {
             const res = await apiClient.get(`/clientes/${cliente.id}`);
             const detalhado = res.data.cliente ? { ...res.data.cliente, ...res.data } : res.data;
             setClienteDetalhado(detalhado);
-        } catch (err: unknown) {
+        } catch (err: any) {
             setClienteDetalhado(null);
             setSelectedCliente(null);
-            if (
-                typeof err === 'object' &&
-                err !== null &&
-                'response' in err &&
-                typeof (err as { response?: { status?: number } }).response === 'object' &&
-                (err as { response?: { status?: number } }).response?.status === 404
-            ) {
-                setSnackbar({ open: true, message: 'Cliente não encontrado ou já removido.', severity: 'error' });
-            } else {
-                setSnackbar({ open: true, message: 'Erro ao buscar detalhes do cliente', severity: 'error' });
-            }
+            showToast.error('Erro ao buscar detalhes do cliente');
         } finally {
             setDetalheLoading(false);
         }
@@ -195,7 +176,7 @@ const CustomersPage: React.FC = () => {
 
     const handleDelete = async (cliente: Cliente) => {
         if (!cliente || !cliente.id) {
-            setSnackbar({ open: true, message: 'Erro: Cliente inválido para exclusão', severity: 'error' });
+            showToast.error('Erro: Cliente inválido para exclusão');
             return;
         }
 
@@ -204,10 +185,12 @@ const CustomersPage: React.FC = () => {
         );
         if (!confirmed) return;
 
-        setSaving(true);
         try {
-            await customerService.remove(cliente.id);
-            setSnackbar({ open: true, message: `Cliente "${cliente.nome}" excluído com sucesso`, severity: 'success' });
+            await showToast.promise(customerService.remove(cliente.id), {
+                loading: 'Excluindo cliente...',
+                success: `Cliente "${cliente.nome}" excluído com sucesso`,
+                error: 'Erro ao excluir cliente'
+            }, { theme: 'error' });
             fetchClientes();
             fetchDashboard();
         } catch (error: unknown) {
@@ -225,36 +208,49 @@ const CustomersPage: React.FC = () => {
                 if (window.confirm(msg)) {
                     try {
                         await apiClient.patch(`/clientes/${cliente.id}/status`, { ativo: false });
-                        setSnackbar({ open: true, message: `Cliente "${cliente.nome}" desativado com sucesso`, severity: 'success' });
+                        showToast.error(`Cliente "${cliente.nome}" desativado com sucesso`);
                         fetchClientes();
                         fetchDashboard();
                     } catch (patchErr: unknown) {
                         const patchMsg = (patchErr as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao desativar cliente';
-                        setSnackbar({ open: true, message: patchMsg, severity: 'error' });
+                        showToast.error(patchMsg);
                     }
                     return; // Interrompe para não mostrar o erro original
                 }
             }
 
             const errorMessage = err.response?.data?.message || 'Erro ao excluir cliente';
-            setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+            showToast.error(errorMessage);
         } finally {
             setSaving(false);
         }
     };
 
     const handleSave = async (data: Partial<Cliente>) => {
-        setSaving(true);
         try {
+            const promise = editData && editData.id
+                ? customerService.update(editData.id, data)
+                : customerService.create(data);
+
+            const savedCustomer = await showToast.promise(promise, {
+                loading: editData && editData.id ? 'Atualizando cliente...' : 'Cadastrando cliente...',
+                success: editData && editData.id ? 'Cliente atualizado com sucesso' : 'Cliente cadastrado com sucesso',
+                error: 'Erro ao salvar cliente'
+            });
+
             if (editData && editData.id) {
-                await customerService.update(editData.id, data);
-                setSnackbar({ open: true, message: 'Cliente atualizado com sucesso', severity: 'success' });
+                // Atualizar na lista local
+                setClientes(prev => prev.map(c => c.id === editData.id ? { ...c, ...savedCustomer } : c));
             } else {
-                await customerService.create(data);
-                setSnackbar({ open: true, message: 'Cliente cadastrado com sucesso', severity: 'success' });
+                // Adicionar no topo da lista local
+                setClientes(prev => [savedCustomer, ...prev]);
+                setSearchTerm(''); // Limpar busca para mostrar o novo cliente
             }
+
             setFormOpen(false);
             setEditData(undefined);
+
+            // fetchClientes() e fetchDashboard() podem rodar em background para garantir sincronia total
             fetchClientes();
             fetchDashboard();
         } catch (error: unknown) {
@@ -266,9 +262,9 @@ const CustomersPage: React.FC = () => {
             ) {
                 const errResponse = (error as { response?: { data?: { message?: string; error?: string } } }).response;
                 const errorMessage = errResponse?.data?.message || errResponse?.data?.error || 'Erro ao salvar cliente';
-                setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+                showToast.error(errorMessage);
             } else {
-                setSnackbar({ open: true, message: 'Erro ao salvar cliente', severity: 'error' });
+                showToast.error('Erro ao salvar cliente');
             }
         } finally {
             setSaving(false);
@@ -310,7 +306,7 @@ const CustomersPage: React.FC = () => {
         document.body.removeChild(link);
 
         handleExportClose();
-        setSnackbar({ open: true, message: 'CSV exportado com sucesso', severity: 'success' });
+        showToast.info('CSV exportado com sucesso');
     };
 
     const exportarExcel = () => {
@@ -334,7 +330,7 @@ const CustomersPage: React.FC = () => {
         XLSX.writeFile(wb, `clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
 
         handleExportClose();
-        setSnackbar({ open: true, message: 'Excel exportado com sucesso', severity: 'success' });
+        showToast.info('Excel exportado com sucesso');
     };
 
     const exportarPDF = () => {
@@ -383,7 +379,7 @@ const CustomersPage: React.FC = () => {
         doc.save(`clientes-${new Date().toISOString().split('T')[0]}.pdf`);
 
         handleExportClose();
-        setSnackbar({ open: true, message: 'PDF exportado com sucesso', severity: 'success' });
+        showToast.info('PDF exportado com sucesso');
     };
 
     return (
@@ -532,11 +528,7 @@ const CustomersPage: React.FC = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
             />
-            <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-                <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
+            {/* Snackbar unificado em showToast */}
 
             {/* Dicas de atalhos */}
             <Box sx={{ mt: 4, p: 2, bgcolor: 'grey.50', dark: { bgcolor: 'grey.900' }, borderRadius: 1, textAlign: 'center' }}>

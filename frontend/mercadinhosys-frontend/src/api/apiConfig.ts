@@ -1,7 +1,12 @@
 // src/api/apiConfig.ts
 
 // Detectar ambiente automaticamente
-const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost';
+const isDevelopment =
+    import.meta.env.DEV ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.startsWith('192.168.') ||
+    window.location.hostname.endsWith('.local');
 
 // Normaliza URL: remove barras extras e garante protocolo consistente
 const normalizeUrl = (url: string): string => {
@@ -32,23 +37,23 @@ const getRuntimeApiUrl = (): string | undefined => {
 const getBaseUrl = (): string => {
     // Em desenvolvimento com Vite proxy, usar caminho relativo para evitar CORS
     if (isDevelopment) return '/api';
-    
+
     const host = window.location.hostname || '';
     const isVercel = host.endsWith('.vercel.app');
-    
+
     // 1. Prioridade: Runtime override (window.__API_URL__)
     const runtimeUrl = getRuntimeApiUrl();
     if (runtimeUrl) return normalizeUrl(runtimeUrl);
-    
+
     // 2. Variável de ambiente do Vite
     if (import.meta.env.VITE_API_URL) return normalizeUrl(import.meta.env.VITE_API_URL as string);
-    
+
     // 3. Fallback para Vercel: usar URL do Render
     if (isVercel) {
         const renderUrl = import.meta.env.VITE_RENDER_API_URL || 'https://mercadinhosys.onrender.com';
         return normalizeUrl(renderUrl);
     }
-    
+
     // 4. Último fallback: mesma origem
     return normalizeUrl(window.location.origin);
 };

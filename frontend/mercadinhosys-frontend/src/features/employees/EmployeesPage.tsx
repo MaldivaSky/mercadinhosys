@@ -12,16 +12,17 @@ import {
     Legend,
     Filler,
 } from "chart.js";
-import { 
-    UserCog, Users, TrendingUp, DollarSign, 
-    Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle, 
-    CheckCircle, UserCheck, UserX, Award, Clock 
+import {
+    UserCog, Users, TrendingUp, DollarSign,
+    Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle,
+    CheckCircle, UserCheck, UserX, Award, Clock
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { employeesService, Funcionario, EstatisticasFuncionarios } from "./employeesService";
 import { buscarCep, formatCep, formatCpf, formatPhone } from "../../utils/cepUtils";
 import { useLocation } from "react-router-dom";
+import { showToast } from "../../utils/toast";
 
 ChartJS.register(
     BarElement,
@@ -72,7 +73,7 @@ export default function EmployeesPage() {
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [estatisticas, setEstatisticas] = useState<EstatisticasFuncionarios | null>(null);
-    
+
     // Filtros
     const [filtros, setFiltros] = useState({
         busca: "",
@@ -126,8 +127,7 @@ export default function EmployeesPage() {
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
 
-    // Toast notifications (renomeado para evitar conflito com react-hot-toast)
-    const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    // Local toast notification removed
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -140,16 +140,9 @@ export default function EmployeesPage() {
         }
     }, [location.search]);
 
-    useEffect(() => {
-        if (toastNotification) {
-            const timer = setTimeout(() => setToastNotification(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [toastNotification]);
+    /* Timer effect removed */
 
-    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-        setToastNotification({ message, type });
-    };
+    /* Local showToast removed */
 
     useEffect(() => {
         carregarFuncionarios();
@@ -170,9 +163,9 @@ export default function EmployeesPage() {
     async function carregarFuncionarios() {
         setLoading(true);
         setErro(null);
-        
+
         try {
-                const params: Record<string, string | number> = {
+            const params: Record<string, string | number> = {
                 pagina: filtros.pagina,
                 por_pagina: filtros.por_pagina,
                 ordenar_por: filtros.ordenar_por,
@@ -189,7 +182,7 @@ export default function EmployeesPage() {
             if (filtros.salario_max) params.salario_max = filtros.salario_max;
 
             const response = await employeesService.listar(params);
-            
+
             if (response.success) {
                 setFuncionarios(response.data || []);
             } else {
@@ -215,7 +208,7 @@ export default function EmployeesPage() {
     async function carregarEstatisticas() {
         try {
             const response = await employeesService.obterEstatisticas();
-            
+
             if (response.success && response.estatisticas) {
                 setEstatisticas(response.estatisticas);
             } else {
@@ -326,23 +319,19 @@ export default function EmployeesPage() {
 
     async function abrirDetalhes(funcionario: Funcionario) {
         try {
-            const response = await employeesService.obterDetalhes(funcionario.id);
+            const promise = employeesService.obterDetalhes(funcionario.id);
+            const response = await showToast.promise(promise, {
+                loading: 'Carregando detalhes...',
+                success: 'Detalhes carregados!',
+                error: 'Erro ao carregar detalhes'
+            });
+
             if (response.success) {
                 setFuncionarioSelecionado(response.data);
                 setModalDetalhesAberto(true);
             }
-        } catch (err: unknown) {
+        } catch (err: any) {
             console.error("❌ Erro ao carregar detalhes:", err);
-            let errorMessage = "Erro ao carregar detalhes: ";
-            if (err instanceof Error) {
-                errorMessage += err.message;
-            } else if (typeof err === 'object' && err !== null && 'response' in err) {
-                const axiosError = err as any;
-                errorMessage += axiosError.response?.data?.error || axiosError.message || "Erro desconhecido";
-            } else {
-                errorMessage += "Erro desconhecido";
-            }
-            showToast(errorMessage, 'error');
         }
     }
 
@@ -353,29 +342,23 @@ export default function EmployeesPage() {
                 salario: formData.salario ? parseFloat(formData.salario) : 0,
             };
 
-            if (modoEdicao && funcionarioSelecionado) {
-                await employeesService.atualizar(funcionarioSelecionado.id, dados);
-                showToast("Funcionário atualizado com sucesso!");
-            } else {
-                await employeesService.criar(dados);
-                showToast("Funcionário criado com sucesso!");
-            }
+            const promise = modoEdicao && funcionarioSelecionado
+                ? employeesService.atualizar(funcionarioSelecionado.id, dados)
+                : employeesService.criar(dados);
+
+            await showToast.promise(promise, {
+                loading: modoEdicao ? 'Atualizando funcionário...' : 'Criando funcionário...',
+                success: modoEdicao ? 'Funcionário atualizado com sucesso!' : 'Funcionário criado com sucesso!',
+                error: 'Erro ao salvar funcionário'
+            }, {
+                theme: modoEdicao ? 'warning' : 'success'
+            });
 
             setModalAberto(false);
             carregarFuncionarios();
             carregarEstatisticas();
-        } catch (err: unknown) {
+        } catch (err: any) {
             console.error("❌ Erro ao salvar funcionário:", err);
-            let errorMessage = "Erro ao salvar funcionário: ";
-            if (err instanceof Error) {
-                errorMessage += err.message;
-            } else if (typeof err === 'object' && err !== null && 'response' in err) {
-                const axiosError = err as any;
-                errorMessage += axiosError.response?.data?.error || axiosError.message || "Erro desconhecido";
-            } else {
-                errorMessage += "Erro desconhecido";
-            }
-            showToast(errorMessage, 'error');
         }
     }
 
@@ -383,22 +366,17 @@ export default function EmployeesPage() {
         if (!confirm("Tem certeza que deseja desativar este funcionário?")) return;
 
         try {
-            await employeesService.excluir(id);
-            showToast("Funcionário desativado com sucesso!");
+            await showToast.promise(employeesService.excluir(id), {
+                loading: 'Desativando funcionário...',
+                success: 'Funcionário desativado com sucesso!',
+                error: 'Erro ao desativar funcionário'
+            }, {
+                theme: 'error'
+            });
             carregarFuncionarios();
             carregarEstatisticas();
-        } catch (err: unknown) {
+        } catch (err: any) {
             console.error("❌ Erro ao excluir funcionário:", err);
-            let errorMessage = "Erro ao excluir funcionário: ";
-            if (err instanceof Error) {
-                errorMessage += err.message;
-            } else if (typeof err === 'object' && err !== null && 'response' in err) {
-                const axiosError = err as any;
-                errorMessage += axiosError.response?.data?.error || axiosError.message || "Erro desconhecido";
-            } else {
-                errorMessage += "Erro desconhecido";
-            }
-            showToast(errorMessage, 'error');
         }
     }
 
@@ -429,12 +407,12 @@ export default function EmployeesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setMenuExportarAberto(false);
-            showToast("CSV exportado com sucesso!");
+            showToast.info("CSV exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar CSV:", err);
-            showToast(`Erro ao exportar CSV: ${err.message}`, 'error');
+            showToast.error(`Erro ao exportar CSV: ${err.message}`);
         }
     }
 
@@ -457,7 +435,7 @@ export default function EmployeesPage() {
                 ...dados.map(obj => Object.values(obj))
             ];
 
-            const csvContent = ws_data.map(row => 
+            const csvContent = ws_data.map(row =>
                 row.map(cell => `"${cell}"`).join(",")
             ).join("\n");
 
@@ -470,12 +448,12 @@ export default function EmployeesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             setMenuExportarAberto(false);
-            showToast("Excel exportado com sucesso!");
+            showToast.info("Excel exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar Excel:", err);
-            showToast(`Erro ao exportar Excel: ${err.message}`, 'error');
+            showToast.error(`Erro ao exportar Excel: ${err.message}`);
         }
     }
 
@@ -486,11 +464,11 @@ export default function EmployeesPage() {
             // Cabeçalho
             doc.setFillColor(63, 81, 181); // Cor primária (Indigo)
             doc.rect(0, 0, 210, 40, 'F');
-            
+
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(22);
             doc.text("Relatório de Funcionários", 105, 20, { align: "center" });
-            
+
             doc.setFontSize(10);
             doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 105, 30, { align: "center" });
 
@@ -526,33 +504,19 @@ export default function EmployeesPage() {
             }
 
             doc.save(`funcionarios-${new Date().toISOString().split('T')[0]}.pdf`);
-            
+
             setMenuExportarAberto(false);
-            showToast("PDF exportado com sucesso!");
+            showToast.info("PDF exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar PDF:", err);
-            showToast(`Erro ao exportar PDF: ${err.message}`, 'error');
+            showToast.error(`Erro ao exportar PDF: ${err.message}`);
         }
     }
 
     return (
         <div className="p-6 max-w-7xl mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen">
-            {/* Toast Notification */}
-            {toastNotification && (
-                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in ${
-                    toastNotification.type === 'success' 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-red-500 text-white'
-                }`}>
-                    {toastNotification.type === 'success' ? (
-                        <CheckCircle className="w-5 h-5" />
-                    ) : (
-                        <AlertCircle className="w-5 h-5" />
-                    )}
-                    <span>{toastNotification.message}</span>
-                </div>
-            )}
-            
+            {/* Header */}
+
             {/* Header */}
             <div className="mb-8">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -572,16 +536,15 @@ export default function EmployeesPage() {
                     <div className="flex flex-wrap gap-3">
                         <button
                             onClick={() => setMostrarAnalises(!mostrarAnalises)}
-                            className={`px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 shadow-md font-medium ${
-                                mostrarAnalises
-                                    ? "bg-blue-500 text-white hover:bg-blue-600"
-                                    : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            }`}
+                            className={`px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 shadow-md font-medium ${mostrarAnalises
+                                ? "bg-blue-500 text-white hover:bg-blue-600"
+                                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                }`}
                         >
                             <TrendingUp className="w-5 h-5" />
                             {mostrarAnalises ? "Ocultar Análises" : "Mostrar Análises"}
                         </button>
-                        
+
                         {/* Menu Exportar */}
                         <div className="relative export-menu-container">
                             <button
@@ -591,7 +554,7 @@ export default function EmployeesPage() {
                                 <Download className="w-5 h-5" />
                                 Exportar
                             </button>
-                            
+
                             {menuExportarAberto && (
                                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
                                     <div className="py-1">
@@ -605,7 +568,7 @@ export default function EmployeesPage() {
                                                 <div className="text-xs text-gray-500">Documento pronto para impressão</div>
                                             </div>
                                         </button>
-                                        
+
                                         <button
                                             onClick={exportarExcel}
                                             className="w-full text-left px-4 py-3 hover:bg-green-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-3 text-gray-700 dark:text-gray-300"
@@ -616,7 +579,7 @@ export default function EmployeesPage() {
                                                 <div className="text-xs text-gray-500">Planilha editável</div>
                                             </div>
                                         </button>
-                                        
+
                                         <button
                                             onClick={exportarCSV}
                                             className="w-full text-left px-4 py-3 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-3 text-gray-700 dark:text-gray-300"
@@ -628,7 +591,7 @@ export default function EmployeesPage() {
                                             </div>
                                         </button>
                                     </div>
-                                    
+
                                     <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-gray-50 dark:bg-gray-900">
                                         <p className="text-xs text-gray-600 dark:text-gray-400">
                                             👥 {funcionarios.length} funcionários
@@ -878,12 +841,11 @@ export default function EmployeesPage() {
                                         {estatisticas.top_vendedores.map((vendedor, index) => (
                                             <tr key={vendedor.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                 <td className="py-3 px-4">
-                                                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold ${
-                                                        index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold ${index === 0 ? 'bg-yellow-100 text-yellow-700' :
                                                         index === 1 ? 'bg-gray-100 text-gray-700' :
-                                                        index === 2 ? 'bg-orange-100 text-orange-700' :
-                                                        'bg-blue-100 text-blue-700'
-                                                    }`}>
+                                                            index === 2 ? 'bg-orange-100 text-orange-700' :
+                                                                'bg-blue-100 text-blue-700'
+                                                        }`}>
                                                         {index + 1}
                                                     </span>
                                                 </td>
@@ -1213,7 +1175,7 @@ export default function EmployeesPage() {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Telefone 
+                                        Telefone
                                     </label>
                                     <input
                                         type="text"

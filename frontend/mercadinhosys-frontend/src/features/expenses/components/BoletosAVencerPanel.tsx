@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { BoletoFornecedor, purchaseOrderService } from '../../products/purchaseOrderService';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
-import toast from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 
 interface BoletosAVencerPanelProps {
   className?: string;
@@ -48,7 +48,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
       setResumo(response.resumo);
     } catch (error) {
       console.error('Erro ao carregar boletos:', error);
-      toast.error('Erro ao carregar boletos a vencer');
+      showToast.error('Erro ao carregar boletos a vencer');
     } finally {
       setLoading(false);
     }
@@ -191,8 +191,8 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
           <button
             onClick={() => setFiltro('todos')}
             className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'todos'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              ? 'bg-orange-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
           >
             Todos
@@ -200,8 +200,8 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
           <button
             onClick={() => setFiltro('vencidos')}
             className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'vencidos'
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              ? 'bg-red-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
           >
             Vencidos ({resumo.vencidos})
@@ -209,8 +209,8 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
           <button
             onClick={() => setFiltro('hoje')}
             className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'hoje'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              ? 'bg-orange-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
           >
             Hoje ({resumo.vence_hoje})
@@ -218,8 +218,8 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
           <button
             onClick={() => setFiltro('7_dias')}
             className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === '7_dias'
-                ? 'bg-yellow-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              ? 'bg-yellow-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
           >
             7 Dias ({resumo.vence_7_dias})
@@ -278,11 +278,10 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                     </div>
 
                     <div className="mt-2 flex items-center gap-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        boleto.origem === 'mercadoria'
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${boleto.origem === 'mercadoria'
                           ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
                           : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-                      }`}>
+                        }`}>
                         {boleto.origem === 'mercadoria' ? 'Mercadoria' : 'Despesa'}
                       </span>
                       {boleto.pedido_numero && (
@@ -410,16 +409,14 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
               </div>
 
               {/* Tipo / Origem */}
-              <div className={`p-4 rounded-lg ${
-                selectedBoleto.origem === 'mercadoria'
+              <div className={`p-4 rounded-lg ${selectedBoleto.origem === 'mercadoria'
                   ? 'bg-blue-50 dark:bg-blue-900'
                   : 'bg-purple-50 dark:bg-purple-900'
-              }`}>
-                <h4 className={`font-semibold mb-3 ${
-                  selectedBoleto.origem === 'mercadoria'
+                }`}>
+                <h4 className={`font-semibold mb-3 ${selectedBoleto.origem === 'mercadoria'
                     ? 'text-blue-900 dark:text-blue-100'
                     : 'text-purple-900 dark:text-purple-100'
-                }`}>
+                  }`}>
                   {selectedBoleto.origem === 'mercadoria' ? 'Pedido de Compra (Mercadoria)' : 'Despesa Fixa / Operacional'}
                 </h4>
 
@@ -459,10 +456,10 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
                   <div>
                     <span className="text-gray-600 dark:text-gray-400">Dias para Vencer:</span>
                     <div className={`font-medium text-lg ${selectedBoleto.dias_vencimento < 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : selectedBoleto.dias_vencimento === 0
-                          ? 'text-orange-600 dark:text-orange-400'
-                          : 'text-green-600 dark:text-green-400'
+                      ? 'text-red-600 dark:text-red-400'
+                      : selectedBoleto.dias_vencimento === 0
+                        ? 'text-orange-600 dark:text-orange-400'
+                        : 'text-green-600 dark:text-green-400'
                       }`}>
                       {selectedBoleto.dias_vencimento < 0
                         ? `Vencido há ${Math.abs(selectedBoleto.dias_vencimento)} dias`
@@ -590,7 +587,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
             setShowPayModal(false);
             setSelectedBoleto(null);
             loadBoletos();
-            toast.success('Boleto pago com sucesso!');
+            showToast.success('Boleto pago com sucesso!');
           }}
         />
       )}
@@ -627,7 +624,7 @@ const ModalPagamentoBoleto: React.FC<ModalPagamentoBoletoProps> = ({ boleto, onC
       onPago();
     } catch (error: any) {
       console.error('Erro ao pagar boleto:', error);
-      toast.error(error.response?.data?.error || 'Erro ao registrar pagamento');
+      showToast.error(error.response?.data?.error || 'Erro ao registrar pagamento');
     } finally {
       setProcessando(false);
     }
@@ -719,11 +716,10 @@ const ModalPagamentoBoleto: React.FC<ModalPagamentoBoletoProps> = ({ boleto, onC
                 <button
                   key={value}
                   onClick={() => setFormaPagamento(value)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
-                    formaPagamento === value
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${formaPagamento === value
                       ? 'bg-green-600 text-white border-green-600 shadow-md'
                       : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                  }`}
+                    }`}
                 >
                   {label}
                 </button>

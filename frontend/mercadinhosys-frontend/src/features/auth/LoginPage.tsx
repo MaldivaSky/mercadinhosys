@@ -19,6 +19,7 @@ import {
   EmailOutlined,
 } from '@mui/icons-material';
 import { authService } from './authService';
+import { showToast } from '../../utils/toast';
 import { LoginApiResponse } from '../../types';
 import logo from '../../../logoprincipal.png';
 
@@ -167,11 +168,6 @@ export function LoginPage() {
               </Alert>
             )}
 
-            {error && (
-              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError('')}>
-                {error}
-              </Alert>
-            )}
 
             <form onSubmit={handleSubmit}>
               <TextField
@@ -251,16 +247,22 @@ export function LoginPage() {
                     setLoading(true);
                     setError('');
                     try {
-                      const bootstrap = await authService.bootstrapAdmin(identifier, password);
-                      if (bootstrap.success) {
-                        await authService.login(identifier, password);
-                        window.dispatchEvent(new Event('auth-change'));
-                        return;
-                      }
-                      const response: LoginApiResponse = await authService.login(identifier, password);
-                      if (response.success) window.dispatchEvent(new Event('auth-change'));
+                      const promise = authService.bootstrapAdmin(identifier, password).then(async bootstrap => {
+                        if (bootstrap.success) {
+                          const loginRes = await authService.login(identifier, password);
+                          window.dispatchEvent(new Event('auth-change'));
+                          return loginRes;
+                        }
+                        throw new Error('Falha ao criar admin');
+                      });
+
+                      await showToast.promise(promise, {
+                        loading: 'Criando administrador e autenticando...',
+                        success: 'Administrador criado com sucesso!',
+                        error: 'Falha ao criar administrador inicial'
+                      });
                     } catch (e) {
-                      setError('Credenciais inválidas');
+                      console.error(e);
                     } finally {
                       setLoading(false);
                     }

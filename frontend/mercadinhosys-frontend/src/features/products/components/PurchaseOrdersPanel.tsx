@@ -12,7 +12,7 @@ import {
 import { PedidoCompra, purchaseOrderService } from '../purchaseOrderService';
 import { Fornecedor } from '../../../types';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
-import toast from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 import PurchaseOrderModal from './PurchaseOrderModal';
 import ReceivePurchaseModal from './ReceivePurchaseModal';
 import PurchaseOrderDetailsModal from './PurchaseOrderDetailsModal';
@@ -59,7 +59,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
       setTotalPages(response.paginacao.total_paginas);
     } catch (error) {
       console.error('Erro ao carregar pedidos:', error);
-      toast.error('Erro ao carregar pedidos');
+      showToast.error('Erro ao carregar pedidos');
     } finally {
       setLoading(false);
     }

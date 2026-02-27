@@ -91,12 +91,31 @@ const Icon = {
 export const showToast = {
     success: (message: string, options?: ToastOptions) => {
         toast.success(message, {
-            duration: 2000, // Ultra-rápido para UX fluida
+            duration: 2500,
             style: themes.success.style as React.CSSProperties,
             icon: Icon.success(themes.success.iconColor),
             ...options,
         });
     },
+    /** Verde — para Criações */
+    create: (message: string, options?: ToastOptions) => {
+        toast.success(message, {
+            duration: 2500,
+            style: themes.success.style as React.CSSProperties,
+            icon: Icon.success(themes.success.iconColor),
+            ...options,
+        });
+    },
+    /** Amarelo — para Atualizações / Edições */
+    update: (message: string, options?: ToastOptions) => {
+        toast(message, {
+            duration: 2500,
+            style: themes.warning.style as React.CSSProperties,
+            icon: Icon.warning(themes.warning.iconColor),
+            ...options,
+        });
+    },
+    /** Vermelho — para Erros ou Deleções */
     error: (message: string, options?: ToastOptions) => {
         toast.error(message, {
             duration: 4000,
@@ -105,6 +124,7 @@ export const showToast = {
             ...options,
         });
     },
+    /** Amarelo — para Avisos Gerais */
     warning: (message: string, options?: ToastOptions) => {
         toast(message, {
             duration: 3000,
@@ -113,6 +133,7 @@ export const showToast = {
             ...options,
         });
     },
+    /** Azul — para Informações Gerais */
     info: (message: string, options?: ToastOptions) => {
         toast(message, {
             duration: 2500,
@@ -130,15 +151,20 @@ export const showToast = {
     dismiss: (toastId?: string) => toast.dismiss(toastId),
     promise: <T,>(
         promise: Promise<T>,
-        msgs: { loading: string; success: string; error: string },
-        options?: ToastOptions
+        msgs: {
+            loading: string;
+            success: string | ((data: T) => string);
+            error: string | ((err: any) => string);
+        },
+        options?: ToastOptions & { theme?: 'success' | 'warning' | 'info' | 'error' }
     ) => {
+        const theme = options?.theme || 'success';
         return toast.promise(promise, msgs, {
             style: glassBase,
             success: {
-                style: themes.success.style as React.CSSProperties,
-                icon: Icon.success(themes.success.iconColor),
-                duration: 2000
+                style: themes[theme].style as React.CSSProperties,
+                icon: Icon[theme === 'success' || theme === 'warning' ? (theme as 'success' | 'warning') : 'success'](themes[theme].iconColor),
+                duration: 2500
             },
             error: {
                 style: themes.error.style as React.CSSProperties,

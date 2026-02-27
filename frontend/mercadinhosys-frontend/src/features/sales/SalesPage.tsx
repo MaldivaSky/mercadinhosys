@@ -13,6 +13,7 @@ import {
     Filler,
 } from "chart.js";
 import { apiClient } from "../../api/apiClient";
+import { showToast } from "../../utils/toast";
 
 ChartJS.register(
     BarElement,
@@ -78,6 +79,7 @@ interface Estatisticas {
     ticket_medio: number;
     total_descontos: number;
     total_valor_recebido: number;
+    total_itens: number;
     formas_pagamento: Record<string, FormaPagamento>;
 }
 
@@ -95,6 +97,13 @@ function formatCurrency(value: number) {
     return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+// Função utilitária para obter data local no formato YYYY-MM-DD (Evita erro de UTC/ISO)
+function getLocalDateISO(date: Date = new Date()) {
+    const d = new Date(date);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+}
+
 export default function SalesPage() {
     const [vendas, setVendas] = useState<Venda[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -105,11 +114,12 @@ export default function SalesPage() {
         ticket_medio: 0,
         total_descontos: 0,
         total_valor_recebido: 0,
+        total_itens: 0,
         formas_pagamento: {},
     });
     const [filtros, setFiltros] = useState({
-        data_inicio: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        data_fim: new Date().toISOString().split('T')[0],
+        data_inicio: getLocalDateISO(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+        data_fim: getLocalDateISO(),
         search: "",
         status: "",
         forma_pagamento: "",
@@ -224,6 +234,7 @@ export default function SalesPage() {
                 ticket_medio: 0,
                 total_descontos: 0,
                 total_valor_recebido: 0,
+                total_itens: 0,
                 formas_pagamento: {},
             };
 
@@ -286,8 +297,8 @@ export default function SalesPage() {
 
     function limparFiltros() {
         setFiltros({
-            data_inicio: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            data_fim: new Date().toISOString().split('T')[0],
+            data_inicio: getLocalDateISO(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+            data_fim: getLocalDateISO(),
             search: "",
             status: "",
             forma_pagamento: "",
@@ -316,7 +327,7 @@ export default function SalesPage() {
             setDetalhesVenda(response.data.venda);
         } catch (err: any) {
             console.error("❌ Erro ao carregar detalhes:", err);
-            alert(`Erro ao carregar detalhes da venda: ${err.response?.data?.error || err.message}`);
+            showToast.error(`Erro ao carregar detalhes da venda: ${err.response?.data?.error || err.message}`);
             setModalDetalhesAberto(false);
         } finally {
             setLoadingDetalhes(false);
@@ -328,14 +339,16 @@ export default function SalesPage() {
         if (!confirm("Tem certeza que deseja cancelar esta venda? Os produtos serão devolvidos ao estoque.")) return;
 
         try {
-            await apiClient.post(`/vendas/${vendaId}/cancelar`, {
+            await showToast.promise(apiClient.post(`/vendas/${vendaId}/cancelar`, {
                 motivo: "Cancelamento via painel de vendas"
+            }), {
+                loading: 'Cancelando venda...',
+                success: 'Venda cancelada com sucesso!',
+                error: (err: any) => `Erro ao cancelar venda: ${err.response?.data?.error || err.message}`
             });
-            alert("Venda cancelada com sucesso!");
             carregarVendas();
-        } catch (err: any) {
-            console.error("❌ Erro ao cancelar venda:", err);
-            alert(`Erro ao cancelar venda: ${err.response?.data?.error || err.message}`);
+        } catch (error) {
+            // Erro tratado pelo promise
         }
     }
 
@@ -378,10 +391,10 @@ export default function SalesPage() {
             document.body.removeChild(link);
 
             setMenuExportarAberto(false);
-            alert("✅ CSV exportado com sucesso!");
+            showToast.success("CSV exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar CSV:", err);
-            alert(`Erro ao exportar CSV: ${err.message}`);
+            showToast.error(`Erro ao exportar CSV: ${err.message}`);
         }
     }
 
@@ -424,10 +437,10 @@ export default function SalesPage() {
             document.body.removeChild(link);
 
             setMenuExportarAberto(false);
-            alert("✅ Excel exportado com sucesso!");
+            showToast.success("Excel exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar Excel:", err);
-            alert(`Erro ao exportar Excel: ${err.message}`);
+            showToast.error(`Erro ao exportar Excel: ${err.message}`);
         }
     }
 
@@ -443,10 +456,10 @@ export default function SalesPage() {
             linkElement.click();
 
             setMenuExportarAberto(false);
-            alert("✅ JSON exportado com sucesso!");
+            showToast.success("JSON exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar JSON:", err);
-            alert(`Erro ao exportar JSON: ${err.response?.data?.error || err.message}`);
+            showToast.error(`Erro ao exportar JSON: ${err.response?.data?.error || err.message}`);
         }
     }
 
@@ -566,8 +579,8 @@ export default function SalesPage() {
 
                                     setFiltros(prev => ({
                                         ...prev,
-                                        data_inicio: start.toISOString().split('T')[0],
-                                        data_fim: end.toISOString().split('T')[0],
+                                        data_inicio: getLocalDateISO(start),
+                                        data_fim: getLocalDateISO(end),
                                         page: 1
                                     }));
                                 }}
@@ -668,9 +681,9 @@ export default function SalesPage() {
                 </div>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+            {/* KPIs - Refatorado com Inteligência */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-green-100 rounded-lg text-green-600">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -679,10 +692,26 @@ export default function SalesPage() {
                         </div>
                         <div className="text-sm font-medium text-gray-500">Total Vendido</div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">{formatCurrency(estatisticas.total_vendas)}</div>
+                    <div className="text-2xl font-bold text-gray-900 group-hover:text-green-600 transition-colors">
+                        {formatCurrency(estatisticas.total_vendas)}
+                    </div>
+                    {analisesData?.vendas_por_dia?.length >= 2 && (
+                        <div className="mt-1 flex items-center gap-1 text-xs">
+                            {(() => {
+                                const hoje = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 1]?.total || 0;
+                                const ontem = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0;
+                                const diff = ontem > 0 ? ((hoje - ontem) / ontem * 100) : 0;
+                                return diff > 0 ? (
+                                    <span className="text-green-600 font-bold flex items-center">↑ {diff.toFixed(1)}% <span className="font-normal text-gray-400 ml-1">vs ontem</span></span>
+                                ) : diff < 0 ? (
+                                    <span className="text-red-600 font-bold flex items-center">↓ {Math.abs(diff).toFixed(1)}% <span className="font-normal text-gray-400 ml-1">vs ontem</span></span>
+                                ) : <span className="text-gray-400">Estável</span>;
+                            })()}
+                        </div>
+                    )}
                 </div>
 
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -691,10 +720,13 @@ export default function SalesPage() {
                         </div>
                         <div className="text-sm font-medium text-gray-500">Qtd. Vendas</div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">{estatisticas.quantidade_vendas}</div>
+                    <div className="text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        {estatisticas.quantidade_vendas}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">Volume de transações</div>
                 </div>
 
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -703,10 +735,30 @@ export default function SalesPage() {
                         </div>
                         <div className="text-sm font-medium text-gray-500">Ticket Médio</div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">{formatCurrency(estatisticas.ticket_medio)}</div>
+                    <div className="text-2xl font-bold text-gray-900 group-hover:text-purple-600 transition-colors">
+                        {formatCurrency(estatisticas.ticket_medio)}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">Valor médio por venda</div>
                 </div>
 
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                        </div>
+                        <div className="text-sm font-medium text-gray-500">Itens p/ Venda</div>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors">
+                        {estatisticas.quantidade_vendas > 0
+                            ? (estatisticas.total_itens / estatisticas.quantidade_vendas).toFixed(1)
+                            : "0.0"}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">Consumo médio</div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-red-100 rounded-lg text-red-600">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -715,30 +767,33 @@ export default function SalesPage() {
                         </div>
                         <div className="text-sm font-medium text-gray-500">Descontos</div>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">{formatCurrency(estatisticas.total_descontos)}</div>
+                    <div className="text-2xl font-bold text-gray-900 group-hover:text-red-600 transition-colors">
+                        {formatCurrency(estatisticas.total_descontos)}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">Retenção de valor</div>
                 </div>
 
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-green-100 hover:shadow-md transition-shadow relative overflow-hidden">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-green-100 hover:shadow-md transition-shadow relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-2 opacity-10">
                         <svg className="w-16 h-16 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                         </svg>
                     </div>
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-green-500 rounded-lg text-white shadow-green-200 shadow-lg">
+                        <div className="p-2 bg-green-500 rounded-lg text-white shadow-green-200 shadow-lg group-hover:scale-110 transition-transform">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <div className="text-sm font-bold text-green-700">Lucro Estimado</div>
+                        <div className="text-sm font-bold text-green-700">Lucro Real</div>
                     </div>
                     <div className="text-2xl font-bold text-green-700">
                         {analisesData?.estatisticas_gerais
                             ? formatCurrency(Number(analisesData.estatisticas_gerais.total_lucro ?? 0))
-                            : <span className="text-sm text-gray-400">Carregando...</span>
+                            : <span className="text-sm text-gray-400 animate-pulse">Calculando...</span>
                         }
                     </div>
-                    <div className="text-xs text-green-600 mt-1 font-medium">
+                    <div className="text-xs text-green-600 mt-1 font-medium bg-green-50 px-2 py-0.5 rounded-full inline-block">
                         Margem: {analisesData?.estatisticas_gerais?.total_valor
                             ? (((Number(analisesData.estatisticas_gerais.total_lucro ?? 0) / Number(analisesData.estatisticas_gerais.total_valor)) * 100).toFixed(1) + "%")
                             : "-"}

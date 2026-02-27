@@ -13,7 +13,7 @@ import {
   Tooltip, ResponsiveContainer, LineChart, Line, Cell, AreaChart, Area, Legend
 } from 'recharts';
 import { usePlanGate } from '../../hooks/usePlanGate';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 
 // API Client
 import { apiClient } from '../../api/apiClient';
@@ -368,7 +368,7 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     if (viewMode === 'rh') {
       if (!hasRHTools) {
-        toast.error(`O Plano ${plano} não inclui acesso às ferramentas de RH.`);
+        showToast.error(`O Plano ${plano} não inclui acesso às ferramentas de RH.`);
         setViewMode('visao-geral');
         return;
       }
@@ -377,7 +377,7 @@ const DashboardPage: React.FC = () => {
     }
     if (viewMode === 'avancado' || viewMode === 'detalhado') {
       if (!hasAdvancedDashboard) {
-        toast.error(`O Plano ${plano} não inclui acesso ao Dashboard Científico.`);
+        showToast.error(`O Plano ${plano} não inclui acesso ao Dashboard Científico.`);
         setViewMode('visao-geral');
         return;
       }

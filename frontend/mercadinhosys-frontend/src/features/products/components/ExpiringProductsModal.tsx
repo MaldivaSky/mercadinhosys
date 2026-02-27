@@ -3,7 +3,7 @@ import { X, Calendar, AlertTriangle, TrendingDown } from 'lucide-react';
 import { Produto } from '../../../types';
 import { productsService } from '../productsService';
 import { formatCurrency } from '../../../utils/formatters';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 
 /** Lote no período de validade (vindo da API) */
 export interface LoteNoPeriodo {
@@ -55,7 +55,7 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
             setProdutos((response.produtos || []) as ProdutoComLotes[]);
         } catch (error) {
             console.error('Erro ao carregar produtos expirando:', error);
-            toast.error('Erro ao carregar lista de produtos');
+            showToast.error('Erro ao carregar lista de produtos');
         } finally {
             setLoading(false);
         }
@@ -109,10 +109,10 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
             const response = await productsService.bulkUpdatePrices(atualizacoes);
 
             if (response.success) {
-                toast.success(response.message);
+                showToast.update(response.message);
                 onClose();
             } else {
-                toast.error(response.message || 'Erro ao aplicar promoções');
+                showToast.error(response.message || 'Erro ao aplicar promoções');
             }
         } catch (error: unknown) {
             const axiosError = error as { response?: { data?: { message?: string }; status?: number }; message?: string };
@@ -123,7 +123,7 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                 axiosError.message ||
                 'Ocorreu um erro ao aplicar as promoções. Tente novamente.';
             console.error('Erro ao aplicar promoções:', error);
-            toast.error(msg);
+            showToast.error(msg);
         } finally {
             setLoading(false);
         }

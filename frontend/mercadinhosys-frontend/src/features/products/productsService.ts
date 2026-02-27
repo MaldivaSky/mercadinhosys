@@ -53,22 +53,22 @@ export const productsService = {
     },
 
     getById: async (id: number): Promise<Produto> => {
-        const response = await apiClient.get<{ success: boolean; produto: Produto }>(`/produtos/${id}`);
+        const response = await apiClient.get<{ success: boolean; produto: Produto }>(`/produtos/${id}/`);
         return response.data.produto;
     },
 
     create: async (data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
-        const response = await apiClient.post<any>('/produtos', data);
+        const response = await apiClient.post<any>('/produtos/', data);
         return response.data;
     },
 
     update: async (id: number, data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
-        const response = await apiClient.put<any>(`/produtos/${id}`, data);
+        const response = await apiClient.put<any>(`/produtos/${id}/`, data);
         return response.data;
     },
 
     delete: async (id: number): Promise<{ success: boolean; message: string }> => {
-        const response = await apiClient.delete<any>(`/produtos/${id}`);
+        const response = await apiClient.delete<any>(`/produtos/${id}/`);
         return response.data;
     },
 

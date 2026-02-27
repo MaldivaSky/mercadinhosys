@@ -5,7 +5,7 @@ import {
     Clock, MapPin, CreditCard
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 import { useConfig } from '../../contexts/ConfigContext';
 import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
 import { API_CONFIG } from '../../api/apiConfig';
@@ -121,7 +121,7 @@ const SettingsPage: React.FC = () => {
                 setEstab(data);
             } catch (error) {
                 console.error("Erro ao carregar estabelecimento:", error);
-                toast.error("Erro ao carregar dados do estabelecimento.");
+                showToast.error("Erro ao carregar dados do estabelecimento.");
             } finally {
                 setLoadingEstab(false);
             }
@@ -132,19 +132,22 @@ const SettingsPage: React.FC = () => {
     const handleSave = async () => {
         try {
             setSaving(true);
-            const [, updatedEstab] = await Promise.all([
+            const promise = Promise.all([
                 updateGlobalConfig(config),
                 settingsService.updateEstabelecimento(estab)
-            ]);
+            ]).then(([, updatedEstab]) => {
+                localStorage.setItem('estabelecimento_data', JSON.stringify(updatedEstab));
+                setEstab(updatedEstab);
+                return updatedEstab;
+            });
 
-            // Sincronização Absoluta: Atualiza o localStorage para garantir que o resto do app veja a mudança
-            localStorage.setItem('estabelecimento_data', JSON.stringify(updatedEstab));
-
-            setEstab(updatedEstab);
-            toast.success("Configurações salvas com sucesso!");
+            await showToast.promise(promise, {
+                loading: 'Salvando configurações...',
+                success: 'Configurações salvas com sucesso!',
+                error: 'Erro ao salvar alterações'
+            });
         } catch (error) {
             console.error("Erro ao salvar:", error);
-            toast.error("Erro ao salvar alterações.");
         } finally {
             setSaving(false);
         }
@@ -154,46 +157,41 @@ const SettingsPage: React.FC = () => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
 
-            // Validar tamanho (5MB)
             if (file.size > 5 * 1024 * 1024) {
-                toast.error("Imagem muito grande! Tamanho máximo: 5MB");
+                showToast.error("Imagem muito grande! Tamanho máximo: 5MB");
                 return;
             }
 
-            // Validar tipo
             if (!file.type.startsWith('image/')) {
-                toast.error("Arquivo inválido! Envie apenas imagens.");
+                showToast.error("Arquivo inválido! Envie apenas imagens.");
                 return;
             }
 
             try {
-                // Preview imediato com base64
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                     const base64 = reader.result as string;
-
-                    // Atualizar preview local
-                    setConfig({ ...config, logo_url: base64 });
+                    setConfig({ ...config, logo_base64: base64 });
                 };
                 reader.readAsDataURL(file);
 
-                // Upload para o servidor em background
-                toast.loading("Fazendo upload da logo...", { id: 'upload-logo' });
-                await settingsService.uploadLogo(file);
+                await showToast.promise(settingsService.uploadLogo(file), {
+                    loading: 'Fazendo upload da logo...',
+                    success: 'Logo atualizada com sucesso!',
+                    error: 'Erro ao fazer upload da logo'
+                });
 
                 setLogoPreview(null);
                 await refreshConfig();
-                toast.success("Logo atualizada com sucesso!", { id: 'upload-logo' });
             } catch (error) {
                 console.error("Erro ao fazer upload:", error);
-                toast.error("Erro ao fazer upload da logo.", { id: 'upload-logo' });
             }
         }
     };
 
     const handleGetCurrentLocation = async () => {
         if (!navigator.geolocation) {
-            toast.error('Geolocalização não suportada neste navegador');
+            showToast.error('Geolocalização não suportada neste navegador');
             return;
         }
 
@@ -207,17 +205,17 @@ const SettingsPage: React.FC = () => {
                         latitude_estabelecimento: parseFloat(latitude.toFixed(6)),
                         longitude_estabelecimento: parseFloat(longitude.toFixed(6))
                     });
-                    toast.success(`Localização capturada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+                    showToast.success(`Localização capturada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
                     setLoadingGeolocation(false);
                 },
                 (error) => {
                     console.error('Erro ao obter localização:', error);
                     if (error.code === error.PERMISSION_DENIED) {
-                        toast.error('Permissão de localização negada. Verifique as configurações do navegador.');
+                        showToast.error('Permissão de localização negada. Verifique as configurações do navegador.');
                     } else if (error.code === error.POSITION_UNAVAILABLE) {
-                        toast.error('Localização indisponível. Tente novamente.');
+                        showToast.error('Localização indisponível. Tente novamente.');
                     } else {
-                        toast.error('Erro ao obter localização: ' + error.message);
+                        showToast.error('Erro ao obter localização: ' + error.message);
                     }
                     setLoadingGeolocation(false);
                 },
@@ -228,7 +226,7 @@ const SettingsPage: React.FC = () => {
                 }
             );
         } catch (error) {
-            toast.error('Erro ao acessar geolocalização');
+            showToast.error('Erro ao acessar geolocalização');
             setLoadingGeolocation(false);
         }
     };
@@ -892,10 +890,10 @@ const SyncPanel: React.FC = () => {
             setReplicating(true);
             await apiClient.post('/sync/replicar');
             await fetchHealth();
-            toast.success('Replicação concluída');
+            showToast.success('Replicação concluída');
         } catch (e: unknown) {
             const error = e as { response?: { data?: { message?: string } } };
-            toast.error(error.response?.data?.message || 'Erro ao replicar');
+            showToast.error(error.response?.data?.message || 'Erro ao replicar');
         } finally {
             setReplicating(false);
         }

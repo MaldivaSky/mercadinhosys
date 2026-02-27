@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
 from flask_jwt_extended import get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
 import os
 import requests
@@ -289,7 +289,8 @@ def bulk_update_prices():
         return jsonify({"success": False, "message": str(e)}), 500
 
 
-@produtos_bp.route("/", methods=["GET"])
+@produtos_bp.route("/", methods=["GET"], strict_slashes=False)
+@produtos_bp.route("", methods=["GET"], strict_slashes=False)
 @funcionario_required
 def listar_produtos():
     """Lista todos os produtos com filtros avançados e paginação"""
@@ -621,7 +622,8 @@ def listar_produtos():
         }), 500
 
 
-@produtos_bp.route("/<int:id>", methods=["GET"])
+@produtos_bp.route("/<int:id>", methods=["GET"], strict_slashes=False)
+@produtos_bp.route("/<int:id>/", methods=["GET"], strict_slashes=False)
 @funcionario_required
 def obter_produto(id):
     """Obtém detalhes completos de um produto específico"""
@@ -775,7 +777,8 @@ def obter_produto(id):
         )
 
 
-@produtos_bp.route("/", methods=["POST"])
+@produtos_bp.route("/", methods=["POST"], strict_slashes=False)
+@produtos_bp.route("", methods=["POST"], strict_slashes=False)
 @funcionario_required
 def criar_produto():
     """Cria um novo produto"""
@@ -822,8 +825,12 @@ def criar_produto():
             current_app.logger.info("Nenhuma categoria fornecida")
 
         # Calcular preços e margem
-        preco_custo = Decimal(str(data.get("preco_custo", 0)))
-        preco_venda = Decimal(str(data.get("preco_venda", 0)))
+        try:
+            preco_custo = Decimal(str(data.get("preco_custo", 0) or 0))
+            preco_venda = Decimal(str(data.get("preco_venda", 0) or 0))
+        except (ValueError, TypeError, DecimalException):
+            preco_custo = Decimal("0")
+            preco_venda = Decimal("0")
         
         # Calcular margem de lucro
         if preco_custo > 0:
@@ -835,22 +842,22 @@ def criar_produto():
         produto = Produto(
             estabelecimento_id=estabelecimento_id,
             categoria_id=categoria_id,
-            fornecedor_id=data.get("fornecedor_id"),
+            fornecedor_id=data.get("fornecedor_id") if data.get("fornecedor_id") else None,
             codigo_barras=data.get("codigo_barras", "").strip(),
             codigo_interno=data.get("codigo_interno", "").strip(),
             nome=data["nome"].strip(),
             descricao=data.get("descricao", "").strip(),
             marca=data.get("marca", "").strip(),
             fabricante=data.get("fabricante", "").strip(),
-            subcategoria=data.get("subcategoria", "").strip(),
-            unidade_medida=data.get("unidade_medida", "UN"),
-            quantidade=int(data.get("quantidade", 0)),
-            quantidade_minima=int(data.get("quantidade_minima", 10)),
+            subcategoria=data.get("subcategoria", "").strip() if data.get("subcategoria") else "",
+            unidade_medida=data.get("unidade_medida", "UN") or "UN",
+            quantidade=int(data.get("quantidade") or 0),
+            quantidade_minima=int(data.get("quantidade_minima") or 10),
             preco_custo=preco_custo,
             preco_venda=preco_venda,
             margem_lucro=margem,
-            ncm=data.get("ncm", "").strip(),
-            origem=int(data.get("origem", 0)),
+            ncm=data.get("ncm", "").strip() if data.get("ncm") else "",
+            origem=int(data.get("origem") or 0),
             controlar_validade=data.get("controlar_validade", False),
             data_validade=(
                 datetime.strptime(data["data_validade"], "%Y-%m-%d").date()
@@ -937,7 +944,7 @@ def criar_produto():
         )
 
 
-@produtos_bp.route("/<int:id>", methods=["PUT"])
+@produtos_bp.route("/<int:id>", methods=["PUT"], strict_slashes=False)
 @funcionario_required
 def atualizar_produto(id):
     """Atualiza um produto existente"""
@@ -1155,7 +1162,7 @@ def atualizar_produto(id):
         )
 
 
-@produtos_bp.route("/<int:id>", methods=["DELETE"])
+@produtos_bp.route("/<int:id>", methods=["DELETE"], strict_slashes=False)
 @funcionario_required
 def deletar_produto(id):
     """Desativa um produto (soft delete)"""

@@ -14,7 +14,7 @@ import {
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
 import { apiClient } from '../../api/apiClient';
-import { Toaster, toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 import { formatCurrency } from '../../utils/formatters';
 
 import ProductAnalyticsDashboard from './components/ProductAnalyticsDashboard';
@@ -109,7 +109,7 @@ const ProductsPage: React.FC = () => {
       setTotalItems(response?.paginacao?.total_itens ?? 0);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
-      toast.error('Erro ao carregar produtos');
+      showToast.error('Erro ao carregar produtos');
       setProdutos([]);
     } finally {
       setLoading(false);
@@ -166,28 +166,34 @@ const ProductsPage: React.FC = () => {
   const handleDelete = async (id: number) => {
     if (!window.confirm('Desativar este produto?')) return;
     try {
-      await productsService.delete(id);
-      toast.success('Produto desativado!');
+      await showToast.promise(productsService.delete(id), {
+        loading: 'Desativando produto...',
+        success: 'Produto desativado com sucesso!',
+        error: 'Erro ao desativar produto'
+      });
       loadProdutos();
       loadStats();
     } catch (error) {
-      toast.error('Erro ao desativar produto');
+      // Erro já tratado pelo promise
     }
   };
 
   const handleStockAdjust = async () => {
     if (!selectedProduct || !stockAdjust.motivo.trim()) {
-      toast.error('Informe o motivo do ajuste');
+      showToast.error('Informe o motivo do ajuste');
       return;
     }
     try {
-      await productsService.ajustarEstoque(selectedProduct.id, stockAdjust.quantidade, stockAdjust.operacao, stockAdjust.motivo);
-      toast.success('Estoque ajustado!');
+      await showToast.promise(productsService.ajustarEstoque(selectedProduct.id, stockAdjust.quantidade, stockAdjust.operacao, stockAdjust.motivo), {
+        loading: 'Ajustando estoque...',
+        success: 'Estoque ajustado com sucesso!',
+        error: 'Erro ao ajustar estoque'
+      });
       setShowStockModal(false);
       loadProdutos();
       loadStats();
     } catch (error) {
-      toast.error('Erro ao ajustar estoque');
+      // Erro já tratado pelo promise
     }
   };
 
@@ -199,9 +205,9 @@ const ProductsPage: React.FC = () => {
       link.href = URL.createObjectURL(blob);
       link.download = `produtos_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-      toast.success(`${response.total_produtos} produtos exportados!`);
+      showToast.info(`${response.total_produtos} produtos exportados!`);
     } catch (error) {
-      toast.error('Erro ao exportar');
+      showToast.error('Erro ao exportar');
     }
   };
 
@@ -371,7 +377,6 @@ const ProductsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <Toaster position="top-right" />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
