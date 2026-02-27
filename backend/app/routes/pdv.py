@@ -657,6 +657,8 @@ def finalizar_venda():
                 preco_unitario = to_decimal(item_data.get("price", produto.preco_venda))
                 total_item = preco_unitario * quantidade
 
+                margem_lucro_real = (preco_unitario - to_decimal(produto.preco_custo or 0)) * quantidade
+
                 novo_item = VendaItem(
                     venda_id=nova_venda.id,
                     produto_id=produto.id,
@@ -665,7 +667,8 @@ def finalizar_venda():
                     produto_unidade=produto.unidade_medida or "UN",
                     quantidade=quantidade,
                     preco_unitario=preco_unitario,
-                    total_item=total_item
+                    total_item=total_item,
+                    margem_lucro_real=margem_lucro_real
                 )
                 db.session.add(novo_item)
 
