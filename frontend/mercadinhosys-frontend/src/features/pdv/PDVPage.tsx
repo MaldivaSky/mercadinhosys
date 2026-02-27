@@ -8,7 +8,6 @@ import {
     Smartphone,
     User,
     Tag,
-    Mail,
     X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,8 +42,6 @@ const PDVPage: React.FC = () => {
         atualizarQuantidade,
         aplicarDescontoItem,
         limparCarrinho,
-        emailRecibo,
-        setEmailRecibo,
         finalizarVenda,
     } = usePDV();
 
@@ -64,22 +61,26 @@ const PDVPage: React.FC = () => {
         }
 
         try {
-            const venda = await finalizarVenda();
+            const venda = await showToast.promise(finalizarVenda(), {
+                loading: 'Finalizando venda...',
+                success: 'Venda concluída com sucesso!',
+                error: (err: any) => err.message || 'Erro ao finalizar venda'
+            });
+
             if (venda) {
                 setVendaFinalizada(venda);
-                showToast.success('Venda concluída!');
                 setFormaPagamentoAberta(false);
                 setMostrarModalNotaFiscal(true);
             }
-        } catch (error: any) {
-            showToast.error(error.message || 'Erro ao finalizar venda');
+        } catch (error) {
+            // Erro tratado pelo promise
         }
     };
 
     const handleLimparCarrinho = () => {
         if (carrinho.length > 0 && confirm('Deseja realmente cancelar esta venda?')) {
             limparCarrinho();
-            showToast.info('Venda cancelada');
+            showToast.warning('Venda cancelada');
         }
     };
 
@@ -104,7 +105,7 @@ const PDVPage: React.FC = () => {
 
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden border-t border-slate-200 dark:border-slate-800">
                 {/* 🛒 LISTAGEM DE ITENS (FOCO TOTAL) */}
-                <div className="lg:col-span-10 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="lg:col-span-9 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
                     <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
                         <ProdutoSearch onProdutoSelecionado={adicionarProduto} />
                     </div>
@@ -136,11 +137,11 @@ const PDVPage: React.FC = () => {
                 </div>
 
                 {/* 🏷️ RESUMO LATERAL (PROFISSIONAL E SÓBRIO) */}
-                <div className="hidden lg:flex lg:col-span-2 flex-col bg-slate-50 dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800">
+                <div className="hidden lg:flex lg:col-span-3 flex-col bg-slate-50 dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800">
                     <div className="flex-1 p-6 flex flex-col justify-end gap-6">
                         <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none text-center">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total a Pagar</span>
-                            <span className="text-4xl font-black text-red-600 dark:text-red-400 tabular-nums">
+                            <span className="text-3xl font-black text-red-600 dark:text-red-400 tabular-nums block truncate">
                                 {formatCurrency(total)}
                             </span>
                         </div>
@@ -298,21 +299,7 @@ const PDVPage: React.FC = () => {
                             </div>
 
                             {/* Drawer Footer */}
-                            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 space-y-5">
-                                {/* 📧 ENVIO DE RECIBO (ELITE UX) */}
-                                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                                    <div className="flex items-center gap-2 mb-2 px-1">
-                                        <Mail className="w-4 h-4 text-blue-500" />
-                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Enviar Comprovante</span>
-                                    </div>
-                                    <input
-                                        type="email"
-                                        value={emailRecibo}
-                                        onChange={(e) => setEmailRecibo(e.target.value)}
-                                        placeholder="E-mail para envio (Opcional)"
-                                        className="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    />
-                                </div>
+                            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 space-y-6">
 
                                 <div className="flex justify-between items-center px-1">
                                     <div className="flex flex-col">
@@ -347,7 +334,7 @@ const PDVPage: React.FC = () => {
 
             <NotaFiscalModal
                 mostrar={mostrarModalNotaFiscal}
-                emailCliente={cliente?.email || emailRecibo}
+                emailCliente={cliente?.email || ''}
                 onFechar={() => {
                     setMostrarModalNotaFiscal(false);
                     setVendaFinalizada(null);
@@ -366,13 +353,16 @@ const PDVPage: React.FC = () => {
                     if (!vendaFinalizada) return;
                     setEnviandoEmail(true);
                     try {
-                        await pdvService.enviarCupomFiscal(vendaFinalizada.id, email);
-                        showToast.success('Nota fiscal enviada por e-mail!');
+                        await showToast.promise(pdvService.enviarCupomFiscal(vendaFinalizada.id, email), {
+                            loading: 'Enviando nota fiscal...',
+                            success: 'Nota fiscal enviada por e-mail!',
+                            error: (err: any) => err.response?.data?.error || 'Erro ao enviar e-mail'
+                        });
                         setMostrarModalNotaFiscal(false);
                         setVendaFinalizada(null);
                         limparCarrinho();
-                    } catch (error: any) {
-                        showToast.error(error.response?.data?.error || 'Erro ao enviar e-mail');
+                    } catch (error) {
+                        // Erro tratado pelo promise
                     } finally {
                         setEnviandoEmail(false);
                     }

@@ -193,7 +193,8 @@ def calcular_estatisticas_vendas(query):
         func.count(Venda.id).label("quantidade"),
         func.sum(Venda.total).label("total"),
         func.sum(Venda.desconto).label("descontos"),
-        func.sum(Venda.valor_recebido).label("valor_recebido")
+        func.sum(Venda.valor_recebido).label("valor_recebido"),
+        func.sum(Venda.quantidade_itens).label("total_itens")
     ).first()
 
     quantidade = stats.quantidade or 0
@@ -208,6 +209,7 @@ def calcular_estatisticas_vendas(query):
         "ticket_medio": ticket_medio,
         "total_descontos": descontos,
         "total_valor_recebido": valor_recebido,
+        "total_itens": int(stats.total_itens or 0),
         "formas_pagamento": {},
     }
 
@@ -374,6 +376,7 @@ def listar_vendas():
             "ticket_medio": float(estatisticas["ticket_medio"]),
             "total_descontos": float(estatisticas["total_descontos"]),
             "total_valor_recebido": float(estatisticas["total_valor_recebido"]),
+            "total_itens": estatisticas["total_itens"],
             "formas_pagamento": dict(estatisticas["formas_pagamento"]),
         }
 
@@ -428,11 +431,17 @@ def estatisticas_vendas():
         total_vendas = stats_gerais.total_vendas or 0
         total_valor = float(stats_gerais.total_valor or 0)
 
-        # 2. Lucro Real (soma dos itens das vendas filtradas)
-        total_lucro = db.session.query(func.sum(VendaItem.margem_lucro_real)).filter(VendaItem.venda_id.in_(vendas_ids_select)).scalar() or 0
-        total_lucro = float(total_lucro)
+        # 2. Lucro Real e Total Itens (soma dos itens das vendas filtradas)
+        stats_itens = db.session.query(
+            func.sum(VendaItem.margem_lucro_real).label("total_lucro"),
+            func.sum(VendaItem.quantidade).label("total_itens")
+        ).filter(VendaItem.venda_id.in_(vendas_ids_select)).first()
+        
+        total_lucro = float(stats_itens.total_lucro or 0)
+        total_itens_venda = float(stats_itens.total_itens or 0)
 
         ticket_medio = total_valor / total_vendas if total_vendas > 0 else 0
+        itens_por_venda = total_itens_venda / total_vendas if total_vendas > 0 else 0
 
         # --- VENDAS POR DIA ---
         campo_data = func.coalesce(Venda.data_venda, Venda.created_at)
@@ -564,7 +573,9 @@ def estatisticas_vendas():
                 "total_vendas": total_vendas,
                 "total_valor": float(total_valor),
                 "total_lucro": float(total_lucro),
+                "total_itens": total_itens_venda,
                 "ticket_medio": float(ticket_medio),
+                "itens_por_venda": float(itens_por_venda),
                 "periodo": {"data_inicio": data_inicio, "data_fim": data_fim},
             },
             "vendas_por_dia": vendas_historicas,

@@ -64,7 +64,7 @@ const SuppliersPage: React.FC = () => {
         const total = suppliers.length;
         const ativos = suppliers.filter(s => s.ativo).length;
         const inativos = total - ativos;
-        
+
         const por_estado: { [key: string]: number } = {};
         suppliers.forEach(s => {
             if (s.estado) {
@@ -76,9 +76,9 @@ const SuppliersPage: React.FC = () => {
         const sem_produtos = total - com_produtos;
 
         // Top fornecedor por total de produtos
-        const topFornecedor = suppliers.reduce((max, s) => 
+        const topFornecedor = suppliers.reduce((max, s) =>
             (s.total_produtos || 0) > (max.total_produtos || 0) ? s : max
-        , suppliers[0] || null);
+            , suppliers[0] || null);
 
         const totalProdutos = suppliers.reduce((sum, s) => sum + (s.total_produtos || 0), 0);
 
@@ -181,13 +181,15 @@ const SuppliersPage: React.FC = () => {
                 ativo: formData.ativo,
             };
 
-            if (editMode && selectedSupplier) {
-                await apiClient.put(`/fornecedores/${selectedSupplier.id}`, dadosBackend);
-                showToast.success('Fornecedor atualizado com sucesso');
-            } else {
-                await apiClient.post('/fornecedores', dadosBackend);
-                showToast.success('Fornecedor cadastrado com sucesso');
-            }
+            const promise = editMode && selectedSupplier
+                ? apiClient.put(`/fornecedores/${selectedSupplier.id}`, dadosBackend)
+                : apiClient.post('/fornecedores', dadosBackend);
+
+            await showToast.promise(promise, {
+                loading: editMode ? 'Atualizando fornecedor...' : 'Cadastrando fornecedor...',
+                success: editMode ? 'Fornecedor atualizado com sucesso!' : 'Fornecedor cadastrado com sucesso!',
+                error: (err: any) => err.response?.data?.error || err.response?.data?.message || 'Erro ao salvar fornecedor',
+            });
 
             setShowModal(false);
             resetForm();
@@ -226,7 +228,7 @@ const SuppliersPage: React.FC = () => {
         try {
             // Usar PATCH para desativar ao invés de DELETE
             await apiClient.patch(`/fornecedores/${id}/status`, { ativo: false });
-            showToast.success('Fornecedor desativado');
+            showToast.error('Fornecedor desativado');
             loadSuppliers();
         } catch (error: unknown) {
             console.error('Erro ao desativar fornecedor:', error);
@@ -239,7 +241,7 @@ const SuppliersPage: React.FC = () => {
         setFornecedorSelecionado(fornecedor);
         setShowProdutosModal(true);
         setLoadingProdutos(true);
-        
+
         try {
             const response = await apiClient.get('/produtos/estoque', {
                 params: {
@@ -247,7 +249,7 @@ const SuppliersPage: React.FC = () => {
                     por_pagina: 100,
                 }
             });
-            
+
             setProdutosFornecedor(response.data.produtos || []);
         } catch (error) {
             console.error('Erro ao carregar produtos:', error);
@@ -262,21 +264,21 @@ const SuppliersPage: React.FC = () => {
         const matchesSearch = supplier.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
             supplier.cnpj?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             supplier.cidade?.toLowerCase().includes(searchTerm.toLowerCase());
-        
+
         const matchesStatus = filterStatus === 'all' ? true :
             filterStatus === 'active' ? supplier.ativo :
-            !supplier.ativo;
+                !supplier.ativo;
 
         const matchesProdutos = filterProdutos === 'all' ? true :
             filterProdutos === 'com' ? (supplier.total_produtos || 0) > 0 :
-            (supplier.total_produtos || 0) === 0;
+                (supplier.total_produtos || 0) === 0;
 
         return matchesSearch && matchesStatus && matchesProdutos;
     });
 
     const handleCardClick = useCallback((type: string) => {
         // Filtros são visuais — sem toast para não poluir
-        switch(type) {
+        switch (type) {
             case 'all':
                 setFilterStatus('all');
                 setFilterProdutos('all');
@@ -308,7 +310,7 @@ const SuppliersPage: React.FC = () => {
     // Função para exportar para CSV
     const exportarCSV = useCallback(() => {
         setExportando(true);
-        
+
         try {
             const headers = ['Nome', 'CNPJ', 'Telefone', 'Email', 'Cidade', 'Estado', 'Status', 'Produtos'];
             const rows = filteredSuppliers.map(s => [
@@ -333,7 +335,7 @@ const SuppliersPage: React.FC = () => {
             link.download = `fornecedores_${new Date().toISOString().split('T')[0]}.csv`;
             link.click();
 
-            showToast.success('CSV exportado com sucesso');
+            showToast.info('CSV exportado com sucesso');
             setShowExportMenu(false);
         } catch (error) {
             console.error('Erro ao exportar CSV:', error);
@@ -364,7 +366,7 @@ const SuppliersPage: React.FC = () => {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Fornecedores");
             XLSX.writeFile(wb, `fornecedores_${new Date().toISOString().split('T')[0]}.xlsx`);
-            
+
             showToast.success('Excel exportado com sucesso');
             setShowExportMenu(false);
         } catch (error) {
@@ -383,11 +385,11 @@ const SuppliersPage: React.FC = () => {
             // Cabeçalho
             doc.setFillColor(37, 99, 235); // Blue 600
             doc.rect(0, 0, 210, 40, 'F');
-            
+
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(22);
             doc.text("Relatório de Fornecedores", 105, 20, { align: "center" });
-            
+
             doc.setFontSize(10);
             doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 105, 30, { align: "center" });
 
@@ -422,7 +424,7 @@ const SuppliersPage: React.FC = () => {
             }
 
             doc.save(`fornecedores-${new Date().toISOString().split('T')[0]}.pdf`);
-            
+
             showToast.success('PDF exportado com sucesso');
             setShowExportMenu(false);
         } catch (error) {
@@ -520,11 +522,10 @@ const SuppliersPage: React.FC = () => {
             {/* Dashboard de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Total de Fornecedores */}
-                <div 
+                <div
                     onClick={() => handleCardClick('all')}
-                    className={`bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${
-                        filterStatus === 'all' ? 'ring-4 ring-blue-300 ring-offset-2' : ''
-                    }`}
+                    className={`bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${filterStatus === 'all' ? 'ring-4 ring-blue-300 ring-offset-2' : ''
+                        }`}
                 >
                     <div className="flex items-center justify-between mb-2">
                         <Truck className="w-8 h-8 opacity-80" />
@@ -540,11 +541,10 @@ const SuppliersPage: React.FC = () => {
                 </div>
 
                 {/* Fornecedores Ativos */}
-                <div 
+                <div
                     onClick={() => handleCardClick('active')}
-                    className={`bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${
-                        filterStatus === 'active' ? 'ring-4 ring-green-300 ring-offset-2' : ''
-                    }`}
+                    className={`bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${filterStatus === 'active' ? 'ring-4 ring-green-300 ring-offset-2' : ''
+                        }`}
                 >
                     <div className="flex items-center justify-between mb-2">
                         <TrendingUp className="w-8 h-8 opacity-80" />
@@ -562,11 +562,10 @@ const SuppliersPage: React.FC = () => {
                 </div>
 
                 {/* Fornecedores Inativos */}
-                <div 
+                <div
                     onClick={() => handleCardClick('inactive')}
-                    className={`bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${
-                        filterStatus === 'inactive' ? 'ring-4 ring-red-300 ring-offset-2' : ''
-                    } ${stats.inativos > 0 ? 'animate-pulse' : ''}`}
+                    className={`bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${filterStatus === 'inactive' ? 'ring-4 ring-red-300 ring-offset-2' : ''
+                        } ${stats.inativos > 0 ? 'animate-pulse' : ''}`}
                 >
                     <div className="flex items-center justify-between mb-2">
                         <AlertCircle className="w-8 h-8 opacity-80" />
@@ -584,11 +583,10 @@ const SuppliersPage: React.FC = () => {
                 </div>
 
                 {/* Fornecedores Com Produtos */}
-                <div 
+                <div
                     onClick={() => handleCardClick('com_produtos')}
-                    className={`bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${
-                        filterProdutos === 'com' ? 'ring-4 ring-purple-300 ring-offset-2' : ''
-                    }`}
+                    className={`bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 ${filterProdutos === 'com' ? 'ring-4 ring-purple-300 ring-offset-2' : ''
+                        }`}
                 >
                     <div className="flex items-center justify-between mb-2">
                         <Package className="w-8 h-8 opacity-80" />
@@ -609,7 +607,7 @@ const SuppliersPage: React.FC = () => {
                 </div>
 
                 {/* Top Fornecedor */}
-                <div 
+                <div
                     className="bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl shadow-lg p-6 text-white"
                 >
                     <div className="flex items-center justify-between mb-2">
@@ -680,11 +678,10 @@ const SuppliersPage: React.FC = () => {
                                     </div>
                                 </div>
                                 <span
-                                    className={`px-2 py-1 text-xs rounded-full font-semibold ${
-                                        supplier.ativo
-                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                                    }`}
+                                    className={`px-2 py-1 text-xs rounded-full font-semibold ${supplier.ativo
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                        }`}
                                 >
                                     {supplier.ativo ? '✓ Ativo' : '✕ Inativo'}
                                 </span>
@@ -693,24 +690,22 @@ const SuppliersPage: React.FC = () => {
                             {/* Badge de Produtos e Compras */}
                             <div className="space-y-2 mb-3">
                                 {supplier.total_produtos !== undefined && (
-                                    <div 
+                                    <div
                                         onClick={() => (supplier.total_produtos ?? 0) > 0 && handleVerProdutos(supplier)}
-                                        className={`p-2 rounded-lg ${
-                                            (supplier.total_produtos ?? 0) > 10 
-                                                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                                                : (supplier.total_produtos ?? 0) > 0
+                                        className={`p-2 rounded-lg ${(supplier.total_produtos ?? 0) > 10
+                                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                                            : (supplier.total_produtos ?? 0) > 0
                                                 ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
                                                 : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-                                        } ${supplier.total_produtos > 0 ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+                                            } ${supplier.total_produtos > 0 ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
                                     >
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className={`font-medium ${
-                                                supplier.total_produtos > 10 
-                                                    ? 'text-green-700 dark:text-green-300'
-                                                    : supplier.total_produtos > 0
+                                            <span className={`font-medium ${supplier.total_produtos > 10
+                                                ? 'text-green-700 dark:text-green-300'
+                                                : supplier.total_produtos > 0
                                                     ? 'text-yellow-700 dark:text-yellow-300'
                                                     : 'text-red-700 dark:text-red-300'
-                                            }`}>
+                                                }`}>
                                                 📦 {supplier.total_produtos || 0} produtos
                                             </span>
                                             {supplier.total_produtos === 0 ? (
@@ -725,7 +720,7 @@ const SuppliersPage: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {/* Informações de Compras */}
                                 {supplier.valor_total_comprado !== undefined && supplier.valor_total_comprado > 0 && (
                                     <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
@@ -739,12 +734,11 @@ const SuppliersPage: React.FC = () => {
                                         </div>
                                         {supplier.classificacao && (
                                             <div className="mt-1">
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                                                    supplier.classificacao === 'PREMIUM' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' :
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${supplier.classificacao === 'PREMIUM' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' :
                                                     supplier.classificacao === 'A' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
-                                                    supplier.classificacao === 'B' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' :
-                                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                                }`}>
+                                                        supplier.classificacao === 'B' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' :
+                                                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                    }`}>
                                                     {supplier.classificacao === 'PREMIUM' ? '👑 ' : ''}Classe {supplier.classificacao}
                                                 </span>
                                             </div>
@@ -1016,7 +1010,7 @@ const SuppliersPage: React.FC = () => {
                     </div>
                 </div>
             )}
-            
+
             {/* Modal de Produtos do Fornecedor */}
             {showProdutosModal && fornecedorSelecionado && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1069,16 +1063,15 @@ const SuppliersPage: React.FC = () => {
                                                     )}
                                                 </div>
                                                 <span
-                                                    className={`px-2 py-1 text-xs rounded-full font-semibold ${
-                                                        produto.ativo
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                                                    }`}
+                                                    className={`px-2 py-1 text-xs rounded-full font-semibold ${produto.ativo
+                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                                        }`}
                                                 >
                                                     {produto.ativo ? '✓' : '✕'}
                                                 </span>
                                             </div>
-                                            
+
                                             <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
                                                 <div>
                                                     <p className="text-gray-500 dark:text-gray-400 text-xs">Estoque</p>
@@ -1101,7 +1094,7 @@ const SuppliersPage: React.FC = () => {
                                                 <div>
                                                     <p className="text-gray-500 dark:text-gray-400 text-xs">Margem</p>
                                                     <p className="font-bold text-purple-600 dark:text-purple-400">
-                                                        {produto.preco_custo > 0 
+                                                        {produto.preco_custo > 0
                                                             ? (((produto.preco_venda - produto.preco_custo) / produto.preco_custo) * 100).toFixed(1)
                                                             : 0}%
                                                     </p>

@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { Camera, Sparkles } from 'lucide-react';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 import { Fornecedor, Produto } from '../../../types';
 import { productsService } from '../productsService';
 import { cosmosService } from '../../../services/cosmosService';
@@ -98,7 +98,7 @@ const ProductFormModal = ({
         setFormData(prev => ({ ...prev, codigo_barras: codigo }));
 
         setIsSearchingCosmos(true);
-        const loadingToast = toast.loading('Consultando Cosmos API...');
+        const loadingToast = showToast.loading('Consultando Cosmos API...');
 
         try {
             const data = await cosmosService.buscarPorGtin(codigo);
@@ -109,13 +109,12 @@ const ProductFormModal = ({
                 descricao: data.ncm?.full_description || data.description || prev.descricao,
                 marca: data.brand?.name || prev.marca,
                 imagem_url: data.thumbnail || prev.imagem_url,
-                // Mapear categoria se possÃ­vel ou focar no nome/marca
             }));
 
-            toast.success('Dados preenchidos automaticamente!', { id: loadingToast });
+            showToast.info('Dados preenchidos automaticamente!', { id: loadingToast });
         } catch (error) {
             console.error('Erro na consulta Cosmos:', error);
-            toast.error('Produto nÃ£o encontrado no banco de dados geral.', { id: loadingToast });
+            showToast.error('Produto não encontrado no banco de dados geral.', { id: loadingToast });
         } finally {
             setIsSearchingCosmos(false);
         }
@@ -123,21 +122,25 @@ const ProductFormModal = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.nome.trim()) { toast.error('Nome obrigatorio'); return; }
-        if (!formData.categoria.trim()) { toast.error('Categoria obrigatoria'); return; }
+        if (!formData.nome.trim()) { showToast.error('Nome obrigatório'); return; }
+        if (!formData.categoria.trim()) { showToast.error('Categoria obrigatória'); return; }
         setLoading(true);
         try {
-            if (editMode && produto) {
-                await productsService.update(produto.id, formData);
-                toast.success('Produto atualizado!');
-            } else {
-                await productsService.create(formData);
-                toast.success('Produto criado!');
-            }
+            const promise = editMode && produto
+                ? productsService.update(produto.id, formData)
+                : productsService.create(formData);
+
+            await showToast.promise(promise, {
+                loading: editMode ? 'Atualizando produto...' : 'Criando produto...',
+                success: editMode ? 'Produto atualizado!' : 'Produto criado!',
+                error: 'Erro ao salvar produto'
+            }, {
+                theme: editMode ? 'warning' : 'success'
+            });
+
             onSuccess();
         } catch (error: unknown) {
-            const err = error as any;
-            toast.error(err.response?.data?.error || 'Erro ao salvar');
+            // Erro tratado pelo promise
         } finally {
             setLoading(false);
         }

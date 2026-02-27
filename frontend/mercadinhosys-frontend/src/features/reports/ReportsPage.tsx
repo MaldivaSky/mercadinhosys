@@ -41,7 +41,7 @@ import { ptBR } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 import { salesService } from '../sales/salesService';
 import { productsService } from '../products/productsService';
 import { pontoService } from '../ponto/pontoService';
@@ -271,7 +271,7 @@ const ReportsPage: React.FC = () => {
         if (type === 'csv') exportToCSV(data, filename);
         else if (type === 'excel') exportToExcel(data, filename, sheetName);
         else generateGenericPDF(data, title, columns, filename, headColor, period);
-        toast.success('Relatório gerado com sucesso!');
+        showToast.info('Relatório gerado com sucesso!');
     };
 
     // ==================== BACKUP ====================
@@ -279,18 +279,24 @@ const ReportsPage: React.FC = () => {
     const handleBackupExport = async () => {
         setLoadingBackup(true);
         try {
-            const res = await apiClient.get('/relatorios/backup/exportar', { responseType: 'blob' });
-            const blob = new Blob([res.data], { type: 'application/zip' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `backup_local_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.zip`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-            toast.success('Backup baixado com sucesso!');
+            const promise = apiClient.get('/relatorios/backup/exportar', { responseType: 'blob' }).then(res => {
+                const blob = new Blob([res.data], { type: 'application/zip' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `backup_local_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.zip`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                return res;
+            });
+
+            await showToast.promise(promise, {
+                loading: 'Gerando backup do sistema...',
+                success: 'Backup baixado com sucesso!',
+                error: 'Erro ao exportar backup'
+            });
         } catch (error) {
             console.error(error);
-            toast.error('Erro ao exportar backup');
         } finally {
             setLoadingBackup(false);
         }
@@ -336,11 +342,11 @@ const ReportsPage: React.FC = () => {
                     return dateB.localeCompare(dateA);
                 } catch { return 0; }
             });
-            if (data.length === 0) toast.error('Nenhuma venda encontrada no período');
+            if (data.length === 0) showToast.error('Nenhuma venda encontrada no período');
             setVendasData(data);
         } catch (error) {
             console.error(error);
-            toast.error('Erro ao carregar vendas');
+            showToast.error('Erro ao carregar vendas');
         } finally { setLoadingReport(null); }
     };
 
@@ -360,7 +366,7 @@ const ReportsPage: React.FC = () => {
             ];
             handleGenericExport(vendasData, type, 'Relatório Detalhado de Vendas', filename, 'Vendas', cols, [63, 81, 181], displayPeriodLabel);
         } catch {
-            toast.error('Erro ao gerar relatório de vendas');
+            showToast.error('Erro ao gerar relatório de vendas');
         } finally { setLoadingReport(null); }
     };
 
@@ -391,7 +397,7 @@ const ReportsPage: React.FC = () => {
             setProdutosData(data);
         } catch (error) {
             console.error(error);
-            toast.error('Erro ao carregar produtos');
+            showToast.error('Erro ao carregar produtos');
         } finally { setLoadingReport(null); }
     };
 
@@ -412,7 +418,7 @@ const ReportsPage: React.FC = () => {
             ];
             handleGenericExport(produtosData, type, 'Relatório de Estoque e Inventário', filename, 'Estoque', cols, [16, 185, 129]);
         } catch {
-            toast.error('Erro ao gerar relatório de estoque');
+            showToast.error('Erro ao gerar relatório de estoque');
         } finally { setLoadingReport(null); }
     };
 
@@ -467,7 +473,7 @@ const ReportsPage: React.FC = () => {
             });
         } catch (error) {
             console.error(error);
-            toast.error('Erro ao carregar dados financeiros');
+            showToast.error('Erro ao carregar dados financeiros');
         } finally { setLoadingReport(null); }
     };
 
@@ -486,7 +492,7 @@ const ReportsPage: React.FC = () => {
             setEquipeData(data);
         } catch (error) {
             console.error(error);
-            toast.error('Erro ao carregar equipe');
+            showToast.error('Erro ao carregar equipe');
         } finally { setLoadingReport(null); }
     };
 
@@ -503,7 +509,7 @@ const ReportsPage: React.FC = () => {
             ];
             handleGenericExport(equipeData, type, 'Performance da Equipe', filename, 'Equipe', cols, [236, 72, 153], displayPeriodLabel);
         } catch {
-            toast.error('Erro ao gerar relatório de equipe');
+            showToast.error('Erro ao gerar relatório de equipe');
         } finally { setLoadingReport(null); }
     };
 
@@ -524,7 +530,7 @@ const ReportsPage: React.FC = () => {
             }
         } catch (error) {
             console.error(error);
-            toast.error('Erro ao carregar relatório de ponto');
+            showToast.error('Erro ao carregar relatório de ponto');
         } finally { setLoadingReport(null); }
     };
 
@@ -542,7 +548,7 @@ const ReportsPage: React.FC = () => {
             ];
             handleGenericExport(pontoData, type, 'Relatório de Controle de Ponto', filename, 'Ponto', cols, [99, 102, 241], displayPeriodLabel);
         } catch {
-            toast.error('Erro ao gerar relatório de ponto');
+            showToast.error('Erro ao gerar relatório de ponto');
         } finally { setLoadingReport(null); }
     };
 
@@ -566,7 +572,7 @@ const ReportsPage: React.FC = () => {
                     'Última Compra': c.ultima_compra ? new Date(c.ultima_compra).toLocaleDateString('pt-BR') : 'N/A'
                 })));
             }
-        } catch (error) { console.error(error); toast.error('Erro ao carregar análise RFM'); }
+        } catch (error) { console.error(error); showToast.error('Erro ao carregar análise RFM'); }
         finally { setLoadingReport(null); }
     };
 
@@ -589,7 +595,7 @@ const ReportsPage: React.FC = () => {
                     'Estoque Atual': p.estoque_atual, '% Faturamento': p.percentual_faturamento.toFixed(2)
                 })));
             }
-        } catch (error) { console.error(error); toast.error('Erro ao carregar análise ABC'); }
+        } catch (error) { console.error(error); showToast.error('Erro ao carregar análise ABC'); }
         finally { setLoadingReport(null); }
     };
 
@@ -608,7 +614,7 @@ const ReportsPage: React.FC = () => {
                     'Status': p.status
                 })));
             }
-        } catch (error) { console.error(error); toast.error('Erro ao carregar previsão'); }
+        } catch (error) { console.error(error); showToast.error('Erro ao carregar previsão'); }
         finally { setLoadingReport(null); }
     };
 
@@ -643,7 +649,7 @@ const ReportsPage: React.FC = () => {
                     'Total Pago (R$)': item.boletos?.valor_pago ?? 0,
                 })));
             }
-        } catch (error) { console.error(error); toast.error('Erro ao carregar relatório de fornecedores'); }
+        } catch (error) { console.error(error); showToast.error('Erro ao carregar relatório de fornecedores'); }
         finally { setLoadingReport(null); }
     };
 
@@ -670,7 +676,7 @@ const ReportsPage: React.FC = () => {
                     };
                 }));
             }
-        } catch (error) { console.error(error); toast.error('Erro ao carregar relatório de clientes'); }
+        } catch (error) { console.error(error); showToast.error('Erro ao carregar relatório de clientes'); }
         finally { setLoadingReport(null); }
     };
 
@@ -751,7 +757,7 @@ const ReportsPage: React.FC = () => {
     // ==================== EXPORT: DRE FINANCEIRO ====================
 
     const handleFinanceiroExport = (type: 'pdf' | 'excel' | 'csv') => {
-        if (!financeiroData) { toast.error('Carregue o relatório financeiro primeiro'); return; }
+        if (!financeiroData) { showToast.error('Carregue o relatório financeiro primeiro'); return; }
         const dreRows = [
             { 'Descrição': '(+) Receita Bruta (Faturamento)', 'Valor (R$)': financeiroData.faturamento, 'Observação': `${financeiroData.total_vendas} vendas no período` },
             { 'Descrição': '(-) Custo da Mercadoria Vendida (CMV)', 'Valor (R$)': financeiroData.custo_mercadoria, 'Observação': '' },
@@ -810,7 +816,7 @@ const ReportsPage: React.FC = () => {
                 }
             });
             doc.save(`DRE_Financeiro_${dateRange.startDate}.pdf`);
-            toast.success('DRE exportado em PDF com sucesso!');
+            showToast.info('DRE exportado em PDF com sucesso!');
         } else if (type === 'excel') {
             const formattedRows = dreRows.map(r => ({
                 ...r,

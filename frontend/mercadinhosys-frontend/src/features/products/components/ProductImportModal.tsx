@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Download, HelpCircle } from 'lucide-react';
 import { productsService } from '../productsService';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 
 interface ProductImportModalProps {
@@ -39,14 +39,14 @@ const ProductImportModal = ({ show, onClose, onSuccess }: ProductImportModalProp
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success('Modelo baixado com sucesso!');
+        showToast.success('Modelo baixado com sucesso!');
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const selectedFile = e.target.files[0];
             if (!selectedFile.name.endsWith('.csv')) {
-                toast.error('Por favor, selecione um arquivo no formato .csv');
+                showToast.error('Por favor, selecione um arquivo no formato .csv');
                 return;
             }
             setFile(selectedFile);
@@ -59,18 +59,21 @@ const ProductImportModal = ({ show, onClose, onSuccess }: ProductImportModalProp
 
         try {
             setImporting(true);
-            const response = await productsService.importarCSV(file);
+            const promise = productsService.importarCSV(file);
+            const response = await showToast.promise(promise, {
+                loading: 'Processando planilha...',
+                success: 'Produtos importados com sucesso!',
+                error: 'Erro na importação. Verifique o arquivo.'
+            });
             setResult(response);
 
             if (response.success && response.total_importados > 0) {
-                toast.success(`${response.total_importados} produtos importados com sucesso!`);
                 onSuccess();
             } else if (response.total_erros > 0) {
-                toast.error('Algumas linhas não puderam ser importadas.');
+                showToast.warning('Algumas linhas não puderam ser importadas.');
             }
         } catch (error: any) {
             console.error('Erro na importação:', error);
-            toast.error('Erro ao conectar com o sistema. Tente novamente.');
         } finally {
             setImporting(false);
         }

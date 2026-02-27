@@ -5,7 +5,7 @@ import { Fornecedor, Produto } from '../../../types';
 import { CreatePedidoData, purchaseOrderService } from '../purchaseOrderService';
 import { apiClient } from '../../../api/apiClient';
 import { formatCurrency } from '../../../utils/formatters';
-import toast from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 
 interface PurchaseOrderModalProps {
   isOpen: boolean;
@@ -151,12 +151,12 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
     e.preventDefault();
 
     if (!formData.fornecedor_id) {
-      toast.error('Selecione um fornecedor');
+      showToast.error('Selecione um fornecedor');
       return;
     }
 
     if (itens.length === 0) {
-      toast.error('Adicione pelo menos um item ao pedido');
+      showToast.error('Adicione pelo menos um item ao pedido');
       return;
     }
 
@@ -178,12 +178,12 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
       };
 
       await purchaseOrderService.criarPedido(pedidoData);
-      toast.success('Pedido de compra criado com sucesso!');
+      showToast.create('Pedido de compra criado com sucesso!');
       onSuccess();
       handleClose();
     } catch (error: any) {
       console.error('Erro ao criar pedido:', error);
-      toast.error(error.response?.data?.error || 'Erro ao criar pedido');
+      showToast.error(error.response?.data?.error || 'Erro ao criar pedido');
     } finally {
       setLoading(false);
     }

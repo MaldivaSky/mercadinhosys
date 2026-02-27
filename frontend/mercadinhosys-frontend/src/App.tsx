@@ -20,9 +20,9 @@ const App: React.FC = () => {
               position="top-right"
               reverseOrder={false}
               gutter={12}
-              containerStyle={{ zIndex: 99999, top: '24px', right: '24px' }}
+              containerStyle={{ zIndex: 999999, top: '24px', right: '24px' }}
               toastOptions={{
-                duration: 3500,
+                duration: 2500,
               }}
             />
           </Router>

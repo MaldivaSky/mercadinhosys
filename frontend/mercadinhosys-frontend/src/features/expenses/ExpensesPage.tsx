@@ -13,6 +13,7 @@ import {
     Filler,
 } from "chart.js";
 import { apiClient } from "../../api/apiClient";
+import { showToast } from "../../utils/toast";
 import { FileText, TrendingUp, TrendingDown, DollarSign, Calendar, Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle, CheckCircle, Wallet } from "lucide-react";
 import BoletosAVencerPanel from "./components/BoletosAVencerPanel";
 import ResumoFinanceiroPanel from "./components/ResumoFinanceiroPanel";
@@ -144,19 +145,7 @@ export default function ExpensesPage() {
     const [mostrarAnalises, setMostrarAnalises] = useState(true);
     const [menuExportarAberto, setMenuExportarAberto] = useState(false);
 
-    // Toast notifications
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-    useEffect(() => {
-        if (toast) {
-            const timer = setTimeout(() => setToast(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [toast]);
-
-    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type });
-    };
+    /* Local showToast removed */
 
     useEffect(() => {
         carregarDespesas();
@@ -295,20 +284,21 @@ export default function ExpensesPage() {
                 valor: parseFloat(formData.valor),
             };
 
-            if (modoEdicao && despesaSelecionada) {
-                await apiClient.put(`/despesas/${despesaSelecionada.id}`, dados);
-                showToast("Despesa atualizada com sucesso!");
-            } else {
-                await apiClient.post("/despesas", dados);
-                showToast("Despesa criada com sucesso!");
-            }
+            const promise = modoEdicao && despesaSelecionada
+                ? apiClient.put(`/despesas/${despesaSelecionada.id}`, dados)
+                : apiClient.post("/despesas", dados);
+
+            await showToast.promise(promise, {
+                loading: modoEdicao ? 'Atualizando despesa...' : 'Criando despesa...',
+                success: modoEdicao ? 'Despesa atualizada com sucesso!' : 'Despesa criada com sucesso!',
+                error: 'Erro ao salvar despesa'
+            });
 
             setModalAberto(false);
             carregarDespesas();
             carregarEstatisticas();
         } catch (err: any) {
             console.error("❌ Erro ao salvar despesa:", err);
-            showToast(`Erro ao salvar despesa: ${err.response?.data?.error || err.message}`, 'error');
         }
     }
 
@@ -316,13 +306,15 @@ export default function ExpensesPage() {
         if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
 
         try {
-            await apiClient.delete(`/despesas/${id}`);
-            showToast("Despesa excluída com sucesso!");
+            await showToast.promise(apiClient.delete(`/despesas/${id}`), {
+                loading: 'Excluindo despesa...',
+                success: 'Despesa excluída com sucesso!',
+                error: 'Erro ao excluir despesa'
+            });
             carregarDespesas();
             carregarEstatisticas();
         } catch (err: any) {
             console.error("❌ Erro ao excluir despesa:", err);
-            showToast(`Erro ao excluir despesa: ${err.response?.data?.error || err.message}`, 'error');
         }
     }
 
@@ -355,10 +347,10 @@ export default function ExpensesPage() {
             document.body.removeChild(link);
 
             setMenuExportarAberto(false);
-            showToast("CSV exportado com sucesso!");
+            showToast.success("CSV exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar CSV:", err);
-            showToast(`Erro ao exportar CSV: ${err.message}`, 'error');
+            showToast.error(`Erro ao exportar CSV: ${err.message}`);
         }
     }
 
@@ -395,29 +387,16 @@ export default function ExpensesPage() {
             document.body.removeChild(link);
 
             setMenuExportarAberto(false);
-            showToast("Excel exportado com sucesso!");
+            showToast.success("Excel exportado com sucesso!");
         } catch (err: any) {
             console.error("❌ Erro ao exportar Excel:", err);
-            showToast(`Erro ao exportar Excel: ${err.message}`, 'error');
+            showToast.error(`Erro ao exportar Excel: ${err.message}`);
         }
     }
 
     return (
         <div className="p-6 max-w-7xl mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen">
-            {/* Toast Notification */}
-            {toast && (
-                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-slide-in ${toast.type === 'success'
-                    ? 'bg-green-500 text-white'
-                    : 'bg-red-500 text-white'
-                    }`}>
-                    {toast.type === 'success' ? (
-                        <CheckCircle className="w-5 h-5" />
-                    ) : (
-                        <AlertCircle className="w-5 h-5" />
-                    )}
-                    <span>{toast.message}</span>
-                </div>
-            )}
+            {/* Header */}
 
             {/* Header */}
             <div className="mb-8">

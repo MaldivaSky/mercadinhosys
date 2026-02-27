@@ -1,4 +1,4 @@
-import { toast } from 'react-hot-toast';
+import { showToast } from './toast';
 
 export interface CepData {
     cep: string;
@@ -17,26 +17,26 @@ export interface CepData {
  */
 export const buscarCep = async (cep: string): Promise<CepData | null> => {
     const cepLimpo = cep.replace(/\D/g, '');
-    
+
     if (cepLimpo.length !== 8) {
-        toast.error('CEP deve conter 8 dígitos');
+        showToast.error('CEP deve conter 8 dígitos');
         return null;
     }
 
     try {
         const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
         const data: CepData = await response.json();
-        
+
         if (data.erro) {
-            toast.error('CEP não encontrado');
+            showToast.error('CEP não encontrado');
             return null;
         }
 
-        toast.success('✅ Endereço preenchido automaticamente!');
+        showToast.info('Endereço preenchido automaticamente!');
         return data;
     } catch (error) {
         console.error('Erro ao buscar CEP:', error);
-        toast.error('Erro ao buscar CEP. Verifique sua conexão.');
+        showToast.error('Erro ao buscar CEP. Verifique sua conexão.');
         return null;
     }
 };

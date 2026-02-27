@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Lead } from '../../types';
 import { apiClient } from '../../api/apiClient';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 
 const LeadDashboard: React.FC = () => {
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -26,7 +26,7 @@ const LeadDashboard: React.FC = () => {
             }
         } catch (error) {
             console.error('Erro ao buscar leads:', error);
-            toast.error('Erro ao carregar lista de interessados.');
+            showToast.error('Erro ao carregar lista de interessados.');
         } finally {
             setLoading(false);
         }

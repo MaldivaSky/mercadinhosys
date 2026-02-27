@@ -8,38 +8,17 @@ import {
 import { pontoService, RegistroPonto, ConfiguracaoHorario, EstatisticasPonto } from './pontoService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
-// Toast notification component
-const Toast: React.FC<{ message: string; type: 'success' | 'error' | 'warning'; onClose: () => void }> = ({ message, type, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  const colors = {
-    success: 'bg-green-500',
-    error: 'bg-red-500',
-    warning: 'bg-yellow-500'
-  };
-
-  return (
-    <div className={`${colors[type]} text-white px-6 py-4 rounded-lg shadow-xl flex items-center justify-between`}>
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-4 hover:opacity-80">
-        <X className="w-5 h-5" />
-      </button>
-    </div>
-  );
-};
+import { showToast } from '../../utils/toast';
 
 // Função auxiliar para construir URL completa da foto
 const construirUrlFoto = (fotoUrl: string | null | undefined): string => {
   if (!fotoUrl) return '';
-  
+
   // Se for URL completa, retorna como está
   if (fotoUrl.startsWith('http://') || fotoUrl.startsWith('https://')) {
     return fotoUrl;
   }
-  
+
   // Em desenvolvimento, o proxy do Vite cuida de /uploads
   // Em produção, usar a mesma origem
   return fotoUrl;
@@ -56,14 +35,13 @@ const PontoPage: React.FC = () => {
   const [foto, setFoto] = useState<string | null>(null);
   const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
   const [tipoRegistroSelecionado, setTipoRegistroSelecionado] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [distanciaValidacao, setDistanciaValidacao] = useState<number | null>(null);
   const [localizacaoConfirmada, setLocalizacaoConfirmada] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [registrosOffline, setRegistrosOffline] = useState<any[]>([]);
   const [fotoModal, setFotoModal] = useState<{ url: string; registro: RegistroPonto } | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -89,16 +67,17 @@ const PontoPage: React.FC = () => {
   const carregarDados = async () => {
     try {
       setLoading(true);
-      const [pontosResponse, estatisticasResponse] = await Promise.all([
+      const promise = Promise.all([
         pontoService.obterPontosHoje(),
         pontoService.obterEstatisticas()
       ]);
-      
+
+      const [pontosResponse, estatisticasResponse] = await promise;
+
       if (pontosResponse.success) {
         setRegistrosHoje(pontosResponse.data.registros);
         setConfiguracao(pontosResponse.data.configuracao);
-        
-        // DEBUG: Log dos registros com URLs de foto
+
         console.log('📋 REGISTROS DE HOJE CARREGADOS:', {
           quantidade: pontosResponse.data.registros.length,
           registros: pontosResponse.data.registros.map((r: RegistroPonto) => ({
@@ -109,21 +88,17 @@ const PontoPage: React.FC = () => {
           }))
         });
       }
-      
+
       if (estatisticasResponse.success) {
         setEstatisticas(estatisticasResponse.data);
       }
 
-      // Sincronizar registros offline se estiver online
       if (online && registrosOffline.length > 0) {
         await sincronizarRegistrosOffline();
       }
     } catch (error: any) {
       console.error('Erro ao carregar dados:', error);
-      setToast({
-        message: 'Erro ao carregar dados. Verifique sua conexão.',
-        type: 'error'
-      });
+      showToast.error('Erro ao carregar dados. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -132,10 +107,10 @@ const PontoPage: React.FC = () => {
   const sincronizarRegistrosOffline = async () => {
     for (const registro of registrosOffline) {
       try {
-        await pontoService.registrarPonto(registro);
-        setToast({
-          message: `✅ Registro offline sincronizado: ${registro.tipo_registro}`,
-          type: 'success'
+        await showToast.promise(pontoService.registrarPonto(registro), {
+          loading: `Sincronizando registro off-line...`,
+          success: `Registro sincronizado: ${registro.tipo_registro}`,
+          error: `Erro ao sincronizar registro`
         });
       } catch (error) {
         console.error('Erro ao sincronizar registro:', error);
@@ -183,22 +158,22 @@ const PontoPage: React.FC = () => {
     try {
       console.log('🎥 Iniciando câmera...');
       setCameraReady(false);
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
         audio: false
       });
-      
+
       console.log('✅ Stream obtido:', stream.getTracks());
       setShowCamera(true);
-      
+
       // Aguardar um pouco para o DOM renderizar
       setTimeout(() => {
         if (videoRef.current) {
           console.log('📺 Atribuindo stream ao video...');
           videoRef.current.srcObject = stream;
           streamRef.current = stream;
-          
+
           // Forçar play
           videoRef.current.play().then(() => {
             console.log('▶️ Play iniciado');
@@ -211,7 +186,7 @@ const PontoPage: React.FC = () => {
           console.error('❌ videoRef não disponível');
         }
       }, 100);
-      
+
     } catch (error: any) {
       console.error('❌ Erro ao acessar câmera:', error.name, error.message);
       alert(`Erro: ${error.message}\n\nVerifique as permissões de câmera`);
@@ -236,12 +211,12 @@ const PontoPage: React.FC = () => {
           alert('⏳ Aguarde a câmera carregar completamente!');
           return;
         }
-        
+
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0);
         const fotoBase64 = canvasRef.current.toDataURL('image/jpeg', 0.8);
-        
+
         console.log('📸 Foto capturada:', fotoBase64.substring(0, 50) + '...');
         setFoto(fotoBase64);
         pararCamera();
@@ -255,7 +230,7 @@ const PontoPage: React.FC = () => {
     try {
       // Validar horário primeiro
       const validacao = validarHorarioRegistro(tipoRegistro);
-      
+
       if (!validacao.valido) {
         setToast({
           message: validacao.mensagem,
@@ -266,12 +241,12 @@ const PontoPage: React.FC = () => {
         }
         return;
       }
-      
+
       if (validacao.alerta) {
         const continuar = confirm(`${validacao.mensagem}\n\n${validacao.alerta}\n\nDeseja continuar mesmo assim?`);
         if (!continuar) return;
       }
-      
+
       setLoading(true);
       setTipoRegistroSelecionado(tipoRegistro);
 
@@ -290,7 +265,7 @@ const PontoPage: React.FC = () => {
         setDistanciaValidacao(distancia);
       } catch (error) {
         console.error('❌ Erro ao obter localização:', error);
-        
+
         if (configuracao?.exigir_localizacao) {
           setToast({
             message: '📍 Localização obrigatória. Habilite a geolocalização no navegador.',
@@ -306,7 +281,7 @@ const PontoPage: React.FC = () => {
           'Verifique se você permitiu o acesso à localização no navegador.\n\n' +
           'Deseja continuar sem localização?'
         );
-        
+
         if (!permitirSemLocalizacao) {
           setLoading(false);
           setTipoRegistroSelecionado(null);
@@ -359,14 +334,12 @@ const PontoPage: React.FC = () => {
 
       let response;
       if (online) {
-        response = await pontoService.registrarPonto(dados);
+        response = await showToast.promise(pontoService.registrarPonto(dados), {
+          loading: 'Salvando registro de ponto...',
+          success: (res: any) => res.message || 'Ponto registrado com sucesso!',
+          error: (err: any) => err.response?.data?.message || err.message || 'Erro ao registrar ponto'
+        });
         console.log('📡 RESPOSTA DO SERVIDOR:', response);
-        
-        // Verificar se resposta tem foto_url
-        if (response.data) {
-          console.log('📸 Foto URL na resposta:', response.data.foto_url);
-          console.log('📋 Todos os campos retornados:', Object.keys(response.data));
-        }
       } else {
         // Modo offline
         console.log('📱 Modo offline - Armazenando registro...');
@@ -374,11 +347,8 @@ const PontoPage: React.FC = () => {
         registrosOfflineLocal.push(dados);
         localStorage.setItem('registros_ponto_offline', JSON.stringify(registrosOfflineLocal));
         setRegistrosOffline(registrosOfflineLocal);
-        
-        setToast({
-          message: `📱 Registro armazenado offline. Será sincronizado quando conectar.`,
-          type: 'warning'
-        });
+
+        showToast.warning('Registro armazenado offline. Será sincronizado quando conectar.');
 
         setFoto(null);
         setLocalizacao(null);
@@ -386,13 +356,9 @@ const PontoPage: React.FC = () => {
         setLoading(false);
         return;
       }
-      
-      if (response.success) {
+
+      if (response && response.success) {
         console.log('✅ Sucesso! Resposta:', response.data);
-        setToast({
-          message: `✅ ${response.message}`,
-          type: 'success'
-        });
         setFoto(null);
         setLocalizacao(null);
         setLocalizacaoConfirmada(false);
@@ -445,42 +411,31 @@ const PontoPage: React.FC = () => {
     const confirmar = window.confirm(
       '⚠️ ATENÇÃO - MODO TESTE\n\nVocê realmente quer deletar TODOS os registros de hoje para testes?\n\nEsta ação não pode ser desfeita!'
     );
-    
+
     if (!confirmar) return;
 
     try {
       setLoading(true);
-      
-      // Chama a API para limpar registros
-      const response = await fetch('/api/ponto/teste/limpar-hoje', {
+
+      const promise = fetch('/api/ponto/teste/limpar-hoje', {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
           'Content-Type': 'application/json'
         }
+      }).then(res => res.json());
+
+      const data = await showToast.promise(promise, {
+        loading: 'Limpando registros de teste...',
+        success: (res: any) => `${res.message} (${res.data.registros_removidos} removidos)`,
+        error: 'Erro ao limpar registros'
       });
-      
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        setToast({
-          message: `✅ ${data.message} (${data.data.registros_removidos} removidos)`,
-          type: 'success'
-        });
-        
+
+      if (data && data.success) {
         await carregarDados();
-      } else {
-        setToast({
-          message: `❌ ${data.message || 'Erro ao limpar registros'}`,
-          type: 'error'
-        });
       }
     } catch (error: any) {
       console.error('Erro ao limpar registros:', error);
-      setToast({
-        message: `❌ Erro: ${error.message}`,
-        type: 'error'
-      });
     } finally {
       setLoading(false);
     }
@@ -488,21 +443,21 @@ const PontoPage: React.FC = () => {
 
   const validarHorarioRegistro = (tipo: string): { valido: boolean; mensagem: string; alerta?: string } => {
     if (!configuracao) return { valido: true, mensagem: '' };
-    
+
     const agora = new Date();
     const horaAtual = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
     const tolerancia = configuracao.tolerancia_atraso_minutos || 5;
-    
+
     const horarioEsperado = getHorarioEsperado(tipo);
     if (!horarioEsperado) return { valido: true, mensagem: '' };
-    
+
     const [horaEsp, minEsp] = horarioEsperado.split(':').map(Number);
     const [horaAtual_h, minAtual] = horaAtual.split(':').map(Number);
-    
+
     const minEsperado = horaEsp * 60 + minEsp;
     const minAgora = horaAtual_h * 60 + minAtual;
     const diferenca = minAgora - minEsperado;
-    
+
     // Validar se está no horário (com tolerância)
     if (diferenca < -30) {
       // Antes do horário
@@ -512,7 +467,7 @@ const PontoPage: React.FC = () => {
         alerta: `O horário é às ${horarioEsperado}. Faltam ${Math.abs(Math.floor(diferenca))} minutos.`
       };
     }
-    
+
     if (diferenca > 240) {
       // Muito depois do horário esperado
       return {
@@ -521,7 +476,7 @@ const PontoPage: React.FC = () => {
         alerta: `Esperado às ${horarioEsperado}, mas agora é ${horaAtual}. Atraso de ${Math.floor(diferenca)} minutos.`
       };
     }
-    
+
     if (diferenca > tolerancia) {
       return {
         valido: true,
@@ -529,7 +484,7 @@ const PontoPage: React.FC = () => {
         alerta: undefined
       };
     }
-    
+
     return {
       valido: true,
       mensagem: '',
@@ -539,16 +494,6 @@ const PontoPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4 md:p-6">
-      {/* TOAST NOTIFICATIONS */}
-      {toast && (
-        <div className="fixed top-4 right-4 z-50 max-w-md">
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        </div>
-      )}
 
       {/* STATUS ONLINE/OFFLINE */}
       {!online && (
@@ -607,7 +552,7 @@ const PontoPage: React.FC = () => {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </button>
-           
+
           </div>
         </div>
       </div>
@@ -618,14 +563,14 @@ const PontoPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-6 max-w-2xl w-full">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">📸 Tire sua foto</h3>
             <p className="text-gray-600 text-sm mb-4">Posicione seu rosto na câmera e clique em "Capturar Foto"</p>
-            
+
             {!cameraReady && (
               <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded-lg">
                 <p className="text-yellow-800 font-semibold">⏳ Câmera carregando...</p>
                 <p className="text-sm text-yellow-700 mt-1">Se não aparecer em 5 segundos, verifique as permissões</p>
               </div>
             )}
-            
+
             <div className="relative bg-black rounded-lg overflow-hidden mb-4 border-4 border-gray-300">
               <video
                 ref={videoRef}
@@ -639,7 +584,7 @@ const PontoPage: React.FC = () => {
                 {cameraReady ? '✅ Câmera pronta' : '⏳ Carregando...'}
               </div>
             </div>
-            
+
             <div className="flex gap-3 mt-4">
               <button
                 onClick={tirarFoto}
@@ -666,7 +611,7 @@ const PontoPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-6 max-w-2xl w-full">
             <h3 className="text-2xl font-bold text-gray-900 mb-4">Confirmar foto e localização</h3>
             <img src={foto} alt="Preview" className="w-full rounded-lg mb-4" />
-            
+
             {/* Info de localização */}
             {localizacao && (
               <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-300">
@@ -731,34 +676,33 @@ const PontoPage: React.FC = () => {
         ].map((item) => {
           const registrado = jaRegistrou(item.tipo);
           const registro = registrosHoje.find(r => r.tipo_registro === item.tipo);
-          
+
           return (
             <button
               key={item.tipo}
               onClick={() => !registrado && registrarPonto(item.tipo)}
               disabled={registrado || loading}
-              className={`relative p-6 rounded-2xl shadow-xl transform transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
-                registrado ? 'bg-gray-200' : `bg-gradient-to-r ${item.color}`
-              }`}
+              className={`relative p-6 rounded-2xl shadow-xl transform transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${registrado ? 'bg-gray-200' : `bg-gradient-to-r ${item.color}`
+                }`}
             >
               {registrado && (
                 <div className="absolute top-2 right-2">
                   <CheckCircle className="w-6 h-6 text-green-600" />
                 </div>
               )}
-              
+
               <div className="text-center">
                 <div className="text-4xl mb-2">{item.icon}</div>
                 <h3 className={`text-xl font-bold mb-2 ${registrado ? 'text-gray-700' : 'text-white'}`}>
                   {item.label}
                 </h3>
-                
+
                 {configuracao && (
                   <p className={`text-sm mb-2 ${registrado ? 'text-gray-600' : 'text-white/90'}`}>
                     Horário: {getHorarioEsperado(item.tipo)}
                   </p>
                 )}
-                
+
                 {registrado && registro && (
                   <div className="mt-3 p-2 bg-white rounded-lg">
                     <p className="text-sm font-semibold text-gray-900">
@@ -790,15 +734,15 @@ const PontoPage: React.FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={estatisticas.grafico_frequencia}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="data" 
+                  <XAxis
+                    dataKey="data"
                     tick={{ fontSize: 10 }}
                     angle={-45}
                     textAnchor="end"
                     height={80}
                   />
                   <YAxis />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{
                       backgroundColor: '#fff',
                       border: '2px solid #3b82f6',
@@ -822,9 +766,9 @@ const PontoPage: React.FC = () => {
                       return null;
                     }}
                   />
-                  <Area 
+                  <Area
                     type="monotone"
-                    dataKey="total_registros" 
+                    dataKey="total_registros"
                     fill="#93c5fd"
                     stroke="#3b82f6"
                     strokeWidth={2}
@@ -890,7 +834,7 @@ const PontoPage: React.FC = () => {
           <Calendar className="w-6 h-6 text-blue-600" />
           Registros de Hoje
         </h3>
-        
+
         {registrosHoje.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Clock className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -916,11 +860,10 @@ const PontoPage: React.FC = () => {
                         setFotoModal({ url: registro.foto_url, registro });
                       }
                     }}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                      registro.status === 'atrasado' 
-                        ? 'border-red-300 bg-red-50 hover:bg-red-100 hover:shadow-lg' 
-                        : 'border-green-300 bg-green-50 hover:bg-green-100 hover:shadow-lg'
-                    } ${!registro.foto_url ? 'opacity-75' : ''}`}
+                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${registro.status === 'atrasado'
+                      ? 'border-red-300 bg-red-50 hover:bg-red-100 hover:shadow-lg'
+                      : 'border-green-300 bg-green-50 hover:bg-green-100 hover:shadow-lg'
+                      } ${!registro.foto_url ? 'opacity-75' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -945,10 +888,10 @@ const PontoPage: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-3">
                         {registro.foto_url ? (
-                          <div 
+                          <div
                             className="w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-300 hover:border-blue-500 cursor-pointer hover:scale-110 transition-transform relative"
                             title="Clique para visualizar foto"
                             onClick={(e) => {
@@ -956,9 +899,9 @@ const PontoPage: React.FC = () => {
                               setFotoModal({ url: registro.foto_url!, registro });
                             }}
                           >
-                            <img 
-                              src={construirUrlFoto(registro.foto_url)} 
-                              alt="Foto do registro" 
+                            <img
+                              src={construirUrlFoto(registro.foto_url)}
+                              alt="Foto do registro"
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 console.error('❌ Erro ao carregar thumbnail:', construirUrlFoto(registro.foto_url));
@@ -974,7 +917,7 @@ const PontoPage: React.FC = () => {
                           </div>
                         )}
                         {registro.latitude && registro.longitude && (
-                          <div 
+                          <div
                             className="p-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition cursor-pointer"
                             title={`📍 ${registro.latitude.toFixed(6)}, ${registro.longitude.toFixed(6)}`}
                             onClick={(e) => {
@@ -1032,9 +975,9 @@ const PontoPage: React.FC = () => {
 
             {/* CONTEÚDO */}
             <div className="p-4 sm:p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
-              <img 
-                src={construirUrlFoto(fotoModal.url)} 
-                alt="Foto do registro" 
+              <img
+                src={construirUrlFoto(fotoModal.url)}
+                alt="Foto do registro"
                 className="w-full rounded-xl shadow-lg object-cover max-h-[500px] mb-6"
                 onError={(e) => {
                   console.error('❌ Erro ao carregar foto modal:', construirUrlFoto(fotoModal.url));
@@ -1053,16 +996,14 @@ const PontoPage: React.FC = () => {
                   <p className="text-xs text-green-600 font-semibold">⏰ Horário</p>
                   <p className="text-sm sm:text-lg font-bold text-gray-900 mt-1">{fotoModal.registro.hora}</p>
                 </div>
-                <div className={`p-2 sm:p-4 rounded-lg border-l-4 ${
-                  fotoModal.registro.status === 'atrasado' 
-                    ? 'bg-red-50 border-red-600' 
-                    : 'bg-green-50 border-green-600'
-                }`}>
-                  <p className={`text-xs font-semibold ${
-                    fotoModal.registro.status === 'atrasado' 
-                      ? 'text-red-600' 
-                      : 'text-green-600'
-                  }`}>Status</p>
+                <div className={`p-2 sm:p-4 rounded-lg border-l-4 ${fotoModal.registro.status === 'atrasado'
+                  ? 'bg-red-50 border-red-600'
+                  : 'bg-green-50 border-green-600'
+                  }`}>
+                  <p className={`text-xs font-semibold ${fotoModal.registro.status === 'atrasado'
+                    ? 'text-red-600'
+                    : 'text-green-600'
+                    }`}>Status</p>
                   <p className="text-sm sm:text-lg font-bold text-gray-900 mt-1">
                     {fotoModal.registro.status === 'atrasado' ? '⚠️ Atrasado' : '✅ No Horário'}
                   </p>

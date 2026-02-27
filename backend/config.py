@@ -46,6 +46,13 @@ else:
         
         _sqlalchemy_database_uri = _database_url
         _using_postgres = _database_url.startswith("postgresql://")
+        
+        # Correção Crítica: Forçar sslmode=disable para localhost se não houver parâmetros
+        if _using_postgres and "localhost" in _sqlalchemy_database_uri and "?" not in _sqlalchemy_database_uri:
+            _sqlalchemy_database_uri += "?sslmode=disable"
+        elif _using_postgres and "127.0.0.1" in _sqlalchemy_database_uri and "?" not in _sqlalchemy_database_uri:
+            _sqlalchemy_database_uri += "?sslmode=disable"
+            
         _db_source = "CLOUD_ENV"
         
         if _using_postgres:
@@ -78,6 +85,7 @@ class Config:
             "keepalives_interval": 10,
             "keepalives_count": 5,
             "connect_timeout": 10,
+            "sslmode": "disable" # Força desativação de SSL para evitar erro em localhost
             # "options": "-c statement_timeout=30000" # Removido para compatibilidade Neon/PgBouncer
         },
     } if _using_postgres else {}

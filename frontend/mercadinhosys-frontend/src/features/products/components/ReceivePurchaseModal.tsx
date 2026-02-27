@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Package, FileText, DollarSign, CheckCircle, ChevronDown } from 'lucide-react';
 import { PedidoCompra, ReceberPedidoData, purchaseOrderService } from '../purchaseOrderService';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
-import toast from 'react-hot-toast';
+import { showToast } from '../../../utils/toast';
 
 interface ReceivePurchaseModalProps {
   isOpen: boolean;
@@ -91,7 +91,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
 
     } catch (error) {
       console.error('Erro ao carregar detalhes do pedido:', error);
-      toast.error('Erro ao carregar detalhes do pedido');
+      showToast.error('Erro ao carregar detalhes do pedido');
     } finally {
       setLoadingDetails(false);
     }
@@ -143,12 +143,12 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
     const itensComRecebimento = itensRecebimento.filter(item => item.quantidade_recebida > 0);
 
     if (itensComRecebimento.length === 0) {
-      toast.error('Informe a quantidade recebida para pelo menos um item');
+      showToast.error('Informe a quantidade recebida para pelo menos um item');
       return;
     }
 
     if (formData.gerar_boleto && !formData.data_vencimento) {
-      toast.error('Informe a data de vencimento do boleto');
+      showToast.error('Informe a data de vencimento do boleto');
       return;
     }
 
@@ -176,12 +176,8 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
       const totalRecebido = itensComRecebimento.reduce((sum, item) => sum + item.quantidade_recebida, 0);
       const totalValor = calcularTotalRecebido();
 
-      toast.success(
-        `✅ Pedido Recebido!\n📦 ${totalRecebido} unidades\n💰 R$ ${totalValor.toFixed(2)}\n📊 Estoque Ajustado${formData.gerar_boleto ? '\n📄 Boleto Gerado' : ''}`,
-        {
-          duration: 4000,
-          icon: '✅'
-        }
+      showToast.success(
+        `✅ Pedido Recebido!\n📦 ${totalRecebido} unidades\n💰 R$ ${totalValor.toFixed(2)}\n📊 Estoque Ajustado${formData.gerar_boleto ? '\n📄 Boleto Gerado' : ''}`
       );
 
       // Aguardar um pouco para o usuário ver o feedback
@@ -192,7 +188,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
 
     } catch (error: any) {
       console.error('Erro ao receber pedido:', error);
-      toast.error(error.response?.data?.error || 'Erro ao receber pedido');
+      showToast.error(error.response?.data?.error || 'Erro ao receber pedido');
     } finally {
       setLoading(false);
     }

@@ -25,7 +25,7 @@ import {
     CheckCircle
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { toast } from 'react-hot-toast';
+import { showToast } from '../../utils/toast';
 import { API_CONFIG } from '../../api/apiConfig';
 
 const LandingPage: React.FC = () => {
@@ -63,7 +63,7 @@ const LandingPage: React.FC = () => {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                toast.success('Informações enviadas! Entraremos em contato em breve.');
+                showToast.info('Informações enviadas! Entraremos em contato em breve.');
                 setLeadName('');
                 setLeadEmail('');
                 setLeadWhatsApp('');
@@ -73,11 +73,11 @@ const LandingPage: React.FC = () => {
                     window.open(`https://wa.me/5511919889233?text=Olá! Acabei de me cadastrar no site e gostaria de saber mais sobre o MercadinhoSys. Meu e-mail é ${leadEmail}.`, '_blank');
                 }, 1000);
             } else {
-                toast.error(result.error || 'Ocorreu um erro ao enviar seus dados.');
+                showToast.error(result.error || 'Ocorreu um erro ao enviar seus dados.');
             }
         } catch (error) {
             console.error('Erro ao enviar lead:', error);
-            toast.error('Erro de conexão com o servidor.');
+            showToast.error('Erro de conexão com o servidor.');
         } finally {
             setLoadingLead(false);
         }
@@ -109,14 +109,14 @@ const LandingPage: React.FC = () => {
             const result = await response.json();
 
             if (response.ok && result.checkout_url) {
-                toast.success('Conta criada! Redirecionando para o pagamento...');
+                showToast.create('Conta criada! Redirecionando para o pagamento...');
                 window.location.href = result.checkout_url;
             } else {
-                toast.error(result.message || 'Erro ao iniciar checkout.');
+                showToast.error(result.message || 'Erro ao iniciar checkout.');
             }
         } catch (error) {
             console.error('Erro no checkout:', error);
-            toast.error('Erro de conexão.');
+            showToast.error('Erro de conexão.');
         } finally {
             setLoadingCheckout(false);
         }
@@ -124,14 +124,7 @@ const LandingPage: React.FC = () => {
 
     const handleDemoAccess = async () => {
         try {
-            toast.loading('Preparando ambiente de demonstração de elite...', {
-                style: {
-                    borderRadius: '16px',
-                    background: '#1e293b',
-                    color: '#fff',
-                    fontWeight: 'bold'
-                }
-            });
+            showToast.loading('Preparando ambiente de demonstração de elite...');
             const response = await fetch(`${API_CONFIG.BASE_URL}/auth/demo`, {
                 method: 'POST',
                 headers: {
@@ -149,21 +142,21 @@ const LandingPage: React.FC = () => {
                 localStorage.setItem('estabelecimento_data', JSON.stringify(estabelecimento));
                 window.dispatchEvent(new Event('auth-change'));
 
-                toast.dismiss();
-                toast.success('Entrando como Convidado Específicio...', { icon: '✨' });
+                showToast.dismiss();
+                showToast.info('Entrando como Convidado Específico...', { icon: '✨' });
 
                 // Redirecionar para o dashboard após breve delay
                 setTimeout(() => {
                     navigate('/dashboard');
                 }, 1000);
             } else {
-                toast.dismiss();
-                toast.error(result.error || 'Erro ao acessar demonstração');
+                showToast.dismiss();
+                showToast.error(result.error || 'Erro ao acessar demonstração');
             }
         } catch (error) {
-            toast.dismiss();
+            showToast.dismiss();
             console.error('Erro no demo access:', error);
-            toast.error('Erro de conexão com o servidor demo.');
+            showToast.error('Erro de conexão com o servidor demo.');
         }
     };
 

@@ -75,7 +75,7 @@ def create_app(config_name=None):
                     "keepalives_idle": 30,
                     "keepalives_interval": 10,
                     "keepalives_count": 5,
-                    "sslmode": "require" # CRÍTICO PARA AIVEN
+                    "sslmode": "require" if all(h not in runtime_db_url for h in ["localhost", "127.0.0.1", "::1"]) else "disable"
                 }
             }
         else:
@@ -322,12 +322,13 @@ def create_app(config_name=None):
                 ("funcionarios", "ativo",                       "BOOLEAN      DEFAULT TRUE"),
                 ("funcionarios", "permissoes_json",              "TEXT"),
                 # Produtos
-                ("produtos", "margem_lucro",                    "NUMERIC(5,2)"),
+                ("produtos", "margem_lucro",                    "NUMERIC(10,2)"),
                 ("produtos", "fornecedor_id",                   "INTEGER"),
                 ("produtos", "codigo_barras",                   "VARCHAR(50)"),
                 ("produtos", "ativo",                          "BOOLEAN DEFAULT TRUE"),
                 ("produtos", "fabricante",                      "VARCHAR(100)"),
                 ("produtos", "tipo",                            "VARCHAR(50)"),
+                ("produtos", "subcategoria",                    "VARCHAR(50)"),
                 ("produtos", "ncm",                             "VARCHAR(8)"),
                 ("produtos", "origem",                          "INTEGER DEFAULT 0"),
                 ("produtos", "controlar_validade",              "BOOLEAN DEFAULT FALSE"),
