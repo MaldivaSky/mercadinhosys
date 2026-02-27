@@ -15,7 +15,7 @@ import {
 import {
     UserCog, Users, TrendingUp, DollarSign,
     Filter, Download, Plus, Edit2, Trash2, Eye, X, AlertCircle,
-    CheckCircle, UserCheck, UserX, Award, Clock
+    UserCheck, UserX, Award, Clock
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";

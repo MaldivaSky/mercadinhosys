@@ -852,21 +852,20 @@ const DashboardPage: React.FC = () => {
   } } = data.data;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300 p-4 sm:p-6 lg:p-8 pb-24">
       {/* HEADER CIENTÍFICO */}
       <div className="mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-gray-900 tracking-tight">Dashboard Executivo</h1>
-            <p className="text-gray-500 text-sm md:text-base mt-1 font-medium">
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight transition-colors">Dashboard Executivo</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base mt-2 font-medium transition-colors">
               Análise completa do seu negócio • {new Date().toLocaleDateString('pt-BR')}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-
             <button
               onClick={loadDashboard}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+              className="px-6 py-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-1 flex items-center gap-2 transition-all duration-300"
             >
               <RefreshCw className="w-4 h-4" />
               Atualizar
@@ -877,26 +876,26 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 DIAGNÓSTICO FINANCEIRO INTELIGENTE (CFO VIRTUAL) */}
       {data?.data?.recomendacoes?.filter((rec: any) => rec.prioridade === 1).map((rec: any, idx: number) => (
-        <div key={idx} className="bg-white border-l-4 border-red-500 rounded-xl shadow-lg p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-6 animate-fadeIn">
-          <div className="bg-red-100 p-4 rounded-full">
-            <TrendingUpFill className="w-8 h-8 text-red-600" />
+        <div key={idx} className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800 border-l-4 border-l-red-500 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-6 animate-fadeIn">
+          <div className="bg-red-50 dark:bg-red-500/10 p-4 rounded-full border border-red-100 dark:border-red-500/20">
+            <TrendingUpFill className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
           <div className="flex-1">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Diagnóstico Financeiro: Atenção Requerida</h3>
-            <p className="text-gray-700 text-lg leading-relaxed">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Diagnóstico Financeiro: Atenção Requerida</h3>
+            <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed">
               {rec.mensagem}
             </p>
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setSelectedRecommendation(rec)}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition-all flex items-center gap-2"
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg shadow-red-500/30 hover:-translate-y-1 transition-all duration-300 flex items-center gap-2"
               >
                 <TargetIcon className="w-4 h-4" />
                 {rec.cta}
               </button>
               <button
                 onClick={() => document.getElementById('detalhes-financeiros')?.scrollIntoView({ behavior: 'smooth' })}
-                className="px-6 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-lg transition-all"
+                className="px-6 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:-translate-y-1 transition-all duration-300"
               >
                 Ver Detalhes do DRE
               </button>
@@ -906,24 +905,24 @@ const DashboardPage: React.FC = () => {
       ))}
 
       {/* 🔥 NOVO: FILTROS DE PERÍODO E VISUALIZAÇÃO - ACIMA DAS ANÁLISES */}
-      <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200">
+      <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800/60 p-6 mb-6 transition-all duration-300">
         <div className="flex flex-col gap-6">
           {/* SELETOR DE MODO DE FILTRO */}
-          <div className="flex gap-4 border-b border-gray-200 pb-4">
+          <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
             <button
               onClick={() => setModoFiltro('rapido')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${modoFiltro === 'rapido'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 ${modoFiltro === 'rapido'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 -translate-y-0.5'
+                : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
             >
               ⚡ Filtro Rápido
             </button>
             <button
               onClick={() => setModoFiltro('personalizado')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${modoFiltro === 'personalizado'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 ${modoFiltro === 'personalizado'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 -translate-y-0.5'
+                : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
             >
               📅 Período Personalizado
@@ -934,7 +933,7 @@ const DashboardPage: React.FC = () => {
             {/* FILTRO RÁPIDO */}
             {modoFiltro === 'rapido' && (
               <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                   📅 Período de Análise
                 </label>
                 <div className="flex gap-2 flex-wrap">
@@ -951,9 +950,9 @@ const DashboardPage: React.FC = () => {
                       key={periodo.dias}
                       onClick={() => setPeriodoDias(periodo.dias)}
                       disabled={loading}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${periodoDias === periodo.dias
-                        ? 'bg-blue-600 text-white shadow-lg scale-105 ring-2 ring-blue-300'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-102'
+                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 ${periodoDias === periodo.dias
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 scale-105 ring-2 ring-blue-500/50'
+                        : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:-translate-y-0.5'
                         } ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       title={periodo.desc}
                     >
@@ -961,9 +960,9 @@ const DashboardPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  📊 Analisando dados dos últimos <strong className="text-blue-600">{periodoDias} dias</strong>
-                  {loading && <span className="ml-2 text-blue-600 animate-pulse">• Carregando...</span>}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                  📊 Analisando dados dos últimos <strong className="text-blue-600 dark:text-blue-400">{periodoDias} dias</strong>
+                  {loading && <span className="ml-2 text-blue-600 dark:text-blue-400 animate-pulse">• Carregando...</span>}
                 </p>
               </div>
             )}
@@ -971,45 +970,45 @@ const DashboardPage: React.FC = () => {
             {/* FILTRO PERSONALIZADO */}
             {modoFiltro === 'personalizado' && (
               <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                   📅 Selecione o Período Personalizado
                 </label>
                 <div className="flex gap-4 items-end flex-wrap">
                   <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs text-gray-600 mb-1">Data Início</label>
+                    <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Data Início</label>
                     <input
                       type="date"
                       value={dataInicio}
                       onChange={(e) => setDataInicio(e.target.value)}
                       max={new Date().toISOString().split('T')[0]}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300"
                     />
                   </div>
                   <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs text-gray-600 mb-1">Data Fim</label>
+                    <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Data Fim</label>
                     <input
                       type="date"
                       value={dataFim}
                       onChange={(e) => setDataFim(e.target.value)}
                       max={new Date().toISOString().split('T')[0]}
                       min={dataInicio}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-300"
                     />
                   </div>
                   <button
                     onClick={aplicarFiltroPersonalizado}
                     disabled={loading || !dataInicio || !dataFim}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all"
+                    className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 font-medium transition-all duration-300"
                   >
                     Aplicar Filtro
                   </button>
                 </div>
                 {dataInicio && dataFim && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    📊 Período selecionado: <strong className="text-blue-600">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    📊 Período selecionado: <strong className="text-blue-600 dark:text-blue-400">
                       {new Date(dataInicio).toLocaleDateString('pt-BR')} até {new Date(dataFim).toLocaleDateString('pt-BR')}
                     </strong>
-                    {loading && <span className="ml-2 text-blue-600 animate-pulse">• Carregando...</span>}
+                    {loading && <span className="ml-2 text-blue-600 dark:text-blue-400 animate-pulse">• Carregando...</span>}
                   </p>
                 )}
               </div>
@@ -1017,11 +1016,11 @@ const DashboardPage: React.FC = () => {
 
             {/* FILTRO DE MODO DE VISUALIZAÇÃO */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 👁️ Modo de Visualização
               </label>
               <select
-                className="px-4 py-2 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-medium"
+                className="px-4 py-2 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-white font-medium outline-none transition-all duration-300"
                 value={viewMode}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -1089,21 +1088,30 @@ const DashboardPage: React.FC = () => {
           <div
             key={kpi.key} // 🔥 Usar key única baseada no período
             onClick={() => setKpiModalAberto(kpi.title)} // 🔥 Abrir modal ao clicar
-            className={`bg-gradient-to-br ${kpi.color} rounded-xl shadow-lg p-6 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-xl animate-fadeIn cursor-pointer`}
+            className={`relative overflow-hidden bg-gradient-to-br ${kpi.color} rounded-2xl shadow-lg hover:shadow-2xl border border-white/10 dark:border-white/5 p-6 text-white transform transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] cursor-pointer group`}
             title="Clique para ver histórico detalhado"
           >
-            <div className="flex justify-between items-start mb-2">
-              <kpi.icon className="w-8 h-8 opacity-80" />
-              <div className={`flex items-center px-2 py-1 rounded-full text-xs font-bold ${kpi.change >= 0 ? 'bg-white/20' : 'bg-black/20'}`}>
+            {/* Efeito de brilho no hover */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl pointer-events-none" />
+
+            <div className="flex justify-between items-start mb-4 relative z-10">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md border border-white/20">
+                <kpi.icon className="w-6 h-6 text-white" />
+              </div>
+              <div className={`flex items-center px-2 py-1 rounded-lg text-xs font-bold backdrop-blur-md border border-white/10 ${kpi.change >= 0 ? 'bg-white/20 text-white' : 'bg-black/20 text-white'}`}>
                 {kpi.change >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                 {Math.abs(kpi.change).toFixed(1)}%
               </div>
             </div>
 
-            <p className="text-xs opacity-70 mb-1 leading-none">📅 {kpi.periodo}</p>
-            <p className="text-sm opacity-80 mb-1 font-medium">{kpi.title}</p>
-            <p className="text-2xl sm:text-3xl font-bold mb-2 break-all">{kpi.value}</p>
-            <p className="text-xs sm:text-sm opacity-90 font-medium">{kpi.subtitle}</p>
+            <div className="relative z-10 mt-2">
+              <p className="text-[10px] sm:text-xs text-white/70 mb-1 font-semibold uppercase tracking-wider flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> {kpi.periodo}
+              </p>
+              <h3 className="text-sm font-medium text-white/90 mb-1">{kpi.title}</h3>
+              <p className="text-2xl sm:text-3xl font-extrabold mb-1 tracking-tight drop-shadow-sm">{kpi.value}</p>
+              <p className="text-xs sm:text-sm font-medium text-white/80">{kpi.subtitle}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -1130,17 +1138,17 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-              <TargetIcon className="w-8 h-8 text-blue-600" />
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+              <TargetIcon className="w-8 h-8 text-blue-600 dark:text-blue-500" />
               📊 Resumo Executivo - Últimos {periodoDias} dias
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Desempenho Financeiro */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <DollarIcon className="w-5 h-5 text-green-600" />
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-2xl p-6 border border-green-200 dark:border-green-500/20">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <DollarIcon className="w-5 h-5 text-green-600 dark:text-green-500" />
                   Desempenho Financeiro
                 </h3>
                 <div className="space-y-3">
@@ -1172,14 +1180,14 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Produtos e Estoque */}
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Package className="w-5 h-5 text-blue-600" />
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/10 dark:to-cyan-900/10 rounded-2xl p-6 border border-blue-200 dark:border-blue-500/20">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-600 dark:text-blue-500" />
                   Produtos e Estoque
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Produtos Estrela (Classe A):</span>
+                    <span className="text-slate-700 dark:text-slate-300">Produtos Estrela (Classe A):</span>
                     <span className="font-bold text-green-600">{analise_produtos?.curva_abc?.resumo?.A?.quantidade || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1202,9 +1210,9 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Insights Rápidos */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200 md:col-span-2">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-purple-600" />
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-2xl p-6 border border-purple-200 dark:border-purple-500/20 md:col-span-2">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-purple-600 dark:text-purple-500" />
                   💡 Insights Rápidos
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1237,8 +1245,8 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">
+            <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-500/20 rounded-xl p-4">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
                 💡 <strong>Dica:</strong> Para análises mais detalhadas, selecione <strong>"Análise Detalhada"</strong> ou <strong>"Análise Avançada"</strong> nos filtros acima.
               </p>
             </div>
@@ -1290,40 +1298,40 @@ const DashboardPage: React.FC = () => {
 
       {/* SEÇÃO PRINCIPAL: CURVA ABC COM GRÁFICO DE PARETO */}
       {viewMode === 'detalhado' && (
-        <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl mb-8 overflow-hidden border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
           <div
-            className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+            className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={() => toggleCard('curva-abc')}
           >
             <div className="flex items-center gap-3">
-              <ChartBar className="w-8 h-8 text-blue-600" />
+              <ChartBar className="w-8 h-8 text-blue-600 dark:text-blue-500" />
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Curva ABC de Pareto</h2>
-                <p className="text-gray-600">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white transition-colors">Curva ABC de Pareto</h2>
+                <p className="text-slate-600 dark:text-slate-400">Análise 80/20 dos produtos • {analise_produtos?.curva_abc?.pareto_80_20 ? '✅ Lei de Pareto Confirmada' : '⚠️ Distribuição Atípica'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex space-x-1">
                 <button
-                  className={`px-4 py-2 rounded-lg ${selectedABC === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  className={`px-4 py-2 rounded-xl transition-all duration-300 ${selectedABC === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   onClick={(e) => { e.stopPropagation(); setSelectedABC('all'); }}
                 >
                   Todos
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg ${selectedABC === 'A' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  className={`px-4 py-2 rounded-xl transition-all duration-300 ${selectedABC === 'A' ? 'bg-green-600 text-white shadow-lg shadow-green-500/30' : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   onClick={(e) => { e.stopPropagation(); setSelectedABC('A'); }}
                 >
                   Classe A
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg ${selectedABC === 'B' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  className={`px-4 py-2 rounded-xl transition-all duration-300 ${selectedABC === 'B' ? 'bg-yellow-600 text-white shadow-lg shadow-yellow-500/30' : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   onClick={(e) => { e.stopPropagation(); setSelectedABC('B'); }}
                 >
                   Classe B
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-lg ${selectedABC === 'C' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  className={`px-4 py-2 rounded-xl transition-all duration-300 ${selectedABC === 'C' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
                   onClick={(e) => { e.stopPropagation(); setSelectedABC('C'); }}
                 >
                   Classe C
@@ -1347,13 +1355,13 @@ const DashboardPage: React.FC = () => {
                           <YAxis />
                           <Tooltip
                             content={({ payload, label }) => (
-                              <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                                <p className="font-bold text-gray-900">{label}</p>
-                                <p className="text-sm text-gray-600">Faturamento: R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                <p className="text-sm text-gray-600">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
-                                <p className="text-sm text-gray-600">Margem: {(payload?.[0]?.payload?.margem || 0).toFixed(1)}%</p>
-                                <p className="text-sm text-gray-600">Qtd Vendida: {payload?.[0]?.payload?.quantidade_vendida}</p>
-                                <p className="text-sm text-gray-600">% Acumulado: {(payload?.[0]?.payload?.percentual_acumulado || 0).toFixed(1)}%</p>
+                              <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-xl border border-slate-200 dark:border-slate-700">
+                                <p className="font-bold text-slate-900 dark:text-white mb-2">{label}</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300">Faturamento: <span className="font-bold text-slate-900 dark:text-white">R$ {payload?.[0]?.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300">Classificação: <span className={`font-bold`} style={{ color: getABCColor(payload?.[0]?.payload?.classificacao) }}>{payload?.[0]?.payload?.classificacao}</span></p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300">Margem: <span className="font-bold">{((payload?.[0]?.payload?.margem) || 0).toFixed(1)}%</span></p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300">Qtd Vendida: <span className="font-bold">{payload?.[0]?.payload?.quantidade_vendida}</span></p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300">% Acumulado: <span className="font-bold">{(payload?.[0]?.payload?.percentual_acumulado || 0).toFixed(1)}%</span></p>
                               </div>
                             )}
                           />
@@ -1371,13 +1379,13 @@ const DashboardPage: React.FC = () => {
                     <div className="flex justify-center gap-6 mt-6">
                       {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => (
                         <div key={classe} className="text-center">
-                          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100' : classe === 'B' ? 'bg-yellow-100' : 'bg-red-100'}`}>
-                            <span className={`text-2xl font-bold ${classe === 'A' ? 'text-green-600' : classe === 'B' ? 'text-yellow-600' : 'text-red-600'}`}>
+                          <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100 dark:bg-green-500/20' : classe === 'B' ? 'bg-yellow-100 dark:bg-yellow-500/20' : 'bg-red-100 dark:bg-red-500/20'}`}>
+                            <span className={`text-2xl font-bold ${classe === 'A' ? 'text-green-600 dark:text-green-400' : classe === 'B' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
                               {classe}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-600">{dados.quantidade} produtos</p>
-                          <p className="text-lg font-bold text-gray-900">{(dados?.percentual || 0).toFixed(1)}% do faturamento</p>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">{dados.quantidade} produtos</p>
+                          <p className="text-lg font-bold text-slate-900 dark:text-white">{(dados?.percentual || 0).toFixed(1)}% do faturamento</p>
                         </div>
                       ))}
                     </div>
@@ -1385,36 +1393,36 @@ const DashboardPage: React.FC = () => {
 
                   {/* LEGENDA E DETALHES */}
                   <div className="space-y-6">
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
-                      <h3 className="font-bold text-gray-900 mb-4">📊 Interpretação da Curva ABC</h3>
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-6 rounded-2xl border border-blue-200 dark:border-blue-500/20">
+                      <h3 className="font-bold text-slate-900 dark:text-white mb-4">📊 Interpretação da Curva ABC</h3>
                       <div className="space-y-3">
                         <div className="flex items-center gap-3">
                           <div className="w-3 h-3 rounded-full bg-green-500"></div>
                           <div>
-                            <p className="font-semibold text-gray-900">Classe A (20% dos produtos)</p>
-                            <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.A?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                            <p className="font-semibold text-slate-900 dark:text-white">Classe A (20% dos produtos)</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">Responsáveis por {analise_produtos?.curva_abc?.resumo?.A?.percentual?.toFixed(1) || 0}% do faturamento</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                           <div>
-                            <p className="font-semibold text-gray-900">Classe B (30% dos produtos)</p>
-                            <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                            <p className="font-semibold text-slate-900 dark:text-white">Classe B (30% dos produtos)</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">Responsáveis por {analise_produtos?.curva_abc?.resumo?.B?.percentual?.toFixed(1) || 0}% do faturamento</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="w-3 h-3 rounded-full bg-red-500"></div>
                           <div>
-                            <p className="font-semibold text-gray-900">Classe C (50% dos produtos)</p>
-                            <p className="text-sm text-gray-600">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
+                            <p className="font-semibold text-slate-900 dark:text-white">Classe C (50% dos produtos)</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">Responsáveis por {analise_produtos?.curva_abc?.resumo?.C?.percentual?.toFixed(1) || 0}% do faturamento</p>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {/* TOP 5 PRODUTOS DA CLASSE SELECIONADA */}
-                    <div className="border border-gray-200 rounded-xl p-4">
-                      <h4 className="font-bold text-gray-900 mb-3">
+                    <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+                      <h4 className="font-bold text-slate-900 dark:text-white mb-4">
                         🏆 Top Produtos {selectedABC === 'all' ? 'Geral' : `Classe ${selectedABC}`}
                       </h4>
                       <div className="space-y-3">
@@ -1423,30 +1431,30 @@ const DashboardPage: React.FC = () => {
                           ?.map((produto, idx) => (
                             <div
                               key={produto.id}
-                              className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${produto.classificacao === 'A' ? 'bg-green-100 text-green-800' :
-                                  produto.classificacao === 'B' ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-red-100 text-red-800'
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${produto.classificacao === 'A' ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' :
+                                  produto.classificacao === 'B' ? 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' :
+                                    'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400'
                                   }`}>
                                   {idx + 1}
                                 </div>
                                 <div>
-                                  <p className="font-medium text-gray-900">{produto.nome}</p>
-                                  <p className="text-xs text-gray-500">
+                                  <p className="font-medium text-slate-900 dark:text-white">{produto.nome}</p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">
                                     Classe {produto.classificacao} • Margem: {produto.margem.toFixed(1)}%
                                   </p>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className={`font-bold ${produto.classificacao === 'A' ? 'text-green-600' :
-                                  produto.classificacao === 'B' ? 'text-yellow-600' :
-                                    'text-red-600'
+                                <p className={`font-bold ${produto.classificacao === 'A' ? 'text-green-600 dark:text-green-400' :
+                                  produto.classificacao === 'B' ? 'text-yellow-600 dark:text-yellow-400' :
+                                    'text-red-600 dark:text-red-400'
                                   }`}>
                                   R$ {(produto?.faturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
-                                <p className="text-xs text-gray-500">{produto?.quantidade_vendida || 0} unidades</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{produto?.quantidade_vendida || 0} unidades</p>
                               </div>
                             </div>
                           ))}
@@ -1455,20 +1463,20 @@ const DashboardPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-64">
+                <div className="flex items-center justify-center h-64 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
                   <div className="text-center">
-                    <ChartBar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium mb-2">
+                    <ChartBar className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-600 dark:text-slate-400 font-medium mb-2">
                       Nenhum produto encontrado na Classe {selectedABC}
                     </p>
-                    <p className="text-gray-500 text-sm">
+                    <p className="text-slate-500 dark:text-slate-500 text-sm">
                       {selectedABC === 'C'
                         ? 'Parabéns! Você não tem produtos de baixo desempenho (Classe C).'
                         : 'Selecione outra classe para visualizar os produtos.'}
                     </p>
                     <button
                       onClick={() => setSelectedABC('all')}
-                      className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="mt-6 px-6 py-2 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-1 transition-all duration-300 font-medium"
                     >
                       Ver Todos os Produtos
                     </button>
@@ -1482,16 +1490,16 @@ const DashboardPage: React.FC = () => {
 
       {/* SEÇÃO: ANÁLISE TEMPORAL - TENDÊNCIA DE VENDAS */}
       {viewMode === 'detalhado' && (
-        <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
+        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl mb-8 overflow-hidden border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
           <div
-            className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+            className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={() => toggleCard('analise-temporal')}
           >
             <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-purple-600" />
+              <TrendingUp className="w-8 h-8 text-purple-600 dark:text-purple-500" />
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Análise Temporal de Vendas</h2>
-                <p className="text-gray-600">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white transition-colors">Análise Temporal de Vendas</h2>
+                <p className="text-slate-600 dark:text-slate-400">Tendência • Sazonalidade • Previsões • Evolução Mensal</p>
               </div>
             </div>
             <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-temporal'] ? 'rotate-180' : ''}`} />
@@ -1501,9 +1509,9 @@ const DashboardPage: React.FC = () => {
             <div className="p-6 animate-fadeIn">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
-                <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-xl border border-purple-200 lg:col-span-2">
-                  <h3 className="font-bold text-gray-900 mb-6 text-lg flex items-center gap-2">
-                    <LineChartIcon className="w-5 h-5 text-purple-600" />
+                <div className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-900/50 p-6 rounded-2xl border border-purple-200 dark:border-purple-500/20 lg:col-span-2">
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-6 text-lg flex items-center gap-2">
+                    <LineChartIcon className="w-5 h-5 text-purple-600 dark:text-purple-500" />
                     Evolução das Vendas (30 dias)
                   </h3>
                   <div className="h-[300px]">
@@ -1521,8 +1529,8 @@ const DashboardPage: React.FC = () => {
                           <YAxis tick={{ fontSize: 12 }} />
                           <Tooltip
                             content={({ payload, label }) => (
-                              <div className="bg-white p-4 shadow-xl rounded-lg border border-gray-200">
-                                <p className="font-bold text-gray-900">{label}</p>
+                              <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-xl border border-slate-200 dark:border-slate-700">
+                                <p className="font-bold text-slate-900 dark:text-white">{label}</p>
                                 {payload?.map((entry, index) => (
                                   <p key={index} className="text-sm" style={{ color: entry.color }}>
                                     {entry.name}: R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1583,24 +1591,24 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 {/* 🔥 MOVIDO: COMPARAÇÃO MENSAL - AGORA ABAIXO DO GRÁFICO */}
-                <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border border-orange-200 lg:col-span-2">
-                  <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <LucideBarChart className="w-5 h-5 text-orange-600" />
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/10 dark:to-red-900/10 p-6 rounded-2xl border border-orange-200 dark:border-orange-500/20 lg:col-span-2">
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <LucideBarChart className="w-5 h-5 text-orange-600 dark:text-orange-500" />
                     Comparação Mensal
                   </h3>
                   <div className="space-y-3">
                     {analise_temporal?.comparacao_meses && analise_temporal?.comparacao_meses.length > 0 ? (
                       analise_temporal?.comparacao_meses.map((comp, idx) => (
-                        <div key={`mes-${comp.mes || idx}`} className="bg-white/70 p-4 rounded-lg">
+                        <div key={`mes-${comp.mes || idx}`} className="bg-white/70 dark:bg-slate-800/60 backdrop-blur-md p-4 rounded-xl border border-white/20 dark:border-slate-700/50 hover:shadow-md transition-shadow">
                           <div className="flex justify-between items-center mb-2">
-                            <span className="font-medium text-gray-900">{comp.mes}</span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            <span className="font-medium text-slate-900 dark:text-white">{comp.mes}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${comp.crescimento > 0 ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400'}`}>
                               {comp.crescimento > 0 ? '+' : ''}{comp.crescimento.toFixed(1)}%
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">Vendas: R$ {(comp?.vendas || 0).toLocaleString('pt-BR')}</span>
-                            <span className="text-gray-600">Meta: R$ {(comp?.meta || 0).toLocaleString('pt-BR')}</span>
+                            <span className="text-slate-600 dark:text-slate-400">Vendas: R$ {(comp?.vendas || 0).toLocaleString('pt-BR')}</span>
+                            <span className="text-slate-600 dark:text-slate-400">Meta: R$ {(comp?.meta || 0).toLocaleString('pt-BR')}</span>
                           </div>
                         </div>
                       ))
