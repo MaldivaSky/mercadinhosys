@@ -7,7 +7,7 @@ import CustomerDashboard from './components/CustomerDashboard';
 import { customerService } from './customerService';
 import { apiClient } from '../../api/apiClient';
 import { pdvService } from '../pdv/pdvService';
-import { Button, Typography, CircularProgress, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu, Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment as InputAd, Divider } from '@mui/material';
+import { Button, Typography, CircularProgress, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { showToast } from '../../utils/toast';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';

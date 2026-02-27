@@ -1492,6 +1492,62 @@ class DataLayer:
             clientes_com_fiado = int(agg.clientes_com_fiado or 0)
             total_clientes = int(agg.total_clientes or 0)
 
+            # -------------------------------------------------------------
+            # AI & Predictive Metrics para Gestão de Fiados
+            # -------------------------------------------------------------
+            hoje = datetime.utcnow()
+            trinta_dias_atras = hoje - timedelta(days=30)
+
+            # 1. Tendência: Novos Fiados vs. Pagamentos (últimos 30 dias)
+            novos_fiados_30d = db.session.query(func.coalesce(func.sum(Venda.total), 0)).filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.forma_pagamento.ilike('%fiado%'),
+                Venda.status == 'finalizada',
+                Venda.data_venda >= trinta_dias_atras
+            ).scalar() or 0.0
+
+            from app.models import MovimentacaoCaixa
+            pagamentos_fiado_30d = db.session.query(func.coalesce(func.sum(MovimentacaoCaixa.valor), 0)).filter(
+                MovimentacaoCaixa.estabelecimento_id == estabelecimento_id,
+                MovimentacaoCaixa.tipo == 'suprimento',
+                db.or_(
+                    MovimentacaoCaixa.descricao.ilike('Receb. Fiado%'),
+                    MovimentacaoCaixa.observacoes.ilike('%Pagamento de fiado%')
+                ),
+                MovimentacaoCaixa.created_at >= trinta_dias_atras
+            ).scalar() or 0.0
+
+            taxa_recuperacao = (float(pagamentos_fiado_30d) / float(novos_fiados_30d) * 100) if float(novos_fiados_30d) > 0 else 100.0
+
+            # 2. Top Produtos vendidos no Fiado
+            from app.models import VendaItem
+            top_produtos_query = db.session.query(
+                VendaItem.produto_nome,
+                func.sum(VendaItem.quantidade).label('qtde'),
+                func.sum(VendaItem.total_item).label('valor')
+            ).join(Venda).filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.forma_pagamento.ilike('%fiado%'),
+                Venda.status == 'finalizada'
+            ).group_by(VendaItem.produto_nome).order_by(desc('valor')).limit(5).all()
+
+            top_produtos = [{"nome": p.produto_nome, "quantidade": float(p.qtde), "valor": float(p.valor)} for p in top_produtos_query]
+
+            # 3. Bons Pagadores: Clientes que frequentemente compram fiado mas quitam as dívidas rapidamente.
+            bons_pagadores_query = db.session.query(
+                Cliente.id,
+                Cliente.nome,
+                Cliente.celular,
+                func.sum(Venda.total).label('volume_credito')
+            ).join(Venda).filter(
+                Cliente.estabelecimento_id == estabelecimento_id,
+                Cliente.saldo_devedor <= 0,
+                Venda.forma_pagamento.ilike('%fiado%'),
+                Venda.status == 'finalizada'
+            ).group_by(Cliente.id, Cliente.nome, Cliente.celular).order_by(desc('volume_credito')).limit(5).all()
+
+            bons_pagadores = [{"id": c.id, "nome": c.nome, "celular": c.celular or "", "volume_credito": float(c.volume_credito)} for c in bons_pagadores_query]
+
             # Maior devedor — busca separada por clareza
             maior_devedor = db.session.query(
                 Cliente.id,
@@ -1554,7 +1610,15 @@ class DataLayer:
                         "ultima_compra": d.ultima_compra.isoformat() if d.ultima_compra else None,
                     }
                     for d in top_devedores
-                ]
+                ],
+                "tendencias": {
+                    "novos_fiados_30d": float(novos_fiados_30d),
+                    "pagamentos_fiado_30d": float(pagamentos_fiado_30d),
+                    "taxa_recuperacao_percentual": round(taxa_recuperacao, 1),
+                    "status": "saudavel" if taxa_recuperacao >= 80 else ("alerta" if taxa_recuperacao >= 50 else "critico")
+                },
+                "top_produtos": top_produtos,
+                "bons_pagadores": bons_pagadores
             }
         except Exception as e:
             db.session.rollback()
@@ -1571,7 +1635,10 @@ class DataLayer:
                 "maior_devedor_nome": "",
                 "maior_devedor_celular": "",
                 "maior_devedor_valor": 0.0,
-                "top_devedores": []
+                "top_devedores": [],
+                "tendencias": {"novos_fiados_30d": 0.0, "pagamentos_fiado_30d": 0.0, "taxa_recuperacao_percentual": 0.0, "status": "alerta"},
+                "top_produtos": [],
+                "bons_pagadores": []
             }
 
     @staticmethod

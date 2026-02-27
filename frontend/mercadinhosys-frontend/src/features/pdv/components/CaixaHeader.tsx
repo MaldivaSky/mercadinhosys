@@ -1,26 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Wifi,
-    WifiOff,
     Clock,
-    User,
-    Home,
-    Settings,
-    Store
+    User
 } from 'lucide-react';
 
 interface CaixaHeaderProps {
     funcionarioNome?: string;
     funcionarioRole?: string;
-    /** Quando muda, força novo carregamento das estatísticas (ex: após finalizar venda) */
-    refreshKey?: number | string;
     onOpenCaixaManager?: () => void;
 }
 
 const CaixaHeader: React.FC<CaixaHeaderProps> = ({
     funcionarioNome = 'Operador',
     funcionarioRole = 'Caixa',
-    refreshKey // Keep refreshKey as it was in the original component
 }) => {
     const [horaAtual, setHoraAtual] = useState(new Date());
 

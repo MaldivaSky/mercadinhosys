@@ -933,6 +933,9 @@ class DashboardOrchestrator:
                 "maior_devedor_celular": fiado_metrics.get("maior_devedor_celular", ""),
                 "maior_devedor_valor": fiado_metrics.get("maior_devedor_valor", 0.0),
                 "top_devedores": fiado_metrics.get("top_devedores", []),
+                "tendencias": fiado_metrics.get("tendencias", {"novos_fiados_30d": 0.0, "pagamentos_fiado_30d": 0.0, "taxa_recuperacao_percentual": 0.0, "status": "alerta"}),
+                "top_produtos": fiado_metrics.get("top_produtos", []),
+                "bons_pagadores": fiado_metrics.get("bons_pagadores", []),
             },
             "receivables": receivables_metrics, # NEW: Dados detalhados para a nova aba financeira
             "_performance": {
