@@ -1,14 +1,11 @@
-# 🛒 MercadinhoSys - Sistema de Gestão para Pequenos Mercados
+# 🛒 MercadinhoSys - ERP & Scientific BI Dashboard
 
-![Status do Projeto](https://img.shields.io/badge/Status-Production_Ready-green)
-![License](https://img.shields.io/badge/License-MIT-blue)
+![Version](https://img.shields.io/badge/Version-2.2.0_Scientific-blue)
+![Status](https://img.shields.io/badge/Status-Stable-green)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
-![React](https://img.shields.io/badge/React-18+-blue)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-blue)
+![React](https://img.shields.io/badge/React-18+_TS-blue)
 
-**MercadinhoSys** é uma solução completa de ERP (Enterprise Resource Planning) e PDV (Ponto de Venda) desenvolvida para facilitar a gestão de pequenos comércios. O sistema integra controle de estoque, frente de caixa, gestão financeira e análise de dados em uma interface web moderna e responsiva.
-
-**🎉 Novidade:** Sistema agora suporta PostgreSQL e está pronto para deploy em produção no Render.com!
+**MercadinhoSys** é um ecossistema completo de gestão comercial (ERP) e Ponto de Venda (PDV) de nível industrial, agora potencializado com um **Dashboard de Business Intelligence Científico**. O sistema oferece análise preditiva, gestão de estoque via Classificação ABC e orquestração financeira avançada em uma interface premium e responsiva.
 
 ---
 
@@ -82,41 +79,20 @@ Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
 
 ## 📋 Funcionalidades Principais
 
-### 🖥️ PDV (Ponto de Venda)
-* Frente de caixa ágil e intuitiva
-* Leitura de código de barras
-* Carrinho de compras em tempo real
-* Múltiplos métodos de pagamento
-* Autorização de gerente para descontos
-* Busca rápida de produtos e clientes
-* **📧 Envio de cupom fiscal por email**
+### � Business Intelligence Científico (BI)
+*   **3 Níveis de Análise:**
+    *   **Visão Geral:** KPIs executivos em tempo real (Faturamento, Lucro Líquido, Margens).
+    *   **Análise Detalhada:** Cruzamento de dados ABC, temporal e financeiro.
+    *   **Modo Científico:** Insights profundos sobre comportamento de clientes e produtos.
+*   **Gestão de Estoque Inteligente:** Classificação ABC automática baseada no Princípio de Pareto.
+*   **Análise de RFM:** Segmentação de clientes (Campeão, Fiel, Risco, Perdido).
+*   **Previsão de Demanda:** Sugestões de reposição baseadas em giro de estoque e lead time.
 
-### 📊 Dashboard Científico
-* **3 Modos de Visualização:**
-  - 📊 Visão Geral (KPIs essenciais)
-  - 📈 Análise Detalhada (ABC + Temporal + Financeiro)
-  - 🧬 Modo Científico (análise completa)
-* Tooltips interativos com explicações
-* Drill-down em métricas (ex: ROI por produto)
-* Gráficos de evolução temporal
-* Análise ABC de produtos
-* Métricas financeiras avançadas
-
-### 📦 Gestão de Estoque
-* CRUD completo de produtos
-* Controle de fornecedores
-* Categorização de produtos
-* Alertas de estoque baixo
-* Precificação com margem de lucro
-* Exportação para CSV
-
-### 👥 Gestão Administrativa
-* Controle de acesso por roles (ADMIN, GERENTE, VENDEDOR)
-* Gestão de funcionários
-* Cadastro de clientes
-* Registro de despesas
-* Relatórios gerenciais
-* Histórico de vendas
+### 🖥️ PDV & Gestão
+*   **Frente de Caixa Ágil:** PDV moderno com suporte a múltiplos pagamentos e descontos.
+*   **Gestão de Crédito (Fiado):** Controle de exposição de risco e carteira de devedores.
+*   **Controle de Validade:** Gestão completa de Lote, Fabricação e Validade (FIFO).
+*   **Email Automation:** Envio automático de cupons fiscais e relatórios.
 
 ---
 
@@ -342,14 +318,14 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ## 👨‍💻 Autor
 
-Desenvolvido com 💙 por [Seu Nome]
+Desenvolvido com 💙 por MaldivasTech - Feito com alma amazônica!
 
 ---
 
 ## 📞 Suporte
 
-- 📧 Email: seu-email@exemplo.com
-- 🐛 Issues: [GitHub Issues](https://github.com/seu-usuario/mercadinhosys/issues)
+- 📧 Email: rafaelmaldivas@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/MaldivaSky/mercadinhosys/issues)
 - 📚 Docs: Ver pasta de documentação
 
 ---

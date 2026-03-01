@@ -926,7 +926,7 @@ class Produto(db.Model):
             return 'baixo'
         return 'normal'
 
-    controlar_validade = db.Column(db.Boolean, default=False)
+    data_fabricacao = db.Column(db.Date)
     data_validade = db.Column(db.Date)
     lote = db.Column(db.String(50))
 
@@ -1345,6 +1345,7 @@ class Produto(db.Model):
             "fornecedor": self.fornecedor.to_dict() if self.fornecedor else None,
             "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
             "fornecedor_id": self.fornecedor_id,
+            "data_fabricacao": self.data_fabricacao.isoformat() if self.data_fabricacao else None,
             "data_validade": self.data_validade.isoformat() if self.data_validade else None,
             "lote": self.lote,
             "imagem_url": self.imagem_url,

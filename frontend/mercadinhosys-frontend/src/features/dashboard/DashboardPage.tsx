@@ -848,7 +848,9 @@ const DashboardPage: React.FC = () => {
       <div className="text-center">
         <div className="relative">
           <div className="animate-spin rounded-full h-20 w-20 border-b-4 border-blue-600 mx-auto"></div>
-          <Brain className="w-10 h-10 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+          <div className="w-10 h-10 bg-blue-600 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+            <span className="text-white text-[10px] font-bold">BI</span>
+          </div>
         </div>
         <p className="mt-6 text-xl font-semibold text-gray-700">Carregando Dashboard...</p>
         <p className="text-gray-500 mt-2">Analisando dados dos últimos {periodoDias} dias</p>
