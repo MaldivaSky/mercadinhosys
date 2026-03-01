@@ -42,6 +42,9 @@ const ProductFormModal = ({
         quantidade: 0,
         quantidade_minima: 10,
         fornecedor_id: undefined as number | undefined,
+        lote: '',
+        data_validade: '',
+        data_fabricacao: '',
         ativo: true,
         imagem_url: '',
     });
@@ -66,6 +69,9 @@ const ProductFormModal = ({
                     quantidade: produto.quantidade || 0,
                     quantidade_minima: produto.quantidade_minima || 10,
                     fornecedor_id: produto.fornecedor_id,
+                    lote: produto.lote || '',
+                    data_validade: produto.data_validade || '',
+                    data_fabricacao: produto.data_fabricacao || '',
                     ativo: produto.ativo ?? true,
                     imagem_url: produto.imagem_url || '',
                 });
@@ -86,6 +92,9 @@ const ProductFormModal = ({
                     quantidade: 0,
                     quantidade_minima: 10,
                     fornecedor_id: undefined,
+                    lote: '',
+                    data_validade: '',
+                    data_fabricacao: '',
                     ativo: true,
                     imagem_url: '',
                 });
@@ -319,6 +328,41 @@ const ProductFormModal = ({
                             <div className="space-y-2">
                                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Qtd. MÃ­nima</label>
                                 <input type="number" value={formData.quantidade_minima} onChange={(e) => setFormData(prev => ({ ...prev, quantidade_minima: parseInt(e.target.value) || 0 }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Lote e Validade */}
+                    <div className="md:col-span-2 space-y-4">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Lote e Validade</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Lote</label>
+                                <input
+                                    type="text"
+                                    value={formData.lote}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, lote: e.target.value }))}
+                                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Ex: L2024-01"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Data de FabricaÃ§Ã£o</label>
+                                <input
+                                    type="date"
+                                    value={formData.data_fabricacao}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, data_fabricacao: e.target.value }))}
+                                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Data de Validade</label>
+                                <input
+                                    type="date"
+                                    value={formData.data_validade}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, data_validade: e.target.value }))}
+                                    className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                                />
                             </div>
                         </div>
                     </div>

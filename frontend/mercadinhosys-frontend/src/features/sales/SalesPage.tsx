@@ -93,8 +93,9 @@ interface Paginacao {
     tem_proxima: boolean;
 }
 
-function formatCurrency(value: number) {
-    return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+function formatCurrency(value: any) {
+    const amount = Number(value || 0);
+    return amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 // Função utilitária para obter data local no formato YYYY-MM-DD (Evita erro de UTC/ISO)
