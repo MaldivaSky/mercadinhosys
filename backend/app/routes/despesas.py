@@ -81,10 +81,10 @@ def listar_despesas():
             400,
         )
 
-    # Filtro por categoria
+    # Filtro por categoria (Case-insensitive)
     categoria = request.args.get("categoria")
     if categoria:
-        query = query.filter(Despesa.categoria == categoria)
+        query = query.filter(Despesa.categoria.ilike(categoria))
 
     # Filtro por tipo
     tipo = request.args.get("tipo")
@@ -293,7 +293,7 @@ def listar_despesas():
 @despesas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
 @funcionario_required
 def obter_estatisticas_despesas():
-    """Obtém estatísticas de despesas para o dashboard"""
+    """Obtém estatísticas de despesas para o dashboard, com suporte a filtros de data."""
     current_user_id = get_jwt_identity()
     funcionario = Funcionario.query.get(current_user_id)
     if funcionario and funcionario.estabelecimento_id:
@@ -305,52 +305,61 @@ def obter_estatisticas_despesas():
             return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
 
     try:
-        from sqlalchemy import func, extract
+        from sqlalchemy import func
         from datetime import datetime, timedelta
+        from decimal import Decimal, ROUND_HALF_UP
 
-        # Data atual e períodos
         hoje = datetime.now().date()
         mes_atual_inicio = hoje.replace(day=1)
         mes_anterior_inicio = (mes_atual_inicio - timedelta(days=1)).replace(day=1)
         mes_anterior_fim = mes_atual_inicio - timedelta(days=1)
 
-        # Estatísticas gerais
-        total_despesas = Despesa.query.filter(
-            Despesa.estabelecimento_id == estabelecimento_id
-        ).count()
+        # ── Período customizado via query params ─────────────────────────────
+        inicio_str = request.args.get("inicio")
+        fim_str = request.args.get("fim")
+        try:
+            filtro_inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date() if inicio_str else None
+            filtro_fim = datetime.strptime(fim_str, "%Y-%m-%d").date() if fim_str else None
+        except ValueError:
+            filtro_inicio = None
+            filtro_fim = None
 
-        soma_total = (
-            db.session.query(func.sum(Despesa.valor))
-            .filter(Despesa.estabelecimento_id == estabelecimento_id)
-            .scalar()
-            or 0.0
+        cat_inicio = filtro_inicio if filtro_inicio else (hoje - timedelta(days=30))
+        cat_fim = filtro_fim if filtro_fim else hoje
+
+        # ── Totais gerais (todos os registros do estabelecimento) ─────────────
+        total_despesas = (
+            Despesa.query.filter(Despesa.estabelecimento_id == estabelecimento_id).count()
         )
 
-        # Despesas do mês atual
-        despesas_mes_atual = (
+        # CRITICAL FIX: convert to Decimal immediately, before any arithmetic
+        soma_total = Decimal(str(
+            db.session.query(func.sum(Despesa.valor))
+            .filter(Despesa.estabelecimento_id == estabelecimento_id)
+            .scalar() or 0
+        ))
+
+        despesas_mes_atual = Decimal(str(
             db.session.query(func.sum(Despesa.valor))
             .filter(
                 Despesa.estabelecimento_id == estabelecimento_id,
                 Despesa.data_despesa >= mes_atual_inicio,
                 Despesa.data_despesa <= hoje,
             )
-            .scalar()
-            or 0.0
-        )
+            .scalar() or 0
+        ))
 
-        # Despesas do mês anterior
-        despesas_mes_anterior = (
+        despesas_mes_anterior = Decimal(str(
             db.session.query(func.sum(Despesa.valor))
             .filter(
                 Despesa.estabelecimento_id == estabelecimento_id,
                 Despesa.data_despesa >= mes_anterior_inicio,
                 Despesa.data_despesa <= mes_anterior_fim,
             )
-            .scalar()
-            or 0.0
-        )
+            .scalar() or 0
+        ))
 
-        # Calcular variação percentual
+        # ── Variação — todos os operandos já são Decimal ─────────────────────
         if despesas_mes_anterior > 0:
             variacao_percentual = (
                 (despesas_mes_atual - despesas_mes_anterior) / despesas_mes_anterior
@@ -358,8 +367,50 @@ def obter_estatisticas_despesas():
         else:
             variacao_percentual = Decimal('100') if despesas_mes_atual > 0 else Decimal('0')
 
-        # Despesas por categoria
-        despesas_por_categoria = (
+        # ── Hoje / ontem / semana (métricas de curto prazo) ──────────────────
+        ontem = hoje - timedelta(days=1)
+        semana_inicio = hoje - timedelta(days=6)
+
+        despesas_hoje = Decimal(str(
+            db.session.query(func.sum(Despesa.valor))
+            .filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                Despesa.data_despesa == hoje,
+            )
+            .scalar() or 0
+        ))
+
+        despesas_ontem = Decimal(str(
+            db.session.query(func.sum(Despesa.valor))
+            .filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                Despesa.data_despesa == ontem,
+            )
+            .scalar() or 0
+        ))
+
+        despesas_semana = Decimal(str(
+            db.session.query(func.sum(Despesa.valor))
+            .filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                Despesa.data_despesa >= semana_inicio,
+                Despesa.data_despesa <= hoje,
+            )
+            .scalar() or 0
+        ))
+
+        # ── Período filtrado: total e por categoria ───────────────────────────
+        soma_periodo = Decimal(str(
+            db.session.query(func.sum(Despesa.valor))
+            .filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                Despesa.data_despesa >= cat_inicio,
+                Despesa.data_despesa <= cat_fim,
+            )
+            .scalar() or 0
+        ))
+
+        despesas_por_categoria_raw = (
             db.session.query(
                 Despesa.categoria,
                 func.sum(Despesa.valor).label("total"),
@@ -367,123 +418,118 @@ def obter_estatisticas_despesas():
             )
             .filter(
                 Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.data_despesa >= (hoje - timedelta(days=30)),  # Últimos 30 dias
+                Despesa.data_despesa >= cat_inicio,
+                Despesa.data_despesa <= cat_fim,
             )
             .group_by(Despesa.categoria)
+            .order_by(func.sum(Despesa.valor).desc())
             .all()
         )
 
-        # Despesas recorrentes vs não recorrentes
-        despesas_recorrentes = (
+        # ── Recorrentes ───────────────────────────────────────────────────────
+        despesas_recorrentes = Decimal(str(
             db.session.query(func.sum(Despesa.valor))
             .filter(
                 Despesa.estabelecimento_id == estabelecimento_id,
                 Despesa.recorrente == True,
             )
-            .scalar()
-            or 0.0
-        )
+            .scalar() or 0
+        ))
 
-        # Convert to Decimal to avoid arithmetic issues
-        despesas_recorrentes = Decimal(str(despesas_recorrentes))
-        soma_total = Decimal(str(soma_total))
-        despesas_mes_atual = Decimal(str(despesas_mes_atual))
-        despesas_mes_anterior = Decimal(str(despesas_mes_anterior))
-
-        # Evolução mensal (últimos 6 meses)
+        # ── Evolução mensal (últimos 6 meses) ─────────────────────────────────
         evolucao_mensal = []
         for i in range(6):
-            # Calcular data do mês
             mes_data = hoje.replace(day=1)
             for _ in range(i):
-                # Subtrair um mês
                 if mes_data.month == 1:
                     mes_data = mes_data.replace(year=mes_data.year - 1, month=12)
                 else:
                     mes_data = mes_data.replace(month=mes_data.month - 1)
 
-            # Calcular último dia do mês
             if mes_data.month == 12:
                 mes_fim = mes_data.replace(year=mes_data.year + 1, month=1, day=1) - timedelta(days=1)
             else:
                 mes_fim = mes_data.replace(month=mes_data.month + 1, day=1) - timedelta(days=1)
 
             try:
-                total_mes = (
+                total_mes = Decimal(str(
                     db.session.query(func.sum(Despesa.valor))
                     .filter(
                         Despesa.estabelecimento_id == estabelecimento_id,
                         Despesa.data_despesa >= mes_data,
                         Despesa.data_despesa <= mes_fim,
                     )
-                    .scalar()
-                    or Decimal('0')
-                )
-                total_mes = Decimal(str(total_mes))
-            except Exception as e:
-                current_app.logger.error(f"Erro ao calcular evolução mensal: {e}")
+                    .scalar() or 0
+                ))
+            except Exception as e_inner:
+                current_app.logger.error(f"Erro ao calcular mês {mes_data}: {e_inner}")
                 total_mes = Decimal('0')
 
-            evolucao_mensal.append(
-                {
-                    "mes": mes_data.strftime("%Y-%m"),
-                    "total": float(total_mes),
-                    "mes_nome": mes_data.strftime("%b/%Y"),
-                }
-            )
+            evolucao_mensal.append({
+                "mes": mes_data.strftime("%Y-%m"),
+                "total": float(total_mes),
+                "mes_nome": mes_data.strftime("%b/%Y"),
+            })
 
-        evolucao_mensal.reverse()  # Do mais antigo para o mais recente
+        evolucao_mensal.reverse()
 
-        # Calcular média por despesa
+        # ── Médias ────────────────────────────────────────────────────────────
         media_valor = soma_total / Decimal(str(total_despesas)) if total_despesas > 0 else Decimal('0')
 
-        # Garantir que despesas_por_categoria não seja None
+        # ── Montar lista de categorias com percentual ─────────────────────────
         despesas_por_categoria_list = []
-        if despesas_por_categoria:
-            for categoria, total, quantidade in despesas_por_categoria:
-                if total is not None and soma_total > 0:
-                    total_decimal = Decimal(str(total))
-                    percentual = ((total_decimal / soma_total) * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                else:
-                    percentual = Decimal('0')
-                despesas_por_categoria_list.append({
-                    "categoria": categoria or "Sem categoria",
-                    "total": float(total) if total else 0.0,
-                    "quantidade": quantidade or 0,
-                    "percentual": float(percentual),
-                })
+        for categoria, total, quantidade in despesas_por_categoria_raw:
+            total_d = Decimal(str(total)) if total else Decimal('0')
+            percentual = (
+                (total_d / soma_periodo * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if soma_periodo > 0 else Decimal('0')
+            )
+            despesas_por_categoria_list.append({
+                "categoria": categoria or "Sem categoria",
+                "total": float(total_d),
+                "quantidade": quantidade or 0,
+                "percentual": float(percentual),
+            })
 
         return (
-            jsonify(
-                {
-                    "success": True,
-                    "estatisticas": {
-                        "total_despesas": total_despesas,
-                        "soma_total": float(soma_total),
-                        "media_valor": float(media_valor),
-                        "despesas_mes_atual": float(despesas_mes_atual),
-                        "despesas_mes_anterior": float(despesas_mes_anterior),
-                        "variacao_percentual": float(variacao_percentual.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
-                        "despesas_recorrentes": float(despesas_recorrentes),
-                        "despesas_nao_recorrentes": float(soma_total - despesas_recorrentes),
-                        "despesas_por_categoria": despesas_por_categoria_list,
-                        "evolucao_mensal": evolucao_mensal,
-                    },
-                }
-            ),
+            jsonify({
+                "success": True,
+                "periodo": {
+                    "inicio": cat_inicio.isoformat(),
+                    "fim": cat_fim.isoformat(),
+                },
+                "estatisticas": {
+                    "total_despesas": total_despesas,
+                    "soma_total": float(soma_total),
+                    "soma_periodo": float(soma_periodo),
+                    "media_valor": float(media_valor),
+                    "despesas_hoje": float(despesas_hoje),
+                    "despesas_ontem": float(despesas_ontem),
+                    "despesas_semana": float(despesas_semana),
+                    "despesas_mes_atual": float(despesas_mes_atual),
+                    "despesas_mes_anterior": float(despesas_mes_anterior),
+                    "variacao_percentual": float(
+                        variacao_percentual.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    ),
+                    "despesas_recorrentes": float(despesas_recorrentes),
+                    "despesas_nao_recorrentes": float(soma_total - despesas_recorrentes),
+                    "despesas_por_categoria": despesas_por_categoria_list,
+                    "evolucao_mensal": evolucao_mensal,
+                },
+            }),
             200,
         )
 
     except Exception as e:
         current_app.logger.error(f"Erro ao obter estatísticas: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
         return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": "Erro ao obter estatísticas",
-                    "message": str(e),
-                }
-            ),
+            jsonify({
+                "success": False,
+                "error": "Erro ao obter estatísticas",
+                "message": str(e),
+            }),
             500,
         )
 
@@ -515,24 +561,18 @@ def criar_despesa():
     if valor < 0:
         return jsonify({"success": False, "error": "Valor não pode ser negativo"}), 400
 
-    data_despesa = data.get("data_despesa")
-    try:
-        data_despesa_date = (
-            datetime.strptime(data_despesa, "%Y-%m-%d").date()
-            if data_despesa
-            else datetime.now().date()
-        )
-    except ValueError:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": "Data inválida",
-                    "message": "Use o formato YYYY-MM-DD em data_despesa",
-                }
-            ),
-            400,
-        )
+    def _parse_date_field(raw):
+        """Parse YYYY-MM-DD string to date, or return None."""
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    data_despesa_date = _parse_date_field(data.get("data_despesa")) or datetime.now().date()
+    data_emissao_date = _parse_date_field(data.get("data_emissao"))
+    data_vencimento_date = _parse_date_field(data.get("data_vencimento"))
 
     despesa = Despesa(
         estabelecimento_id=funcionario.estabelecimento_id,
@@ -541,6 +581,8 @@ def criar_despesa():
         tipo=(data.get("tipo") or "variavel").strip() or "variavel",
         valor=valor,
         data_despesa=data_despesa_date,
+        data_emissao=data_emissao_date,
+        data_vencimento=data_vencimento_date,
         forma_pagamento=(data.get("forma_pagamento") or "").strip() or None,
         recorrente=bool(data.get("recorrente", False)),
         observacoes=(data.get("observacoes") or "").strip() or None,
@@ -592,22 +634,22 @@ def atualizar_despesa(despesa_id: int):
             )
         despesa.valor = valor
 
-    if "data_despesa" in data:
+    def _parse_date(raw):
+        if not raw:
+            return None
         try:
-            despesa.data_despesa = datetime.strptime(
-                data.get("data_despesa"), "%Y-%m-%d"
-            ).date()
-        except (TypeError, ValueError):
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "error": "Data inválida",
-                        "message": "Use o formato YYYY-MM-DD em data_despesa",
-                    }
-                ),
-                400,
-            )
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    if "data_despesa" in data:
+        despesa.data_despesa = _parse_date(data["data_despesa"]) or despesa.data_despesa
+    if "data_emissao" in data:
+        despesa.data_emissao = _parse_date(data["data_emissao"])
+    if "data_vencimento" in data:
+        despesa.data_vencimento = _parse_date(data["data_vencimento"])
+
+
 
     if "forma_pagamento" in data:
         fp = (data.get("forma_pagamento") or "").strip()
@@ -797,6 +839,7 @@ def resumo_financeiro():
         cp = financial_data['contas_pagar']
         vendas = financial_data['vendas']
         desp = financial_data['despesas']
+        caixa_pdv = financial_data.get('caixa_pdv', {'sangrias': 0.0, 'suprimentos': 0.0})
         
         # --- Lógica Exata para Mercadinho ---
         receita_bruta = vendas.get("revenue", 0.0)
@@ -830,10 +873,10 @@ def resumo_financeiro():
                 "acao": "Reduzir compras ou renegociar prazos com fornecedores",
             })
 
-        # Fluxo de Caixa Real (Foco em Entradas de Vendas vs Saídas Totais)
-        # Fluxo de Caixa Real (Foco em Entradas de Recebimentos vs Saídas Totais)
-        entradas_reais = vendas.get("total_recebido", 0.0)
-        saidas_reais = cp['pago_periodo'] + desp['total']
+        # Fluxo de Caixa Real: inclui receita de vendas + suprimentos de caixa (entradas)
+        # e pagamentos de contas + despesas cadastradas + sangrias de caixa (saídas)
+        entradas_reais = vendas.get("total_recebido", 0.0) + caixa_pdv['suprimentos']
+        saidas_reais = cp['pago_periodo'] + desp['total'] + caixa_pdv['sangrias']
 
         return jsonify({
             "success": True,
@@ -869,6 +912,10 @@ def resumo_financeiro():
                 "total": desp['total'],
                 "recorrentes": desp['recorrentes'],
                 "variaveis": desp['total'] - desp['recorrentes']
+            },
+            "caixa_pdv": {
+                "sangrias": caixa_pdv['sangrias'],
+                "suprimentos": caixa_pdv['suprimentos'],
             },
             "fluxo_caixa_real": {
                 "entradas": entradas_reais,

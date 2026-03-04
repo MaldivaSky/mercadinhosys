@@ -3,19 +3,26 @@
 // Detectar ambiente automaticamente
 const isDevelopment =
     import.meta.env.DEV ||
+    window.location.port === '5173' ||
+    window.location.port === '3000' ||
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
     window.location.hostname.startsWith('192.168.') ||
+    window.location.hostname.startsWith('10.') ||
+    window.location.hostname.startsWith('172.') ||
     window.location.hostname.endsWith('.local');
 
 // Normaliza URL: remove barras extras e garante protocolo consistente
 const normalizeUrl = (url: string): string => {
     if (!url) return url;
     let out = url.trim();
-    // troca postgres:// etc não aplicável aqui; apenas http/https
-    // remove barra duplicada antes de /api
+
+    // CORREÇÃO DE SEGURANÇA: NUNCA permitir que o navegador tente resolver o host 'backend'
+    if (out.includes('backend') || out.includes(':5000')) {
+        return '/api';
+    }
+
     out = out.replace(/\/+$/g, '');
-    // garante sufixo /api
     if (!/\/api$/.test(out)) {
         out = `${out}/api`;
     }
@@ -35,26 +42,23 @@ const getRuntimeApiUrl = (): string | undefined => {
 
 // URL do backend baseada no ambiente com fallback robusto
 const getBaseUrl = (): string => {
-    // Em desenvolvimento com Vite proxy, usar caminho relativo para evitar CORS
-    if (isDevelopment) return '/api';
+    // 1. PRIORIDADE ABSOLUTA: Se estiver rodando localmente, SEMPRE usar /api (Proxy do Vite)
+    // Isso evita que o navegador tente resolver hosts internos como 'backend:5000'
+    const isLocal =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.') ||
+        window.location.hostname.startsWith('172.');
 
-    const host = window.location.hostname || '';
-    const isVercel = host.endsWith('.vercel.app');
+    if (isLocal) return '/api';
 
-    // 1. Prioridade: Runtime override (window.__API_URL__)
+    // 2. Produção ou Fallback
     const runtimeUrl = getRuntimeApiUrl();
     if (runtimeUrl) return normalizeUrl(runtimeUrl);
 
-    // 2. Variável de ambiente do Vite
     if (import.meta.env.VITE_API_URL) return normalizeUrl(import.meta.env.VITE_API_URL as string);
 
-    // 3. Fallback para Vercel: usar URL do Render
-    if (isVercel) {
-        const renderUrl = import.meta.env.VITE_RENDER_API_URL || 'https://mercadinhosys.onrender.com';
-        return normalizeUrl(renderUrl);
-    }
-
-    // 4. Último fallback: mesma origem
     return normalizeUrl(window.location.origin);
 };
 

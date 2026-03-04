@@ -211,7 +211,7 @@ const ProductFormModal = ({
                             </div>
                             <div className="text-left">
                                 <h4 className="font-bold text-lg">Cadastro Inteligente</h4>
-                                <p className="text-xs text-blue-100">Escanear cÃ³digo e buscar dados na nuvem</p>
+                                <p className="text-xs text-blue-100">Escanear código e buscar dados na nuvem</p>
                             </div>
                         </div>
                         <Sparkles className="w-8 h-8 opacity-20 group-hover:scale-125 transition-transform duration-500" />
@@ -220,9 +220,9 @@ const ProductFormModal = ({
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* IdentificaÃ§Ã£o Principal */}
+                    {/* Identificação Principal */}
                     <div className="space-y-4">
-                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">IdentificaÃ§Ã£o</h4>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Identificação</h4>
                         <div className="space-y-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
                             <div className="space-y-2">
                                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Nome do Produto *</label>
@@ -235,7 +235,7 @@ const ProductFormModal = ({
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">CÃ³digo de Barras</label>
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Código de Barras</label>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
@@ -255,9 +255,9 @@ const ProductFormModal = ({
                         </div>
                     </div>
 
-                    {/* OrganizaÃ§Ã£o */}
+                    {/* Organização */}
                     <div className="space-y-4">
-                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">OrganizaÃ§Ã£o</h4>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Organização</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
                             <div className="space-y-2">
                                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Categoria *</label>
@@ -297,12 +297,12 @@ const ProductFormModal = ({
                     </div>
                 </div>
 
-                {/* PrecificaÃ§Ã£o */}
+                {/* Precificação */}
                 <div className="space-y-4">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">PrecificaÃ§Ã£o e Lucro</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Precificação e Lucro</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100/50 dark:border-blue-900/30">
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">PreÃ§o de Custo (R$)</label>
+                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">Preço de Custo (R$)</label>
                             <input type="number" step="0.01" value={formData.preco_custo} onChange={(e) => setFormData(prev => ({ ...prev, preco_custo: parseFloat(e.target.value) || 0 }))} onBlur={calcularPrecoVenda} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold" />
                         </div>
                         <div className="space-y-2">
@@ -310,7 +310,7 @@ const ProductFormModal = ({
                             <input type="number" step="0.1" value={formData.margem_lucro} onChange={(e) => setFormData(prev => ({ ...prev, margem_lucro: parseFloat(e.target.value) || 0 }))} onBlur={calcularPrecoVenda} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold" />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">PreÃ§o de Venda (R$)</label>
+                            <label className="text-sm font-semibold text-blue-800 dark:text-blue-300">Preço de Venda (R$)</label>
                             <input type="number" step="0.01" value={formData.preco_venda} onChange={(e) => setFormData(prev => ({ ...prev, preco_venda: parseFloat(e.target.value) || 0 }))} onBlur={calcularMargem} className="w-full px-4 py-3 bg-blue-600 text-white border-transparent rounded-xl outline-none focus:ring-4 focus:ring-blue-500/30 text-lg font-bold shadow-lg shadow-blue-500/20" />
                         </div>
                     </div>
@@ -326,7 +326,7 @@ const ProductFormModal = ({
                                 <input type="number" value={formData.quantidade} onChange={(e) => setFormData(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Qtd. MÃ­nima</label>
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Qtd. Mínima</label>
                                 <input type="number" value={formData.quantidade_minima} onChange={(e) => setFormData(prev => ({ ...prev, quantidade_minima: parseInt(e.target.value) || 0 }))} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                         </div>
@@ -347,7 +347,7 @@ const ProductFormModal = ({
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Data de FabricaÃ§Ã£o</label>
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Data de Fabricação</label>
                                 <input
                                     type="date"
                                     value={formData.data_fabricacao}
@@ -372,7 +372,7 @@ const ProductFormModal = ({
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Metadados</h4>
                         <div className="space-y-4 p-5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">DescriÃ§Ã£o/ObervaÃ§Ãµes</label>
+                                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Descrição/Observações</label>
                                 <textarea value={formData.descricao} onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))} rows={2} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Opcional..." />
                             </div>
                         </div>

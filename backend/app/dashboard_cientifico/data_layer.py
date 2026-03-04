@@ -71,27 +71,33 @@ class DataLayer:
             if end_dt.hour == 0 and end_dt.minute == 0:
                  end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             
-            result = db.session.query(
-                func.coalesce(func.sum(Venda.total), 0).label('revenue'),
-                func.coalesce(func.sum(VendaItem.custo_unitario * VendaItem.quantidade), 0).label('cogs'),
-                func.coalesce(func.sum(VendaItem.total_item), 0).label('gross_sales')
-            ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
+            # Query 1: Faturamento Total (Vendas Finalizadas)
+            revenue = db.session.query(
+                func.coalesce(func.sum(Venda.total), 0)
+            ).filter(
                 Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_dt,
                 Venda.data_venda <= end_dt,
                 Venda.status == 'finalizada'
-            ).first()
+            ).scalar() or 0
 
-            revenue = float(result.revenue or 0)
-            cogs = float(result.cogs or 0)
-            
-            # Se COGS for zero (dados antigos sem custo histórico), tentar estimar?
-            # Por enquanto, assumimos que 0 é o valor real se não houver dados.
+            # Query 2: CMV (Custo da Mercadoria Vendida) via VendaItem
+            cogs = db.session.query(
+                func.coalesce(func.sum(VendaItem.custo_unitario * VendaItem.quantidade), 0)
+            ).join(Venda, Venda.id == VendaItem.venda_id).filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= start_dt,
+                Venda.data_venda <= end_dt,
+                Venda.status == 'finalizada'
+            ).scalar() or 0
+
+            revenue_f = float(revenue)
+            cogs_f = float(cogs)
             
             return {
-                "revenue": revenue,
-                "cogs": cogs,
-                "gross_profit": revenue - cogs
+                "revenue": revenue_f,
+                "cogs": cogs_f,
+                "gross_profit": revenue_f - cogs_f
             }
         except Exception as e:
             db.session.rollback()
@@ -99,13 +105,17 @@ class DataLayer:
             return {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
 
     @staticmethod
+    @staticmethod
     def get_sales_timeseries(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
-        """Série temporal de vendas diárias"""
+        """Série temporal de vendas diárias integrando Receita, CMV e Despesas."""
         try:
             start_date = (datetime.utcnow() - timedelta(days=days)).date()
             
-            # Agrupa por data (dia)
-            results = db.session.query(
+            # Garante formato start_date datetime
+            start_dt = datetime.combine(start_date, datetime.min.time())
+            
+            # Query Vendas (Agrupa por dia)
+            resultados_venda = db.session.query(
                 func.date(Venda.data_venda).label('data'),
                 func.sum(Venda.total).label('valor'),
                 func.count(Venda.id).label('qtd')
@@ -113,27 +123,116 @@ class DataLayer:
                 Venda.estabelecimento_id == estabelecimento_id,
                 func.date(Venda.data_venda) >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(
-                func.date(Venda.data_venda)
-            ).order_by(
-                func.date(Venda.data_venda)
-            ).all()
+            ).group_by(func.date(Venda.data_venda)).all()
 
-            return [
-                {
-                    "data": str(r.data),
-                    "total": float(r.valor or 0),
-                    "valor": float(r.valor or 0),
-                    "qtd": r.qtd
+            # Query CMV (Custo)
+            resultados_cogs = db.session.query(
+                func.date(Venda.data_venda).label('data'),
+                func.sum(VendaItem.custo_unitario * VendaItem.quantidade).label('cogs')
+            ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
+                Venda.estabelecimento_id == estabelecimento_id,
+                func.date(Venda.data_venda) >= start_date,
+                Venda.status == 'finalizada'
+            ).group_by(func.date(Venda.data_venda)).all()
+
+            # Query Despesas
+            resultados_despesas = db.session.query(
+                func.date(Despesa.data_despesa).label('data'),
+                func.sum(Despesa.valor).label('valor')
+            ).filter(
+                Despesa.estabelecimento_id == estabelecimento_id,
+                func.date(Despesa.data_despesa) >= start_date
+            ).group_by(func.date(Despesa.data_despesa)).all()
+
+            # Construir mapa de dias
+            mapa_dias = {}
+            for i in range(days):
+                d = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
+                mapa_dias[d] = {
+                    "data": d,
+                    "total": 0.0,
+                    "valor": 0.0,
+                    "qtd": 0,
+                    "cogs": 0.0,
+                    "despesas": 0.0,
+                    "lucro_bruto": 0.0,
+                    "lucro_liquido": 0.0
                 }
-                for r in results
-            ]
+
+            # Preencher Vendas
+            for r in resultados_venda:
+                d_str = str(r.data)
+                if d_str in mapa_dias:
+                    mapa_dias[d_str]["total"] = float(r.valor or 0)
+                    mapa_dias[d_str]["valor"] = float(r.valor or 0)
+                    mapa_dias[d_str]["qtd"] = r.qtd
+            
+            # Preencher COGS
+            for r in resultados_cogs:
+                d_str = str(r.data)
+                if d_str in mapa_dias:
+                    mapa_dias[d_str]["cogs"] = float(r.cogs or 0)
+                    
+            # Preencher Despesas
+            for r in resultados_despesas:
+                d_str = str(r.data)
+                if d_str in mapa_dias:
+                    mapa_dias[d_str]["despesas"] = float(r.valor or 0)
+
+            # Calcular Lucro Bruto e Líquido Diários
+            for k in mapa_dias:
+                dia = mapa_dias[k]
+                dia["lucro_bruto"] = dia["total"] - dia["cogs"]
+                dia["lucro_liquido"] = dia["lucro_bruto"] - dia["despesas"]
+
+            return sorted(list(mapa_dias.values()), key=lambda x: x["data"])
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro em get_sales_timeseries: {e}")
             return []
 
     # ... (other replacements will follow same pattern)
+
+    @staticmethod
+    def get_expiring_products(estabelecimento_id: int, days_alert: int = 30) -> List[Dict[str, Any]]:
+        """Busca produtos com data de validade próxima ao vencimento"""
+        try:
+            hoje = datetime.utcnow().date()
+            data_limite = hoje + timedelta(days=days_alert)
+            
+            results = db.session.query(
+                Produto.id,
+                Produto.nome,
+                Produto.lote,
+                Produto.data_validade,
+                Produto.quantidade,
+                Produto.preco_custo,
+                Produto.preco_venda
+            ).filter(
+                Produto.estabelecimento_id == estabelecimento_id,
+                Produto.ativo == True,
+                Produto.data_validade.isnot(None),
+                Produto.data_validade <= data_limite
+            ).order_by(Produto.data_validade.asc()).all()
+
+            return [
+                {
+                    "id": r.id,
+                    "nome": r.nome,
+                    "lote": r.lote or "N/D",
+                    "data_validade": r.data_validade.isoformat() if r.data_validade else None,
+                    "dias_para_vencer": (r.data_validade - hoje).days if r.data_validade else 0,
+                    "quantidade": r.quantidade,
+                    "valor_risco_custo": float(r.preco_custo or 0) * (r.quantidade or 0),
+                    "valor_risco_venda": float(r.preco_venda or 0) * (r.quantidade or 0)
+                }
+                for r in results
+                if r.quantidade and r.quantidade > 0
+            ]
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro em get_expiring_products: {e}")
+            return []
 
     @staticmethod
     def get_inventory_summary(estabelecimento_id: int) -> Dict[str, Any]:
@@ -932,14 +1031,26 @@ class DataLayer:
 
             beneficios_por_func = db.session.query(
                 FuncionarioBeneficio.funcionario_id,
-                func.sum(FuncionarioBeneficio.valor).label("total")
-            ).select_from(FuncionarioBeneficio).join(Funcionario).filter(
+                Beneficio.nome,
+                FuncionarioBeneficio.valor
+            ).select_from(FuncionarioBeneficio).join(Beneficio).join(Funcionario).filter(
                 Funcionario.estabelecimento_id == estabelecimento_id,
                 Funcionario.ativo == True,
                 FuncionarioBeneficio.ativo == True
-            ).group_by(FuncionarioBeneficio.funcionario_id).all()
+            ).all()
 
-            beneficios_por_func_id = {int(r.funcionario_id): float(r.total or 0) for r in beneficios_por_func}
+            beneficios_por_func_id = {}
+            beneficios_detalhes_por_id = {}
+            for fid, nome, valor in beneficios_por_func:
+                fid = int(fid)
+                val_f = float(valor or 0)
+                beneficios_por_func_id[fid] = beneficios_por_func_id.get(fid, 0) + val_f
+                if fid not in beneficios_detalhes_por_id:
+                    beneficios_detalhes_por_id[fid] = []
+                beneficios_detalhes_por_id[fid].append({
+                    "descricao": nome,
+                    "valor": val_f
+                })
 
             dias_uteis_mes = 0
             d = inicio_mes
@@ -1032,6 +1143,7 @@ class DataLayer:
                     "cargo": f.cargo,
                     "salario_base": float(f.salario_base or 0),
                     "beneficios": float(beneficios_total),
+                    "beneficios_detalhes": beneficios_detalhes_por_id.get(f.id, []),
                     "horas_extras_horas": round(extras_min / 60, 2),
                     "custo_horas_extras": float(custo_extras_func),
                     "atrasos_minutos": int(atraso_info["minutos"]),
@@ -1301,8 +1413,16 @@ class DataLayer:
             }
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro em get_inventory_summary: {e}")
-            return {"valor_total": 0.0, "baixo_estoque": 0}
+            logger.error(f"Erro em get_consolidated_financial_summary: {e}")
+            return {
+                "contas_pagar": {
+                    "total_aberto": 0.0, "total_vencido": 0.0, "vence_hoje_valor": 0.0,
+                    "vence_7d": 0.0, "vence_30d": 0.0, "pago_periodo": 0.0,
+                    "qtd_vencidos": 0, "qtd_vence_hoje": 0, "qtd_vence_7d": 0
+                },
+                "despesas": { "total": 0.0, "recorrentes": 0.0 },
+                "vendas": { "revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0, "count": 0 }
+            }
 
     @staticmethod
     def get_sales_financials(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
@@ -1397,6 +1517,30 @@ class DataLayer:
                     Venda.status != 'cancelada'
                 ).scalar() or 0.0
                 result["vendas"]["total_recebido"] = float(total_recebido)
+
+                # ── MovimentacaoCaixa do PDV (sangrias e suprimentos) ─────────
+                try:
+                    from app.models import MovimentacaoCaixa
+                    mov_stats = db.session.query(
+                        func.coalesce(
+                            func.sum(case((MovimentacaoCaixa.tipo == 'sangria', MovimentacaoCaixa.valor), else_=0)), 0
+                        ).label('sangrias'),
+                        func.coalesce(
+                            func.sum(case((MovimentacaoCaixa.tipo == 'suprimento', MovimentacaoCaixa.valor), else_=0)), 0
+                        ).label('suprimentos'),
+                    ).filter(
+                        MovimentacaoCaixa.estabelecimento_id == estabelecimento_id,
+                        MovimentacaoCaixa.created_at >= start_dt,
+                        MovimentacaoCaixa.created_at <= end_dt,
+                    ).first()
+                    result["caixa_pdv"] = {
+                        "sangrias": float(mov_stats.sangrias or 0),
+                        "suprimentos": float(mov_stats.suprimentos or 0),
+                    }
+                except Exception as e_mov:
+                    logger.warning(f"Erro ao ler MovimentacaoCaixa: {e_mov}")
+                    result["caixa_pdv"] = {"sangrias": 0.0, "suprimentos": 0.0}
+
             except Exception as e:
                 logger.error(f"Erro processando VENDAS em get_consolidated_financial_summary: {e}")
 
@@ -1419,45 +1563,47 @@ class DataLayer:
             except Exception as e:
                 logger.error(f"Erro processando DESPESAS em get_consolidated_financial_summary: {e}")
 
-            # 3. CONTAS A PAGAR
+            # 3. CONTAS A PAGAR (Cálculo Independente de Filtro de Data para Aberto/Vencido)
             try:
                 hoje = datetime.utcnow().date()
                 date_7d = hoje + timedelta(days=7)
                 date_30d = hoje + timedelta(days=30)
                 
+                # Para "A Pagar", o filtro de data start/end geralmente não se aplica ao SALDO ABERTO,
+                # pois dívidas de meses passados ainda são dívidas hoje.
                 contas_query = db.session.query(
-                    func.sum(ContaPagar.valor_total - func.coalesce(ContaPagar.valor_pago, 0)).label('total_aberto'),
+                    func.coalesce(func.sum(ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), 0).label('total_aberto'),
                     func.count(ContaPagar.id).filter(ContaPagar.data_vencimento < hoje).label('qtd_vencidos'),
-                    func.sum(case((ContaPagar.data_vencimento < hoje, ContaPagar.valor_total - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)).label('total_vencido'),
-                    func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= hoje), ContaPagar.valor_total - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)).label('vence_hoje_valor'),
+                    func.coalesce(func.sum(case((ContaPagar.data_vencimento < hoje, ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('total_vencido'),
+                    func.coalesce(func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= hoje), ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('vence_hoje_valor'),
                     func.count(ContaPagar.id).filter(and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= hoje)).label('qtd_vence_hoje'),
                     func.count(ContaPagar.id).filter(and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_7d)).label('qtd_vence_7d'),
-                    func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_7d), ContaPagar.valor_total - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)).label('vence_7d'),
-                    func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_30d), ContaPagar.valor_total - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)).label('vence_30d')
+                    func.coalesce(func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_7d), ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('vence_7d'),
+                    func.coalesce(func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_30d), ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('vence_30d')
                 ).filter(
                     ContaPagar.estabelecimento_id == estabelecimento_id,
-                    ContaPagar.status.in_(['pendente', 'parcial'])
+                    ContaPagar.status.in_(['aberto', 'parcial'])
                 ).first()
                 
-                # Pagamentos realizados no período (para Fluxo de Caixa)
-                pagamentos_query = db.session.query(func.sum(ContaPagar.valor_pago)).filter(
+                # Pagamentos realizados no período específico (para Fluxo de Caixa REAL)
+                pagamentos_query = db.session.query(func.coalesce(func.sum(ContaPagar.valor_pago), 0)).filter(
                     ContaPagar.estabelecimento_id == estabelecimento_id,
                     ContaPagar.data_pagamento >= start_dt,
-                    ContaPagar.data_pagamento <= end_dt
+                    ContaPagar.data_pagamento <= end_dt,
+                    ContaPagar.status.in_(['pago', 'parcial'])
                 ).scalar()
 
-                if contas_query:
-                    result["contas_pagar"] = {
-                        "total_aberto": float(contas_query.total_aberto or 0),
-                        "total_vencido": float(contas_query.total_vencido or 0),
-                        "vence_hoje_valor": float(contas_query.vence_hoje_valor or 0),
-                        "qtd_vencidos": int(contas_query.qtd_vencidos or 0),
-                        "qtd_vence_hoje": int(contas_query.qtd_vence_hoje or 0),
-                        "qtd_vence_7d": int(contas_query.qtd_vence_7d or 0),
-                        "vence_7d": float(contas_query.vence_7d or 0),
-                        "vence_30d": float(contas_query.vence_30d or 0),
-                        "pago_periodo": float(pagamentos_query or 0)
-                    }
+                result["contas_pagar"] = {
+                    "total_aberto": float(contas_query.total_aberto),
+                    "total_vencido": float(contas_query.total_vencido),
+                    "vence_hoje_valor": float(contas_query.vence_hoje_valor),
+                    "qtd_vencidos": int(contas_query.qtd_vencidos or 0),
+                    "qtd_vence_hoje": int(contas_query.qtd_vence_hoje or 0),
+                    "qtd_vence_7d": int(contas_query.qtd_vence_7d or 0),
+                    "vence_7d": float(contas_query.vence_7d),
+                    "vence_30d": float(contas_query.vence_30d),
+                    "pago_periodo": float(pagamentos_query or 0)
+                }
             except Exception as e:
                 logger.error(f"Erro processando CONTAS A PAGAR em get_consolidated_financial_summary: {e}")
 

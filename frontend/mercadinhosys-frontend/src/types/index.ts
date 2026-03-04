@@ -80,16 +80,19 @@ export interface Funcionario {
     telefone?: string;
     email?: string;
     foto_url?: string;
-    cargo: string;  // Não restringir a valores fixos
-    role: string;   // Não restringir a valores fixos
-    status: string; // Não restringir a valores fixos
+    cargo: string;
+    role: string;
+    status: string;
     comissao_percentual: number;
     salario_base?: number;
     horas_extras?: number;
+    horas_extras_horas?: number;
+    beneficios?: number;
+    beneficios_detalhes?: Array<{ descricao: string; valor: number }>;
     data_admissao: string;
     data_demissao?: string;
     ativo: boolean;
-    permissoes: Record<string, boolean>; // Chave-valor de permissões
+    permissoes: Record<string, boolean>;
     created_at?: string;
     updated_at?: string;
 }

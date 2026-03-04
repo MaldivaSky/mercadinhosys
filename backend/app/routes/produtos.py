@@ -295,9 +295,19 @@ def bulk_update_prices():
 def listar_produtos():
     """Lista todos os produtos com filtros avançados e paginação"""
     try:
+        # Obter claims do JWT
         claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        raw_est_id = claims.get("estabelecimento_id")
         
+        if raw_est_id is None:
+            # Fallback seguro para o primeiro estabelecimento
+            from app.utils.query_helpers import get_first_estabelecimento_id_safe
+            f_id = get_first_estabelecimento_id_safe()
+            estabelecimento_id = f_id if f_id else 1
+            current_app.logger.warning(f"⚠️ listar_produtos: estabelecimento_id ausente no JWT. Usando fallback: {estabelecimento_id}")
+        else:
+            estabelecimento_id = int(raw_est_id)
+
         # Parâmetros de paginação
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
@@ -457,20 +467,25 @@ def listar_produtos():
         for produto in paginacao.items:
             produto_dict = produto.to_dict()
 
-            # Adicionar informações calculadas
-            produto_dict["margem_lucro"] = calcular_margem_lucro(
-                float(produto.preco_venda), float(produto.preco_custo)
-            )
-            produto_dict["valor_total_estoque"] = float(
-                produto.quantidade * produto.preco_custo
-            )
+            # Adicionar informações calculadas com proteção contra None
+            p_venda = float(produto.preco_venda or 0)
+            p_custo = float(produto.preco_custo or 0)
+            p_qtd = int(produto.quantidade or 0)
+            p_qtd_min = int(produto.quantidade_minima or 0)
+
+            produto_dict["margem_lucro"] = calcular_margem_lucro(p_venda, p_custo)
+            produto_dict["valor_total_estoque"] = p_qtd * p_custo
             produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
-            produto_dict["status_giro"] = produto.calcular_status_giro()
+            
+            try:
+                produto_dict["status_giro"] = produto.calcular_status_giro()
+            except Exception:
+                produto_dict["status_giro"] = "Sem Vendas"
             
             # Definir status de estoque para frontend
-            if produto.quantidade <= 0:
+            if p_qtd <= 0:
                 produto_dict["estoque_status"] = "esgotado"
-            elif produto.quantidade <= produto.quantidade_minima:
+            elif p_qtd <= p_qtd_min:
                 produto_dict["estoque_status"] = "baixo"
             else:
                 produto_dict["estoque_status"] = "normal"
@@ -501,7 +516,7 @@ def listar_produtos():
             # Em listagem padrão (sem filtros de validade e sem expandir por lote),
             # não consultamos lotes para evitar N+1 e timeouts.
             produto_dict["lotes_no_periodo"] = []
-            produto_dict["preco_venda_efetivo"] = float(produto.preco_venda)
+            produto_dict["preco_venda_efetivo"] = float(produto.preco_venda or 0)
             precisa_consultar_lotes = (
                 expandir_por_lote
                 or (validade_proxima and validade_proxima.lower() == "true")
@@ -1927,7 +1942,7 @@ def obter_estatisticas_produtos():
                 })
 
         if tipo:
-            query = query.filter(Produto.tipo.ilike(f"%{tipo}%"))
+            query = query.filter(Produto.tipo.ilike(f"%{tipo or ''}%"))
 
         if fornecedor_id:
             query = query.filter_by(fornecedor_id=fornecedor_id)
@@ -2050,12 +2065,60 @@ def obter_estatisticas_produtos():
         hoje = datetime.utcnow()
         hoje_date = hoje.date()
         
+        # CALCULAR FATURAMENTO REAL E ÚLTIMA VENDA DOS ITENS (Sincronização Dinâmica)
+        # Isso resolve o problema de métricas zeradas se os campos cacheados estiverem desatualizados
+        faturamentos_reais = {}
+        ultimas_vendas_reais = {}
+        
+        try:
+            vendas_resumo = db.session.query(
+                VendaItem.produto_id,
+                func.sum(VendaItem.total_item).label('total'),
+                func.max(Venda.data_venda).label('ultima')
+            ).join(Venda, Venda.id == VendaItem.venda_id)\
+             .filter(Venda.estabelecimento_id == estabelecimento_id)\
+             .filter(Venda.status == 'finalizada')\
+             .group_by(VendaItem.produto_id).all()
+            
+            for row in vendas_resumo:
+                faturamentos_reais[row.produto_id] = Decimal(str(row.total or 0))
+                ultimas_vendas_reais[row.produto_id] = row.ultima
+        except Exception as e_stats:
+            current_app.logger.error(f"Erro ao buscar resumo de vendas: {e_stats}")
+
+        # CALCULAR VALIDADES REAIS DOS LOTES (FIFO)
+        validade_lotes = {}
+        try:
+            lotes_resumo = db.session.query(
+                ProdutoLote.produto_id,
+                func.min(ProdutoLote.data_validade).label('prox_validade')
+            ).filter(ProdutoLote.quantidade > 0)\
+             .group_by(ProdutoLote.produto_id).all()
+            
+            for row in lotes_resumo:
+                validade_lotes[row.produto_id] = row.prox_validade
+        except Exception as e_val:
+            current_app.logger.error(f"Erro ao buscar validade dos lotes: {e_val}")
+
         # Calcular faturamento total para classificação ABC
         produtos_com_faturamento = []
         faturamento_total = Decimal('0')
         
         for produto in produtos:
-            faturamento = Decimal(str(produto.total_vendido or 0))
+            # Priorizar faturamento real calculado dos itens, fallback para o cache
+            faturamento = faturamentos_reais.get(produto.id)
+            if faturamento is None:
+                faturamento = Decimal(str(produto.total_vendido or 0))
+            
+            # Atualizar dinamicamente a última venda para o cálculo de Giro
+            if produto.id in ultimas_vendas_reais:
+                produto._ultima_venda_real = ultimas_vendas_reais[produto.id]
+            else:
+                produto._ultima_venda_real = produto.ultima_venda
+                
+            # Sincronização dinâmica de validade (Prioriza lotes ativos)
+            produto._data_validade_real = validade_lotes.get(produto.id) or produto.data_validade
+
             produtos_com_faturamento.append({
                 'produto': produto,
                 'faturamento': faturamento
@@ -2072,90 +2135,121 @@ def obter_estatisticas_produtos():
             produto = item['produto']
             faturamento = item['faturamento']
             
-            # Status do estoque
-            if produto.quantidade <= 0:
-                produtos_esgotados += 1
-            elif produto.quantidade <= (produto.quantidade_minima or 0):
-                produtos_baixo_estoque += 1
-            else:
-                produtos_normal += 1
-            
-            # Valor total do estoque
-            valor_produto = Decimal(str(produto.preco_custo or 0)) * Decimal(str(produto.quantidade or 0))
-            valor_total_estoque += valor_produto
-            
-            # Margem
-            margem_calculada = calcular_margem_lucro(float(produto.preco_venda), float(produto.preco_custo))
-            soma_margens += Decimal(str(margem_calculada))
-            if margem_calculada >= 50:
-                margem_alta_count += 1
-            elif margem_calculada < 30:
-                margem_baixa_count += 1
-
-            # Validade
-            if produto.data_validade:
-                # Converter para date se for datetime para permitir comparação
-                dt_val = produto.data_validade.date() if isinstance(produto.data_validade, datetime) else produto.data_validade
+            try:
+                # Status do estoque
+                qtd = produto.quantidade or 0
+                qtd_min = produto.quantidade_minima or 0
+                if qtd <= 0:
+                    produtos_esgotados += 1
+                elif qtd <= qtd_min:
+                    produtos_baixo_estoque += 1
+                else:
+                    produtos_normal += 1
                 
-                if dt_val < hoje_date:
-                    val_counts["vencidos"] += 1
-                elif dt_val <= hoje_date + timedelta(days=15):
-                    val_counts["vence_15"] += 1
-                    val_counts["vence_30"] += 1
-                    val_counts["vence_90"] += 1
-                elif dt_val <= hoje_date + timedelta(days=30):
-                    val_counts["vence_30"] += 1
-                    val_counts["vence_90"] += 1
-                elif dt_val <= hoje_date + timedelta(days=90):
-                    val_counts["vence_90"] += 1
+                # Valor total do estoque
+                p_custo = Decimal(str(produto.preco_custo or 0))
+                valor_produto = p_custo * Decimal(str(qtd))
+                valor_total_estoque += valor_produto
+                
+                # Margem
+                p_venda = float(produto.preco_venda or 0)
+                p_custo_f = float(produto.preco_custo or 0)
+                margem_calculada = calcular_margem_lucro(p_venda, p_custo_f)
+                soma_margens += Decimal(str(margem_calculada))
+                if margem_calculada >= 50:
+                    margem_alta_count += 1
+                elif margem_calculada < 30:
+                    margem_baixa_count += 1
 
-            # Classificação ABC
-            acumulado_faturamento += faturamento
-            if faturamento_total > 0:
-                percentual_acumulado = acumulado_faturamento / faturamento_total
-                if percentual_acumulado <= Decimal('0.80'):
-                    abc_counts["A"] += 1
-                elif percentual_acumulado <= Decimal('0.95'):
-                    abc_counts["B"] += 1
+                # Validade
+                dt_val_efetiva = getattr(produto, '_data_validade_real', None)
+                if dt_val_efetiva:
+                    try:
+                        dt_val = dt_val_efetiva.date() if hasattr(dt_val_efetiva, 'date') else dt_val_efetiva
+                        if isinstance(dt_val, date):
+                            if dt_val < hoje_date:
+                                val_counts["vencidos"] += 1
+                            elif dt_val <= hoje_date + timedelta(days=15):
+                                val_counts["vence_15"] += 1
+                                val_counts["vence_30"] += 1
+                                val_counts["vence_90"] += 1
+                            elif dt_val <= hoje_date + timedelta(days=30):
+                                val_counts["vence_30"] += 1
+                                val_counts["vence_90"] += 1
+                            elif dt_val <= hoje_date + timedelta(days=90):
+                                val_counts["vence_90"] += 1
+                    except Exception:
+                        pass
+                
+                # Classificação ABC
+                acumulado_faturamento += faturamento
+                if faturamento_total > 0:
+                    percentual_acumulado = acumulado_faturamento / faturamento_total
+                    if percentual_acumulado <= Decimal('0.80'):
+                        abc_counts["A"] += 1
+                    elif percentual_acumulado <= Decimal('0.95'):
+                        abc_counts["B"] += 1
+                    else:
+                        abc_counts["C"] += 1
                 else:
                     abc_counts["C"] += 1
-            else:
-                abc_counts["C"] += 1
-            
-            # Giro de estoque
-            if produto.ultima_venda:
-                # Converter para date se for datetime
-                data_venda = produto.ultima_venda.date() if isinstance(produto.ultima_venda, datetime) else produto.ultima_venda
-                dias_desde_venda = (hoje_date - data_venda).days
-                if dias_desde_venda <= 7:
-                    giro_counts["rapido"] += 1
-                elif dias_desde_venda <= 30:
-                    giro_counts["normal"] += 1
+                
+                # Giro de estoque
+                ultima_venda_efetiva = getattr(produto, '_ultima_venda_real', None)
+                if ultima_venda_efetiva:
+                    try:
+                        data_venda = ultima_venda_efetiva.date() if hasattr(ultima_venda_efetiva, 'date') else ultima_venda_efetiva
+                        if isinstance(data_venda, date):
+                            dias_desde_venda = (hoje_date - data_venda).days
+                            if dias_desde_venda <= 7:
+                                giro_counts["rapido"] += 1
+                            elif dias_desde_venda <= 30:
+                                giro_counts["normal"] += 1
+                            else:
+                                giro_counts["lento"] += 1
+                        else:
+                            giro_counts["lento"] += 1
+                    except Exception:
+                        giro_counts["lento"] += 1
                 else:
                     giro_counts["lento"] += 1
-            else:
-                giro_counts["lento"] += 1
+            except Exception as e_prod:
+                current_app.logger.warning(f"Erro ao processar produto {produto.id}: {e_prod}")
+                continue
 
         # Calcular margem média
         margem_media = soma_margens / total_produtos if total_produtos > 0 else Decimal('0')
 
-        # Preparar lista de produtos e listas auxiliares
-        produtos_lista = [p.to_dict() for p in produtos]
+        # Preparar lista de produtos e listas auxiliares com proteção
+        produtos_lista = []
+        for p in produtos:
+            try:
+                produtos_lista.append(p.to_dict())
+            except Exception as e_dict:
+                current_app.logger.error(f"Erro em to_dict do produto {p.id}: {e_dict}")
         
         # Top 10 Críticos
         criticos = sorted(
-            [p for p in produtos if p.quantidade <= (p.quantidade_minima or 0)],
-            key=lambda x: x.quantidade
+            [p for p in produtos if (p.quantidade or 0) <= (p.quantidade_minima or 0)],
+            key=lambda x: (x.quantidade or 0)
         )[:10]
-        criticos_lista = [p.to_dict() for p in criticos]
+        criticos_lista = []
+        for p in criticos:
+            try:
+                criticos_lista.append(p.to_dict())
+            except Exception: pass
 
         # Top 5 Margem
         top_margem = sorted(
             produtos,
-            key=lambda x: calcular_margem_lucro(float(x.preco_venda), float(x.preco_custo)),
+            key=lambda x: calcular_margem_lucro(float(x.preco_venda or 0), float(x.preco_custo or 0)),
             reverse=True
         )[:5]
-        top_margem_lista = [p.to_dict() for p in top_margem]
+        top_margem_lista = []
+        for p in top_margem:
+            try:
+                top_margem_lista.append(p.to_dict())
+            except Exception: pass
 
         # Preparar resposta
         estatisticas = {

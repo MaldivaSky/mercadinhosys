@@ -231,6 +231,7 @@ def listar_funcionarios():
                 "usuario": f.username,
                 "nivel_acesso": f.role,
                 "ativo": f.ativo,
+                "data_demissao": f.data_demissao.isoformat() if f.data_demissao else None,
                 "created_at": f.data_cadastro.isoformat() if f.data_cadastro else None,
                 # "updated_at": None, # Campo removido do modelo
                 "permissoes": f.permissoes
@@ -441,7 +442,7 @@ def estatisticas_funcionarios():
         )
 
         # Admissões por mês (últimos 12 meses)
-        hoje = datetime.now()
+        hoje = date.today()
         admissoes_por_mes = []
 
         for i in range(12):
@@ -475,9 +476,17 @@ def estatisticas_funcionarios():
                 or 0
             )
 
-            # Nota: Campo data_demissao removido do modelo, usando ativo=False como proxy aproximado
-            # ou ignorando demissões se não houver campo de data de desativação
-            demissoes_mes = 0 
+            # 🔥 CORREÇÃO: Utilizar data_demissao que existe no modelo e contar
+            demissoes_mes = (
+                db.session.query(func.count(Funcionario.id))
+                .filter(
+                    Funcionario.estabelecimento_id == estabelecimento_id,
+                    Funcionario.data_demissao >= mes_data,
+                    Funcionario.data_demissao <= mes_fim,
+                )
+                .scalar()
+                or 0
+            )
             
             admissoes_por_mes.append(
                 {
@@ -488,6 +497,10 @@ def estatisticas_funcionarios():
                     "saldo": total_mes - demissoes_mes,
                 }
             )
+
+        # Totais anuais
+        total_admissoes_ano = sum(item["admissoes"] for item in admissoes_por_mes)
+        total_demissoes_ano = sum(item["demissoes"] for item in admissoes_por_mes)
 
         admissoes_por_mes.reverse()  # Do mais antigo para o mais recente
 
@@ -576,12 +589,8 @@ def estatisticas_funcionarios():
                         ],
                         "admissoes_demissoes": {
                             "por_mes": admissoes_por_mes,
-                            "total_admissoes_ano": sum(
-                                item["admissoes"] for item in admissoes_por_mes
-                            ),
-                            "total_demissoes_ano": sum(
-                                item["demissoes"] for item in admissoes_por_mes
-                            ),
+                            "total_admissoes_ano": total_admissoes_ano,
+                            "total_demissoes_ano": total_demissoes_ano,
                         },
                         "tempo_empresa": {
                             "medio_dias": tempo_medio_empresa,

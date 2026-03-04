@@ -160,8 +160,8 @@ export default function EspelhoPonto() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Espelho de Ponto</h2>
-          <p className="text-sm text-gray-600 mt-1">Visualização detalhada dos registros por funcionário</p>
+          <h2 className="text-2xl font-black text-gray-950 dark:text-white uppercase tracking-tight leading-none">Espelho de Ponto</h2>
+          <p className="text-sm text-gray-950 dark:text-gray-100 font-black mt-1">Visualização detalhada dos registros por funcionário</p>
         </div>
         {espelhoData && (
           <button
@@ -176,17 +176,17 @@ export default function EspelhoPonto() {
 
       <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
         <div className="flex items-center gap-2 mb-4">
-          <Filter className="w-5 h-5 text-gray-500" />
-          <h3 className="font-bold text-gray-900">Selecionar Funcionário e Período</h3>
+          <Filter className="w-5 h-5 text-gray-900 dark:text-gray-100 font-black" />
+          <h3 className="font-bold text-gray-900 dark:text-white">Selecionar Funcionário e Período</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Funcionário *</label>
+            <label className="block text-sm font-medium text-gray-950 dark:text-gray-200 font-black uppercase tracking-tighter text-xs">Funcionário *</label>
             <select
               value={funcionarioId}
               onChange={(e) => setFuncionarioId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 text-gray-950 dark:text-white font-bold bg-white dark:bg-gray-700"
             >
               <option value="">Selecione...</option>
               {funcionarios.map(f => (
@@ -196,22 +196,22 @@ export default function EspelhoPonto() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Início *</label>
+            <label className="block text-sm font-medium text-gray-950 dark:text-gray-200 font-black uppercase tracking-tighter text-xs">Data Início *</label>
             <input
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border-2 border-gray-400 text-gray-950 font-bold bg-white"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Fim *</label>
+            <label className="block text-sm font-medium text-gray-950 dark:text-gray-200 font-black uppercase tracking-tighter text-xs">Data Fim *</label>
             <input
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 text-gray-950 dark:text-white font-bold bg-white dark:bg-gray-700"
             />
           </div>
 
@@ -219,7 +219,7 @@ export default function EspelhoPonto() {
             <button
               onClick={loadEspelhoPonto}
               disabled={!funcionarioId || !dataInicio || !dataFim}
-              className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 font-black shadow-lg shadow-blue-500/20"
             >
               Gerar Espelho
             </button>
@@ -228,7 +228,7 @@ export default function EspelhoPonto() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64 bg-white rounded-xl shadow-md">
+        <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 rounded-xl shadow-md">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Gerando espelho de ponto...</p>
@@ -243,8 +243,8 @@ export default function EspelhoPonto() {
         </div>
       ) : espelhoData ? (
         <>
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">Resumo do Período</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-4">Resumo do Período</h3>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="p-4 bg-blue-50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-blue-700">{espelhoData.resumo.total_dias_trabalhados}</p>
@@ -270,9 +270,9 @@ export default function EspelhoPonto() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="font-bold text-gray-900">Registros Diários</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="font-bold text-gray-900 dark:text-white">Registros Diários</h3>
             </div>
             <div className="divide-y divide-gray-100">
               {espelhoData.registros_diarios.map((registro, idx) => (
@@ -286,10 +286,10 @@ export default function EspelhoPonto() {
                         <Calendar className="w-5 h-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="font-bold text-gray-900">
+                        <p className="font-bold text-gray-950 dark:text-white font-black underline decoration-blue-500/30">
                           {new Date(registro.data).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-950 dark:text-gray-200 font-black">
                           {registro.entrada || '-'} às {registro.saida || '-'} • {(registro.horas_trabalhadas / 60).toFixed(1)}h trabalhadas
                         </p>
                       </div>
@@ -330,7 +330,7 @@ export default function EspelhoPonto() {
                       {registro.observacao && (
                         <div className="col-span-2 md:col-span-4 p-3 bg-gray-50 rounded-lg">
                           <p className="text-xs text-gray-600 font-medium uppercase">Observação</p>
-                          <p className="text-sm text-gray-900 mt-1">{registro.observacao}</p>
+                          <p className="text-sm text-gray-950 font-black underline decoration-blue-500/30 mt-1">{registro.observacao}</p>
                         </div>
                       )}
                     </div>

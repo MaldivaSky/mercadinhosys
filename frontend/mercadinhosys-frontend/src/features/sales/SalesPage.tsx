@@ -119,7 +119,7 @@ export default function SalesPage() {
         formas_pagamento: {},
     });
     const [filtros, setFiltros] = useState({
-        data_inicio: getLocalDateISO(new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)),
+        data_inicio: getLocalDateISO(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
         data_fim: getLocalDateISO(),
         search: "",
         status: "",
@@ -232,6 +232,7 @@ export default function SalesPage() {
 
             const estatisticasFromApi = response.data.paginacao?.estatisticas || {
                 total_vendas: 0,
+                total_valor: 0,
                 quantidade_vendas: 0,
                 ticket_medio: 0,
                 total_descontos: 0,
@@ -239,6 +240,11 @@ export default function SalesPage() {
                 total_itens: 0,
                 formas_pagamento: {},
             };
+
+            // Garantir que total_vendas tenha o valor monetário se total_valor estiver presente
+            if (!estatisticasFromApi.total_vendas && estatisticasFromApi.total_valor) {
+                estatisticasFromApi.total_vendas = estatisticasFromApi.total_valor;
+            }
 
             setEstatisticas(estatisticasFromApi);
             setPaginacao(response.data.paginacao || null);
@@ -621,34 +627,34 @@ export default function SalesPage() {
                     {/* Período */}
                     <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4 bg-[#F8FAFC] dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 transition-colors">Data Início</label>
+                            <label className="block text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest mb-1.5 transition-colors">Data Início</label>
                             <input
                                 type="date"
                                 name="data_inicio"
                                 value={filtros.data_inicio}
                                 onChange={handleFiltroChange}
-                                className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none color-scheme-dark"
+                                className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-950 dark:text-slate-100 font-bold border-2 border-slate-300 dark:border-slate-600"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 transition-colors">Data Fim</label>
+                            <label className="block text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest mb-1.5 transition-colors">Data Fim</label>
                             <input
                                 type="date"
                                 name="data_fim"
                                 value={filtros.data_fim}
                                 onChange={handleFiltroChange}
-                                className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none color-scheme-dark"
+                                className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-950 dark:text-slate-100 font-bold border-2 border-slate-300 dark:border-slate-600"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 transition-colors">Status</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest mb-1.5 transition-colors">Status</label>
                         <select
                             name="status"
                             value={filtros.status}
                             onChange={handleFiltroChange}
-                            className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none cursor-pointer"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-950 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none cursor-pointer"
                         >
                             <option value="">Status Geral</option>
                             <option value="finalizada">✅ Finalizada</option>
@@ -658,12 +664,12 @@ export default function SalesPage() {
                     </div>
 
                     <div className="self-end pb-1 lg:pb-0 lg:self-auto">
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 lg:mt-0 transition-colors">Formas de Pagamento</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest mb-1.5 lg:mt-0 transition-colors">Formas de Pagamento</label>
                         <select
                             name="forma_pagamento"
                             value={filtros.forma_pagamento}
                             onChange={handleFiltroChange}
-                            className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none cursor-pointer"
+                            className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-950 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none cursor-pointer"
                         >
                             <option value="">Qualquer Forma</option>
                             <option value="dinheiro">💵 Dinheiro</option>
@@ -675,7 +681,7 @@ export default function SalesPage() {
                     </div>
 
                     <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2">
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5 transition-colors">Buscar Inteligente</label>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest mb-1.5 transition-colors">Buscar Inteligente</label>
                         <div className="relative border-t border-slate-100 dark:border-slate-800/80 pt-4">
                             <input
                                 type="text"
@@ -683,7 +689,7 @@ export default function SalesPage() {
                                 placeholder="Digite nome do cliente, funcionário, CPF, código da venda..."
                                 value={filtros.search}
                                 onChange={handleFiltroChange}
-                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none"
+                                className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 transition-all shadow-sm outline-none"
                             />
                             <div className="absolute inset-y-0 top-4 left-0 flex items-center pl-4 pointer-events-none">
                                 <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -705,15 +711,15 @@ export default function SalesPage() {
                         </svg>
                     </div>
                     <div className="flex items-center gap-3 mb-2 relative z-10">
-                        <div className="p-2 bg-white/20 rounded-xl text-white backdrop-blur-md">
+                        <div className="p-2 bg-white/25 rounded-xl text-white backdrop-blur-md shadow-inner">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
-                        <div className="text-xs font-bold text-indigo-50 uppercase tracking-widest">Total Faturado</div>
+                        <div className="text-xs font-black text-white uppercase tracking-widest bg-black/10 px-2 py-0.5 rounded">Total Faturado</div>
                     </div>
-                    <div className="text-3xl font-black text-white mt-1 mb-2 relative z-10">
-                        {formatCurrency(estatisticas.total_vendas)}
+                    <div className="text-3xl font-black text-white mt-1 mb-2 relative z-10 drop-shadow-sm">
+                        {formatCurrency(estatisticas.total_vendas || estatisticas.total_valor_recebido)}
                     </div>
                     {analisesData?.vendas_por_dia?.length >= 2 && (
                         <div className="mt-1 flex items-center gap-1 text-[11px]">
@@ -722,10 +728,10 @@ export default function SalesPage() {
                                 const ontem = analisesData.vendas_por_dia[analisesData.vendas_por_dia.length - 2]?.total || 0;
                                 const diff = ontem > 0 ? ((hoje - ontem) / ontem * 100) : 0;
                                 return diff > 0 ? (
-                                    <span className="text-emerald-300 font-bold flex items-center bg-emerald-500/20 px-2 py-0.5 rounded-md">↑ {diff.toFixed(1)}% <span className="font-normal text-indigo-100/80 ml-1">vs ontem</span></span>
+                                    <span className="text-white font-bold flex items-center bg-emerald-600/60 backdrop-blur-sm px-2 py-1 rounded-md border border-white/20 shadow-sm">↑ {diff.toFixed(1)}% <span className="font-semibold text-white/90 ml-1">vs ontem</span></span>
                                 ) : diff < 0 ? (
-                                    <span className="text-rose-300 font-bold flex items-center bg-rose-500/20 px-2 py-0.5 rounded-md">↓ {Math.abs(diff).toFixed(1)}% <span className="font-normal text-indigo-100/80 ml-1">vs ontem</span></span>
-                                ) : <span className="text-indigo-200 bg-indigo-500/20 px-2 py-0.5 rounded-md">Estável</span>;
+                                    <span className="text-white font-bold flex items-center bg-rose-600/60 backdrop-blur-sm px-2 py-1 rounded-md border border-white/20 shadow-sm">↓ {Math.abs(diff).toFixed(1)}% <span className="font-semibold text-white/90 ml-1">vs ontem</span></span>
+                                ) : <span className="text-white font-bold bg-indigo-600/40 backdrop-blur-sm px-2 py-1 rounded-md border border-white/20 shadow-sm">Estável</span>;
                             })()}
                         </div>
                     )}
@@ -747,9 +753,9 @@ export default function SalesPage() {
                             </div>
                             <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Lucro</div>
                         </div>
-                        <div className="text-[10px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-100 dark:border-emerald-500/20 whitespace-nowrap self-start sm:self-auto">
-                            Margem: {analisesData?.estatisticas_gerais?.total_valor
-                                ? (((Number(analisesData.estatisticas_gerais.total_lucro ?? 0) / Number(analisesData.estatisticas_gerais.total_valor)) * 100).toFixed(1) + "%")
+                        <div className="text-[10px] sm:text-xs font-black text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/40 shadow-sm whitespace-nowrap self-start sm:self-auto">
+                            MARGEM: {analisesData?.estatisticas_gerais && (analisesData.estatisticas_gerais.total_valor || analisesData.estatisticas_gerais.total_vendas)
+                                ? (((Number(analisesData.estatisticas_gerais.total_lucro ?? 0) / Number(analisesData.estatisticas_gerais.total_valor || analisesData.estatisticas_gerais.total_vendas)) * 100).toFixed(1) + "%")
                                 : "--"}
                         </div>
                     </div>
@@ -1198,7 +1204,7 @@ export default function SalesPage() {
                                     {vendas.map((venda, index) => (
                                         <tr key={venda.id} className={`border-b border-slate-100 dark:border-slate-800/60 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 transition-colors group ${index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/30 dark:bg-slate-800/20'}`}>
                                             <td className="p-4 font-mono text-xs text-slate-400 font-medium group-hover:text-indigo-500 dark:group-hover:text-indigo-400 transition-colors">{venda.codigo.split('-')[0].toUpperCase()}</td>
-                                            <td className="p-4 font-semibold text-slate-800 dark:text-slate-200 transition-colors">{venda.cliente?.nome || <span className="text-slate-400 dark:text-slate-500 font-normal italic">Consumidor Padrão</span>}</td>
+                                            <td className="p-4 font-semibold text-slate-950 dark:text-slate-200 transition-colors">{venda.cliente?.nome || <span className="text-slate-400 dark:text-slate-500 font-normal italic">Consumidor Padrão</span>}</td>
                                             <td className="p-4 text-slate-600 dark:text-slate-400 transition-colors">{venda.funcionario?.nome || "-"}</td>
                                             <td className="p-4 text-right text-slate-500 dark:text-slate-400">{formatCurrency(venda.subtotal)}</td>
                                             <td className="p-4 text-right">
@@ -1259,9 +1265,9 @@ export default function SalesPage() {
                         {paginacao && paginacao.total_paginas > 1 && (
                             <div className="flex flex-col md:flex-row justify-between items-center p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800/60 gap-4 transition-colors">
                                 <div className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                                    Mostrando <span className="font-bold text-slate-800 dark:text-slate-200">{((paginacao.pagina_atual - 1) * paginacao.itens_por_pagina) + 1}</span> a{" "}
-                                    <span className="font-bold text-slate-800 dark:text-slate-200">{Math.min(paginacao.pagina_atual * paginacao.itens_por_pagina, paginacao.total_itens)}</span> de{" "}
-                                    <span className="font-bold text-slate-800 dark:text-slate-200">{paginacao.total_itens}</span>
+                                    Mostrando <span className="font-bold text-slate-950 dark:text-slate-200">{((paginacao.pagina_atual - 1) * paginacao.itens_por_pagina) + 1}</span> a{" "}
+                                    <span className="font-bold text-slate-950 dark:text-slate-200">{Math.min(paginacao.pagina_atual * paginacao.itens_por_pagina, paginacao.total_itens)}</span> de{" "}
+                                    <span className="font-bold text-slate-950 dark:text-slate-200">{paginacao.total_itens}</span>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <button
@@ -1341,15 +1347,15 @@ export default function SalesPage() {
                                         </div>
                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                                             <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>Data da Transação</p>
-                                            <p className="font-bold text-slate-800 dark:text-slate-200 text-base">{detalhesVenda.data_formatada}</p>
+                                            <p className="font-bold text-slate-950 dark:text-slate-200 text-base">{detalhesVenda.data_formatada}</p>
                                         </div>
                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                                             <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>Cliente Vinculado</p>
-                                            <p className="font-bold text-slate-800 dark:text-slate-200 text-base truncate" title={detalhesVenda.cliente?.nome || "Consumidor Padrão"}>{detalhesVenda.cliente?.nome || <span className="text-slate-400 dark:text-slate-500 italic font-normal">Consumidor Padrão</span>}</p>
+                                            <p className="font-bold text-slate-950 dark:text-slate-200 text-base truncate" title={detalhesVenda.cliente?.nome || "Consumidor Padrão"}>{detalhesVenda.cliente?.nome || <span className="text-slate-400 dark:text-slate-500 italic font-normal">Consumidor Padrão</span>}</p>
                                         </div>
                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                                             <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Vendedor</p>
-                                            <p className="font-bold text-slate-800 dark:text-slate-200 text-base truncate" title={detalhesVenda.funcionario?.nome || "Não Informado"}>{detalhesVenda.funcionario?.nome || <span className="text-slate-400 dark:text-slate-500">-</span>}</p>
+                                            <p className="font-bold text-slate-950 dark:text-slate-200 text-base truncate" title={detalhesVenda.funcionario?.nome || "Não Informado"}>{detalhesVenda.funcionario?.nome || <span className="text-slate-400 dark:text-slate-500">-</span>}</p>
                                         </div>
                                     </div>
 
@@ -1372,7 +1378,7 @@ export default function SalesPage() {
                                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                                                     {detalhesVenda.itens?.map((item: ItemVenda, idx: number) => (
                                                         <tr key={item.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/30 dark:bg-slate-800/20'} hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-colors`}>
-                                                            <td className="px-6 py-4 font-semibold text-slate-800 dark:text-slate-200 transition-colors">{item.produto_nome}</td>
+                                                            <td className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-200 transition-colors">{item.produto_nome}</td>
                                                             <td className="px-6 py-4 text-center font-bold">
                                                                 <span className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1 rounded-lg text-slate-700 dark:text-slate-200 shadow-sm inline-flex items-center justify-center min-w-[3rem] transition-colors">
                                                                     {item.quantidade}x

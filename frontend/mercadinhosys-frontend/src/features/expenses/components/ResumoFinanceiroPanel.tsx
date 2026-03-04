@@ -11,6 +11,9 @@ import {
   TrendingUp,
   Wallet,
   XCircle,
+  ArrowUpRight,
+  ArrowDownRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { expensesService, ResumoFinanceiro, AlertaFinanceiro } from '../expensesService';
 
@@ -48,10 +51,34 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
 
   const getSeverityColor = (severidade: string) => {
     switch (severidade) {
-      case 'critica': return { bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-200 dark:border-red-800', text: 'text-red-800 dark:text-red-200', icon: 'text-red-600 dark:text-red-400' };
-      case 'alta': return { bg: 'bg-orange-50 dark:bg-orange-900/30', border: 'border-orange-200 dark:border-orange-800', text: 'text-orange-800 dark:text-orange-200', icon: 'text-orange-600 dark:text-orange-400' };
-      case 'media': return { bg: 'bg-yellow-50 dark:bg-yellow-900/30', border: 'border-yellow-200 dark:border-yellow-800', text: 'text-yellow-800 dark:text-yellow-200', icon: 'text-yellow-600 dark:text-yellow-400' };
-      default: return { bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-800 dark:text-blue-200', icon: 'text-blue-600 dark:text-blue-400' };
+      case 'critica': return {
+        bg: 'bg-red-500/10',
+        border: 'border-red-500/20',
+        text: 'text-red-700 dark:text-red-300',
+        icon: 'text-red-600 dark:text-red-400',
+        accent: 'bg-red-500'
+      };
+      case 'alta': return {
+        bg: 'bg-orange-500/10',
+        border: 'border-orange-500/20',
+        text: 'text-orange-700 dark:text-orange-300',
+        icon: 'text-orange-600 dark:text-orange-400',
+        accent: 'bg-orange-500'
+      };
+      case 'media': return {
+        bg: 'bg-yellow-500/10',
+        border: 'border-yellow-500/20',
+        text: 'text-yellow-700 dark:text-yellow-300',
+        icon: 'text-yellow-600 dark:text-yellow-400',
+        accent: 'bg-yellow-500'
+      };
+      default: return {
+        bg: 'bg-blue-500/10',
+        border: 'border-blue-500/20',
+        text: 'text-blue-700 dark:text-blue-300',
+        icon: 'text-blue-600 dark:text-blue-400',
+        accent: 'bg-blue-500'
+      };
     }
   };
 
@@ -68,10 +95,13 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
 
   if (loading) {
     return (
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 ${className}`}>
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-          <span className="ml-3 text-gray-600 dark:text-gray-300">Carregando resumo financeiro...</span>
+      <div className={`backdrop-blur-xl bg-white/40 dark:bg-slate-900/40 border border-white/20 dark:border-slate-800/40 rounded-3xl p-8 ${className}`}>
+        <div className="flex flex-col items-center justify-center py-10">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+            <RefreshCw className="w-6 h-6 text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <span className="mt-4 text-slate-500 dark:text-slate-400 font-medium animate-pulse">Sincronizando Inteligência Financeira...</span>
         </div>
       </div>
     );
@@ -79,15 +109,20 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
 
   if (erro || !resumo) {
     return (
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 ${className}`}>
-        <div className="text-center py-8">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-          <p className="text-gray-600 dark:text-gray-300">{erro || 'Dados indisponíveis'}</p>
+      <div className={`backdrop-blur-xl bg-white/40 dark:bg-slate-900/40 border border-white/20 dark:border-slate-800/40 rounded-3xl p-8 ${className}`}>
+        <div className="text-center py-10 px-4">
+          <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-10 h-10 text-amber-500" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Ponto de Atenção</h3>
+          <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-xs mx-auto text-sm">
+            {erro || 'Não foi possível consolidar os dados financeiros neste momento.'}
+          </p>
           <button
             onClick={carregarResumo}
-            className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors"
+            className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-blue-500/25 active:scale-95"
           >
-            Tentar Novamente
+            Tentar Restaurar
           </button>
         </div>
       </div>
@@ -98,171 +133,205 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
   const fluxoPositivo = fluxo.saldo >= 0;
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+    <div className={`space-y-6 ${className}`}>
+      {/* Premium Glass Card */}
+      <div className="backdrop-blur-2xl bg-white/70 dark:bg-slate-900/70 border border-white/40 dark:border-slate-800/50 rounded-[2.5rem] shadow-2xl relative overflow-hidden transition-all duration-500">
+        {/* Subtle background glow */}
+        <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none" />
+
         <div
-          className="p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+          className="p-8 flex flex-col md:flex-row md:items-center justify-between cursor-pointer group"
           onClick={() => setExpandido(!expandido)}
         >
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-md">
-              <Wallet className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-emerald-500 blur-xl opacity-30 group-hover:opacity-50 transition-opacity" />
+              <div className="relative p-5 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white dark:to-slate-200 rounded-2xl shadow-xl transform group-hover:scale-105 transition-transform">
+                <Wallet className="w-8 h-8 text-white dark:text-slate-900" />
+              </div>
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                Painel Financeiro
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">V2.0 PRO</span>
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Visão consolidada: contas a pagar, pressão de caixa e saúde financeira
+              <div className="flex items-center gap-3 mb-1">
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">
+                  Painel Financeiro
+                </h2>
+                <div className="flex gap-1">
+                  <span className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">V2.0</span>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-black uppercase tracking-tighter">PRO</span>
+                </div>
+              </div>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400 max-w-sm">
+                Inteligência de fluxo, contas a pagar e saúde financeira consolidada
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-4 mt-6 md:mt-0">
             {resumo.total_alertas > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-full text-sm font-medium animate-pulse">
-                <Bell className="w-4 h-4" />
-                {resumo.total_alertas} alerta{resumo.total_alertas > 1 ? 's' : ''}
-              </span>
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-2xl text-xs font-black uppercase tracking-wider animate-pulse">
+                <AlertTriangle className="w-4 h-4" />
+                {resumo.total_alertas} Alerta{resumo.total_alertas > 1 ? 's' : ''}
+              </div>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); carregarResumo(); }}
-              className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-              title="Atualizar"
+              className="p-3 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all rounded-xl hover:bg-blue-500/5 active:scale-90"
+              title="Sincronizar"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${expandido ? 'rotate-90' : ''}`} />
+            <div className={`p-2 rounded-xl bg-slate-100 dark:bg-slate-800 transition-all ${expandido ? 'rotate-90' : ''}`}>
+              <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+            </div>
           </div>
         </div>
 
         {expandido && (
-          <div className="border-t border-gray-100 dark:border-gray-700">
-            {/* KPIs Principais */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-700">
-              {/* Contas a Pagar */}
-              <div className="p-5 group">
-                <div className="flex items-center gap-2 mb-3">
-                  <Wallet className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">A Pagar</span>
+          <div className="px-8 pb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+
+              {/* Card 1: A Pagar */}
+              <div className="relative p-6 rounded-[2rem] bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 overflow-hidden group">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-rose-500/10 text-rose-500 rounded-xl">
+                    <ArrowDownRight className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Contas a Pagar</span>
                 </div>
-                <div className="text-2xl font-bold text-red-600 dark:text-red-400 mb-1">
+                <div className="text-3xl font-black text-slate-900 dark:text-white mb-2 leading-none">
                   {formatCurrency(resumo.contas_pagar.total_aberto)}
                 </div>
-                <div className="space-y-1">
-                  {resumo.contas_pagar.qtd_vencidos > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 font-medium">
-                      <XCircle className="w-3.5 h-3.5" />
-                      {resumo.contas_pagar.qtd_vencidos} vencido{resumo.contas_pagar.qtd_vencidos > 1 ? 's' : ''}: {formatCurrency(resumo.contas_pagar.total_vencido)}
-                    </div>
-                  )}
-                  {resumo.contas_pagar.qtd_vence_7d > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-orange-600 dark:text-orange-400">
-                      <Bell className="w-3.5 h-3.5" />
-                      {resumo.contas_pagar.qtd_vence_7d} vence{resumo.contas_pagar.qtd_vence_7d > 1 ? 'm' : ''} em 7 dias
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Pago no mes: {formatCurrency(resumo.contas_pagar.pago_no_mes)}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-700 dark:text-slate-400 font-medium">Pago no mês</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-bold">{formatCurrency(resumo.contas_pagar.pago_no_mes)}</span>
                   </div>
+                  <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-rose-500 w-[60%] rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)]" />
+                  </div>
+                  {resumo.contas_pagar.qtd_vencidos > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex items-center gap-2 text-[10px] font-black uppercase text-rose-600 dark:text-rose-400 bg-rose-500/5 p-2 rounded-lg">
+                      <ShieldCheck className="w-3 h-3 text-rose-500" />
+                      {resumo.contas_pagar.qtd_vencidos} Títulos Vencidos
+                    </div>
+                  )}
                 </div>
               </div>
 
-
-              {/* Despesas do Mes */}
-              <div className="p-5 group">
-                <div className="flex items-center gap-2 mb-3">
-                  <BadgeDollarSign className="w-5 h-5 text-purple-500" />
-                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Despesas Mes</span>
+              {/* Card 2: Despesas Mês */}
+              <div className="relative p-6 rounded-[2rem] bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/50 dark:border-slate-700/50 overflow-hidden group">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
+                    <BadgeDollarSign className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Gasto Operacional</span>
                 </div>
-                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                <div className="text-3xl font-black text-slate-900 dark:text-white mb-2 leading-none">
                   {formatCurrency(resumo.despesas_mes.total)}
                 </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Fixas: {formatCurrency(resumo.despesas_mes.recorrentes)}
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl border border-white dark:border-slate-700/30">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">Fixas</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{formatCurrency(resumo.despesas_mes.recorrentes)}</p>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Variaveis: {formatCurrency(resumo.despesas_mes.variaveis)}
+                  <div className="bg-white/50 dark:bg-slate-900/50 p-3 rounded-2xl border border-white dark:border-slate-700/30">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">Variáveis</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{formatCurrency(resumo.despesas_mes.variaveis)}</p>
                   </div>
-                  {resumo.despesas_mes.total > 0 && (
-                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mt-1">
-                      <div
-                        className="bg-purple-500 h-1.5 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (resumo.despesas_mes.recorrentes / resumo.despesas_mes.total) * 100)}%` }}
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Fluxo de Caixa */}
-              <div className="p-5 group">
-                <div className="flex items-center gap-2 mb-3">
-                  <BarChart3 className="w-5 h-5 text-blue-500" />
-                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Fluxo de Caixa (Realizado)</span>
+              {/* Card 3: Fluxo de Caixa */}
+              <div className="relative p-6 rounded-[2rem] bg-slate-900 dark:bg-white border border-slate-800 dark:border-slate-200 overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 blur-[60px] rounded-full" />
+                <div className="flex items-center justify-between mb-6">
+                  <div className="p-2 bg-emerald-500 text-white dark:text-white rounded-xl">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-widest">Cashflow Realizado</span>
                 </div>
-                <div className={`text-2xl font-bold mb-1 ${fluxoPositivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                <div className={`text-4xl font-black mb-2 leading-none tracking-tighter ${fluxoPositivo ? 'text-emerald-400 dark:text-emerald-600' : 'text-rose-400 dark:text-rose-600'}`}>
                   {fluxoPositivo ? '+' : ''}{formatCurrency(fluxo.saldo)}
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    Entradas: {formatCurrency(fluxo.entradas)}
+                <div className="flex items-center gap-4 mt-6">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400 dark:text-emerald-600" />
+                    <span className="text-[10px] font-black text-emerald-400 dark:text-emerald-600 uppercase tracking-tighter">Entradas</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    Saidas: {formatCurrency(fluxo.saidas)}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 rounded-full border border-rose-500/20">
+                    <ArrowDownRight className="w-3.5 h-3.5 text-rose-400 dark:text-rose-600" />
+                    <span className="text-[10px] font-black text-rose-400 dark:text-rose-600 uppercase tracking-tighter">Saídas</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Monitor de Gestão Owner-First */}
-            <div className="px-5 pb-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Indicador 1: Comprometimento de Vendas */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/50 shadow-sm relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:scale-125 transition-transform">
-                    <BarChart3 className="w-12 h-12 text-blue-900 dark:text-blue-100" />
-                  </div>
-                  <div className="flex items-center justify-between mb-3 relative">
-                    <span className="text-[10px] font-black text-blue-800 dark:text-blue-300 uppercase tracking-widest">Comprometimento de Vendas</span>
-                    <span className={`text-lg font-black ${resumo.indicadores_gestao.indice_comprometimento > 80 ? 'text-red-600' : 'text-blue-700 dark:text-blue-400'}`}>
-                      {resumo.indicadores_gestao.indice_comprometimento.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full mb-3 overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-1000 ${resumo.indicadores_gestao.indice_comprometimento > 80 ? 'bg-red-500' : 'bg-blue-500'}`}
-                      style={{ width: `${Math.min(100, resumo.indicadores_gestao.indice_comprometimento)}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-tight">
-                    <strong>Relação Dívida/Venda:</strong> Para cada R$ 1,00 que você vende, <strong>{formatCurrency(resumo.indicadores_gestao.indice_comprometimento / 100)}</strong> já está "prometido" a fornecedores.
-                  </p>
+            {/* Business Insights KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+              {/* Insight: Comprometimento */}
+              <div className="group relative p-8 rounded-[2.5rem] bg-gradient-to-br from-slate-900 to-slate-800 text-white overflow-hidden shadow-2xl">
+                <div className="absolute -top-10 -left-10 w-40 h-40 bg-blue-500/20 blur-[80px] rounded-full" />
+                <div className="absolute bottom-0 right-0 p-8 opacity-5">
+                  <BarChart3 className="w-32 h-32" />
                 </div>
 
-                {/* Indicador 2: Pressão de Caixa Diária */}
-                <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-xl p-4 border border-orange-100 dark:border-orange-800/50 shadow-sm relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:scale-125 transition-transform">
-                    <TrendingDown className="w-12 h-12 text-red-900 dark:text-red-100" />
+                <div className="flex items-center justify-between mb-8 relative">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-blue-400 mb-1">Índice de Comprometimento</h3>
+                    <p className="text-slate-400 text-[10px]">Percentual da venda futura já comprometido</p>
                   </div>
-                  <div className="flex items-center justify-between mb-3 relative">
-                    <span className="text-[10px] font-black text-orange-800 dark:text-orange-300 uppercase tracking-widest">Pressão de Caixa (Hoje)</span>
-                    <span className={`text-lg font-black ${resumo.indicadores_gestao.pressao_caixa_diaria > 100 ? 'text-red-600' : 'text-orange-700 dark:text-orange-400'}`}>
-                      {resumo.indicadores_gestao.pressao_caixa_diaria.toFixed(0)}%
-                    </span>
+                  <div className="text-4xl font-black text-white italic">
+                    {resumo.indicadores_gestao.indice_comprometimento.toFixed(1)}<span className="text-xl text-blue-400">%</span>
                   </div>
-                  <div className="flex items-baseline gap-1 relative">
-                    <span className="text-xl font-black text-gray-900 dark:text-white">{formatCurrency(resumo.indicadores_gestao.vence_hoje_valor)}</span>
-                    <span className="text-[10px] text-gray-500 uppercase font-bold">Vence Hoje</span>
+                </div>
+
+                <div className="relative h-3 bg-white/10 rounded-full mb-8 overflow-hidden backdrop-blur-sm border border-white/5">
+                  <div
+                    className={`h-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.5)] ${resumo.indicadores_gestao.indice_comprometimento > 80 ? 'bg-rose-500' : 'bg-gradient-to-r from-blue-600 to-cyan-400'}`}
+                    style={{ width: `${Math.min(100, resumo.indicadores_gestao.indice_comprometimento)}%` }}
+                  />
+                </div>
+
+                <div className="bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
+                  <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                    Para cada R$ 100,00 que você vende, <strong className="text-blue-400">{formatCurrency(resumo.indicadores_gestao.indice_comprometimento)}</strong> já estão comprometidos com boletos.
+                  </p>
+                </div>
+              </div>
+
+              {/* Insight: Pressão de Caixa */}
+              <div className="group relative p-8 rounded-[2.5rem] bg-white border border-slate-200 overflow-hidden shadow-2xl">
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 blur-[80px] rounded-full" />
+
+                <div className="flex items-center justify-between mb-8 relative">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-600 mb-1">Pressão de Caixa (Hoje)</h3>
+                    <p className="text-slate-500 text-[10px]">Capacidade de pagamento vs Vencimentos</p>
                   </div>
-                  <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-2">
+                  <div className={`text-4xl font-black italic ${resumo.indicadores_gestao.pressao_caixa_diaria > 100 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {resumo.indicadores_gestao.pressao_caixa_diaria.toFixed(0)}<span className="text-xl">%</span>
+                  </div>
+                </div>
+
+                <div className="flex items-end gap-3 mb-8">
+                  <div className="text-5xl font-black text-slate-900 tracking-tighter">
+                    {formatCurrency(resumo.indicadores_gestao.vence_hoje_valor)}
+                  </div>
+                  <div className="pb-1">
+                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest leading-none block">Vence</span>
+                    <span className="text-[10px] font-black uppercase text-slate-900 tracking-widest leading-none block">Hoje</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-3xl border border-slate-100">
+                  <div className={`p-2 rounded-full ${resumo.indicadores_gestao.pressao_caixa_diaria > 100 ? 'bg-rose-500/10 text-rose-600' : 'bg-emerald-500/10 text-emerald-600'}`}>
+                    {resumo.indicadores_gestao.pressao_caixa_diaria > 100 ? <AlertTriangle className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                  </div>
+                  <p className="text-xs text-slate-600 leading-tight font-medium">
                     {resumo.indicadores_gestao.pressao_caixa_diaria > 100
-                      ? "Média de vendas não cobre os boletos de hoje."
-                      : `Sua venda média de ${formatCurrency(resumo.indicadores_gestao.venda_media_diaria)} cobre os compromissos de hoje.`}
+                      ? "Escalabilidade de risco: venda média não cobre os boletos de hoje."
+                      : `Consistência ideal: venda média de ${formatCurrency(resumo.indicadores_gestao.venda_media_diaria)} absorve os compromissos.`}
                   </p>
                 </div>
               </div>
@@ -271,38 +340,37 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
         )}
       </div>
 
-      {/* Alertas Financeiros */}
+      {/* Modern Alertas Feed */}
       {expandido && resumo.alertas.length > 0 && (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {resumo.alertas.map((alerta: AlertaFinanceiro, idx: number) => {
-            const colors = getSeverityColor(alerta.severidade);
+            const style = getSeverityColor(alerta.severidade);
             const Icon = getAlertIcon(alerta.tipo);
             return (
               <div
                 key={idx}
-                className={`${colors.bg} ${colors.border} border rounded-xl p-4 flex items-start gap-3 transition-all hover:shadow-md`}
+                className={`backdrop-blur-md ${style.bg} ${style.border} border rounded-[2rem] p-6 flex flex-col gap-4 shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] cursor-default relative overflow-hidden`}
               >
-                <div className={`p-2 rounded-lg ${colors.bg}`}>
-                  <Icon className={`w-5 h-5 ${colors.icon}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h4 className={`font-semibold text-sm ${colors.text}`}>
-                      {alerta.titulo}
-                    </h4>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${alerta.severidade === 'critica' ? 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
-                      : alerta.severidade === 'alta' ? 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200'
-                        : 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200'
-                      }`}>
-                      {alerta.severidade}
-                    </span>
+                <div className={`absolute top-0 right-0 w-2 h-full ${style.accent}`} />
+                <div className="flex items-center justify-between">
+                  <div className={`p-3 rounded-2xl ${style.bg}`}>
+                    <Icon className={`w-5 h-5 ${style.icon}`} />
                   </div>
-                  <p className={`text-sm ${colors.text} opacity-80`}>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.1em] ${style.accent} text-white`}>
+                    {alerta.severidade}
+                  </span>
+                </div>
+                <div>
+                  <h4 className={`font-black text-sm mb-1 uppercase tracking-tight ${style.text}`}>
+                    {alerta.titulo}
+                  </h4>
+                  <p className={`text-xs ${style.text} opacity-70 leading-relaxed font-medium mb-3`}>
                     {alerta.descricao}
                   </p>
-                  <p className={`text-xs mt-1 ${colors.text} opacity-60 italic`}>
-                    {alerta.acao}
-                  </p>
+                  <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 group">
+                    Recommendation: {alerta.acao}
+                    <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </div>
                 </div>
               </div>
             );

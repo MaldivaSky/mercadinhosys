@@ -347,6 +347,9 @@ def create_app(config_name=None):
                 ("venda_itens", "custo_unitario",               "NUMERIC(10,2)"),
                 ("venda_itens", "margem_item",                  "NUMERIC(5,2)"),
                 ("venda_itens", "margem_lucro_real",             "NUMERIC(10,2)"),
+                # Despesas - campos de documento ERP
+                ("despesas", "data_emissao",                    "DATE"),
+                ("despesas", "data_vencimento",                 "DATE"),
             ]
 
             # Otimização: Agrupar por tabela e verificar colunas existentes via Inspector
