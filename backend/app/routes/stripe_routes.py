@@ -187,18 +187,34 @@ def customer_portal():
             estabelecimento_id = funcionario_data.get('estabelecimento_id')
 
         estab_data = get_estabelecimento_safe(estabelecimento_id)
-        if not estab_data or not estab_data.get('stripe_customer_id'):
-            # Tenta buscar o stripe_customer_id isoladamente se não veio no safe (pode ser coluna nova que falhou no fetch_col generico)
-            # Mas o get_estabelecimento_safe já tenta isso.
-            return jsonify({'success': False, 'message': 'Nenhuma assinatura Stripe ativa encontrada'}), 404
+        if not estab_data:
+            return jsonify({'success': False, 'message': 'Estabelecimento não encontrado'}), 404
 
         import os
         import stripe as stripe_lib
         stripe_lib.api_key = os.getenv('STRIPE_SECRET_KEY')
 
+        stripe_customer_id = estab_data.get('stripe_customer_id')
+
+        if not stripe_customer_id:
+            from app.models import Estabelecimento
+            estab = Estabelecimento.query.get(estabelecimento_id)
+            if not estab:
+                return jsonify({'success': False, 'message': 'Estabelecimento não encontrado no DB'}), 404
+            
+            # Buscar email do usuário
+            funcionario_data = get_funcionario_safe(int(current_user_id))
+            user_email = funcionario_data.get('email') if funcionario_data else estab.email
+
+            stripe_svc = _get_stripe_service()
+            stripe_customer_id = stripe_svc._get_or_create_customer(estab, user_email)
+
+        if not stripe_customer_id:
+            return jsonify({'success': False, 'message': 'Erro ao registrar cliente no Stripe'}), 500
+
         return_url = os.getenv('FRONTEND_URL', 'http://localhost:5173') + '/configuracoes'
         portal_session = stripe_lib.billing_portal.Session.create(
-            customer=estab_data.get('stripe_customer_id'),
+            customer=stripe_customer_id,
             return_url=return_url,
         )
         return jsonify({'success': True, 'portal_url': portal_session.url})

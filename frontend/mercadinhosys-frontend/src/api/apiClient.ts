@@ -38,9 +38,24 @@ const shouldRetryRequest = (error: any): boolean => {
     return isGet && (isTimeout || isNetwork) && retryCount < 1;
 };
 
-// Request interceptor para adicionar token
+// Request interceptor para adicionar token e sanitizar URLs
 apiClient.interceptors.request.use(
     (config) => {
+        // CORREÇÃO DEFINITIVA: Sanitizar baseURL e URL para evitar vazamento de host interno
+        const sanitize = (val: string | undefined): string | undefined => {
+            if (!val) return val;
+            // Se a URL contiver o host interno do Docker ou 'backend', reduz para caminho relativo
+            if (/backend|:\d+|https?:\/\//.test(val) && (val.includes('backend') || val.includes(':5000'))) {
+                const parts = val.split('/api');
+                const path = parts.length > 1 ? `/api${parts[1]}` : val.replace(/^https?:\/\/[^\/]+/, '');
+                return path.startsWith('/api') ? path : `/api${path.startsWith('/') ? '' : '/'}${path}`;
+            }
+            return val;
+        };
+
+        config.baseURL = sanitize(config.baseURL);
+        config.url = sanitize(config.url);
+
         const token = localStorage.getItem('access_token');
         if (token && token !== 'undefined' && token !== 'null') {
             config.headers.Authorization = `Bearer ${token}`;

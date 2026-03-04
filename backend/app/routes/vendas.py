@@ -10,6 +10,7 @@ from app.models import (
     Cliente,
     Fornecedor,
 )
+from flask_jwt_extended import jwt_required, get_jwt
 from sqlalchemy import or_, and_, func, extract, cast, String, Date, distinct, select
 import random
 import string
@@ -39,13 +40,20 @@ ORDENACOES_PERMITIDAS = {
 }
 
 
-def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
+def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
     """Aplica filtros avançados na query de vendas"""
+    
+    # Filtro obrigatório por estabelecimento_id (Multi-tenancy)
+    query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
 
     # Aplicar filtros definidos em FILTROS_PERMITIDOS_VENDAS
     for chave, valor in filtros.items():
         if chave in FILTROS_PERMITIDOS_VENDAS:
             query = query.filter(FILTROS_PERMITIDOS_VENDAS[chave](valor))
+
+    # Se nenhum status for especificado, filtrar por 'finalizada' por padrão (Sincroniza com Dashboard)
+    if not filtros.get("status"):
+        query = query.filter(Venda.status == "finalizada")
 
     # Filtro por data
     for filtro_data in ["data_inicio", "data_fim"]:
@@ -69,8 +77,8 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id=1):
                         pass
                 
                 if data_dt:
-                    # Usar coalesce para considerar data_venda ou created_at
-                    campo_data = func.coalesce(Venda.data_venda, Venda.created_at)
+                    # Usar apenas data_venda para consistência com o Dashboard
+                    campo_data = Venda.data_venda
                     
                     if filtro_data == "data_inicio":
                         # Remover parte de hora para garantir inicio do dia se for apenas data
@@ -186,46 +194,51 @@ def aplicar_ordenacao_vendas(query, ordenar_por, direcao):
     return query
 
 
-def calcular_estatisticas_vendas(query):
+def calcular_estatisticas_vendas(query, estabelecimento_id):
     """Calcula estatísticas agregadas das vendas filtradas usando SQL"""
     # 1. Estatísticas básicas
-    stats = query.with_entities(
-        func.count(Venda.id).label("quantidade"),
-        func.sum(Venda.total).label("total"),
-        func.sum(Venda.desconto).label("descontos"),
-        func.sum(Venda.valor_recebido).label("valor_recebido"),
-        func.sum(Venda.quantidade_itens).label("total_itens")
+    # Capture the IDs from the filtered query to use in subqueries for aggregation
+    # This avoids re-applying complex joins/filters for each aggregation
+    vendas_ids_subquery = query.with_entities(Venda.id).subquery()
+    vendas_ids_select = select(vendas_ids_subquery.c.id)
+
+    # 2. Resumo Geral de Vendas no período (Baseado na query filtrada)
+    resumo_vendas = db.session.query(
+        func.count(Venda.id).label('quantidade'),
+        func.sum(Venda.total).label('total'),
+        func.sum(Venda.desconto).label('descontos'),
+        func.sum(Venda.valor_recebido).label('valor_recebido')
+    ).filter(
+        Venda.id.in_(vendas_ids_select)
     ).first()
 
-    quantidade = stats.quantidade or 0
-    total = float(stats.total or 0)
-    descontos = float(stats.descontos or 0)
-    valor_recebido = float(stats.valor_recebido or 0)
-    ticket_medio = total / quantidade if quantidade > 0 else 0
+    # Query separada para lucro total e total de itens (Join com VendaItem)
+    stats_itens = db.session.query(
+        func.sum(VendaItem.margem_lucro_real).label('lucro'),
+        func.sum(VendaItem.quantidade).label('total_itens')
+    ).filter(
+        VendaItem.venda_id.in_(vendas_ids_select)
+    ).first()
 
-    # Calcular lucro total juntando com VendaItem
-    # Subquery para pegar as vendas filtradas
-    try:
-        from sqlalchemy import select
-        vendas_base_query = query.with_entities(Venda.id).distinct().subquery()
-        vendas_ids_select = select(vendas_base_query.c.id)
-        
-        lucro_stats = db.session.query(
-            func.sum(VendaItem.margem_lucro_real).label("total_lucro")
-        ).filter(VendaItem.venda_id.in_(vendas_ids_select)).first()
-        total_lucro = float(lucro_stats.total_lucro or 0)
-    except Exception as e:
-        print(f"Erro ao calcular lucro total nas estatísticas: {e}")
-        total_lucro = 0.0
+    quantidade = resumo_vendas.quantidade or 0
+    total = float(resumo_vendas.total or 0)
+    total_lucro = float(stats_itens.lucro or 0)
+    descontos = float(resumo_vendas.descontos or 0)
+    valor_recebido = float(resumo_vendas.valor_recebido or 0)
+    total_itens = int(stats_itens.total_itens or 0)
+
+    ticket_medio = total / quantidade if quantidade > 0 else 0
 
     estatisticas = {
         "total_valor": total,
+        "total_vendas": total,
+        "total_faturado": total, # Adicionado para garantir compatibilidade se houver variação
         "total_lucro": total_lucro,
         "quantidade_vendas": quantidade,
         "ticket_medio": ticket_medio,
         "total_descontos": descontos,
         "total_valor_recebido": valor_recebido,
-        "total_itens": int(stats.total_itens or 0),
+        "total_itens": total_itens,
         "formas_pagamento": {},
     }
 
@@ -242,6 +255,17 @@ def calcular_estatisticas_vendas(query):
             "total": float(f.total or 0)
         }
 
+    # 3. Período (Audit)
+    datas = query.with_entities(
+        func.min(Venda.data_venda).label("inicio"),
+        func.max(Venda.data_venda).label("fim")
+    ).first()
+
+    estatisticas["periodo"] = {
+        "data_inicio": datas.inicio.isoformat() if datas and datas.inicio else None,
+        "data_fim": datas.fim.isoformat() if datas and datas.fim else None
+    }
+
     return estatisticas
 
 
@@ -256,9 +280,12 @@ def gerar_codigo_venda():
 
 
 @vendas_bp.route("/", methods=["GET"], strict_slashes=False)
+@jwt_required()
 def listar_vendas():
     """Lista vendas com filtros avançados otimizada"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
         # Configuração de paginação
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
@@ -307,11 +334,11 @@ def listar_vendas():
                 )
             )
 
-        # Aplicar todos os filtros avançados na query base
-        query_base = aplicar_filtros_avancados_vendas(query_base, filtros_avancados)
-
+        # Aplicar todos os filtros avançados na query base (inclui estabelecimento_id)
+        query_base = aplicar_filtros_avancados_vendas(query_base, filtros_avancados, estabelecimento_id)
+        
         # 1. Calcular estatísticas ANTES da ordenação e paginação (usando query_base filtrada)
-        estatisticas = calcular_estatisticas_vendas(query_base)
+        estatisticas = calcular_estatisticas_vendas(query_base, estabelecimento_id)
 
         # 2. Preparar query para resultados com joins necessários para a exibição
         query_resultados = query_base.options(
@@ -367,8 +394,8 @@ def listar_vendas():
                 }
             )
 
-        # Metadados da paginação
-        metadados = {
+        # Metadados da paginação (Renomeado para paginacao para compatibilidade com front-end)
+        paginacao = {
             "pagina_atual": pagination.page,
             "total_paginas": pagination.pages,
             "total_itens": pagination.total,
@@ -379,15 +406,16 @@ def listar_vendas():
 
         # Metadados dos filtros aplicados
         if filtros_avancados:
-            metadados["filtros_aplicados"] = filtros_avancados
+            paginacao["filtros_aplicados"] = filtros_avancados
         if search:
-            metadados["busca_global"] = search
+            paginacao["busca_global"] = search
 
-        metadados["ordenacao"] = {"campo": ordenar_por, "direcao": direcao}
+        paginacao["ordenacao"] = {"campo": ordenar_por, "direcao": direcao}
 
         # Adicionar estatísticas à resposta
-        metadados["estatisticas"] = {
+        paginacao["estatisticas"] = {
             "total_valor": float(estatisticas["total_valor"]),
+            "total_vendas": float(estatisticas["total_vendas"]),
             "total_lucro": float(estatisticas["total_lucro"]),
             "quantidade_vendas": estatisticas["quantidade_vendas"],
             "ticket_medio": float(estatisticas["ticket_medio"]),
@@ -397,13 +425,14 @@ def listar_vendas():
             "formas_pagamento": dict(estatisticas["formas_pagamento"]),
         }
 
+        paginacao["filtros_disponiveis"] = list(FILTROS_PERMITIDOS_VENDAS.keys()) + filtros_especiais
+        paginacao["ordenacoes_disponiveis"] = list(ORDENACOES_PERMITIDAS.keys())
+
         return jsonify(
             {
                 "vendas": resultado,
-                "paginacao": metadados,
-                "filtros_disponiveis": list(FILTROS_PERMITIDOS_VENDAS.keys())
-                + filtros_especiais,
-                "ordenacoes_disponiveis": list(ORDENACOES_PERMITIDAS.keys()),
+                "ponto_venda": "PDV 01",
+                "paginacao": paginacao,
             }
         )
 
@@ -413,9 +442,13 @@ def listar_vendas():
 
 
 @vendas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
+@jwt_required()
 def estatisticas_vendas():
     """Estatísticas gerais de vendas com filtros avançados otimizada"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         # Coletar filtros
         filtros = {k: v for k, v in request.args.items() if v}
         data_inicio = filtros.get("data_inicio")
@@ -423,7 +456,7 @@ def estatisticas_vendas():
         
         # 1. Query Base
         query_base = Venda.query
-        query_base = aplicar_filtros_avancados_vendas(query_base, filtros)
+        query_base = aplicar_filtros_avancados_vendas(query_base, filtros, estabelecimento_id)
 
         # --- ESTATÍSTICAS GERAIS ---
         # Usamos uma subquery para garantir que filtros complexos (como join com VendaItem) não dupliquem contagem
@@ -432,33 +465,39 @@ def estatisticas_vendas():
         
         # SQL centralizado para eficiência
         has_item_filter = "produto_nome" in filtros
-        estabelecimento_id = 1 # Define estabelecimento_id padrão
+        # estabelecimento_id já extraído do JWT
         
         # Obter IDs de vendas filtradas para cálculos subsequentes consistentes
-        vendas_base_query = aplicar_filtros_avancados_vendas(Venda.query.with_entities(Venda.id), filtros)
+        vendas_base_query = aplicar_filtros_avancados_vendas(Venda.query.with_entities(Venda.id), filtros, estabelecimento_id)
         vendas_ids_subquery = vendas_base_query.distinct().subquery()
         vendas_ids_select = select(vendas_ids_subquery.c.id)
 
         # 1. Total vendas e Total Valor (agregados das vendas únicas)
         stats_gerais = db.session.query(
-            func.count(Venda.id).label("total_vendas"),
+            func.count(Venda.id).label("total_vendas_count"),
             func.sum(Venda.total).label("total_valor")
         ).filter(Venda.id.in_(vendas_ids_select)).first()
 
-        total_vendas = stats_gerais.total_vendas or 0
+        total_vendas_count = stats_gerais.total_vendas_count or 0
         total_valor = float(stats_gerais.total_valor or 0)
 
         # 2. Lucro Real e Total Itens (soma dos itens das vendas filtradas)
-        stats_itens = db.session.query(
-            func.sum(VendaItem.margem_lucro_real).label("total_lucro"),
-            func.sum(VendaItem.quantidade).label("total_itens")
-        ).filter(VendaItem.venda_id.in_(vendas_ids_select)).first()
-        
-        total_lucro = float(stats_itens.total_lucro or 0)
-        total_itens_venda = float(stats_itens.total_itens or 0)
+        try:
+             # Usar a query_base que já tem os filtros aplicados
+             stats_itens = query_base.join(VendaItem, Venda.id == VendaItem.venda_id)\
+                           .with_entities(
+                               func.sum(VendaItem.margem_lucro_real).label("total_lucro"),
+                               func.sum(VendaItem.quantidade).label("total_itens")
+                           ).first()
+             total_lucro = float(stats_itens.total_lucro or 0)
+             total_itens_venda = float(stats_itens.total_itens or 0)
+        except Exception as e:
+             print(f"⚠️ Erro ao calcular lucro específico: {e}")
+             total_lucro = 0.0
+             total_itens_venda = 0
 
-        ticket_medio = total_valor / total_vendas if total_vendas > 0 else 0
-        itens_por_venda = total_itens_venda / total_vendas if total_vendas > 0 else 0
+        ticket_medio = total_valor / total_vendas_count if total_vendas_count > 0 else 0
+        itens_por_venda = total_itens_venda / total_vendas_count if total_vendas_count > 0 else 0
 
         # --- VENDAS POR DIA ---
         campo_data = func.coalesce(Venda.data_venda, Venda.created_at)
@@ -587,9 +626,10 @@ def estatisticas_vendas():
 
         return jsonify({
             "estatisticas_gerais": {
-                "total_vendas": total_vendas,
-                "total_valor": float(total_valor),
-                "total_lucro": float(total_lucro),
+                "quantidade_vendas": total_vendas_count, # Count para o front
+                "total_vendas": total_valor, # Alias para o front (valor monetário)
+                "total_valor": total_valor,
+                "total_lucro": total_lucro,
                 "total_itens": total_itens_venda,
                 "ticket_medio": float(ticket_medio),
                 "itens_por_venda": float(itens_por_venda),
@@ -629,29 +669,35 @@ def estatisticas_vendas():
         return jsonify({"error": f"Erro ao obter estatísticas: {str(e)}"}), 500
 
 
-@vendas_bp.route("/relatorio-diario", methods=["GET"], strict_slashes=False)
+@vendas_bp.route("/relatorio-diario", methods=["GET"])
+@jwt_required()
 def relatorio_diario():
     """Relatório diário detalhado de vendas"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         # Parâmetros
-        data_relatorio = request.args.get("data", datetime.now().strftime("%Y-%m-%d"))
+        data_str = request.args.get("data", datetime.now().strftime("%Y-%m-%d"))
         formato = request.args.get("formato", "json")
 
         try:
-            data_dt = datetime.strptime(data_relatorio, "%Y-%m-%d")
+            data_dt = datetime.strptime(data_str, "%Y-%m-%d")
         except ValueError:
             data_dt = datetime.now()
 
         inicio_dia = datetime.combine(data_dt.date(), datetime.min.time())
         fim_dia = datetime.combine(data_dt.date(), datetime.max.time())
 
-        # Buscar vendas do dia
+        # Buscar vendas do dia filtradas
+        query = Venda.query.filter(
+            Venda.estabelecimento_id == estabelecimento_id,
+            Venda.status == "finalizada",
+            Venda.data_venda >= inicio_dia,
+            Venda.data_venda <= fim_dia
+        )
         vendas = (
-            Venda.query.filter(
-                Venda.created_at >= inicio_dia,
-                Venda.created_at <= fim_dia,
-                Venda.status == "finalizada",
-            )
+            query
             .options(
                 db.joinedload(Venda.itens),
                 db.joinedload(Venda.funcionario),
@@ -702,7 +748,7 @@ def relatorio_diario():
             return (
                 jsonify(
                     {
-                        "data": data_relatorio,
+                        "data": data_str,
                         "resumo": {
                             "total_vendas": float(total_vendas),
                             "quantidade_vendas": quantidade_vendas,
@@ -773,10 +819,14 @@ def relatorio_diario():
         return jsonify({"error": f"Erro ao gerar relatório diário: {str(e)}"}), 500
 
 
-@vendas_bp.route("/analise-tendencia", methods=["GET"], strict_slashes=False)
+@vendas_bp.route("/analise-tendencia", methods=["GET"])
+@jwt_required()
 def analise_tendencia():
     """Análise de tendência de vendas por período"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         # Parâmetros
         periodo = request.args.get("periodo", "mensal")  # diario, semanal, mensal
         meses = int(request.args.get("meses", 6))
@@ -784,8 +834,9 @@ def analise_tendencia():
         data_fim = datetime.now()
         data_inicio = data_fim - timedelta(days=30 * meses)
 
-        # Consulta base
+        # Consulta base filtrada por estabelecimento
         query = Venda.query.filter(
+            Venda.estabelecimento_id == estabelecimento_id,
             Venda.status == "finalizada",
             Venda.created_at >= data_inicio,
             Venda.created_at <= data_fim,
@@ -801,7 +852,10 @@ def analise_tendencia():
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total"),
                 )
-                .filter(Venda.status == "finalizada")
+                .filter(
+                    Venda.estabelecimento_id == estabelecimento_id,
+                    Venda.status == "finalizada"
+                )
                 .group_by(func.date(Venda.created_at))
                 .order_by(func.date(Venda.created_at).desc())
                 .limit(30)
@@ -901,16 +955,13 @@ def analise_tendencia():
 
 
 @vendas_bp.route("/", methods=["POST", "OPTIONS"], strict_slashes=False)
+@jwt_required(optional=True) # Pode vir do PDV com ou sem token em transição, mas preferencialmente com
 def criar_venda():
     """Cria uma nova venda (finalizar compra no PDV)"""
-    if request.method == "OPTIONS":
-        response = jsonify({"status": "ok"})
-        response.headers.add("Access-Control-Allow-Origin", "http://localhost:5173")
-        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
-        return response
-
+    # ... (options logic unchanged) ...
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id") or 1) # Fallback seguro durante transição
         data = request.get_json()
         print(f"📦 Dados da venda recebidos: {data}")
 
@@ -943,13 +994,14 @@ def criar_venda():
         except ValueError:
             return jsonify({"error": "Valores numéricos inválidos"}), 400
 
-        # 1. GERAR CÓDIGO DA VENDA
+        # 1. GERAR CÓDIGO DA VENDA (escopado por estabelecimento)
         codigo_venda = gerar_codigo_venda()
-        while Venda.query.filter_by(codigo=codigo_venda).first():
+        while Venda.query.filter_by(estabelecimento_id=estabelecimento_id, codigo=codigo_venda).first():
             codigo_venda = gerar_codigo_venda()
 
         # 2. CRIAR A VENDA
         nova_venda = Venda(
+            estabelecimento_id=estabelecimento_id,
             codigo=codigo_venda,
             cliente_id=data.get("cliente_id"),
             funcionario_id=data.get("funcionario_id", 1),
@@ -988,7 +1040,8 @@ def criar_venda():
                 )
 
             # Buscar produto com bloqueio para evitar condições de corrida (Negative Stock Fix)
-            produto = Produto.query.with_for_update().get(produto_id)
+            # Garantir que o produto pertence ao mesmo estabelecimento
+            produto = Produto.query.filter_by(id=produto_id, estabelecimento_id=estabelecimento_id).with_for_update().first()
             if not produto:
                 db.session.rollback()
                 return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
@@ -1034,6 +1087,7 @@ def criar_venda():
 
             # 5. REGISTRAR MOVIMENTAÇÃO DE ESTOQUE
             movimentacao = MovimentacaoEstoque(
+                estabelecimento_id=estabelecimento_id,
                 produto_id=produto_id,
                 tipo="saida",
                 quantidade=quantidade,
@@ -1096,18 +1150,22 @@ def criar_venda():
         return jsonify({"error": f"Erro ao processar venda: {str(e)}"}), 500
 
 
-@vendas_bp.route("/<int:venda_id>", methods=["GET"], strict_slashes=False)
+@vendas_bp.route("/<int:venda_id>", methods=["GET"])
+@jwt_required()
 def obter_venda(venda_id):
     """Obtém detalhes completos de uma venda específica"""
     try:
-        venda = Venda.query.options(
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
+        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).options(
             db.joinedload(Venda.itens),
             db.joinedload(Venda.cliente),
             db.joinedload(Venda.funcionario),
-        ).get_or_404(venda_id)
+        ).first_or_404()
 
         # Buscar movimentações relacionadas a esta venda
-        movimentacoes = MovimentacaoEstoque.query.filter_by(venda_id=venda_id).all()
+        movimentacoes = MovimentacaoEstoque.query.filter_by(venda_id=venda_id, estabelecimento_id=estabelecimento_id).all()
 
         return (
             jsonify(
@@ -1195,16 +1253,21 @@ def obter_venda(venda_id):
         return jsonify({"error": f"Erro ao obter venda: {str(e)}"}), 500
 
 
-@vendas_bp.route("/dia", methods=["GET"], strict_slashes=False)
+@vendas_bp.route("/vendas-do-dia", methods=["GET"])
+@jwt_required()
 def vendas_do_dia():
     """Retorna as vendas do dia atual (para dashboard PDV)"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         hoje = datetime.now().date()
         amanha = hoje + timedelta(days=1)
 
         # Vendas do dia
         vendas_hoje = (
             Venda.query.filter(
+                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.created_at >= hoje,
                 Venda.created_at < amanha,
                 Venda.status == "finalizada",
@@ -1218,6 +1281,7 @@ def vendas_do_dia():
         total_hoje = (
             db.session.query(func.sum(Venda.total))
             .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.created_at >= hoje,
                 Venda.created_at < amanha,
                 Venda.status == "finalizada",
@@ -1236,6 +1300,7 @@ def vendas_do_dia():
                 func.sum(Venda.total).label("total"),
             )
             .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.created_at >= hoje,
                 Venda.created_at < amanha,
                 Venda.status == "finalizada",
@@ -1253,6 +1318,7 @@ def vendas_do_dia():
             )
             .join(Venda)
             .filter(
+                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.created_at >= hoje,
                 Venda.created_at < amanha,
                 Venda.status == "finalizada",
@@ -1319,10 +1385,14 @@ def vendas_do_dia():
         return jsonify({"error": f"Erro ao obter vendas do dia: {str(e)}"}), 500
 
 
-@vendas_bp.route("/<int:venda_id>/cancelar", methods=["POST"], strict_slashes=False)
+@vendas_bp.route("/<int:venda_id>/cancelar", methods=["POST"])
+@jwt_required()
 def cancelar_venda(venda_id):
     """Cancela uma venda e devolve os produtos ao estoque"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         data = request.get_json()
         motivo = data.get("motivo", "Cancelamento solicitado pelo usuário")
         funcionario_id = data.get(
@@ -1330,7 +1400,7 @@ def cancelar_venda(venda_id):
         )  # ID do funcionário que está cancelando
 
         # Buscar venda
-        venda = Venda.query.options(db.joinedload(Venda.itens)).get_or_404(venda_id)
+        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).options(db.joinedload(Venda.itens)).first_or_404()
 
         # Verificar se já está cancelada
         if venda.status == "cancelada":
@@ -1354,7 +1424,7 @@ def cancelar_venda(venda_id):
         try:
             # Para cada item, devolver ao estoque
             for item in venda.itens:
-                produto = Produto.query.get(item.produto_id)
+                produto = Produto.query.filter_by(id=item.produto_id, estabelecimento_id=estabelecimento_id).first()
                 if produto:
                     quantidade_anterior = produto.quantidade
                     produto.quantidade += item.quantidade
@@ -1362,7 +1432,8 @@ def cancelar_venda(venda_id):
 
                     # Registrar movimentação de entrada (devolução)
                     movimentacao = MovimentacaoEstoque(
-                        produto_id=produto.id,
+                        estabelecimento_id=estabelecimento_id,
+                        produto_id=item.produto_id,
                         tipo="entrada",
                         quantidade=item.quantidade,
                         quantidade_anterior=quantidade_anterior,
@@ -1412,16 +1483,17 @@ def cancelar_venda(venda_id):
 
 
 @vendas_bp.route("/exportar", methods=["GET"], strict_slashes=False)
+@jwt_required()
 def exportar_vendas():
     """Exporta vendas em formato CSV (compatível com Excel).
     
     Query params:
-    - formato: 'excel' ou 'csv' (padrão: csv)
-    - data_inicio: YYYY-MM-DD
-    - data_fim: YYYY-MM-DD
-    - status: filtrar por status
+    ...
     """
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         import io
         import csv
 
@@ -1432,7 +1504,7 @@ def exportar_vendas():
 
         query = db.session.query(Venda).outerjoin(Cliente).outerjoin(
             Funcionario, Venda.funcionario_id == Funcionario.id
-        )
+        ).filter(Venda.estabelecimento_id == estabelecimento_id)
 
         if data_inicio:
             query = query.filter(Venda.data_venda >= datetime.strptime(data_inicio, "%Y-%m-%d"))
@@ -1507,13 +1579,16 @@ def exportar_vendas():
 
 
 @vendas_bp.route("/<int:venda_id>/comprovante", methods=["GET"], strict_slashes=False)
+@jwt_required()
 def comprovante_venda(venda_id):
     """Gera comprovante de venda em formato texto (para impressão térmica ou PDF).
-    
-    Retorna um arquivo de texto formatado como cupom fiscal simplificado.
+    ...
     """
     try:
-        venda = Venda.query.get(venda_id)
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
+        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
         if not venda:
             return jsonify({"error": "Venda não encontrada"}), 404
 
@@ -1587,9 +1662,13 @@ def comprovante_venda(venda_id):
 
 
 @vendas_bp.route("/pdv/ativo", methods=["POST"])
+@jwt_required()
 def iniciar_venda_pdv():
     """Inicia uma nova venda ativa no PDV (carrinho em andamento)"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         data = request.get_json()
         funcionario_id = data.get("funcionario_id")
         cliente_id = data.get("cliente_id")
@@ -1602,6 +1681,7 @@ def iniciar_venda_pdv():
 
         # Criar venda com status "em_andamento"
         venda = Venda(
+            estabelecimento_id=estabelecimento_id,
             codigo=codigo_temp,
             cliente_id=cliente_id,
             funcionario_id=funcionario_id,
@@ -1637,9 +1717,13 @@ def iniciar_venda_pdv():
 
 
 @vendas_bp.route("/pdv/<int:venda_id>/adicionar-item", methods=["POST"])
+@jwt_required()
 def adicionar_item_pdv(venda_id):
     """Adiciona um item ao carrinho de uma venda em andamento"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         data = request.get_json()
         produto_id = data.get("produto_id")
         quantidade = data.get("quantidade", 1)
@@ -1648,12 +1732,12 @@ def adicionar_item_pdv(venda_id):
             return jsonify({"error": "Produto é obrigatório"}), 400
 
         # Buscar venda
-        venda = Venda.query.get(venda_id)
+        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
         if not venda or venda.status != "em_andamento":
             return jsonify({"error": "Venda não encontrada ou não está ativa"}), 404
 
         # Buscar produto
-        produto = Produto.query.get(produto_id)
+        produto = Produto.query.filter_by(id=produto_id, estabelecimento_id=estabelecimento_id).first()
         if not produto:
             return jsonify({"error": "Produto não encontrado"}), 404
 
@@ -1719,18 +1803,28 @@ def adicionar_item_pdv(venda_id):
 
 
 @vendas_bp.route("/pdv/<int:venda_id>/remover-item/<int:item_id>", methods=["DELETE"])
+@jwt_required()
 def remover_item_pdv(venda_id, item_id):
     """Remove um item do carrinho de uma venda em andamento"""
     try:
-        # Buscar item
-        item = VendaItem.query.filter_by(id=item_id, venda_id=venda_id).first()
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
+        # Buscar item (garantindo que a venda pertence ao estabelecimento)
+        item = VendaItem.query.join(Venda).filter(
+            VendaItem.id == item_id, 
+            VendaItem.venda_id == venda_id,
+            Venda.estabelecimento_id == estabelecimento_id
+        ).first()
         if not item:
             return jsonify({"error": "Item não encontrado"}), 404
 
         db.session.delete(item)
 
         # Recalcular totais da venda
-        venda = Venda.query.get(venda_id)
+        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
+        if not venda:
+            return jsonify({"error": "Venda não encontrada"}), 404
         venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
         venda.subtotal = sum(
             item.preco_unitario * item.quantidade for item in venda.itens
@@ -1759,9 +1853,13 @@ def remover_item_pdv(venda_id, item_id):
 
 
 @vendas_bp.route("/pdv/<int:venda_id>/atualizar-quantidade", methods=["PUT"])
+@jwt_required()
 def atualizar_quantidade_pdv(venda_id):
     """Atualiza a quantidade de um item no carrinho"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         data = request.get_json()
         item_id = data.get("item_id")
         nova_quantidade = data.get("quantidade", 1)
@@ -1770,12 +1868,18 @@ def atualizar_quantidade_pdv(venda_id):
             return jsonify({"error": "Quantidade deve ser maior que 0"}), 400
 
         # Buscar item
-        item = VendaItem.query.filter_by(id=item_id, venda_id=venda_id).first()
+        item = VendaItem.query.join(Venda).filter(
+            VendaItem.id == item_id, 
+            VendaItem.venda_id == venda_id,
+            Venda.estabelecimento_id == estabelecimento_id
+        ).first()
         if not item:
             return jsonify({"error": "Item não encontrado"}), 404
 
         # Verificar estoque
-        produto = Produto.query.get(item.produto_id)
+        produto = Produto.query.filter_by(id=item.produto_id, estabelecimento_id=estabelecimento_id).first()
+        if not produto:
+             return jsonify({"error": "Produto não encontrado"}), 404
         if produto.quantidade < nova_quantidade:
             return (
                 jsonify(
@@ -1789,7 +1893,9 @@ def atualizar_quantidade_pdv(venda_id):
         item.total_item = nova_quantidade * item.preco_unitario
 
         # Recalcular totais da venda
-        venda = Venda.query.get(venda_id)
+        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
+        if not venda:
+            return jsonify({"error": "Venda não encontrada"}), 404
         venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
         venda.subtotal = sum(
             item.preco_unitario * item.quantidade for item in venda.itens
@@ -1818,9 +1924,13 @@ def atualizar_quantidade_pdv(venda_id):
 
 
 @vendas_bp.route("/pdv/configuracoes", methods=["GET"])
+@jwt_required()
 def obter_configuracoes_pdv():
     """Retorna configurações específicas para o PDV"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         # Aqui você buscaria as configurações do estabelecimento
         # Por enquanto, retornamos configurações padrão
 
@@ -1855,6 +1965,7 @@ def obter_configuracoes_pdv():
 
 
 @vendas_bp.route("/pdv/calcular-troco", methods=["POST"])
+@jwt_required()
 def calcular_troco():
     """Calcula o troco com base no total e valor recebido"""
     try:
@@ -1887,11 +1998,15 @@ def calcular_troco():
 
 
 @vendas_bp.route("/pdv/carrinhos-ativos", methods=["GET"])
+@jwt_required()
 def listar_carrinhos_ativos():
     """Lista todas as vendas em andamento (carrinhos ativos)"""
     try:
+        claims = get_jwt()
+        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        
         # Buscar vendas em andamento
-        vendas_ativas = Venda.query.filter_by(status="em_andamento").all()
+        vendas_ativas = Venda.query.filter_by(status="em_andamento", estabelecimento_id=estabelecimento_id).all()
 
         return (
             jsonify(

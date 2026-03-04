@@ -225,7 +225,6 @@ const ProductsPage: React.FC = () => {
 
   const openOrderModal = (produto: Produto) => {
     setSelectedProductForOrder(produto);
-    setShowPurchaseOrders(true);
   };
 
   const openDetailModal = (produto: Produto) => {

@@ -528,7 +528,7 @@ export default function EmployeesPage() {
                             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                                 Gestão de Funcionários
                             </h1>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                 Controle completo da equipe e recursos humanos
                             </p>
                         </div>
@@ -565,7 +565,7 @@ export default function EmployeesPage() {
                                             <Users className="w-5 h-5 text-red-600" />
                                             <div>
                                                 <div className="font-medium">PDF (.pdf)</div>
-                                                <div className="text-xs text-gray-500">Documento pronto para impressão</div>
+                                                <div className="text-xs text-gray-800 dark:text-gray-200">Documento pronto para impressão</div>
                                             </div>
                                         </button>
 
@@ -576,7 +576,7 @@ export default function EmployeesPage() {
                                             <Users className="w-5 h-5 text-green-600" />
                                             <div>
                                                 <div className="font-medium">Excel (.xls)</div>
-                                                <div className="text-xs text-gray-500">Planilha editável</div>
+                                                <div className="text-xs text-gray-800 dark:text-gray-200">Planilha editável</div>
                                             </div>
                                         </button>
 
@@ -587,13 +587,13 @@ export default function EmployeesPage() {
                                             <Users className="w-5 h-5 text-blue-600" />
                                             <div>
                                                 <div className="font-medium">CSV (.csv)</div>
-                                                <div className="text-xs text-gray-500">Dados separados</div>
+                                                <div className="text-xs text-gray-800 dark:text-gray-200">Dados separados</div>
                                             </div>
                                         </button>
                                     </div>
 
                                     <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 bg-gray-50 dark:bg-gray-900">
-                                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                                        <p className="text-xs text-gray-700 dark:text-gray-300">
                                             👥 {funcionarios.length} funcionários
                                         </p>
                                     </div>
@@ -850,7 +850,7 @@ export default function EmployeesPage() {
                                                     </span>
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-gray-900 dark:text-white font-medium">{vendedor.nome}</td>
-                                                <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{vendedor.cargo}</td>
+                                                <td className="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{vendedor.cargo}</td>
                                                 <td className="py-3 px-4 text-sm text-gray-900 dark:text-white text-right font-semibold">{vendedor.total_vendas}</td>
                                                 <td className="py-3 px-4 text-sm text-green-600 dark:text-green-400 text-right font-semibold">{formatCurrency(vendedor.valor_total_vendas)}</td>
                                                 <td className="py-3 px-4 text-sm text-blue-600 dark:text-blue-400 text-right font-semibold">{formatCurrency(vendedor.ticket_medio)}</td>
@@ -881,7 +881,7 @@ export default function EmployeesPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        <label className="block text-sm font-bold text-black dark:text-white mb-2">
                             Buscar
                         </label>
                         <input
@@ -890,7 +890,7 @@ export default function EmployeesPage() {
                             value={filtros.busca}
                             onChange={handleFiltroChange}
                             placeholder="Nome, CPF, usuário..."
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white placeholder-gray-500 font-medium"
                         />
                     </div>
 
@@ -902,7 +902,7 @@ export default function EmployeesPage() {
                             name="cargo"
                             value={filtros.cargo}
                             onChange={handleFiltroChange}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium"
                         >
                             <option value="">Todos os cargos</option>
                             {CARGOS.map(cargo => (
@@ -919,7 +919,7 @@ export default function EmployeesPage() {
                             name="nivel_acesso"
                             value={filtros.nivel_acesso}
                             onChange={handleFiltroChange}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium"
                         >
                             <option value="">Todos os níveis</option>
                             {NIVEIS_ACESSO.map(nivel => (
@@ -936,7 +936,7 @@ export default function EmployeesPage() {
                             name="ativos"
                             value={filtros.ativos}
                             onChange={handleFiltroChange}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium"
                         >
                             <option value="true">Ativos</option>
                             <option value="false">Inativos</option>
@@ -953,7 +953,7 @@ export default function EmployeesPage() {
                             name="data_admissao_inicio"
                             value={filtros.data_admissao_inicio}
                             onChange={handleFiltroChange}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium shadow-sm"
                         />
                     </div>
 
@@ -966,7 +966,7 @@ export default function EmployeesPage() {
                             name="data_admissao_fim"
                             value={filtros.data_admissao_fim}
                             onChange={handleFiltroChange}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium shadow-sm"
                         />
                     </div>
 
@@ -980,7 +980,7 @@ export default function EmployeesPage() {
                             value={filtros.salario_min}
                             onChange={handleFiltroChange}
                             placeholder="R$ 0,00"
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium shadow-sm"
                         />
                     </div>
 
@@ -994,7 +994,7 @@ export default function EmployeesPage() {
                             value={filtros.salario_max}
                             onChange={handleFiltroChange}
                             placeholder="R$ 0,00"
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                            className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-black dark:bg-gray-700 dark:text-white font-medium shadow-sm"
                         />
                     </div>
                 </div>
@@ -1016,19 +1016,19 @@ export default function EmployeesPage() {
                     ) : funcionarios.length === 0 ? (
                         <div className="p-12 text-center">
                             <UserX className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-600 dark:text-gray-400">Nenhum funcionário encontrado</p>
+                            <p className="text-gray-700 dark:text-gray-300">Nenhum funcionário encontrado</p>
                         </div>
                     ) : (
                         <table className="w-full">
-                            <thead className="bg-gray-50 dark:bg-gray-700">
+                            <thead className="bg-gray-200 dark:bg-gray-700 border-b-2 border-gray-400">
                                 <tr>
-                                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">Nome</th>
-                                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">CPF</th>
-                                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">Cargo</th>
-                                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">Salário</th>
-                                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">Admissão</th>
-                                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">Status</th>
-                                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">Ações</th>
+                                    <th className="text-left py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">Nome</th>
+                                    <th className="text-left py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">CPF</th>
+                                    <th className="text-left py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">Cargo</th>
+                                    <th className="text-left py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">Salário</th>
+                                    <th className="text-left py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">Admissão</th>
+                                    <th className="text-left py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">Status</th>
+                                    <th className="text-center py-4 px-6 text-sm font-black text-black dark:text-white uppercase tracking-tight">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1040,21 +1040,21 @@ export default function EmployeesPage() {
                                                     <UserCog className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                                                 </div>
                                                 <div>
-                                                    <div className="font-medium text-gray-900 dark:text-white">{funcionario.nome}</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{funcionario.usuario}</div>
+                                                    <div className="font-medium text-black dark:text-white font-black">{funcionario.nome}</div>
+                                                    <div className="text-xs text-gray-800 dark:text-gray-200">{funcionario.usuario}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{formatCPF(funcionario.cpf)}</td>
+                                        <td className="py-4 px-6 text-sm text-black dark:text-gray-100 font-black">{formatCPF(funcionario.cpf)}</td>
                                         <td className="py-4 px-6">
                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                                                 {funcionario.cargo}
                                             </span>
                                         </td>
-                                        <td className="py-4 px-6 text-sm font-semibold text-gray-900 dark:text-white">
+                                        <td className="py-4 px-6 text-sm font-semibold text-black dark:text-white font-black">
                                             {funcionario.salario ? formatCurrency(funcionario.salario) : "-"}
                                         </td>
-                                        <td className="py-4 px-6 text-sm text-gray-600 dark:text-gray-400">{formatDate(funcionario.data_admissao)}</td>
+                                        <td className="py-4 px-6 text-sm text-black dark:text-gray-100 font-black">{formatDate(funcionario.data_admissao)}</td>
                                         <td className="py-4 px-6">
                                             {funcionario.ativo ? (
                                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
@@ -1115,7 +1115,7 @@ export default function EmployeesPage() {
                                 onClick={() => setModalAberto(false)}
                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                             >
-                                <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                                <X className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                             </button>
                         </div>
 
@@ -1129,7 +1129,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.nome}
                                         onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     />
                                 </div>
@@ -1142,7 +1142,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.cpf}
                                         onChange={(e) => setFormData({ ...formData, cpf: formatCpf(e.target.value) })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         placeholder="000.000.000-00"
                                         maxLength={14}
                                         required
@@ -1157,7 +1157,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.rg}
                                         onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1169,7 +1169,7 @@ export default function EmployeesPage() {
                                         type="date"
                                         value={formData.data_nascimento}
                                         onChange={(e) => setFormData({ ...formData, data_nascimento: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1181,7 +1181,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.telefone}
                                         onChange={(e) => setFormData({ ...formData, telefone: formatPhone(e.target.value) })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         placeholder="(00) 00000-0000"
                                         maxLength={15}
                                     />
@@ -1195,7 +1195,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.celular}
                                         onChange={(e) => setFormData({ ...formData, celular: formatPhone(e.target.value) })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         placeholder="(00) 00000-0000"
                                         maxLength={15}
                                         required
@@ -1210,7 +1210,7 @@ export default function EmployeesPage() {
                                         type="email"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     />
                                 </div>
@@ -1248,7 +1248,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.logradouro}
                                         onChange={(e) => setFormData({ ...formData, logradouro: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1260,7 +1260,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.numero}
                                         onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1272,7 +1272,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.complemento}
                                         onChange={(e) => setFormData({ ...formData, complemento: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1284,7 +1284,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.bairro}
                                         onChange={(e) => setFormData({ ...formData, bairro: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1296,7 +1296,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.cidade}
                                         onChange={(e) => setFormData({ ...formData, cidade: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                     />
                                 </div>
 
@@ -1308,7 +1308,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.estado}
                                         onChange={(e) => setFormData({ ...formData, estado: e.target.value.toUpperCase().slice(0, 2) })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         maxLength={2}
                                     />
                                 </div>
@@ -1326,7 +1326,7 @@ export default function EmployeesPage() {
                                     <select
                                         value={formData.cargo}
                                         onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     >
                                         {CARGOS.map(cargo => (
@@ -1344,7 +1344,7 @@ export default function EmployeesPage() {
                                         step="0.01"
                                         value={formData.salario}
                                         onChange={(e) => setFormData({ ...formData, salario: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     />
                                 </div>
@@ -1357,7 +1357,7 @@ export default function EmployeesPage() {
                                         type="date"
                                         value={formData.data_admissao}
                                         onChange={(e) => setFormData({ ...formData, data_admissao: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     />
                                 </div>
@@ -1370,7 +1370,7 @@ export default function EmployeesPage() {
                                         type="text"
                                         value={formData.usuario}
                                         onChange={(e) => setFormData({ ...formData, usuario: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     />
                                 </div>
@@ -1383,7 +1383,7 @@ export default function EmployeesPage() {
                                         type="password"
                                         value={formData.senha}
                                         onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required={!modoEdicao}
                                     />
                                 </div>
@@ -1395,7 +1395,7 @@ export default function EmployeesPage() {
                                     <select
                                         value={formData.nivel_acesso}
                                         onChange={(e) => setFormData({ ...formData, nivel_acesso: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required
                                     >
                                         {NIVEIS_ACESSO.map(nivel => (
@@ -1450,7 +1450,7 @@ export default function EmployeesPage() {
                                 onClick={() => setModalDetalhesAberto(false)}
                                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                             >
-                                <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                                <X className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                             </button>
                         </div>
 
@@ -1464,19 +1464,19 @@ export default function EmployeesPage() {
                                     </h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Nome</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Nome</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.nome}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">CPF</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">CPF</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{formatCPF(funcionarioSelecionado.cpf)}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">RG</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">RG</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.rg || "-"}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Data de Nascimento</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Data de Nascimento</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.data_nascimento ? formatDate(funcionarioSelecionado.data_nascimento) : "-"}</p>
                                         </div>
                                     </div>
@@ -1487,15 +1487,15 @@ export default function EmployeesPage() {
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Contato</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Telefone</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Telefone</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.telefone}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Celular</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Celular</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.celular || "-"}</p>
                                         </div>
                                         <div className="col-span-2">
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Email</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.email}</p>
                                         </div>
                                     </div>
@@ -1506,22 +1506,22 @@ export default function EmployeesPage() {
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Endereço</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="col-span-2">
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Logradouro</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Logradouro</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {funcionarioSelecionado.logradouro ? `${funcionarioSelecionado.logradouro}, ${funcionarioSelecionado.numero || 'S/N'}` : "-"}
                                                 {funcionarioSelecionado.complemento ? ` - ${funcionarioSelecionado.complemento}` : ""}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Bairro</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Bairro</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.bairro || "-"}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">CEP</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">CEP</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.cep || "-"}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Cidade/UF</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Cidade/UF</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {funcionarioSelecionado.cidade ? `${funcionarioSelecionado.cidade}/${funcionarioSelecionado.estado}` : "-"}
                                             </p>
@@ -1534,21 +1534,21 @@ export default function EmployeesPage() {
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Informações Profissionais</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Cargo</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Cargo</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.cargo}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Salário</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Salário</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {funcionarioSelecionado.salario ? formatCurrency(funcionarioSelecionado.salario) : "-"}
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Data de Admissão</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Data de Admissão</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{formatDate(funcionarioSelecionado.data_admissao)}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Status</p>
                                             <p className="font-medium text-gray-900 dark:text-white">
                                                 {funcionarioSelecionado.ativo ? (
                                                     <span className="text-green-600 dark:text-green-400">Ativo</span>
@@ -1565,11 +1565,11 @@ export default function EmployeesPage() {
                                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Acesso ao Sistema</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Usuário</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Usuário</p>
                                             <p className="font-medium text-gray-900 dark:text-white">{funcionarioSelecionado.usuario}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">Nível de Acesso</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">Nível de Acesso</p>
                                             <p className="font-medium text-gray-900 dark:text-white capitalize">{funcionarioSelecionado.nivel_acesso}</p>
                                         </div>
                                     </div>

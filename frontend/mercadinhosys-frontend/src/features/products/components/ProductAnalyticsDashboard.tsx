@@ -250,7 +250,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                     </div>
                     <p className="text-sm opacity-90 mb-1">Estoque Normal</p>
                     <p className="text-3xl font-bold">{stats.produtos_normal}</p>
-                    <p className="text-xs opacity-75 mt-2">✅ {((stats.produtos_normal / stats.total_produtos) * 100).toFixed(0)}% do total</p>
+                    <p className="text-xs opacity-75 mt-2">✅ {stats.total_produtos > 0 ? ((stats.produtos_normal / stats.total_produtos) * 100).toFixed(0) : '0'}% do total</p>
                 </div>
 
                 {/* Baixo Estoque */}

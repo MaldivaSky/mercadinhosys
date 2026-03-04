@@ -7,15 +7,29 @@ export const formatCurrency = (value: number): string => {
     }).format(value);
 };
 
-export const formatDate = (date: string | Date): string => {
-    return new Intl.DateTimeFormat('pt-BR').format(new Date(date));
+export const formatDate = (date: string | Date | null | undefined): string => {
+    if (!date) return '---';
+    try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '---';
+        return new Intl.DateTimeFormat('pt-BR').format(d);
+    } catch (e) {
+        return '---';
+    }
 };
 
-export const formatDateTime = (date: string | Date): string => {
-    return new Intl.DateTimeFormat('pt-BR', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-    }).format(new Date(date));
+export const formatDateTime = (date: string | Date | null | undefined): string => {
+    if (!date) return '---';
+    try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '---';
+        return new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+        }).format(d);
+    } catch (e) {
+        return '---';
+    }
 };
 
 export const formatCPF = (cpf: string): string => {

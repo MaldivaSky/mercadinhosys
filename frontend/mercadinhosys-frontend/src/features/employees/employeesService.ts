@@ -18,7 +18,7 @@ export interface Funcionario {
     ativo: boolean;
     created_at?: string;
     updated_at?: string;
-    
+
     // Endereço
     cep?: string;
     logradouro?: string;
@@ -107,12 +107,12 @@ export interface EstatisticasFuncionarios {
 
 export const employeesService = {
     async listar(params?: Record<string, unknown>) {
-        const response = await apiClient.get("/funcionarios", { params });
+        const response = await apiClient.get("/funcionarios/", { params });
         return response.data;
     },
 
     async obterEstatisticas() {
-        const response = await apiClient.get("/funcionarios/estatisticas");
+        const response = await apiClient.get("/funcionarios/estatisticas/");
         return response.data;
     },
 
@@ -122,7 +122,7 @@ export const employeesService = {
     },
 
     async criar(dados: Partial<Funcionario>) {
-        const response = await apiClient.post("/funcionarios", dados);
+        const response = await apiClient.post("/funcionarios/", dados);
         return response.data;
     },
 
@@ -137,7 +137,7 @@ export const employeesService = {
     },
 
     async relatorioVendas(params?: Record<string, unknown>) {
-        const response = await apiClient.get("/funcionarios/relatorio-vendas", { params });
+        const response = await apiClient.get("/funcionarios/relatorio-vendas/", { params });
         return response.data;
     },
 };

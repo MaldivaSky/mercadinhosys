@@ -299,6 +299,10 @@ class DashboardOrchestrator:
                               {"produtos": [], "resumo": {}, "total_value": 0}, 
                               days=days, limit=None) # Limit None para pegar tudo
                               
+        # 🔥 NOVO: Coletando Produtos Próximos do Vencimento (30 dias)
+        expiring_products = safe_get(DataLayer.get_expiring_products, "expiring_products", [],
+                                   self.establishment_id, 30)
+                              
         customer_metrics = safe_get(DataLayer.get_customer_metrics, "cust_metrics", 
                                   {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}, 
                                   self.establishment_id, days)
@@ -369,7 +373,7 @@ class DashboardOrchestrator:
             hourly_customer_behavior = []
 
         try:
-            forecast = PracticalModels.generate_forecast(sales_timeseries) if sales_timeseries else []
+            forecast = PracticalModels.generate_forecast(sales_timeseries)
         except Exception as e:
             _logger.warning(f"Erro ao gerar forecast: {e}")
             forecast = []
@@ -829,6 +833,24 @@ class DashboardOrchestrator:
                 "icone": "💡"
             })
 
+        # --- CENÁRIO 9: PRODUTOS PRÓXIMOS AO VENCIMENTO -----------------
+        if expiring_products:
+            total_expiring = len(expiring_products)
+            loss_estimate = sum(p.get("valor_risco_custo", 0) for p in expiring_products)
+            recomendacoes.append({
+                "tipo": "vencimento_critico",
+                "prioridade": 1,
+                "mensagem": (
+                    f"⚠️ ALERTA DE VALIDADE: {total_expiring} produto(s) vencerão nos próximos 30 dias. "
+                    f"Risco de perda financeira (estoque encalhado): R$ {loss_estimate:,.2f}. "
+                    f"Recomendação: Crie promoções atrativas imediatamente para liquidar esses lotes."
+                ),
+                "impacto_estimado": round(loss_estimate, 2),
+                "cta": "Promover Produtos",
+                "alvo": "produtos",
+                "icone": "⏳"
+            })
+
         # Ordenar: críticos primeiro
         recomendacoes.sort(key=lambda x: x.get("prioridade", 99))
 
@@ -858,6 +880,35 @@ class DashboardOrchestrator:
         for p in previsao_demanda:
             pid = p.get("id")
             p["ultima_compra"] = last_orders.get(pid) if pid else None
+        
+        # 10. Construir Previsões Financeiras para o painel avançado
+        forecast_list = forecast.get("forecast", []) if isinstance(forecast, dict) else forecast
+        forecast_faturamento = sum([f.get("valor_previsto", 0) for f in forecast_list[:30]]) if forecast_list else revenue * 1.05
+        previsao_despesas = total_despesas_periodo * 1.02
+        
+        previsoes_financeiras = [
+            {
+                "variavel": "Faturamento Estimado",
+                "valor_atual": revenue,
+                "previsao_30d": forecast_faturamento,
+                "confianca": 85.0,
+                "intervalo_confianca": [forecast_faturamento * 0.9, forecast_faturamento * 1.1]
+            },
+            {
+                "variavel": "Despesas Projetadas",
+                "valor_atual": total_despesas_periodo,
+                "previsao_30d": previsao_despesas,
+                "confianca": 80.0,
+                "intervalo_confianca": [previsao_despesas * 0.95, previsao_despesas * 1.05]
+            },
+            {
+                "variavel": "Lucro Operacional",
+                "valor_atual": net_profit,
+                "previsao_30d": forecast_faturamento - previsao_despesas,
+                "confianca": 75.0,
+                "intervalo_confianca": [(forecast_faturamento - previsao_despesas) * 0.8, (forecast_faturamento - previsao_despesas) * 1.2]
+            }
+        ]
         
         # 11. Montar objeto final
         res = {
@@ -911,6 +962,7 @@ class DashboardOrchestrator:
             "recomendacoes": recomendacoes,
             "correlations": correlations,
             "anomalies": anomalies,
+            "previsoes": previsoes_financeiras,
             "analise_produtos": {
                 "produtos_estrela": produtos_estrela,
                 "produtos_lentos": produtos_lentos,

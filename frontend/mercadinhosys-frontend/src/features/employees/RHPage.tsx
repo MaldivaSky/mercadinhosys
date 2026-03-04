@@ -31,7 +31,7 @@ export default function RHPage() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Recursos Humanos
             </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            <p className="text-sm text-gray-900 dark:text-gray-100 mt-1 font-bold">
               Gestão completa de RH, ponto eletrônico e folha de pagamento
             </p>
           </div>
@@ -46,14 +46,16 @@ export default function RHPage() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 px-4 py-3 rounded-lg transition-all flex items-center justify-center gap-3 ${activeTab === tab.id
-                    ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'bg-gradient-to-r from-purple-600 to-purple-800 text-white shadow-lg'
+                  : 'text-gray-950 dark:text-gray-100 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
                   }`}
               >
                 <Icon className="w-5 h-5" />
                 <div className="text-left">
                   <div className="font-medium">{tab.label}</div>
-                  <div className="text-xs opacity-75">{tab.description}</div>
+                  <div className={`text-xs font-bold ${activeTab === tab.id ? 'text-purple-100' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {tab.description}
+                  </div>
                 </div>
               </button>
             );

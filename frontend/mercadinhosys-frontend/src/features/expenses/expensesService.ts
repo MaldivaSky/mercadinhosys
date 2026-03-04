@@ -98,6 +98,10 @@ export interface ResumoFinanceiro {
         despesas_operacionais: number;
         lucro_liquido: number;
     };
+    caixa_pdv?: {
+        sangrias: number;
+        suprimentos: number;
+    };
     alertas: AlertaFinanceiro[];
     total_alertas: number;
 }

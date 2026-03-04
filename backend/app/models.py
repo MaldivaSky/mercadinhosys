@@ -932,6 +932,7 @@ class Produto(db.Model):
 
     imagem_url = db.Column(db.String(255))
 
+    controlar_validade = db.Column(db.Boolean, default=True)
     ativo = db.Column(db.Boolean, default=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1142,32 +1143,8 @@ class Produto(db.Model):
         markup = ((venda - custo) / custo * 100)
         return markup.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    def calcular_status_giro(self, dias_analise: int = 30) -> str:
-        """
-        Calcula o status de giro do produto baseado na última venda.
-        
-        Classificação de giro para otimização de estoque:
-        - Rápido: Vendido nos últimos 7 dias (alta rotatividade)
-        - Normal: Vendido entre 8 e 30 dias (rotatividade média)
-        - Lento: Vendido há mais de 30 dias ou nunca vendido (baixa rotatividade)
-        
-        Args:
-            dias_analise: Período de análise (padrão: 30 dias)
-            
-        Returns:
-            str: "rapido", "normal" ou "lento"
-        """
-        if not self.ultima_venda:
-            return "lento"
-
-        dias_desde_ultima_venda = (datetime.utcnow() - self.ultima_venda).days
-
-        if dias_desde_ultima_venda <= 7:
-            return "rapido"
-        elif dias_desde_ultima_venda <= dias_analise:
-            return "normal"
-        else:
-            return "lento"
+    # Removido duplicata de calcular_status_giro que estava aqui.
+    # A implementação correta está na linha 1407.
 
     @staticmethod
     def calcular_classificacao_abc_dinamica(estabelecimento_id: int, periodo_dias: int = 90):
@@ -1349,7 +1326,7 @@ class Produto(db.Model):
             "data_validade": self.data_validade.isoformat() if self.data_validade else None,
             "lote": self.lote,
             "imagem_url": self.imagem_url,
-            "controlar_validade": self.controlar_validade,
+            "controlar_validade": bool(getattr(self, "controlar_validade", True)),
             "total_vendido": float(self.total_vendido) if self.total_vendido else 0.0,
             "quantidade_vendida": int(self.quantidade_vendida) if self.quantidade_vendida else 0,
             "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
@@ -2167,6 +2144,8 @@ class Despesa(db.Model):
 
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     data_despesa = db.Column(db.Date, nullable=False, default=date.today)
+    data_emissao = db.Column(db.Date, nullable=True)      # Data do documento/nota
+    data_vencimento = db.Column(db.Date, nullable=True)   # Prazo de pagamento
 
     forma_pagamento = db.Column(db.String(50))
     recorrente = db.Column(db.Boolean, default=False)

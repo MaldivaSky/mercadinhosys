@@ -158,8 +158,8 @@ export default function PontoHistoricoRH() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Histórico de Registros de Ponto</h2>
-          <p className="text-sm text-gray-600 mt-1">Visualização detalhada de todos os registros</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Histórico de Registros de Ponto</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Visualização detalhada de todos os registros</p>
         </div>
         <button
           onClick={exportarPDF}
@@ -170,22 +170,22 @@ export default function PontoHistoricoRH() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-5 h-5 text-gray-500" />
-          <h3 className="font-bold text-gray-900">Filtros</h3>
+          <h3 className="font-bold text-gray-900 dark:text-white">Filtros</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Funcionário</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Funcionário</label>
             <select
               value={filtroFuncionarioId}
               onChange={(e) => {
                 setFiltroFuncionarioId(e.target.value);
                 setPage(1);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">Todos</option>
               {funcionarios.map(f => (
@@ -195,7 +195,7 @@ export default function PontoHistoricoRH() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data Início</label>
             <input
               type="date"
               value={filtroDataInicio}
@@ -203,12 +203,12 @@ export default function PontoHistoricoRH() {
                 setFiltroDataInicio(e.target.value);
                 setPage(1);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Data Fim</label>
             <input
               type="date"
               value={filtroDataFim}
@@ -216,7 +216,7 @@ export default function PontoHistoricoRH() {
                 setFiltroDataFim(e.target.value);
                 setPage(1);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
@@ -228,7 +228,7 @@ export default function PontoHistoricoRH() {
                 setFiltroTipo(e.target.value);
                 setPage(1);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">Todos</option>
               <option value="entrada">Entrada</option>
@@ -249,7 +249,7 @@ export default function PontoHistoricoRH() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
@@ -271,7 +271,7 @@ export default function PontoHistoricoRH() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 text-gray-600 font-medium">
+                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium">
                   <tr>
                     <th className="px-4 py-3">Data</th>
                     <th className="px-4 py-3">Hora</th>
@@ -287,17 +287,17 @@ export default function PontoHistoricoRH() {
                   {registros.length > 0 ? (
                     registros.map((registro) => (
                       <tr key={registro.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-900">
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                           {new Date(registro.data).toLocaleDateString('pt-BR')}
                         </td>
-                        <td className="px-4 py-3 text-gray-900">{registro.hora}</td>
+                        <td className="px-4 py-3 text-gray-900 dark:text-gray-100">{registro.hora}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <User className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium text-gray-900">{registro.funcionario_nome}</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{registro.funcionario_nome}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{registro.funcionario_cargo}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{registro.funcionario_cargo}</td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 text-xs font-bold rounded-full ${getTipoBadgeColor(registro.tipo)}`}>
                             {getTipoLabel(registro.tipo)}
