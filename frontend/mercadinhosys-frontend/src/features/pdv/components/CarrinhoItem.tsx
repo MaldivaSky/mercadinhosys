@@ -86,18 +86,55 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                             {produto.nome}
                         </h4>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase">
-                                {produto.codigo_barras || 'SEM EAN'}
-                            </span>
+                            {produto.codigo_barras && (
+                                <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                    {produto.codigo_barras}
+                                </span>
+                            )}
                             <span className="text-xs font-bold text-slate-500">
                                 {formatCurrency(precoUnitario)}<span className="text-[10px] opacity-50">/un</span>
                             </span>
+                            {/* Estoque disponível */}
+                            {(() => {
+                                const estoque = produto.estoque_atual ?? (produto as any).quantidade ?? null;
+                                if (estoque === null) return null;
+                                const baixo = estoque <= 5;
+                                return (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${baixo
+                                        ? 'text-red-600 bg-red-50 dark:bg-red-900/20'
+                                        : 'text-slate-400 bg-slate-100 dark:bg-slate-700'
+                                        }`}>
+                                        Est: {estoque}
+                                    </span>
+                                );
+                            })()}
+                            {/* Validade */}
+                            {produto.data_validade && (() => {
+                                let y: number, m: number, d: number;
+                                if (produto.data_validade.includes('-')) {
+                                    [y, m, d] = produto.data_validade.split('-').map(Number);
+                                } else {
+                                    [d, m, y] = produto.data_validade.split('/').map(Number);
+                                }
+                                const dataVal = new Date(y, m - 1, d);
+                                const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+                                const limite = new Date(hoje); limite.setDate(hoje.getDate() + 30);
+                                if (dataVal < hoje) {
+                                    return <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase bg-red-500 text-white animate-pulse">Vencido</span>;
+                                } else if (dataVal <= limite) {
+                                    const dias = Math.round((dataVal.getTime() - hoje.getTime()) / 86400000);
+                                    return <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase bg-amber-500 text-white">Vence em {dias}d</span>;
+                                } else {
+                                    return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">Val. OK</span>;
+                                }
+                            })()}
                             {desconto > 0 && (
                                 <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                                     -{percentualAplicado}%
                                 </span>
                             )}
                         </div>
+
                     </div>
 
                     {/* Controles de quantidade */}
@@ -140,8 +177,8 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                             onClick={() => { setMostrarDesconto(!mostrarDesconto); setValorDesconto(''); }}
                             title="Desconto neste item"
                             className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${mostrarDesconto || desconto > 0
-                                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                                    : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                                ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                                 }`}
                         >
                             <Tag className="w-4 h-4" />

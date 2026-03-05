@@ -16,7 +16,7 @@ import {
   Visibility,
   VisibilityOff,
   LockOutlined,
-  EmailOutlined,
+  AccountCircleOutlined,
 } from '@mui/icons-material';
 import { authService } from './authService';
 import { showToast } from '../../utils/toast';
@@ -44,7 +44,7 @@ export function LoginPage() {
     e.preventDefault();
 
     if (!identifier.trim() || password.length < 6) {
-      setError('Preencha email/usuário e senha (mínimo 6 caracteres)');
+      setError('Preencha o usuário e a senha (mínimo 6 caracteres)');
       return;
     }
 
@@ -163,7 +163,7 @@ export function LoginPage() {
                 onClose={() => setStripeSuccess(false)}
               >
                 <strong>Assinatura realizada com sucesso!</strong><br />
-                Faça login com seu e-mail para começar. <br />
+                Faça login com seu usuário para começar. <br />
                 Sua senha temporária é: <strong>Trocar@123</strong>
               </Alert>
             )}
@@ -177,7 +177,7 @@ export function LoginPage() {
             <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
-                label="Usuário ou Email"
+                label="Usuário"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -188,7 +188,7 @@ export function LoginPage() {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <EmailOutlined color="action" />
+                      <AccountCircleOutlined color="action" />
                     </InputAdornment>
                   ),
                 }}

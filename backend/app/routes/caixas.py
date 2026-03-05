@@ -259,76 +259,69 @@ def obter_resumo_caixa_atual():
         if not caixa:
             return jsonify({"success": False, "error": "Nenhum caixa aberto encontrado"}), 404
 
-        from app.models import Venda
+        from app.models import MovimentacaoCaixa
         from collections import defaultdict
 
         # ─── Normalização de formas de pagamento ──────────────────────────────
-        # Mapeia variações históricas para chaves canônicas
         NORMALIZE_MAP = {
             "dinheiro": "dinheiro",
             "cartao_credito": "cartao_credito",
-            "cartão_de_crédito": "cartao_credito",
-            "cartao_de_credito": "cartao_credito",
-            "credito": "cartao_credito",
             "cartao_debito": "cartao_debito",
-            "cartão_de_débito": "cartao_debito",
-            "cartao_de_debito": "cartao_debito",
-            "debito": "cartao_debito",
             "pix": "pix",
             "fiado": "fiado",
             "outros": "outros",
         }
 
         def normalizar_forma(forma_raw: str) -> str:
-            key = (forma_raw or "outros").strip().lower()
-            # remove acentos de forma simples para o mapeamento
+            if not forma_raw: return "outros"
+            # Remove acentos, espaços e converte para minúsculo
+            key = str(forma_raw).strip().lower()
             key = key.replace("é", "e").replace("ê", "e").replace("ã", "a").replace("á", "a")
-            return NORMALIZE_MAP.get(key, "outros")
+            
+            if "credito" in key: return "cartao_credito"
+            if "debito" in key: return "cartao_debito"
+            if "pix" in key: return "pix"
+            if "dinheiro" in key: return "dinheiro"
+            if "fiado" in key: return "fiado"
+            
+            return "outros"
 
-        # Totais por forma de pagamento (vendas do turno)
-        vendas_turno = Venda.query.filter(
-            Venda.data_venda >= caixa.data_abertura
-        ).all()
-
-        totais_por_forma = defaultdict(lambda: {"quantidade": 0, "total": 0.0})
-
-        # Garantir que fiado sempre apareça (mesmo que zerado)
-        FORMAS_FIXAS = ["dinheiro", "cartao_credito", "cartao_debito", "pix", "fiado"]
-        for forma_fixa in FORMAS_FIXAS:
-            totais_por_forma[forma_fixa]  # inicializa
-
-        for v in vendas_turno:
-            forma = normalizar_forma(v.forma_pagamento or "outros")
-            totais_por_forma[forma]["quantidade"] += 1
-            totais_por_forma[forma]["total"] += float(v.total or 0)
-
-        # Movimentações diretas do caixa (sangrias/suprimentos)
+        # Buscar todas as movimentações do caixa atual
         movimentacoes = MovimentacaoCaixa.query.filter_by(caixa_id=caixa.id).all()
-        total_sangrias = sum(float(m.valor or 0) for m in movimentacoes if m.tipo == "sangria")
-        total_suprimentos = sum(float(m.valor or 0) for m in movimentacoes if m.tipo == "suprimento")
+        
+        totais_por_forma = defaultdict(lambda: {"quantidade": 0, "total": 0.0})
+        
+        # Inicializar formas fixas
+        FORMAS_FIXAS = ["dinheiro", "cartao_debito", "cartao_credito", "pix", "fiado"]
+        for f in FORMAS_FIXAS: totais_por_forma[f]
 
-        total_vendas = sum(t["total"] for t in totais_por_forma.values())
-        total_fiado = totais_por_forma.get("fiado", {}).get("total", 0.0)
+        total_sangrias = 0.0
+        total_suprimentos = 0.0
+        total_vendas = 0.0
 
-        # Saldo esperado na gaveta (dinheiro + suprimentos - sangrias)
-        saldo_dinheiro_vendas = totais_por_forma.get("dinheiro", {}).get("total", 0.0)
+        for m in movimentacoes:
+            valor = float(m.valor or 0)
+            tipo = m.tipo.lower()
+            
+            if tipo == "venda":
+                forma = normalizar_forma(m.forma_pagamento)
+                totais_por_forma[forma]["quantidade"] += 1
+                totais_por_forma[forma]["total"] += valor
+                total_vendas += valor
+            elif tipo == "sangria":
+                total_sangrias += valor
+            elif tipo == "suprimento":
+                total_suprimentos += valor
+            # 'abertura' e 'fechamento' não entram no cálculo de vendas/sangrias/suprimentos fixos
+
+        # Saldo esperado na gaveta (Dinheiro Inicial + Vendas Dinheiro + Suprimentos - Sangrias)
+        vendas_dinheiro = totais_por_forma["dinheiro"]["total"]
         saldo_esperado_gaveta = (
-            float(caixa.saldo_inicial or 0)
-            + saldo_dinheiro_vendas
-            + total_suprimentos
+            float(caixa.saldo_inicial or 0) 
+            + vendas_dinheiro 
+            + total_suprimentos 
             - total_sangrias
         )
-
-        # Ordenar na ordem canônica preferida
-        ORDEM = ["dinheiro", "cartao_debito", "cartao_credito", "pix", "fiado", "outros"]
-        por_forma_ordenado = {}
-        for k in ORDEM:
-            if k in totais_por_forma:
-                por_forma_ordenado[k] = totais_por_forma[k]
-        # Qualquer forma extra que não estava na lista
-        for k, v in totais_por_forma.items():
-            if k not in por_forma_ordenado:
-                por_forma_ordenado[k] = v
 
         return jsonify({
             "success": True,
@@ -338,10 +331,9 @@ def obter_resumo_caixa_atual():
                 "saldo_atual": float(caixa.saldo_atual or 0),
                 "saldo_esperado_gaveta": round(saldo_esperado_gaveta, 2),
                 "total_vendas": round(total_vendas, 2),
-                "total_fiado": round(total_fiado, 2),
                 "total_sangrias": round(total_sangrias, 2),
                 "total_suprimentos": round(total_suprimentos, 2),
-                "por_forma_pagamento": por_forma_ordenado,
+                "por_forma_pagamento": dict(totais_por_forma),
                 "data_abertura": caixa.data_abertura.isoformat() if caixa.data_abertura else None,
             }
         }), 200
