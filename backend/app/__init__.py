@@ -127,7 +127,7 @@ def create_app(config_name=None):
 
     @app.errorhandler(500)
     def handle_500_error(e):
-        import traceback
+        import traceback87788
         error_details = traceback.format_exc() if not app.config.get("PRODUCTION") else "Erro interno no servidor"
         logger.error(f"💥 ERRO 500: {str(e)}\n{traceback.format_exc()}")
         try:
@@ -174,31 +174,27 @@ def create_app(config_name=None):
     # CORS - Configuração COMPLETA para produção
     import re
     
-    # Se não houver CORS configurado, permitir todos em desenvolvimento
+    # Configuração de CORS - Robusta para Vercel/Render e Local
+    cors_origins = None
+    if app.config.get("CORS_ORIGINS"):
+        cors_origins = app.config["CORS_ORIGINS"]
+    
     if not cors_origins:
-        if config_name == 'development':
-            cors_origins = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
+        # Fallbacks dinâmicos se não houver env
+        if os.getenv("VERCEL_URL"):
+            cors_origins = [f"https://{os.getenv('VERCEL_URL')}", "https://mercadinhosys.vercel.app"]
         else:
-            # Em produção, permitimos Vercel (incluindo previews) e Render
-            # Usamos Regex para capturar subdomínios dinâmicos do Vercel
-            cors_origins = [
-                re.compile(r"https://.*\.vercel\.app$"),
-                re.compile(r"https://.*\.onrender\.com$"),
-                "https://mercadinhosys.vercel.app"
-            ]
+            cors_origins = ["*"] # Desenvolvimento ou fallback absoluto
     
-    # Log de CORS para debug
+    CORS(app, resources={r"/api/*": {
+        "origins": cors_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Access-Control-Allow-Origin"],
+        "expose_headers": ["Content-Range", "X-Content-Range"],
+        "supports_credentials": True,
+        "max_age": 600
+    }})
     logger.info(f"🌐 CORS configurado (Regex habilitado para Vercel/Render)")
-    
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": cors_origins}},
-        supports_credentials=True, # Habilitado para cookies/JWT se necessário
-        allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Origin"],
-        expose_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        max_age=3600,
-    )
 
 
     

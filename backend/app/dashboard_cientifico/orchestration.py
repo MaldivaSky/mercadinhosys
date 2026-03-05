@@ -523,16 +523,16 @@ class DashboardOrchestrator:
             
             for p in produtos_lentos_candidatos:
                 produto_id = p.get("id", 0)
-                qtd_vendida = p.get("quantidade_vendida", 0)
+                qtd_vendida = float(p.get("quantidade_vendida", 0) or 0)
                 
                 # 🔥 CORREÇÃO: Pegar estoque e preço de custo REAIS do banco
                 produto_db_data = produtos_db_map.get(produto_id, {'estoque': 0, 'preco_custo': 0})
-                estoque_atual = produto_db_data['estoque']
-                preco_custo = produto_db_data['preco_custo']
+                estoque_atual = float(produto_db_data['estoque'] or 0)
+                preco_custo = float(produto_db_data['preco_custo'] or 0)
                 
                 # Se preco_custo do banco for 0, tentar pegar do ABC
                 if preco_custo == 0:
-                    preco_custo = p.get("preco_custo", 0)
+                    preco_custo = float(p.get("preco_custo", 0) or 0)
                 
                 # Calcular giro de estoque (vendas / estoque médio)
                 # Para produtos lentos, o giro será baixo
@@ -587,9 +587,9 @@ class DashboardOrchestrator:
             
             for p in top_20_produtos:
                 produto_id = p.get("id", 0)
-                qtd_vendida = p.get("quantidade_vendida", 0)
+                qtd_vendida = float(p.get("quantidade_vendida", 0) or 0)
                 demanda_diaria = qtd_vendida / days if days > 0 else 0
-                estoque_atual = estoque_map.get(produto_id, 0)
+                estoque_atual = float(estoque_map.get(produto_id, 0) or 0)
                 
                 # Calcular giro de estoque
                 giro_estoque = (qtd_vendida / estoque_atual) if estoque_atual > 0 else 0

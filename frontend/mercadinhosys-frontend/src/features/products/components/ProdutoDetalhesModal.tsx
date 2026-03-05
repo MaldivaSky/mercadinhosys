@@ -19,7 +19,7 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { Produto, ProdutoLote, HistoricoPreco } from '../../../types';
-import { formatCurrency, formatDate } from '../../../utils/formatters';
+import { formatCurrency, formatDate, fixImageUrl } from '../../../utils/formatters';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 
 interface ProdutoDetalhesModalProps {
@@ -73,14 +73,14 @@ const ProdutoDetalhesModal = ({ produto, onClose }: ProdutoDetalhesModalProps) =
                     <div className="w-full lg:w-64 flex flex-col gap-4">
                         <div className="aspect-square bg-white dark:bg-gray-900 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden shadow-sm relative group">
                             {produto.imagem_url ? (
-                                <img src={produto.imagem_url} alt={produto.nome} className="w-full h-full object-contain p-4 transition-transform group-hover:scale-110 duration-500" />
+                                <img src={fixImageUrl(produto.imagem_url)} alt={produto.nome} className="w-full h-full object-contain p-4 transition-transform group-hover:scale-110 duration-500" />
                             ) : (
                                 <ImageIcon className="w-16 h-16 text-gray-100 dark:text-gray-800" />
                             )}
                             <div className="absolute top-3 right-3">
                                 <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase shadow-sm border ${produto.classificacao_abc === 'A' ? 'bg-green-500 text-white border-green-400' :
-                                        produto.classificacao_abc === 'B' ? 'bg-blue-500 text-white border-blue-400' :
-                                            'bg-gray-500 text-white border-gray-400'
+                                    produto.classificacao_abc === 'B' ? 'bg-blue-500 text-white border-blue-400' :
+                                        'bg-gray-500 text-white border-gray-400'
                                     }`}>
                                     Classe {produto.classificacao_abc || 'C'}
                                 </span>

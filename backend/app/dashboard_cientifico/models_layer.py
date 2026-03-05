@@ -610,9 +610,10 @@ class PracticalModels:
             if target_est_id:
                 # 2️⃣ Hora do Dia vs Volume de Vendas
                 try:
+                    from app.utils.query_helpers import get_hour_extract
                     print("DEBUG: Executing Hourly Sales Query...")
                     hourly_sales = db.session.query(
-                        func.extract('hour', Venda.data_venda).label('hora'),
+                        get_hour_extract(Venda.data_venda).label('hora'),
                         func.sum(Venda.total).label('total')
                     ).filter(
                         Venda.estabelecimento_id == target_est_id,
@@ -656,13 +657,15 @@ class PracticalModels:
                              print(f"DEBUG: Adding Hourly Insight: {market_insight['insight']}")
                              correlations.append(market_insight)
                 except Exception as e:
+                    db.session.rollback()
                     print(f"DEBUG: Error in Hourly Sales: {e}")
 
                 # 3️⃣ Dia da Semana vs Ticket Médio
                 try:
+                    from app.utils.query_helpers import get_dow_extract
                     print("DEBUG: Executing Day of Week Query...")
                     dow_sales = db.session.query(
-                        func.extract('dow', Venda.data_venda).label('dia'),
+                        get_dow_extract(Venda.data_venda).label('dia'),
                         func.avg(Venda.total).label('ticket_medio')
                     ).filter(
                         Venda.estabelecimento_id == target_est_id,
@@ -707,6 +710,7 @@ class PracticalModels:
                             print(f"DEBUG: Adding Day Insight: {market_insight['insight']}")
                             correlations.append(market_insight)
                 except Exception as e:
+                    db.session.rollback()
                     print(f"DEBUG: Error in Day Sales: {e}")
 
                 # 4️⃣ Variedade de Produtos (Mix) vs Faturamento Diário
@@ -757,6 +761,7 @@ class PracticalModels:
                             print(f"DEBUG: Adding Mix Insight: {market_insight['insight']}")
                             correlations.append(market_insight)
                 except Exception as e:
+                    db.session.rollback()
                     print(f"DEBUG: Error in Product Mix: {e}")
 
             # Fallbacks garantidos se a lista estiver vazia

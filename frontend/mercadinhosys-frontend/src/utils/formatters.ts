@@ -39,3 +39,15 @@ export const formatCPF = (cpf: string): string => {
 export const formatPhone = (phone: string): string => {
     return phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
 };
+
+/**
+ * Corrige URLs de imagem que utilizam o serviço via.placeholder.com (que está instável/fora do ar)
+ * substituindo pelo serviço placehold.co.
+ */
+export const fixImageUrl = (url: string | null | undefined): string | undefined => {
+    if (!url) return undefined;
+    if (url.includes('via.placeholder.com')) {
+        return url.replace('via.placeholder.com', 'placehold.co');
+    }
+    return url;
+};
