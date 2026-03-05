@@ -165,13 +165,15 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                         {getStockLabel(produto)}
                                     </span>
                                 </td>
-                                <td className="px-4 py-3 text-center text-xs font-mono">
+                                <td className="px-4 py-3 text-center text-xs">
                                     {produto.lote ? (
-                                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                                            {produto.lote}
-                                        </span>
+                                        <div className="flex flex-col items-center">
+                                            <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-black text-[10px] uppercase tracking-tighter">
+                                                LOTE: {produto.lote}
+                                            </span>
+                                        </div>
                                     ) : (
-                                        <span className="text-gray-400">-</span>
+                                        <span className="text-gray-400 font-bold">-</span>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-center text-sm">
@@ -184,27 +186,30 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                             if (dias < 0) {
                                                 return (
                                                     <div className="flex flex-col items-center">
-                                                        <span className="text-red-700 font-bold">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
-                                                        <span className="text-[10px] px-1 rounded bg-red-100 text-red-700 border border-red-200 uppercase font-black">Vencido</span>
+                                                        <span className="text-red-700 font-black text-xs">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-600 text-white font-black uppercase tracking-widest mt-0.5 shadow-sm">VENCIDO</span>
                                                     </div>
                                                 );
                                             }
                                             if (dias <= 30) {
                                                 return (
                                                     <div className="flex flex-col items-center">
-                                                        <span className="text-amber-600 font-bold">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
-                                                        <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-600 border border-amber-200 uppercase font-black">{dias} dias</span>
+                                                        <span className="text-amber-600 font-black text-xs">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-black uppercase tracking-widest mt-0.5 shadow-sm">{dias} DIAS</span>
                                                     </div>
                                                 );
                                             }
                                             return (
-                                                <span className="text-green-600 font-medium whitespace-nowrap">
-                                                    {new Date(produto.data_validade).toLocaleDateString('pt-BR')}
-                                                </span>
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-green-700 dark:text-green-400 font-black text-xs">
+                                                        {new Date(produto.data_validade).toLocaleDateString('pt-BR')}
+                                                    </span>
+                                                    <span className="text-[9px] text-green-600 dark:text-green-500 font-bold uppercase">No Prazo</span>
+                                                </div>
                                             );
                                         })()
                                     ) : (
-                                        <span className="text-gray-400">-</span>
+                                        <span className="text-gray-400 font-bold">-</span>
                                     )}
                                 </td>
                                 <td className="px-4 py-3 text-right">{formatCurrency(produto.preco_custo)}</td>
