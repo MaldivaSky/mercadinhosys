@@ -13,6 +13,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import GetAppIcon from '@mui/icons-material/GetApp';
+import SyncIcon from '@mui/icons-material/Sync';
 import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import HandshakeIcon from '@mui/icons-material/Handshake';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
@@ -31,7 +32,23 @@ const CustomersPage: React.FC = () => {
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [clienteDetalhado, setClienteDetalhado] = useState<Cliente | null>(null);
     const [detalheLoading, setDetalheLoading] = useState(false);
-    const [dashboard, setDashboard] = useState<{ total: number, ativos: number, inativos: number, novos: number, vip: number }>({ total: 0, ativos: 0, inativos: 0, novos: 0, vip: 0 });
+    const [dashboard, setDashboard] = useState<{
+        total: number;
+        total_gasto: number;
+        total_devido: number;
+        melhor_cliente_nome: string;
+        melhor_cliente_valor: number;
+        maior_devedor_nome: string;
+        maior_devedor_valor: number;
+    }>({
+        total: 0,
+        total_gasto: 0,
+        total_devido: 0,
+        melhor_cliente_nome: "Nenhum",
+        melhor_cliente_valor: 0,
+        maior_devedor_nome: "Nenhum",
+        maior_devedor_valor: 0
+    });
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('todos');
     const [fiadoFilter, setFiadoFilter] = useState(false);
@@ -43,6 +60,21 @@ const CustomersPage: React.FC = () => {
     const [fiadoValor, setFiadoValor] = useState('');
     const [fiadoForma, setFiadoForma] = useState('Dinheiro');
     const [fiadoLoading, setFiadoLoading] = useState(false);
+    const [recalcLoading, setRecalcLoading] = useState(false);
+
+    const handleRecalcularMetricas = async () => {
+        setRecalcLoading(true);
+        try {
+            const res = await apiClient.post('/clientes/recalcular-metricas');
+            showToast.success(res.data.message || 'Métricas recalculadas com sucesso!');
+            fetchClientes();
+            fetchDashboard();
+        } catch {
+            showToast.error('Erro ao recalcular métricas');
+        } finally {
+            setRecalcLoading(false);
+        }
+    };
 
     // Indicadores de Fiado
     const clientesComFiado = clientes.filter(c => (c.saldo_devedor ?? 0) > 0);
@@ -57,10 +89,12 @@ const CustomersPage: React.FC = () => {
             if (res.data && res.data.estatisticas) {
                 setDashboard({
                     total: res.data.estatisticas.total || 0,
-                    ativos: res.data.estatisticas.ativos || 0,
-                    inativos: res.data.estatisticas.inativos || 0,
-                    novos: 0, // Campo não disponível na API atual
-                    vip: 0, // Campo não disponível na API atual
+                    total_gasto: res.data.estatisticas.total_gasto || 0,
+                    total_devido: res.data.estatisticas.total_devido || 0,
+                    melhor_cliente_nome: res.data.estatisticas.melhor_cliente_nome || "Nenhum",
+                    melhor_cliente_valor: res.data.estatisticas.melhor_cliente_valor || 0,
+                    maior_devedor_nome: res.data.estatisticas.maior_devedor_nome || "Nenhum",
+                    maior_devedor_valor: res.data.estatisticas.maior_devedor_valor || 0,
                 });
             }
         } catch {
@@ -523,6 +557,19 @@ const CustomersPage: React.FC = () => {
                         <MenuItem onClick={exportarExcel}>Exportar Excel</MenuItem>
                         <MenuItem onClick={exportarPDF}>Exportar PDF</MenuItem>
                     </Menu>
+                    <Tooltip title="Recalcula total de compras e valor gasto de todos os clientes com base nas vendas reais do banco">
+                        <span>
+                            <Button
+                                variant="outlined"
+                                startIcon={recalcLoading ? <CircularProgress size={16} /> : <SyncIcon />}
+                                onClick={handleRecalcularMetricas}
+                                disabled={recalcLoading}
+                                sx={{ color: '#388e3c', borderColor: '#388e3c', '&:hover': { bgcolor: '#e8f5e9' } }}
+                            >
+                                {recalcLoading ? 'Sincronizando...' : 'Sincronizar Métricas'}
+                            </Button>
+                        </span>
+                    </Tooltip>
                     <Button
                         variant="contained"
                         startIcon={<PersonAddAlt1Icon />}

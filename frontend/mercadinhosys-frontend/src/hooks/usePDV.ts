@@ -382,13 +382,32 @@ export const usePDV = () => {
                 paymentMethod: formaPagamentoSelecionada,
                 valor_recebido: formaPg?.permite_troco ? valorRecebido : total,
                 troco,
-                cliente_id: cliente?.id,
+                cliente_id: cliente?.id ? Number(cliente.id) : null,
                 email_destino: emailRecibo.trim() || undefined,
                 observacoes: observacoes.trim() || undefined,
                 ...(extraData || {}),
             };
 
             const venda = await pdvService.finalizarVenda(vendaData);
+
+            // ── Alerta de Sangria ──────────────────────────────────────────
+            // Se a venda foi em dinheiro, verifica o saldo no caixa
+            const LIMITE_SANGRIA = 500; // R$ — ajuste conforme política da loja
+            if (formaPagamentoSelecionada === 'dinheiro') {
+                try {
+                    const resumo = await pdvService.getResumoCaixa();
+                    const saldoDinheiro = resumo?.por_forma?.dinheiro ?? resumo?.saldo_atual ?? 0;
+                    if (saldoDinheiro > LIMITE_SANGRIA) {
+                        showToast.warning(
+                            `💰 Sangria recomendada! Dinheiro no caixa: R$ ${saldoDinheiro.toFixed(2).replace('.', ',')}. Limite: R$ ${LIMITE_SANGRIA},00`,
+                            { duration: 8000, icon: '🔔' }
+                        );
+                    }
+                } catch {
+                    // Alerta de sangria é não-crítico — não bloqueia o fluxo
+                }
+            }
+
             return venda;
         } catch (error: any) {
             console.error("Erro ao finalizar venda:", error);

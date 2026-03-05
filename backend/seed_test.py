@@ -174,6 +174,24 @@ def seed(app):
             db.session.flush()
             prod_objs.append(p)
 
+        # 4.1 CLIENTES
+        print("👥 Criando Clientes...")
+        cliente_objs = []
+        nomes_clientes = ["Silvio Santos", "Gugu Liberato", "Fausto Silva", "Hebe Camargo", "Rato"]
+        for idx, nome in enumerate(nomes_clientes):
+            c = Cliente(
+                estabelecimento_id=ESTAB_ID,
+                nome=nome,
+                cpf=f"111.222.333-0{idx}",
+                telefone="(11) 99999-0000",
+                ativo=True,
+                total_compras=0,
+                valor_total_gasto=Decimal("0.00")
+            )
+            db.session.add(c)
+            db.session.flush()
+            cliente_objs.append(c)
+
         # 5. COMPRAS
         print("🛒 Gerando Pedidos de Compra...")
         for meses in [2, 1]:
@@ -215,8 +233,10 @@ def seed(app):
         for d_off in range(30, -1, -1):
             dia = TODAY - timedelta(days=d_off)
             for _ in range(random.randint(3, 7)):
+                cliente = random.choice(cliente_objs) if random.random() > 0.3 else None
                 v = Venda(
                     estabelecimento_id=ESTAB_ID, funcionario_id=func_map["ana.caixa"].id,
+                    cliente_id=cliente.id if cliente else None,
                     codigo=str(uuid.uuid4())[:8].upper(), data_venda=dia, status="finalizada",
                     total=0, subtotal=0, forma_pagamento="Dinheiro"
                 )
@@ -243,6 +263,11 @@ def seed(app):
                         ))
                 v.total = vt
                 v.subtotal = vt
+                if cliente:
+                    cliente.total_compras += 1
+                    cliente.valor_total_gasto += Decimal(str(vt))
+                    cliente.ultima_compra = dia
+                    db.session.add(cliente)
 
         # 7. PONTO
         print("⏰ Gerando Registros de Ponto...")

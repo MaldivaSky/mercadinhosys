@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
     Settings, Building, ShoppingCart, Package, Shield, Save,
     Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon,
-    Clock, MapPin, CreditCard
+    Clock, MapPin, CreditCard, Building2, Plus, Edit2, CheckCircle2, XCircle, Store, RefreshCw
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { showToast } from '../../utils/toast';
@@ -11,6 +11,7 @@ import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUt
 import { API_CONFIG } from '../../api/apiConfig';
 import { apiClient } from '../../api/apiClient';
 import SubscriptionSettings from './SubscriptionSettings';
+import { authService } from '../auth/authService';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 type SectionTitleProps = {
@@ -86,6 +87,139 @@ const defaultConfig: Configuracao = {
 const defaultEstab: Estabelecimento = {
     id: 0, nome_fantasia: '', razao_social: '', cnpj: '', telefone: '', email: '',
     cep: '', logradouro: '', numero: '', bairro: '', cidade: '', estado: ''
+};
+
+// ==================== PAINEL DE ESTABELECIMENTOS ====================
+interface EstabInfo {
+    id: number; nome_fantasia: string; razao_social: string; cnpj: string;
+    telefone: string; email: string; cidade: string; estado: string;
+    ativo: boolean; total_funcionarios: number; total_produtos: number;
+    total_clientes: number; faturamento_total: number;
+}
+
+const EstabelecimentosPanel: React.FC = () => {
+    const [lista, setLista] = useState<EstabInfo[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [editando, setEditando] = useState<EstabInfo | null>(null);
+
+    const carregar = async () => {
+        setLoading(true);
+        try {
+            const res = await apiClient.get('/configuracao/estabelecimentos');
+            setLista(res.data.estabelecimentos || []);
+        } catch {
+            showToast.error('Erro ao carregar estabelecimentos');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { carregar(); }, []);
+
+    const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Todos os estabelecimentos cadastrados nesta conta.</p>
+                <button onClick={carregar} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                    Atualizar
+                </button>
+            </div>
+
+            {loading && (
+                <div className="flex justify-center py-10">
+                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+            )}
+
+            {!loading && lista.map(est => (
+                <div key={est.id} className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                    {/* Header */}
+                    <div className={`px-4 py-3 flex items-center justify-between ${est.ativo ? 'bg-blue-600' : 'bg-gray-500'
+                        }`}>
+                        <div className="flex items-center gap-2">
+                            <Store size={18} className="text-white" />
+                            <div>
+                                <p className="text-white font-semibold text-sm">{est.nome_fantasia}</p>
+                                <p className="text-blue-100 text-xs opacity-80">{est.razao_social}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${est.ativo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                                }`}>
+                                {est.ativo ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                                {est.ativo ? 'Ativa' : 'Inativa'}
+                            </span>
+                            <button
+                                onClick={() => setEditando(est)}
+                                className="flex items-center gap-1 text-xs bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg transition-colors"
+                            >
+                                <Edit2 size={12} /> Editar
+                            </button>
+                        </div>
+                    </div>
+                    {/* Métricas */}
+                    <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white dark:bg-gray-800">
+                        <div className="text-center">
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{est.total_funcionarios}</p>
+                            <p className="text-xs text-gray-500">Funcionários</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{est.total_produtos}</p>
+                            <p className="text-xs text-gray-500">Produtos</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{est.total_clientes}</p>
+                            <p className="text-xs text-gray-500">Clientes</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-sm font-bold text-green-600">{fmt(est.faturamento_total)}</p>
+                            <p className="text-xs text-gray-500">Faturamento</p>
+                        </div>
+                    </div>
+                    {/* Rodapé contato */}
+                    <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700/40 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 dark:border-gray-700">
+                        {est.cidade && <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1"><MapPin size={11} /> {est.cidade}/{est.estado}</span>}
+                        {est.telefone && <span className="text-xs text-gray-500 dark:text-gray-400">{est.telefone}</span>}
+                        {est.email && <span className="text-xs text-gray-500 dark:text-gray-400">{est.email}</span>}
+                    </div>
+                </div>
+            ))}
+
+            {/* Modal de edição */}
+            {editando && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/60" onClick={() => setEditando(null)} />
+                    <div className="relative w-full max-w-md mx-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Building2 size={18} className="text-blue-600" />
+                                Editar: {editando.nome_fantasia}
+                            </h3>
+                            <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Para editar os dados completos deste estabelecimento, acesse a aba <strong>Estabelecimento</strong> nas configurações ou entre com a conta do administrador desta loja.</p>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div><p className="text-gray-500">ID</p><p className="font-semibold text-gray-900 dark:text-white">#{editando.id}</p></div>
+                            <div><p className="text-gray-500">CNPJ</p><p className="font-semibold text-gray-900 dark:text-white">{editando.cnpj || '—'}</p></div>
+                            <div><p className="text-gray-500">Faturamento</p><p className="font-semibold text-green-600">{fmt(editando.faturamento_total)}</p></div>
+                            <div><p className="text-gray-500">Status</p><p className={`font-semibold ${editando.ativo ? 'text-green-600' : 'text-red-500'}`}>{editando.ativo ? 'Ativa' : 'Inativa'}</p></div>
+                        </div>
+                        <button
+                            onClick={() => setEditando(null)}
+                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-colors"
+                        >
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 const SettingsPage: React.FC = () => {
@@ -264,6 +398,9 @@ const SettingsPage: React.FC = () => {
         }
     };
 
+    const userRole = authService.getCurrentUser()?.role?.toLowerCase();
+    const isAdmin = userRole === 'admin';
+
     const tabs = [
         { id: 'geral', label: 'Geral', icon: Settings },
         { id: 'estabelecimento', label: 'Estabelecimento', icon: Building },
@@ -272,6 +409,7 @@ const SettingsPage: React.FC = () => {
         { id: 'ponto', label: 'Ponto & RH', icon: Clock },
         { id: 'sistema', label: 'Sistema & Segurança', icon: Shield },
         { id: 'assinatura', label: 'Assinatura', icon: CreditCard },
+        ...(isAdmin ? [{ id: 'lojas', label: 'Minhas Lojas', icon: Building2 }] : []),
     ];
 
     const loading = configLoading || loadingEstab;
@@ -780,6 +918,14 @@ const SettingsPage: React.FC = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Assinatura & Plano" icon={CreditCard} />
                             <SubscriptionSettings />
+                        </div>
+                    )}
+
+                    {/* ABA MINHAS LOJAS (apenas admin) */}
+                    {activeTab === 'lojas' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
+                            <SectionTitle title="Minhas Lojas" icon={Building2} />
+                            <EstabelecimentosPanel />
                         </div>
                     )}
 

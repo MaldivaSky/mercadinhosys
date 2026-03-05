@@ -600,7 +600,10 @@ class Cliente(db.Model, EnderecoMixin):
             ),
             "saldo_devedor": float(self.saldo_devedor) if self.saldo_devedor else 0.0,
             "total_compras": self.total_compras,
+            "valor_total_gasto": float(self.valor_total_gasto) if self.valor_total_gasto else 0.0,
             "ativo": self.ativo,
+            "data_cadastro": self.data_cadastro.isoformat() if self.data_cadastro else None,
+            "ultima_compra": self.ultima_compra.isoformat() if self.ultima_compra else None,
         }
 
     @staticmethod

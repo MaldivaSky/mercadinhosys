@@ -77,7 +77,7 @@ export interface FinalizarVendaRequest {
     paymentMethod: string;
     valor_recebido: number;
     troco: number;
-    cliente_id?: number;
+    cliente_id?: number | null;
     email_destino?: string;
     observacoes?: string;
     data_vencimento_fiado?: string; // YYYY-MM-DD - data prevista de pagamento do fiado

@@ -275,7 +275,7 @@ def get_funcionario_safe(func_id):
                     text(f"SELECT {target_col} FROM funcionarios WHERE id = :fid"),
                     {"fid": func_id}
                 ).fetchone()
-                return r[0] if r else default
+                return r[0] if r and r[0] is not None else default
             except:
                 return default
 

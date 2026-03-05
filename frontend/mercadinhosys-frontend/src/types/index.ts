@@ -89,6 +89,7 @@ export interface Funcionario {
     horas_extras_horas?: number;
     beneficios?: number;
     beneficios_detalhes?: Array<{ descricao: string; valor: number }>;
+    atrasos_horas?: number;
     data_admissao: string;
     data_demissao?: string;
     ativo: boolean;
