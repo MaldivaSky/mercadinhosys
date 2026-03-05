@@ -9,6 +9,8 @@ interface ProdutoSearchProps {
     onProdutoSelecionado: (produto: Produto) => void;
 }
 
+const UNIDADES_PESO = ['KG', 'G', 'GR', 'L', 'LT', 'ML'];
+
 const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) => {
     const [query, setQuery] = useState('');
     const [resultados, setResultados] = useState<Produto[]>([]);
@@ -18,8 +20,6 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const inputRef = useRef<HTMLInputElement>(null);
 
     const { config } = useConfig();
-
-    // Configurações de Elite
     const estoqueMinimo = config?.estoque_minimo_padrao ?? 10;
     const mostrarValidade = config?.controlar_validade ?? true;
     const mostrarAlertaEstoque = config?.alerta_estoque_minimo ?? true;
@@ -37,7 +37,6 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
             setErro(null);
 
             try {
-                // Código de barras numérico (EAN-8 a EAN-14): busca direta por validação
                 if (/^\d{8,14}$/.test(query.trim())) {
                     const produto = await pdvService.buscarPorCodigoBarras(query.trim());
                     if (produto) {
@@ -48,9 +47,7 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                         setErro('Código de barras não encontrado');
                     }
                 } else {
-                    // Busca textual - usa a rota turbo
                     const produtos = await pdvService.buscarProduto(query);
-
                     if (Array.isArray(produtos)) {
                         setResultados(produtos.slice(0, 20));
                     } else {
@@ -76,13 +73,11 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
         return () => clearTimeout(debounce);
     }, [query, onProdutoSelecionado]);
 
-    // Handler para scan de código de barras
     const handleScanCodigo = async (codigo: string) => {
         setScannerAberto(false);
         setQuery(codigo);
     };
 
-    // Handler para click em produto da lista
     const handleProdutoClick = (produto: Produto) => {
         setErro(null);
         onProdutoSelecionado(produto);
@@ -91,11 +86,45 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
         inputRef.current?.focus();
     };
 
+    /** Calcula badge de validade */
+    const getValidadeBadge = (dvStr: string | null | undefined): React.ReactNode => {
+        if (!dvStr) return null;
+        let y: number, m: number, d: number;
+        if (String(dvStr).includes('-')) {
+            [y, m, d] = String(dvStr).split('-').map(Number);
+        } else {
+            [d, m, y] = String(dvStr).split('/').map(Number);
+        }
+        const dv = new Date(y, m - 1, d);
+        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+        const limite = new Date(hoje); limite.setDate(hoje.getDate() + diasAlertaValidade);
+
+        if (dv < hoje) {
+            return (
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-red-500 text-white animate-pulse">
+                    Vencido
+                </span>
+            );
+        } else if (dv <= limite) {
+            const dias = Math.round((dv.getTime() - hoje.getTime()) / 86400000);
+            return (
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-amber-500 text-white">
+                    Vence em {dias}d
+                </span>
+            );
+        } else {
+            return (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                    Val. OK
+                </span>
+            );
+        }
+    };
+
     return (
         <div className="relative">
-            {/* Barra de Busca com Botões */}
+            {/* Barra de Busca */}
             <div className="flex items-center space-x-2 mb-4">
-                {/* Botão Scanner de Câmera */}
                 <button
                     onClick={() => setScannerAberto(true)}
                     className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 shadow-lg transition"
@@ -104,7 +133,6 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                     <Camera className="w-5 h-5" />
                 </button>
 
-                {/* Campo de Busca */}
                 <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
@@ -117,7 +145,6 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                         className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 dark:text-white"
                         autoFocus
                     />
-
                     {loading && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
@@ -138,97 +165,83 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
 
             {/* Lista de Resultados */}
             {resultados.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl max-h-96 overflow-y-auto">
-                    {resultados.map((produto) => (
-                        <div
-                            key={produto.id}
-                            onClick={() => handleProdutoClick(produto)}
-                            className="p-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition"
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-lg flex items-center justify-center">
-                                            <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-gray-800 dark:text-white">
-                                                {produto.nome}
-                                            </h4>
-                                            <div className="flex items-center space-x-2 mt-1">
-                                                <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded">
-                                                    {produto.codigo_barras}
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-96 overflow-y-auto">
+                    {resultados.map((produto) => {
+                        const un = ((produto as any).unidade_medida || 'UN').toUpperCase();
+                        const isPeso = UNIDADES_PESO.includes(un);
+                        const estq: number = (produto as any).quantidade_estoque ?? (produto as any).estoque_atual ?? 0;
+                        const dvStr = (produto as any).data_validade || produto.data_validade;
+                        const preco = (produto as any).preco_venda_efetivo ?? produto.preco_venda ?? 0;
+
+                        return (
+                            <div
+                                key={produto.id}
+                                onClick={() => handleProdutoClick(produto)}
+                                className="p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    {/* Badge de unidade */}
+                                    <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
+                                            ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                                        }`}>
+                                        {isPeso ? un : <Package className="w-5 h-5" />}
+                                    </div>
+
+                                    {/* Nome + badges */}
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-bold text-gray-800 dark:text-white text-sm leading-tight truncate">
+                                            {produto.nome}
+                                        </h4>
+                                        <div className="flex items-center flex-wrap gap-1.5 mt-1">
+
+                                            {/* A Granel */}
+                                            {isPeso && (
+                                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-orange-500 text-white">
+                                                    A Granel · {un}
                                                 </span>
-                                                <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                                    {produto.categoria}
+                                            )}
+
+                                            {/* Código de barras */}
+                                            {(produto as any).codigo_barras && (
+                                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                                                    {(produto as any).codigo_barras}
                                                 </span>
-                                                {produto.marca && (
-                                                    <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded">
-                                                        {produto.marca}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            )}
+
+                                            {/* Marca */}
+                                            {produto.marca && (
+                                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                                    {produto.marca}
+                                                </span>
+                                            )}
+
+                                            {/* Validade */}
+                                            {mostrarValidade && getValidadeBadge(dvStr)}
                                         </div>
                                     </div>
-                                </div>
-                                <div className="text-right ml-4">
-                                    <p className="font-bold text-xl text-gray-800 dark:text-white">
-                                        R$ {((produto as { preco_venda_efetivo?: number }).preco_venda_efetivo ?? produto.preco_venda ?? 0).toFixed(2)}
-                                    </p>
-                                    <div className="flex items-center justify-end space-x-2 mt-1">
+
+                                    {/* Preço + Estoque */}
+                                    <div className="text-right flex-shrink-0 min-w-[90px]">
+                                        <p className="font-black text-base text-gray-800 dark:text-white tabular-nums leading-tight">
+                                            R$ {Number(preco).toFixed(2).replace('.', ',')}
+                                            <span className="text-[10px] font-normal text-slate-400">/{un.toLowerCase()}</span>
+                                        </p>
                                         {mostrarAlertaEstoque && (
-                                            <span className={`text-xs px-2 py-0.5 rounded ${(produto.quantidade_estoque || 0) > estoqueMinimo
-                                                ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
-                                                : (produto.quantidade_estoque || 0) > 0
-                                                    ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                                                    : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 inline-block ${estq > estoqueMinimo
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                                    : estq > 0
+                                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                                                 }`}>
-                                                Estoque: {produto.quantidade_estoque || 0}
+                                                Est: {estq} {un.toLowerCase()}
                                             </span>
                                         )}
-                                        {mostrarValidade && produto.data_validade && (() => {
-                                            // Parse robusto: suporta YYYY-MM-DD e DD/MM/YYYY
-                                            let y, m, d;
-                                            if (produto.data_validade.includes('-')) {
-                                                [y, m, d] = produto.data_validade.split('-').map(Number);
-                                            } else {
-                                                [d, m, y] = produto.data_validade.split('/').map(Number);
-                                            }
-
-                                            const dataVal = new Date(y, m - 1, d);
-                                            const hoje = new Date();
-                                            hoje.setHours(0, 0, 0, 0);
-
-                                            const dateLimite = new Date(hoje);
-                                            dateLimite.setDate(hoje.getDate() + diasAlertaValidade);
-
-                                            if (dataVal < hoje) {
-                                                return (
-                                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-red-500 text-white animate-pulse">
-                                                        Vencido
-                                                    </span>
-                                                );
-                                            } else if (dataVal <= dateLimite) {
-                                                const diffTime = dataVal.getTime() - hoje.getTime();
-                                                const dias = Math.round(diffTime / (1000 * 3600 * 24));
-                                                return (
-                                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500 text-white" title={`Vence em ${dias} dias`}>
-                                                        Vence Logo
-                                                    </span>
-                                                );
-                                            } else {
-                                                return (
-                                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-green-100 text-green-700">
-                                                        Validade OK
-                                                    </span>
-                                                );
-                                            }
-                                        })()}
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

@@ -315,43 +315,74 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
                             ) : resumoCaixa && (
                                 <div className="rounded-2xl overflow-hidden"
                                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                    <div className="flex items-center gap-2 px-4 py-3"
+                                    <div className="flex items-center justify-between px-4 py-3"
                                         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                        <BarChart3 className="w-4 h-4 text-indigo-400" />
-                                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Resumo do Turno</span>
-                                    </div>
-                                    {Object.entries(resumoCaixa.por_forma_pagamento || {}).map(([forma, dados]: any) => {
-                                        const info = FORMA_LABELS[forma] || { label: forma, emoji: '📦', color: 'text-slate-400' };
-                                        const isFiado = forma === 'fiado';
-                                        return (
-                                            <div key={forma}
-                                                className="flex justify-between items-center px-4 py-3 transition-colors"
-                                                style={{
-                                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                                    background: isFiado ? 'rgba(234,88,12,0.08)' : undefined
-                                                }}>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-lg leading-none">{info.emoji}</span>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-white">{info.label}</p>
-                                                        <p className="text-[11px] text-slate-500">{dados.quantidade} venda{dados.quantidade !== 1 ? 's' : ''}</p>
-                                                    </div>
-                                                </div>
-                                                <span className={`font-black text-base tabular-nums ${isFiado ? 'text-orange-400' : 'text-white'}`}>
-                                                    {dados.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                    {/* Esperado na gaveta */}
-                                    <div className="flex justify-between items-center px-4 py-3"
-                                        style={{ background: 'rgba(245,158,11,0.12)', borderTop: '1px solid rgba(245,158,11,0.2)' }}>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-lg">💰</span>
-                                            <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Esperado na Gaveta</span>
+                                            <BarChart3 className="w-4 h-4 text-indigo-400" />
+                                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Resumo do Turno</span>
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">ATIVO</span>
+                                    </div>
+
+                                    {/* Grid de Totais Rápidos */}
+                                    <div className="grid grid-cols-2 gap-px bg-white/5 border-b border-white/5">
+                                        <div className="p-3">
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Vendas Totais</p>
+                                            <p className="text-sm font-black text-white">{formatCurrency(resumoCaixa.total_vendas)}</p>
+                                        </div>
+                                        <div className="p-3 border-l border-white/5">
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Entradas (Suprim.)</p>
+                                            <p className="text-sm font-black text-green-400">+{formatCurrency(resumoCaixa.total_suprimentos)}</p>
+                                        </div>
+                                        <div className="p-3 border-t border-white/5">
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Saídas (Sangrias)</p>
+                                            <p className="text-sm font-black text-red-400">-{formatCurrency(resumoCaixa.total_sangrias)}</p>
+                                        </div>
+                                        <div className="p-3 border-t border-l border-white/5">
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Troco Inicial</p>
+                                            <p className="text-sm font-black text-slate-300">{formatCurrency(resumoCaixa.saldo_inicial)}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Detalhamento por forma */}
+                                    <div className="divide-y divide-white/5">
+                                        {Object.entries(resumoCaixa.por_forma_pagamento || {}).map(([forma, dados]: any) => {
+                                            if (dados.total === 0 && forma !== 'dinheiro' && forma !== 'fiado') return null;
+                                            const info = FORMA_LABELS[forma] || { label: forma, emoji: '📦', color: 'text-slate-400' };
+                                            const isFiado = forma === 'fiado';
+                                            return (
+                                                <div key={forma}
+                                                    className="flex justify-between items-center px-4 py-2.5 transition-colors"
+                                                    style={{ background: isFiado && dados.total > 0 ? 'rgba(234,88,12,0.08)' : undefined }}>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-base leading-none">{info.emoji}</span>
+                                                        <div>
+                                                            <p className="text-[13px] font-bold text-white leading-tight">{info.label}</p>
+                                                            <p className="text-[10px] text-slate-500">{dados.quantidade} op.</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`font-black text-sm tabular-nums ${isFiado ? 'text-orange-400' : 'text-white'}`}>
+                                                        {formatCurrency(dados.total)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Final Esperado na Gaveta */}
+                                    <div className="flex justify-between items-center px-4 py-4"
+                                        style={{ background: 'rgba(245,158,11,0.15)', borderTop: '2px dashed rgba(245,158,11,0.3)' }}>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                                <DollarSign className="w-4 h-4 text-amber-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest leading-none">Esperado em Dinheiro</p>
+                                                <p className="text-[9px] text-amber-600/70 font-bold mt-1">(Troco + Dinheiro + Suprim - Sangrias)</p>
+                                            </div>
                                         </div>
                                         <span className="text-xl font-black text-amber-400 tabular-nums">
-                                            {resumoCaixa.saldo_esperado_gaveta?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                            {formatCurrency(resumoCaixa.saldo_esperado_gaveta)}
                                         </span>
                                     </div>
                                 </div>
