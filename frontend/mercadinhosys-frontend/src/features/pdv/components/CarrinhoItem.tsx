@@ -26,6 +26,8 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
     onRemover,
     onAplicarDesconto,
 }) => {
+    const isGranel = ['KG', 'L', 'G', 'ML'].includes(produto.unidade_medida?.toUpperCase()) || (produto as any).tipo === 'granel';
+    const diasAlertaValidade = 30; // Pode vir de um context se necessário
     const [mostrarDesconto, setMostrarDesconto] = useState(false);
     const [valorDesconto, setValorDesconto] = useState('');
     const [tipoDesconto, setTipoDesconto] = useState<'valor' | 'percentual'>('percentual');
@@ -138,25 +140,31 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                     </div>
 
                     {/* Controles de quantidade */}
-                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 gap-0.5">
-                        <button
-                            onClick={() => onAtualizarQuantidade(Math.max(1, quantidade - 1))}
-                            className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
-                        >
-                            <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <input
-                            type="number"
-                            value={quantidade}
-                            onChange={e => onAtualizarQuantidade(parseInt(e.target.value) || 1)}
-                            className="w-8 text-center bg-transparent border-none focus:ring-0 text-xs font-bold text-slate-900 dark:text-white"
-                        />
-                        <button
-                            onClick={() => onAtualizarQuantidade(quantidade + 1)}
-                            className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
-                        >
-                            <Plus className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+                            <button
+                                onClick={() => onAtualizarQuantidade(Math.max(0, quantidade - (isGranel ? 0.1 : 1)))}
+                                className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-90"
+                            >
+                                <Minus className="w-5 h-5" />
+                            </button>
+                            <input
+                                type="number"
+                                value={quantidade}
+                                step={isGranel ? "0.001" : "1"}
+                                onChange={(e) => onAtualizarQuantidade(parseFloat(e.target.value) || 0)}
+                                className="w-16 text-center bg-transparent border-none font-black text-slate-900 dark:text-white focus:outline-none tabular-nums"
+                            />
+                            <button
+                                onClick={() => onAtualizarQuantidade(quantidade + (isGranel ? 0.1 : 1))}
+                                className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-90"
+                            >
+                                <Plus className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <span className="text-[10px] font-black text-slate-400 border border-slate-200 dark:border-slate-700 px-2 py-1 rounded-lg uppercase tracking-widest">
+                            {produto.unidade_medida || 'UN'}
+                        </span>
                     </div>
 
                     {/* Total + ações */}

@@ -19,6 +19,7 @@ import ClienteSelect from './components/ClienteSelect';
 import CaixaHeader from './components/CaixaHeader';
 import NotaFiscalModal from './components/NotaFiscalModal';
 import CupomFiscalModal from './components/CupomFiscalModal';
+import PesoInputModal from './components/PesoInputModal';
 import { usePDV } from '../../hooks/usePDV';
 import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
@@ -64,6 +65,8 @@ const PDVPage: React.FC = () => {
     const [managerCaixaAberto, setManagerCaixaAberto] = useState(false);
     const [dataVencimentoFiado, setDataVencimentoFiado] = useState('');  // data prevista pagamento do fiado
     const [cupomModalAberto, setCupomModalAberto] = useState(false);
+    const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
+    const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
 
     const isFiado = formaPagamentoSelecionada === 'fiado';
 
@@ -130,6 +133,24 @@ const PDVPage: React.FC = () => {
         }
     };
 
+    const handleProdutoSelecionado = (p: any) => {
+        const aGranel = ['KG', 'G', 'L', 'ML'].includes(p.unidade_medida?.toUpperCase()) || p.tipo === 'granel';
+
+        if (aGranel) {
+            setProdutoPendentePeso(p);
+            setMostrarModalPeso(true);
+        } else {
+            adicionarProduto(p, 1);
+        }
+    };
+
+    const handleConfirmarPeso = (peso: number) => {
+        if (produtoPendentePeso) {
+            adicionarProduto(produtoPendentePeso, peso);
+            setProdutoPendentePeso(null);
+        }
+    };
+
     const renderIconPagamento = (tipo: string) => {
         switch (tipo) {
             case 'dinheiro': return <DollarSign className="w-6 h-6" />;
@@ -149,6 +170,13 @@ const PDVPage: React.FC = () => {
                 setCaixaAtual={setCaixaAberto}
                 isOpen={managerCaixaAberto}
                 onClose={() => setManagerCaixaAberto(false)}
+            />
+
+            <PesoInputModal
+                isOpen={mostrarModalPeso}
+                onClose={() => { setMostrarModalPeso(false); setProdutoPendentePeso(null); }}
+                onConfirm={handleConfirmarPeso}
+                produto={produtoPendentePeso}
             />
 
             <CaixaHeader
@@ -197,7 +225,9 @@ const PDVPage: React.FC = () => {
                     </div>
 
                     <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                        <ProdutoSearch onProdutoSelecionado={adicionarProduto} />
+                        <div className="bg-white dark:bg-slate-900 p-4 border-b border-slate-200 dark:border-slate-800">
+                            <ProdutoSearch onProdutoSelecionado={handleProdutoSelecionado} />
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
