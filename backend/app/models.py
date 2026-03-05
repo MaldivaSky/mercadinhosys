@@ -905,8 +905,8 @@ class Produto(db.Model):
 
     unidade_medida = db.Column(db.String(20), default="UN")
 
-    quantidade = db.Column(db.Integer, default=0)
-    quantidade_minima = db.Column(db.Integer, default=10)
+    quantidade = db.Column(db.Numeric(10, 3), default=0.0)
+    quantidade_minima = db.Column(db.Numeric(10, 3), default=10.0)
 
     preco_custo = db.Column(db.Numeric(10, 2), nullable=False)
     preco_venda = db.Column(db.Numeric(10, 2), nullable=False)
@@ -916,7 +916,7 @@ class Produto(db.Model):
     origem = db.Column(db.Integer, default=0)
 
     total_vendido = db.Column(db.Float, default=0.0)
-    quantidade_vendida = db.Column(db.Integer, default=0)
+    quantidade_vendida = db.Column(db.Numeric(10, 3), default=0.0)
     ultima_venda = db.Column(db.DateTime)
 
     classificacao_abc = db.Column(db.String(1))
@@ -1316,8 +1316,8 @@ class Produto(db.Model):
             "unidade_medida": self.unidade_medida,
             "categoria": self.categoria.nome if self.categoria else None,
             "categoria_id": self.categoria_id,
-            "quantidade": self.quantidade,
-            "quantidade_minima": self.quantidade_minima,
+            "quantidade": float(self.quantidade) if self.quantidade else 0.0,
+            "quantidade_minima": float(self.quantidade_minima) if self.quantidade_minima else 0.0,
             "preco_custo": float(self.preco_custo) if self.preco_custo else 0.0,
             "preco_venda": float(self.preco_venda) if self.preco_venda else 0.0,
             "margem_lucro": float(self.margem_lucro) if self.margem_lucro else 0.0,
@@ -1331,7 +1331,7 @@ class Produto(db.Model):
             "imagem_url": self.imagem_url,
             "controlar_validade": bool(getattr(self, "controlar_validade", True)),
             "total_vendido": float(self.total_vendido) if self.total_vendido else 0.0,
-            "quantidade_vendida": int(self.quantidade_vendida) if self.quantidade_vendida else 0,
+            "quantidade_vendida": float(self.quantidade_vendida) if self.quantidade_vendida else 0.0,
             "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
             "classificacao_abc": self.classificacao_abc,
             "estoque_status": self.estoque_status,
@@ -1449,8 +1449,8 @@ class ProdutoLote(db.Model):
     numero_lote = db.Column(db.String(50), nullable=False)  # Ex: "LOTE-2025-001"
     
     # Quantidade e validade
-    quantidade = db.Column(db.Integer, nullable=False)  # Quantidade atual no lote
-    quantidade_inicial = db.Column(db.Integer, nullable=False)  # Quantidade quando recebido
+    quantidade = db.Column(db.Numeric(10, 3), nullable=False)  # Quantidade atual no lote
+    quantidade_inicial = db.Column(db.Numeric(10, 3), nullable=False)  # Quantidade quando recebido
     
     data_validade = db.Column(db.Date, nullable=False)
     data_entrada = db.Column(db.Date, default=date.today, nullable=False)
@@ -1496,6 +1496,24 @@ class ProdutoLote(db.Model):
     )
 
     @property
+    def ultima_venda(self):
+        """Retorna a data da última venda deste lote específico (Blindado contra schema SQLite antigo)"""
+        try:
+            from app.models import MovimentacaoEstoque
+            # Tenta filtrar por lote_id, se column não existir, o query falha
+            ultima = (
+                MovimentacaoEstoque.query.filter_by(lote_id=self.id, tipo="saida")
+                .filter(MovimentacaoEstoque.motivo.ilike("%venda%"))
+                .order_by(MovimentacaoEstoque.created_at.desc())
+                .first()
+            )
+            return ultima.created_at if ultima else None
+        except Exception:
+            # Fallback: Se lote_id não existir no banco (ex: SQLite Docker sem sync), 
+            # não quebra a API (Erro 500), apenas retorna None
+            return None
+
+    @property
     def dias_para_vencer(self) -> int:
         """Retorna dias até a validade (negativo se vencido)"""
         return (self.data_validade - date.today()).days
@@ -1516,8 +1534,8 @@ class ProdutoLote(db.Model):
             "numero_lote": self.numero_lote,
             "produto_id": self.produto_id,
             "produto_nome": self.produto.nome if self.produto else None,
-            "quantidade": self.quantidade,
-            "quantidade_inicial": self.quantidade_inicial,
+            "quantidade": float(self.quantidade) if self.quantidade else 0.0,
+            "quantidade_inicial": float(self.quantidade_inicial) if self.quantidade_inicial else 0.0,
             "data_validade": self.data_validade.isoformat() if self.data_validade else None,
             "data_entrada": self.data_entrada.isoformat() if self.data_entrada else None,
             "dias_para_vencer": self.dias_para_vencer,
@@ -1525,6 +1543,7 @@ class ProdutoLote(db.Model):
             "preco_custo_unitario": float(self.preco_custo_unitario) if self.preco_custo_unitario else 0.0,
             "preco_venda": float(self.preco_venda) if self.preco_venda is not None else None,
             "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
+            "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
             "ativo": self.ativo,
         }
 
@@ -1621,7 +1640,7 @@ class VendaItem(db.Model):
     produto_codigo = db.Column(db.String(50))
     produto_unidade = db.Column(db.String(20))
 
-    quantidade = db.Column(db.Integer, nullable=False)
+    quantidade = db.Column(db.Numeric(10, 3), nullable=False)
     preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)
     desconto = db.Column(db.Numeric(10, 2), default=0)
     total_item = db.Column(db.Numeric(10, 2), nullable=False)
@@ -1647,7 +1666,7 @@ class VendaItem(db.Model):
             "id": self.id,
             "produto_id": self.produto_id,
             "produto_nome": self.produto_nome,
-            "quantidade": self.quantidade,
+            "quantidade": float(self.quantidade) if self.quantidade else 0.0,
             "preco_unitario": (
                 float(self.preco_unitario) if self.preco_unitario else 0.0
             ),
@@ -1728,12 +1747,13 @@ class MovimentacaoEstoque(db.Model):
 
     venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
     pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"))
+    lote_id = db.Column(db.Integer, db.ForeignKey("produto_lotes.id"))
     funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
 
     tipo = db.Column(db.String(20), nullable=False)
-    quantidade = db.Column(db.Integer, nullable=False)
-    quantidade_anterior = db.Column(db.Integer, nullable=False)
-    quantidade_atual = db.Column(db.Integer, nullable=False)
+    quantidade = db.Column(db.Numeric(10, 3), nullable=False)
+    quantidade_anterior = db.Column(db.Numeric(10, 3), nullable=False)
+    quantidade_atual = db.Column(db.Numeric(10, 3), nullable=False)
 
     custo_unitario = db.Column(db.Numeric(10, 2))
     valor_total = db.Column(db.Numeric(10, 2))
@@ -1753,6 +1773,9 @@ class MovimentacaoEstoque(db.Model):
     funcionario = db.relationship(
         "Funcionario", backref=db.backref("movimentacoes", lazy=True)
     )
+    lote = db.relationship(
+        "ProdutoLote", backref=db.backref("movimentacoes_lote", lazy=True)
+    )
 
     __table_args__ = (
         db.Index("idx_mov_estoque_produto", "produto_id"),
@@ -1760,15 +1783,23 @@ class MovimentacaoEstoque(db.Model):
     )
 
     def to_dict(self):
-        return {
+        data = {
             "id": self.id,
             "produto_id": self.produto_id,
             "tipo": self.tipo,
-            "quantidade": self.quantidade,
-            "quantidade_atual": self.quantidade_atual,
+            "quantidade": float(self.quantidade) if self.quantidade else 0.0,
+            "quantidade_atual": float(self.quantidade_atual) if self.quantidade_atual else 0.0,
             "motivo": self.motivo,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+        
+        # Blindagem: Tenta incluir lote_id se a coluna existir no objeto
+        try:
+            data["lote_id"] = self.lote_id
+        except:
+            pass
+            
+        return data
 
 
 # ============================================

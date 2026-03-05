@@ -575,26 +575,34 @@ def buscar_produtos_pdv():
         from sqlalchemy import text as sql_text
         resultado = db.session.execute(sql_text(f"""
             SELECT
-                id,
-                nome,
-                codigo_barras,
-                codigo_interno,
-                marca,
-                preco_venda,
-                quantidade AS quantidade_estoque,
-                unidade_medida,
-                data_validade
-            FROM produtos
-            WHERE estabelecimento_id = :estab_id
-              AND ativo = true
-              AND quantidade > 0
+                p.id,
+                p.nome,
+                p.codigo_barras,
+                p.codigo_interno,
+                p.marca,
+                p.preco_venda,
+                p.quantidade AS quantidade_estoque,
+                p.unidade_medida,
+                COALESCE(pl.data_validade, p.data_validade) as data_validade,
+                COALESCE(pl.numero_lote, p.lote) as lote
+            FROM produtos p
+            LEFT JOIN (
+                SELECT DISTINCT ON (produto_id) 
+                    produto_id, data_validade, numero_lote
+                FROM produto_lotes
+                WHERE ativo = true AND quantidade > 0
+                ORDER BY produto_id, data_validade ASC
+            ) pl ON p.id = pl.produto_id
+            WHERE p.estabelecimento_id = :estab_id
+              AND p.ativo = true
+              AND p.quantidade > 0
               AND (
-                  nome {like_op} :busca
-                  OR codigo_barras {like_op} :busca
-                  OR codigo_interno {like_op} :busca
-                  OR marca {like_op} :busca
+                  p.nome {like_op} :busca
+                  OR p.codigo_barras {like_op} :busca
+                  OR p.codigo_interno {like_op} :busca
+                  OR p.marca {like_op} :busca
               )
-            ORDER BY nome ASC
+            ORDER BY p.nome ASC
             LIMIT 20
         """), {"estab_id": estabelecimento_id, "busca": busca_termo}).fetchall()
 

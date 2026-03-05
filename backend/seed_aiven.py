@@ -349,7 +349,7 @@ def run():
                 quantidade_minima=random.randint(5,20), unidade_medida="UN",
                 ncm=fake.numerify(text="########"), marca=marca_p, fabricante=marca_p,
                 tipo=cat_nome, subcategoria="Geral", ativo=True,
-                imagem_url=f"https://via.placeholder.com/300x300?text={nome_p[:15].replace(' ','+')}",
+                imagem_url=f"https://placehold.co/300x300?text={nome_p[:15].replace(' ','+')}",
                 controlar_validade=True,
             )
             _db.session.add(prod)

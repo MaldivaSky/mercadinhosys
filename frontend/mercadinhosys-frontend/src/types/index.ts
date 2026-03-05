@@ -185,6 +185,52 @@ export interface Produto {
     controla_estoque?: boolean;
     created_at?: string;
     updated_at?: string;
+    /** NOVO: Lista de lotes para o carrossel de detalhes */
+    lotes?: ProdutoLote[];
+    historico_precos?: HistoricoPreco[];
+    historico_perdas?: MovimentacaoEstoque[];
+    metricas_gestao?: {
+        giro_estoque: number;
+        dias_estoque: number;
+        cobertura_estoque: string;
+        frequencia_venda: string;
+    };
+}
+
+export interface HistoricoPreco {
+    id: number;
+    produto_id: number;
+    produto_nome?: string;
+    funcionario?: string;
+    preco_custo_anterior: number;
+    preco_venda_anterior: number;
+    margem_anterior: number;
+    preco_custo_novo: number;
+    preco_venda_novo: number;
+    margem_nova: number;
+    variacao_custo_pct: number;
+    variacao_venda_pct: number;
+    motivo: string;
+    observacoes?: string;
+    data_alteracao: string;
+}
+
+export interface ProdutoLote {
+    id: number;
+    numero_lote: string;
+    produto_id: number;
+    produto_nome?: string;
+    quantidade: number;
+    quantidade_inicial: number;
+    data_validade: string;
+    data_entrada: string;
+    dias_para_vencer: number;
+    esta_vencido: boolean;
+    preco_custo_unitario: number;
+    preco_venda: number | null;
+    fornecedor_nome?: string;
+    ultima_venda?: string;
+    ativo: boolean;
 }
 
 // Response da API de produtos com estatísticas

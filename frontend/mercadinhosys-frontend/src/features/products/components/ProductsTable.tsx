@@ -1,4 +1,4 @@
-import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
+import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers, PackageX } from 'lucide-react';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 
@@ -20,6 +20,7 @@ interface ProductsTableProps {
     onStockAdjust: (produto: Produto) => void;
     onHistory: (produto: Produto) => void;
     onMakeOrder: (produto: Produto) => void;
+    onDiscard: (produto: Produto) => void;
     onViewLotes?: (produto: Produto) => void;
     onProductClick?: (produto: Produto) => void;
     onSort?: (key: string) => void;
@@ -39,6 +40,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
     onStockAdjust,
     onHistory,
     onMakeOrder,
+    onDiscard,
     onViewLotes,
     onProductClick,
     onSort,
@@ -163,8 +165,14 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                         {getStockLabel(produto)}
                                     </span>
                                 </td>
-                                <td className="px-4 py-3 text-center text-sm font-mono text-gray-600 dark:text-gray-400">
-                                    {produto.lote || '-'}
+                                <td className="px-4 py-3 text-center text-xs font-mono">
+                                    {produto.lote ? (
+                                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                                            {produto.lote}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
                                 </td>
                                 <td className="px-4 py-3 text-center text-sm">
                                     {produto.data_validade ? (
@@ -172,8 +180,25 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                             const hoje = new Date();
                                             const validade = new Date(produto.data_validade);
                                             const dias = Math.floor((validade.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+                                            if (dias < 0) {
+                                                return (
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-red-700 font-bold">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
+                                                        <span className="text-[10px] px-1 rounded bg-red-100 text-red-700 border border-red-200 uppercase font-black">Vencido</span>
+                                                    </div>
+                                                );
+                                            }
+                                            if (dias <= 30) {
+                                                return (
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-amber-600 font-bold">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
+                                                        <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-600 border border-amber-200 uppercase font-black">{dias} dias</span>
+                                                    </div>
+                                                );
+                                            }
                                             return (
-                                                <span className={`${dias < 0 ? 'text-red-700 font-bold' : dias <= 30 ? 'text-red-600 font-medium' : dias <= 90 ? 'text-yellow-600' : 'text-green-600'}`}>
+                                                <span className="text-green-600 font-medium whitespace-nowrap">
                                                     {new Date(produto.data_validade).toLocaleDateString('pt-BR')}
                                                 </span>
                                             );
@@ -213,6 +238,13 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                             title="Histórico"
                                         >
                                             <FileText className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => onDiscard(produto)}
+                                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded"
+                                            title="Descartar (Prejuízo)"
+                                        >
+                                            <PackageX className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => onStockAdjust(produto)}

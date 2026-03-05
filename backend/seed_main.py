@@ -287,7 +287,7 @@ def seed(app):
                 estabelecimento_id=est.id,
                 formas_pagamento=json.dumps(["Dinheiro", "Pix", "Cartão de Crédito",
                                              "Cartão de Débito", "Fiado"]),
-                logo_url="https://via.placeholder.com/200x100?text=Logo",
+                logo_url="https://placehold.co/200x100?text=Logo",
                 controlar_validade=True,
                 alerta_estoque_minimo=True,
                 permitir_venda_sem_estoque=False,
@@ -472,7 +472,7 @@ def seed(app):
                 tipo=cat_nome,
                 subcategoria="Geral",
                 ativo=True,
-                imagem_url=f"https://via.placeholder.com/300x300?text={nome_p[:20].replace(' ', '+')}",
+                imagem_url=f"https://placehold.co/300x300?text={nome_p[:20].replace(' ', '+')}",
                 controlar_validade=True,
             )
             db.session.add(prod)

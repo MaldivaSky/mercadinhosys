@@ -215,4 +215,18 @@ export const productsService = {
         });
         return response.data;
     },
+
+    descartarProduto: async (
+        id: number,
+        quantidade: number,
+        motivoEspecifico: string,
+        observacoes?: string
+    ): Promise<{ success: boolean; message: string; data: any }> => {
+        const response = await apiClient.post<any>(`/produtos/${id}/descarte`, {
+            quantidade,
+            motivo_especifico: motivoEspecifico,
+            observacoes
+        });
+        return response.data;
+    },
 };

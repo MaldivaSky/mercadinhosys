@@ -9,7 +9,8 @@ import {
   ChevronDown,
   RefreshCw,
   X,
-  Upload
+  Upload,
+  PackageX
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
 import { productsService } from './productsService';
@@ -81,6 +82,7 @@ const ProductsPage: React.FC = () => {
   const [showPurchaseOrders, setShowPurchaseOrders] = useState(false);
   const [showLotesModal, setShowLotesModal] = useState(false);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
+  const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [expiryTimeframe, setExpiryTimeframe] = useState<'vencidos' | '15' | '30' | '90'>('30');
 
   const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
@@ -97,6 +99,12 @@ const ProductsPage: React.FC = () => {
     preco_custo: 0,
     markup: 30,
     preco_venda: 0,
+  });
+
+  const [discardData, setDiscardData] = useState({
+    quantidade: 0,
+    motivo_especifico: 'Vencido',
+    observacoes: '',
   });
 
   // Data Loading
@@ -194,6 +202,35 @@ const ProductsPage: React.FC = () => {
       loadStats();
     } catch (error) {
       // Erro já tratado pelo promise
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (!selectedProduct) return;
+    if (discardData.quantidade <= 0) {
+      showToast.error('Quantidade deve ser maior que zero');
+      return;
+    }
+
+    try {
+      await showToast.promise(
+        productsService.descartarProduto(
+          selectedProduct.id,
+          discardData.quantidade,
+          discardData.motivo_especifico,
+          discardData.observacoes
+        ),
+        {
+          loading: 'Processando descarte...',
+          success: 'Descarte realizado e prejuízo registrado!',
+          error: (err: any) => err.response?.data?.message || 'Erro ao processar descarte'
+        }
+      );
+      setShowDiscardModal(false);
+      loadProdutos();
+      loadStats();
+    } catch (error) {
+      console.error('Erro no descarte:', error);
     }
   };
 
@@ -515,6 +552,7 @@ const ProductsPage: React.FC = () => {
         onHistory={(p) => { setSelectedProduct(p); setShowProductHistory(true); }}
         onMakeOrder={openOrderModal}
         onViewLotes={(p) => { setSelectedProduct(p); setShowLotesModal(true); }}
+        onDiscard={(p) => { setSelectedProduct(p); setDiscardData({ quantidade: 0, motivo_especifico: 'Vencido', observacoes: '' }); setShowDiscardModal(true); }}
         onProductClick={openDetailModal}
         onSort={handleSort}
         sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
@@ -561,6 +599,109 @@ const ProductsPage: React.FC = () => {
             <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700">
               <button onClick={() => setShowStockModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
               <button onClick={handleStockAdjust} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDiscardModal && selectedProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between p-6 border-b dark:border-slate-800 bg-rose-50/50 dark:bg-rose-900/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-rose-500/20">
+                  <PackageX className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Registrar Perda</h3>
+                  <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Gestão Profissional</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDiscardModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Produto para Descarte</p>
+                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedProduct.nome}</p>
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <span className="text-xs font-bold px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300">
+                    Estoque: {selectedProduct.quantidade} {selectedProduct.unidade_medida}
+                  </span>
+                  <span className="text-xs font-bold px-2 py-1 bg-rose-100 dark:bg-rose-900/30 rounded-md text-rose-600 dark:text-rose-400">
+                    Custo: {formatCurrency(selectedProduct.preco_custo)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Quantidade a Descartar</label>
+                  <input
+                    type="number"
+                    max={selectedProduct.quantidade}
+                    value={discardData.quantidade}
+                    onChange={(e) => setDiscardData(prev => ({ ...prev, quantidade: parseFloat(e.target.value) || 0 }))}
+                    className="w-full text-3xl font-black text-center py-4 bg-slate-50 dark:bg-slate-800/50 border-2 border-transparent focus:border-rose-500 rounded-2xl outline-none transition-all tabular-nums text-slate-900 dark:text-white"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Motivo Profissional</label>
+                  <select
+                    value={discardData.motivo_especifico}
+                    onChange={(e) => setDiscardData(prev => ({ ...prev, motivo_especifico: e.target.value }))}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:border-rose-500 font-bold text-slate-700 dark:text-slate-200 appearance-none"
+                  >
+                    <option value="Vencido">Produto Vencido</option>
+                    <option value="Avariado">Produto Estragado/Avariado</option>
+                    <option value="Quebra">Quebra de Manuseio</option>
+                    <option value="Extravio">Extravio / Furto</option>
+                    <option value="Outros">Outros Motivos</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Observações Internas</label>
+                  <textarea
+                    value={discardData.observacoes}
+                    onChange={(e) => setDiscardData(prev => ({ ...prev, observacoes: e.target.value }))}
+                    rows={2}
+                    className="w-full p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none focus:border-rose-500 font-medium text-slate-700 dark:text-slate-200 text-sm"
+                    placeholder="Detalhes adicionais sobre a perda..."
+                  />
+                </div>
+              </div>
+
+              {/* Impacto Financeiro Preview */}
+              <div className="p-4 bg-rose-50 dark:bg-rose-900/10 rounded-2xl border border-rose-100 dark:border-rose-500/20 text-center">
+                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Impacto Previsto em Despesas</p>
+                <p className="text-2xl font-black text-rose-600 dark:text-rose-400 tabular-nums">
+                  {formatCurrency(discardData.quantidade * selectedProduct.preco_custo)}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+              <button
+                onClick={() => setShowDiscardModal(false)}
+                className="flex-1 py-4 px-6 rounded-2xl font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-all uppercase text-xs tracking-widest"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDiscard}
+                disabled={discardData.quantidade <= 0 || discardData.quantidade > selectedProduct.quantidade}
+                className={`flex-1 py-4 px-6 rounded-2xl font-black flex items-center justify-center gap-3 transition-all uppercase text-xs tracking-widest shadow-lg ${discardData.quantidade > 0 && discardData.quantidade <= selectedProduct.quantidade
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20 active:scale-95'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed shadow-none'
+                  }`}
+              >
+                Confirmar Descarte
+              </button>
             </div>
           </div>
         </div>

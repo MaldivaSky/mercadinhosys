@@ -540,6 +540,20 @@ def listar_lotes_disponiveis(produto_id):
         })
         
     except Exception as e:
+        from flask import current_app
+        import traceback
+        current_app.logger.error(f"Erro ao listar lotes de {produto_id}: {str(e)}\n{traceback.format_exc()}")
+        
+        # Blindagem: Se falhou por causa da coluna lote_id ou similar em SQLite Docker 
+        # retornamos lista vazia para nao travar o frontend
+        if "no such column" in str(e).lower() or "lote_id" in str(e):
+            return jsonify({
+                'produto_id': produto_id,
+                'lotes': [],
+                'total_lotes': 0,
+                'warning': 'Schema de lotes nao sincronizado'
+            })
+            
         return jsonify({'error': str(e)}), 500
 
 
