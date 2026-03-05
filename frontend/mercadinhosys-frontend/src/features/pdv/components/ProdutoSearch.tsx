@@ -90,33 +90,51 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
     const getValidadeBadge = (dvStr: string | null | undefined): React.ReactNode => {
         if (!dvStr) return null;
         let y: number, m: number, d: number;
-        if (String(dvStr).includes('-')) {
+        let dateLabel = "";
+
+        if (String(dvStr).includes('T')) {
+            const dt = new Date(dvStr);
+            y = dt.getFullYear(); m = dt.getMonth() + 1; d = dt.getDate();
+            dateLabel = dt.toLocaleDateString('pt-BR');
+        } else if (String(dvStr).includes('-')) {
             [y, m, d] = String(dvStr).split('-').map(Number);
+            dateLabel = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
         } else {
             [d, m, y] = String(dvStr).split('/').map(Number);
+            dateLabel = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
         }
+
         const dv = new Date(y, m - 1, d);
         const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
         const limite = new Date(hoje); limite.setDate(hoje.getDate() + diasAlertaValidade);
 
         if (dv < hoje) {
             return (
-                <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-red-500 text-white animate-pulse">
-                    Vencido
-                </span>
+                <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-red-500 text-white animate-pulse">
+                        Vencido
+                    </span>
+                    <span className="text-[10px] font-bold text-red-600 dark:text-red-400">{dateLabel}</span>
+                </div>
             );
         } else if (dv <= limite) {
             const dias = Math.round((dv.getTime() - hoje.getTime()) / 86400000);
             return (
-                <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-amber-500 text-white">
-                    Vence em {dias}d
-                </span>
+                <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase bg-amber-500 text-white">
+                        Vence em {dias}d
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{dateLabel}</span>
+                </div>
             );
         } else {
             return (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                    Val. OK
-                </span>
+                <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                        Val. OK
+                    </span>
+                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">{dateLabel}</span>
+                </div>
             );
         }
     };
@@ -182,8 +200,8 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                 <div className="flex items-center gap-3">
                                     {/* Badge de unidade */}
                                     <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center text-[11px] font-black ${isPeso
-                                            ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                                            : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                                        ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
                                         }`}>
                                         {isPeso ? un : <Package className="w-5 h-5" />}
                                     </div>
@@ -205,7 +223,14 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                             {/* Código de barras */}
                                             {(produto as any).codigo_barras && (
                                                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-                                                    {(produto as any).codigo_barras}
+                                                    Code: {(produto as any).codigo_barras}
+                                                </span>
+                                            )}
+
+                                            {/* Lote */}
+                                            {(produto as any).lote && (
+                                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800">
+                                                    Lote: {(produto as any).lote}
                                                 </span>
                                             )}
 
@@ -229,10 +254,10 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                                         </p>
                                         {mostrarAlertaEstoque && (
                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 inline-block ${estq > estoqueMinimo
-                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                                    : estq > 0
-                                                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                                                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                                : estq > 0
+                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                                                 }`}>
                                                 Est: {estq} {un.toLowerCase()}
                                             </span>

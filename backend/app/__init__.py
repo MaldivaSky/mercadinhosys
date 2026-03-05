@@ -172,28 +172,28 @@ def create_app(config_name=None):
     login_manager.init_app(app)
 
     # CORS - Configuração COMPLETA para produção
-    cors_origins = app.config.get('CORS_ORIGINS', [])
+    import re
     
     # Se não houver CORS configurado, permitir todos em desenvolvimento
     if not cors_origins:
         if config_name == 'development':
-            cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+            cors_origins = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173"]
         else:
-            # Em produção sem CORS configurado, usar domínios padrão do Vercel/Render
-            logger.warning("⚠️ CORS_ORIGINS não configurado! Usando domínios padrão.")
+            # Em produção, permitimos Vercel (incluindo previews) e Render
+            # Usamos Regex para capturar subdomínios dinâmicos do Vercel
             cors_origins = [
-                "https://mercadinhosys.vercel.app",
-                "https://*.vercel.app",
-                "https://*.onrender.com"
+                re.compile(r"https://.*\.vercel\.app$"),
+                re.compile(r"https://.*\.onrender\.com$"),
+                "https://mercadinhosys.vercel.app"
             ]
     
     # Log de CORS para debug
-    logger.info(f"🌐 CORS configurado para: {cors_origins}")
+    logger.info(f"🌐 CORS configurado (Regex habilitado para Vercel/Render)")
     
     CORS(
         app,
         resources={r"/api/*": {"origins": cors_origins}},
-        supports_credentials=False,
+        supports_credentials=True, # Habilitado para cookies/JWT se necessário
         allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "Origin"],
         expose_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
