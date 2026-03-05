@@ -172,6 +172,66 @@ def get_estabelecimento():
         return jsonify({"success": False, "error": "Erro ao carregar dados da empresa"}), 500
 
 
+@configuracao_bp.route("/estabelecimentos", methods=["GET"])
+@jwt_required()
+def listar_estabelecimentos():
+    """Lista todos os estabelecimentos - apenas para ADMIN (visão multi-loja)"""
+    try:
+        claims = get_jwt()
+        role = claims.get("role", "").lower()
+
+        if role not in ["admin", "dono"]:
+            return jsonify({"success": False, "error": "Acesso restrito à administração"}), 403
+
+        from sqlalchemy import text
+        sql = text("""
+            SELECT 
+                e.id, e.nome_fantasia, e.razao_social, e.cnpj, e.telefone, e.email,
+                e.logradouro, e.numero, e.bairro, e.cidade, e.estado, e.cep,
+                e.ativo, e.regime_tributario,
+                CAST(e.data_abertura AS TEXT) as data_abertura,
+                (SELECT COUNT(*) FROM funcionarios f WHERE f.estabelecimento_id = e.id AND f.ativo = TRUE) as total_funcionarios,
+                (SELECT COUNT(*) FROM produtos p WHERE p.estabelecimento_id = e.id AND p.ativo = TRUE) as total_produtos,
+                (SELECT COUNT(*) FROM clientes c WHERE c.estabelecimento_id = e.id AND c.ativo = TRUE) as total_clientes,
+                (SELECT COALESCE(SUM(v.total), 0) FROM vendas v WHERE v.estabelecimento_id = e.id AND v.status = 'finalizada') as faturamento_total,
+                (SELECT CAST(MAX(v.data_venda) AS TEXT) FROM vendas v WHERE v.estabelecimento_id = e.id) as ultima_venda
+            FROM estabelecimentos e
+            ORDER BY e.id
+        """)
+        rows = db.session.execute(sql).fetchall()
+
+        estabelecimentos = []
+        for r in rows:
+            estabelecimentos.append({
+                "id": r[0],
+                "nome_fantasia": r[1],
+                "razao_social": r[2],
+                "cnpj": r[3],
+                "telefone": r[4],
+                "email": r[5],
+                "logradouro": r[6],
+                "numero": r[7],
+                "bairro": r[8],
+                "cidade": r[9],
+                "estado": r[10],
+                "cep": r[11],
+                "ativo": r[12],
+                "regime_tributario": r[13],
+                "data_abertura": r[14],
+                "total_funcionarios": r[15] or 0,
+                "total_produtos": r[16] or 0,
+                "total_clientes": r[17] or 0,
+                "faturamento_total": float(r[18]) if r[18] else 0.0,
+                "ultima_venda": r[19],
+            })
+
+        return jsonify({"success": True, "estabelecimentos": estabelecimentos}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro em listar_estabelecimentos: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao listar estabelecimentos"}), 500
+
+
 @configuracao_bp.route("/estabelecimento", methods=["PUT"])
 @jwt_required()
 def update_estabelecimento():

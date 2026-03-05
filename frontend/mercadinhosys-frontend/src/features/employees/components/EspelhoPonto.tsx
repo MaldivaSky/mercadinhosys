@@ -158,35 +158,35 @@ export default function EspelhoPonto() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-950 dark:text-white uppercase tracking-tight leading-none">Espelho de Ponto</h2>
-          <p className="text-sm text-gray-950 dark:text-gray-100 font-black mt-1">Visualização detalhada dos registros por funcionário</p>
+          <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Espelho de Ponto</h2>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">Visualização detalhada dos registros por funcionário</p>
         </div>
         {espelhoData && (
           <button
             onClick={exportarPDF}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+            className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-lg shadow-rose-600/20 font-bold transition-all flex items-center gap-2"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-5 h-5" />
             Exportar PDF
           </button>
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-sm p-6 border border-gray-200/50 dark:border-gray-700/50">
         <div className="flex items-center gap-2 mb-4">
-          <Filter className="w-5 h-5 text-gray-900 dark:text-gray-100 font-black" />
-          <h3 className="font-bold text-gray-900 dark:text-white">Selecionar Funcionário e Período</h3>
+          <Filter className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+          <h3 className="font-bold text-gray-900 dark:text-white">Filtros de Busca</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-950 dark:text-gray-200 font-black uppercase tracking-tighter text-xs">Funcionário *</label>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Funcionário *</label>
             <select
               value={funcionarioId}
               onChange={(e) => setFuncionarioId(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 text-gray-950 dark:text-white font-bold bg-white dark:bg-gray-700"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
             >
               <option value="">Selecione...</option>
               {funcionarios.map(f => (
@@ -196,22 +196,22 @@ export default function EspelhoPonto() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-950 dark:text-gray-200 font-black uppercase tracking-tighter text-xs">Data Início *</label>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Data Início *</label>
             <input
               type="date"
               value={dataInicio}
               onChange={(e) => setDataInicio(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-gray-400 text-gray-950 font-bold bg-white"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-950 dark:text-gray-200 font-black uppercase tracking-tighter text-xs">Data Fim *</label>
+            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Data Fim *</label>
             <input
               type="date"
               value={dataFim}
               onChange={(e) => setDataFim(e.target.value)}
-              className="w-full px-3 py-2 border-2 border-gray-400 dark:border-gray-600 text-gray-950 dark:text-white font-bold bg-white dark:bg-gray-700"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
             />
           </div>
 
@@ -219,7 +219,7 @@ export default function EspelhoPonto() {
             <button
               onClick={loadEspelhoPonto}
               disabled={!funcionarioId || !dataInicio || !dataFim}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 font-black shadow-lg shadow-blue-500/20"
+              className="w-full px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-600/20 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Gerar Espelho
             </button>
@@ -228,109 +228,117 @@ export default function EspelhoPonto() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 rounded-xl shadow-md">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Gerando espelho de ponto...</p>
+        <div className="flex flex-col items-center justify-center min-h-[400px] bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-3xl border border-gray-100 dark:border-gray-700/50">
+          <div className="relative w-16 h-16 mb-4">
+            <div className="absolute inset-0 border-4 border-indigo-100 dark:border-indigo-900/30 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
           </div>
+          <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest animate-pulse">Gerando espelho de ponto...</p>
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-          <div className="flex items-center gap-3 text-red-700">
+        <div className="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl p-6">
+          <div className="flex items-center gap-3 text-rose-700 dark:text-rose-400">
             <AlertCircle className="w-6 h-6" />
-            <p>{error}</p>
+            <p className="font-bold">{error}</p>
           </div>
         </div>
       ) : espelhoData ? (
-        <>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700">
-            <h3 className="font-bold text-gray-900 dark:text-white mb-4">Resumo do Período</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="p-4 bg-blue-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-blue-700">{espelhoData.resumo.total_dias_trabalhados}</p>
-                <p className="text-xs text-blue-600 font-medium uppercase mt-1">Dias Trabalhados</p>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-sm p-6 border border-gray-200/50 dark:border-gray-700/50">
+            <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-6">Resumo do Período</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="p-5 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-100 dark:border-blue-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider mb-1 relative z-10">Dias Trabalhados</p>
+                <p className="text-4xl font-black text-blue-700 dark:text-blue-300 tracking-tight relative z-10">{espelhoData.resumo.total_dias_trabalhados}</p>
               </div>
-              <div className="p-4 bg-red-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-red-700">{espelhoData.resumo.total_atrasos}</p>
-                <p className="text-xs text-red-600 font-medium uppercase mt-1">Atrasos</p>
-                <p className="text-xs text-red-500 mt-1">{espelhoData.resumo.total_minutos_atraso}m</p>
+              <div className="p-5 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-100 dark:border-rose-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-bold uppercase tracking-wider mb-1 relative z-10">Atrasos</p>
+                <p className="text-4xl font-black text-rose-700 dark:text-rose-300 tracking-tight relative z-10">{espelhoData.resumo.total_atrasos}</p>
+                <p className="text-xs text-rose-500 dark:text-rose-400/70 font-bold mt-1 relative z-10">{espelhoData.resumo.total_minutos_atraso}m</p>
               </div>
-              <div className="p-4 bg-orange-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-orange-700">{espelhoData.resumo.total_horas_extras.toFixed(1)}h</p>
-                <p className="text-xs text-orange-600 font-medium uppercase mt-1">Horas Extras</p>
+              <div className="p-5 bg-orange-50 dark:bg-orange-500/10 rounded-xl border border-orange-100 dark:border-orange-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-bold uppercase tracking-wider mb-1 relative z-10">Horas Extras</p>
+                <p className="text-4xl font-black text-orange-700 dark:text-orange-300 tracking-tight relative z-10">{espelhoData.resumo.total_horas_extras.toFixed(1)}h</p>
               </div>
-              <div className="p-4 bg-green-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-green-700">{espelhoData.resumo.total_horas_trabalhadas.toFixed(1)}h</p>
-                <p className="text-xs text-green-600 font-medium uppercase mt-1">Total Trabalhado</p>
+              <div className="p-5 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider mb-1 relative z-10">Totais Trabalhadas</p>
+                <p className="text-4xl font-black text-emerald-700 dark:text-emerald-300 tracking-tight relative z-10">{espelhoData.resumo.total_horas_trabalhadas.toFixed(1)}h</p>
               </div>
-              <div className="p-4 bg-purple-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-purple-700">{espelhoData.resumo.media_horas_dia.toFixed(1)}h</p>
-                <p className="text-xs text-purple-600 font-medium uppercase mt-1">Média/Dia</p>
+              <div className="p-5 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider mb-1 relative z-10">Média/Dia</p>
+                <p className="text-4xl font-black text-indigo-700 dark:text-indigo-300 tracking-tight relative z-10">{espelhoData.resumo.media_horas_dia.toFixed(1)}h</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+            <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50">
               <h3 className="font-bold text-gray-900 dark:text-white">Registros Diários</h3>
             </div>
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-gray-800/80">
               {espelhoData.registros_diarios.map((registro, idx) => (
-                <div key={idx} className="p-4 hover:bg-gray-50 transition-colors">
+                <div key={idx} className="p-6 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                   <div
-                    className="flex items-center justify-between cursor-pointer"
+                    className="flex items-center justify-between cursor-pointer group"
                     onClick={() => toggleDay(registro.data)}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <Calendar className="w-5 h-5 text-blue-600" />
+                      <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl group-hover:scale-110 transition-transform">
+                        <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                       </div>
                       <div>
-                        <p className="font-bold text-gray-950 dark:text-white font-black underline decoration-blue-500/30">
+                        <p className="font-bold text-gray-900 dark:text-white text-lg">
                           {new Date(registro.data).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
-                        <p className="text-sm text-gray-950 dark:text-gray-200 font-black">
-                          {registro.entrada || '-'} às {registro.saida || '-'} • {(registro.horas_trabalhadas / 60).toFixed(1)}h trabalhadas
+                        <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                          {registro.entrada || '---'} às {registro.saida || '---'} • <span className="text-indigo-600 dark:text-indigo-400 font-bold">{(registro.horas_trabalhadas / 60).toFixed(1)}h</span> trabalhadas
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       {registro.minutos_atraso > 0 && (
-                        <span className="px-2 py-1 text-xs font-bold rounded-full bg-red-100 text-red-700">
+                        <span className="px-3 py-1 text-xs font-bold rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400">
                           {registro.minutos_atraso}m atraso
                         </span>
                       )}
                       {registro.minutos_extras > 0 && (
-                        <span className="px-2 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-700">
+                        <span className="px-3 py-1 text-xs font-bold rounded-md bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400">
                           {(registro.minutos_extras / 60).toFixed(1)}h extras
                         </span>
                       )}
-                      {expandedDays[registro.data] ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                      <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
+                        {expandedDays[registro.data] ? <ChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />}
+                      </div>
                     </div>
                   </div>
 
                   {expandedDays[registro.data] && (
-                    <div className="mt-4 ml-14 grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="p-3 bg-green-50 rounded-lg">
-                        <p className="text-xs text-green-600 font-medium uppercase">Entrada</p>
-                        <p className="text-lg font-bold text-green-900 mt-1">{registro.entrada || '-'}</p>
+                    <div className="mt-6 ml-[3.25rem] grid grid-cols-2 md:grid-cols-4 gap-4 animate-in slide-in-from-top-2 duration-200">
+                      <div className="p-4 bg-white dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Entrada</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white mt-1">{registro.entrada || '---'}</p>
                       </div>
-                      <div className="p-3 bg-yellow-50 rounded-lg">
-                        <p className="text-xs text-yellow-600 font-medium uppercase">Intervalo Início</p>
-                        <p className="text-lg font-bold text-yellow-900 mt-1">{registro.intervalo_inicio || '-'}</p>
+                      <div className="p-4 bg-white dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider">Pausa Início</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white mt-1">{registro.intervalo_inicio || '---'}</p>
                       </div>
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <p className="text-xs text-blue-600 font-medium uppercase">Intervalo Fim</p>
-                        <p className="text-lg font-bold text-blue-900 mt-1">{registro.intervalo_fim || '-'}</p>
+                      <div className="p-4 bg-white dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Pausa Fim</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white mt-1">{registro.intervalo_fim || '---'}</p>
                       </div>
-                      <div className="p-3 bg-red-50 rounded-lg">
-                        <p className="text-xs text-red-600 font-medium uppercase">Saída</p>
-                        <p className="text-lg font-bold text-red-900 mt-1">{registro.saida || '-'}</p>
+                      <div className="p-4 bg-white dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                        <p className="text-xs text-rose-600 dark:text-rose-400 font-bold uppercase tracking-wider">Saída</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white mt-1">{registro.saida || '---'}</p>
                       </div>
                       {registro.observacao && (
-                        <div className="col-span-2 md:col-span-4 p-3 bg-gray-50 rounded-lg">
-                          <p className="text-xs text-gray-600 font-medium uppercase">Observação</p>
-                          <p className="text-sm text-gray-950 font-black underline decoration-blue-500/30 mt-1">{registro.observacao}</p>
+                        <div className="col-span-2 md:col-span-4 p-4 bg-yellow-50 dark:bg-yellow-500/10 rounded-xl border border-yellow-100 dark:border-yellow-500/20">
+                          <p className="text-xs text-yellow-700 dark:text-yellow-400 font-bold uppercase tracking-wider">Observação do RH</p>
+                          <p className="text-sm text-yellow-900 dark:text-yellow-200 font-medium mt-1">{registro.observacao}</p>
                         </div>
                       )}
                     </div>
@@ -339,11 +347,12 @@ export default function EspelhoPonto() {
               ))}
             </div>
           </div>
-        </>
+        </div>
       ) : (
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-12 text-center">
-          <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-600">Selecione um funcionário e período para gerar o espelho de ponto</p>
+        <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 rounded-3xl p-16 text-center">
+          <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-6" />
+          <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2">Selecione os Filtros</h3>
+          <p className="text-gray-500 dark:text-gray-400 font-medium max-w-sm mx-auto">Preencha o funcionário e o período desejado acima para visualizar e gerar o espelho de ponto.</p>
         </div>
       )}
     </div>

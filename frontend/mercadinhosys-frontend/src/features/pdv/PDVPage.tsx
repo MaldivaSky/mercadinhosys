@@ -18,6 +18,7 @@ import CarrinhoItem from './components/CarrinhoItem';
 import ClienteSelect from './components/ClienteSelect';
 import CaixaHeader from './components/CaixaHeader';
 import NotaFiscalModal from './components/NotaFiscalModal';
+import CupomFiscalModal from './components/CupomFiscalModal';
 import { usePDV } from '../../hooks/usePDV';
 import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
@@ -62,6 +63,7 @@ const PDVPage: React.FC = () => {
     const [vendaFinalizada, setVendaFinalizada] = useState<{ id: number; codigo: string } | null>(null);
     const [managerCaixaAberto, setManagerCaixaAberto] = useState(false);
     const [dataVencimentoFiado, setDataVencimentoFiado] = useState('');  // data prevista pagamento do fiado
+    const [cupomModalAberto, setCupomModalAberto] = useState(false);
 
     const isFiado = formaPagamentoSelecionada === 'fiado';
 
@@ -108,8 +110,16 @@ const PDVPage: React.FC = () => {
                 setMostrarModalNotaFiscal(true);
                 setDataVencimentoFiado('');
             }
-        } catch (error) {
-            // Erro tratado pelo promise
+        } catch (error: any) {
+            // 403 com CAIXA_FECHADO → avisar e abrir o gestor de caixa
+            const errData = error?.response?.data;
+            if (error?.response?.status === 403 && errData?.error === 'CAIXA_FECHADO') {
+                showToast.error('⚠️ Caixa fechado! Abra o caixa antes de registrar vendas.', { duration: 6000 });
+                setFormaPagamentoAberta(false);
+                setManagerCaixaAberto(true);
+                return;
+            }
+            // Outros erros já tratados pelo promise
         }
     };
 
@@ -446,12 +456,8 @@ const PDVPage: React.FC = () => {
                 }}
                 onImprimir={async () => {
                     if (!vendaFinalizada) return;
-                    try {
-                        const url = await pdvService.imprimirComprovante(vendaFinalizada.id);
-                        window.open(url, '_blank');
-                    } catch (error) {
-                        showToast.error('Erro ao gerar comprovante');
-                    }
+                    setMostrarModalNotaFiscal(false);
+                    setCupomModalAberto(true);
                 }}
                 onEnviarEmail={async (email) => {
                     if (!vendaFinalizada) return;
@@ -474,12 +480,19 @@ const PDVPage: React.FC = () => {
                 enviando={enviandoEmail}
                 onVisualizar={async () => {
                     if (!vendaFinalizada) return;
-                    try {
-                        const url = await pdvService.imprimirComprovante(vendaFinalizada.id);
-                        window.open(url, '_blank');
-                    } catch (error) {
-                        showToast.error('Erro ao abrir comprovante profissional');
-                    }
+                    setMostrarModalNotaFiscal(false);
+                    setCupomModalAberto(true);
+                }}
+            />
+
+            {/* CUPOM FISCAL PROFISSIONAL */}
+            <CupomFiscalModal
+                aberto={cupomModalAberto}
+                vendaId={vendaFinalizada?.id ?? null}
+                onFechar={() => {
+                    setCupomModalAberto(false);
+                    setVendaFinalizada(null);
+                    limparCarrinho();
                 }}
             />
 

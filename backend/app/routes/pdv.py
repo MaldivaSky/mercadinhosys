@@ -244,6 +244,16 @@ def obter_configuracoes_pdv():
 
         # Busca formas de pagamento do cache de configurações se disponível
         cached_config = get_cached_config(funcionario_data.get("estabelecimento_id"))
+        if isinstance(cached_config, str):
+            import json
+            try:
+                cached_config = json.loads(cached_config)
+                if isinstance(cached_config, str):
+                    cached_config = json.loads(cached_config)
+            except:
+                cached_config = {}
+        if not isinstance(cached_config, dict):
+            cached_config = {}
 
         # Formas de pagamento base canônicas (sempre presentes)
         FORMAS_PADRAO = [
@@ -280,20 +290,41 @@ def obter_configuracoes_pdv():
                 for fp_padrao in FORMAS_PADRAO:
                     if fp_padrao["tipo"] not in tipos_existentes:
                         formas_pagamento.append(fp_padrao)
+
+                # ─── Deduplicar por tipo (evita duplicatas vindas do banco) ───
+                seen = {}
+                for fp in formas_pagamento:
+                    t = fp.get("tipo")
+                    if t and t not in seen:
+                        seen[t] = fp
+                formas_pagamento = list(seen.values())
+
             except:
                 formas_pagamento = FORMAS_PADRAO
         else:
             formas_pagamento = FORMAS_PADRAO
 
 
+        permissoes = funcionario_data.get("permissoes", {})
+        if isinstance(permissoes, str):
+            import json
+            try:
+                permissoes = json.loads(permissoes)
+                if isinstance(permissoes, str):
+                    permissoes = json.loads(permissoes)
+            except:
+                permissoes = {}
+        if not isinstance(permissoes, dict):
+            permissoes = {}
+
         configuracoes = {
             "funcionario": {
                 "id": funcionario_data.get("id"),
                 "nome": funcionario_data.get("nome"),
                 "role": funcionario_data.get("role"),
-                "pode_dar_desconto": funcionario_data.get("permissoes", {}).get("pode_dar_desconto", False),
-                "limite_desconto": funcionario_data.get("permissoes", {}).get("limite_desconto", 0),
-                "pode_cancelar_venda": funcionario_data.get("permissoes", {}).get("pode_cancelar_venda", False),
+                "pode_dar_desconto": permissoes.get("pode_dar_desconto", False),
+                "limite_desconto": permissoes.get("limite_desconto", 0),
+                "pode_cancelar_venda": permissoes.get("pode_cancelar_venda", False),
             },
             "formas_pagamento": formas_pagamento,
             "permite_venda_sem_cliente": bool(cached_config.get("permite_venda_sem_cliente", True)) if cached_config else True,
@@ -322,11 +353,14 @@ def obter_configuracoes_pdv():
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"ERRO CRÍTICO CONFIG PDV: {str(e)}")
+        import traceback
+        erro_formatado = traceback.format_exc()
+        current_app.logger.error(f"ERRO CRÍTICO CONFIG PDV: {erro_formatado}")
         return jsonify({
             "success": False,
             "error": "Falha na comunicação com o servidor de configurações",
-            "msg": "O servidor do PDV está temporariamente instável."
+            "msg": f"O servidor do PDV está temporariamente instável. Detalhe técnico: {str(e)}",
+            "traceback": erro_formatado
         }), 500
 
 
@@ -609,6 +643,7 @@ def finalizar_venda():
             }
 
         data = request.get_json()
+        print(f"🔥 FINALIZAR PAYLOAD FRONTEND: {data}", flush=True)
         if not data:
             return jsonify({"error": "Dados não fornecidos"}), 400
 
@@ -773,19 +808,37 @@ def finalizar_venda():
                     cliente_id=cliente_id,
                     venda_id=nova_venda.id,
                     numero_documento=codigo_venda,
-                    descricao=f"Fiado PDV - {cliente.nome}",
                     valor_original=total,
                     valor_atual=total,
                     data_emissao=data_venda.date(),
                     data_vencimento=data_vencimento,
                     status="aberto",
-                    observacoes=f"Venda fiado em {data_venda.strftime('%d/%m/%Y')}"
+                    observacoes=f"Fiado PDV - {cliente.nome}. Venda fiado em {data_venda.strftime('%d/%m/%Y')}"
                 )
                 db.session.add(conta)
                 # Não entra dinheiro no caixa (é fiado)
             elif forma_lower == "dinheiro":
                 # Atualizar saldo apenas se for dinheiro (caixa físico)
                 caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual) + float(total)
+
+            # ========================
+            # ATUALIZAR MÉTRICAS DO CLIENTE
+            # ========================
+            # Independente da forma de pagamento, toda venda com cliente
+            # deve atualizar os campos de agregação (total_compras, valor_total_gasto, ultima_compra)
+            if cliente_id and forma_lower != "fiado":
+                # Para fiado o cliente já foi carregado acima; para outros buscamos aqui
+                cliente_para_metrica = Cliente.query.get(cliente_id)
+                if cliente_para_metrica:
+                    cliente_para_metrica.total_compras = int(cliente_para_metrica.total_compras or 0) + 1
+                    cliente_para_metrica.valor_total_gasto = float(cliente_para_metrica.valor_total_gasto or 0) + float(total)
+                    cliente_para_metrica.ultima_compra = data_venda
+            elif cliente_id and forma_lower == "fiado":
+                # cliente já está em memória da seção fiado acima (variável 'cliente')
+                if cliente:
+                    cliente.total_compras = int(cliente.total_compras or 0) + 1
+                    cliente.valor_total_gasto = float(cliente.valor_total_gasto or 0) + float(total)
+                    cliente.ultima_compra = data_venda
 
             db.session.commit()
 
@@ -801,13 +854,21 @@ def finalizar_venda():
             }), 201
 
         except Exception as e:
+            import traceback
             db.session.rollback()
-            current_app.logger.error(f"ERRO TRANSAÇÃO PDV: {str(e)}")
-            return jsonify({"error": "Erro ao salvar venda no banco", "details": str(e)}), 500
+            trace = traceback.format_exc()
+            current_app.logger.error(f"ERRO TRANSAÇÃO PDV: {str(e)}\n{trace}")
+            with open('backend_finalizar_erro.txt', 'a', encoding='utf-8') as f:
+                f.write(f"\n--- ERRO TRANSAÇÃO ---\n{str(e)}\n{trace}\n")
+            return jsonify({"error": "Erro ao salvar venda no banco", "details": str(e), "trace": trace}), 500
 
     except Exception as e:
-        current_app.logger.error(f"ERRO FATAL PDV: {str(e)}")
-        return jsonify({"error": "Falha interna ao processar venda"}), 500
+        import traceback
+        trace = traceback.format_exc()
+        current_app.logger.error(f"ERRO FATAL PDV: {str(e)}\n{trace}")
+        with open('backend_finalizar_erro.txt', 'a', encoding='utf-8') as f:
+            f.write(f"\n--- ERRO FATAL ---\n{str(e)}\n{trace}\n")
+        return jsonify({"error": "Falha interna ao processar venda", "details": str(e), "trace": trace}), 500
 
 
 @pdv_bp.route("/vendas-hoje", methods=["GET"])
@@ -1351,7 +1412,6 @@ def imprimir_venda_html(venda_id):
         }
 
         # REUTILIZAR O TEMPLATE MASTERCLASS (Injetando script de auto-print)
-        from app.utils.email_service import email_service # Se tivermos um método que retorne apenas o HTML
         # Vou copiar o template aqui para garantir controle total sobre o layout de IMPRESSÃO
         
         html_masterclass = """

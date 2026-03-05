@@ -24,6 +24,7 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const LeadDashboard = lazy(() => import('../features/saas/LeadDashboard'));
 
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
+const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
 
 // Componente para proteção de rotas por role
 const RoleGuard = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
@@ -86,6 +87,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="ponto-diagnostico" element={<RoleGuard allowedRoles={['admin', 'gerente']}><DiagnosticoFotos /></RoleGuard>} />
                     <Route path="reports" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ReportsPage /></RoleGuard>} />
                     <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><SettingsPage /></RoleGuard>} />
+                    <Route path="estabelecimentos" element={<RoleGuard allowedRoles={['admin']}><EstabelecimentosPage /></RoleGuard>} />
                     <Route path="leads" element={<RoleGuard allowedRoles={['admin']}><LeadDashboard /></RoleGuard>} />
                 </Route>
 

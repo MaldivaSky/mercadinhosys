@@ -125,12 +125,16 @@ def create_app(config_name=None):
 
     mail.init_app(app)
 
-    # ERROR HANDLER GLOBAL (Resiliência de Elite)
     @app.errorhandler(500)
     def handle_500_error(e):
         import traceback
         error_details = traceback.format_exc() if not app.config.get("PRODUCTION") else "Erro interno no servidor"
         logger.error(f"💥 ERRO 500: {str(e)}\n{traceback.format_exc()}")
+        try:
+            with open(r'c:\Users\rafae\OneDrive\Desktop\mercadinhosys\backend\frontend_erro_500.txt', 'a', encoding='utf-8') as f:
+                f.write(f"\n--- ERRO 500 ---\nURL: {request.url}\nERRO: {str(e)}\nTRACE: {traceback.format_exc()}\n")
+        except:
+            pass
         return jsonify({
             "success": False,
             "error": "Erro interno do servidor",
@@ -265,130 +269,123 @@ def create_app(config_name=None):
     else:
         logger.info("INFO: db.create_all() pulado (SKIP_DB_SETUP=true). Schema sync ainda sera executado.")
 
-    # ==================== SCHEMA SYNC SEMPRE RODA ====================
-    # Independente do SKIP_DB_SETUP, garantimos que todas as colunas existam.
-    # Isso corrige o banco de producao sem precisar de flask db upgrade manual.
-    with app.app_context():
-        try:
-            from sqlalchemy import text as _sync_text
-            is_sqlite = db.engine.name == 'sqlite'
+    # ==================== SCHEMA SYNC ====================
+    # Pode ser pulado com SKIP_SCHEMA_SYNC=true (ex: durante seed que já fez drop_all+create_all)
+    if os.environ.get("SKIP_SCHEMA_SYNC", "false").lower() == "true":
+        logger.info("⏭️ Schema Sync pulado (SKIP_SCHEMA_SYNC=true).")
+    else:
+        with app.app_context():
+            try:
+                from sqlalchemy import text as _sync_text
+                is_sqlite = db.engine.name == 'sqlite'
 
-            schema_sqls = [
-                # Estabelecimento - SaaS
-                ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Basic'"),
-                ("estabelecimentos", "plano_status",            "VARCHAR(20)  DEFAULT 'experimental'"),
-                ("estabelecimentos", "stripe_customer_id",      "VARCHAR(100)"),
-                ("estabelecimentos", "stripe_subscription_id",  "VARCHAR(100)"),
-                ("estabelecimentos", "vencimento_assinatura",   "TIMESTAMP"),
-                ("estabelecimentos", "pagarme_id",              "VARCHAR(100)"),
-                # Estabelecimento - Endereço completo
-                ("estabelecimentos", "cep",                     "VARCHAR(9)   DEFAULT '00000-000'"),
-                ("estabelecimentos", "logradouro",              "VARCHAR(200) DEFAULT 'Nao Informado'"),
-                ("estabelecimentos", "numero",                  "VARCHAR(10)  DEFAULT 'S/N'"),
-                ("estabelecimentos", "complemento",             "VARCHAR(100)"),
-                ("estabelecimentos", "bairro",                  "VARCHAR(100) DEFAULT 'Centro'"),
-                ("estabelecimentos", "cidade",                  "VARCHAR(100) DEFAULT 'Cidade'"),
-                ("estabelecimentos", "estado",                  "VARCHAR(2)   DEFAULT 'SP'"),
-                ("estabelecimentos", "pais",                    "VARCHAR(50)  DEFAULT 'Brasil'"),
-                # Configurações - completo
-                ("configuracoes", "logo_base64",                "TEXT"),
-                ("configuracoes", "tema_escuro",                "BOOLEAN DEFAULT FALSE"),
-                ("configuracoes", "cor_principal",              "VARCHAR(7) DEFAULT '#2563eb'"),
-                ("configuracoes", "emitir_nfe",                 "BOOLEAN DEFAULT FALSE"),
-                ("configuracoes", "emitir_nfce",                "BOOLEAN DEFAULT TRUE"),
-                ("configuracoes", "impressao_automatica",       "BOOLEAN DEFAULT FALSE"),
-                ("configuracoes", "tipo_impressora",            "VARCHAR(20) DEFAULT 'termica_80mm'"),
-                ("configuracoes", "exibir_preco_tela",          "BOOLEAN DEFAULT TRUE"),
-                ("configuracoes", "permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
-                ("configuracoes", "desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
-                ("configuracoes", "desconto_maximo_funcionario","NUMERIC(5,2) DEFAULT 10.00"),
-                ("configuracoes", "arredondamento_valores",     "BOOLEAN DEFAULT TRUE"),
-                ("configuracoes", "formas_pagamento",           "TEXT"),
-                ("configuracoes", "controlar_validade",         "BOOLEAN DEFAULT TRUE"),
-                ("configuracoes", "alerta_estoque_minimo",      "BOOLEAN DEFAULT TRUE"),
-                ("configuracoes", "dias_alerta_validade",       "INTEGER DEFAULT 30"),
-                ("configuracoes", "estoque_minimo_padrao",      "INTEGER DEFAULT 10"),
-                ("configuracoes", "tempo_sessao_minutos",       "INTEGER DEFAULT 30"),
-                ("configuracoes", "tentativas_senha_bloqueio",  "INTEGER DEFAULT 3"),
-                ("configuracoes", "alertas_email",              "BOOLEAN DEFAULT FALSE"),
-                ("configuracoes", "alertas_whatsapp",           "BOOLEAN DEFAULT FALSE"),
-                ("configuracoes", "horas_extras_percentual",    "NUMERIC(5,2) DEFAULT 50.00"),
-                # Funcionarios - campos extras
-                ("funcionarios", "data_demissao",               "DATE"),
-                ("funcionarios", "salario",                     "NUMERIC(10,2)"),
-                ("funcionarios", "observacoes",                 "TEXT"),
-                ("funcionarios", "foto_url",                    "TEXT"),
-                ("funcionarios", "role",                        "VARCHAR(30)  DEFAULT 'FUNCIONARIO'"),
-                ("funcionarios", "ativo",                       "BOOLEAN      DEFAULT TRUE"),
-                ("funcionarios", "permissoes_json",              "TEXT"),
-                # Produtos
-                ("produtos", "margem_lucro",                    "NUMERIC(10,2)"),
-                ("produtos", "fornecedor_id",                   "INTEGER"),
-                ("produtos", "codigo_barras",                   "VARCHAR(50)"),
-                ("produtos", "ativo",                          "BOOLEAN DEFAULT TRUE"),
-                ("produtos", "fabricante",                      "VARCHAR(100)"),
-                ("produtos", "tipo",                            "VARCHAR(50)"),
-                ("produtos", "subcategoria",                    "VARCHAR(50)"),
-                ("produtos", "ncm",                             "VARCHAR(8)"),
-                ("produtos", "origem",                          "INTEGER DEFAULT 0"),
-                ("produtos", "controlar_validade",              "BOOLEAN DEFAULT FALSE"),
-                ("produtos", "data_validade",                   "DATE"),
-                ("produtos", "lote",                            "VARCHAR(50)"),
-                ("produtos", "imagem_url",                      "VARCHAR(255)"),
-                ("produtos", "classificacao_abc",               "VARCHAR(1)"),
-                # Vendas
-                ("vendas", "valor_recebido",                    "NUMERIC(10,2) DEFAULT 0"),
-                ("vendas", "troco",                             "NUMERIC(10,2) DEFAULT 0"),
-                ("vendas", "data_cancelamento",                 "TIMESTAMP"),
-                ("vendas", "motivo_cancelamento",               "VARCHAR(255)"),
-                ("vendas", "quantidade_itens",                  "INTEGER DEFAULT 0"),
-                ("vendas", "observacoes",                       "TEXT"),
-                # Venda Itens
-                ("venda_itens", "custo_unitario",               "NUMERIC(10,2)"),
-                ("venda_itens", "margem_item",                  "NUMERIC(5,2)"),
-                ("venda_itens", "margem_lucro_real",             "NUMERIC(10,2)"),
-                # Despesas - campos de documento ERP
-                ("despesas", "data_emissao",                    "DATE"),
-                ("despesas", "data_vencimento",                 "DATE"),
-            ]
+                schema_sqls = [
+                    # Estabelecimento - SaaS
+                    ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Basic'"),
+                    ("estabelecimentos", "plano_status",            "VARCHAR(20)  DEFAULT 'experimental'"),
+                    ("estabelecimentos", "stripe_customer_id",      "VARCHAR(100)"),
+                    ("estabelecimentos", "stripe_subscription_id",  "VARCHAR(100)"),
+                    ("estabelecimentos", "vencimento_assinatura",   "TIMESTAMP"),
+                    ("estabelecimentos", "pagarme_id",              "VARCHAR(100)"),
+                    # Estabelecimento - Endereço completo
+                    ("estabelecimentos", "cep",                     "VARCHAR(9)   DEFAULT '00000-000'"),
+                    ("estabelecimentos", "logradouro",              "VARCHAR(200) DEFAULT 'Nao Informado'"),
+                    ("estabelecimentos", "numero",                  "VARCHAR(10)  DEFAULT 'S/N'"),
+                    ("estabelecimentos", "complemento",             "VARCHAR(100)"),
+                    ("estabelecimentos", "bairro",                  "VARCHAR(100) DEFAULT 'Centro'"),
+                    ("estabelecimentos", "cidade",                  "VARCHAR(100) DEFAULT 'Cidade'"),
+                    ("estabelecimentos", "estado",                  "VARCHAR(2)   DEFAULT 'SP'"),
+                    ("estabelecimentos", "pais",                    "VARCHAR(50)  DEFAULT 'Brasil'"),
+                    # Configurações
+                    ("configuracoes", "logo_base64",                "TEXT"),
+                    ("configuracoes", "tema_escuro",                "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "cor_principal",              "VARCHAR(7) DEFAULT '#2563eb'"),
+                    ("configuracoes", "emitir_nfe",                 "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "emitir_nfce",                "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "impressao_automatica",       "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "tipo_impressora",            "VARCHAR(20) DEFAULT 'termica_80mm'"),
+                    ("configuracoes", "exibir_preco_tela",          "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "permitir_venda_sem_estoque", "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "desconto_maximo_percentual", "NUMERIC(5,2) DEFAULT 10.00"),
+                    ("configuracoes", "desconto_maximo_funcionario","NUMERIC(5,2) DEFAULT 10.00"),
+                    ("configuracoes", "arredondamento_valores",     "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "formas_pagamento",           "TEXT"),
+                    ("configuracoes", "controlar_validade",         "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "alerta_estoque_minimo",      "BOOLEAN DEFAULT TRUE"),
+                    ("configuracoes", "dias_alerta_validade",       "INTEGER DEFAULT 30"),
+                    ("configuracoes", "estoque_minimo_padrao",      "INTEGER DEFAULT 10"),
+                    ("configuracoes", "tempo_sessao_minutos",       "INTEGER DEFAULT 30"),
+                    ("configuracoes", "tentativas_senha_bloqueio",  "INTEGER DEFAULT 3"),
+                    ("configuracoes", "alertas_email",              "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "alertas_whatsapp",           "BOOLEAN DEFAULT FALSE"),
+                    ("configuracoes", "horas_extras_percentual",    "NUMERIC(5,2) DEFAULT 50.00"),
+                    # Funcionarios
+                    ("funcionarios", "data_demissao",               "DATE"),
+                    ("funcionarios", "salario",                     "NUMERIC(10,2)"),
+                    ("funcionarios", "observacoes",                 "TEXT"),
+                    ("funcionarios", "foto_url",                    "TEXT"),
+                    ("funcionarios", "role",                        "VARCHAR(30)  DEFAULT 'FUNCIONARIO'"),
+                    ("funcionarios", "ativo",                       "BOOLEAN      DEFAULT TRUE"),
+                    ("funcionarios", "permissoes_json",             "TEXT"),
+                    # Produtos
+                    ("produtos", "margem_lucro",                    "NUMERIC(10,2)"),
+                    ("produtos", "fornecedor_id",                   "INTEGER"),
+                    ("produtos", "codigo_barras",                   "VARCHAR(50)"),
+                    ("produtos", "ativo",                           "BOOLEAN DEFAULT TRUE"),
+                    ("produtos", "fabricante",                      "VARCHAR(100)"),
+                    ("produtos", "tipo",                            "VARCHAR(50)"),
+                    ("produtos", "subcategoria",                    "VARCHAR(50)"),
+                    ("produtos", "ncm",                             "VARCHAR(8)"),
+                    ("produtos", "origem",                          "INTEGER DEFAULT 0"),
+                    ("produtos", "controlar_validade",              "BOOLEAN DEFAULT FALSE"),
+                    ("produtos", "data_validade",                   "DATE"),
+                    ("produtos", "lote",                            "VARCHAR(50)"),
+                    ("produtos", "imagem_url",                      "VARCHAR(255)"),
+                    ("produtos", "classificacao_abc",               "VARCHAR(1)"),
+                    # Vendas
+                    ("vendas", "valor_recebido",                    "NUMERIC(10,2) DEFAULT 0"),
+                    ("vendas", "troco",                             "NUMERIC(10,2) DEFAULT 0"),
+                    ("vendas", "data_cancelamento",                 "TIMESTAMP"),
+                    ("vendas", "motivo_cancelamento",               "VARCHAR(255)"),
+                    ("vendas", "quantidade_itens",                  "INTEGER DEFAULT 0"),
+                    ("vendas", "observacoes",                       "TEXT"),
+                    # Venda Itens
+                    ("venda_itens", "custo_unitario",               "NUMERIC(10,2)"),
+                    ("venda_itens", "margem_item",                  "NUMERIC(5,2)"),
+                    ("venda_itens", "margem_lucro_real",            "NUMERIC(10,2)"),
+                    # Despesas
+                    ("despesas", "data_emissao",                    "DATE"),
+                    ("despesas", "data_vencimento",                 "DATE"),
+                ]
 
-            # Otimização: Agrupar por tabela e verificar colunas existentes via Inspector
-            from sqlalchemy import inspect as _insp
-            inspector = _insp(db.engine)
-            
-            # Cache de tabelas e colunas (evita round-trips repetitivos)
-            logger.info("⚡ Iniciando Schema Sync Otimizado...")
-            
-            table_columns_cache = {}
-            existing_tables = inspector.get_table_names()
-            
-            added = 0
-            for table, col, col_type in schema_sqls:
-                if table not in existing_tables:
-                    continue
-                    
-                if table not in table_columns_cache:
-                    table_columns_cache[table] = [c['name'] for c in inspector.get_columns(table)]
-                
-                if col not in table_columns_cache[table]:
-                    try:
-                        logger.info(f"➕ Adicionando coluna {col} na tabela {table}...")
-                        if is_sqlite:
+                from sqlalchemy import inspect as _insp
+                inspector = _insp(db.engine)
+                logger.info("⚡ Iniciando Schema Sync Otimizado...")
+                table_columns_cache = {}
+                existing_tables = inspector.get_table_names()
+                added = 0
+
+                for table, col, col_type in schema_sqls:
+                    if table not in existing_tables:
+                        continue
+                    if table not in table_columns_cache:
+                        table_columns_cache[table] = [c['name'] for c in inspector.get_columns(table)]
+                    if col not in table_columns_cache[table]:
+                        try:
+                            logger.info(f"➕ Adicionando coluna {col} na tabela {table}...")
                             db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
-                        else:
-                            # Postgres/Neon suporta IF NOT EXISTS mas o Inspector ja resolve o check aqui
-                            db.session.execute(_sync_text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
-                        db.session.commit()
-                        table_columns_cache[table].append(col)
-                        added += 1
-                    except Exception as e:
-                        db.session.rollback()
-                        logger.warning(f"⚠️ Erro ao adicionar {table}.{col}: {e}")
+                            db.session.commit()
+                            table_columns_cache[table].append(col)
+                            added += 1
+                        except Exception as e:
+                            db.session.rollback()
+                            logger.warning(f"⚠️ Erro ao adicionar {table}.{col}: {e}")
 
-            logger.info(f"✅ Schema sync concluido: {added} colunas novas adicionadas.")
-        except Exception as sync_err:
-            db.session.rollback()
-            logger.error(f"⚠️ Schema sync falhou: {sync_err}")
+                logger.info(f"✅ Schema sync concluido: {added} colunas novas adicionadas.")
+            except Exception as sync_err:
+                db.session.rollback()
+                logger.error(f"⚠️ Schema sync falhou: {sync_err}")
+
 
 
     # ==================== REGISTRO DE BLUEPRINTS ====================

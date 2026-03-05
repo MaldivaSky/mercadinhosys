@@ -139,10 +139,13 @@ export default function RHDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 bg-gray-50 dark:bg-gray-900 rounded-xl">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400 font-bold">Carregando dados de RH...</p>
+      <div className="flex items-center justify-center min-h-[400px] bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-3xl border border-gray-100 dark:border-gray-700/50">
+        <div className="text-center space-y-4">
+          <div className="relative w-16 h-16 mx-auto">
+            <div className="absolute inset-0 border-4 border-indigo-100 dark:border-indigo-900/30 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
+          </div>
+          <p className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest animate-pulse">Sincronizando Métricas</p>
         </div>
       </div>
     );
@@ -164,15 +167,15 @@ export default function RHDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-950 dark:text-white leading-none mb-1 uppercase tracking-tight">Dashboard de RH</h2>
-          <p className="text-sm text-gray-900 dark:text-gray-200 font-black">Análise completa de recursos humanos</p>
+          <h2 className="text-3xl font-black text-gray-900 dark:text-white leading-tight tracking-tight">Métricas de RH</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Análise de desempenho e custos em tempo real</p>
         </div>
         <select
           value={periodoDias}
           onChange={(e) => setPeriodoDias(Number(e.target.value))}
-          className="px-4 py-2 border-2 border-gray-400 text-gray-900 dark:text-white font-bold bg-white dark:bg-gray-800"
+          className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
         >
           <option value={7}>Últimos 7 dias</option>
           <option value={15}>Últimos 15 dias</option>
@@ -182,68 +185,74 @@ export default function RHDashboard() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-800 dark:to-slate-900 p-6 rounded-xl shadow-lg border border-blue-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <div className="p-3 bg-blue-600 rounded-lg shadow-md shadow-blue-500/20 text-white">
-              <Users className="w-6 h-6" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl">
+              <Users className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-xs text-gray-900 dark:text-gray-300 font-black uppercase mt-1">Funcionários Ativos</p>
-          <h3 className="text-4xl font-black text-blue-900 dark:text-white font-black">{rhData.funcionarios_ativos}</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1 relative z-10">Funcionários Ativos</p>
+          <h3 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight relative z-10">{rhData.funcionarios_ativos}</h3>
         </div>
 
-        <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-slate-800 dark:to-slate-900 p-6 rounded-xl shadow-lg border border-green-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <div className="p-3 bg-emerald-600 rounded-lg shadow-md shadow-emerald-500/20 text-white">
-              <DollarSign className="w-6 h-6" />
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+              <DollarSign className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-xs text-emerald-800 dark:text-emerald-400 font-black uppercase tracking-widest">Folha de Pagamento</p>
-          <h3 className="text-3xl font-black text-emerald-900 dark:text-white font-black">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1 relative z-10">Folha de Pagamento</p>
+          <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight relative z-10">
             R$ {rhData.custo_folha_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </h3>
-          <p className="text-[10px] text-gray-900 dark:text-gray-300 font-bold uppercase mt-1">Estimado mensal</p>
+          <p className="text-[10px] text-gray-400 font-semibold uppercase mt-2 relative z-10">Estimativa mensal atual</p>
         </div>
 
         <div
-          className="bg-gradient-to-br from-red-50 to-red-100 dark:from-slate-800 dark:to-slate-900 p-6 rounded-xl shadow-lg border border-red-200 dark:border-slate-700 cursor-pointer hover:shadow-xl transition-all"
+          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 relative overflow-hidden group cursor-pointer hover:border-rose-200 dark:hover:border-rose-900/50 transition-all"
           onClick={() => setFiltroAtrasados(!filtroAtrasados)}
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="p-3 bg-rose-600 rounded-lg shadow-md shadow-rose-500/20 text-white">
-              <AlertCircle className="w-6 h-6" />
+          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 dark:bg-rose-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="p-3 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl">
+              <AlertCircle className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-black text-rose-800 bg-rose-200 px-3 py-1 rounded-full uppercase tracking-tighter shadow-sm">
-              Filtrar Lista
+            <span className="text-[9px] font-black text-rose-600 bg-rose-50 dark:bg-rose-500/10 dark:text-rose-400 px-2.5 py-1 rounded-full uppercase tracking-widest border border-rose-100 dark:border-rose-500/20">
+              Filtrar
             </span>
           </div>
-          <p className="text-xs text-rose-800 dark:text-rose-400 font-black uppercase tracking-widest">Total de Atrasos</p>
-          <h3 className="text-4xl font-black text-rose-900 dark:text-white font-black">{rhData.total_atrasos_qtd}</h3>
-          <p className="text-[10px] text-rose-700 dark:text-rose-300 font-bold uppercase tracking-tighter mt-1">{rhData.total_minutos_atraso} min acumulados</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1 relative z-10">Picos de Atraso</p>
+          <h3 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight relative z-10">{rhData.total_atrasos_qtd}</h3>
+          <p className="text-[10px] text-rose-500 dark:text-rose-400 font-bold uppercase tracking-wider mt-2 relative z-10">{rhData.total_minutos_atraso} min acumulados</p>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-slate-800 dark:to-slate-900 p-6 rounded-xl shadow-lg border border-purple-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <div className="p-3 bg-indigo-600 rounded-lg shadow-md shadow-indigo-500/20 text-white">
-              <TrendingUp className="w-6 h-6" />
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 dark:bg-purple-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="p-3 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl">
+              <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-xs text-indigo-800 dark:text-indigo-400 font-black uppercase tracking-widest">Taxa de Pontualidade</p>
-          <h3 className="text-4xl font-black text-indigo-900 dark:text-white font-black">{rhData.taxa_pontualidade}%</h3>
-          <p className="text-[10px] text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-tighter mt-1">Eficiência Operacional</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1 relative z-10">Pontualidade Média</p>
+          <h3 className="text-4xl font-black text-gray-900 dark:text-white tracking-tight relative z-10">{rhData.taxa_pontualidade}%</h3>
+          <p className="text-[10px] text-purple-500 dark:text-purple-400 font-bold uppercase tracking-wider mt-2 relative z-10">Taxa do período</p>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2">
-            <BarChart className="w-5 h-5 text-gray-500" />
-            Histórico de Admissões, Demissões, Ausências e Atrasos
-          </h3>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700/50">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400">
+              <BarChart className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg">Histórico de Movimentação</h3>
+          </div>
           <button
             onClick={() => toggleSection('turnover')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
           >
             {expandedSections['turnover'] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </button>
@@ -276,23 +285,25 @@ export default function RHDashboard() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900 flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-purple-600" />
-            Folha de Pagamento Detalhada
-          </h3>
-          <div className="flex gap-2">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700/50">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg">Folha de Pagamento Detalhada</h3>
+          </div>
+          <div className="flex items-center gap-3">
             <button
               onClick={exportarFolhaPagamentoPDF}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 border border-rose-200 dark:border-rose-500/20"
             >
               <Download className="w-4 h-4" />
-              Relatório Geral (PDF)
+              <span className="hidden sm:inline">Exportar PDF</span>
             </button>
             <button
               onClick={() => toggleSection('folha')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
             >
               {expandedSections['folha'] ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
             </button>
@@ -302,52 +313,59 @@ export default function RHDashboard() {
         {expandedSections['folha'] && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-200 dark:bg-gray-700 text-black dark:text-white font-black border-b-2 border-gray-400 dark:border-gray-500">
+              <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 font-bold border-b border-gray-200 dark:border-gray-700/80">
                 <tr>
-                  <th className="px-4 py-3 rounded-l-lg uppercase tracking-tight text-black dark:text-white">Funcionário</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">Cargo</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">Salário Base</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">Benefícios</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">H. Extras</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">Faltas</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">Atrasos</th>
-                  <th className="px-4 py-3 uppercase tracking-tight text-black dark:text-white">Total Estimado</th>
-                  <th className="px-4 py-3 rounded-r-lg text-right uppercase tracking-tight text-black dark:text-white">Ações</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs">Funcionário</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs">Cargo</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs whitespace-nowrap">Salário Base</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs">Benefícios</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs whitespace-nowrap">H. Extras</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs text-center">Faltas</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs text-center">Atrasos</th>
+                  <th className="px-5 py-4 uppercase tracking-wider text-xs text-right whitespace-nowrap">Total Líq.</th>
+                  <th className="px-5 py-4 text-right uppercase tracking-wider text-xs">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {rhData.espelho_pagamento_mes && rhData.espelho_pagamento_mes.length > 0 ? (
                   rhData.espelho_pagamento_mes.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border-b border-gray-300 dark:border-gray-600">
-                      <td className="px-4 py-3">
-                        <p className="text-black dark:text-white font-black">{row.nome}</p>
+                    <tr key={idx} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/80 transition-colors">
+                      <td className="px-5 py-4">
+                        <p className="text-gray-900 dark:text-white font-semibold">{row.nome}</p>
                       </td>
-                      <td className="px-4 py-3 text-black dark:text-gray-100 font-black">{row.cargo}</td>
-                      <td className="px-4 py-3 text-black dark:text-white font-black">R$ {row.salario_base.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-black dark:text-white font-black">R$ {row.beneficios.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-black dark:text-white font-black">
-                        {row.horas_extras_horas.toFixed(1)}h / R$ {row.custo_horas_extras.toFixed(2)}
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300 font-medium">{row.cargo}</td>
+                      <td className="px-5 py-4 text-gray-700 dark:text-gray-300 whitespace-nowrap font-medium">R$ {row.salario_base.toFixed(2)}</td>
+                      <td className="px-5 py-4 text-gray-700 dark:text-gray-300 font-medium">R$ {row.beneficios.toFixed(2)}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-gray-900 dark:text-gray-200 font-semibold">{row.horas_extras_horas.toFixed(1)}h</span>
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">+R$ {row.custo_horas_extras.toFixed(2)}</span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-black dark:text-white font-black">{row.faltas}</td>
-                      <td className="px-4 py-3 text-black dark:text-white font-black">{row.atrasos_minutos}m</td>
-                      <td className="px-4 py-3 text-black dark:text-white font-black">
-                        R$ {row.total_estimado.toFixed(2)}
+                      <td className="px-5 py-4 text-center">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${row.faltas > 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400' : 'text-gray-400'}`}>{row.faltas}</span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-5 py-4 text-center">
+                        <span className={`inline-flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold ${row.atrasos_minutos > 0 ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' : 'text-gray-400'}`}>{row.atrasos_minutos}m</span>
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <span className="text-gray-900 dark:text-white font-black text-sm">R$ {row.total_estimado.toFixed(2)}</span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
                         <button
                           onClick={() => openHolerite(row)}
-                          className="flex items-center gap-1 text-blue-900 dark:text-blue-300 hover:text-blue-700 font-black text-xs ml-auto uppercase tracking-tighter"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
                         >
-                          <Printer className="w-4 h-4" />
-                          Holerite
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Holerite</span>
                         </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-gray-400">
-                      Sem dados para espelho de pagamento
+                    <td colSpan={9} className="px-5 py-12 text-center text-gray-400 dark:text-gray-500">
+                      Sem dados processados para o período
                     </td>
                   </tr>
                 )}

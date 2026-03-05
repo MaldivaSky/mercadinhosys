@@ -242,6 +242,13 @@ def listar_clientes():
             query.filter_by(ativo=True).count() if ativo is None else paginacao.total
         )
         clientes_inativos = total_clientes - clientes_ativos
+        
+        # Calcular Dashboard do Cliente Global (apenas para o estabelecimento atual)
+        total_gasto_geral = db.session.query(db.func.sum(Cliente.valor_total_gasto)).filter_by(estabelecimento_id=estabelecimento_id).scalar() or 0
+        total_devido_geral = db.session.query(db.func.sum(Cliente.saldo_devedor)).filter_by(estabelecimento_id=estabelecimento_id).scalar() or 0
+        
+        melhor_cliente = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).order_by(Cliente.valor_total_gasto.desc()).first()
+        maior_devedor = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).order_by(Cliente.saldo_devedor.desc()).first()
 
         return jsonify(
             {
@@ -260,6 +267,12 @@ def listar_clientes():
                         if total_clientes > 0
                         else 0
                     ),
+                    "total_gasto": float(total_gasto_geral),
+                    "total_devido": float(total_devido_geral),
+                    "melhor_cliente_nome": melhor_cliente.nome if melhor_cliente and float(melhor_cliente.valor_total_gasto or 0) > 0 else "Nenhum",
+                    "melhor_cliente_valor": float(melhor_cliente.valor_total_gasto) if melhor_cliente else 0.0,
+                    "maior_devedor_nome": maior_devedor.nome if maior_devedor and float(maior_devedor.saldo_devedor or 0) > 0 else "Nenhum",
+                    "maior_devedor_valor": float(maior_devedor.saldo_devedor) if maior_devedor and float(maior_devedor.saldo_devedor or 0) > 0 else 0.0,
                 },
             }
         )
@@ -853,9 +866,10 @@ def buscar_clientes():
                     "celular": cliente.celular or "",
                     "email": cliente.email or "",
                     "ativo": cliente.ativo,
-                    "total_compras": float(cliente.valor_total_gasto or 0),  # Valor total gasto
-                    "frequencia_compras": cliente.total_compras or 0,  # Quantidade de compras
-                    "valor_total_gasto": float(cliente.valor_total_gasto or 0),
+                    "total_compras": cliente.total_compras or 0,  # Quantidade de compras
+                    "valor_total_gasto": float(cliente.valor_total_gasto or 0), # Dinheiro gasto
+                    "frequencia_compras": cliente.total_compras or 0,
+                    "saldo_devedor": float(cliente.saldo_devedor or 0), # Fiado
                     "classificacao": calcular_classificacao_cliente(cliente),
                     "limite_disponivel": calcular_limite_disponivel(cliente),
                 }
@@ -871,6 +885,66 @@ def buscar_clientes():
             jsonify({"success": False, "message": "Erro interno na busca de clientes"}),
             500,
         )
+
+
+@clientes_bp.route("/recalcular-metricas", methods=["POST"])
+@funcionario_required
+def recalcular_metricas_clientes():
+    """
+    Recalcula total_compras, valor_total_gasto, ultima_compra e saldo_devedor
+    de todos os clientes a partir das vendas e contas reais no banco.
+    Útil para sincronizar dados após seeds ou migrações.
+    """
+    try:
+        jwt_data = get_jwt()
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
+
+        clientes_lista = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).all()
+        atualizados = 0
+
+        for cliente in clientes_lista:
+            # Vendas do cliente
+            vendas_cliente = Venda.query.filter_by(
+                cliente_id=cliente.id,
+                estabelecimento_id=estabelecimento_id,
+                status="finalizada"
+            ).all()
+
+            total_compras = len(vendas_cliente)
+            valor_total_gasto = sum(float(v.total or 0) for v in vendas_cliente)
+            ultima_compra = max((v.data_venda for v in vendas_cliente if v.data_venda), default=None)
+
+            # Contas a receber em aberto (fiado)
+            contas_abertas = ContaReceber.query.filter_by(
+                cliente_id=cliente.id,
+                estabelecimento_id=estabelecimento_id,
+                status="aberto"
+            ).all()
+            saldo_devedor = sum(float(c.valor_atual or 0) for c in contas_abertas)
+
+            cliente.total_compras = total_compras
+            cliente.valor_total_gasto = valor_total_gasto
+            cliente.ultima_compra = ultima_compra
+            cliente.saldo_devedor = saldo_devedor
+            atualizados += 1
+
+        db.session.commit()
+        current_app.logger.info(
+            f"Recálculo de métricas concluído: {atualizados} clientes atualizados (estab={estabelecimento_id})"
+        )
+
+        return jsonify({
+            "success": True,
+            "message": f"{atualizados} clientes tiveram suas métricas recalculadas com sucesso.",
+            "clientes_atualizados": atualizados
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao recalcular métricas: {str(e)}")
+        return jsonify({"success": False, "message": "Erro ao recalcular métricas"}), 500
+
+
 
 
 @clientes_bp.route("/<int:id>/pagar_fiado", methods=["POST"])

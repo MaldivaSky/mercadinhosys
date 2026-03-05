@@ -74,9 +74,16 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                                 <h4 className="font-semibold text-gray-800 dark:text-white">
                                     {cliente.nome}
                                 </h4>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    CPF: {cliente.cpf || 'N/A'} • Total: R$ {(cliente.total_compras || 0).toFixed(2)}
-                                </p>
+                                <div className="flex items-center space-x-2 mt-1">
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        CPF: {cliente.cpf || 'N/A'} • Total Gasto: R$ {(cliente.valor_total_gasto || 0).toFixed(2)}
+                                    </p>
+                                    {cliente.saldo_devedor && cliente.saldo_devedor > 0 ? (
+                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-bold rounded-full">
+                                            FIADO: R$ {cliente.saldo_devedor.toFixed(2)}
+                                        </span>
+                                    ) : null}
+                                </div>
                             </div>
                         </div>
                         <button
@@ -141,13 +148,19 @@ const ClienteSelect: React.FC<ClienteSelectProps> = ({ cliente, onClienteSelecio
                                                 {cliente.cpf || 'CPF não informado'} • {cliente.telefone || cliente.celular || 'Sem contato'}
                                             </p>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="text-right flex flex-col items-end">
                                             <p className="text-sm font-medium text-gray-800 dark:text-white">
-                                                R$ {(cliente.total_compras || 0).toFixed(2)}
+                                                Gasto: R$ {(cliente.valor_total_gasto || 0).toFixed(2)}
                                             </p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                {cliente.valor_total_gasto ? `${cliente.valor_total_gasto} compras` : 'Sem compras'}
-                                            </p>
+                                            {cliente.saldo_devedor && cliente.saldo_devedor > 0 ? (
+                                                <div className="mt-1 px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold rounded-full">
+                                                    Dívida Fiado: R$ {cliente.saldo_devedor.toFixed(2)}
+                                                </div>
+                                            ) : (
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    {cliente.total_compras ? `${cliente.total_compras} compras` : 'Sem compras'}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
