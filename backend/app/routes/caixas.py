@@ -67,7 +67,7 @@ def abrir_caixa():
         )
 
         db.session.add(novo_caixa)
-        db.session.commit()
+        db.session.flush() # Manter na transação sem commitar
 
         # Registrar a abertura como movimentação inicial
         if saldo_inicial > 0:
@@ -81,7 +81,8 @@ def abrir_caixa():
                 observacoes="Lançamento automático de abertura"
             )
             db.session.add(mov)
-            db.session.commit()
+            
+        db.session.commit()
 
         return jsonify({
             "success": True, 

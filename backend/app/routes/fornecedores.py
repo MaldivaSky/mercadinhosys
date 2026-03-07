@@ -248,32 +248,20 @@ def listar_fornecedores():
             for r in rows:
                 try:
                     d = {
-                        "id": r["id"],
-                        "nome_fantasia": r["nome_fantasia"],
-                        "razao_social": r["razao_social"],
-                        "cnpj": r["cnpj"],
-                        "telefone": r["telefone"],
-                        "email": r["email"],
-                        "cidade": r.get("cidade"),
-                        "estado": r.get("estado"),
-                        "ativo": bool(r.get("ativo", True)),
-                        "classificacao": r.get("classificacao") or "REGULAR",
+                        "id": r[0] if isinstance(r, tuple) else r.id,
+                        "nome_fantasia": r[1] if isinstance(r, tuple) else r.nome_fantasia,
+                        "razao_social": r[2] if isinstance(r, tuple) else r.razao_social,
+                        "cnpj": r[3] if isinstance(r, tuple) else r.cnpj,
+                        "telefone": r[4] if isinstance(r, tuple) else r.telefone,
+                        "email": r[5] if isinstance(r, tuple) else r.email,
+                        "cidade": r[6] if isinstance(r, tuple) and len(r) > 6 else (r.cidade if hasattr(r, 'cidade') else None),
+                        "estado": r[7] if isinstance(r, tuple) and len(r) > 7 else (r.estado if hasattr(r, 'estado') else None),
+                        "ativo": bool(r[8]) if isinstance(r, tuple) and len(r) > 8 else (bool(r.ativo) if hasattr(r, 'ativo') else True),
+                        "classificacao": r[9] if isinstance(r, tuple) and len(r) > 9 else (r.classificacao if hasattr(r, 'classificacao') else "REGULAR"),
                         "produtos_ativos": None,
                     }
                 except Exception:
-                    d = {
-                        "id": r[0],
-                        "nome_fantasia": r[1],
-                        "razao_social": r[2],
-                        "cnpj": r[3],
-                        "telefone": r[4],
-                        "email": r[5],
-                        "cidade": r[6] if len(r) > 6 else None,
-                        "estado": r[7] if len(r) > 7 else None,
-                        "ativo": bool(r[8]) if len(r) > 8 else True,
-                        "classificacao": r[9] if len(r) > 9 else "REGULAR",
-                        "produtos_ativos": None,
-                    }
+                    pass
                 fornecedores.append(d)
             total_sql = text(
                 "SELECT COUNT(*) FROM fornecedores WHERE estabelecimento_id = :estabelecimento_id"

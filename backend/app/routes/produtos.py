@@ -588,7 +588,7 @@ def listar_produtos():
                         "data_validade": l.data_validade.isoformat() if l.data_validade else None,
                         "quantidade": l.quantidade,
                         "preco_venda": float(preco_lote) if preco_lote is not None else None,
-                        "preco_produto": float(produto.preco_venda),
+                        "preco_produto": float(produto.preco_venda or 0),
                     })
 
                 if not produto_dict["lotes_no_periodo"] and (
@@ -601,7 +601,7 @@ def listar_produtos():
                         "data_validade": produto.data_validade.isoformat() if produto.data_validade else None,
                         "quantidade": produto.quantidade,
                         "preco_venda": None,
-                        "preco_produto": float(produto.preco_venda),
+                        "preco_produto": float(produto.preco_venda or 0),
                     })
 
                 if precisa_consultar_lotes:
@@ -682,7 +682,7 @@ def obter_produto(id):
         dados_produto["estoque_baixo"] = verificar_estoque_baixo(produto)
         dados_produto["validade_proxima"] = verificar_validade_proxima(produto)
 
-        dados_produto["preco_venda_efetivo"] = float(produto.preco_venda)
+        dados_produto["preco_venda_efetivo"] = float(produto.preco_venda or 0)
         try:
             lotes_fifo = produto.get_lotes_disponiveis()
             for l in lotes_fifo:
@@ -2190,9 +2190,9 @@ def obter_estatisticas_produtos():
         
         # Aplicar filtros de margem em Python (após calcular a margem corretamente)
         if filtro_rapido == "margem_alta":
-            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda), float(p.preco_custo)) >= 50]
+            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) >= 50]
         elif filtro_rapido == "margem_baixa":
-            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda), float(p.preco_custo)) < 30]
+            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) < 30]
 
         # CALCULAR ESTATÍSTICAS COM DECIMAL PARA PRECISÃO
         total_produtos = len(produtos)

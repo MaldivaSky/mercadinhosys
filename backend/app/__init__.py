@@ -540,6 +540,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar stripe: {e}")
 
+    # Onboarding SaaS
+    try:
+        from app.routes.onboarding import onboarding_bp
+        app.register_blueprint(onboarding_bp, url_prefix="/api/onboarding")
+        logger.info("✅ Blueprint SaaS Onboarding registrado em /api/onboarding")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar onboarding: {e}")
+
     # Dashboard Científico - verifica se existe a pasta
     try:
         dashboard_cientifico_path = os.path.join(

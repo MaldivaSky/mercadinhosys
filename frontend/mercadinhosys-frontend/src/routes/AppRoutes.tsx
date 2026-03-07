@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import ConnectionTest from '../components/ConnectionTest';
 import { LoginPage } from '../features/auth/LoginPage';
+import { RegisterPage } from '../features/auth/RegisterPage';
 import { authService } from '../features/auth/authService';
 
 // Lazy loading das páginas
@@ -65,6 +66,11 @@ const AppRoutes: React.FC = () => {
                 {/* Rota de login - sempre acessível */}
                 <Route path="/login" element={
                     isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
+                } />
+
+                {/* Rota de registro - sempre acessível */}
+                <Route path="/register" element={
+                    isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />
                 } />
 
                 {/* Rota de teste - sempre acessível */}
