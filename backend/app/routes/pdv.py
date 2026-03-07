@@ -572,6 +572,26 @@ def buscar_produtos_pdv():
         engine_name = str(db.engine.name).lower()
         like_op = "ILIKE" if 'sqlite' not in engine_name else "LIKE"
 
+        if 'sqlite' in engine_name:
+            lot_join_sql = """
+            LEFT JOIN (
+                SELECT produto_id, MIN(data_validade) as data_validade, MIN(numero_lote) as numero_lote
+                FROM produto_lotes
+                WHERE ativo = true AND quantidade > 0
+                GROUP BY produto_id
+            ) pl ON p.id = pl.produto_id
+            """
+        else:
+            lot_join_sql = """
+            LEFT JOIN (
+                SELECT DISTINCT ON (produto_id) 
+                    produto_id, data_validade, numero_lote
+                FROM produto_lotes
+                WHERE ativo = true AND quantidade > 0
+                ORDER BY produto_id, data_validade ASC
+            ) pl ON p.id = pl.produto_id
+            """
+
         from sqlalchemy import text as sql_text
         resultado = db.session.execute(sql_text(f"""
             SELECT
@@ -586,13 +606,7 @@ def buscar_produtos_pdv():
                 COALESCE(pl.data_validade, p.data_validade) as data_validade,
                 COALESCE(pl.numero_lote, p.lote) as lote
             FROM produtos p
-            LEFT JOIN (
-                SELECT DISTINCT ON (produto_id) 
-                    produto_id, data_validade, numero_lote
-                FROM produto_lotes
-                WHERE ativo = true AND quantidade > 0
-                ORDER BY produto_id, data_validade ASC
-            ) pl ON p.id = pl.produto_id
+            {lot_join_sql}
             WHERE p.estabelecimento_id = :estab_id
               AND p.ativo = true
               AND p.quantidade > 0
