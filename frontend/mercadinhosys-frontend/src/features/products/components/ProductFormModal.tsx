@@ -114,10 +114,10 @@ const ProductFormModal = ({
 
             setFormData(prev => ({
                 ...prev,
-                nome: data.description || prev.nome,
-                descricao: data.ncm?.full_description || data.description || prev.descricao,
-                marca: data.brand?.name || prev.marca,
-                imagem_url: data.thumbnail || `https://placehold.co/300x300?text=${(data.description || prev.nome).replace(/ /g, '+')}`,
+                nome: data?.description || prev.nome,
+                descricao: data?.category?.name || data?.ncm?.full_description || data?.description || prev.descricao,
+                marca: data?.brand?.name || prev.marca,
+                imagem_url: data?.thumbnail || `https://placehold.co/300x300?text=${(data?.description || prev.nome).replace(/ /g, '+')}`,
             }));
 
             showToast.info('Dados preenchidos automaticamente!', { id: loadingToast });

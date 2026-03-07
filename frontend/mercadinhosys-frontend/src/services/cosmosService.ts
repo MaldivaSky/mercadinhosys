@@ -16,6 +16,10 @@ export interface CosmosProductData {
         code: string;
         description: string;
     };
+    category?: {
+        name: string;
+        description: string;
+    };
     price: string;
     avg_price: number;
     max_price: number;

@@ -3,7 +3,7 @@ import { useNavigate, NavLink } from 'react-router-dom';
 import {
     User, LogOut, Settings, Moon, Sun, ChevronDown,
     Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3,
-    CreditCard, FileText, UserCog, Briefcase, Clock, Truck, TrendingUp
+    CreditCard, FileText, UserCog, Briefcase, Clock, Truck
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import logo from '../../../logoprincipal.png';
@@ -23,7 +23,6 @@ const mobileMenuItems = [
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/settings', icon: Settings, label: 'Configurações' },
-    { to: '/leads', icon: TrendingUp, label: 'Gestão de Leads', adminOnly: true },
 ];
 
 const HeaderProfessional = () => {
@@ -316,7 +315,6 @@ const HeaderProfessional = () => {
                                 <ul className="space-y-0.5">
                                     {mobileMenuItems.filter(item => {
                                         const role = user.role?.toLowerCase();
-                                        if (item.adminOnly && role !== 'admin') return false;
                                         if (role === 'caixa' && item.to !== '/pdv' && item.to !== '/settings') return false;
                                         return true;
                                     }).map((item) => (
@@ -381,18 +379,7 @@ const HeaderProfessional = () => {
                                     Configurações
                                 </button>
 
-                                {user.role === 'admin' && (
-                                    <button
-                                        onClick={() => {
-                                            setMobileMenuOpen(false);
-                                            navigate('/leads');
-                                        }}
-                                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold text-blue-600 dark:text-blue-400"
-                                    >
-                                        <TrendingUp className="w-5 h-5" />
-                                        Gestão de Leads
-                                    </button>
-                                )}
+
 
                                 <button
                                     onClick={() => {

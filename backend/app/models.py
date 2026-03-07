@@ -1305,7 +1305,34 @@ class Produto(db.Model):
         demanda = self.demanda_media_diaria(days=days)
         return float(demanda) * float(lead_time_dias) * float(fator_seguranca)
 
+    def calcular_giro(self, days: int = 30) -> float:
+        """Calcula o giro de estoque (Vendas / Estoque)"""
+        try:
+            total_vendido = float(self.quantidade_vendida or 0)
+            estoque_atual = float(self.quantidade or 0)
+            if estoque_atual <= 0: return 0.0
+            return total_vendido / estoque_atual
+        except:
+            return 0.0
+
+    def calcular_cobertura_dias(self, days: int = 30):
+        """Calcula quantos dias o estoque dura baseado na demanda média"""
+        try:
+            dmd = self.demanda_media_diaria(days)
+            if dmd <= 0: 
+                return "Indeterminado" if float(self.quantidade or 0) > 0 else "Sem Estoque"
+            cobertura = float(self.quantidade or 0) / dmd
+            return round(cobertura, 1)
+        except:
+            return "---"
+
     def to_dict(self):
+        # Calcular métricas básicas com fallback seguro
+        giro = self.calcular_giro(30)
+        cobertura = self.calcular_cobertura_dias(30)
+        cobertura_str = f"{cobertura} dias" if isinstance(cobertura, (int, float)) else str(cobertura)
+        freq = self.calcular_status_giro(30)
+
         return {
             "id": self.id,
             "codigo_barras": self.codigo_barras,
@@ -1323,21 +1350,31 @@ class Produto(db.Model):
             "quantidade_minima": float(self.quantidade_minima) if self.quantidade_minima else 0.0,
             "preco_custo": float(self.preco_custo) if self.preco_custo else 0.0,
             "preco_venda": float(self.preco_venda) if self.preco_venda else 0.0,
-            "margem_lucro": float(self.margem_lucro) if self.margem_lucro else 0.0,
+            "margem_lucro": float(self.margem_lucro) if self.margem_lucro and float(self.margem_lucro) > 0 else (
+                round(((float(self.preco_venda) - float(self.preco_custo)) / float(self.preco_custo) * 100), 2)
+                if self.preco_custo and float(self.preco_custo) > 0 else 0.0
+            ),
             "ativo": self.ativo,
-            "fornecedor": self.fornecedor.to_dict() if self.fornecedor else None,
-            "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
+            "fornecedor": self.fornecedor.to_dict() if hasattr(self, 'fornecedor') and self.fornecedor else None,
+            "fornecedor_nome": self.fornecedor.nome_fantasia if hasattr(self, 'fornecedor') and self.fornecedor else None,
             "fornecedor_id": self.fornecedor_id,
-            "data_fabricacao": self.data_fabricacao.isoformat() if self.data_fabricacao else None,
-            "data_validade": self.data_validade.isoformat() if self.data_validade else None,
-            "lote": self.lote,
-            "imagem_url": self.imagem_url,
-            "controlar_validade": bool(getattr(self, "controlar_validade", True)),
+            "data_fabricacao": self.data_fabricacao.isoformat() if hasattr(self, 'data_fabricacao') and self.data_fabricacao else None,
+            "data_validade": self.data_validade.isoformat() if hasattr(self, 'data_validade') and self.data_validade else None,
+            "lote": getattr(self, 'lote', ''),
+            "imagem_url": getattr(self, 'imagem_url', ''),
             "total_vendido": float(self.total_vendido) if self.total_vendido else 0.0,
             "quantidade_vendida": float(self.quantidade_vendida) if self.quantidade_vendida else 0.0,
-            "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
-            "classificacao_abc": self.classificacao_abc,
+            "ultima_venda": self.ultima_venda.isoformat() if hasattr(self, 'ultima_venda') and self.ultima_venda else None,
+            "created_at": self.created_at.isoformat() if hasattr(self, 'created_at') and self.created_at else None,
+            "classificacao_abc": getattr(self, 'classificacao_abc', 'C'),
             "estoque_status": self.estoque_status,
+            "controlar_validade": bool(getattr(self, "controlar_validade", True)),
+            "metricas_gestao": {
+                "giro_estoque": giro,
+                "dias_estoque": cobertura if isinstance(cobertura, (int, float)) else 0,
+                "cobertura_estoque": cobertura_str,
+                "frequencia_venda": freq
+            }
         }
 
     def get_lotes_disponiveis(self):

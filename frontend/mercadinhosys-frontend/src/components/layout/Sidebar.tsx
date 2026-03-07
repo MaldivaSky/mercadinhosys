@@ -13,7 +13,6 @@ import {
     Truck,
     Clock,
     Briefcase,
-    TrendingUp,
     ChevronLeft,
     ChevronRight,
     DollarSign
@@ -34,7 +33,6 @@ const menuItems = [
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/settings', icon: Settings, label: 'Configurações' },
-    { to: '/leads', icon: TrendingUp, label: 'Gestão de Leads', adminOnly: true },
 ];
 
 interface SidebarProps {
@@ -58,7 +56,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                 <ul className="space-y-2">
                     {menuItems.filter(item => {
                         const role = authService.getCurrentUser()?.role?.toLowerCase();
-                        if (item.adminOnly && role !== 'admin') return false;
 
                         // Se for caixa ou estoquista, aplicamos o filtro seletivo a áreas estritas
                         if (role === 'caixa') {
@@ -73,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
 
                         // Funcionário genérico?
                         if (role === 'funcionario') {
-                            const bloqueados = ['/sales', '/expenses', '/employees', '/rh', '/ponto-relatorios', '/ponto-diagnostico', '/reports', '/leads'];
+                            const bloqueados = ['/sales', '/expenses', '/employees', '/rh', '/ponto-relatorios', '/ponto-diagnostico', '/reports'];
                             return !bloqueados.includes(item.to);
                         }
 
