@@ -103,6 +103,31 @@ class AuthService {
         }
     }
 
+    async registerAccount(payload: any): Promise<{ success: boolean; message?: string; estabelecimento_id?: number }> {
+        try {
+            const response = await axios.post(
+                `${API_URL}/onboarding/registrar`,
+                payload,
+                {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 15000
+                }
+            );
+            const data = response.data;
+            if (!data || typeof data !== 'object') {
+                throw new Error('Resposta inválida do servidor');
+            }
+            if (!data.success) {
+                throw new Error(data.error || 'Falha ao registrar conta');
+            }
+            return data;
+        } catch (error: unknown) {
+            const err = error as { message?: string; response?: { status?: number; data?: any } };
+            const serverData = err.response?.data;
+            throw new Error(serverData?.error || err.message || 'Erro ao registrar conta');
+        }
+    }
+
     async updateProfile(payload: { nome?: string; email?: string; telefone?: string; foto_url?: string }): Promise<{ success: boolean; data?: { nome?: string; email?: string; telefone?: string; foto_url?: string }; message?: string }> {
         const token = this.getToken();
         if (!token) {

@@ -693,6 +693,7 @@ def finalizar_venda():
                 estabelecimento_id=funcionario_data.get("estabelecimento_id"),
                 cliente_id=cliente_id,
                 funcionario_id=funcionario_data.get("id"),
+                caixa_id=caixa_aberto.id,
                 subtotal=subtotal,
                 desconto=desconto,
                 total=total,

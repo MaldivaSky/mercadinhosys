@@ -43,6 +43,38 @@ class EmailService:
         return True
 
     @staticmethod
+    def send_credentials_email(to_email, nome_usuario, senha_temporaria):
+        """
+        Envia e-mail com as credenciais de acesso geradas automaticamente pelo sistema.
+        """
+        subject = f"Credenciais de Acesso - MercadinhoSys"
+        
+        content = f"""
+        Olá {nome_usuario},
+        
+        Seu cadastro no MercadinhoSys foi realizado com sucesso!
+        
+        Como medida de segurança, nós geramos automaticamente suas credenciais de acesso.
+        Por favor, utilize as informações abaixo para acessar o sistema:
+        
+        E-mail/Usuário: {to_email}
+        Senha Temporária: {senha_temporaria}
+        
+        Recomendamos que você altere esta senha no seu primeiro acesso, através da aba 'Meu Perfil'.
+        
+        Link de Acesso: https://mercadinhosys.vercel.app/login
+        
+        Atenciosamente,
+        Equipe MercadinhoSys
+        """
+        
+        logger.info(f"📧 [EMAIL SIMULADO CREDENCIAIS] Enviando para: {to_email}")
+        logger.info(f"Subject: {subject}")
+        logger.info(f"Body: {content}")
+        
+        return True
+
+    @staticmethod
     def send_payment_confirmation(to_email, plano_nome):
         """
         Confirmação de ativação de plano SaaS.

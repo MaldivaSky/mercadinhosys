@@ -569,6 +569,7 @@ class Cliente(db.Model, EnderecoMixin):
     data_atualizacao = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     estabelecimento = db.relationship(
         "Estabelecimento",
@@ -820,6 +821,7 @@ class CategoriaProduto(db.Model):
 
     ativo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     estabelecimento = db.relationship(
         "Estabelecimento",
@@ -942,6 +944,7 @@ class Produto(db.Model):
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     estabelecimento = db.relationship(
         "Estabelecimento", backref=db.backref("produtos", lazy=True)
@@ -1566,6 +1569,9 @@ class Venda(db.Model):
     funcionario_id = db.Column(
         db.Integer, db.ForeignKey("funcionarios.id"), nullable=False
     )
+    caixa_id = db.Column(
+        db.Integer, db.ForeignKey("caixas.id"), nullable=True
+    )
 
     codigo = db.Column(db.String(50), nullable=False)
 
@@ -1590,6 +1596,7 @@ class Venda(db.Model):
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     estabelecimento = db.relationship(
         "Estabelecimento", backref=db.backref("vendas", lazy=True)
