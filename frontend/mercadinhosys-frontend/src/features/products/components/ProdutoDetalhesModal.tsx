@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import {
-    Tag,
     Image as ImageIcon,
     Clipboard,
-    Calendar,
-    Barcode,
     Building2,
     ChevronLeft,
     ChevronRight,
@@ -12,13 +9,12 @@ import {
     TrendingUp,
     TrendingDown,
     PackageSearch,
-    User,
     Clock,
     Flame,
     AlertTriangle,
     ShieldCheck
 } from 'lucide-react';
-import { Produto, ProdutoLote, HistoricoPreco } from '../../../types';
+import { Produto, ProdutoLote } from '../../../types';
 import { formatCurrency, formatDate, fixImageUrl } from '../../../utils/formatters';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 
@@ -288,7 +284,7 @@ const ProdutoDetalhesModal = ({ produto, onClose }: ProdutoDetalhesModalProps) =
                                             <span className="text-[10px] text-gray-500 font-bold">{formatDate(p.created_at || '')}</span>
                                         </div>
                                         <div className="text-right flex flex-col">
-                                            <span className="text-xs font-black text-red-600">{formatCurrency(p.valor_total || p.custo_unitario * p.quantidade || 0)}</span>
+                                            <span className="text-xs font-black text-red-600">{formatCurrency(p.valor_total || (p.custo_unitario ? p.custo_unitario * p.quantidade : 0))}</span>
                                             <span className="text-[9px] text-gray-400 font-bold uppercase truncate max-w-[120px]">{p.motivo}</span>
                                         </div>
                                     </div>

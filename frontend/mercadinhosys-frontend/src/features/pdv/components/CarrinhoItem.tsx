@@ -27,7 +27,7 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
     onAplicarDesconto,
 }) => {
     const isGranel = ['KG', 'L', 'G', 'ML'].includes(produto.unidade_medida?.toUpperCase()) || (produto as any).tipo === 'granel';
-    const diasAlertaValidade = 30; // Pode vir de um context se necessário
+
     const [mostrarDesconto, setMostrarDesconto] = useState(false);
     const [valorDesconto, setValorDesconto] = useState('');
     const [tipoDesconto, setTipoDesconto] = useState<'valor' | 'percentual'>('percentual');
