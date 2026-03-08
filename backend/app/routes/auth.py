@@ -286,13 +286,14 @@ def login():
                 400,
             )
 
-        # Buscar funcionário por username OU email (sem estabelecimento_id)
+        # Buscar funcionário por username OU email (sem estabelecimento_id) - CASE INSENSITIVE
         funcionario = Funcionario.query.filter(
             db.or_( 
-                Funcionario.username == identifier,
+                db.func.lower(Funcionario.username) == identifier.lower(),
                 db.func.lower(Funcionario.email) == identifier.lower(),
             )
         ).first()
+
         if funcionario:
             current_app.logger.info(f"[LOGIN] Funcionário encontrado: id={funcionario.id}, username={funcionario.username}, email={funcionario.email}, ativo={funcionario.ativo}, status={getattr(funcionario, 'status', 'N/A')}")
         else:
@@ -357,7 +358,30 @@ def login():
                 db.session.rollback()
                 current_app.logger.error(f"[LOGIN] Falha crítica no auto-bootstrap: {be}\n{traceback.format_exc()}")
 
+        print(f"\n[DEBUG] Tentativa de login: ID='{identifier}'")
+        # Buscar funcionário por username OU email (sem estabelecimento_id) - CASE INSENSITIVE
+        funcionario = Funcionario.query.filter(
+            db.or_( 
+                db.func.lower(Funcionario.username) == identifier.lower(),
+                db.func.lower(Funcionario.email) == identifier.lower(),
+            )
+        ).first()
+
+        if funcionario:
+            print(f"[DEBUG] Usuário encontrado: {funcionario.username} (ID: {funcionario.id})")
+        else:
+            print(f"[DEBUG] Usuário NÃO encontrado: {identifier}")
+
+        # Registrar tentativa de login (sucesso ou falha)
+        login_history = LoginHistory(
+            username=identifier,
+            ip_address=ip_address,
+            dispositivo=dispositivo[:200],
+            success=False,
+        )
+
         if not funcionario:
+            print("[DEBUG] Falha: Usuário não encontrado")
             current_app.logger.warning(
                 f"Tentativa de login com credencial não encontrada: {identifier} "
                 f"de IP: {ip_address}"
@@ -375,13 +399,13 @@ def login():
                 db.session.rollback()
                 current_app.logger.warning(f"Não foi possível salvar histórico de login (tabela ausente?): {str(e)}")
 
-            current_app.logger.warning("[LOGIN] Retornando 401 - Credenciais inválidas (usuário não encontrado)")
+            current_app.logger.warning("[LOGIN] Retornando 401 - Usuário não encontrado")
             return (
                 jsonify(
                     {
                         "success": False,
-                        "error": "Credenciais inválidas",
-                        "code": "INVALID_CREDENTIALS",
+                        "error": f"Usuário '{identifier}' não encontrado no banco",
+                        "code": "USER_NOT_FOUND",
                     }
                 ),
                 401,
@@ -392,7 +416,11 @@ def login():
         login_history.funcionario_id = funcionario.id
 
         # Verificar senha
-        if not funcionario.check_senha(senha):
+        check_pwd = funcionario.check_senha(senha)
+        print(f"[DEBUG] Verificação de senha para {identifier}: {check_pwd}")
+        
+        if not check_pwd:
+            print(f"[DEBUG] Falha: Senha incorreta para {identifier}")
             current_app.logger.warning(
                 f"[LOGIN] Senha incorreta para: {identifier} (ID: {funcionario.id}) "
                 f"de IP: {ip_address}"
@@ -406,13 +434,13 @@ def login():
                 db.session.rollback()
                 current_app.logger.warning(f"Erro ao salvar histórico (senha incorreta): {e}")
 
-            current_app.logger.warning("[LOGIN] Retornando 401 - Credenciais inválidas (senha incorreta)")
+            current_app.logger.warning("[LOGIN] Retornando 401 - Senha incorreta")
             return (
                 jsonify(
                     {
                         "success": False,
-                        "error": "Credenciais inválidas",
-                        "code": "INVALID_CREDENTIALS",
+                        "error": "Senha incorreta para este usuário",
+                        "code": "WRONG_PASSWORD",
                     }
                 ),
                 401,
@@ -517,6 +545,11 @@ def login():
             )
 
         # Claims adicionais
+        is_super = funcionario.is_super_admin
+        # Fallback Senior: Garante que maldivas/admin sempre sejam super admins no token
+        if funcionario.username in ['maldivas', 'admin']:
+            is_super = True
+
         additional_claims = {
             "username": funcionario.username,
             "nome": funcionario.nome,
@@ -525,6 +558,7 @@ def login():
             "status": funcionario.status,
             "role": funcionario.role,
             "cargo": funcionario.cargo,
+            "is_super_admin": is_super,
             "login_time": datetime.utcnow().isoformat(),
             "ip_address": ip_address,
             "dispositivo": dispositivo[:100],
@@ -586,6 +620,7 @@ def login():
                             "cargo": funcionario.cargo,
                             "role": funcionario.role,
                             "status": funcionario.status,
+                            "is_super_admin": funcionario.is_super_admin,
                             "cpf": funcionario.cpf,
                             "telefone": getattr(funcionario, 'telefone', None),
                             "foto_url": getattr(funcionario, 'foto_url', None),

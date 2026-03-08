@@ -282,6 +282,24 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
         """Retorna False para usuários reais"""
         return False
 
+    @property
+    def is_super_admin(self):
+        """
+        Retorna True se o usuário é o Administrador Global/Dono do Sistema (SaaS Owner).
+        Este nível de acesso permite ver Leads, Estabelecimentos e métricas globais.
+        """
+        if not self.role:
+            return False
+            
+        # Comparação robusta (case-insensitive)
+        role_ok = self.role.strip().upper() == "ADMIN"
+        user_ok = (
+            self.email == "admin@mercadinhosys.com" or 
+            self.username == "admin" or
+            self.username == "maldivas"
+        )
+        return role_ok and user_ok
+
     def get_id(self):
         """Retorna o ID do usuário como string (requerido pelo Flask-Login)"""
         return str(self.id)
@@ -365,6 +383,7 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
             "salario_base": float(self.salario_base) if self.salario_base else 0.0,
             "username": self.username,
             "role": self.role,
+            "is_super_admin": self.is_super_admin,
             "ativo": self.ativo,
             "permissoes": self.permissoes,
             # Campos de compatibilidade para frontend
@@ -2890,3 +2909,76 @@ def load_user_from_request(request):
             return user
 
     return None
+
+# ============================================
+# 30. AUDITORIA E MONITORAMENTO GLOBAL (SaaS)
+# ============================================
+
+class Auditoria(db.Model):
+    """
+    Tabela central para logs de auditoria e monitoramento em tempo real.
+    Permite ao Super Admin acompanhar vendas, cadastros e movimentações
+    de todos os estabelecimentos em um único lugar.
+    """
+    __tablename__ = "auditoria"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    usuario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
+    
+    # Tipo de evento: venda_finalizada, produto_criado, estoque_movimentado, login_sucesso
+    tipo_evento = db.Column(db.String(50), nullable=False)
+    descricao = db.Column(db.String(500), nullable=False)
+    
+    # Campo opcional para valores monetários (Ex: valor da venda)
+    valor = db.Column(db.Numeric(12, 2), nullable=True)
+    
+    # Detalhes extras em JSON (Ex: lista de produtos da venda)
+    detalhes_json = db.Column(db.Text, nullable=True)
+    
+    data_evento = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relacionamentos
+    estabelecimento = db.relationship("Estabelecimento", backref=db.backref("auditoria", lazy=True))
+    usuario = db.relationship("Funcionario", backref=db.backref("atividades", lazy=True))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "estabelecimento_id": self.estabelecimento_id,
+            "estabelecimento_nome": self.estabelecimento.nome_fantasia if self.estabelecimento else "N/A",
+            "usuario_id": self.usuario_id,
+            "usuario_nome": self.usuario.nome if self.usuario else "Sistema",
+            "tipo_evento": self.tipo_evento,
+            "descricao": self.descricao,
+            "valor": float(self.valor) if self.valor else 0.0,
+            "data_evento": self.data_evento.isoformat(),
+            "detalhes": json.loads(self.detalhes_json) if self.detalhes_json else {}
+        }
+
+    @classmethod
+    def registrar(cls, estabelecimento_id, tipo_evento, descricao, usuario_id=None, valor=None, detalhes=None):
+        """Método auxiliar para registrar eventos de auditoria"""
+        from flask import current_app
+        try:
+            novo_log = cls(
+                estabelecimento_id=estabelecimento_id,
+                tipo_evento=tipo_evento,
+                descricao=descricao,
+                usuario_id=usuario_id,
+                valor=valor,
+                detalhes_json=json.dumps(detalhes) if detalhes else None
+            )
+            db.session.add(novo_log)
+            db.session.flush()
+            return True
+        except Exception as e:
+            if current_app:
+                current_app.logger.error(f"Erro ao registrar auditoria: {str(e)}")
+            else:
+                print(f"Erro ao registrar auditoria (sem context): {str(e)}")
+            return False

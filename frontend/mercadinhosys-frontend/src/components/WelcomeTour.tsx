@@ -1,117 +1,151 @@
 import React, { useState, useEffect } from 'react';
-import { X, ChevronRight, CheckCircle, Info } from 'lucide-react';
+import {
+    X,
+    ChevronRight,
+    ChevronLeft,
+    ShoppingBag,
+    Package,
+    LayoutDashboard,
+    Settings,
+    Rocket
+} from 'lucide-react';
 
 interface TourStep {
-    target: string;
     title: string;
-    content: string;
-    position: 'top' | 'bottom' | 'left' | 'right' | 'center';
+    description: string;
+    targetId: string;
+    icon: React.ReactNode;
+    position: 'top' | 'bottom' | 'left' | 'right';
 }
 
-const TOUR_STEPS: TourStep[] = [
+const steps: TourStep[] = [
     {
-        target: 'body',
-        title: '🌟 Bem-vindo ao MercadinhoSys!',
-        content: 'Estamos muito felizes em ter você conosco. Vamos fazer um tour rápido pelas ferramentas que vão transformar seu negócio?',
-        position: 'center'
-    },
-    {
-        target: '#nav-pdv',
-        title: '💰 Ponto de Venda (PDV)',
-        content: 'Aqui é onde a mágica acontece. Nosso PDV é ultra-rápido e funciona até mesmo com oscilações de internet.',
+        title: "Bem-vindo ao Futuro!",
+        description: "Olá! Este é o seu novo painel de controle inteligente. Vamos fazer um tour de 30 segundos para você dominar sua loja?",
+        targetId: 'dashboard-main',
+        icon: <Rocket className="text-indigo-600" size={24} />,
         position: 'bottom'
     },
     {
-        target: '#nav-estoque',
-        title: '📦 Gestão de Estoque',
-        content: 'Cadastre seus produtos, controle validades e receba alertas automáticos de estoque baixo.',
+        title: "Seu Faturamento em Tempo Real",
+        description: "Aqui você acompanha quanto vendeu hoje, seu lucro e a margem bruta. Tudo atualizado no momento da venda.",
+        targetId: 'kpi-cards',
+        icon: <LayoutDashboard className="text-blue-600" size={24} />,
+        position: 'bottom'
+    },
+    {
+        title: "O Coração do Negócio: Vendas",
+        description: "Clique aqui para abrir o PDV. É o checkout mais rápido do mercado, integrado com seu estoque e financeiro.",
+        targetId: 'nav-vendas',
+        icon: <ShoppingBag className="text-green-600" size={24} />,
         position: 'right'
     },
     {
-        target: '#nav-financeiro',
-        title: '📊 Financeiro Inteligente',
-        content: 'Acompanhe seu lucro real, fluxo de caixa e despesas de forma automatizada.',
+        title: "Gestão de Estoque Inteligente",
+        description: "Cadastre produtos, controle validade e receba alertas de reposição automática para nunca perder uma venda.",
+        targetId: 'nav-produtos',
+        icon: <Package className="text-orange-600" size={24} />,
         position: 'right'
     },
     {
-        target: 'body',
-        title: '🚀 Tudo Pronto!',
-        content: 'Agora é com você. Boas vendas e conte conosco para o que precisar!',
-        position: 'center'
+        title: "Personalize sua Marca",
+        description: "Configure seu logotipo, dados da empresa e regras de negócio para que o sistema fique com a cara da sua loja.",
+        targetId: 'nav-configuracoes',
+        icon: <Settings className="text-gray-600" size={24} />,
+        position: 'right'
     }
 ];
 
 const WelcomeTour: React.FC = () => {
-    const [currentStep, setCurrentStep] = useState(-1);
+    const [currentStep, setCurrentStep] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {
-        // Verifica se é o primeiro acesso (localStorage)
-        const hasSeenTour = localStorage.getItem('has_seen_welcome_tour');
-        const user = JSON.parse(localStorage.getItem('user_data') || '{}');
-
-        // Só mostra se for o primeiro acesso e NÃO for o Super Admin
-        if (!hasSeenTour && user.id && !user.is_super_admin) {
-            setTimeout(() => {
-                setIsVisible(true);
-                setCurrentStep(0);
-            }, 2000);
+        // Verifica se é o primeiro acesso
+        const hasSeenTour = localStorage.getItem('mercadinhosys_tour_seen');
+        if (!hasSeenTour) {
+            const timer = setTimeout(() => setIsVisible(true), 2000); // 2 segundos após carregar
+            return () => clearTimeout(timer);
         }
     }, []);
 
     const handleNext = () => {
-        if (currentStep < TOUR_STEPS.length - 1) {
+        if (currentStep < steps.length - 1) {
             setCurrentStep(currentStep + 1);
         } else {
-            handleClose();
+            completeTour();
         }
     };
 
-    const handleClose = () => {
-        setIsVisible(false);
-        localStorage.setItem('has_seen_welcome_tour', 'true');
+    const handlePrev = () => {
+        if (currentStep > 0) {
+            setCurrentStep(currentStep - 1);
+        }
     };
 
-    if (!isVisible || currentStep === -1) return null;
+    const completeTour = () => {
+        localStorage.setItem('mercadinhosys_tour_seen', 'true');
+        setIsVisible(false);
+    };
 
-    const step = TOUR_STEPS[currentStep];
+    if (!isVisible) return null;
+
+    const step = steps[currentStep];
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm transition-all">
-            <div className={`bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-indigo-100 transform transition-all scale-100`}>
-                <div className="flex items-start justify-between mb-4">
-                    <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600">
-                        {currentStep === TOUR_STEPS.length - 1 ? <CheckCircle size={32} /> : <Info size={32} />}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={completeTour} />
+
+            <div className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-8 animate-in zoom-in-95 duration-300 border border-white/20 pointer-events-auto">
+                <button
+                    onClick={completeTour}
+                    className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                    <X size={20} />
+                </button>
+
+                <div className="flex flex-col items-center text-center space-y-6">
+                    <div className="p-4 bg-indigo-50 rounded-2xl shadow-inner mb-2">
+                        {step.icon}
                     </div>
-                    <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <X size={24} />
-                    </button>
-                </div>
 
-                <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-gray-900">{step.title}</h2>
-                    <p className="text-gray-600 leading-relaxed">
-                        {step.content}
-                    </p>
-                </div>
+                    <div className="space-y-3">
+                        <h3 className="text-xl font-black text-gray-900 italic tracking-tight">
+                            {step.title}
+                        </h3>
+                        <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                            {step.description}
+                        </p>
+                    </div>
 
-                <div className="mt-8 flex items-center justify-between">
-                    <div className="flex gap-1">
-                        {TOUR_STEPS.map((_, i) => (
+                    {/* Progress dots */}
+                    <div className="flex gap-2">
+                        {steps.map((_, i) => (
                             <div
                                 key={i}
-                                className={`h-1.5 rounded-full transition-all ${i === currentStep ? 'w-6 bg-indigo-600' : 'w-1.5 bg-gray-200'}`}
+                                className={`h-1.5 rounded-full transition-all duration-300 ${i === currentStep ? 'w-6 bg-indigo-600' : 'w-1.5 bg-gray-200'}`}
                             />
                         ))}
                     </div>
 
-                    <button
-                        onClick={handleNext}
-                        className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-all hover:shadow-lg active:scale-95"
-                    >
-                        {currentStep === TOUR_STEPS.length - 1 ? 'Começar Agora!' : 'Entendi'}
-                        {currentStep < TOUR_STEPS.length - 1 && <ChevronRight size={18} />}
-                    </button>
+                    <div className="flex w-full gap-3 pt-4">
+                        {currentStep > 0 && (
+                            <button
+                                onClick={handlePrev}
+                                className="flex-1 px-6 py-3 border border-gray-200 rounded-2xl text-xs font-black text-gray-400 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <ChevronLeft size={16} />
+                                ANTERIOR
+                            </button>
+                        )}
+                        <button
+                            onClick={handleNext}
+                            className="flex-[2] px-6 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black italic tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
+                        >
+                            {currentStep === steps.length - 1 ? 'VAMOS COMEÇAR!' : 'PRÓXIMO'}
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

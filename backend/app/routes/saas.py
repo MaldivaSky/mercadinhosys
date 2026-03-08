@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify, current_app
+# app/routes/saas.py
+from flask import Blueprint, request, jsonify
 from app.models import db, Lead, Estabelecimento
 from app.decorators.decorator_jwt import admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
@@ -141,5 +142,6 @@ def pagarme_webhook():
         return jsonify({"success": True}), 200
         
     except Exception as e:
-        logger.error(f"Erro no webhook Pagar.me: {e}")
+        from flask import current_app
+        current_app.logger.error(f"Erro no webhook Pagar.me: {e}")
         return jsonify({"success": False, "error": str(e)}), 500

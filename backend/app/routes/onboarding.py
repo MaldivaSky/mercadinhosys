@@ -6,12 +6,40 @@ Rotas públicas para registro de novos clientes/lojas (Self-Service).
 
 from datetime import datetime, date
 from flask import Blueprint, request, jsonify, current_app
-from app.models import db, Estabelecimento, Funcionario, Configuracao
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
+from app.models import db, Estabelecimento, Funcionario, Configuracao, Auditoria
 import json
 
 onboarding_bp = Blueprint("onboarding", __name__)
 
+def super_admin_required(fn):
+    """Custom decorator for super admin routes"""
+    from functools import wraps
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        from flask import current_app
+        claims = get_jwt()
+        
+        # 1. Verificação Primária: Claim no Token JWT (Rápida)
+        if claims.get("is_super_admin") is True:
+            return fn(*args, **kwargs)
+            
+        # 2. Verificação de Redundância: Fail-safe Senior via DB
+        try:
+            from app.models import Funcionario
+            user_id = get_jwt_identity()
+            user = Funcionario.query.get(int(user_id))
+            
+            if user and user.username in ['maldivas', 'admin']:
+                return fn(*args, **kwargs)
+        except Exception as e:
+            current_app.logger.error(f"Erro na redundância de onboarding: {str(e)}")
+            
+        return jsonify({"success": False, "error": "Acesso restrito ao Administrador do Sistema"}), 403
+    return jwt_required()(wrapper)
+
 @onboarding_bp.route("/registrar", methods=["POST"])
+@super_admin_required
 def registrar_conta():
     """
     Endpoint público para registrar um novo Estabelecimento e seu Usuário Administrador.
@@ -135,6 +163,16 @@ def registrar_conta():
             )
             novo_admin.set_senha(senha_temporaria)
             db.session.add(novo_admin)
+            db.session.flush()
+
+            # Auditoria SaaS (Log de Onboarding)
+            Auditoria.registrar(
+                estabelecimento_id=novo_estabelecimento.id,
+                tipo_evento="estabelecimento_registrado",
+                descricao=f"Novo estabelecimento: {nome_fantasia} (CNPJ: {cnpj})",
+                usuario_id=novo_admin.id,
+                detalhes={"estabelecimento": nome_fantasia, "admin": username, "email": email_admin}
+            )
 
             # Confirmar tudo!
             db.session.commit()
@@ -142,8 +180,14 @@ def registrar_conta():
             # Enviar e-mail com as credenciais
             try:
                 from app.services.email_service import email_service
-                email_service.send_credentials_email(email_admin, nome_admin, senha_temporaria)
+                email_service.send_credentials_email(
+                    email_admin, 
+                    nome_admin, 
+                    senha_temporaria,
+                    nome_loja=novo_estabelecimento.nome_fantasia
+                )
             except Exception as email_e:
+                from flask import current_app
                 current_app.logger.warning(f"Conta criada, mas erro ao enviar e-mail: {str(email_e)}")
 
             return jsonify({
@@ -154,9 +198,11 @@ def registrar_conta():
 
         except Exception as intern_e:
             db.session.rollback()
+            from flask import current_app
             current_app.logger.error(f"Erro transacional ao registrar conta SaaS: {str(intern_e)}")
             return jsonify({"success": False, "error": "Erro interno ao processar cadastro. Tente novamente."}), 500
 
     except Exception as e:
+        from flask import current_app
         current_app.logger.error(f"Erro grave no onboarding: {str(e)}")
         return jsonify({"success": False, "error": f"Falha no servidor: {str(e)}"}), 500

@@ -75,7 +75,7 @@ def create_app(config_name=None):
                     "keepalives_idle": 30,
                     "keepalives_interval": 10,
                     "keepalives_count": 5,
-                    "sslmode": "require" if all(h not in runtime_db_url for h in ["localhost", "127.0.0.1", "::1"]) else "disable"
+                    "sslmode": "require" if all(h not in runtime_db_url for h in ["localhost", "127.0.0.1", "::1", "postgres", "db"]) else "disable"
                 }
             }
         else:
@@ -125,22 +125,6 @@ def create_app(config_name=None):
 
     mail.init_app(app)
 
-    @app.errorhandler(500)
-    def handle_500_error(e):
-        import traceback87788
-        error_details = traceback.format_exc() if not app.config.get("PRODUCTION") else "Erro interno no servidor"
-        logger.error(f"💥 ERRO 500: {str(e)}\n{traceback.format_exc()}")
-        try:
-            with open(r'c:\Users\rafae\OneDrive\Desktop\mercadinhosys\backend\frontend_erro_500.txt', 'a', encoding='utf-8') as f:
-                f.write(f"\n--- ERRO 500 ---\nURL: {request.url}\nERRO: {str(e)}\nTRACE: {traceback.format_exc()}\n")
-        except:
-            pass
-        return jsonify({
-            "success": False,
-            "error": "Erro interno do servidor",
-            "message": "Ocorreu um erro inesperado. Nossa equipe de elite já foi notificada.",
-            "details": error_details if not os.environ.get("FLASK_ENV") == "production" else None
-        }), 500
 
     @app.errorhandler(404)
     def handle_404_error(e):
@@ -244,14 +228,9 @@ def create_app(config_name=None):
                     logger.critical("Verifique DATABASE_URL e firewall.")
                     # Não relançamos o erro para não derrubar o container em loop, mas a app ficará instável/erro 500
                 elif hybrid_mode != "offline" and app.config.get("USING_POSTGRES"):
-                    logger.warning("⚠️ FALLBACK: Mudando para banco de dados LOCAL (SQLite) devido a falha na Nuvem (Ambiente Dev/Híbrido).")
-                    
-                    # Tentar reconfigurar para SQLite em tempo de execução
-                    basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-                    local_uri = f"sqlite:///{os.path.join(basedir, 'instance', 'mercadinho_local.db')}"
-                    
-                    app.config["SQLALCHEMY_DATABASE_URI"] = local_uri
-                    app.config["USING_POSTGRES"] = False
+                    logger.error("❌ ERRO CRÍTICO: Falha ao conectar ao Postgres. Fallback para SQLite DESATIVADO para manter integridade.")
+                    # Mantém o URI original para tentar reconexão nas próximas requests
+                    pass
                     
                     # Recriar engine/session (simplificado - idealmente reiniciaria a app, mas vamos tentar create_all local)
                     try:
@@ -531,6 +510,14 @@ def create_app(config_name=None):
         logger.info("✅ Blueprint SaaS registrado em /api/saas")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar saas: {e}")
+
+    # Monitoramento Global (SaaS Monitor)
+    try:
+        from app.routes.monitor import monitor_bp
+        app.register_blueprint(monitor_bp, url_prefix="/api/saas/monitor")
+        logger.info("✅ Blueprint SaaS Monitor registrado em /api/saas/monitor")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar monitor: {e}")
 
     # Stripe
     try:
