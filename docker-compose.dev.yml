@@ -30,17 +30,17 @@ services:
       target: builder
     container_name: mercadinhosys-backend-dev
     command: flask run --debug --host=0.0.0.0
-    restart: unless-stopped
-    # Sem depends_on em postgres: por padrão o backend usa SQLite (instance/mercadinho.db).
-    # Para usar Postgres no Docker, defina DATABASE_URL no .env do backend.
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       FLASK_APP: run.py
       FLASK_ENV: development
       FLASK_DEBUG: 1
       WERKZEUG_DEBUG_PIN: "off"
-      # Força SQLite local (caminho absoluto) — prioridade máxima no __init__.py
-      DATABASE_URL_TARGET: "sqlite:////app/instance/mercadinho.db"
-      DATABASE_URL: "sqlite:////app/instance/mercadinho.db"
+      # Usar Postgres do container 'postgres' (porta 5432 interna)
+      DATABASE_URL_TARGET: "postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys"
+      DATABASE_URL: "postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys"
       # Zerar variáveis cloud para evitar vazamento do .env para o Docker
       AIVEN_DATABASE_URL: ""
       DB_PRIMARY: ""
@@ -72,7 +72,7 @@ services:
     command: sh -c "npm install && npm run dev -- --host"
     environment:
       - VITE_API_TARGET=http://backend:5000
-      - CHOKIDAR_USEPOLLING=true  # Garante hot-reload no Docker (Windows/WSL)
+      - CHOKIDAR_USEPOLLING=true # Garante hot-reload no Docker (Windows/WSL)
     depends_on:
       - backend
     networks:
