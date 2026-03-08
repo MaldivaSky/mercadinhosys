@@ -23,16 +23,22 @@ const DiagnosticoFotos = lazy(() => import('../features/ponto/DiagnosticoFotos')
 const ReportsPage = lazy(() => import('../features/reports/ReportsPage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const LeadDashboard = lazy(() => import('../features/saas/LeadDashboard'));
-
+const SystemMonitorPage = lazy(() => import('../features/saas/SystemMonitorPage'));
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
 
 // Componente para proteção de rotas por role
-const RoleGuard = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
-    const userRole = authService.getCurrentUser()?.role?.toLowerCase() || '';
+const RoleGuard = ({ children, allowedRoles, requireSuperAdmin }: { children: React.ReactNode, allowedRoles?: string[], requireSuperAdmin?: boolean }) => {
+    const user = authService.getCurrentUser();
+    const userRole = user?.role?.toLowerCase() || '';
+    const isSuperAdmin = user?.is_super_admin || false;
+
+    // Se exigir super admin e não for, bloqueia
+    if (requireSuperAdmin && !isSuperAdmin) {
+        return <Navigate to="/dashboard" replace />;
+    }
 
     // Se a rota for restrita a certos perfis (ex: admin)
-    // Permite se não houver allowedRoles definido (rota pública logada) ou se o role estiver na lista
     if (allowedRoles && !allowedRoles.includes(userRole)) {
         return <Navigate to="/dashboard" replace />;
     }
@@ -93,8 +99,9 @@ const AppRoutes: React.FC = () => {
                     <Route path="ponto-diagnostico" element={<RoleGuard allowedRoles={['admin', 'gerente']}><DiagnosticoFotos /></RoleGuard>} />
                     <Route path="reports" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ReportsPage /></RoleGuard>} />
                     <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><SettingsPage /></RoleGuard>} />
-                    <Route path="estabelecimentos" element={<RoleGuard allowedRoles={['admin']}><EstabelecimentosPage /></RoleGuard>} />
-                    <Route path="leads" element={<RoleGuard allowedRoles={['admin']}><LeadDashboard /></RoleGuard>} />
+                    <Route path="estabelecimentos" element={<RoleGuard requireSuperAdmin><EstabelecimentosPage /></RoleGuard>} />
+                    <Route path="monitor" element={<RoleGuard requireSuperAdmin><SystemMonitorPage /></RoleGuard>} />
+                    <Route path="leads" element={<RoleGuard requireSuperAdmin><LeadDashboard /></RoleGuard>} />
                 </Route>
 
                 {/* Fallback - se alguém acessar uma rota não definida */}

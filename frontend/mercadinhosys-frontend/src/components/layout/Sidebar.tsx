@@ -15,7 +15,10 @@ import {
     Briefcase,
     ChevronLeft,
     ChevronRight,
-    DollarSign
+    DollarSign,
+    Building2,
+    Target,
+    Activity
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 
@@ -33,6 +36,9 @@ const menuItems = [
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/settings', icon: Settings, label: 'Configurações' },
+    { to: '/estabelecimentos', icon: Building2, label: 'Estabelecimentos' },
+    { to: '/monitor', icon: Activity, label: 'Monitor Sistema' },
+    { to: '/leads', icon: Target, label: 'Leads SaaS' },
 ];
 
 interface SidebarProps {
@@ -55,7 +61,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
             <nav className="px-4 pb-4">
                 <ul className="space-y-2">
                     {menuItems.filter(item => {
-                        const role = authService.getCurrentUser()?.role?.toLowerCase();
+                        const user = authService.getCurrentUser();
+                        const role = user?.role?.toLowerCase();
+                        const isSuperAdmin = user?.is_super_admin || false;
+
+                        // Rotas restritas ao Super Admin (Dono do SaaS)
+                        if (['/estabelecimentos', '/leads', '/monitor'].includes(item.to) && !isSuperAdmin) {
+                            return false;
+                        }
 
                         // Se for caixa ou estoquista, aplicamos o filtro seletivo a áreas estritas
                         if (role === 'caixa') {

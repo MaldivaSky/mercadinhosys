@@ -211,7 +211,7 @@ class AuthService {
         return localStorage.getItem('access_token');
     }
 
-    getCurrentUser(): { nome: string; role: string } | null {
+    getCurrentUser(): { nome: string; role: string; is_super_admin?: boolean } | null {
         const userStr = localStorage.getItem('user_data');
         try {
             return userStr ? JSON.parse(userStr) : null;

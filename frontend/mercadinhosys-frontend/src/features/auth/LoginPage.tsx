@@ -68,14 +68,12 @@ export function LoginPage() {
       }
     } catch (err: any) {
       console.error('❌ Erro no login:', err);
-      let errorMessage = 'Erro ao fazer login';
-      if (err.response?.status === 401) {
-        errorMessage = 'Credenciais inválidas';
-        setShowBootstrap(true);
-      } else if (err.response?.status === 404) {
-        errorMessage = 'Usuário não encontrado';
+      let errorMessage = err.response?.data?.error || 'Erro ao fazer login';
+
+      if (err.response?.status === 401 || err.response?.status === 404) {
         setShowBootstrap(true);
       }
+
       setError(errorMessage);
       authService.logout();
     } finally {
