@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
-from app.models import db, Produto, Venda, VendaItem, MovimentacaoEstoque, Configuracao, Funcionario, Cliente
+from app.models import db, Produto, Venda, VendaItem, MovimentacaoEstoque, Configuracao, Funcionario, Cliente, Auditoria
 from app.decorators.decorator_jwt import funcionario_required
 import pytz
 import uuid
@@ -862,6 +862,16 @@ def finalizar_venda():
                     cliente.total_compras = int(cliente.total_compras or 0) + 1
                     cliente.valor_total_gasto = float(cliente.valor_total_gasto or 0) + float(total)
                     cliente.ultima_compra = data_venda
+            
+            # Auditoria Global (SaaS Monitor)
+            Auditoria.registrar(
+                estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                tipo_evento="venda_finalizada",
+                descricao=f"Venda {codigo_venda} finalizada - Total: R$ {float(total):.2f}",
+                usuario_id=funcionario_data.get("id"),
+                valor=total,
+                detalhes={"codigo": codigo_venda, "itens": len(items), "forma_pagamento": forma_pagamento}
+            )
 
             db.session.commit()
 

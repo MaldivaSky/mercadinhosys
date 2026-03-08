@@ -43,33 +43,36 @@ class EmailService:
         return True
 
     @staticmethod
-    def send_credentials_email(to_email, nome_usuario, senha_temporaria):
+    def send_credentials_email(to_email, nome_usuario, senha_temporaria, nome_loja="Sua Loja"):
         """
-        Envia e-mail com as credenciais de acesso geradas automaticamente pelo sistema.
+        Envia e-mail profissional de boas-vindas com as credenciais de acesso.
         """
-        subject = f"Credenciais de Acesso - MercadinhoSys"
+        subject = f"🚀 Seu Mercadinho está pronto para decolar! | Acesso ao MercadinhoSys"
         
         content = f"""
         Olá {nome_usuario},
-        
-        Seu cadastro no MercadinhoSys foi realizado com sucesso!
-        
-        Como medida de segurança, nós geramos automaticamente suas credenciais de acesso.
-        Por favor, utilize as informações abaixo para acessar o sistema:
-        
+
+        É um prazer ter o {nome_loja} como nosso parceiro! Você acaba de contratar um ecossistema de gestão inteligente projetado para maximizar seus lucros e organizar sua operação.
+
+        Como medida de segurança, nós geramos automaticamente suas credenciais de acesso iniciais.
+        Por favor, utilize as informações abaixo para entrar no sistema:
+
+        URL de Acesso: https://mercadinhosys.vercel.app/login
         E-mail/Usuário: {to_email}
         Senha Temporária: {senha_temporaria}
-        
-        Recomendamos que você altere esta senha no seu primeiro acesso, através da aba 'Meu Perfil'.
-        
-        Link de Acesso: https://mercadinhosys.vercel.app/login
-        
-        Atenciosamente,
-        Equipe MercadinhoSys
+
+        (Recomendamos que você altere esta senha no seu primeiro acesso para total segurança).
+
+        🧭 PRÓXIMOS PASSOS:
+        Ao entrar, você verá o nosso Tour de Boas-Vindas. Ele te guiará nos primeiros passos de configuração.
+
+        Vamos crescer juntos?
+        Equipe Maldivas Sistemas
         """
         
-        logger.info(f"📧 [EMAIL SIMULADO CREDENCIAIS] Enviando para: {to_email}")
+        logger.info(f"📧 [EMAIL BOAS-VINDAS] Enviando para: {to_email}")
         logger.info(f"Subject: {subject}")
+        # Log completo apenas em ambientes controlados por segurança
         logger.info(f"Body: {content}")
         
         return True

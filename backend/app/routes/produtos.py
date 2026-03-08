@@ -23,6 +23,7 @@ from app.models import (
     PedidoCompraItem,
     HistoricoPrecos,
     Despesa,
+    Auditoria
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
@@ -957,6 +958,16 @@ def criar_produto():
                 observacoes=f"Produto cadastrado por {claims.get('nome')}",
             )
             db.session.add(movimentacao)
+
+        # Auditoria Global (SaaS Monitor)
+        Auditoria.registrar(
+            estabelecimento_id=estabelecimento_id,
+            tipo_evento="produto_criado",
+            descricao=f"Produto '{produto.nome}' cadastrado",
+            usuario_id=int(get_jwt_identity()),
+            valor=produto.preco_venda,
+            detalhes={"id": produto.id, "nome": produto.nome, "preco_venda": float(produto.preco_venda)}
+        )
 
         db.session.commit()
 
@@ -3725,6 +3736,15 @@ def importar_produtos_csv():
                 db.session.add(novo_produto)
                 db.session.flush() # Para pegar o ID do produto para o lote
                 
+                # Auditoria SaaS
+                Auditoria.registrar(
+                    estabelecimento_id=estabelecimento_id,
+                    tipo_evento="produto_criado",
+                    descricao=f"Produto '{novo_produto.nome}' importado via Bulk",
+                    valor=novo_produto.preco_venda,
+                    detalhes={"id": novo_produto.id, "nome": novo_produto.nome, "metodo": "import_bulk"}
+                )
+
                 # Se informou estoque > 0, cria o primeiro lote oficial
                 if qtd_inicial > 0:
                     novo_lote = ProdutoLote(
