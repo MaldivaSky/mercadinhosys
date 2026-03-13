@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
     Store, Settings, CreditCard, Printer,
     Shield, Bell, Upload, MapPin,
-    Save, RotateCcw, CheckCircle, AlertCircle, Info, Building2, Clock,
-    ShoppingCart, Package, Users, TrendingUp, X, Eye, XCircle, Edit2, RefreshCw,
-    Database, Palette, Wifi, HardDrive, Keyboard, DollarSign
+    Save, CheckCircle, Building2, Clock,
+    ShoppingCart, Package, X, XCircle, Edit2, RefreshCw,
+    Database, HardDrive, Keyboard, DollarSign
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import { showToast } from '../../components/elements/Toast';
@@ -235,7 +235,6 @@ const SettingsPage: React.FC = () => {
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const {
         config: globalConfig,
-        preferencias: userPrefs,
         isDark,
         loading: configLoading,
         updateConfig: updateGlobalConfig,

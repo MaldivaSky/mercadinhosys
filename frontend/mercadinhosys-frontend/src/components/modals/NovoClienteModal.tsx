@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, User, Mail, Phone, Lock, CheckCircle } from 'lucide-react';
+import { X, Building2, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { API_CONFIG } from '../../api/apiConfig';
 
@@ -23,7 +23,7 @@ interface FormData {
   bairro: string;
   cidade: string;
   estado: string;
-  
+
   // Dados do Administrador
   nome_admin: string;
   email_admin: string;
@@ -31,10 +31,10 @@ interface FormData {
   confirmar_senha: string;
 }
 
-const NovoClienteModal: React.FC<NovoClienteModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  onSuccess 
+const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +52,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
     bairro: '',
     cidade: '',
     estado: '',
-    
+
     // Dados do Administrador
     nome_admin: '',
     email_admin: '',
@@ -155,7 +155,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
 
       if (data.success) {
         toast.success('Ambiente criado com sucesso!', { id: 'onboarding' });
-        
+
         // Mostrar dados de acesso
         const acessoInfo = `
           🎉 Cliente provisionado com sucesso!
@@ -167,9 +167,9 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
           
           📧 Enviamos os dados por email para: ${data.data.administrador.email}
         `;
-        
+
         toast.success(acessoInfo, { duration: 8000 });
-        
+
         onSuccess();
         onClose();
         resetForm();
@@ -244,20 +244,18 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
         <div className="px-6 py-4 border-b">
           <div className="flex items-center justify-between">
             <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
-              }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+                }`}>
                 {currentStep > 1 ? <CheckCircle className="w-4 h-4" /> : '1'}
               </div>
               <span className="font-medium">Dados do Estabelecimento</span>
             </div>
-            
+
             <div className={`flex-1 h-1 mx-4 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
-            
+
             <div className={`flex items-center space-x-2 ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'
-              }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+                }`}>
                 2
               </div>
               <span className="font-medium">Dados do Administrador</span>
@@ -273,7 +271,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
                   Informações do Estabelecimento
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -288,7 +286,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Razão Social *
@@ -302,7 +300,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       CNPJ
@@ -316,7 +314,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       CPF (para MEI)
@@ -330,7 +328,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Telefone *
@@ -344,7 +342,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Email do Estabelecimento *
@@ -359,13 +357,13 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                     />
                   </div>
                 </div>
-                
+
                 <div className="mt-4 p-3 bg-blue-50 rounded-md">
                   <p className="text-sm text-blue-800">
                     <strong>Endereço (opcional):</strong> Pode preencher agora ou depois nas configurações
                   </p>
                 </div>
-                
+
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-4">
                   <input
                     type="text"
@@ -427,7 +425,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
                   Dados do Administrador (Dono)
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -442,7 +440,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Email *
@@ -456,7 +454,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Senha *
@@ -470,7 +468,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                       disabled={isLoading}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Confirmar Senha *
@@ -485,7 +483,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                     />
                   </div>
                 </div>
-                
+
                 <div className="mt-6 p-4 bg-green-50 rounded-md">
                   <h4 className="font-medium text-green-900 mb-2">✨ Recursos que serão criados:</h4>
                   <ul className="text-sm text-green-800 space-y-1">
@@ -514,7 +512,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
               </button>
             )}
           </div>
-          
+
           <div className="flex items-center space-x-3">
             <button
               onClick={onClose}
@@ -523,7 +521,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
             >
               Cancelar
             </button>
-            
+
             {currentStep === 1 && (
               <button
                 onClick={nextStep}
@@ -533,7 +531,7 @@ const NovoClienteModal: React.FC<NovoClienteModalProps> = ({
                 Próximo →
               </button>
             )}
-            
+
             {currentStep === 2 && (
               <button
                 onClick={handleSubmit}

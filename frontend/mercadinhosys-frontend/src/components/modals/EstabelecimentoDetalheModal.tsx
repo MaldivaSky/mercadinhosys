@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, Mail, Calendar, CreditCard, Settings, Eye } from 'lucide-react';
+import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, CreditCard, Settings, Eye } from 'lucide-react';
 
 interface EstabelecimentoDetalheModalProps {
     estabelecimento: any;
@@ -56,7 +56,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            
+
             <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
                 {/* Header */}
                 <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
@@ -66,7 +66,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                     >
                         <X size={20} />
                     </button>
-                    
+
                     <div className="flex items-start gap-4">
                         <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
                             <Building2 size={32} />
@@ -177,14 +177,14 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                     <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Endereço Completo</span>
                                         <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                                            {estabelecimento.logradouro && estabelecimento.numero 
-                                                ? `${estabelecimento.logradouro}, ${estabelecimento.numero}` 
+                                            {estabelecimento.logradouro && estabelecimento.numero
+                                                ? `${estabelecimento.logradouro}, ${estabelecimento.numero}`
                                                 : 'Endereço não informado'
                                             }
                                             {estabelecimento.complemento && `, ${estabelecimento.complemento}`}
                                             {estabelecimento.bairro && `, ${estabelecimento.bairro}`}
-                                            {estabelecimento.cidade && estabelecimento.estado 
-                                                ? `, ${estabelecimento.cidade}/${estabelecimento.estado}` 
+                                            {estabelecimento.cidade && estabelecimento.estado
+                                                ? `, ${estabelecimento.cidade}/${estabelecimento.estado}`
                                                 : ''
                                             }
                                         </p>

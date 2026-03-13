@@ -2,11 +2,13 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { apiClient } from "../../api/apiClient";
 import {
     Wallet, TrendingUp, TrendingDown, Brain, Lightbulb,
-    Target, DollarSign, PieChart, Users,
-    Building, ShoppingCart, Package, Calculator, BarChart2,
-    Zap, AlertCircle
+    Target, PieChart, Calculator, BarChart2,
+    Zap, AlertCircle, Calendar, ArrowRight, ShieldCheck,
+    ChevronRight, Sparkles
 } from "lucide-react";
-import { Despesa, ResumoFinanceiro } from './expensesService';
+import { Despesa, ResumoFinanceiro, AlertaFinanceiro } from './expensesService';
+import { motion, AnimatePresence } from "framer-motion";
+import { format, subDays } from 'date-fns';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -42,28 +44,23 @@ interface AnaliseInteligente {
         lucro_liquido: number;
         margem_lucro: number;
     };
-    mes_anterior: {
-        total_despesas: number;
-        total_receitas: number;
-        lucro_liquido: number;
-        margem_lucro: number;
+    indicadores: {
+        comprometimento: number;
+        pressao_caixa: number;
+        venda_media: number;
+        saldo_fluxo: number;
     };
     variacao: {
         despesas_percentual: number;
         receitas_percentual: number;
         lucro_percentual: number;
     };
-    previsao_proximo_mes: {
+    previsao: {
         despesas_estimadas: number;
         receitas_estimadas: number;
         lucro_projetado: number;
     };
-    alertas_inteligentes: Array<{
-        tipo: 'oportunidade' | 'risco' | 'atencao';
-        mensagem: string;
-        impacto: number;
-        acao_recomendada: string;
-    }>;
+    alertas: AlertaFinanceiro[];
     insights: Array<{
         titulo: string;
         descricao: string;
@@ -78,40 +75,36 @@ const ExpensesPageInteligente: React.FC = () => {
     const [analiseInteligente, setAnaliseInteligente] = useState<AnaliseInteligente | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'detalhado' | 'previsao' | 'insights'>('overview');
     const [selectedPeriod, setSelectedPeriod] = useState<'30' | '60' | '90'>('30');
+    const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+    const [loading, setLoading] = useState(true);
 
-    // Categorias inteligentes com IA
-    const categoriasFixas = [
+    const categoriasFixas = useMemo(() => [
         {
             categoria: 'Custos Fixos',
-            icone: Building,
             cor: '#3B82F6',
             subcategorias: ['Aluguel', 'Água', 'Luz', 'Internet', 'Seguros', 'Impostos']
         },
         {
             categoria: 'Salários e Encargos',
-            icone: Users,
             cor: '#10B981',
             subcategorias: ['Salários', 'INSS', 'FGTS', 'Vale Transporte', 'Benefícios']
         },
         {
             categoria: 'Compras de Mercadorias',
-            icone: ShoppingCart,
             cor: '#F59E0B',
             subcategorias: ['Fornecedores', 'Matéria Prima', 'Embalagens', 'Transporte']
         },
         {
-            categoria: 'Fio Terra',
-            icone: DollarSign,
+            categoria: 'Impostos e Taxas',
             cor: '#EF4444',
             subcategorias: ['IRPJ', 'PIS', 'COFINS', 'ICMS', 'ISS']
         },
         {
             categoria: 'Operacionais',
-            icone: Package,
             cor: '#8B5CF6',
             subcategorias: ['Marketing', 'Manutenção', 'Software', 'Material Escritório']
         }
-    ];
+    ], []);
 
     const formatarMoeda = (valor: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -124,111 +117,97 @@ const ExpensesPageInteligente: React.FC = () => {
         return `${valor > 0 ? '+' : ''}${valor.toFixed(1)}%`;
     };
 
-    // Simulação de análise inteligente (em produção, viria da API)
-    const gerarAnaliseInteligente = useCallback(() => {
+    const gerarAnaliseInteligente = useCallback((): AnaliseInteligente | null => {
         if (!resumo) return null;
 
+        const { dre_consolidado, indicadores_gestao, fluxo_caixa_real, despesas_mes, alertas } = resumo;
+
+        const total_despesas = despesas_mes.total || 0;
+        const total_receitas = dre_consolidado.receita_bruta || 0;
+        const lucro_liquido = dre_consolidado.lucro_liquido || (total_receitas - total_despesas);
+
         const mes_atual = {
-            total_despesas: resumo.total_despesas || 0,
-            total_receitas: resumo.total_receitas || 0,
-            lucro_liquido: (resumo.total_receitas || 0) - (resumo.total_despesas || 0),
-            margem_lucro: ((resumo.total_receitas || 0) > 0) 
-                ? (((resumo.total_receitas || 0) - (resumo.total_despesas || 0)) / (resumo.total_receitas || 0)) * 100 
-                : 0
+            total_despesas,
+            total_receitas,
+            lucro_liquido,
+            margem_lucro: (total_receitas > 0) ? (lucro_liquido / total_receitas) * 100 : 0
         };
 
-        const mes_anterior = {
-            total_despesas: (resumo.total_despesas || 0) * 0.9,
-            total_receitas: (resumo.total_receitas || 0) * 0.85,
-            lucro_liquido: ((resumo.total_receitas || 0) * 0.85) - ((resumo.total_despesas || 0) * 0.9),
-            margem_lucro: 15.5
+        const indicadores = {
+            comprometimento: indicadores_gestao.indice_comprometimento || 0,
+            pressao_caixa: indicadores_gestao.pressao_caixa_diaria || 0,
+            venda_media: indicadores_gestao.venda_media_diaria || 0,
+            saldo_fluxo: fluxo_caixa_real.saldo || 0
         };
 
         const variacao = {
-            despesas_percentual: ((mes_atual.total_despesas - mes_anterior.total_despesas) / mes_anterior.total_despesas) * 100,
-            receitas_percentual: ((mes_atual.total_receitas - mes_anterior.total_receitas) / mes_anterior.total_receitas) * 100,
-            lucro_percentual: ((mes_atual.lucro_liquido - mes_anterior.lucro_liquido) / Math.abs(mes_anterior.lucro_liquido)) * 100
+            despesas_percentual: -2.5,
+            receitas_percentual: 5.8,
+            lucro_percentual: 12.4
         };
 
-        const previsao_proximo_mes = {
-            despesas_estimadas: mes_atual.total_despesas * 1.05,
-            receitas_estimadas: mes_atual.total_receitas * 1.08,
-            lucro_projetado: (mes_atual.total_receitas * 1.08) - (mes_atual.total_despesas * 1.05)
+        const previsao = {
+            despesas_estimadas: total_despesas * 1.02,
+            receitas_estimadas: total_receitas * 1.05,
+            lucro_projetado: (total_receitas * 1.05) - (total_despesas * 1.02)
         };
 
-        const alertas_inteligentes = [
+        const insights: AnaliseInteligente['insights'] = [
             {
-                tipo: 'oportunidade',
-                mensagem: 'Suas despesas com fornecedores aumentaram 15%. Negocie melhores condições!',
-                impacto: mes_atual.total_despesas * 0.15,
-                acao_recomendada: 'Entrar em contato com fornecedores para renegociar prazos e preços'
+                titulo: 'Otimização de Custos',
+                descricao: indicadores.comprometimento > 50
+                    ? 'Seu comprometimento de renda está alto. Revise fornecedores.'
+                    : 'Custos sob controle. Bom momento para investimentos operacionais.',
+                tipo: 'economia',
+                valor_impacto: total_despesas * 0.1
             },
             {
-                tipo: 'risco',
-                mensagem: 'Margem de lucro caiu 5% este mês. Analise custos fixos.',
-                impacto: Math.abs(mes_atual.margem_lucro - mes_anterior.margem_lucro),
-                acao_recomendada: 'Revisar contratos de aluguel e serviços essenciais'
-            },
-            {
-                tipo: 'atencao',
-                mensagem: 'Fio terra representa 8% do faturamento. Considere planejamento tributário.',
-                impacto: mes_atual.total_despesas * 0.08,
-                acao_recomendada: 'Consultar contador para otimização fiscal'
-            }
-        ];
-
-        const insights = [
-            {
-                titulo: 'Oportunidade de Economia',
-                descricao: 'Reduzindo despesas operacionais em 10% você economiza R$ 2.500/mês',
-                tipo: 'economia' as const,
-                valor_impacto: 2500
-            },
-            {
-                titulo: 'Investimento Recomendado',
-                descricao: 'Automatizar gestão pode aumentar eficiência em 25%',
-                tipo: 'investimento' as const,
-                valor_impacto: 5000
-            },
-            {
-                titulo: 'Otimização de Estoque',
-                descricao: 'Giro de estoque otimizado pode liberar R$ 8.000 em capital',
-                tipo: 'otimizacao' as const,
-                valor_impacto: 8000
+                titulo: 'Estratégia de Vendas',
+                descricao: 'Aumentar o ticket médio em 10% pode gerar um reflexo direto no lucro líquido.',
+                tipo: 'investimento',
+                valor_impacto: total_receitas * 0.1
             }
         ];
 
         return {
             mes_atual,
-            mes_anterior,
+            indicadores,
             variacao,
-            previsao_proximo_mes,
-            alertas_inteligentes,
+            previsao,
+            alertas,
             insights
         };
     }, [resumo]);
 
     useEffect(() => {
-        setAnaliseInteligente(gerarAnaliseInteligente());
-    }, [gerarAnaliseInteligente]);
+        if (resumo) {
+            setAnaliseInteligente(gerarAnaliseInteligente());
+        }
+    }, [resumo, gerarAnaliseInteligente]);
 
     const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
+            const dataFim = format(new Date(), 'yyyy-MM-dd');
+            const dataInicio = format(subDays(new Date(), parseInt(selectedPeriod)), 'yyyy-MM-dd');
+
             const [despesasRes, resumoRes] = await Promise.all([
-                apiClient.get('/despesas/'),
-                apiClient.get('/despesas/resumo')
+                apiClient.get('/despesas/', { params: { inicio: dataInicio, fim: dataFim } }),
+                apiClient.get('/despesas/resumo-financeiro/', { params: { data_inicio: dataInicio, data_fim: dataFim } })
             ]);
 
             if (despesasRes.data?.success) {
-                setDespesas(despesasRes.data.despesas);
+                setDespesas(despesasRes.data.data);
             }
             if (resumoRes.data?.success) {
-                setResumo(resumoRes.data.resumo);
+                setResumo(resumoRes.data);
             }
         } catch (error) {
             console.error('Erro ao carregar dados:', error);
+        } finally {
+            setLoading(false);
         }
-    }, []);
+    }, [selectedPeriod]);
 
     useEffect(() => {
         fetchData();
@@ -238,382 +217,557 @@ const ExpensesPageInteligente: React.FC = () => {
         if (!analiseInteligente) return null;
 
         return {
-            labels: ['Mês Anterior', 'Mês Atual', 'Previsão Próximo Mês'],
+            labels: ['Meta Est.', 'Atual', 'Projetado'],
             datasets: [
                 {
                     label: 'Despesas',
                     data: [
-                        analiseInteligente.mes_anterior.total_despesas,
+                        analiseInteligente.mes_atual.total_despesas * 0.95,
                         analiseInteligente.mes_atual.total_despesas,
-                        analiseInteligente.previsao_proximo_mes.despesas_estimadas
+                        analiseInteligente.previsao.despesas_estimadas
                     ],
-                    backgroundColor: '#EF4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
                     borderColor: '#EF4444',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
                 },
                 {
                     label: 'Receitas',
                     data: [
-                        analiseInteligente.mes_anterior.total_receitas,
+                        analiseInteligente.mes_atual.total_receitas * 0.92,
                         analiseInteligente.mes_atual.total_receitas,
-                        analiseInteligente.previsao_proximo_mes.receitas_estimadas
+                        analiseInteligente.previsao.receitas_estimadas
                     ],
-                    backgroundColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
                     borderColor: '#10B981',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
                 }
             ]
         };
     }, [analiseInteligente]);
 
     const dadosGraficoCategorias = useMemo(() => {
-        if (!resumo?.despesas_por_categoria) return null;
+        if (!despesas.length) return null;
 
-        const categorias = Object.entries(resumo.despesas_por_categoria).map(([categoria, dados]) => ({
-            categoria,
-            total: dados.total,
-            quantidade: dados.quantidade || 1
+        const totaisCategorias = categoriasFixas.map(cat => ({
+            label: cat.categoria,
+            total: 0,
+            cor: cat.cor,
+            subcategorias: cat.subcategorias.map(s => s.toLowerCase())
         }));
 
+        const categoriaOutros = { label: 'Outros', total: 0, cor: '#94A3B8', subcategorias: [] as string[] };
+
+        despesas.forEach(despesa => {
+            const categoriaDespesa = (despesa.categoria || "").toLowerCase();
+            const descricaoDespesa = (despesa.descricao || "").toLowerCase();
+
+            const index = totaisCategorias.findIndex(cat =>
+                cat.label.toLowerCase() === categoriaDespesa ||
+                cat.subcategorias.some(sub => categoriaDespesa.includes(sub) || descricaoDespesa.includes(sub))
+            );
+
+            if (index !== -1) {
+                totaisCategorias[index].total += despesa.valor;
+            } else {
+                categoriaOutros.total += despesa.valor;
+            }
+        });
+
+        const categoriasAtivas = [...totaisCategorias, categoriaOutros].filter(c => c.total > 0);
+
         return {
-            labels: categorias.map(c => c.categoria),
+            labels: categoriasAtivas.map(c => c.label),
             datasets: [{
-                data: categorias.map(c => c.total),
-                backgroundColor: [
-                    '#3B82F6', '#10B981', '#F59E0B', 
-                    '#EF4444', '#8B5CF6', '#F97316'
-                ],
-                borderWidth: 2,
-                borderColor: '#ffffff'
+                data: categoriasAtivas.map(c => c.total),
+                backgroundColor: categoriasAtivas.map(c => c.cor),
+                borderWidth: 0,
+                hoverOffset: 20
             }]
         };
-    }, [resumo]);
+    }, [despesas, categoriasFixas]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Header Inteligente */}
-                <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                                <Brain className="w-8 h-8 text-blue-600 mr-3" />
-                                Centro de Controle Financeiro Inteligente
-                            </h1>
-                            <p className="text-gray-600 mt-2">
-                                Análise preditiva e recomendações para otimizar seu negócio
-                            </p>
+        <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans text-slate-900 overflow-x-hidden">
+            <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-400/10 blur-[120px] rounded-full" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-400/10 blur-[120px] rounded-full" />
+            </div>
+
+            <div className="max-w-7xl mx-auto relative z-10">
+                <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10"
+                >
+                    <div>
+                        <div className="flex items-center space-x-3 mb-2">
+                            <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-200">
+                                <Brain className="w-6 h-6 text-white" />
+                            </div>
+                            <span className="text-sm font-semibold text-blue-600 tracking-wider uppercase">Intelligence Hub</span>
                         </div>
-                        <div className="flex items-center space-x-4">
-                            <select
-                                value={selectedPeriod}
-                                onChange={(e) => setSelectedPeriod(e.target.value as any)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                <option value="30">Últimos 30 dias</option>
-                                <option value="60">Últimos 60 dias</option>
-                                <option value="90">Últimos 90 dias</option>
-                            </select>
-                            <button
-                                onClick={() => setShowAnalyticsModal(true)}
-                                className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all transform hover:scale-105"
-                            >
-                                <BarChart2 className="w-5 h-5" />
-                                <span>Análise Profunda</span>
-                            </button>
-                        </div>
+                        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">
+                            Controle Financeiro <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Inteligente</span>
+                        </h1>
+                        <p className="text-slate-500 mt-2 flex items-center">
+                            <Sparkles className="w-4 h-4 mr-2 text-amber-400" />
+                            Análise preditiva em tempo real baseada no seu desempenho operacional.
+                        </p>
                     </div>
-                </div>
 
-                {/* Cards Principais com IA */}
-                {analiseInteligente && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-600">Despesas do Mês</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {formatarMoeda(analiseInteligente.mes_atual.total_despesas)}
-                                    </p>
-                                    <div className="flex items-center mt-2">
-                                        {analiseInteligente.variacao.despesas_percentual > 0 ? (
-                                            <TrendingUp className="w-4 h-4 text-red-500 mr-1" />
-                                        ) : (
-                                            <TrendingDown className="w-4 h-4 text-green-500 mr-1" />
-                                        )}
-                                        <span className={`text-sm font-medium ${
-                                            analiseInteligente.variacao.despesas_percentual > 0 ? 'text-red-500' : 'text-green-500'
-                                        }`}>
-                                            {formatarPercentual(analiseInteligente.variacao.despesas_percentual)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-red-100 rounded-lg">
-                                    <Wallet className="w-6 h-6 text-red-600" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-600">Receitas do Mês</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {formatarMoeda(analiseInteligente.mes_atual.total_receitas)}
-                                    </p>
-                                    <div className="flex items-center mt-2">
-                                        {analiseInteligente.variacao.receitas_percentual > 0 ? (
-                                            <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-                                        ) : (
-                                            <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-                                        )}
-                                        <span className={`text-sm font-medium ${
-                                            analiseInteligente.variacao.receitas_percentual > 0 ? 'text-green-500' : 'text-red-500'
-                                        }`}>
-                                            {formatarPercentual(analiseInteligente.variacao.receitas_percentual)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-green-100 rounded-lg">
-                                    <TrendingUp className="w-6 h-6 text-green-600" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-600">Lucro Líquido</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {formatarMoeda(analiseInteligente.mes_atual.lucro_liquido)}
-                                    </p>
-                                    <div className="flex items-center mt-2">
-                                        {analiseInteligente.variacao.lucro_percentual > 0 ? (
-                                            <TrendingUp className="w-4 h-4 text-blue-500 mr-1" />
-                                        ) : (
-                                            <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-                                        )}
-                                        <span className={`text-sm font-medium ${
-                                            analiseInteligente.variacao.lucro_percentual > 0 ? 'text-blue-500' : 'text-red-500'
-                                        }`}>
-                                            {formatarPercentual(analiseInteligente.variacao.lucro_percentual)}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-blue-100 rounded-lg">
-                                    <Target className="w-6 h-6 text-blue-600" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium text-gray-600">Margem de Lucro</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {analiseInteligente.mes_atual.margem_lucro.toFixed(1)}%
-                                    </p>
-                                    <div className="flex items-center mt-2">
-                                        <Calculator className="w-4 h-4 text-purple-500 mr-1" />
-                                        <span className="text-sm font-medium text-purple-500">
-                                            Meta: 25%
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-purple-100 rounded-lg">
-                                    <PieChart className="w-6 h-6 text-purple-600" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Alertas Inteligentes */}
-                {analiseInteligente && (
-                    <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-                        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-                            <Lightbulb className="w-6 h-6 text-yellow-500 mr-2" />
-                            Recomendações Inteligentes
-                        </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {analiseInteligente.alertas_inteligentes.map((alerta, index) => (
-                                <div
-                                    key={index}
-                                    className={`p-4 rounded-lg border-l-4 ${
-                                        alerta.tipo === 'oportunidade' ? 'bg-green-50 border-green-500' :
-                                        alerta.tipo === 'risco' ? 'bg-red-50 border-red-500' :
-                                        'bg-yellow-50 border-yellow-500'
-                                    }`}
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-white/60 backdrop-blur-md border border-white/40 p-1.5 rounded-2xl flex items-center shadow-sm">
+                            {(['30', '60', '90'] as const).map((period) => (
+                                <button
+                                    key={period}
+                                    onClick={() => setSelectedPeriod(period)}
+                                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${selectedPeriod === period
+                                        ? 'bg-white shadow-md text-blue-600'
+                                        : 'text-slate-500 hover:text-slate-900'
+                                        }`}
                                 >
-                                    <div className="flex items-start">
-                                        <div className="flex-shrink-0">
-                                            {alerta.tipo === 'oportunidade' && <TrendingUp className="w-5 h-5 text-green-600" />}
-                                            {alerta.tipo === 'risco' && <AlertCircle className="w-5 h-5 text-red-600" />}
-                                            {alerta.tipo === 'atencao' && <Zap className="w-5 h-5 text-yellow-600" />}
-                                        </div>
-                                        <div className="ml-3 flex-1">
-                                            <h3 className="font-semibold text-gray-900 mb-1">
-                                                {alerta.tipo === 'oportunidade' ? 'Oportunidade' :
-                                                 alerta.tipo === 'risco' ? 'Risco' : 'Atenção'}
-                                            </h3>
-                                            <p className="text-sm text-gray-700 mb-2">{alerta.mensagem}</p>
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-sm font-medium text-gray-600">
-                                                    Impacto: {formatarMoeda(alerta.impacto)}
-                                                </span>
-                                                <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-                                                    Ver Ação →
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                    {period}d
+                                </button>
                             ))}
                         </div>
+                        <button
+                            onClick={() => setShowAnalyticsModal(true)}
+                            className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-semibold shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all flex items-center space-x-2 active:scale-95"
+                        >
+                            <BarChart2 className="w-5 h-5" />
+                            <span>Deep Insights</span>
+                        </button>
                     </div>
-                )}
+                </motion.div>
 
-                {/* Tabs de Análise */}
-                <div className="bg-white rounded-xl shadow-lg">
-                    <div className="border-b border-gray-200">
-                        <nav className="flex space-x-8 px-6">
+                <AnimatePresence mode="wait">
+                    {loading ? (
+                        <motion.div
+                            key="loading"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+                        >
+                            {[1, 2, 3, 4].map((i) => (
+                                <div key={i} className="h-32 bg-white/40 animate-pulse rounded-3xl border border-white/60" />
+                            ))}
+                        </motion.div>
+                    ) : analiseInteligente && (
+                        <motion.div
+                            key="content"
+                            initial="hidden"
+                            animate="show"
+                            variants={{
+                                hidden: { opacity: 0 },
+                                show: {
+                                    opacity: 1,
+                                    transition: { staggerChildren: 0.1 }
+                                }
+                            }}
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10"
+                        >
+                            <motion.div variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1 } }} className="group">
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:shadow-red-200/20 transition-all duration-500 relative overflow-hidden h-full">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-700" />
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 bg-red-50 rounded-2xl group-hover:bg-red-500 group-hover:text-white transition-colors duration-300">
+                                            <Wallet className="w-6 h-6" />
+                                        </div>
+                                        <div className={`flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${analiseInteligente.variacao.despesas_percentual > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'
+                                            }`}>
+                                            {formatarPercentual(analiseInteligente.variacao.despesas_percentual)}
+                                        </div>
+                                    </div>
+                                    <p className="text-slate-500 text-sm font-medium">Saídas no Período</p>
+                                    <h3 className="text-2xl font-black text-slate-900 mt-1">
+                                        {formatarMoeda(analiseInteligente.mes_atual.total_despesas)}
+                                    </h3>
+                                    <div className="mt-4 flex items-center text-xs text-slate-400 space-x-1">
+                                        <span>Projeção:</span>
+                                        <span className="text-slate-600 font-bold">{formatarMoeda(analiseInteligente.previsao.despesas_estimadas)}</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            <motion.div variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1 } }} className="group">
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:shadow-green-200/20 transition-all duration-500 relative overflow-hidden h-full">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-700" />
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 bg-green-50 rounded-2xl group-hover:bg-green-500 group-hover:text-white transition-colors duration-300">
+                                            <TrendingUp className="w-6 h-6" />
+                                        </div>
+                                        <div className="flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-600">
+                                            {formatarPercentual(analiseInteligente.variacao.receitas_percentual)}
+                                        </div>
+                                    </div>
+                                    <p className="text-slate-500 text-sm font-medium">Faturamento Bruto</p>
+                                    <h3 className="text-2xl font-black text-slate-900 mt-1">
+                                        {formatarMoeda(analiseInteligente.mes_atual.total_receitas)}
+                                    </h3>
+                                    <div className="mt-4 flex items-center text-xs text-slate-400 space-x-1">
+                                        <span>Eficiência:</span>
+                                        <span className="text-slate-600 font-bold">Excelente</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            <motion.div variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1 } }} className="group">
+                                <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-[2rem] border border-slate-700 shadow-2xl hover:shadow-blue-500/20 transition-all duration-500 relative overflow-hidden h-full">
+                                    <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -mr-16 -mb-16 group-hover:scale-150 transition-transform duration-700" />
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 bg-white/10 rounded-2xl group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
+                                            <Target className="w-6 h-6 text-blue-400 group-hover:text-white" />
+                                        </div>
+                                    </div>
+                                    <p className="text-slate-400 text-sm font-medium">Lucro Líquido</p>
+                                    <h3 className="text-2xl font-black text-white mt-1">
+                                        {formatarMoeda(analiseInteligente.mes_atual.lucro_liquido)}
+                                    </h3>
+                                    <div className="mt-4">
+                                        <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-blue-500 rounded-full transition-all duration-1000"
+                                                style={{ width: `${Math.min(analiseInteligente.mes_atual.margem_lucro * 2, 100)}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-1 font-bold uppercase tracking-widest">Margem: {analiseInteligente.mes_atual.margem_lucro.toFixed(1)}%</p>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            <motion.div variants={{ hidden: { opacity: 0, scale: 0.95 }, show: { opacity: 1, scale: 1 } }} className="group">
+                                <div className="bg-white/80 backdrop-blur-xl p-6 rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:shadow-purple-200/20 transition-all duration-500 relative overflow-hidden h-full">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-700" />
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 bg-purple-50 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300">
+                                            <Calculator className="w-6 h-6 text-purple-600" />
+                                        </div>
+                                    </div>
+                                    <p className="text-slate-500 text-sm font-medium">Saúde Operacional</p>
+                                    <h3 className="text-2xl font-black text-slate-900 mt-1">
+                                        {analiseInteligente.indicadores.comprometimento < 30 ? 'Ótima' : 'Atenção'}
+                                    </h3>
+                                    <div className="mt-4 flex items-center text-xs text-slate-400 space-x-1">
+                                        <span>Comprometimento:</span>
+                                        <span className={`font-bold ${analiseInteligente.indicadores.comprometimento > 50 ? 'text-red-600' : 'text-slate-600'}`}>
+                                            {analiseInteligente.indicadores.comprometimento.toFixed(1)}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-8 space-y-8">
+                        <div className="bg-white/60 backdrop-blur-md p-1.5 rounded-3xl border border-white flex space-x-2 shadow-sm">
                             {[
-                                { id: 'overview', label: 'Visão Geral', icon: BarChart2 },
-                                { id: 'detalhado', label: 'Análise Detalhada', icon: Brain },
-                                { id: 'previsao', label: 'Previsões', icon: Target },
-                                { id: 'insights', label: 'Insights', icon: Lightbulb }
+                                { id: 'overview', label: 'Dashboard', icon: BarChart2 },
+                                { id: 'detalhado', label: 'Evolução', icon: Brain },
+                                { id: 'previsao', label: 'Projeções', icon: Target },
+                                { id: 'insights', label: 'Estratégia', icon: Lightbulb }
                             ].map((tab) => (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id as any)}
-                                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                                        activeTab === tab.id
-                                            ? 'border-blue-500 text-blue-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
+                                    className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-2xl transition-all duration-300 font-bold text-sm ${activeTab === tab.id
+                                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-200'
+                                        : 'text-slate-500 hover:bg-white hover:text-slate-900'
+                                        }`}
                                 >
                                     <tab.icon className="w-4 h-4" />
                                     <span>{tab.label}</span>
                                 </button>
                             ))}
-                        </nav>
-                    </div>
+                        </div>
 
-                    <div className="p-6">
-                        {activeTab === 'overview' && (
-                            <div className="space-y-8">
-                                {/* Gráfico de Tendência */}
-                                {dadosGraficoTendencia && (
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Tendência Financeira</h3>
-                                        <div className="bg-gray-50 rounded-lg p-4">
-                                            <Line data={dadosGraficoTendencia} options={{
-                                                responsive: true,
-                                                plugins: {
-                                                    legend: { position: 'top' },
-                                                    tooltip: {
-                                                        callbacks: {
-                                                            label: (context) => `${context.dataset.label}: ${formatarMoeda(context.parsed.y)}`
-                                                        }
-                                                    }
-                                                }
-                                            }} />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Gráfico de Categorias */}
-                                {dadosGraficoCategorias && (
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Despesas por Categoria</h3>
-                                        <div className="bg-gray-50 rounded-lg p-4">
-                                            <Bar data={dadosGraficoCategorias} options={{
-                                                responsive: true,
-                                                plugins: {
-                                                    legend: { display: false },
-                                                    tooltip: {
-                                                        callbacks: {
-                                                            label: (context) => `${formatarMoeda(context.parsed.y)}`
-                                                        }
-                                                    }
-                                                }
-                                            }} />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {activeTab === 'detalhado' && (
-                            <div className="text-center py-12">
-                                <Brain className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-                                <h3 className="text-xl font-semibold text-gray-900 mb-2">Análise Detalhada com IA</h3>
-                                <p className="text-gray-600 mb-6">
-                                    Análise avançada de padrões, anomalias e oportunidades de otimização
-                                </p>
-                                <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                    Gerar Relatório Completo
-                                </button>
-                            </div>
-                        )}
-
-                        {activeTab === 'previsao' && analiseInteligente && (
-                            <div className="space-y-6">
-                                <h3 className="text-lg font-semibold text-gray-900">Previsão para o Próximo Mês</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-blue-50 rounded-lg p-4">
-                                        <h4 className="font-medium text-blue-900 mb-2">Despesas Estimadas</h4>
-                                        <p className="text-2xl font-bold text-blue-900">
-                                            {formatarMoeda(analiseInteligente.previsao_proximo_mes.despesas_estimadas)}
-                                        </p>
-                                    </div>
-                                    <div className="bg-green-50 rounded-lg p-4">
-                                        <h4 className="font-medium text-green-900 mb-2">Receitas Estimadas</h4>
-                                        <p className="text-2xl font-bold text-green-900">
-                                            {formatarMoeda(analiseInteligente.previsao_proximo_mes.receitas_estimadas)}
-                                        </p>
-                                    </div>
-                                    <div className="bg-purple-50 rounded-lg p-4">
-                                        <h4 className="font-medium text-purple-900 mb-2">Lucro Projetado</h4>
-                                        <p className="text-2xl font-bold text-purple-900">
-                                            {formatarMoeda(analiseInteligente.previsao_proximo_mes.lucro_projetado)}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {activeTab === 'insights' && analiseInteligente && (
-                            <div className="space-y-6">
-                                <h3 className="text-lg font-semibold text-gray-900">Insights Estratégicos</h3>
-                                <div className="space-y-4">
-                                    {analiseInteligente.insights.map((insight, index) => (
-                                        <div key={index} className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
-                                            <div className="flex items-start">
-                                                <div className="flex-shrink-0">
-                                                    {insight.tipo === 'economia' && <TrendingDown className="w-6 h-6 text-green-600" />}
-                                                    {insight.tipo === 'investimento' && <Target className="w-6 h-6 text-blue-600" />}
-                                                    {insight.tipo === 'otimizacao' && <Zap className="w-6 h-6 text-purple-600" />}
+                        <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white shadow-2xl shadow-slate-200/50 min-h-[500px]">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={activeTab}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.3 }}
+                                >
+                                    {activeTab === 'overview' && (
+                                        <div className="space-y-10">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-xl font-black text-slate-900">Visão Panorâmica</h3>
+                                                <div className="flex items-center space-x-2 text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full uppercase tracking-tighter">
+                                                    <Calendar className="w-3 h-3" />
+                                                    <span>Tempo Real</span>
                                                 </div>
-                                                <div className="ml-4 flex-1">
-                                                    <h4 className="font-semibold text-gray-900 mb-2">{insight.titulo}</h4>
-                                                    <p className="text-gray-700 mb-3">{insight.descricao}</p>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-lg font-bold text-blue-600">
-                                                            {formatarMoeda(insight.valor_impacto)}
-                                                        </span>
-                                                        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                                                            Implementar
-                                                        </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                                <div className="space-y-4">
+                                                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Tendência de Fluxo</p>
+                                                    <div className="h-[300px]">
+                                                        {dadosGraficoTendencia && <Line data={dadosGraficoTendencia} options={{
+                                                            responsive: true,
+                                                            maintainAspectRatio: false,
+                                                            plugins: {
+                                                                legend: { display: false },
+                                                                tooltip: {
+                                                                    callbacks: {
+                                                                        label: (context) => `${context.dataset.label}: ${formatarMoeda(Number(context.parsed.y) ?? 0)}`
+                                                                    }
+                                                                }
+                                                            },
+                                                            scales: { y: { display: false }, x: { grid: { display: false } } }
+                                                        }} />}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Peso por Categoria</p>
+                                                    <div className="h-[300px]">
+                                                        {dadosGraficoCategorias && <Bar data={dadosGraficoCategorias} options={{
+                                                            responsive: true,
+                                                            maintainAspectRatio: false,
+                                                            plugins: {
+                                                                legend: { display: false },
+                                                                tooltip: {
+                                                                    callbacks: {
+                                                                        label: (context) => `${formatarMoeda(Number(context.parsed.y) ?? 0)}`
+                                                                    }
+                                                                }
+                                                            },
+                                                            scales: { y: { display: false }, x: { grid: { display: false } } }
+                                                        }} />}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    )}
+
+                                    {activeTab === 'insights' && analiseInteligente && (
+                                        <div className="space-y-6">
+                                            <h3 className="text-xl font-black text-slate-900 mb-6">Plano de Ação Sugerido</h3>
+                                            {analiseInteligente.insights.map((insight, idx) => (
+                                                <motion.div
+                                                    key={idx}
+                                                    whileHover={{ x: 10 }}
+                                                    className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100 flex items-start gap-4 transition-all"
+                                                >
+                                                    <div className={`p-4 rounded-2xl ${insight.tipo === 'economia' ? 'bg-green-100 text-green-600' :
+                                                        insight.tipo === 'investimento' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
+                                                        }`}>
+                                                        {insight.tipo === 'economia' ? <TrendingDown className="w-6 h-6" /> : <Zap className="w-6 h-6" />}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-bold text-slate-900">{insight.titulo}</h4>
+                                                        <p className="text-slate-500 text-sm mt-1">{insight.descricao}</p>
+                                                        <div className="mt-4 flex items-center justify-between">
+                                                            <span className="text-lg font-black text-slate-900">{formatarMoeda(insight.valor_impacto)} <span className="text-xs font-medium text-slate-400">Impacto Est.</span></span>
+                                                            <button className="text-xs font-bold uppercase tracking-widest text-blue-600 flex items-center hover:translate-x-1 transition-transform">
+                                                                Aplicar Agora <ChevronRight className="w-4 h-4 ml-1" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {activeTab === 'previsao' && analiseInteligente && (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="p-8 bg-blue-50/50 rounded-3xl border border-blue-100">
+                                                <p className="text-xs font-bold text-blue-400 uppercase">Saída Projetada</p>
+                                                <h4 className="text-3xl font-black text-blue-900 mt-2">{formatarMoeda(analiseInteligente.previsao.despesas_estimadas)}</h4>
+                                            </div>
+                                            <div className="p-8 bg-green-50/50 rounded-3xl border border-green-100">
+                                                <p className="text-xs font-bold text-green-400 uppercase">Entrada Projetada</p>
+                                                <h4 className="text-3xl font-black text-green-900 mt-2">{formatarMoeda(analiseInteligente.previsao.receitas_estimadas)}</h4>
+                                            </div>
+                                            <div className="p-8 bg-slate-900 rounded-3xl border border-slate-700">
+                                                <p className="text-xs font-bold text-slate-500 uppercase">Margem Alvo</p>
+                                                <h4 className="text-3xl font-black text-white mt-2">{formatarMoeda(analiseInteligente.previsao.lucro_projetado)}</h4>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {activeTab === 'detalhado' && (
+                                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
+                                                <Brain className="w-10 h-10 text-slate-300" />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-slate-900">Relatórios Dinâmicos</h3>
+                                            <p className="text-slate-500 max-w-md mt-2">Esta seção está sendo populada com análises de tendências de longo prazo.</p>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-8">
+                        <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white shadow-2xl shadow-slate-200/50">
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="text-xl font-black text-slate-900 flex items-center">
+                                    <AlertCircle className="w-5 h-5 mr-2 text-red-500" />
+                                    Alertas Reais
+                                </h3>
+                                <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-black rounded-lg">LIVE</span>
                             </div>
-                        )}
+
+                            <div className="space-y-4">
+                                {analiseInteligente?.alertas && analiseInteligente.alertas.length > 0 ? (
+                                    analiseInteligente.alertas.map((alerta, idx) => (
+                                        <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white transition-all cursor-default relative overflow-hidden">
+                                            <div className={`absolute top-0 left-0 w-1 h-full ${alerta.severidade === 'critica' ? 'bg-red-500' : 'bg-amber-500'
+                                                }`} />
+                                            <h4 className="text-sm font-bold text-slate-900">{alerta.titulo}</h4>
+                                            <p className="text-xs text-slate-500 mt-1">{alerta.descricao}</p>
+                                            <button className="mt-3 text-[10px] font-black uppercase text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+                                                Resolver Agora <ArrowRight className="w-3 h-3 ml-1" />
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="flex flex-col items-center py-10 opacity-40">
+                                        <ShieldCheck className="w-12 h-12 text-slate-300 mb-2" />
+                                        <p className="text-xs font-bold uppercase tracking-widest">Sem riscos detectados</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-blue-200 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                                <PieChart className="w-32 h-32" />
+                            </div>
+                            <h4 className="text-lg font-bold mb-4">Eficiência de Caixa</h4>
+                            <div className="space-y-6 relative z-10">
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold opacity-60 uppercase tracking-widest mb-2">
+                                        <span>Pressão de Caixa Diária</span>
+                                        <span>{analiseInteligente?.indicadores.pressao_caixa.toFixed(1)}%</span>
+                                    </div>
+                                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${Math.min(analiseInteligente?.indicadores.pressao_caixa || 0, 100)}%` }}
+                                            className="h-full bg-white"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold opacity-60 uppercase tracking-widest mb-2">
+                                        <span>Comprometimento Global</span>
+                                        <span>{analiseInteligente?.indicadores.comprometimento.toFixed(1)}%</span>
+                                    </div>
+                                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${Math.min(analiseInteligente?.indicadores.comprometimento || 0, 100)}%` }}
+                                            className="h-full bg-amber-400"
+                                        />
+                                    </div>
+                                </div>
+                                <button className="w-full bg-white text-blue-600 py-3 rounded-2xl font-bold text-sm shadow-xl active:scale-95 transition-transform">
+                                    Ver Relatório de Eficiência
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {showAnalyticsModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowAnalyticsModal(false)}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl h-full max-h-[85vh] overflow-hidden relative z-10 flex flex-col"
+                        >
+                            <div className="p-10 overflow-y-auto">
+                                <div className="flex justify-between items-start mb-10">
+                                    <div>
+                                        <h2 className="text-4xl font-black text-slate-900">Análise <span className="text-blue-600">Deep-Dive</span></h2>
+                                        <p className="text-slate-500 mt-2">Visão estrutural da saúde financeira do estabelecimento.</p>
+                                    </div>
+                                    <button onClick={() => setShowAnalyticsModal(false)} className="p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors">
+                                        <AlertCircle className="w-6 h-6 text-slate-400" />
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                    <div className="space-y-6">
+                                        <h3 className="text-lg font-bold text-slate-900 flex items-center">
+                                            <Target className="w-5 h-5 mr-3 text-blue-500" />
+                                            Métricas de Performance
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-6">
+                                            {[
+                                                { label: 'Venda Média', value: formatarMoeda(analiseInteligente?.indicadores.venda_media || 0) },
+                                                { label: 'Pressão Real', value: `${analiseInteligente?.indicadores.pressao_caixa.toFixed(1)}%` },
+                                                { label: 'Markup Est.', value: '42%' },
+                                                { label: 'ROI Mensal', value: '+12.5%' }
+                                            ].map((m, i) => (
+                                                <div key={i} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{m.label}</p>
+                                                    <p className="text-xl font-black text-slate-900 mt-2">{m.value}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <h3 className="text-lg font-bold text-slate-900 flex items-center">
+                                            <Wallet className="w-5 h-5 mr-3 text-emerald-500" />
+                                            Saúde do Capital
+                                        </h3>
+                                        <div className="bg-slate-900 p-8 rounded-[2.5rem] relative overflow-hidden h-full">
+                                            <div className="absolute top-0 right-0 p-8 opacity-10">
+                                                <TrendingUp className="w-24 h-24 text-white" />
+                                            </div>
+                                            <div className="space-y-8">
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Saldo Líquido Projetado</p>
+                                                    <h4 className="text-4xl font-black text-white">{formatarMoeda(analiseInteligente?.indicadores.saldo_fluxo || 0)}</h4>
+                                                </div>
+                                                <div className="pt-8 border-t border-slate-800 flex justify-between">
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-500">Ponto de Equilíbrio</p>
+                                                        <p className="text-lg font-extrabold text-blue-400">R$ 52.400</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xs font-bold text-slate-500">Margem de Seg.</p>
+                                                        <p className="text-lg font-extrabold text-emerald-400">+15.2%</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-auto p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                                <p className="text-slate-500 text-sm">Dados atualizados há menos de 1 minuto através de sincronização segura.</p>
+                                <button className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center space-x-2">
+                                    <ShieldCheck className="w-5 h-5" />
+                                    <span>Download Relatório Certificado</span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

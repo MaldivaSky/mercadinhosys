@@ -14,18 +14,25 @@ interface Establishment {
 
 interface EstablishmentSelectorProps {
   className?: string;
+  selectedEstablishment?: number | null;
+  onEstablishmentChange?: (id: number) => void;
 }
 
 const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
-  className = ""
+  className = "",
+  selectedEstablishment,
+  onEstablishmentChange
 }) => {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(() => {
+  const [internalSelectedId, setInternalSelectedId] = useState<number | null>(() => {
     const stored = localStorage.getItem('selected_establishment_id');
     return stored ? parseInt(stored) : null;
   });
+
+  // Use either the controlled prop or the internal state
+  const selectedId = selectedEstablishment !== undefined ? selectedEstablishment : internalSelectedId;
 
   useEffect(() => {
     fetchEstablishments();
@@ -54,16 +61,19 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
   };
 
   const handleSelection = (id: number) => {
-    setSelectedId(id);
-    localStorage.setItem('selected_establishment_id', id.toString());
-    setIsOpen(false);
-    toast.success('Contexto de auditoria alterado');
+    if (onEstablishmentChange) {
+      onEstablishmentChange(id);
+    } else {
+      setInternalSelectedId(id);
+      localStorage.setItem('selected_establishment_id', id.toString());
+      toast.success('Contexto de auditoria alterado');
 
-    // Forçar recarregamento para que todos os componentes (Dashboard, Vendas, etc) 
-    // passem a enviar o novo header e carregar os dados corretos.
-    setTimeout(() => {
-      window.location.reload();
-    }, 500);
+      // Forçar recarregamento apenas para modo não-controlado
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    }
+    setIsOpen(false);
   };
 
   const selectedData = establishments.find(est => est.id === selectedId);

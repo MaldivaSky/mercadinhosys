@@ -2,7 +2,7 @@
 // src/components/EstabelecimentoIndicator.tsx
 import React from 'react';
 import { useEstabelecimento } from '../contexts/EstabelecimentoContext';
-import { Building2, Eye, X } from 'lucide-react';
+import { Building2, X } from 'lucide-react';
 
 const EstabelecimentoIndicator: React.FC = () => {
     const { estabelecimentoAtual, isSuperAdmin, handleClearEstabelecimento } = useEstabelecimento();

@@ -1,17 +1,9 @@
 
-// src/components/EstabelecimentoSelector.tsx
 import React, { useState, useEffect } from 'react';
-import { useEstabelecimento } from '../contexts/EstabelecimentoContext';
+import { useEstabelecimento, Estabelecimento } from '../contexts/EstabelecimentoContext';
 import { apiClient } from '../api/apiClient';
 import { Building2, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-interface Estabelecimento {
-    id: number;
-    nome_fantasia: string;
-    razao_social: string;
-    cnpj: string;
-}
 
 const EstabelecimentoSelector: React.FC = () => {
     const { estabelecimentoAtual, setEstabelecimentoAtual, estabelecimentos, setEstabelecimentos } = useEstabelecimento();
@@ -26,7 +18,7 @@ const EstabelecimentoSelector: React.FC = () => {
             const response = await apiClient.get('/estabelecimentos');
             if (response.data?.success) {
                 setEstabelecimentos(response.data.estabelecimentos);
-                
+
                 // Se não tiver estabelecimento selecionado, seleciona o primeiro
                 if (!estabelecimentoAtual && response.data.estabelecimentos.length > 0) {
                     setEstabelecimentoAtual(response.data.estabelecimentos[0]);
@@ -40,7 +32,7 @@ const EstabelecimentoSelector: React.FC = () => {
     const handleSelect = (estabelecimento: Estabelecimento) => {
         setEstabelecimentoAtual(estabelecimento);
         setIsOpen(false);
-        toast.success(\`Estabelecimento \${estabelecimento.nome_fantasia} selecionado\`);
+        toast.success(`Estabelecimento ${estabelecimento.nome_fantasia} selecionado`);
     };
 
     return (
@@ -69,11 +61,10 @@ const EstabelecimentoSelector: React.FC = () => {
                                 <button
                                     key={estabelecimento.id}
                                     onClick={() => handleSelect(estabelecimento)}
-                                    className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                                        estabelecimentoAtual?.id === estabelecimento.id
-                                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                    }`}
+                                    className={`w-full text-left px-3 py-2 rounded-md transition-colors ${estabelecimentoAtual?.id === estabelecimento.id
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                        : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                        }`}
                                 >
                                     <div className="font-medium">{estabelecimento.nome_fantasia}</div>
                                     <div className="text-xs text-gray-500 dark:text-gray-400">

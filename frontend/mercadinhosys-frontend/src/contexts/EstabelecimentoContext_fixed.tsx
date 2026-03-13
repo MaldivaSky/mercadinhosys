@@ -55,8 +55,8 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
         if (estabelecimentoAtual) {
             localStorage.setItem('estabelecimentoSelecionado', JSON.stringify(estabelecimentoAtual));
             // Disparar evento global para outras páginas saberem
-            window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', { 
-                detail: estabelecimentoAtual 
+            window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', {
+                detail: estabelecimentoAtual
             }));
         }
     }, [estabelecimentoAtual]);
@@ -65,12 +65,12 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
     useEffect(() => {
         const salvo = localStorage.getItem('estabelecimentoSelecionado');
         const userStr = localStorage.getItem('user');
-        
+
         if (salvo) {
             const estab = JSON.parse(salvo);
             setEstabelecimentoAtual(estab);
         }
-        
+
         if (userStr) {
             const user = JSON.parse(userStr);
             setIsSuperAdmin(user.is_super_admin || false);
@@ -84,7 +84,7 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
             if (response.data?.success) {
                 const estabs = response.data.estabelecimentos || [];
                 setEstabelecimentos(estabs);
-                
+
                 // Se não tiver selecionado, selecionar o primeiro
                 const salvo = localStorage.getItem('estabelecimentoSelecionado');
                 if (!salvo && estabs.length > 0) {
@@ -100,14 +100,14 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
 
     const handleSelectEstabelecimento = (estabelecimento: Estabelecimento) => {
         setEstabelecimentoAtual(estabelecimento);
-        toast.success(f'Estabelecimento {estabelecimento.nome_fantasia} selecionado');
+        toast.success(`Estabelecimento ${estabelecimento.nome_fantasia} selecionado`);
     };
 
     const handleClearEstabelecimento = () => {
         setEstabelecimentoAtual(null);
         localStorage.removeItem('estabelecimentoSelecionado');
-        window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', { 
-            detail: null 
+        window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', {
+            detail: null
         }));
     };
 

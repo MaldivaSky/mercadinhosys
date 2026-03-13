@@ -1,11 +1,9 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { apiClient } from "../../api/apiClient";
-import { showToast } from "../../utils/toast";
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    TrendingUp, TrendingDown, Target, DollarSign, ShoppingCart,
-    Users, Package, Brain, Lightbulb, Zap, BarChart3,
-    Clock, AlertCircle, Star, ArrowUpRight, Calculator,
-    Eye, Filter, Download, RefreshCw
+    TrendingUp, Target, DollarSign, ShoppingCart,
+    Users, Package, Brain, Lightbulb, BarChart3,
+    ArrowUpRight, Calculator,
+    RefreshCw
 } from "lucide-react";
 import {
     Chart as ChartJS,
@@ -20,7 +18,7 @@ import {
     LineElement,
     Filler
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Line, Doughnut } from 'react-chartjs-2';
 
 ChartJS.register(
     CategoryScale,
@@ -101,7 +99,6 @@ interface AnaliseVendasInteligente {
 }
 
 const VendasInteligentesPage: React.FC = () => {
-    const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<'dashboard' | 'produtos' | 'clientes' | 'previsoes'>('dashboard');
     const [selectedPeriod, setSelectedPeriod] = useState<'7' | '30' | '90'>('30');
     const [analiseVendas, setAnaliseVendas] = useState<AnaliseVendasInteligente | null>(null);
@@ -230,7 +227,7 @@ const VendasInteligentesPage: React.FC = () => {
                 quantidade_vendida: 450,
                 faturamento: 11655,
                 margem_lucro: 32.5,
-                tendencia: 'alta',
+                tendencia: 'alta' as const,
                 previsao_proxima_semana: 520,
                 cross_sell_opportunity: 'Feijão, Óleo de Soja',
                 icone_tendencia: TrendingUp
@@ -243,7 +240,7 @@ const VendasInteligentesPage: React.FC = () => {
                 quantidade_vendida: 280,
                 faturamento: 5250,
                 margem_lucro: 45.2,
-                tendencia: 'estavel',
+                tendencia: 'estavel' as const,
                 previsao_proxima_semana: 290,
                 cross_sell_opportunity: 'Esponja, Limpador Vidros',
                 icone_tendencia: Target
@@ -256,7 +253,7 @@ const VendasInteligentesPage: React.FC = () => {
                 quantidade_vendida: 680,
                 faturamento: 5780,
                 margem_lucro: 28.8,
-                tendencia: 'alta',
+                tendencia: 'alta' as const,
                 previsao_proxima_semana: 750,
                 cross_sell_opportunity: 'Salgadinhos, Amendoim',
                 icone_tendencia: TrendingUp
@@ -275,9 +272,9 @@ const VendasInteligentesPage: React.FC = () => {
                 frequencia_compra: 3.2, // vezes por semana
                 ultima_compra: '2024-03-10',
                 potencial_aumento: 450,
-                perfil: 'premium',
+                perfil: 'premium' as const,
                 produtos_recomendados: ['Arroz Premium', 'Carnes Selecionadas'],
-                risco_churn: 'baixo'
+                risco_churn: 'baixo' as const
             },
             {
                 id: 2,
@@ -287,9 +284,9 @@ const VendasInteligentesPage: React.FC = () => {
                 frequencia_compra: 1.8,
                 ultima_compra: '2024-03-08',
                 potencial_aumento: 180,
-                perfil: 'regular',
+                perfil: 'regular' as const,
                 produtos_recomendados: ['Feijão', 'Óleo', 'Açúcar'],
-                risco_churn: 'medio'
+                risco_churn: 'medio' as const
             },
             {
                 id: 3,
@@ -299,9 +296,9 @@ const VendasInteligentesPage: React.FC = () => {
                 frequencia_compra: 0.8,
                 ultima_compra: '2024-03-05',
                 potencial_aumento: 85,
-                perfil: 'ocasional',
+                perfil: 'ocasional' as const,
                 produtos_recomendados: ['Promoções Semanais'],
-                risco_churn: 'alto'
+                risco_churn: 'alto' as const
             }
         ];
     }, []);
@@ -475,22 +472,20 @@ const VendasInteligentesPage: React.FC = () => {
                             Oportunidades Identificadas pela IA
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {analiseVendas.oportunidades.map((oportunidade, index) => (
+                            {analiseVendas.oportunidades.map((oportunidade: any, index: number) => (
                                 <div
                                     key={index}
-                                    className={`p-4 rounded-lg border-l-4 ${
-                                        oportunidade.prioridade === 'alta' ? 'bg-red-50 border-red-500' :
+                                    className={`p-4 rounded-lg border-l-4 ${oportunidade.prioridade === 'alta' ? 'bg-red-50 border-red-500' :
                                         oportunidade.prioridade === 'media' ? 'bg-yellow-50 border-yellow-500' :
-                                        'bg-blue-50 border-blue-500'
-                                    }`}
+                                            'bg-blue-50 border-blue-500'
+                                        }`}
                                 >
                                     <div className="flex items-start justify-between mb-3">
                                         <h3 className="font-semibold text-gray-900">{oportunidade.titulo}</h3>
-                                        <span className={`text-xs px-2 py-1 rounded-full ${
-                                            oportunidade.prioridade === 'alta' ? 'bg-red-200 text-red-800' :
+                                        <span className={`text-xs px-2 py-1 rounded-full ${oportunidade.prioridade === 'alta' ? 'bg-red-200 text-red-800' :
                                             oportunidade.prioridade === 'media' ? 'bg-yellow-200 text-yellow-800' :
-                                            'bg-blue-200 text-blue-800'
-                                        }`}>
+                                                'bg-blue-200 text-blue-800'
+                                            }`}>
                                             {oportunidade.prioridade.toUpperCase()}
                                         </span>
                                     </div>
@@ -522,11 +517,10 @@ const VendasInteligentesPage: React.FC = () => {
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id as any)}
-                                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                                        activeTab === tab.id
-                                            ? 'border-blue-500 text-blue-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${activeTab === tab.id
+                                        ? 'border-blue-500 text-blue-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
                                 >
                                     <tab.icon className="w-4 h-4" />
                                     <span>{tab.label}</span>
@@ -549,7 +543,7 @@ const VendasInteligentesPage: React.FC = () => {
                                                     legend: { position: 'top' },
                                                     tooltip: {
                                                         callbacks: {
-                                                            label: (context) => `${context.dataset.label}: ${context.dataset.label === 'Vendas' ? context.parsed.y : formatarMoeda(context.parsed.y)}`
+                                                            label: (context: any) => `${context.dataset.label}: ${context.dataset.label === 'Vendas' ? context.parsed.y : formatarMoeda(context.parsed.y as number)}`
                                                         }
                                                     }
                                                 }
@@ -569,7 +563,7 @@ const VendasInteligentesPage: React.FC = () => {
                                                     legend: { position: 'right' },
                                                     tooltip: {
                                                         callbacks: {
-                                                            label: (context) => `${context.label}: ${context.parsed}%`
+                                                            label: (context: any) => `${context.label}: ${context.parsed}%`
                                                         }
                                                     }
                                                 }
@@ -597,7 +591,7 @@ const VendasInteligentesPage: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {produtosInteligentes.map((produto) => (
+                                            {produtosInteligentes.map((produto: ProdutoInteligente) => (
                                                 <tr key={produto.id}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{produto.nome}</div>
@@ -639,11 +633,11 @@ const VendasInteligentesPage: React.FC = () => {
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Segmentação Inteligente de Clientes</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {clientesInteligentes.map((cliente) => (
+                                    {clientesInteligentes.map((cliente: ClienteInteligente) => (
                                         <div key={cliente.id} className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                                             <div className="flex items-center justify-between mb-4">
                                                 <h4 className="font-semibold text-gray-900">{cliente.nome}</h4>
-                                                <span className={`text-xs px-2 py-1 rounded-full`} style={{ 
+                                                <span className={`text-xs px-2 py-1 rounded-full`} style={{
                                                     backgroundColor: getCorPerfil(cliente.perfil) + '20',
                                                     color: getCorPerfil(cliente.perfil)
                                                 }}>
@@ -673,7 +667,7 @@ const VendasInteligentesPage: React.FC = () => {
                                             <div className="mt-4 pt-4 border-t border-gray-200">
                                                 <div className="text-sm text-gray-600 mb-2">Recomendado:</div>
                                                 <div className="flex flex-wrap gap-1">
-                                                    {cliente.produtos_recomendados.map((produto, index) => (
+                                                    {cliente.produtos_recomendados.map((produto: string, index: number) => (
                                                         <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                                                             {produto}
                                                         </span>
@@ -706,7 +700,7 @@ const VendasInteligentesPage: React.FC = () => {
                                         <div className="bg-purple-50 rounded-lg p-4">
                                             <h4 className="font-medium text-purple-900 mb-2">Produtos em Alta</h4>
                                             <div className="space-y-1">
-                                                {analiseVendas.previsoes.proxima_semana.produtos_mais_vendidos.map((produto, index) => (
+                                                {analiseVendas.previsoes.proxima_semana.produtos_mais_vendidos.map((produto: string, index: number) => (
                                                     <div key={index} className="text-sm text-purple-900">
                                                         • {produto}
                                                     </div>

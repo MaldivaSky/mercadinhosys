@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Truck, Clock, CheckCircle, MapPin, Phone, User, Calendar, Filter, Search, Download } from 'lucide-react';
+import { Package, Truck, Clock, CheckCircle, MapPin, Phone, Download, Search, Filter } from 'lucide-react';
 import { apiClient } from '../api/apiClient';
 import toast from 'react-hot-toast';
 
@@ -22,14 +22,13 @@ interface Entrega {
   }>;
   valor_total: number;
   transportadora?: string;
-    codigo_rastreio?: string;
+  codigo_rastreio?: string;
   observacoes?: string;
 }
 
 const EntregasPage: React.FC = () => {
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filtro, setFiltro] = useState('');
   const [statusFiltro, setStatusFiltro] = useState<string>('todos');
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
@@ -42,7 +41,7 @@ const EntregasPage: React.FC = () => {
   const carregarEntregas = async () => {
     try {
       setLoading(true);
-      
+
       const params = new URLSearchParams({
         pagina: paginaAtual.toString(),
         status: statusFiltro,
@@ -50,10 +49,11 @@ const EntregasPage: React.FC = () => {
       });
 
       const response = await apiClient.get(`/api/entregas?${params}`);
-      
+
       if (response.data?.success) {
         setEntregas(response.data.entregas);
         setTotalPaginas(response.data.total_paginas || 1);
+        toast.success('Entregador disponível para novas entregas');
       } else {
         toast.error('Erro ao carregar entregas');
       }
@@ -120,13 +120,13 @@ const EntregasPage: React.FC = () => {
   };
 
   const entregasFiltradas = entregas.filter(entrega => {
-    const matchBusca = !busca || 
+    const matchBusca = !busca ||
       entrega.numero_pedido.toLowerCase().includes(busca.toLowerCase()) ||
       entrega.cliente.nome.toLowerCase().includes(busca.toLowerCase()) ||
       entrega.cliente.cpf.includes(busca);
-    
+
     const matchStatus = statusFiltro === 'todos' || entrega.status === statusFiltro;
-    
+
     return matchBusca && matchStatus;
   });
 
@@ -145,7 +145,7 @@ const EntregasPage: React.FC = () => {
                 Acompanhe o status de todas as suas entregas
               </p>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               {/* Filtros */}
               <div className="flex items-center space-x-2">
@@ -240,7 +240,7 @@ const EntregasPage: React.FC = () => {
                           {formatarData(entrega.data_pedido)}
                         </div>
                       </td>
-                      
+
                       <td className="px-6 py-4">
                         <div className="text-sm">
                           <div className="font-medium text-gray-900">
@@ -259,7 +259,7 @@ const EntregasPage: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      
+
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
                           {entrega.produtos.slice(0, 2).map((produto, index) => (
@@ -274,25 +274,25 @@ const EntregasPage: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      
+
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {formatarMoeda(entrega.valor_total)}
                         </div>
                       </td>
-                      
+
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(entrega.status)}`}>
                           {getStatusIcon(entrega.status)}
                           <span className="ml-2">{getStatusText(entrega.status)}</span>
                         </span>
                       </td>
-                      
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
                           onClick={() => {
                             // Em produção abriria modal com detalhes
-                            toast.info(`Detalhes do pedido ${entrega.numero_pedido}`);
+                            toast.success(`Detalhes do pedido ${entrega.numero_pedido}`);
                           }}
                           className="text-blue-600 hover:text-blue-900"
                         >
