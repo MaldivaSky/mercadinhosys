@@ -5,12 +5,14 @@ from decimal import Decimal
 from app.models import (
     db, Venda, VendaItem, Pagamento, MovimentacaoEstoque, 
     Caixa, MovimentacaoCaixa, Produto, Cliente, ProdutoLote,
-    HistoricoPrecos, ContaReceber, CategoriaProduto, Funcionario, Despesa
+    HistoricoPrecos, ContaReceber, CategoriaProduto, Funcionario, Despesa, Auditoria
 )
 from sqlalchemy import func
 from app.simulation.dna_factory import DNAFactory
 from app.simulation.injectors import RealisticInjector
 from flask import g
+import json
+import os
 
 class ChronicleSimulator:
     """Motor de Simulação MASTER: Cronologia, Lotes, Balança (Peso) e Realidade Brasileira."""
@@ -64,8 +66,10 @@ class ChronicleSimulator:
         if not caixa:
             caixa = Caixa(
                 estabelecimento_id=est.id, funcionario_id=funcionario_id,
-                numero_caixa=1,
-                status="aberto", saldo_inicial=5000.0, saldo_atual=5000.0, 
+                numero_caixa=str(1),
+                status="aberto", 
+                saldo_inicial=Decimal("5000.00"), 
+                saldo_atual=Decimal("5000.00"), 
                 data_abertura=start_date
             )
             db.session.add(caixa)
@@ -74,55 +78,65 @@ class ChronicleSimulator:
         # Injetar para os listeners
         g.estabelecimento_id = est.id
 
-        while current_date <= end_date:
-            day = current_date.day
-            weekday = current_date.weekday()
-            
-            # Sazonalidade Realista
-            # 1. Quinto dia útil (Salário)
-            multi = 1.6 if day <= 8 else 1.0
-            # 2. Fim de semana (Churrasco/Lazer)
-            if weekday >= 4: multi *= 1.4
-            
-            # Pulsos de Inflação / Reajuste
-            if day == 1:
-                self.apply_economic_pulse(est, current_date, funcionario_id)
-            
-            # Simular "Quebras de Estoque" (Perda natural em Hortifruti/Açougue) e Produtos Vencidos/Reabastecimento
-            if weekday == 0: # Toda segunda confere quebra
-                self.simulate_inventory_shrinkage(est, current_date)
-            
-            # Check estoque e vencimentos terças e sextas
-            if weekday in (1, 4):
-                self.simulate_expiration_and_restock(est, current_date, funcionario_id)
+        try:
+            while current_date <= end_date:
+                day = current_date.day
+                weekday = current_date.weekday()
+                
+                # Sazonalidade Realista
+                multi = 1.6 if day <= 8 else 1.0
+                if weekday >= 4: multi *= 1.4
+                
+                if day == 1:
+                    self.apply_economic_pulse(est, current_date, funcionario_id)
+                
+                if weekday == 0: 
+                    self.simulate_inventory_shrinkage(est, current_date)
+                
+                if weekday in (1, 4):
+                    self.simulate_expiration_and_restock(est, current_date, funcionario_id)
 
-            qty_vendas = int(dna.giro_velocidade * multi * random.uniform(0.8, 1.2))
-            
-            for _ in range(qty_vendas):
-                ts = current_date + timedelta(hours=random.randint(7, 21), minutes=random.randint(0, 59))
-                self.generate_master_sale(est, dna, ts, caixa, funcionario_id)
-            
-            db.session.commit()
-            if day == 1:
-                self.simulate_monthly_expenses(est, dna, current_date, funcionario_id)
-                print(f"📅 {dna.nome} | Mês {current_date.month}/{current_date.year} concluído.")
-            
-            current_date += timedelta(days=1)
+                qty_vendas = int(dna.giro_velocidade * multi * random.uniform(0.8, 1.2))
+                
+                for _ in range(qty_vendas):
+                    ts = current_date + timedelta(hours=random.randint(7, 21), minutes=random.randint(0, 59))
+                    try:
+                        self.generate_master_sale(est, dna, ts, caixa, funcionario_id)
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"⚠️ Erro ao gerar venda em {ts}: {str(e)}")
+                        continue
+                
+                db.session.commit()
+                if day == 1:
+                    try:
+                        self.simulate_monthly_expenses(est, dna, current_date, funcionario_id)
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"⚠️ Erro ao simular despesas mensais: {str(e)}")
+                    print(f"📅 {dna.nome} | Mês {current_date.month}/{current_date.year} concluído.")
+                
+                current_date += timedelta(days=1)
+        except Exception as e:
+            db.session.rollback()
+            print(f"❌ ERRO CRÍTICO NA SIMULAÇÃO: {str(e)}")
+            raise e
 
     def simulate_monthly_expenses(self, est, dna, date_obj, funcionario_id):
         """Injeta custos operacionais reais para evitar Lucro = Faturamento."""
+        
         # 1. Aluguel e Infra (Varia por DNA)
         base_rent = {
-            "Elite": 12000.0, "Bom": 7500.0, "Razoavel": 4500.0, 
-            "Mal": 3000.0, "Pessimo": 1500.0
+            "Elite": Decimal("12000.00"), "Bom": Decimal("7500.00"), "Razoavel": Decimal("4500.00"), 
+            "Mal": Decimal("3000.00"), "Pessimo": Decimal("1500.00")
         }
-        rent_val = base_rent.get(dna.nome, 2000.0) * random.uniform(0.9, 1.1)
+        rent_val = base_rent.get(dna.nome, Decimal("2000.00")) * Decimal(str(random.uniform(0.9, 1.1)))
         
         infra = [
             ("Aluguel Comercial", rent_val, "fixa"),
-            ("Energia Elétrica", rent_val * 0.15, "variavel"),
-            ("Internet e Software", 350.0, "fixa"),
-            ("Contabilidade", 1200.0, "fixa")
+            ("Energia Elétrica", (rent_val * Decimal("0.15")).quantize(Decimal("0.01")), "variavel"),
+            ("Internet e Software", Decimal("350.00"), "fixa"),
+            ("Contabilidade", Decimal("1200.00"), "fixa")
         ]
         
         for desc, val, tipo in infra:
@@ -132,31 +146,49 @@ class ChronicleSimulator:
                 data_despesa=date_obj.date()
             )
             db.session.add(exp)
+            
+            # Auditoria de Despesa (Monitor Master)
+            meta_exp = Auditoria(
+                estabelecimento_id=est.id, usuario_id=funcionario_id,
+                tipo_evento="despesas_insert",
+                descricao=f"Despesa registrada: {desc} (R$ {val:.2f})",
+                valor=val, data_evento=date_obj,
+                detalhes_json=json.dumps({"categoria": "Operacional", "tipo": tipo})
+            )
+            db.session.add(meta_exp)
 
         # 2. Folha de Pagamento (Baseado nos funcionários reais)
         equipe = Funcionario.query.filter_by(estabelecimento_id=est.id, ativo=True).all()
         for f in equipe:
-            salario = float(f.salario_base or 1412.0)
-            # Adiciona encargos (30%)
-            custo_total = salario * 1.3
+            salario = Decimal(str(f.salario_base or "1412.00"))
+            custo_total = (salario * Decimal("1.30")).quantize(Decimal("0.01"))
             exp = Despesa(
                 estabelecimento_id=est.id, descricao=f"Folha de Pagamento - {f.nome}",
                 categoria="RH", tipo="fixa", valor=custo_total,
                 data_despesa=date_obj.date()
             )
             db.session.add(exp)
+            
+            aud_rh = Auditoria(
+                estabelecimento_id=est.id, usuario_id=funcionario_id,
+                tipo_evento="despesas_insert",
+                descricao=f"Folha de Pagamento: {f.nome} (R$ {custo_total:.2f})",
+                valor=custo_total, data_evento=date_obj,
+                detalhes_json=json.dumps({"categoria": "RH", "funcionario": f.nome})
+            )
+            db.session.add(aud_rh)
 
         # 3. Impostos (Simples Nacional aproximado: 10% do faturamento)
-        # Busca faturamento do mês anterior
         start_month = date_obj - timedelta(days=30)
+        from app.models import Venda
         revenue = db.session.query(func.sum(Venda.total)).filter(
             Venda.estabelecimento_id == est.id,
             Venda.data_venda >= start_month,
             Venda.data_venda < date_obj,
             Venda.status == 'finalizada'
-        ).scalar() or 0
+        ).scalar() or Decimal("0.00")
         
-        imposto = float(revenue) * 0.10
+        imposto = (Decimal(str(revenue)) * Decimal("0.10")).quantize(Decimal("0.01"))
         if imposto > 0:
             exp = Despesa(
                 estabelecimento_id=est.id, descricao="Impostos (Simples Nacional)",
@@ -164,6 +196,15 @@ class ChronicleSimulator:
                 data_despesa=date_obj.date()
             )
             db.session.add(exp)
+            
+            aud_tax = Auditoria(
+                estabelecimento_id=est.id, usuario_id=funcionario_id,
+                tipo_evento="despesas_insert",
+                descricao=f"Impostos provisionados (R$ {imposto:.2f})",
+                valor=imposto, data_evento=date_obj,
+                detalhes_json=json.dumps({"categoria": "Tributário", "base_calculo": float(revenue)})
+            )
+            db.session.add(aud_tax)
 
     def apply_economic_pulse(self, est, date_obj, funcionario_id):
         """Reajustes de preços mensais (Inflação real brasileira)"""
@@ -229,7 +270,8 @@ class ChronicleSimulator:
             
             qtd_perdida = float(lote.quantidade)
             lote.quantidade = 0
-            lote.status = "descartado"
+            lote.ativo = False
+            lote.motivo_inativacao = "Validade expirada"
             
             ant = float(produto.quantidade)
             produto.quantidade -= Decimal(str(qtd_perdida))
@@ -286,10 +328,10 @@ class ChronicleSimulator:
                 fornecedor_id=forn_id,
                 funcionario_id=funcionario_id,
                 numero_pedido=f"PC-{uuid.uuid4().hex[:6].upper()}",
-                data_pedido=date_obj.date(),
-                data_prevista_entrega=date_obj.date() + timedelta(days=random.randint(2, 5)),
+                data_pedido=date_obj,
+                data_previsao_entrega=date_obj.date() + timedelta(days=random.randint(2, 5)),
                 status="recebido", 
-                valor_total=valor_total,
+                total=valor_total,
                 created_at=date_obj
             )
             db.session.add(pedido)
@@ -315,10 +357,12 @@ class ChronicleSimulator:
                 pi = PedidoCompraItem(
                     pedido_id=pedido.id,
                     produto_id=p.id,
+                    produto_nome=p.nome,
+                    produto_unidade=p.unidade_medida,
                     quantidade_solicitada=qtd,
                     quantidade_recebida=qtd,
                     preco_unitario=custo,
-                    subtotal=qtd * custo
+                    total_item=qtd * custo
                 )
                 db.session.add(pi)
                 
@@ -329,23 +373,23 @@ class ChronicleSimulator:
                 lote = ProdutoLote(
                     estabelecimento_id=est.id,
                     produto_id=p.id,
-                    numero_lote=f"L{date_obj.strftime('%Y%m%d')}-{random.randint(100,999)}",
+                    numero_lote=f"L{date_obj.strftime('%Y%m%d')}-{p.id}-{random.randint(1000,9999)}",
                     quantidade=qtd,
                     quantidade_inicial=qtd,
                     preco_custo_unitario=custo,
                     data_fabricacao=date_obj.date() - timedelta(days=random.randint(5, 30)),
                     data_validade=validade,
-                    status="disponivel",
+                    ativo=True,
                     created_at=date_obj
                 )
                 db.session.add(lote)
                 
                 # Registra histórico se o custo mudou (simula negociação/inflação)
-                old_c = float(p.preco_custo or 0)
-                if old_c > 0 and abs(old_c - custo) > 0.01:
-                    from app.models import HistoricoPrecos
+                old_c = p.preco_custo or Decimal("0.00")
+                custo_dec = Decimal(str(custo))
+                if old_c > 0 and abs(old_c - custo_dec) > Decimal("0.01"):
                     m_old = Produto.calcular_markup_de_preco(old_c, p.preco_venda)
-                    m_new = Produto.calcular_markup_de_preco(custo, p.preco_venda)
+                    m_new = Produto.calcular_markup_de_preco(custo_dec, p.preco_venda)
                     
                     hp = HistoricoPrecos(
                         estabelecimento_id=est.id,
@@ -354,7 +398,7 @@ class ChronicleSimulator:
                         preco_custo_anterior=old_c,
                         preco_venda_anterior=p.preco_venda,
                         margem_anterior=m_old,
-                        preco_custo_novo=custo,
+                        preco_custo_novo=custo_dec,
                         preco_venda_novo=p.preco_venda,
                         margem_nova=m_new,
                         data_alteracao=date_obj,
@@ -362,7 +406,7 @@ class ChronicleSimulator:
                     )
                     db.session.add(hp)
                     # Atualiza o produto com o novo custo
-                    p.preco_custo = Decimal(str(custo))
+                    p.preco_custo = custo_dec
 
                     auditoria_preco = Auditoria(
                         estabelecimento_id=est.id,
@@ -391,7 +435,9 @@ class ChronicleSimulator:
             cp = ContaPagar(
                 estabelecimento_id=est.id,
                 fornecedor_id=forn_id,
-                descricao=f"Pedido de Compra {pedido.numero_pedido}",
+                pedido_compra_id=pedido.id,
+                numero_documento=f"DUP-{pedido.numero_pedido}",
+                observacoes=f"Pedido de Compra {pedido.numero_pedido}",
                 valor_original=valor_total,
                 valor_atual=valor_total,
                 data_emissao=date_obj.date(),
@@ -425,13 +471,14 @@ class ChronicleSimulator:
 
         venda = Venda(
             estabelecimento_id=est.id, cliente_id=cliente.id if cliente else None,
-            funcionario_id=funcionario_id, codigo=f"V-{uuid.uuid4().hex[:6].upper()}",
-            status="finalizada", created_at=ts, forma_pagamento=forma
+            funcionario_id=funcionario_id, codigo=f"V-{uuid.uuid4().hex[:12].upper()}",
+            status="finalizada", data_venda=ts, created_at=ts, forma_pagamento=forma
         )
         db.session.add(venda)
         db.session.flush()
         
-        total_venda = 0
+        total_venda = Decimal("0.00")
+        items_count = 0
         for p in basket:
             # Selecionar lote FIFO MASTER
             lote = ProdutoLote.query.filter(
@@ -450,15 +497,18 @@ class ChronicleSimulator:
                 qtd = random.randint(1, 6)
             
             qtd = min(float(qtd), float(lote.quantidade))
-            preco_un = float(p.preco_venda) * random.uniform(0.98, 1.02) # Variação na balança/desconto
-            total_item = round(preco_un * qtd, 2)
+            if qtd <= 0: continue
             
-            custo_un = float(lote.preco_custo_unitario)
+            preco_un = p.preco_venda * Decimal(str(random.uniform(0.98, 1.02)))
+            total_item = (preco_un * Decimal(str(qtd))).quantize(Decimal("0.01"))
+            
+            custo_un = lote.preco_custo_unitario or Decimal("0.00")
             margem_item = preco_un - custo_un
-            lucro_real = margem_item * qtd
+            lucro_real = (margem_item * Decimal(str(qtd))).quantize(Decimal("0.01"))
             
             vi = VendaItem(
-                venda_id=venda.id, produto_id=p.id, produto_nome=p.nome, 
+                venda_id=venda.id, produto_id=p.id, produto_nome=p.nome,
+                produto_codigo=p.codigo_barras, produto_unidade=p.unidade_medida,
                 quantidade=qtd, preco_unitario=preco_un, total_item=total_item,
                 custo_unitario=custo_un, margem_item=margem_item,
                 margem_lucro_real=lucro_real,
@@ -473,6 +523,7 @@ class ChronicleSimulator:
             atu = float(p.quantidade)
             
             total_venda += total_item
+            items_count += 1
             
             mov = MovimentacaoEstoque(
                 estabelecimento_id=est.id, produto_id=p.id, 
@@ -483,8 +534,26 @@ class ChronicleSimulator:
             )
             db.session.add(mov)
 
+        if items_count == 0:
+            db.session.delete(venda)
+            # Rollback flush effect
+            return
+
         venda.total = total_venda
         venda.subtotal = total_venda
+        venda.quantidade_itens = items_count
+        
+        # Auditoria de Venda (Monitor Master)
+        aud_venda = Auditoria(
+            estabelecimento_id=est.id,
+            usuario_id=funcionario_id,
+            tipo_evento="vendas_insert",
+            descricao=f"Venda {venda.codigo} finalizada com sucesso (Total: R$ {total_venda:.2f})",
+            valor=total_venda,
+            data_evento=ts,
+            detalhes_json=json.dumps({"forma_pagamento": forma, "itens": len(basket)})
+        )
+        db.session.add(aud_venda)
         
         # Financeiro Master
         if forma == "fiado":

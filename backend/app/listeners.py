@@ -1,4 +1,5 @@
 from sqlalchemy import event, inspect
+import os
 from app.models import db, AuditoriaSincronia, Auditoria
 import json
 from flask import g
@@ -38,7 +39,6 @@ def registrar_evento_forense(mapper, connection, target, operacao):
     Captura o estado do objeto para reconstrução total e auditoria.
     """
     # Evitar recursão ou processamento em simulação massiva
-    import os
     if isinstance(target, (Auditoria, AuditoriaSincronia)) or \
        os.environ.get("FLASK_ENV") == "simulation" or \
        os.environ.get("SYNC_IN_PROGRESS") == "1":
@@ -53,9 +53,13 @@ def registrar_evento_forense(mapper, connection, target, operacao):
 
     # 1. Preparar Payload (Estado Atual)
     try:
+        is_simulation = os.environ.get("FLASK_ENV") == "simulation"
+        if is_simulation:
+            return  # SILÊNCIO TOTAL EM SIMULAÇÃO MASSIVA (Magnitude Master)
+
         payload = object_to_dict(target)
         
-        # 2. Registrar na Sincronia (se aplicável) - Mantém tudo sincronizável
+        # 2. Registrar na Sincronia (se aplicável) 
         if target.__tablename__ in TABELAS_SINCRONIZAVEIS:
             AuditoriaSincronia.registrar_mutacao(
                 estabelecimento_id=estabelecimento_id,
