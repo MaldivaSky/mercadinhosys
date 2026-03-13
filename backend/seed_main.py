@@ -313,8 +313,82 @@ def seed(app):
             "ADMIN": "admin123", "CAIXA": "caixa123", "FUNCIONARIO": "func123"
         }
 
+        # Criar Super Admin SaaS (apenas um, global) - USERNAME ESPECÍFICO!
+        super_admin = Funcionario(
+            estabelecimento_id=estabelecimentos[0].id,  # Associado ao primeiro estabelecimento
+            nome="Super Admin SaaS",
+            username="superadmin",  # USERNAME ESPECÍFICO para Super Admin
+            role="ADMIN",
+            cargo="Super Administrador",
+            salario_base=10000.00,
+            cpf=fake.cpf(),
+            rg=fake.rg(),
+            data_nascimento=fake.date_of_birth(minimum_age=30, maximum_age=50),
+            celular=fake.cellphone_number(),
+            email="admin@mercadinhosys.com",  # EMAIL CRÍTICO - é verificado pela propriedade is_super_admin
+            data_admissao=date(2020, 1, 1),
+            ativo=True,
+            # is_super_admin é uma propriedade calculada, não um campo!
+            cep=estabelecimentos[0].cep,
+            logradouro=estabelecimentos[0].logradouro,
+            numero="100",
+            bairro=estabelecimentos[0].bairro,
+            cidade=estabelecimentos[0].cidade,
+            estado=estabelecimentos[0].estado,
+            permissoes_json=json.dumps({
+                "pdv": True,
+                "estoque": True,
+                "compras": True,
+                "financeiro": True,
+                "configuracoes": True,
+                "saas_admin": True,  # Permissões especiais SaaS
+            }),
+        )
+        super_admin.set_senha("super123")
+        db.session.add(super_admin)
+        funcionarios.append(super_admin)
+        print("   ✅ Super Admin criado: superadmin / super123")
+
+        # Agora criar o admin normal do primeiro estabelecimento
+        admin_normal = Funcionario(
+            estabelecimento_id=estabelecimentos[0].id,
+            nome="Rafael Maldivas",
+            username="admin",  # Admin normal - NÃO é Super Admin
+            role="ADMIN",
+            cargo="Proprietário",
+            salario_base=5000.00,
+            cpf=fake.cpf(),
+            rg=fake.rg(),
+            data_nascimento=fake.date_of_birth(minimum_age=22, maximum_age=55),
+            celular=fake.cellphone_number(),
+            email="admin@mercadinho.com",  # Email diferente do Super Admin
+            data_admissao=date(2020, 1, 1),
+            ativo=True,
+            cep=estabelecimentos[0].cep,
+            logradouro=estabelecimentos[0].logradouro,
+            numero="101",
+            bairro=estabelecimentos[0].bairro,
+            cidade=estabelecimentos[0].cidade,
+            estado=estabelecimentos[0].estado,
+            permissoes_json=json.dumps({
+                "pdv": True,
+                "estoque": True,
+                "compras": True,
+                "financeiro": True,
+                "configuracoes": True,
+            }),
+        )
+        admin_normal.set_senha("admin123")
+        db.session.add(admin_normal)
+        funcionarios.append(admin_normal)
+        print("   ✅ Admin normal criado: admin / admin123 (APENAS acesso ao seu mercadinho)")
+
         for est_idx, est in enumerate(estabelecimentos):
             for t_nome, t_user, t_role, t_cargo, t_sal in FUNC_TEMPLATES:
+                # Pular o admin do primeiro estabelecimento (já criado manualmente)
+                if est_idx == 0 and t_user == "admin":
+                    continue
+                    
                 f = Funcionario(
                     estabelecimento_id=est.id,
                     nome=t_nome,
@@ -499,7 +573,7 @@ def seed(app):
                     ativo=True,
                 )
                 db.session.add(lote)
-                prod.quantidade += qtd_ini
+                prod.quantidade = Decimal(str(prod.quantidade or 0)) + Decimal(str(qtd_ini))
                 # Registrar em memória (ordenado por validade para FIFO)
                 lotes_mem[prod.id].append({"obj": lote, "validade": data_val})
             # Ordenar por validade ASC (FIFO)
@@ -595,11 +669,11 @@ def seed(app):
                 # Adicionar ao lote existente (sem criar novo)
                 lotes_prod = ProdutoLote.query.filter_by(produto_id=produto.id).all()
                 if lotes_prod:
-                    lotes_prod[0].quantidade += qtd_sol
+                    lotes_prod[0].quantidade = Decimal(str(lotes_prod[0].quantidade or 0)) + Decimal(str(qtd_sol))
                     if produto.id in lotes_mem and lotes_mem[produto.id]:
-                        lotes_mem[produto.id][0]["obj"].quantidade += qtd_sol
+                        lotes_mem[produto.id][0]["obj"].quantidade = Decimal(str(lotes_mem[produto.id][0]["obj"].quantidade or 0)) + Decimal(str(qtd_sol))
 
-                produto.quantidade += qtd_sol
+                produto.quantidade = Decimal(str(produto.quantidade or 0)) + Decimal(str(qtd_sol))
                 pc.subtotal = total_it
                 pc.total = total_it
 
@@ -653,7 +727,7 @@ def seed(app):
                 disp = lote_info["obj"].quantidade
                 usar = min(restante, disp)
                 if usar > 0:
-                    lote_info["obj"].quantidade -= usar
+                    lote_info["obj"].quantidade = Decimal(str(lote_info["obj"].quantidade or 0)) - Decimal(str(usar))
                     restante -= usar
                     consumido += usar
             return consumido
@@ -682,10 +756,11 @@ def seed(app):
                 if qtd_cons == 0:
                     continue
                 preco = float(prod.preco_venda)
-                t_item = preco * qtd_cons
-                itens_venda.append((prod, qtd_cons, preco, t_item))
+                qtd_cons_int = int(qtd_cons)
+                t_item = preco * qtd_cons_int
+                itens_venda.append((prod, qtd_cons_int, preco, t_item))
                 total_venda += t_item
-                prod.quantidade -= qtd_cons
+                prod.quantidade = Decimal(str(prod.quantidade or 0)) - Decimal(str(qtd_cons_int))
 
             if not itens_venda:
                 continue
@@ -736,6 +811,10 @@ def seed(app):
                     valor_total=fmt(t_item),
                     motivo="Venda",
                 ))
+                
+                # Atualizar campos de vendas do produto
+                prod.quantidade_vendida = Decimal(str(prod.quantidade_vendida or 0)) + Decimal(str(qtd))
+                prod.total_vendido = float(prod.total_vendido or 0) + float(t_item)
 
             # Conta a receber se Fiado
             if forma_pag == "Fiado" and cliente:

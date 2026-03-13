@@ -45,3 +45,10 @@ debug_request.py
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary Simulation Data
+backend/tmp/
+error*.log
+
+seed_super_admin.py
+seed_main.py

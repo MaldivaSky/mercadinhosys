@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import settingsService, { Configuracao } from '../features/settings/settingsService';
-import { toast } from 'react-hot-toast';
+import settingsService, { Configuracao, PreferenciasUsuario } from '../features/settings/settingsService';
+import { useAuth } from './AuthContext';
 
 interface ConfigContextType {
     config: Configuracao | null;
+    preferencias: PreferenciasUsuario | null;
+    isDark: boolean;
     loading: boolean;
     updateConfig: (newConfig: Partial<Configuracao>) => Promise<void>;
+    updatePreferencias: (newPrefs: Partial<PreferenciasUsuario>) => Promise<void>;
     refreshConfig: () => Promise<void>;
     applyTheme: () => void;
 }
@@ -14,41 +17,38 @@ const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
 export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     const [config, setConfig] = useState<Configuracao | null>(null);
+    const [preferencias, setPreferencias] = useState<PreferenciasUsuario | null>(null);
     const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+
+    // Senior Mode: Cálculo centralizado do tema efetivo
+    const isDark = (() => {
+        const stored = localStorage.getItem('theme');
+        if (preferencias?.tema_escuro !== undefined) return preferencias.tema_escuro;
+        if (stored !== null) return stored === 'dark';
+        return config?.tema_escuro ?? false;
+    })();
 
     const applyTheme = () => {
-        if (!config) return;
-
         const root = document.documentElement;
 
-        // Aplicar cor principal
-        if (config.cor_principal) {
+        // 1. Aplicar cores (vêm do estabelecimento)
+        if (config?.cor_principal) {
             root.style.setProperty('--color-primary', config.cor_principal);
-
-            // Gerar variações da cor principal
             const hex = config.cor_principal.replace('#', '');
-            const r = parseInt(hex.substring(0, 2), 16);
-            const g = parseInt(hex.substring(2, 4), 16);
-            const b = parseInt(hex.substring(4, 6), 16);
-
-            // Cor mais escura (hover) - 20% mais escura
-            const darkerR = Math.max(0, Math.floor(r * 0.8));
-            const darkerG = Math.max(0, Math.floor(g * 0.8));
-            const darkerB = Math.max(0, Math.floor(b * 0.8));
-            root.style.setProperty('--color-primary-dark', `rgb(${darkerR}, ${darkerG}, ${darkerB})`);
-
-            // Cor mais clara (backgrounds) - 10% de opacidade
+            const r = parseInt(hex.substring(0, 2), 16) || 37;
+            const g = parseInt(hex.substring(2, 4), 16) || 99;
+            const b = parseInt(hex.substring(4, 6), 16) || 235;
+            root.style.setProperty('--color-primary-dark', `rgb(${Math.floor(r * 0.8)}, ${Math.floor(g * 0.8)}, ${Math.floor(b * 0.8)})`);
             root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
-
         }
 
-        // Aplicar tema escuro - única fonte de verdade para o tema
-        const isDark = Boolean(config.tema_escuro);
+        // 2. Aplicar Tema
         if (isDark) {
-            document.documentElement.classList.add('dark');
+            root.classList.add('dark');
             localStorage.setItem('theme', 'dark');
         } else {
-            document.documentElement.classList.remove('dark');
+            root.classList.remove('dark');
             localStorage.setItem('theme', 'light');
         }
     };
@@ -57,92 +57,66 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
         try {
             setLoading(true);
 
-            // Verificar se tem token antes de tentar carregar
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                console.log('Sem token, usando configurações padrão');
-                setConfig({
-                    id: 0,
-                    estabelecimento_id: 1,
-                    cor_principal: '#2563eb',
-                    tema_escuro: false,
-                    logo_url: undefined,
-                    emitir_nfe: false,
-                    emitir_nfce: true,
-                    impressao_automatica: false,
-                    tipo_impressora: 'termica_80mm',
-                    exibir_preco_tela: true,
-                    permitir_venda_sem_estoque: false,
-                    desconto_maximo_percentual: 10,
-                    desconto_maximo_funcionario: 10,
-                    arredondamento_valores: true,
-                    formas_pagamento: ['Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'PIX'],
-                    controlar_validade: true,
-                    alerta_estoque_minimo: true,
-                    dias_alerta_validade: 30,
-                    estoque_minimo_padrao: 10,
-                    tempo_sessao_minutos: 30,
-                    tentativas_senha_bloqueio: 3,
-                    alertas_email: false,
-                    alertas_whatsapp: false
-                });
+            if (!user || !user.id) {
+                setConfig(null);
+                setPreferencias(null);
                 setLoading(false);
                 return;
             }
 
-            const response = await settingsService.getConfig();
-            setConfig(response);
-        } catch (error: unknown) {
-            console.error('Erro ao carregar configurações:', error);
-            // ECONNREFUSED = backend não está rodando
-            const isNetworkError =
-                (error as { code?: string })?.code === 'ERR_NETWORK' ||
-                (error as { message?: string })?.message?.includes('ECONNREFUSED') ||
-                (error as { message?: string })?.message?.includes('Network Error');
-            if (isNetworkError) {
-                toast.error('Backend indisponível. Inicie o servidor Flask na porta 5000.');
-            }
-            // Usar configurações padrão em caso de erro
+            const [configRes, prefsRes] = await Promise.all([
+                settingsService.getConfig(),
+                settingsService.getPreferencias().catch(() => ({ tema_escuro: false, notificacoes_desktop: true, idioma: 'pt-BR' }))
+            ]);
+
+            setPreferencias(prefsRes);
             setConfig({
-                id: 0,
-                estabelecimento_id: 1,
-                cor_principal: '#2563eb',
-                tema_escuro: false,
-                logo_url: undefined,
-                emitir_nfe: false,
-                emitir_nfce: true,
-                impressao_automatica: false,
-                tipo_impressora: 'termica_80mm',
-                exibir_preco_tela: true,
-                permitir_venda_sem_estoque: false,
-                desconto_maximo_percentual: 10,
-                desconto_maximo_funcionario: 10,
-                arredondamento_valores: true,
-                formas_pagamento: ['Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'PIX'],
-                controlar_validade: true,
-                alerta_estoque_minimo: true,
-                dias_alerta_validade: 30,
-                estoque_minimo_padrao: 10,
-                tempo_sessao_minutos: 30,
-                tentativas_senha_bloqueio: 3,
-                alertas_email: false,
-                alertas_whatsapp: false
+                ...configRes,
+                logo_url: configRes.logo_base64 || configRes.logo_url || '/assets/logo.png'
             });
+        } catch (error) {
+            console.error('Erro ao carregar configurações:', error);
         } finally {
             setLoading(false);
         }
     };
 
     const updateConfig = async (newConfig: Partial<Configuracao>) => {
+        const previousConfig = config;
+        // ✅ ATUALIZAÇÃO OTIMISTA PARA CORES E CONFIGS
+        setConfig(prev => prev ? { ...prev, ...newConfig } : null);
+
         try {
-            const response = await settingsService.updateConfig(newConfig);
+            const { logo_base64, ...configToUpdate } = newConfig;
+            const response = await settingsService.updateConfig(configToUpdate);
             setConfig(response);
-            toast.success('Configurações atualizadas com sucesso!');
-            // O useEffect [config] aplicará o tema automaticamente com os dados corretos
         } catch (error) {
             console.error('Erro ao atualizar configurações:', error);
-            toast.error('Erro ao atualizar configurações');
+            setConfig(previousConfig);
             throw error;
+        }
+    };
+
+    const updatePreferencias = async (newPrefs: Partial<PreferenciasUsuario>) => {
+        const previousPrefs = preferencias;
+
+        // ✅ ATUALIZAÇÃO OTIMISTA (Instantânea na UI)
+        setPreferencias(prev => prev ? { ...prev, ...newPrefs } : null);
+
+        // Feedback imediato para o localStorage para evitar flicker
+        if (newPrefs.tema_escuro !== undefined) {
+            localStorage.setItem('theme', newPrefs.tema_escuro ? 'dark' : 'light');
+        }
+
+        try {
+            const response = await settingsService.updatePreferencias(newPrefs);
+            setPreferencias(response);
+        } catch (error) {
+            console.error('Erro ao atualizar preferências:', error);
+            setPreferencias(previousPrefs);
+            if (previousPrefs?.tema_escuro !== undefined) {
+                localStorage.setItem('theme', previousPrefs.tema_escuro ? 'dark' : 'light');
+            }
         }
     };
 
@@ -151,17 +125,27 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     };
 
     useEffect(() => {
+        const previousEstab = localStorage.getItem('current_estabelecimento_id');
+        const currentEstab = user?.estabelecimento_id?.toString();
+
+        if (user && previousEstab && currentEstab && previousEstab !== currentEstab) {
+            localStorage.removeItem('theme');
+            localStorage.removeItem('preferencias_usuario');
+        }
+
+        if (currentEstab) {
+            localStorage.setItem('current_estabelecimento_id', currentEstab);
+        }
+
         loadConfig();
-    }, []);
+    }, [user?.id, user?.estabelecimento_id]);
 
     useEffect(() => {
-        if (config) {
-            applyTheme();
-        }
-    }, [config]);
+        applyTheme();
+    }, [config?.cor_principal, isDark]); // Reage especificamente a cor e tema
 
     return (
-        <ConfigContext.Provider value={{ config, loading, updateConfig, refreshConfig, applyTheme }}>
+        <ConfigContext.Provider value={{ config, preferencias, isDark, loading, updateConfig, updatePreferencias, refreshConfig, applyTheme }}>
             {children}
         </ConfigContext.Provider>
     );

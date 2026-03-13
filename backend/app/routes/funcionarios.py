@@ -32,9 +32,10 @@ def listar_funcionarios():
     - ordem: asc/desc (padrão: asc)
     """
     try:
-        # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
         # Parâmetros de paginação
         pagina = request.args.get("pagina", 1, type=int)
@@ -363,9 +364,10 @@ def listar_funcionarios():
 def estatisticas_funcionarios():
     """Obtém estatísticas detalhadas de funcionários para dashboard"""
     try:
-        # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
         # Estatísticas gerais
         total_funcionarios = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id).count()
@@ -642,9 +644,10 @@ def estatisticas_funcionarios():
 def relatorio_vendas_funcionarios():
     """Relatório de vendas por funcionário"""
     try:
-        # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
         # Parâmetros de período
         data_inicio_str = request.args.get("inicio")
@@ -793,9 +796,10 @@ def relatorio_vendas_funcionarios():
 def detalhes_funcionario(id):
     """Obter detalhes de um funcionário com estatísticas completas"""
     try:
-        # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
         funcionario = Funcionario.query.filter_by(
             id=id, 
@@ -963,8 +967,8 @@ def criar_funcionario():
     """Criar um novo funcionário"""
     try:
         # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         data = request.get_json()
 
@@ -1126,8 +1130,8 @@ def atualizar_funcionario(id):
     """Atualizar informações de um funcionário"""
     try:
         # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         funcionario = Funcionario.query.filter_by(
             id=id, 
@@ -1280,8 +1284,8 @@ def excluir_funcionario(id):
     """Excluir (desativar) um funcionário"""
     try:
         # Obter estabelecimento do token
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         funcionario = Funcionario.query.filter_by(
             id=id, 

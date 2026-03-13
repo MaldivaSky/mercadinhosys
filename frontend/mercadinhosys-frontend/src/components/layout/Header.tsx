@@ -3,6 +3,7 @@ import { AppBar, Toolbar, Typography, Avatar, IconButton, Menu, MenuItem, Box } 
 import { Logout, Brightness4, Brightness7, Menu as MenuIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../../logoprincipal.png';
+import EstablishmentSelector from '../EstablishmentSelector';
 
 const Header: React.FC = () => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -75,12 +76,15 @@ const Header: React.FC = () => {
     <AppBar position="static" color="default" elevation={1} sx={{ zIndex: 1201 }}>
       <Toolbar>
         <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-          <img src={logo} alt="Logo MercadinhoSys" style={{ height: 40, marginRight: 12, borderRadius: 6, width:'auto' }} />
+          <img src={logo} alt="Logo MercadinhoSys" style={{ height: 40, marginRight: 12, borderRadius: 6, width: 'auto' }} />
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <IconButton sx={{ display: { xs: 'inline-flex', md: 'none' } }} color="inherit" onClick={openNav}>
             <MenuIcon />
           </IconButton>
+
+          {user.is_super_admin && <EstablishmentSelector className="mr-4" />}
+
           <Typography variant="body1" sx={{ fontWeight: 500, mr: 1 }}>
             {user.nome || 'Usuário'}
           </Typography>

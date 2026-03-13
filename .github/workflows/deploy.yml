@@ -1,0 +1,321 @@
+name: 🚀 Deploy MercadinhoSys v5.0
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+  pull_request:
+    branches: [ main ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # ============================================
+  # 🔐 SECURITY CHECK
+  # ============================================
+  security-check:
+    runs-on: ubuntu-latest
+    name: 🔐 Security Check
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 🔐 Run security check
+        run: |
+          python security_check.py
+      
+      - name: 📋 Upload security report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: SECURITY_REPORT.md
+
+  # ============================================
+  # 🧪 TESTS
+  # ============================================
+  test:
+    runs-on: ubuntu-latest
+    name: 🧪 Test Suite
+    needs: security-check
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: test_mercadinhosys
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      
+      - name: 🧪 Run tests
+        env:
+          APP_MODE: cloud
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_mercadinhosys
+          SECRET_KEY: test-secret-key-for-ci
+          JWT_SECRET_KEY: test-jwt-secret-for-ci
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=html
+      
+      - name: 📊 Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # ============================================
+  # 🔨 BUILD FRONTEND
+  # ============================================
+  build-frontend:
+    runs-on: ubuntu-latest
+    name: 🔨 Build Frontend
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/mercadinhosys-frontend/package-lock.json
+      
+      - name: 📦 Install dependencies
+        working-directory: frontend/mercadinhosys-frontend
+        run: npm ci
+      
+      - name: 🔨 Build
+        working-directory: frontend/mercadinhosys-frontend
+        run: npm run build
+      
+      - name: 📦 Upload build
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/mercadinhosys-frontend/dist/
+
+  # ============================================
+  # 🚀 DEPLOY PRODUCTION (VERCEL)
+  # ============================================
+  deploy-production:
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy to Production
+    needs: [security-check, test, build-frontend]
+    if: github.ref == 'refs/heads/main'
+    
+    environment:
+      name: production
+      url: https://mercadinhosys.vercel.app
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📦 Download frontend build
+        uses: actions/download-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/mercadinhosys-frontend/dist/
+      
+      - name: 🚀 Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+          
+      - name: 📊 Upload deployment info
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-info
+          path: .vercel/output.json
+
+  # ============================================
+  # 🚀 DEPLOY STAGING (VERCEL)
+  # ============================================
+  deploy-staging:
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy to Staging
+    needs: [security-check, test, build-frontend]
+    if: github.ref == 'refs/heads/develop'
+    
+    environment:
+      name: staging
+      url: https://mercadinhosys-staging.vercel.app
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📦 Download frontend build
+        uses: actions/download-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/mercadinhosys-frontend/dist/
+      
+      - name: 🚀 Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: ''
+          working-directory: ./
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+  # ============================================
+  # 📊 HEALTH CHECK
+  # ============================================
+  health-check:
+    runs-on: ubuntu-latest
+    name: 📊 Health Check
+    needs: [deploy-production, deploy-staging]
+    if: always() && (needs.deploy-production.result == 'success' || needs.deploy-staging.result == 'success')
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📦 Install dependencies
+        run: |
+          pip install requests
+      
+      - name: 📊 Health Check Production
+        if: needs.deploy-production.result == 'success'
+        run: |
+          python -c "
+          import requests, time, sys
+          url = 'https://mercadinhosys.vercel.app/api/auth/health'
+          for i in range(30):  # 5 minutos
+              try:
+                  r = requests.get(url, timeout=10)
+                  if r.status_code == 200:
+                      print('✅ Production health check passed')
+                      sys.exit(0)
+              except:
+                  pass
+              time.sleep(10)
+          print('❌ Production health check failed')
+          sys.exit(1)
+          "
+      
+      - name: 📊 Health Check Staging
+        if: needs.deploy-staging.result == 'success'
+        run: |
+          python -c "
+          import requests, time, sys
+          url = 'https://mercadinhosys-staging.vercel.app/api/auth/health'
+          for i in range(30):  # 5 minutos
+              try:
+                  r = requests.get(url, timeout=10)
+                  if r.status_code == 200:
+                      print('✅ Staging health check passed')
+                      sys.exit(0)
+              except:
+                  pass
+              time.sleep(10)
+          print('❌ Staging health check failed')
+          sys.exit(1)
+          "
+
+  # ============================================
+  # 📋 NOTIFICATION
+  # ============================================
+  notify:
+    runs-on: ubuntu-latest
+    name: 📋 Notification
+    needs: [security-check, test, build-frontend, deploy-production, deploy-staging, health-check]
+    if: always()
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 📊 Generate summary
+        run: |
+          echo "## 🚀 MercadinhoSys Deploy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔐 Security Check | ${{ needs.security-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔨 Frontend Build | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Production Deploy | ${{ needs.deploy-production.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Staging Deploy | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📊 Health Check | ${{ needs.health-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.deploy-production.result }}" == "success" ]]; then
+            echo "### 🌐 Production URL" >> $GITHUB_STEP_SUMMARY
+            echo "https://mercadinhosys.vercel.app" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
+            echo "### 🌐 Staging URL" >> $GITHUB_STEP_SUMMARY
+            echo "https://mercadinhosys-staging.vercel.app" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: 📧 Slack Notification (if configured)
+        if: env.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "🚀 MercadinhoSys Deploy ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deploy Status:* ${{ job.status }}\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}"
+                  }
+                }
+              ]
+            }' \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

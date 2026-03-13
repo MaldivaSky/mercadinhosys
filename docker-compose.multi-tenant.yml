@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Banco de dados principal para gerenciamento de tenants
+  postgres-main:
+    image: postgres:15-alpine
+    container_name: mercadinhosys-db-main
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mercadinhosys_main
+      POSTGRES_USER: mercadinho_user
+      POSTGRES_PASSWORD: mercadinho_secure_pass_2024
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_main_data:/var/lib/postgresql/data
+      - ./backend/init-main-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - mercadinhosys-network-multi
+
+  # Backend com suporte a multi-tenant
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mercadinhosys-backend-multi
+    restart: unless-stopped
+    environment:
+      FLASK_ENV: development
+      FLASK_DEBUG: 1
+      SECRET_KEY: dev-secret-key-multi-tenant
+      JWT_SECRET_KEY: dev-jwt-secret-multi-tenant
+      CORS_ORIGINS: http://localhost:5173
+      # Configuração Multi-Tenant
+      MAIN_DATABASE_URL: "postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres-main:5432/mercadinhosys_main"
+      TENANT_DATABASE_TEMPLATE: "postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres-main:5432/tenant_{estabelecimento_id}"
+      MULTI_TENANT_MODE: "true"
+    env_file:
+      - ./backend/.env
+      - ./backend/mail.env
+    volumes:
+      - ./backend:/app
+      - ./backend/instance:/app/instance
+      - backend_uploads_multi:/app/instance/uploads
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres-main
+    networks:
+      - mercadinhosys-network-multi
+
+  # Frontend
+  frontend:
+    image: node:20-alpine
+    container_name: mercadinhosys-frontend-multi
+    working_dir: /app
+    volumes:
+      - ./frontend/mercadinhosys-frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_TARGET=http://backend:5000
+    depends_on:
+      - backend
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - mercadinhosys-network-multi
+
+volumes:
+  postgres_main_data:
+  backend_uploads_multi:
+
+networks:
+  mercadinhosys-network-multi:
+    driver: bridge

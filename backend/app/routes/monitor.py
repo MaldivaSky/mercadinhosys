@@ -1,40 +1,13 @@
 # app/routes/monitor.py
 from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.models import db, Auditoria, Estabelecimento, Venda, Funcionario
+from app.utils.query_helpers import get_authorized_establishment_id
+from app.decorators.decorator_jwt import super_admin_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import json
 
 monitor_bp = Blueprint("monitor", __name__)
-
-def super_admin_required(fn):
-    """Custom decorator for super admin routes"""
-    from functools import wraps
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        from flask import current_app
-        claims = get_jwt()
-        
-        # 1. Verificação Primária: Claim no Token JWT (Rápida)
-        if claims.get("is_super_admin") is True:
-            return fn(*args, **kwargs)
-            
-        # 2. Verificação de Redundância (Senior Fail-Safe): Consulta DB se a claim falhar
-        try:
-            from app.models import Funcionario
-            user_id = get_jwt_identity()
-            user = Funcionario.query.get(int(user_id))
-            
-            if user and user.username in ['maldivas', 'admin']:
-                # Se for um dos donos, permite o acesso e loga o aviso para investigação
-                current_app.logger.warning(f"Acesso SuperAdmin concedido via Redundância para: {user.username}")
-                return fn(*args, **kwargs)
-        except Exception as e:
-            current_app.logger.error(f"Erro na redundância de SuperAdmin: {str(e)}")
-        
-        return jsonify({"success": False, "error": "Acesso restrito ao Administrador do Sistema"}), 403
-    return jwt_required()(wrapper)
 
 @monitor_bp.route("/logs", methods=["GET"])
 @super_admin_required
@@ -44,14 +17,15 @@ def get_global_logs():
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
         tipo = request.args.get("tipo")
-        estab_id = request.args.get("estabelecimento_id", type=int)
-
+        # Tenta pegar estab_id da query ou do header de impersonation
+        estab_id = request.args.get("estabelecimento_id", type=int) or get_authorized_establishment_id()
+        
         query = Auditoria.query
 
         if tipo:
             query = query.filter(Auditoria.tipo_evento == tipo)
-        if estab_id:
-            query = query.filter(Auditoria.estabelecimento_id == estab_id)
+        if estab_id and str(estab_id).lower() != "all":
+            query = query.filter(Auditoria.estabelecimento_id == int(estab_id))
 
         # Paginação com tratamento de erro
         try:
@@ -100,32 +74,50 @@ def get_global_logs():
 def get_global_summary():
     """Retorna resumo estatístico global do sistema"""
     try:
+        estab_id = request.args.get('estab_id', 'all')
+        is_global = str(estab_id).lower() == "all"
+
         agora = datetime.utcnow()
         hoje_start = agora.replace(hour=0, minute=0, second=0, microsecond=0)
         mes_start = hoje_start - timedelta(days=30)
         
-        # 1. Estabelecimentos Totais (Contagem simples)
+        # 1. Estabelecimentos Totais (Contagem simples - sempre global para manter sentido no dashboard SaaS)
         total_estabelecimentos = db.session.query(func.count(Estabelecimento.id)).scalar() or 0
         
+        # Base query vendas
+        query_vendas = db.session.query(Venda.id, Venda.total, Venda.data_venda)
+        if not is_global:
+            query_vendas = query_vendas.filter(Venda.estabelecimento_id == int(estab_id))
+
         # 2. Vendas Hoje (Range Seguro)
         try:
-            vendas_hoje_qtd = db.session.query(func.count(Venda.id)).filter(Venda.data_venda >= hoje_start).scalar() or 0
-            vendas_hoje_valor = db.session.query(func.sum(Venda.total)).filter(Venda.data_venda >= hoje_start).scalar() or 0
+            vendas_hoje_qtd = query_vendas.filter(Venda.data_venda >= hoje_start).count()
+            vendas_hoje_valor = db.session.query(func.sum(Venda.total)).filter(
+                Venda.estabelecimento_id == int(estab_id) if not is_global else True,
+                Venda.data_venda >= hoje_start
+            ).scalar() or 0
         except Exception as e:
             current_app.logger.warning(f"Falha ao ler vendas hoje: {e}")
             vendas_hoje_qtd, vendas_hoje_valor = 0, 0
 
         # 3. Vendas Mês (Para mostrar dados semeados se não houver hoje)
         try:
-            vendas_mes_qtd = db.session.query(func.count(Venda.id)).filter(Venda.data_venda >= mes_start).scalar() or 0
-            vendas_mes_valor = db.session.query(func.sum(Venda.total)).filter(Venda.data_venda >= mes_start).scalar() or 0
+            vendas_mes_qtd = query_vendas.filter(Venda.data_venda >= mes_start).count()
+            vendas_mes_valor = db.session.query(func.sum(Venda.total)).filter(
+                Venda.estabelecimento_id == int(estab_id) if not is_global else True,
+                Venda.data_venda >= mes_start
+            ).scalar() or 0
         except Exception as e:
             current_app.logger.warning(f"Falha ao ler vendas mês: {e}")
             vendas_mes_qtd, vendas_mes_valor = 0, 0
             
         # 4. Últimos registros de onboarding (Com blindagem de JSON)
         try:
-            ultimos_registros = Auditoria.query.filter(Auditoria.tipo_evento == "estabelecimento_registrado").order_by(Auditoria.data_evento.desc()).limit(5).all()
+            query_auditoria = Auditoria.query.filter(Auditoria.tipo_evento == "estabelecimento_registrado")
+            if not is_global:
+                 query_auditoria = query_auditoria.filter(Auditoria.estabelecimento_id == int(estab_id))
+                 
+            ultimos_registros = query_auditoria.order_by(Auditoria.data_evento.desc()).limit(5).all()
             novos_clientes = []
             for log in ultimos_registros:
                 nome_estab = "N/A"
@@ -258,9 +250,10 @@ def delete_establishment(id):
         estab = Estabelecimento.query.get_or_404(id)
         nome = estab.nome_fantasia
         
-        # Auditoria antes de deletar
+        from app.utils.query_helpers import get_estabelecimento_safe, get_authorized_establishment_id
         claims = get_jwt()
-        admin_id = claims.get("sub")
+        # Prioriza o contexto de impersonation se for Super Admin
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Em um sistema real, aqui deletaríamos ou desvincularíamos dependências.
         # Por segurança de dados, vamos apenas marcar como 'excluido' no plano_status 

@@ -33,8 +33,8 @@ def rh_dashboard():
     Isolado do dashboard científico para performance.
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         days = request.args.get("days", default=30, type=int)
 
         # Validar days
@@ -65,8 +65,8 @@ def rh_dashboard():
 def listar_justificativas():
     """Lista justificativas de ponto com filtros opcionais."""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         query = JustificativaPonto.query.filter_by(
             estabelecimento_id=estabelecimento_id
@@ -117,8 +117,8 @@ def listar_justificativas():
 def criar_justificativa():
     """Cria uma nova justificativa de ponto."""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         # Suporta tanto JSON quanto multipart/form-data
         if request.content_type and "multipart/form-data" in request.content_type:
@@ -181,8 +181,8 @@ def criar_justificativa():
 def responder_justificativa(justificativa_id):
     """Aprova ou rejeita uma justificativa (apenas gerente/admin)."""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         user_id = claims.get("funcionario_id")
         role = claims.get("role", "")
 
@@ -238,8 +238,8 @@ def responder_justificativa(justificativa_id):
 def listar_beneficios():
     """Lista benefícios atribuídos a funcionários."""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         funcionario_id = request.args.get("funcionario_id")
         ativo = request.args.get("ativo")
@@ -291,8 +291,8 @@ def listar_beneficios():
 def criar_beneficio_funcionario():
     """Atribui um benefício a um funcionário."""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         data = request.get_json()
         funcionario_id = data.get("funcionario_id")
@@ -351,8 +351,8 @@ def listar_banco_horas():
     try:
         from app.models import BancoHoras
 
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = request.args.get("funcionario_id")
         mes_referencia = request.args.get("mes_referencia")
 

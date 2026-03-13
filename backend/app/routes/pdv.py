@@ -560,8 +560,8 @@ def buscar_produtos_pdv():
     Performance máxima: ~50ms vs ~800ms da rota geral.
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         busca = request.args.get("q", "").strip()
 
         if not busca or len(busca) < 2:

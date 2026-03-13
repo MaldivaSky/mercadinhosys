@@ -10,7 +10,44 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
 
+from sqlalchemy import or_
+from flask import g
+
 db = SQLAlchemy()
+
+class TenantQuery(db.Query):
+    """
+    Query customizada para isolamento automático por estabelecimento (Multi-Tenant).
+    Injeta 'filter(estabelecimento_id == g.estabelecimento_id)' em todas as queries.
+    """
+    def __init__(self, *args, **kwargs):
+        super(TenantQuery, self).__init__(*args, **kwargs)
+
+    def filter_by_tenant(self):
+        """Aplica o filtro de tenant se o estabelecimento_id estiver no contexto"""
+        estabelecimento_id = getattr(g, 'estabelecimento_id', None)
+        if estabelecimento_id:
+            # Pegar a classe do modelo sendo consultada
+            model_class = self._propagate_attrs.get('entity_namespace')
+            if model_class and hasattr(model_class, 'estabelecimento_id'):
+                return self.filter(model_class.estabelecimento_id == estabelecimento_id)
+        return self
+
+    def all(self):
+        return self.filter_by_tenant().super().all()
+
+    def first(self):
+        return self.filter_by_tenant().super().first()
+
+class MultiTenantMixin:
+    """Mixin para modelos que requerem isolamento por estabelecimento"""
+    query_class = TenantQuery
+    
+    @classmethod
+    def query_tenant(cls):
+        """Retorna query já filtrada pelo tenant atual"""
+        return cls.query.filter_by_tenant()
+
 
 # ============================================
 # MIXINS REUTILIZÁVEIS
@@ -52,7 +89,7 @@ class EnderecoMixin:
 # ============================================
 
 
-class Estabelecimento(db.Model, EnderecoMixin):
+class Estabelecimento(db.Model, EnderecoMixin, MultiTenantMixin):
     __tablename__ = "estabelecimentos"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -141,7 +178,7 @@ class Lead(db.Model):
 # ============================================
 
 
-class Configuracao(db.Model):
+class Configuracao(db.Model, MultiTenantMixin):
     __tablename__ = "configuracoes"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -236,14 +273,14 @@ class Configuracao(db.Model):
 # ============================================
 
 
-class Funcionario(db.Model, UserMixin, EnderecoMixin):
+class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
     __tablename__ = "funcionarios"
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
 
     nome = db.Column(db.String(150), nullable=False)
@@ -294,8 +331,8 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin):
         # Comparação robusta (case-insensitive)
         role_ok = self.role.strip().upper() == "ADMIN"
         user_ok = (
-            self.email == "admin@mercadinhosys.com" or 
-            self.username == "admin" or
+            self.email == "rafaelmaldivas@gmail.com" or 
+            self.username == "superadmin" or
             self.username == "maldivas"
         )
         return role_ok and user_ok
@@ -408,7 +445,7 @@ class Beneficio(db.Model):
     )
     nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.String(200))
-    valor_padrao = db.Column(db.Numeric(10, 2), default=0)
+    valor_padrao = db.Column(db.Numeric(12, 2), default=0)
     ativo = db.Column(db.Boolean, default=True)
 
     estabelecimento = db.relationship("Estabelecimento", backref=db.backref("beneficios", lazy=True))
@@ -436,7 +473,7 @@ class FuncionarioBeneficio(db.Model):
         db.ForeignKey("beneficios.id", ondelete="CASCADE"),
         nullable=False
     )
-    valor = db.Column(db.Numeric(10, 2), nullable=False) # Valor específico para o funcionário
+    valor = db.Column(db.Numeric(12, 2), nullable=False) # Valor específico para o funcionário
     data_inicio = db.Column(db.Date, default=date.today)
     ativo = db.Column(db.Boolean, default=True)
 
@@ -454,7 +491,7 @@ class BancoHoras(db.Model):
     )
     mes_referencia = db.Column(db.String(7), nullable=False) # Formato YYYY-MM
     saldo_minutos = db.Column(db.Integer, default=0) # Saldo acumulado do mês em minutos
-    valor_hora_extra = db.Column(db.Numeric(10, 2), default=0) # Valor monetário acumulado
+    valor_hora_extra = db.Column(db.Numeric(12, 2), default=0) # Valor monetário acumulado
     
     # Detalhes
     horas_trabalhadas_minutos = db.Column(db.Integer, default=0)
@@ -555,7 +592,7 @@ class JustificativaPonto(db.Model):
 # ============================================
 
 
-class Cliente(db.Model, EnderecoMixin):
+class Cliente(db.Model, EnderecoMixin, MultiTenantMixin):
     __tablename__ = "clientes"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -574,8 +611,8 @@ class Cliente(db.Model, EnderecoMixin):
     celular = db.Column(db.String(30), nullable=False)
     email = db.Column(db.String(100))
 
-    limite_credito = db.Column(db.Numeric(10, 2), default=0)
-    saldo_devedor = db.Column(db.Numeric(10, 2), default=0)
+    limite_credito = db.Column(db.Numeric(12, 2), default=0)
+    saldo_devedor = db.Column(db.Numeric(12, 2), default=0)
 
     ultima_compra = db.Column(db.DateTime)
     total_compras = db.Column(db.Integer, default=0)
@@ -759,7 +796,7 @@ class Cliente(db.Model, EnderecoMixin):
 # ============================================
 
 
-class Fornecedor(db.Model, EnderecoMixin):
+class Fornecedor(db.Model, EnderecoMixin, MultiTenantMixin):
     __tablename__ = "fornecedores"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -901,7 +938,7 @@ class CategoriaProduto(db.Model):
 # ============================================
 
 
-class Produto(db.Model):
+class Produto(db.Model, MultiTenantMixin):
     __tablename__ = "produtos"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -929,14 +966,14 @@ class Produto(db.Model):
     quantidade = db.Column(db.Numeric(10, 3), default=0.0)
     quantidade_minima = db.Column(db.Numeric(10, 3), default=10.0)
 
-    preco_custo = db.Column(db.Numeric(10, 2), nullable=False)
-    preco_venda = db.Column(db.Numeric(10, 2), nullable=False)
-    margem_lucro = db.Column(db.Numeric(10, 2), nullable=True)
+    preco_custo = db.Column(db.Numeric(12, 2), nullable=False)
+    preco_venda = db.Column(db.Numeric(12, 2), nullable=False)
+    margem_lucro = db.Column(db.Numeric(12, 2), nullable=True)
 
     ncm = db.Column(db.String(8))
     origem = db.Column(db.Integer, default=0)
 
-    total_vendido = db.Column(db.Float, default=0.0)
+    total_vendido = db.Column(db.Numeric(12, 2), default=0.0)
     quantidade_vendida = db.Column(db.Numeric(10, 3), default=0.0)
     ultima_venda = db.Column(db.DateTime)
 
@@ -1008,7 +1045,7 @@ class Produto(db.Model):
         elif tipo == 'saida':
             self.quantidade -= quantidade
             self.quantidade_vendida += quantidade
-            self.total_vendido += float(self.preco_venda * quantidade)
+            self.total_vendido += (self.preco_venda * quantidade)
             self.ultima_venda = datetime.utcnow()
             
         # 3. Geração de Auditoria (Garante Integridade)
@@ -1511,13 +1548,14 @@ class ProdutoLote(db.Model):
     quantidade = db.Column(db.Numeric(10, 3), nullable=False)  # Quantidade atual no lote
     quantidade_inicial = db.Column(db.Numeric(10, 3), nullable=False)  # Quantidade quando recebido
     
+    data_fabricacao = db.Column(db.Date, nullable=True)
     data_validade = db.Column(db.Date, nullable=False)
     data_entrada = db.Column(db.Date, default=date.today, nullable=False)
     
     # Preço de custo (pode variar por lote)
-    preco_custo_unitario = db.Column(db.Numeric(10, 2), nullable=False)
+    preco_custo_unitario = db.Column(db.Numeric(12, 2), nullable=False)
     # Preço de venda do lote (promoção); se None, usa o preço do produto
-    preco_venda = db.Column(db.Numeric(10, 2), nullable=True)
+    preco_venda = db.Column(db.Numeric(12, 2), nullable=True)
 
     # Status
     ativo = db.Column(db.Boolean, default=True)  # False se lote foi descartado/devolvido
@@ -1612,7 +1650,7 @@ class ProdutoLote(db.Model):
 # ============================================
 
 
-class Venda(db.Model):
+class Venda(db.Model, MultiTenantMixin):
     __tablename__ = "vendas"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1631,13 +1669,13 @@ class Venda(db.Model):
 
     codigo = db.Column(db.String(50), nullable=False)
 
-    subtotal = db.Column(db.Numeric(10, 2), nullable=False, default=0)
-    desconto = db.Column(db.Numeric(10, 2), default=0)
-    total = db.Column(db.Numeric(10, 2), nullable=False, default=0)
+    subtotal = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    desconto = db.Column(db.Numeric(12, 2), default=0)
+    total = db.Column(db.Numeric(12, 2), nullable=False, default=0)
 
     forma_pagamento = db.Column(db.String(50), nullable=False)
-    valor_recebido = db.Column(db.Numeric(10, 2), default=0)
-    troco = db.Column(db.Numeric(10, 2), default=0)
+    valor_recebido = db.Column(db.Numeric(12, 2), default=0)
+    troco = db.Column(db.Numeric(12, 2), default=0)
 
     status = db.Column(db.String(20), default="finalizada")
 
@@ -1690,7 +1728,7 @@ class Venda(db.Model):
 # ============================================
 
 
-class VendaItem(db.Model):
+class VendaItem(db.Model, MultiTenantMixin):
     __tablename__ = "venda_itens"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1704,13 +1742,13 @@ class VendaItem(db.Model):
     produto_unidade = db.Column(db.String(20))
 
     quantidade = db.Column(db.Numeric(10, 3), nullable=False)
-    preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)
-    desconto = db.Column(db.Numeric(10, 2), default=0)
-    total_item = db.Column(db.Numeric(10, 2), nullable=False)
+    preco_unitario = db.Column(db.Numeric(12, 2), nullable=False)
+    desconto = db.Column(db.Numeric(12, 2), default=0)
+    total_item = db.Column(db.Numeric(12, 2), nullable=False)
 
-    custo_unitario = db.Column(db.Numeric(10, 2))
-    margem_item = db.Column(db.Numeric(10, 2))
-    margem_lucro_real = db.Column(db.Numeric(10, 2))  # Lucro real: (preco_venda - custo_atual) * quantidade
+    custo_unitario = db.Column(db.Numeric(12, 2))
+    margem_item = db.Column(db.Numeric(12, 2))
+    margem_lucro_real = db.Column(db.Numeric(12, 2))  # Lucro real: (preco_venda - custo_atual) * quantidade
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -1743,7 +1781,7 @@ class VendaItem(db.Model):
 # ============================================
 
 
-class Pagamento(db.Model):
+class Pagamento(db.Model, MultiTenantMixin):
     __tablename__ = "pagamentos"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1757,8 +1795,8 @@ class Pagamento(db.Model):
     )
 
     forma_pagamento = db.Column(db.String(50), nullable=False)
-    valor = db.Column(db.Numeric(10, 2), nullable=False)
-    troco = db.Column(db.Numeric(10, 2), default=0)
+    valor = db.Column(db.Numeric(12, 2), nullable=False)
+    troco = db.Column(db.Numeric(12, 2), default=0)
 
     status = db.Column(db.String(20), default="aprovado")
     data_pagamento = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1797,7 +1835,7 @@ class Pagamento(db.Model):
 # ============================================
 
 
-class MovimentacaoEstoque(db.Model):
+class MovimentacaoEstoque(db.Model, MultiTenantMixin):
     __tablename__ = "movimentacoes_estoque"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1870,7 +1908,7 @@ class MovimentacaoEstoque(db.Model):
 # ============================================
 
 
-class HistoricoPrecos(db.Model):
+class HistoricoPrecos(db.Model, MultiTenantMixin):
     """
     Tabela de auditoria para rastreamento de alterações de preços.
     
@@ -1955,7 +1993,7 @@ class HistoricoPrecos(db.Model):
 # ============================================
 
 
-class PedidoCompra(db.Model):
+class PedidoCompra(db.Model, MultiTenantMixin):
     __tablename__ = "pedidos_compra"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2029,7 +2067,7 @@ class PedidoCompra(db.Model):
 # ============================================
 
 
-class PedidoCompraItem(db.Model):
+class PedidoCompraItem(db.Model, MultiTenantMixin):
     __tablename__ = "pedido_compra_itens"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2043,12 +2081,12 @@ class PedidoCompraItem(db.Model):
     produto_nome = db.Column(db.String(100), nullable=False)
     produto_unidade = db.Column(db.String(20), default="UN")
 
-    quantidade_solicitada = db.Column(db.Integer, nullable=False)
-    quantidade_recebida = db.Column(db.Integer, default=0)
+    quantidade_solicitada = db.Column(db.Numeric(10, 3), nullable=False)
+    quantidade_recebida = db.Column(db.Numeric(10, 3), default=0)
 
-    preco_unitario = db.Column(db.Numeric(10, 2), nullable=False)
+    preco_unitario = db.Column(db.Numeric(12, 2), nullable=False)
     desconto_percentual = db.Column(db.Numeric(5, 2), default=0)
-    total_item = db.Column(db.Numeric(10, 2), nullable=False)
+    total_item = db.Column(db.Numeric(12, 2), nullable=False)
 
     status = db.Column(db.String(20), default="pendente")
 
@@ -2080,7 +2118,7 @@ class PedidoCompraItem(db.Model):
 # ============================================
 
 
-class ContaPagar(db.Model):
+class ContaPagar(db.Model, MultiTenantMixin):
     __tablename__ = "contas_pagar"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2097,9 +2135,9 @@ class ContaPagar(db.Model):
     numero_documento = db.Column(db.String(50), nullable=False)
     tipo_documento = db.Column(db.String(30), default="duplicata")
 
-    valor_original = db.Column(db.Numeric(10, 2), nullable=False)
-    valor_pago = db.Column(db.Numeric(10, 2), default=0)
-    valor_atual = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_original = db.Column(db.Numeric(12, 2), nullable=False)
+    valor_pago = db.Column(db.Numeric(12, 2), default=0)
+    valor_atual = db.Column(db.Numeric(12, 2), nullable=False)
 
     data_emissao = db.Column(db.Date, nullable=False)
     data_vencimento = db.Column(db.Date, nullable=False)
@@ -2154,7 +2192,7 @@ class ContaPagar(db.Model):
 # ============================================
 
 
-class ContaReceber(db.Model):
+class ContaReceber(db.Model, MultiTenantMixin):
     __tablename__ = "contas_receber"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2169,9 +2207,9 @@ class ContaReceber(db.Model):
     numero_documento = db.Column(db.String(50), nullable=False)
     tipo_documento = db.Column(db.String(30), default="duplicata")
 
-    valor_original = db.Column(db.Numeric(10, 2), nullable=False)
-    valor_recebido = db.Column(db.Numeric(10, 2), default=0)
-    valor_atual = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_original = db.Column(db.Numeric(12, 2), nullable=False)
+    valor_recebido = db.Column(db.Numeric(12, 2), default=0)
+    valor_atual = db.Column(db.Numeric(12, 2), nullable=False)
 
     data_emissao = db.Column(db.Date, nullable=False)
     data_vencimento = db.Column(db.Date, nullable=False)
@@ -2224,7 +2262,7 @@ class ContaReceber(db.Model):
 # ============================================
 
 
-class Despesa(db.Model):
+class Despesa(db.Model, MultiTenantMixin):
     __tablename__ = "despesas"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2239,7 +2277,7 @@ class Despesa(db.Model):
     categoria = db.Column(db.String(50), default="geral")
     tipo = db.Column(db.String(20), default="variavel")
 
-    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    valor = db.Column(db.Numeric(12, 2), nullable=False)
     data_despesa = db.Column(db.Date, nullable=False, default=date.today)
     data_emissao = db.Column(db.Date, nullable=True)      # Data do documento/nota
     data_vencimento = db.Column(db.Date, nullable=True)   # Prazo de pagamento
@@ -2339,7 +2377,7 @@ class LoginHistory(db.Model):
 # ============================================
 
 
-class Caixa(db.Model):
+class Caixa(db.Model, MultiTenantMixin):
     __tablename__ = "caixas"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2354,9 +2392,9 @@ class Caixa(db.Model):
 
     numero_caixa = db.Column(db.String(20), nullable=False)
 
-    saldo_inicial = db.Column(db.Numeric(10, 2), nullable=False)
-    saldo_final = db.Column(db.Numeric(10, 2))
-    saldo_atual = db.Column(db.Numeric(10, 2))
+    saldo_inicial = db.Column(db.Numeric(12, 2), nullable=False)
+    saldo_final = db.Column(db.Numeric(12, 2))
+    saldo_atual = db.Column(db.Numeric(12, 2))
 
     data_abertura = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     data_fechamento = db.Column(db.DateTime)
@@ -2403,7 +2441,7 @@ class Caixa(db.Model):
 # ============================================
 
 
-class MovimentacaoCaixa(db.Model):
+class MovimentacaoCaixa(db.Model, MultiTenantMixin):
     __tablename__ = "movimentacoes_caixa"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2417,7 +2455,7 @@ class MovimentacaoCaixa(db.Model):
     )
 
     tipo = db.Column(db.String(20), nullable=False)
-    valor = db.Column(db.Numeric(10, 2), nullable=False)
+    valor = db.Column(db.Numeric(12, 2), nullable=False)
     forma_pagamento = db.Column(db.String(50))
 
     venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
@@ -2459,7 +2497,7 @@ class MovimentacaoCaixa(db.Model):
 # ============================================
 
 
-class DashboardMetrica(db.Model):
+class DashboardMetrica(db.Model, MultiTenantMixin):
     __tablename__ = "dashboard_metricas"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2470,9 +2508,9 @@ class DashboardMetrica(db.Model):
     )
     data_referencia = db.Column(db.Date, nullable=False)
 
-    total_vendas_dia = db.Column(db.Numeric(10, 2), default=0)
+    total_vendas_dia = db.Column(db.Numeric(12, 2), default=0)
     quantidade_vendas_dia = db.Column(db.Integer, default=0)
-    ticket_medio_dia = db.Column(db.Numeric(10, 2), default=0)
+    ticket_medio_dia = db.Column(db.Numeric(12, 2), default=0)
     clientes_atendidos_dia = db.Column(db.Integer, default=0)
 
     total_vendas_mes = db.Column(db.Numeric(12, 2), default=0)
@@ -2537,7 +2575,7 @@ class DashboardMetrica(db.Model):
 # ============================================
 
 
-class RelatorioAgendado(db.Model):
+class RelatorioAgendado(db.Model, MultiTenantMixin):
     __tablename__ = "relatorios_agendados"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2625,7 +2663,7 @@ ItemVenda = VendaItem
 # SISTEMA DE CONTROLE DE PONTO
 # ============================================
 
-class RegistroPonto(db.Model):
+class RegistroPonto(db.Model, MultiTenantMixin):
     """Modelo para registro de ponto dos funcionários"""
     __tablename__ = "registros_ponto"
 
@@ -2914,7 +2952,7 @@ def load_user_from_request(request):
 # 30. AUDITORIA E MONITORAMENTO GLOBAL (SaaS)
 # ============================================
 
-class Auditoria(db.Model):
+class Auditoria(db.Model, MultiTenantMixin):
     """
     Tabela central para logs de auditoria e monitoramento em tempo real.
     Permite ao Super Admin acompanhar vendas, cadastros e movimentações
@@ -2981,4 +3019,65 @@ class Auditoria(db.Model):
                 current_app.logger.error(f"Erro ao registrar auditoria: {str(e)}")
             else:
                 print(f"Erro ao registrar auditoria (sem context): {str(e)}")
+            return False
+
+
+# ============================================
+# 31. FILA DE SINCRONIZAÇÃO (OFFLINE-FIRST)
+# ============================================
+
+class AuditoriaSincronia(db.Model, MultiTenantMixin):
+    """
+    Tabela central para o motor de sincronização (Sync Engine).
+    Registra mutações locais (INSERT, UPDATE, DELETE) para envio posterior
+    ao banco de dados em nuvem. Essencial para operação Offline no Amazonas.
+    """
+    __tablename__ = "auditoria_sincronia"
+
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    
+    tabela = db.Column(db.String(50), nullable=False)
+    registro_id = db.Column(db.Integer, nullable=False)
+    operacao = db.Column(db.String(10), nullable=False)  # INSERT, UPDATE, DELETE
+    
+    # Payload em JSON com o estado do objeto para reconstrução na nuvem
+    payload_json = db.Column(db.Text, nullable=False)
+    
+    # Status: pendente, sincronizado, erro
+    status = db.Column(db.String(20), default="pendente")
+    tentativas = db.Column(db.Integer, default=0)
+    msg_erro = db.Column(db.Text)
+    
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_sincronia = db.Column(db.DateTime)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tabela": self.tabela,
+            "operacao": self.operacao,
+            "status": self.status,
+            "data_criacao": self.data_criacao.isoformat(),
+            "tentativas": self.tentativas
+        }
+
+    @classmethod
+    def registrar_mutacao(cls, estabelecimento_id, tabela, registro_id, operacao, payload):
+        """Registra uma mudança para ser sincronizada"""
+        try:
+            nova_sinc = cls(
+                estabelecimento_id=estabelecimento_id,
+                tabela=tabela,
+                registro_id=registro_id,
+                operacao=operacao,
+                payload_json=json.dumps(payload, default=str)
+            )
+            db.session.add(nova_sinc)
+            return True
+        except Exception:
             return False

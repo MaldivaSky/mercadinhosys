@@ -349,7 +349,7 @@ class DashboardOrchestrator:
             "gross_margin": gross_margin,
             "net_margin": net_margin,
             "roi": roi,
-            "count": int(financials_data.get("count", 0))
+            "count": int(sales_current_summary.get("total_vendas", 0))
         }
 
 
@@ -437,17 +437,21 @@ class DashboardOrchestrator:
             _logger.warning(f"Erro ao detectar tendência de vendas: {e}")
             sales_trend = {"direction": "neutral", "slope": 0, "is_statistically_significant": False}
         
-        # 🔥 NOVO: Calcular correlações estatísticas
+        # 🔥 NOVO: Calcular correlações estatísticas (Blindado contra TypeError/ValueError)
+        correlations = []
         try:
-            correlations = _PM.calculate_correlations(sales_timeseries, expense_details, establishment_id=self.establishment_id)
+            if sales_timeseries and expense_details:
+                correlations = _PM.calculate_correlations(sales_timeseries, expense_details, establishment_id=self.establishment_id)
         except Exception as e:
             _logger.warning(f"Erro ao calcular correlações: {e}")
-            correlations = []
         
-        # 🔥 NOVO: Detectar anomalias
+        # 🔥 NOVO: Detectar anomalias (Blindado)
+        anomalies = []
         try:
-            anomalies = _PM.detect_anomalies(sales_timeseries, expense_details)
+            if sales_timeseries:
+                anomalies = _PM.detect_anomalies(sales_timeseries, expense_details)
         except Exception as e:
+            _logger.warning(f"Erro ao detectar anomalias: {e}")
             _logger.warning(f"Erro ao detectar anomalias: {e}")
             anomalies = []
 

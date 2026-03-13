@@ -6,9 +6,11 @@ import {
     CreditCard, FileText, UserCog, Briefcase, Clock, Truck
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
+import { useAuth } from '../../contexts/AuthContext';
 import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
-import { API_CONFIG } from '../../api/apiConfig';
+import EstablishmentSelector from '../EstablishmentSelector';
+
 
 const mobileMenuItems = [
     { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -48,58 +50,29 @@ const HeaderProfessional = () => {
         return checks;
     }, [newPassword, confirmPassword]);
     const navigate = useNavigate();
-    const { config, updateConfig } = useConfig();
-
-    const user = useMemo(() => {
-        try {
-            return JSON.parse(localStorage.getItem('user_data') || '{}');
-        } catch {
-            return {};
-        }
-    }, []);
+    const { updatePreferencias, isDark, config } = useConfig();
+    const { user, logout } = useAuth();
 
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
-    const [editNome, setEditNome] = useState<string>(typeof user.nome === 'string' ? user.nome : '');
-    const [editEmail, setEditEmail] = useState<string>(typeof user.email === 'string' ? user.email : '');
-    const [editTelefone, setEditTelefone] = useState<string>(typeof user.telefone === 'string' ? user.telefone : '');
-    const [editFotoUrl, setEditFotoUrl] = useState<string>(typeof user.foto_url === 'string' ? user.foto_url : '');
+    const [editNome, setEditNome] = useState<string>(user?.nome ?? '');
+    const [editEmail, setEditEmail] = useState<string>(user?.email ?? '');
+    const [editTelefone, setEditTelefone] = useState<string>(user?.telefone ?? '');
+    const [editFotoUrl, setEditFotoUrl] = useState<string>(user?.foto_url ?? '');
     const [savingProfile, setSavingProfile] = useState(false);
     const [profileError, setProfileError] = useState<string | null>(null);
     const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
     const userInitial = useMemo(() => {
-        return user.nome ? user.nome.charAt(0).toUpperCase() : 'U';
-    }, [user.nome]);
+        return user?.nome ? user.nome.charAt(0).toUpperCase() : 'U';
+    }, [user?.nome]);
 
     // Calcular logo URL dinamicamente baseado no config
-    const logoUrl = useMemo(() => {
-        // Preferir base64 quando disponível (evita mixed content)
-        if (config?.logo_base64) {
-            return config.logo_base64;
-        }
-        if (!config?.logo_url) {
-            return logo;
-        }
-
-        // Se for base64 (preview), usar direto
-        if (config.logo_url.startsWith('data:')) {
-            return config.logo_url;
-        }
-
-        // Se for URL do servidor
-        if (config.logo_url.startsWith('http')) {
-            return config.logo_url;
-        }
-
-        // Se for caminho relativo, anexar à origem do backend (sem /api)
-        const apiOrigin = API_CONFIG.BASE_URL.replace(/\/api$/, '');
-        return `${apiOrigin}${config.logo_url}`;
-    }, [config?.logo_url, config?.logo_base64]);
+    const logoUrl = config?.logo_url || '/assets/logo.png';
 
     const toggleTheme = async () => {
         try {
-            await updateConfig({ tema_escuro: !config?.tema_escuro });
+            await updatePreferencias({ tema_escuro: !isDark });
         } catch (error) {
             console.error('Erro ao alternar tema:', error);
         }
@@ -108,7 +81,7 @@ const HeaderProfessional = () => {
     const handleLogout = () => {
         setUserMenuOpen(false);
         setMobileMenuOpen(false);
-        authService.logout();
+        logout();
         navigate('/login');
     };
 
@@ -158,10 +131,10 @@ const HeaderProfessional = () => {
         setSavingProfile(true);
         try {
             const payload: { nome?: string; email?: string; telefone?: string; foto_url?: string } = {};
-            if (editNome !== user.nome) payload.nome = editNome.trim();
-            if (editEmail !== user.email) payload.email = editEmail.trim();
-            if (editTelefone !== user.telefone) payload.telefone = editTelefone.trim();
-            if (editFotoUrl !== user.foto_url) payload.foto_url = editFotoUrl.trim();
+            if (editNome !== user?.nome) payload.nome = editNome.trim();
+            if (editEmail !== user?.email) payload.email = editEmail.trim();
+            if (editTelefone !== user?.telefone) payload.telefone = editTelefone.trim();
+            if (editFotoUrl !== user?.foto_url) payload.foto_url = editFotoUrl.trim();
             const result = await authService.updateProfile(payload);
             const updated = { ...user, ...result.data };
             localStorage.setItem('user_data', JSON.stringify(updated));
@@ -198,13 +171,24 @@ const HeaderProfessional = () => {
 
                         {/* Desktop Actions */}
                         <div className="hidden md:flex items-center gap-3">
+                            {/* Log de Auditoria Super-Admin */}
+                            {(() => {
+                                if (user?.is_super_admin) {
+                                    console.log("👑 Super-Admin detectado no HeaderProfessional");
+                                }
+                                return null;
+                            })()}
+
+                            {user?.is_super_admin && (
+                                <EstablishmentSelector className="mr-2" />
+                            )}
                             {/* Theme Toggle */}
                             <button
                                 onClick={toggleTheme}
                                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                 title="Alternar tema"
                             >
-                                {config?.tema_escuro ? (
+                                {isDark ? (
                                     <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                                 ) : (
                                     <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -217,10 +201,10 @@ const HeaderProfessional = () => {
                                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                                     className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                                 >
-                                    {user.foto_url ? (
+                                    {user?.foto_url ? (
                                         <img
                                             src={user.foto_url}
-                                            alt={user.nome}
+                                            alt={user?.nome || 'Usuário'}
                                             className="w-8 h-8 rounded-full object-cover"
                                         />
                                     ) : (
@@ -229,7 +213,7 @@ const HeaderProfessional = () => {
                                         </div>
                                     )}
                                     <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                        {user.nome || 'Usuário'}
+                                        {user?.nome || 'Usuário'}
                                     </span>
                                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                                 </button>
@@ -245,13 +229,13 @@ const HeaderProfessional = () => {
                                             {/* User Info */}
                                             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                                                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                                    {user.nome || 'Usuário'}
+                                                    {user?.nome || 'Usuário'}
                                                 </p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                    {user.email || user.usuario || 'Sem email'}
+                                                    {user?.email || user?.username || 'Sem email'}
                                                 </p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                    {user.cargo || user.role || 'Cargo não definido'}
+                                                    {user?.cargo || user?.role || 'Cargo não definido'}
                                                 </p>
                                             </div>
 
@@ -314,7 +298,7 @@ const HeaderProfessional = () => {
                                 <p className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Menu</p>
                                 <ul className="space-y-0.5">
                                     {mobileMenuItems.filter(item => {
-                                        const role = user.role?.toLowerCase();
+                                        const role = user?.role?.toLowerCase();
                                         if (role === 'caixa' && item.to !== '/pdv' && item.to !== '/settings') return false;
                                         return true;
                                     }).map((item) => (
@@ -338,10 +322,10 @@ const HeaderProfessional = () => {
                             </nav>
                             <div className="border-t border-gray-200 dark:border-gray-800 my-2" />
                             <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                                {user.foto_url ? (
+                                {user?.foto_url ? (
                                     <img
                                         src={user.foto_url}
-                                        alt={user.nome}
+                                        alt={user.nome || 'Usuário'}
                                         className="w-10 h-10 rounded-full object-cover"
                                     />
                                 ) : (
@@ -351,10 +335,10 @@ const HeaderProfessional = () => {
                                 )}
                                 <div>
                                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {user.nome || 'Usuário'}
+                                        {user?.nome || 'Usuário'}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {user.cargo || user.role || 'Cargo não definido'}
+                                        {user?.cargo || user?.role || 'Cargo não definido'}
                                     </p>
                                 </div>
                             </div>
@@ -364,8 +348,8 @@ const HeaderProfessional = () => {
                                     onClick={toggleTheme}
                                     className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                                 >
-                                    {config?.tema_escuro ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                                    {config?.tema_escuro ? 'Tema Claro' : 'Tema Escuro'}
+                                    {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                                    {isDark ? 'Tema Claro' : 'Tema Escuro'}
                                 </button>
 
                                 <button
@@ -420,7 +404,7 @@ const HeaderProfessional = () => {
                         </div>
                         <div className="px-5 py-4 space-y-4">
                             <div className="flex items-center gap-3">
-                                {user.foto_url ? (
+                                {user?.foto_url ? (
                                     <img src={user.foto_url} alt={user.nome} className="w-12 h-12 rounded-full object-cover" />
                                 ) : (
                                     <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
@@ -429,20 +413,20 @@ const HeaderProfessional = () => {
                                 )}
                                 <div>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">Nome</p>
-                                    <p className="font-medium text-gray-900 dark:text-white">{user.nome || '-'}</p>
+                                    <p className="font-medium text-gray-900 dark:text-white">{user?.nome || '-'}</p>
                                 </div>
                             </div>
                             <div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Username</p>
-                                <p className="font-medium text-gray-900 dark:text-white">{user.username || user.usuario || '-'}</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user?.username || user?.usuario || '-'}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
-                                <p className="font-medium text-gray-900 dark:text-white">{user.email || '-'}</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user?.email || '-'}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Nível de Permissão</p>
-                                <p className="font-medium text-gray-900 dark:text-white">{user.role || user.cargo || '-'}</p>
+                                <p className="font-medium text-gray-900 dark:text-white">{user?.role || user?.cargo || '-'}</p>
                             </div>
 
                             <div className="pt-2 border-t border-gray-200 dark:border-gray-700">

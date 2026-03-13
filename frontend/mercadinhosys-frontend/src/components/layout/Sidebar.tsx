@@ -65,7 +65,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                         const role = user?.role?.toLowerCase();
                         const isSuperAdmin = user?.is_super_admin || false;
 
-                        // Rotas restritas ao Super Admin (Dono do SaaS)
+                        // ====================================================================
+                        // BARRARIA DE SEGURANÇA SaaS: Apenas Super Admins podem ver
+                        // rotas de administração global do sistema (Leads, Estabelecimentos, Monitor)
+                        // Tenant Admins (role='admin') NÃO devem ver estas opções
+                        // ====================================================================
                         if (['/estabelecimentos', '/leads', '/monitor'].includes(item.to) && !isSuperAdmin) {
                             return false;
                         }

@@ -30,15 +30,15 @@ def make_dashboard_cache_key():
 
 def get_establishment_id():
     """
-    Obtém ID do estabelecimento diretamente das Claims do JWT (sem consulta ao banco).
-    Garante integridade e performance.
+    Obtém ID do estabelecimento de forma inteligente:
+    - Se for Super-Admin, permite Header 'X-Establishment-ID'.
+    - Caso contrário, usa Claims do JWT.
     """
-    claims = get_jwt()
-    est_id = claims.get("estabelecimento_id")
+    from app.utils.query_helpers import get_authorized_establishment_id
+    est_id = get_authorized_establishment_id()
     
     if est_id is None:
-        # Fallback apenas para logs de erro, não tenta query no banco
-        raise ValueError("Token inválido: estabelecimento_id não encontrado nas claims")
+        raise ValueError("Token ou Contexto inválido: estab_id não encontrado")
         
     return int(est_id)
 

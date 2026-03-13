@@ -60,6 +60,28 @@ apiClient.interceptors.request.use(
         if (token && token !== 'undefined' && token !== 'null') {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // Injeção de Contexto Super-Admin (Impersonation)
+        const selectedEstabId = localStorage.getItem('selected_establishment_id');
+        if (selectedEstabId) {
+            config.headers['X-Establishment-ID'] = selectedEstabId;
+        }
+
+        const superAdminTenantId = localStorage.getItem('mercadinhosys_superadmin_tenant');
+        if (superAdminTenantId) {
+            config.headers['X-Impersonate-Tenant-Id'] = superAdminTenantId;
+        }
+
+        // Debug log para upload de logo
+        if (config.url?.includes('logo')) {
+            console.log('🚀 Upload Request:', {
+                method: config.method,
+                url: config.baseURL + config.url,
+                hasToken: !!token,
+                hasFile: !!config.data
+            });
+        }
+
         return config;
     },
     (error) => Promise.reject(error)

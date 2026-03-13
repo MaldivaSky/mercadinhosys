@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { toast } from 'react-hot-toast';
+import { useSuperAdmin } from '../../contexts/SuperAdminContext';
 
 interface Log {
     id: number;
@@ -67,6 +68,9 @@ const SystemMonitorPage: React.FC = () => {
     const [filterType, setFilterType] = useState<string>('');
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Integração do Seletor Global (Context API)
+    const { selectedTenantId, setSelectedTenantId, syncStatus } = useSuperAdmin();
+
     // Onboarding Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -94,13 +98,12 @@ const SystemMonitorPage: React.FC = () => {
     const fetchData = useCallback(async () => {
         try {
             const requests = [
-                apiClient.get('/saas/monitor/logs'),
-                apiClient.get('/saas/monitor/summary')
+                apiClient.get(`/saas/monitor/logs?estab_id=${selectedTenantId}`),
+                apiClient.get(`/saas/monitor/summary?estab_id=${selectedTenantId}`)
             ];
 
-            if (activeTab === 'tenants') {
-                requests.push(apiClient.get('/saas/monitor/establishments'));
-            }
+            // Sempre carrega os estabelecimentos para popular o Dropdown
+            requests.push(apiClient.get('/saas/monitor/establishments'));
 
             const results = await Promise.all(requests);
 
@@ -232,7 +235,31 @@ const SystemMonitorPage: React.FC = () => {
                         <Shield className="text-indigo-600" />
                         Centro de Comando SaaS
                     </h1>
-                    <p className="text-gray-500 font-medium">Gestão Estratégica & Monitoramento Global</p>
+                    <div className="flex items-center gap-3 mt-1 text-sm">
+                        <span className="text-gray-500 font-medium">Gestão Estratégica & Monitoramento Local</span>
+                        {/* Seletor Global de Inquilino */}
+                        <select
+                            value={selectedTenantId}
+                            onChange={(e) => {
+                                setSelectedTenantId(e.target.value);
+                                // A atualização do Contexto vai engatilhar o useEffect via fetchData
+                            }}
+                            className="bg-indigo-50 border border-indigo-100 text-indigo-700 font-black px-3 py-1 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer shadow-sm"
+                        >
+                            <option value="all">🌍 MODO HOLDING: Consolidado Global</option>
+                            {establishments.map(est => (
+                                <option key={est.id} value={est.id}>
+                                    🏢 Cliente: {est.nome_fantasia} (ID: {est.id})
+                                </option>
+                            ))}
+                        </select>
+                        {selectedTenantId !== 'all' && (
+                            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg text-[10px] uppercase font-black tracking-wider">
+                                <span className={`w-1.5 h-1.5 rounded-full ${syncStatus.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}></span>
+                                Sincronizado: Hoje
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-3">
