@@ -39,7 +39,7 @@ const DownloadPage: React.FC = () => {
         descricao: 'Perfeito para pequenos comércios',
         features: [
           'Até 20 clientes',
-          'Até 10 fornecedores', 
+          'Até 10 fornecedores',
           'Até 100 produtos',
           'Até 5 funcionários',
           'PDV básico',
@@ -67,7 +67,7 @@ const DownloadPage: React.FC = () => {
         features: [
           'Até 100 clientes',
           'Até 50 fornecedores',
-          'Até 1000 produtos', 
+          'Até 1000 produtos',
           'Até 20 funcionários',
           'PDV completo',
           'Dashboard avançado',
@@ -124,19 +124,18 @@ const DownloadPage: React.FC = () => {
 
   const detectarSistemaOperacional = () => {
     const userAgent = navigator.userAgent.toLowerCase();
-    
+
     if (userAgent.includes('win')) return 'windows';
     if (userAgent.includes('mac')) return 'mac';
     if (userAgent.includes('linux')) return 'linux';
-    
+
     // Fallback para sistemas menos comuns
     if (userAgent.includes('ubuntu') || userAgent.includes('debian')) return 'linux';
-    
+
     return 'windows'; // Default
   };
 
   const sistemaOperacional = detectarSistemaOperacional();
-  const planoAtual = planos.find(p => p.id === planoSelecionado);
 
   const handleDownload = async (plano: Plano) => {
     try {
@@ -154,7 +153,7 @@ const DownloadPage: React.FC = () => {
       });
 
       toast.success(`Download do plano ${plano.nome} iniciado!`);
-      
+
       // Simular início do download
       const link = document.createElement('a');
       link.href = '#'; // Em produção seria URL real do arquivo
@@ -164,7 +163,7 @@ const DownloadPage: React.FC = () => {
       document.body.removeChild(link);
 
       setBaixando(null);
-      
+
     } catch (error) {
       console.error('Erro no download:', error);
       toast.error('Erro ao iniciar download. Tente novamente.');
@@ -204,11 +203,10 @@ const DownloadPage: React.FC = () => {
           {planos.map((plano) => (
             <div
               key={plano.id}
-              className={`relative bg-white rounded-2xl shadow-lg p-8 border-2 transition-all duration-300 hover:shadow-xl cursor-pointer ${
-                planoSelecionado === plano.id
+              className={`relative bg-white rounded-2xl shadow-lg p-8 border-2 transition-all duration-300 hover:shadow-xl cursor-pointer ${planoSelecionado === plano.id
                   ? 'border-blue-500 ring-4 ring-blue-200'
                   : 'border-gray-200 hover:border-gray-300'
-              }`}
+                }`}
               onClick={() => setPlanoSelecionado(plano.id)}
             >
               {/* Badge Popular */}
@@ -250,25 +248,22 @@ const DownloadPage: React.FC = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Clientes:</span>
-                    <span className={`font-medium ${
-                      plano.limites.clientes === -1 ? 'text-green-600' : 'text-gray-900'
-                    }`}>
+                    <span className={`font-medium ${plano.limites.clientes === -1 ? 'text-green-600' : 'text-gray-900'
+                      }`}>
                       {plano.limites.clientes === -1 ? 'Ilimitados' : plano.limites.clientes}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Fornecedores:</span>
-                    <span className={`font-medium ${
-                      plano.limites.fornecedores === -1 ? 'text-green-600' : 'text-gray-900'
-                    }`}>
+                    <span className={`font-medium ${plano.limites.fornecedores === -1 ? 'text-green-600' : 'text-gray-900'
+                      }`}>
                       {plano.limites.fornecedores === -1 ? 'Ilimitados' : plano.limites.fornecedores}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Produtos:</span>
-                    <span className={`font-medium ${
-                      plano.limites.produtos === -1 ? 'text-green-600' : 'text-gray-900'
-                    }`}>
+                    <span className={`font-medium ${plano.limites.produtos === -1 ? 'text-green-600' : 'text-gray-900'
+                      }`}>
                       {plano.limites.produtos === -1 ? 'Ilimitados' : plano.limites.produtos}
                     </span>
                   </div>
@@ -321,7 +316,7 @@ const DownloadPage: React.FC = () => {
               Downloads verificados e livres de vírus. Instalação em menos de 5 minutos.
             </p>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-md p-6">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
               <Users className="w-5 h-5 mr-2 text-blue-500" />
@@ -331,7 +326,7 @@ const DownloadPage: React.FC = () => {
               Suporte especializado para instalação e configuração do sistema.
             </p>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-md p-6">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
               <Database className="w-5 h-5 mr-2 text-purple-500" />

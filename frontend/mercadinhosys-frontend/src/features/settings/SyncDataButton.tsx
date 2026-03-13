@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, Cloud, CheckCircle2, AlertCircle } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import { showToast } from '../../components/elements/Toast';
 

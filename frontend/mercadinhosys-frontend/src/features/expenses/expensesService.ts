@@ -69,6 +69,8 @@ export interface ResumoFinanceiro {
         pressao_caixa_diaria: number;
         venda_media_diaria: number;
         vence_hoje_valor: number;
+        alavancagem_operacional: number;
+        ponto_equilibrio: number;
     };
     contas_pagar: {
         total_aberto: number;

@@ -1,6 +1,6 @@
 // src/features/saas/SuperAdminDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Package, DollarSign, TrendingUp, Eye, ChevronDown } from 'lucide-react';
+import { Building2, Users, Package, DollarSign, Eye, ChevronDown } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import toast from 'react-hot-toast';
 
@@ -36,11 +36,11 @@ const SuperAdminDashboard: React.FC = () => {
             if (response.data?.success) {
                 const estabs = response.data.estabelecimentos || [];
                 setEstabelecimentos(estabs);
-                
+
                 // Selecionar o primeiro por padrão
                 if (estabs.length > 0 && !estabelecimentoSelecionado) {
                     setEstabelecimentoSelecionado(estabs[0]);
-                    toast.success(f'Estabelecimento {estabs[0].nome_fantasia} selecionado');
+                    toast.success(`Estabelecimento ${estabs[0].nome_fantasia} selecionado`);
                 }
             }
         } catch (error) {
@@ -53,7 +53,7 @@ const SuperAdminDashboard: React.FC = () => {
     const handleSelectEstabelecimento = (estabelecimento: Estabelecimento) => {
         setEstabelecimentoSelecionado(estabelecimento);
         setIsDropdownOpen(false);
-        toast.success(f'Estabelecimento {estabelecimento.nome_fantasia} selecionado');
+        toast.success(`Estabelecimento ${estabelecimento.nome_fantasia} selecionado`);
     };
 
     if (loading) {
@@ -77,7 +77,7 @@ const SuperAdminDashboard: React.FC = () => {
                             <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                                 Super Admin Dashboard
                             </h1>
-                            
+
                             {/* SELETOR DE ESTABELECIMENTOS - VISÍVEL */}
                             <div className="relative">
                                 <button
@@ -90,7 +90,7 @@ const SuperAdminDashboard: React.FC = () => {
                                     </span>
                                     <ChevronDown className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </button>
-                                
+
                                 {/* Dropdown */}
                                 {isDropdownOpen && (
                                     <div className="absolute top-full left-0 mt-1 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
@@ -103,11 +103,10 @@ const SuperAdminDashboard: React.FC = () => {
                                                     <button
                                                         key={estabelecimento.id}
                                                         onClick={() => handleSelectEstabelecimento(estabelecimento)}
-                                                        className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                                                            estabelecimentoSelecionado?.id === estabelecimento.id
-                                                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                                                : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                        }`}
+                                                        className={`w-full text-left px-3 py-2 rounded-md transition-colors ${estabelecimentoSelecionado?.id === estabelecimento.id
+                                                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                            }`}
                                                     >
                                                         <div className="font-medium">{estabelecimento.nome_fantasia}</div>
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -121,7 +120,7 @@ const SuperAdminDashboard: React.FC = () => {
                                 )}
                             </div>
                         </div>
-                        
+
                         {/* INDICADOR VISUAL DO ESTABELECIMENTO ATUAL */}
                         {estabelecimentoSelecionado && (
                             <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -141,41 +140,37 @@ const SuperAdminDashboard: React.FC = () => {
                     <div className="flex space-x-8 py-3">
                         <button
                             onClick={() => setView('overview')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                view === 'overview' 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${view === 'overview'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
                         >
                             Overview
                         </button>
                         <button
                             onClick={() => setView('estabelecimentos')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                view === 'estabelecimentos' 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${view === 'estabelecimentos'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
                         >
                             Estabelecimentos
                         </button>
                         <button
                             onClick={() => setView('clientes')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                view === 'clientes' 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${view === 'clientes'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
                         >
                             Clientes SaaS
                         </button>
                         <button
                             onClick={() => setView('financeiro')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                view === 'financeiro' 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${view === 'financeiro'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
                         >
                             Financeiro
                         </button>

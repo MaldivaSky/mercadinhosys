@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Package, Clock, CheckCircle, MapPin, Phone, User } from 'lucide-react';
+import { Truck, Package, Clock, CheckCircle, MapPin, Phone } from 'lucide-react';
 import { apiClient } from '../api/apiClient';
 import toast from 'react-hot-toast';
 
@@ -40,7 +40,7 @@ const DeliveryPage: React.FC = () => {
                 status: statusFiltro,
                 busca: filtro
             });
-            
+
             const response = await apiClient.get(`/deliveries?${params}`);
             if (response.data?.success) {
                 setDeliveries(response.data.deliveries);
@@ -103,7 +103,7 @@ const DeliveryPage: React.FC = () => {
                                 Gerencie todas as entregas
                             </p>
                         </div>
-                        
+
                         {/* Filtros */}
                         <div className="flex items-center space-x-4">
                             <input
@@ -113,7 +113,7 @@ const DeliveryPage: React.FC = () => {
                                 placeholder="Buscar entregas..."
                                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                             />
-                            
+
                             <select
                                 value={statusFiltro}
                                 onChange={(e) => setStatusFiltro(e.target.value)}
@@ -168,7 +168,7 @@ const DeliveryPage: React.FC = () => {
                                                     {formatarData(delivery.data_pedido)}
                                                 </div>
                                             </td>
-                                            
+
                                             <td className="px-6 py-4">
                                                 <div className="text-sm">
                                                     <div className="font-medium text-gray-900">
@@ -184,30 +184,30 @@ const DeliveryPage: React.FC = () => {
                                                     </div>
                                                 </div>
                                             </td>
-                                            
+
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(delivery.status)}`}>
                                                     {getStatusText(delivery.status)}
                                                 </span>
                                             </td>
-                                            
+
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-900">
                                                     {formatarData(delivery.data_entrega)}
                                                 </div>
                                             </td>
-                                            
+
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">
                                                     {formatarMoeda(delivery.valor_total)}
                                                 </div>
                                             </td>
-                                            
+
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <button
                                                     onClick={() => {
                                                         // Em produção abriria modal com detalhes
-                                                        toast.info(`Detalhes do pedido ${delivery.numero_pedido}`);
+                                                        toast.success(`Detalhes do pedido ${delivery.numero_pedido}`);
                                                     }}
                                                     className="text-blue-600 hover:text-blue-900"
                                                 >
@@ -235,7 +235,7 @@ const DeliveryPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="bg-white rounded-lg shadow-sm p-6">
                         <div className="flex items-center">
                             <Clock className="w-8 h-8 text-yellow-600 mr-3" />
@@ -247,7 +247,7 @@ const DeliveryPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="bg-white rounded-lg shadow-sm p-6">
                         <div className="flex items-center">
                             <Truck className="w-8 h-8 text-purple-600 mr-3" />
@@ -259,7 +259,7 @@ const DeliveryPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="bg-white rounded-lg shadow-sm p-6">
                         <div className="flex items-center">
                             <CheckCircle className="w-8 h-8 text-green-600 mr-3" />

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { apiClient } from '../api/apiClient';
 import toast from 'react-hot-toast';
 
-interface Estabelecimento {
+export interface Estabelecimento {
     id: number;
     nome_fantasia: string;
     razao_social: string;
@@ -52,8 +52,8 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
     useEffect(() => {
         if (estabelecimentoAtual) {
             localStorage.setItem('estabelecimentoSelecionado', JSON.stringify(estabelecimentoAtual));
-            window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', { 
-                detail: estabelecimentoAtual 
+            window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', {
+                detail: estabelecimentoAtual
             }));
         }
     }, [estabelecimentoAtual]);
@@ -61,12 +61,12 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
     useEffect(() => {
         const salvo = localStorage.getItem('estabelecimentoSelecionado');
         const userStr = localStorage.getItem('user');
-        
+
         if (salvo) {
             const estab = JSON.parse(salvo);
             setEstabelecimentoAtual(estab);
         }
-        
+
         if (userStr) {
             const user = JSON.parse(userStr);
             setIsSuperAdmin(user.is_super_admin || false);
@@ -80,7 +80,7 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
             if (response.data?.success) {
                 const estabs = response.data.estabelecimentos || [];
                 setEstabelecimentos(estabs);
-                
+
                 const salvo = localStorage.getItem('estabelecimentoSelecionado');
                 if (!salvo && estabs.length > 0) {
                     setEstabelecimentoAtual(estabs[0]);
@@ -101,8 +101,8 @@ export const EstabelecimentoProvider: React.FC<{ children: ReactNode }> = ({ chi
     const handleClearEstabelecimento = () => {
         setEstabelecimentoAtual(null);
         localStorage.removeItem('estabelecimentoSelecionado');
-        window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', { 
-            detail: null 
+        window.dispatchEvent(new CustomEvent('estabelecimentoAlterado', {
+            detail: null
         }));
     };
 

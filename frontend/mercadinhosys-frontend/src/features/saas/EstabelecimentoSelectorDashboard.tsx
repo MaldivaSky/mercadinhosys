@@ -1,7 +1,6 @@
-
 // src/features/saas/EstabelecimentoSelectorDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Package, DollarSign, TrendingUp, Eye, ArrowLeft } from 'lucide-react';
+import { Eye, ArrowLeft } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
 import toast from 'react-hot-toast';
 
@@ -35,7 +34,7 @@ const EstabelecimentoSelectorDashboard: React.FC = () => {
             if (response.data?.success) {
                 const estabs = response.data.estabelecimentos || [];
                 setEstabelecimentos(estabs);
-                
+
                 if (estabs.length > 0 && !estabelecimentoSelecionado) {
                     setEstabelecimentoSelecionado(estabs[0]);
                 }
@@ -49,7 +48,7 @@ const EstabelecimentoSelectorDashboard: React.FC = () => {
 
     const handleSelectEstabelecimento = (estabelecimento: Estabelecimento) => {
         setEstabelecimentoSelecionado(estabelecimento);
-        toast.success(f'Estabelecimento {estabelecimento.nome_fantasia} selecionado');
+        toast.success(`Estabelecimento ${estabelecimento.nome_fantasia} selecionado`);
     };
 
     const handleAcessarSistema = () => {
@@ -112,13 +111,12 @@ const EstabelecimentoSelectorDashboard: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {estabelecimentos.map((estabelecimento) => (
-                        <div 
-                            key={estabelecimento.id} 
-                            className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 cursor-pointer transition-all ${
-                                estabelecimentoSelecionado?.id === estabelecimento.id
-                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                            }`}
+                        <div
+                            key={estabelecimento.id}
+                            className={`bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 cursor-pointer transition-all ${estabelecimentoSelecionado?.id === estabelecimento.id
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                }`}
                             onClick={() => handleSelectEstabelecimento(estabelecimento)}
                         >
                             <div className="flex items-center justify-between mb-4">
@@ -147,11 +145,10 @@ const EstabelecimentoSelectorDashboard: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="mt-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        estabelecimento.plano === 'premium' 
-                                            ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400'
-                                            : 'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
-                                    }`}>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${estabelecimento.plano === 'premium'
+                                        ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-400'
+                                        : 'bg-gray-100 text-gray-600 dark:bg-gray-900/20 dark:text-gray-400'
+                                        }`}>
                                         {estabelecimento.plano}
                                     </span>
                                 </div>

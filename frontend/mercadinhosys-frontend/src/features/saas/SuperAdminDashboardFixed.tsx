@@ -6,9 +6,6 @@ import {
     DollarSign,
     TrendingUp,
     RefreshCcw,
-    Eye,
-    Settings,
-    Upload,
     BarChart3,
     Activity
 } from 'lucide-react';
@@ -86,7 +83,7 @@ interface ResumoSistema {
 }
 
 const SuperAdminDashboardFixed: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'overview' | 'estabelecimentos' | 'dashboard'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'estabelecimentos' | 'dashboard' | 'vendas' | 'produtos' | 'clientes' | 'financeiro'>('overview');
     const [loading, setLoading] = useState(false);
     const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>([]);
     const [selectedEstabelecimento, setSelectedEstabelecimento] = useState<number | null>(null);
@@ -155,7 +152,7 @@ const SuperAdminDashboardFixed: React.FC = () => {
             const response = await apiClient.post('/super-admin-dashboard/sincronizar', {
                 estabelecimento_id: selectedEstabelecimento
             });
-            
+
             if (response.data?.success) {
                 toast.success('Dados sincronizados com sucesso!');
                 if (selectedEstabelecimento) {
@@ -188,9 +185,6 @@ const SuperAdminDashboardFixed: React.FC = () => {
         }).format(valor);
     };
 
-    const formatarData = (dataString: string) => {
-        return new Date(dataString).toLocaleDateString('pt-BR');
-    };
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
@@ -207,7 +201,7 @@ const SuperAdminDashboardFixed: React.FC = () => {
                                 Gerencie todos os estabelecimentos
                             </p>
                         </div>
-                        
+
                         {/* Seletor de Estabelecimento */}
                         <EstablishmentSelector
                             selectedEstablishment={selectedEstabelecimento}
@@ -272,7 +266,7 @@ const SuperAdminDashboardFixed: React.FC = () => {
                     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                         <div className="p-6">
                             <h2 className="text-2xl font-bold text-gray-900 mb-6">Todos os Estabelecimentos</h2>
-                            
+
                             {loading ? (
                                 <div className="flex items-center justify-center py-12">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -340,7 +334,7 @@ const SuperAdminDashboardFixed: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'dashboard' && dashboardData && (
+                {(activeTab === 'dashboard' || activeTab === 'vendas' || activeTab === 'produtos' || activeTab === 'clientes' || activeTab === 'financeiro') && dashboardData && (
                     <div className="space-y-6">
                         {/* Header do Estabelecimento Selecionado */}
                         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -351,7 +345,7 @@ const SuperAdminDashboardFixed: React.FC = () => {
                                     </h2>
                                     <p className="text-gray-600">Dashboard Específico</p>
                                 </div>
-                                
+
                                 <button
                                     onClick={sincronizarDados}
                                     disabled={sincronizando}
@@ -369,11 +363,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                                 <nav className="flex space-x-8 px-6">
                                     <button
                                         onClick={() => setActiveTab('vendas')}
-                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                            activeTab === 'vendas'
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'vendas'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
                                     >
                                         <div className="flex items-center space-x-2">
                                             <TrendingUp className="w-4 h-4" />
@@ -382,11 +375,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('produtos')}
-                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                            activeTab === 'produtos'
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'produtos'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
                                     >
                                         <div className="flex items-center space-x-2">
                                             <Package className="w-4 h-4" />
@@ -395,11 +387,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('clientes')}
-                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                            activeTab === 'clientes'
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'clientes'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
                                     >
                                         <div className="flex items-center space-x-2">
                                             <Users className="w-4 h-4" />
@@ -408,11 +399,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('financeiro')}
-                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                            activeTab === 'financeiro'
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
+                                        className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'financeiro'
+                                            ? 'border-blue-500 text-blue-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                            }`}
                                     >
                                         <div className="flex items-center space-x-2">
                                             <DollarSign className="w-4 h-4" />
@@ -496,11 +486,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                         <nav className="flex space-x-8 px-6">
                             <button
                                 onClick={() => setActiveTab('overview')}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                    activeTab === 'overview'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'overview'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
                             >
                                 <div className="flex items-center space-x-2">
                                     <BarChart3 className="w-4 h-4" />
@@ -509,11 +498,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => setActiveTab('estabelecimentos')}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                    activeTab === 'estabelecimentos'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'estabelecimentos'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
                             >
                                 <div className="flex items-center space-x-2">
                                     <Building2 className="w-4 h-4" />
@@ -523,11 +511,10 @@ const SuperAdminDashboardFixed: React.FC = () => {
                             {selectedEstabelecimento && (
                                 <button
                                     onClick={() => setActiveTab('dashboard')}
-                                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                        activeTab === 'dashboard'
-                                            ? 'border-blue-500 text-blue-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm ${(activeTab === 'dashboard' || activeTab === 'vendas' || activeTab === 'produtos' || activeTab === 'clientes' || activeTab === 'financeiro')
+                                        ? 'border-blue-500 text-blue-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
                                 >
                                     <div className="flex items-center space-x-2">
                                         <Activity className="w-4 h-4" />

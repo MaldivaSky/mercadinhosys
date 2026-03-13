@@ -19,7 +19,7 @@ export const generateHSLColor = (
   lightness: number = 55
 ): string => {
   if (total <= 0) return `hsl(0, ${saturation}%, ${lightness}%)`;
-  
+
   const hue = (index * 360) / total;
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };
@@ -37,8 +37,8 @@ export const generateColorPalette = (
   lightness: number = 55
 ): string[] => {
   if (!data || data.length === 0) return [];
-  
-  return data.map((_, index) => 
+
+  return data.map((_, index) =>
     generateHSLColor(index, data.length, saturation, lightness)
   );
 };
@@ -49,11 +49,11 @@ export const generateColorPalette = (
  */
 export const generateCategoryColors = (categories: string[]): Record<string, string> => {
   const colors: Record<string, string> = {};
-  
+
   categories.forEach((category, index) => {
     colors[category] = generateHSLColor(index, categories.length, 75, 50);
   });
-  
+
   return colors;
 };
 
@@ -98,8 +98,7 @@ export const getDynamicChartConfig = (
   type: 'bar' | 'line' | 'doughnut' | 'pie' = 'bar'
 ) => {
   const colors = generateColorPalette(data);
-  const statusColors = generateStatusColors();
-  
+
   const baseConfig = {
     responsive: true,
     maintainAspectRatio: false,
@@ -125,7 +124,7 @@ export const getDynamicChartConfig = (
         padding: 12,
         displayColors: true,
         callbacks: {
-          label: function(context: any) {
+          label: function (context: any) {
             let label = context.dataset.label || '';
             if (label) {
               label += ': ';
@@ -189,7 +188,7 @@ export const getDynamicChartConfig = (
               font: {
                 size: 11
               },
-              callback: function(value: any) {
+              callback: function (value: any) {
                 return new Intl.NumberFormat('pt-BR', {
                   style: 'currency',
                   currency: 'BRL'
@@ -235,7 +234,7 @@ export const getDynamicChartConfig = (
               font: {
                 size: 11
               },
-              callback: function(value: any) {
+              callback: function (value: any) {
                 return new Intl.NumberFormat('pt-BR', {
                   style: 'currency',
                   currency: 'BRL'
@@ -268,7 +267,7 @@ export const handleEmptyData = (
       y: 0
     }];
   }
-  
+
   return data.map(item => ({
     ...item,
     value: item.value || item.y || 0,

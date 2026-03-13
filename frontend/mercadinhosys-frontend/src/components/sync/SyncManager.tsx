@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, Database, Download, Upload, RefreshCw, HardDrive, Wifi, WifiOff } from 'lucide-react';
+import { Cloud, Database, Upload, RefreshCw, HardDrive, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { showToast } from '../elements/Toast';
 
@@ -76,15 +76,15 @@ const SyncManager: React.FC = () => {
             });
 
             const result: SyncResult = await response.json();
-            
+
             if (result.success) {
                 showToast.success(`✅ ${result.message}`);
                 showToast.info(`📊 ${result.data?.exported_tables} tabelas exportadas, ${result.data?.total_rows} linhas sincronizadas`);
-                
+
                 if (result.data?.backup?.success) {
                     showToast.success(`💾 Backup ${result.data.backup.provider} criado!`);
                 }
-                
+
                 await loadSyncStatus();
             } else {
                 showToast.error(`❌ Erro na sincronização: ${result.message}`);
@@ -112,7 +112,7 @@ const SyncManager: React.FC = () => {
             });
 
             const result = await response.json();
-            
+
             if (result.success) {
                 showToast.success(`💾 Backup ${result.data.provider} criado com sucesso!`);
                 showToast.info(`📁 Arquivo: ${result.data.filename} (${result.data.file_size} bytes)`);
@@ -191,11 +191,11 @@ const SyncManager: React.FC = () => {
                         </div>
                         {getStatusIcon(syncStatus.local_db.status)}
                     </div>
-                    
+
                     <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(syncStatus.local_db.status)}`}>
                         {syncStatus.local_db.status}
                     </div>
-                    
+
                     {syncStatus.local_db.tables && (
                         <div className="mt-3 space-y-1">
                             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -213,7 +213,7 @@ const SyncManager: React.FC = () => {
                             </div>
                         </div>
                     )}
-                    
+
                     {syncStatus.local_db.error && (
                         <p className="mt-2 text-xs text-red-600">{syncStatus.local_db.error}</p>
                     )}
@@ -228,17 +228,17 @@ const SyncManager: React.FC = () => {
                         </div>
                         {getStatusIcon(syncStatus.cloud_db.status)}
                     </div>
-                    
+
                     <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(syncStatus.cloud_db.status)}`}>
                         {syncStatus.cloud_db.status}
                     </div>
-                    
+
                     {syncStatus.cloud_db.tables && (
                         <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
                             {syncStatus.cloud_db.tables} tabelas sincronizadas
                         </p>
                     )}
-                    
+
                     {syncStatus.cloud_db.error && (
                         <p className="mt-2 text-xs text-red-600">{syncStatus.cloud_db.error}</p>
                     )}
@@ -248,7 +248,7 @@ const SyncManager: React.FC = () => {
             {/* Ações */}
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <h4 className="font-medium text-gray-900 dark:text-white mb-4">Ações de Sincronização</h4>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Upload para Nuvem */}
                     <div className="space-y-3">
@@ -272,7 +272,7 @@ const SyncManager: React.FC = () => {
                                 )}
                                 Sincronizar
                             </button>
-                            
+
                             <select
                                 value={selectedBackup}
                                 onChange={(e) => setSelectedBackup(e.target.value)}
@@ -329,8 +329,8 @@ const SyncManager: React.FC = () => {
                     <div className="flex-1">
                         <h5 className="text-sm font-medium text-blue-900 dark:text-blue-100">Modo Híbrido Ativado</h5>
                         <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                            Seu sistema usa SQLite local para máxima velocidade no dia a dia. 
-                            Use o botão "Sincronizar" para enviar seus dados para a nuvem (PostgreSQL/Aiven) 
+                            Seu sistema usa SQLite local para máxima velocidade no dia a dia.
+                            Use o botão "Sincronizar" para enviar seus dados para a nuvem (PostgreSQL/Aiven)
                             e criar backups seguros no Google Drive ou OneDrive.
                         </p>
                         <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
