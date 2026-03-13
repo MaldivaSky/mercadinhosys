@@ -132,7 +132,7 @@ class HybridSyncManager:
                         if value is None:
                             values.append('NULL')
                         else:
-                            values.append(f"'{str(value).replace("'", "''")}'")
+                            values.append(f"'{str(value).replace(chr(39), chr(39)+chr(39))}'")
                         cols_to_insert.append(col)
                     
                     if values:

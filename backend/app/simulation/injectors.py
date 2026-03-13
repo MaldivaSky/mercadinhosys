@@ -3,9 +3,10 @@ import uuid
 import requests
 import time
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from app.models import (
-    db, Produto, CategoriaProduto, Fornecedor, Cliente, 
-    ProdutoLote, ContaPagar
+    db, Estabelecimento, Funcionario, Produto, CategoriaProduto, Fornecedor, Cliente, 
+    ProdutoLote, ContaPagar, utcnow
 )
 
 class RealisticInjector:
@@ -147,19 +148,41 @@ class RealisticInjector:
     @classmethod
     def inject_funcionarios_time(cls, estabelecimento_id):
         """Injeta time completo de funcionários com credenciais únicas (Magnitude Master)"""
-        from app.models import Funcionario
+        from app.models import Funcionario, Estabelecimento
         from werkzeug.security import generate_password_hash
         
         # Super-Admin Global (Maldivas) - Bypassing MultiTenant filter for global check
         super_admin = db.session.execute(db.select(Funcionario).filter_by(username="maldivas")).scalar_one_or_none()
+        
+        # Garantir Estabelecimento HQ para o Super Admin
+        hq = Estabelecimento.query.filter_by(cnpj="00.000.000/0001-00").first()
+        if not hq:
+            end_hq = {
+                "cep": "69000-000", "logradouro": "Alameda SaaS", "numero": "10", 
+                "bairro": "Distrito", "cidade": "Manaus", "estado": "AM", "pais": "Brasil"
+            }
+            hq = Estabelecimento(
+                nome_fantasia="MercadinhoSys HQ",
+                razao_social="MercadinhoSys SaaS Technology LTDA",
+                cnpj="00.000.000/0001-00",
+                email="rafaelmaldivas@gmail.com",
+                telefone="(92) 99999-0000",
+                data_abertura=date(2023, 1, 1), 
+                plano="Premium Master", # PLANO MASTER REQUERIDO
+                plano_status="ativo",
+                **end_hq
+            )
+            db.session.add(hq)
+            db.session.flush()
+
         if not super_admin:
             end_master = cls.get_endereco_random() # Endereço Real via ViaCEP
             super_admin = Funcionario(
-                estabelecimento_id=None, # REAL GLOBAL ACCESS
-                nome="Maldivas Super Admin",
+                estabelecimento_id=hq.id, # LINKED TO HQ
+                nome="Rafael Maldivas",
                 username="maldivas",
                 senha_hash=generate_password_hash("Mald1v@$"),
-                cargo="SuperAdmin",
+                cargo="PROPRIETÁRIO DO SISTEMA",
                 role="ADMIN", # IMPORTANTE: role ADMIN para is_super_admin retornar True
                 cpf=cls.generate_cpf(),
                 email="rafaelmaldivas@gmail.com", 
@@ -246,6 +269,7 @@ class RealisticInjector:
             db.session.add(prod)
             db.session.flush()
 
+            total_qty = 0
             for l in range(2):
                 data_fab = date.today() - timedelta(days=random.randint(30, 90))
                 dias_val = 15 if item["cat"] in ["Açougue", "Hortifruti"] else 365
@@ -262,10 +286,14 @@ class RealisticInjector:
                     data_fabricacao=data_fab,
                     data_validade=data_val,
                     data_entrada=data_fab + timedelta(days=5),
-                    preco_custo_unitario=p_custo
+                    preco_custo_unitario=p_custo,
+                    ativo=True
                 )
                 db.session.add(lote)
-                prod.quantidade += qtd
+                total_qty += qtd
+            
+            prod.quantidade = Decimal(str(total_qty))
+            prod.quantidade_minima = Decimal("15.0")
 
         db.session.commit()
         print(f"✅ MAGNITUDE MASTER: {len(cls.SKU_DB)} SKUs ativos com endereços REAIS via API (ViaCEP) e CPFs válidos.")
