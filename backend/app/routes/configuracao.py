@@ -9,7 +9,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app import db
 from app.models import Configuracao
-from app.utils.query_helpers import get_configuracao_safe, get_estabelecimento_full_safe
+from app.utils.query_helpers import get_configuracao_safe, get_estabelecimento_full_safe, get_authorized_establishment_id
 from app.utils.smart_cache import get_cached_config, set_cached_config, invalidate_config
 import json
 import traceback
@@ -24,10 +24,10 @@ def obter_configuracoes():
     """Obtém configurações do estabelecimento (Padrão Blindado)"""
     try:
         claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        estabelecimento_id = get_authorized_establishment_id()
         
         if not estabelecimento_id:
-            return jsonify({"success": False, "error": "Estabelecimento não identificado no token"}), 400
+            return jsonify({"success": False, "error": "Estabelecimento não identificado no token ou context"}), 400
 
         # Tenta buscar do cache primeiro
         config_data = get_cached_config(estabelecimento_id)
@@ -70,8 +70,8 @@ def obter_configuracoes():
 def atualizar_configuracoes():
     """Atualiza as configurações do estabelecimento com SQL Puro (Blindado contra Schema Drift)"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         role = claims.get("role")
         
         if role not in ["admin", "dono", "gerente", "ADMIN"]:
@@ -155,7 +155,7 @@ def get_estabelecimento():
     """Retorna dados do estabelecimento com resiliência total"""
     try:
         claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        estabelecimento_id = get_authorized_establishment_id()
         
         dados = get_estabelecimento_full_safe(estabelecimento_id)
 
@@ -237,11 +237,12 @@ def listar_estabelecimentos():
 def update_estabelecimento():
     """Atualização segura do estabelecimento (Somente Admin/Dono)"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         role = claims.get("role")
+        is_super = claims.get("is_super_admin", False)
         
-        if role not in ["admin", "dono", "ADMIN"]:
+        if role not in ["admin", "dono", "ADMIN"] and not is_super:
             return jsonify({"success": False, "error": "Apenas proprietários podem alterar dados da empresa"}), 403
 
         data = request.get_json() or {}
@@ -288,15 +289,128 @@ def update_estabelecimento():
         return jsonify({"success": False, "error": "Falha ao atualizar dados"}), 500
         
 
+# ==================== PREFERÊNCIAS DO USUÁRIO ====================
+
+@configuracao_bp.route("/preferencias", methods=["GET", "PUT"])
+@jwt_required()
+def preferencias_usuario():
+    """
+    Gerencia preferências pessoais do usuário (tema, notificações, etc)
+    Qualquer usuário pode alterar suas próprias preferências
+    """
+    try:
+        claims = get_jwt()
+        user_id = claims.get("sub") or get_jwt_identity()
+        estabelecimento_id = get_authorized_establishment_id()
+        
+        if request.method == "GET":
+            try:
+                from sqlalchemy import text
+                sql = """
+                SELECT tema_escuro_pessoal, notificacoes_desktop_pessoal, idioma_pessoal 
+                FROM funcionarios_preferencias 
+                WHERE funcionario_id = :uid
+                """
+                result = db.session.execute(text(sql), {"uid": user_id}).fetchone()
+            except Exception as e_sql:
+                current_app.logger.warning(f"Erro ao buscar preferências (tabela pode não existir): {str(e_sql)}")
+                result = None
+            
+            if result:
+                return jsonify({
+                    "success": True,
+                    "preferencias": {
+                        "tema_escuro": result[0],
+                        "notificacoes_desktop": result[1],
+                        "idioma": result[2] or "pt-BR"
+                    }
+                }), 200
+            else:
+                # Retorna preferências padrão
+                return jsonify({
+                    "success": True,
+                    "preferencias": {
+                        "tema_escuro": False,
+                        "notificacoes_desktop": True,
+                        "idioma": "pt-BR"
+                    }
+                }), 200
+        
+        elif request.method == "PUT":
+            # Atualizar preferências do usuário
+            data = request.get_json() or {}
+            
+            # Campos permitidos para preferências pessoais
+            allowed_fields = ["tema_escuro", "notificacoes_desktop", "idioma"]
+            
+            from sqlalchemy import text
+            
+            # Verifica se já existe registro de preferências
+            check_sql = "SELECT funcionario_id FROM funcionarios_preferencias WHERE funcionario_id = :uid"
+            existing = db.session.execute(text(check_sql), {"uid": user_id}).fetchone()
+            
+            params = {"uid": user_id}
+            set_clauses = []
+            
+            # Prepara campos para Update/Insert
+            for field in allowed_fields:
+                if field in data:
+                    val = data[field]
+                    params[field] = val
+                    set_clauses.append(f"{field}_pessoal = :{field}")
+            
+            if not set_clauses:
+                return jsonify({"success": True, "message": "Nada a atualizar"}), 200
+            
+            if existing:
+                # Update
+                sql = f"UPDATE funcionarios_preferencias SET {', '.join(set_clauses)} WHERE funcionario_id = :uid"
+                db.session.execute(text(sql), params)
+            else:
+                # Insert com valores padrão para campos não fornecidos
+                all_params = {
+                    "uid": user_id,
+                    "tema_escuro": data.get("tema_escuro", False),
+                    "notificacoes_desktop": data.get("notificacoes_desktop", True),
+                    "idioma": data.get("idioma", "pt-BR")
+                }
+                sql = """
+                INSERT INTO funcionarios_preferencias 
+                (funcionario_id, tema_escuro_pessoal, notificacoes_desktop_pessoal, idioma_pessoal)
+                VALUES (:uid, :tema_escuro, :notificacoes_desktop, :idioma)
+                """
+                db.session.execute(text(sql), all_params)
+            
+            db.session.commit()
+            
+            return jsonify({
+                "success": True,
+                "message": "Preferências atualizadas com sucesso"
+            }), 200
+            
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"❌ Erro em preferencias_usuario: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao atualizar preferências"}), 500
+
+
 # ==================== LOGO UPLOAD ====================
 
 @configuracao_bp.route("/logo", methods=["POST"])
 @jwt_required()
 def upload_logo():
-    """Realiza o upload da logo e salva como Base64 (Máxima Portabilidade)"""
+    """Realiza o upload da logo e salva como Base64 (Máxima Portabilidade) - Apenas ADMIN/GERENTE"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        user_role = claims.get("role", "").lower()
+        
+        # Verificação de permissão - apenas ADMIN e GERENTE podem fazer upload
+        if user_role not in ["admin", "gerente"]:
+            return jsonify({
+                "success": False, 
+                "error": "Acesso negado. Apenas administradores e gerentes podem alterar a logo."
+            }), 403
         
         if 'logo' not in request.files:
             return jsonify({"success": False, "error": "Nenhum arquivo enviado"}), 400
@@ -304,6 +418,19 @@ def upload_logo():
         file = request.files['logo']
         if file.filename == '':
             return jsonify({"success": False, "error": "Arquivo vazio"}), 400
+
+        # Validação do tipo de arquivo
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        if not ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({"success": False, "error": "Tipo de arquivo não permitido. Use PNG, JPG, JPEG, GIF ou WebP."}), 400
+
+        # Validação do tamanho (máximo 5MB)
+        file.seek(0, 2)  # Move para o fim
+        file_size = file.tell()
+        file.seek(0)  # Volta para o início
+        
+        if file_size > 5 * 1024 * 1024:  # 5MB
+            return jsonify({"success": False, "error": "Arquivo muito grande. Tamanho máximo: 5MB"}), 400
 
         # Converte para Base64 para salvar no banco
         import base64

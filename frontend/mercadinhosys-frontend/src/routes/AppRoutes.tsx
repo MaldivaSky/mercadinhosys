@@ -5,6 +5,7 @@ import ConnectionTest from '../components/ConnectionTest';
 import { LoginPage } from '../features/auth/LoginPage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { authService } from '../features/auth/authService';
+import SuperAdminRoute from '../components/routes/SuperAdminRoute';
 
 // Lazy loading das páginas
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -35,12 +36,12 @@ const RoleGuard = ({ children, allowedRoles, requireSuperAdmin }: { children: Re
 
     // Se exigir super admin e não for, bloqueia
     if (requireSuperAdmin && !isSuperAdmin) {
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/login" replace />;
     }
 
     // Se a rota for restrita a certos perfis (ex: admin)
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-        return <Navigate to="/dashboard" replace />;
+        return <Navigate to="/login" replace />;
     }
 
     return <>{children}</>;
@@ -99,9 +100,9 @@ const AppRoutes: React.FC = () => {
                     <Route path="ponto-diagnostico" element={<RoleGuard allowedRoles={['admin', 'gerente']}><DiagnosticoFotos /></RoleGuard>} />
                     <Route path="reports" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ReportsPage /></RoleGuard>} />
                     <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><SettingsPage /></RoleGuard>} />
-                    <Route path="estabelecimentos" element={<RoleGuard requireSuperAdmin><EstabelecimentosPage /></RoleGuard>} />
-                    <Route path="monitor" element={<RoleGuard requireSuperAdmin><SystemMonitorPage /></RoleGuard>} />
-                    <Route path="leads" element={<RoleGuard requireSuperAdmin><LeadDashboard /></RoleGuard>} />
+                    <Route path="estabelecimentos" element={<SuperAdminRoute><EstabelecimentosPage /></SuperAdminRoute>} />
+                    <Route path="monitor" element={<SuperAdminRoute><SystemMonitorPage /></SuperAdminRoute>} />
+                    <Route path="leads" element={<SuperAdminRoute><LeadDashboard /></SuperAdminRoute>} />
                 </Route>
 
                 {/* Fallback - se alguém acessar uma rota não definida */}

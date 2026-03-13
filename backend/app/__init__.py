@@ -13,9 +13,15 @@ from app.models import db
 from config import config
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
-from urllib.parse import urlparse
+
+# Função para horário de Manaus (GMT-4)
+def get_manaus_time():
+    """Retorna datetime atual no fuso de Manaus (GMT-4)"""
+    utc_now = datetime.now(timezone.utc)
+    manaus_tz = timezone(timedelta(hours=-4))
+    return utc_now.astimezone(manaus_tz)
 
 # Inicializa as extensões
 migrate = Migrate()
@@ -53,6 +59,25 @@ def create_app(config_name=None):
         or os.environ.get("POSTGRES_URL")
         or os.environ.get("AIVEN_DATABASE_URL")
     )
+    # DETECTAR MODO MULTI-TENANT (não afeta modo normal)
+    multi_tenant_mode = os.getenv('MULTI_TENANT_MODE', 'false').lower() == 'true'
+    main_db_url = os.getenv('MAIN_DATABASE_URL')
+    
+    if multi_tenant_mode and main_db_url:
+        # Modo Multi-Tenant - usar banco principal para autenticação
+        runtime_db_url = main_db_url
+        app.config["MULTI_TENANT_MODE"] = True
+        logger.info("🏢 MODO MULTI-TENANT ATIVADO")
+    else:
+        # Modo normal - manter ordem original para não quebrar conexão existente
+        runtime_db_url = (
+            os.environ.get("AIVEN_DATABASE_URL")
+            or os.environ.get("POSTGRES_URL") 
+            or os.environ.get("DATABASE_URL_TARGET")
+            or os.environ.get("DB_PRIMARY")
+            or os.environ.get("DATABASE_URL")
+        )
+    
     if runtime_db_url:
         if runtime_db_url.startswith("postgres://"):
             runtime_db_url = runtime_db_url.replace("postgres://", "postgresql://", 1)
@@ -367,7 +392,12 @@ def create_app(config_name=None):
 
     # Auth - IMPORTANTE: blueprint se chama 'auth_bp' no arquivo
     try:
-        from app.routes.auth import auth_bp
+        if app.config.get("MULTI_TENANT_MODE"):
+            from app.routes.auth_multi_tenant import auth_bp
+            logger.info("🏢 Usando autenticação Multi-Tenant")
+        else:
+            from app.routes.auth import auth_bp
+            logger.info("🔐 Usando autenticação Single-Tenant")
 
         app.register_blueprint(auth_bp, url_prefix="/api/auth")
         logger.info("✅ Blueprint auth registrado em /api/auth")
@@ -383,13 +413,13 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar produtos: {e}")
 
-    # Fornecedores FIX
+    # Fornecedores
     try:
-        from app.routes.fornecedores_fix import fornecedores_fix_bp
-        app.register_blueprint(fornecedores_fix_bp, url_prefix="/api/fornecedores")
-        logger.info("✅ Blueprint fornecedores_fix registrado em /api/fornecedores")
+        from app.routes.fornecedores import fornecedores_bp
+        app.register_blueprint(fornecedores_bp, url_prefix="/api/fornecedores")
+        logger.info("✅ Blueprint fornecedores registrado em /api/fornecedores")
     except Exception as e:
-        logger.error(f"❌ Erro ao registrar fornecedores_fix: {e}")
+        logger.error(f"❌ Erro ao registrar fornecedores: {e}")
 
     # Funcionarios
     try:
@@ -449,9 +479,19 @@ def create_app(config_name=None):
         from app.routes.dashboard import dashboard_bp
         app.register_blueprint(dashboard_bp, url_prefix="/api/dashboard")
         logger.info("✅ Blueprint dashboard registrado em /api/dashboard")
+        app.config['DASHBOARD_CIENTIFICO_DISPONIVEL'] = True
     except Exception as e:
         import traceback
         logger.error(f"❌ Erro ao registrar dashboard: {e}\n{traceback.format_exc()}")
+        app.config['DASHBOARD_CIENTIFICO_DISPONIVEL'] = False
+
+    # SaaS (Monitoramento & Onboarding)
+    try:
+        from app.routes.saas import saas_bp
+        app.register_blueprint(saas_bp, url_prefix="/api/saas")
+        logger.info("✅ Blueprint saas registrado em /api/saas")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar saas: {e}")
 
     # Despesas
     try:
@@ -503,14 +543,6 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar pedidos_compra: {e}")
 
-    # SaaS & Planos
-    try:
-        from app.routes.saas import saas_bp
-        app.register_blueprint(saas_bp, url_prefix="/api/saas")
-        logger.info("✅ Blueprint SaaS registrado em /api/saas")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar saas: {e}")
-
     # Monitoramento Global (SaaS Monitor)
     try:
         from app.routes.monitor import monitor_bp
@@ -518,6 +550,15 @@ def create_app(config_name=None):
         logger.info("✅ Blueprint SaaS Monitor registrado em /api/saas/monitor")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar monitor: {e}")
+
+    # Sincronização Híbrida
+    try:
+        from app.routes.sync_hybrid import sync_hybrid_bp
+        app.register_blueprint(sync_hybrid_bp, url_prefix="/api/sync-hybrid")
+        logger.info("✅ Blueprint Sincronização Híbrida registrado em /api/sync-hybrid")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar sync_hybrid: {e}")
+
 
     # Stripe
     try:
@@ -535,70 +576,8 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar onboarding: {e}")
 
-    # Dashboard Científico - verifica se existe a pasta
-    try:
-        dashboard_cientifico_path = os.path.join(
-            os.path.dirname(__file__), "dashboard_cientifico"
-        )
-        if os.path.exists(dashboard_cientifico_path):
-            from flask import Blueprint
-
-            # Cria blueprint dinâmico para dashboard científico
-            cientifico_bp = Blueprint(
-                "cientifico", __name__, url_prefix="/api/cientifico"
-            )
-
-            # Importa o orchestrator do dashboard científico
-            from app.dashboard_cientifico.orchestration import DashboardOrchestrator
-            from app.decorators.decorator_jwt import gerente_ou_admin_required
-            from flask_jwt_extended import get_jwt
-
-            @cientifico_bp.route("/dashboard/<int:estabelecimento_id>", methods=["GET"])
-            @gerente_ou_admin_required
-            def get_dashboard_cientifico(estabelecimento_id):
-                try:
-                    claims = get_jwt()
-                    if int(claims.get("estabelecimento_id") or 0) != int(estabelecimento_id):
-                        return jsonify({"success": False, "error": "Acesso negado"}), 403
-                    orchestrator = DashboardOrchestrator(estabelecimento_id)
-                    return jsonify(orchestrator.get_scientific_dashboard(days=30))
-                except Exception as e:
-                    status = 503 if "Banco de dados indisponível" in str(e) else 500
-                    return jsonify({"success": False, "error": str(e)}), status
-
-            @cientifico_bp.route(
-                "/analise/<int:estabelecimento_id>/<string:tipo>", methods=["GET"]
-            )
-            @gerente_ou_admin_required
-            def get_analise_detalhada(estabelecimento_id, tipo):
-                try:
-                    claims = get_jwt()
-                    if int(claims.get("estabelecimento_id") or 0) != int(estabelecimento_id):
-                        return jsonify({"success": False, "error": "Acesso negado"}), 403
-                    orchestrator = DashboardOrchestrator(estabelecimento_id)
-                    return jsonify(orchestrator.get_detailed_analysis(tipo, days=90))
-                except Exception as e:
-                    status = 503 if "Banco de dados indisponível" in str(e) else 500
-                    return jsonify({"success": False, "error": str(e)}), status
-
-            @cientifico_bp.route("/health", methods=["GET"])
-            @gerente_ou_admin_required
-            def health_cientifico():
-                return jsonify(
-                    {
-                        "status": "operational",
-                        "module": "dashboard_cientifico",
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                )
-
-            app.register_blueprint(cientifico_bp)
-            dashboard_cientifico_disponivel = True
-            logger.info("✅ Dashboard Científico registrado em /api/cientifico")
-        else:
-            logger.info("ℹ️ Pasta dashboard_cientifico não encontrada")
-    except Exception as e:
-        logger.warning(f"⚠️ Dashboard Científico não disponível: {e}")
+    # Dashboard Científico já é tratado via dashboard_bp centralizado
+    pass
 
     # ==================== ROTAS GLOBAIS ====================
 
@@ -621,10 +600,10 @@ def create_app(config_name=None):
                 "database": db_status,
                 "db_source": "POSTGRES_CLOUD" if app.config.get("USING_POSTGRES") else "SQLITE_LOCAL",
                 "db_url_redacted": redacted_db_uri,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": get_manaus_time().isoformat(),
                 "dashboard_cientifico": (
                     "disponível"
-                    if dashboard_cientifico_disponivel
+                    if app.config.get('DASHBOARD_CIENTIFICO_DISPONIVEL')
                     else "não disponível"
                 ),
             }
@@ -647,7 +626,7 @@ def create_app(config_name=None):
                     "pdv": "/api/pdv",
                     "relatorios": "/api/relatorios",
                     "cientifico": (
-                        "/api/cientifico" if dashboard_cientifico_disponivel else None
+                        "/api/cientifico" if app.config.get('DASHBOARD_CIENTIFICO_DISPONIVEL') else None
                     ),
                 },
                 "health_check": "/api/health",
@@ -701,7 +680,7 @@ def create_app(config_name=None):
                     "error": "Erro interno no servidor",
                     "message": err_msg,
                     "code": "INTERNAL_SERVER_ERROR",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": get_manaus_time().isoformat(),
                 }
             ),
             500,
@@ -743,9 +722,23 @@ def create_app(config_name=None):
     MercadinhoSys API v2.0.0 INICIALIZADA
     Ambiente: {config_name}
     Banco: {app.config.get('SQLALCHEMY_DATABASE_URI', 'SQLite')}
-    Dashboard Científico: {'✅ Disponível' if dashboard_cientifico_disponivel else '❌ Não disponível'}
+    Dashboard Cientifico: {'[OK] Disponivel' if app.config.get('DASHBOARD_CIENTIFICO_DISPONIVEL') else '[OFF] Nao disponivel'}
     {'='*60}
     """
     )
+
+    # Configurar Listeners de Sincronia (Abordagem de Guerrilha)
+    with app.app_context():
+        try:
+            from app.listeners import setup_listeners
+            setup_listeners()
+            
+            # Iniciar Worker de Sincronia de Guerrilha (Em processo separado)
+            if os.getenv("SYNC_ENABLED", "false").lower() == "true":
+                from app.services.sync_worker import start_sync_worker
+                start_sync_worker(app)
+                
+        except Exception as e:
+            app.logger.error(f"Erro ao configurar listeners ou worker: {e}")
 
     return app

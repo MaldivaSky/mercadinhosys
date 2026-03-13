@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import {
     Building2, MapPin, Phone, Mail, Users, Package,
     ShoppingBag, TrendingUp, CheckCircle2, XCircle,
-    Calendar, RefreshCw, AlertCircle, Store
+    Calendar, RefreshCw, AlertCircle, Store, Plus, Eye
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
+import NovoClienteModal from '../../components/modals/NovoClienteModal';
+import EstabelecimentoDetalheModal from '../../components/modals/EstabelecimentoDetalheModal';
 
 interface Estabelecimento {
     id: number;
@@ -51,7 +53,7 @@ const MetricPill: React.FC<{ icon: React.ElementType; label: string; value: stri
     </div>
 );
 
-const EstabelecimentoCard: React.FC<{ est: Estabelecimento }> = ({ est }) => (
+const EstabelecimentoCard: React.FC<{ est: Estabelecimento; onVerDetalhes: (est: Estabelecimento) => void }> = ({ est, onVerDetalhes }) => (
     <div className="relative group rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 backdrop-blur-sm shadow-md hover:shadow-xl hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300">
         {/* Header com gradiente */}
         <div className={`px-5 pt-5 pb-4 ${est.ativo
@@ -121,6 +123,17 @@ const EstabelecimentoCard: React.FC<{ est: Estabelecimento }> = ({ est }) => (
                     {est.ultima_venda && ` · Última venda: ${formatDate(est.ultima_venda)}`}
                 </span>
             </div>
+            
+            {/* Botão de Detalhes */}
+            <div className="pt-3 border-t border-gray-100 dark:border-gray-700/50 mt-3">
+                <button
+                    onClick={() => onVerDetalhes(est)}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                    <Eye size={14} />
+                    Ver Detalhes
+                </button>
+            </div>
         </div>
     </div>
 );
@@ -129,6 +142,9 @@ const EstabelecimentosPage: React.FC = () => {
     const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+    const [selectedEstabelecimento, setSelectedEstabelecimento] = useState<any>(null);
+    const [showDetalheModal, setShowDetalheModal] = useState(false);
 
     const fetchEstabelecimentos = async () => {
         setLoading(true);
@@ -141,6 +157,15 @@ const EstabelecimentosPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleOnboardingSuccess = () => {
+        fetchEstabelecimentos(); // Atualiza lista após criar novo cliente
+    };
+
+    const handleVerDetalhes = (estabelecimento: Estabelecimento) => {
+        setSelectedEstabelecimento(estabelecimento);
+        setShowDetalheModal(true);
     };
 
     useEffect(() => {
@@ -165,14 +190,23 @@ const EstabelecimentosPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                <button
-                    onClick={fetchEstabelecimentos}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                    <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-                    Atualizar
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowOnboardingModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+                    >
+                        <Plus size={15} />
+                        Novo Cliente
+                    </button>
+                    <button
+                        onClick={fetchEstabelecimentos}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                        Atualizar
+                    </button>
+                </div>
             </div>
 
             {/* Sumário */}
@@ -213,7 +247,7 @@ const EstabelecimentosPage: React.FC = () => {
             {!loading && !error && estabelecimentos.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {estabelecimentos.map(est => (
-                        <EstabelecimentoCard key={est.id} est={est} />
+                        <EstabelecimentoCard key={est.id} est={est} onVerDetalhes={handleVerDetalhes} />
                     ))}
                 </div>
             )}
@@ -223,8 +257,29 @@ const EstabelecimentosPage: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                     <Building2 size={40} className="text-gray-300 dark:text-gray-600" />
                     <p className="text-gray-500 dark:text-gray-400 font-medium">Nenhum estabelecimento encontrado</p>
+                    <button
+                        onClick={() => setShowOnboardingModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors mt-4"
+                    >
+                        <Plus size={15} />
+                        Cadastrar Primeiro Cliente
+                    </button>
                 </div>
             )}
+
+            {/* Modal de Onboarding */}
+            <NovoClienteModal
+                isOpen={showOnboardingModal}
+                onClose={() => setShowOnboardingModal(false)}
+                onSuccess={handleOnboardingSuccess}
+            />
+
+            {/* Modal de Detalhes */}
+            <EstabelecimentoDetalheModal
+                estabelecimento={selectedEstabelecimento}
+                isOpen={showDetalheModal}
+                onClose={() => setShowDetalheModal(false)}
+            />
         </div>
     );
 };

@@ -11,6 +11,7 @@ from app.models import (
     Fornecedor,
 )
 from flask_jwt_extended import jwt_required, get_jwt
+from app.utils.query_helpers import get_authorized_establishment_id
 from sqlalchemy import or_, and_, func, extract, cast, String, Date, distinct, select
 import random
 import string
@@ -44,7 +45,8 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
     """Aplica filtros avançados na query de vendas"""
     
     # Filtro obrigatório por estabelecimento_id (Multi-tenancy)
-    query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+    if estabelecimento_id != 'all':
+        query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
 
     # Aplicar filtros definidos em FILTROS_PERMITIDOS_VENDAS
     for chave, valor in filtros.items():
@@ -200,7 +202,7 @@ def calcular_estatisticas_vendas(query, estabelecimento_id):
     # Capture the IDs from the filtered query to use in subqueries for aggregation
     # This avoids re-applying complex joins/filters for each aggregation
     vendas_ids_subquery = query.with_entities(Venda.id).subquery()
-    vendas_ids_select = select(vendas_ids_subquery.c.id)
+    vendas_ids_select = db.session.query(vendas_ids_subquery.c.id)
 
     # 2. Resumo Geral de Vendas no período (Baseado na query filtrada)
     resumo_vendas = db.session.query(
@@ -285,7 +287,7 @@ def listar_vendas():
     """Lista vendas com filtros avançados otimizada"""
     try:
         claims = get_jwt()
-        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        estabelecimento_id = get_authorized_establishment_id()
         # Configuração de paginação
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
@@ -447,7 +449,7 @@ def estatisticas_vendas():
     """Estatísticas gerais de vendas com filtros avançados otimizada"""
     try:
         claims = get_jwt()
-        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Coletar filtros
         filtros = {k: v for k, v in request.args.items() if v}
@@ -470,7 +472,7 @@ def estatisticas_vendas():
         # Obter IDs de vendas filtradas para cálculos subsequentes consistentes
         vendas_base_query = aplicar_filtros_avancados_vendas(Venda.query.with_entities(Venda.id), filtros, estabelecimento_id)
         vendas_ids_subquery = vendas_base_query.distinct().subquery()
-        vendas_ids_select = select(vendas_ids_subquery.c.id)
+        vendas_ids_select = db.session.query(vendas_ids_subquery.c.id)
 
         # 1. Total vendas e Total Valor (agregados das vendas únicas)
         stats_gerais = db.session.query(
@@ -484,11 +486,15 @@ def estatisticas_vendas():
         # 2. Lucro Real e Total Itens (soma dos itens das vendas filtradas)
         try:
              # Usar a query_base que já tem os filtros aplicados
-             stats_itens = query_base.join(VendaItem, Venda.id == VendaItem.venda_id)\
-                           .with_entities(
-                               func.sum(VendaItem.margem_lucro_real).label("total_lucro"),
-                               func.sum(VendaItem.quantidade).label("total_itens")
-                           ).first()
+             # Evitar join duplicado se has_item_filter for True
+             stats_query = query_base
+             if not has_item_filter:
+                 stats_query = stats_query.join(VendaItem, Venda.id == VendaItem.venda_id)
+             
+             stats_itens = stats_query.with_entities(
+                                func.sum(VendaItem.margem_lucro_real).label("total_lucro"),
+                                func.sum(VendaItem.quantidade).label("total_itens")
+                            ).first()
              total_lucro = float(stats_itens.total_lucro or 0)
              total_itens_venda = float(stats_itens.total_itens or 0)
         except Exception as e:
@@ -505,7 +511,7 @@ def estatisticas_vendas():
         
         if has_item_filter:
             v_ids = query_base.with_entities(Venda.id).distinct().subquery()
-            v_ids_sel = select(v_ids.c.id)
+            v_ids_sel = db.session.query(v_ids.c.id)
             vendas_por_dia_query = (
                 db.session.query(
                     campo_data_dia.label("data"),
@@ -557,18 +563,24 @@ def estatisticas_vendas():
         def get_grouped_stats(q, group_by_col):
             if has_item_filter:
                 v_ids = q.with_entities(Venda.id).distinct().subquery()
-                v_ids_sel = select(v_ids.c.id)
-                return db.session.query(
+                v_ids_sel = db.session.query(v_ids.c.id)
+                q_grouped = db.session.query(
                     group_by_col,
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total")
-                ).filter(Venda.id.in_(v_ids_sel)).group_by(group_by_col).all()
+                ).filter(Venda.id.in_(v_ids_sel))
+                if estabelecimento_id != 'all':
+                    q_grouped = q_grouped.filter(Venda.estabelecimento_id == estabelecimento_id)
+                return q_grouped.group_by(group_by_col).all()
             else:
-                return q.with_entities(
+                q_grouped = q.with_entities(
                     group_by_col,
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total")
-                ).group_by(group_by_col).all()
+                )
+                if estabelecimento_id != 'all':
+                    q_grouped = q_grouped.filter(Venda.estabelecimento_id == estabelecimento_id)
+                return q_grouped.group_by(group_by_col).all()
 
         formas_pgto_res = get_grouped_stats(query_base, Venda.forma_pagamento)
         
@@ -591,7 +603,7 @@ def estatisticas_vendas():
 
         # --- PRODUTOS E FORNECEDORES (Sempre join com VendaItem) ---
         v_ids_sub = query_base.with_entities(Venda.id).distinct().subquery()
-        v_ids_select = select(v_ids_sub.c.id)
+        v_ids_select = db.session.query(v_ids_sub.c.id)
 
         produtos_res = (
             db.session.query(
@@ -675,7 +687,7 @@ def relatorio_diario():
     """Relatório diário detalhado de vendas"""
     try:
         claims = get_jwt()
-        estabelecimento_id = int(claims.get("estabelecimento_id"))
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros
         data_str = request.args.get("data", datetime.now().strftime("%Y-%m-%d"))

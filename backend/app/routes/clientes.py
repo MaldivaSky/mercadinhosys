@@ -5,6 +5,7 @@
 from flask import Blueprint, request, jsonify, current_app
 # from flask_login import login_required, current_user  # Removido - usando JWT
 from flask_jwt_extended import get_jwt_identity, get_jwt
+from app.utils.query_helpers import get_authorized_establishment_id
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
@@ -149,8 +150,8 @@ def listar_clientes():
     """Lista todos os clientes com filtros e paginação"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
@@ -161,9 +162,9 @@ def listar_clientes():
         direcao = request.args.get("direcao", "desc")
 
         # Query base
-        query = Cliente.query.filter_by(
-            estabelecimento_id=jwt_data.get("estabelecimento_id")
-        )
+        query = Cliente.query
+        if estabelecimento_id != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
 
         # Filtros
         if ativo is not None:
@@ -244,11 +245,22 @@ def listar_clientes():
         clientes_inativos = total_clientes - clientes_ativos
         
         # Calcular Dashboard do Cliente Global (apenas para o estabelecimento atual)
-        total_gasto_geral = db.session.query(db.func.sum(Cliente.valor_total_gasto)).filter_by(estabelecimento_id=estabelecimento_id).scalar() or 0
-        total_devido_geral = db.session.query(db.func.sum(Cliente.saldo_devedor)).filter_by(estabelecimento_id=estabelecimento_id).scalar() or 0
+        query_gasto = db.session.query(db.func.sum(Cliente.valor_total_gasto))
+        query_devido = db.session.query(db.func.sum(Cliente.saldo_devedor))
+        if estabelecimento_id != 'all':
+             query_gasto = query_gasto.filter_by(estabelecimento_id=estabelecimento_id)
+             query_devido = query_devido.filter_by(estabelecimento_id=estabelecimento_id)
+        total_gasto_geral = query_gasto.scalar() or 0
+        total_devido_geral = query_devido.scalar() or 0
         
-        melhor_cliente = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).order_by(Cliente.valor_total_gasto.desc()).first()
-        maior_devedor = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).order_by(Cliente.saldo_devedor.desc()).first()
+        query_melhor = Cliente.query
+        query_maior = Cliente.query
+        if estabelecimento_id != 'all':
+            query_melhor = query_melhor.filter_by(estabelecimento_id=estabelecimento_id)
+            query_maior = query_maior.filter_by(estabelecimento_id=estabelecimento_id)
+        
+        melhor_cliente = query_melhor.order_by(Cliente.valor_total_gasto.desc()).first()
+        maior_devedor = query_maior.order_by(Cliente.saldo_devedor.desc()).first()
 
         return jsonify(
             {
@@ -291,11 +303,11 @@ def obter_cliente(id):
     """Obtém detalhes completos de um cliente específico"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Dados básicos
@@ -303,19 +315,19 @@ def obter_cliente(id):
 
         # Estatísticas detalhadas
         vendas = Venda.query.filter_by(
-            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            cliente_id=id, estabelecimento_id=estabelecimento_id
         ).all()
 
         contas_receber = ContaReceber.query.filter_by(
             cliente_id=id,
-            estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            estabelecimento_id=estabelecimento_id,
             status="aberto",
         ).all()
 
         # Últimas vendas
         ultimas_vendas = (
             Venda.query.filter_by(
-                cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+                cliente_id=id, estabelecimento_id=estabelecimento_id
             )
             .order_by(Venda.data_venda.desc())
             .limit(10)
@@ -333,7 +345,7 @@ def obter_cliente(id):
             .join(Venda, Venda.id == VendaItem.venda_id)
             .filter(
                 Venda.cliente_id == id,
-                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
+                Venda.estabelecimento_id == estabelecimento_id,
             )
             .group_by(VendaItem.produto_nome, VendaItem.produto_codigo)
             .order_by(db.func.sum(VendaItem.quantidade).desc())
@@ -361,7 +373,7 @@ def obter_cliente(id):
         # Última compra
         ultima_compra = (
             Venda.query.filter_by(
-                cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+                cliente_id=id, estabelecimento_id=estabelecimento_id
             )
             .order_by(Venda.data_venda.desc())
             .first()
@@ -466,9 +478,9 @@ def obter_cliente(id):
 def criar_cliente():
     """Cria um novo cliente"""
     try:
-        # Get estabelecimento_id from JWT
+        # Get establishment context (supports Super-Admin impersonation)
         jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         data = request.get_json()
@@ -489,7 +501,7 @@ def criar_cliente():
 
         # Criar cliente
         cliente = Cliente(
-            estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            estabelecimento_id=estabelecimento_id,
             nome=data["nome"].strip(),
             cpf=cpf_formatado,
             rg=data.get("rg", "").strip(),
@@ -581,13 +593,13 @@ def criar_cliente():
 def atualizar_cliente(id):
     """Atualiza um cliente existente"""
     try:
-        # Get estabelecimento_id from JWT
+        # Get establishment context (supports Super-Admin impersonation)
         jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
@@ -687,13 +699,13 @@ def atualizar_cliente(id):
 def atualizar_status_cliente(id):
     """Ativa/desativa um cliente"""
     try:
-        # Get estabelecimento_id from JWT
+        # Get establishment context (supports Super-Admin impersonation)
         jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
@@ -710,7 +722,7 @@ def atualizar_status_cliente(id):
             contas_abertas = ContaReceber.query.filter_by(
                 cliente_id=id,
                 status="aberto",
-                estabelecimento_id=jwt_data.get("estabelecimento_id"),
+                estabelecimento_id=estabelecimento_id,
             ).count()
 
             if contas_abertas > 0:
@@ -755,24 +767,24 @@ def atualizar_status_cliente(id):
 def excluir_cliente(id):
     """Exclui um cliente (apenas se não houver vínculos)"""
     try:
-        # Get estabelecimento_id from JWT
+        # Get establishment context (supports Super-Admin impersonation)
         jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Verificar vínculos
         # 1. Vendas vinculadas
         vendas_count = Venda.query.filter_by(
-            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            cliente_id=id, estabelecimento_id=estabelecimento_id
         ).count()
 
         # 2. Contas a receber
         contas_count = ContaReceber.query.filter_by(
-            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            cliente_id=id, estabelecimento_id=estabelecimento_id
         ).count()
 
         if vendas_count > 0 or contas_count > 0:
@@ -813,8 +825,8 @@ def buscar_clientes():
     """Busca rápida de clientes para autocomplete"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         termo = request.args.get("q", "", type=str).strip()
         limite = request.args.get("limite", 20, type=int)
@@ -824,9 +836,10 @@ def buscar_clientes():
         if not termo or len(termo) < 2:
             return jsonify({"success": True, "clientes": []})
 
-        # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
         query = Cliente.query.filter_by(
             estabelecimento_id=estabelecimento_id
@@ -896,8 +909,8 @@ def recalcular_metricas_clientes():
     Útil para sincronizar dados após seeds ou migrações.
     """
     try:
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         clientes_lista = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).all()
         atualizados = 0
@@ -1034,8 +1047,8 @@ def estatisticas_clientes():
     """Retorna estatísticas gerais sobre clientes"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Total de clientes
 
@@ -1196,8 +1209,8 @@ def listar_compras_cliente(id):
     """Lista todas as compras de um cliente"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 20, type=int)
@@ -1295,8 +1308,8 @@ def exportar_clientes():
     """Exporta clientes em formato CSV ou Excel"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         formato = request.args.get("formato", "csv", type=str).lower()
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
@@ -1534,8 +1547,8 @@ def curva_compras():
     """Retorna a curva de compras agregada por mês (últimos 12 meses)"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         hoje = datetime.utcnow()
         meses = []
@@ -1619,8 +1632,8 @@ def relatorio_analitico_clientes():
     """Gera relatório analítico detalhado dos clientes"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros de filtro
         data_inicio = request.args.get("data_inicio", None)

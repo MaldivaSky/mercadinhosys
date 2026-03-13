@@ -142,4 +142,5 @@ config = {
     "production": ProductionConfig,
     "default": DevelopmentConfig,
     "testing": TestingConfig,
+    "simulation": DevelopmentConfig,
 }

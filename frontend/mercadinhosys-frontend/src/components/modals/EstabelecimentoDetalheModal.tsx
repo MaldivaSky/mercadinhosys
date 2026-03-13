@@ -1,0 +1,299 @@
+import React from 'react';
+import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, Mail, Calendar, CreditCard, Settings, Eye } from 'lucide-react';
+
+interface EstabelecimentoDetalheModalProps {
+    estabelecimento: any;
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = ({
+    estabelecimento,
+    isOpen,
+    onClose
+}) => {
+    if (!isOpen || !estabelecimento) return null;
+
+    const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(value);
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('pt-BR');
+    };
+
+    const getPlanoColor = (plano: string) => {
+        switch (plano?.toLowerCase()) {
+            case 'basic':
+                return 'bg-gray-100 text-gray-800 border-gray-300';
+            case 'advanced':
+                return 'bg-blue-100 text-blue-800 border-blue-300';
+            case 'premium':
+                return 'bg-purple-100 text-purple-800 border-purple-300';
+            default:
+                return 'bg-gray-100 text-gray-800 border-gray-300';
+        }
+    };
+
+    const getPlanoStatusColor = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'ativo':
+                return 'bg-green-100 text-green-800 border-green-300';
+            case 'experimental':
+                return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+            case 'atrasado':
+                return 'bg-red-100 text-red-800 border-red-300';
+            case 'cancelado':
+                return 'bg-gray-100 text-gray-800 border-gray-300';
+            default:
+                return 'bg-gray-100 text-gray-800 border-gray-300';
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            
+            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+                {/* Header */}
+                <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                    <button
+                        onClick={onClose}
+                        className="absolute top-4 right-4 p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
+                    
+                    <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+                            <Building2 size={32} />
+                        </div>
+                        <div className="flex-1">
+                            <h2 className="text-2xl font-bold">{estabelecimento.nome_fantasia}</h2>
+                            <p className="text-blue-100 mt-1">{estabelecimento.razao_social}</p>
+                            <div className="flex items-center gap-3 mt-3">
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
+                                    {estabelecimento.plano || 'Basic'}
+                                </span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoStatusColor(estabelecimento.plano_status)}`}>
+                                    {estabelecimento.plano_status || 'Experimental'}
+                                </span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${estabelecimento.ativo ? 'bg-green-100 text-green-800 border-green-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
+                                    {estabelecimento.ativo ? 'Ativo' : 'Inativo'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Informações Principais */}
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <Building2 size={18} />
+                                    Informações Principais
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">CNPJ</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cnpj}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Inscrição Estadual</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.inscricao_estadual || 'Não informado'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Regime Tributário</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.regime_tributario || 'Não informado'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Data de Abertura</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                            {estabelecimento.data_abertura ? formatDate(estabelecimento.data_abertura) : 'Não informado'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <CreditCard size={18} />
+                                    Assinatura
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Plano</span>
+                                        <span className={`px-2 py-1 rounded text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
+                                            {estabelecimento.plano || 'Basic'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>
+                                        <span className={`px-2 py-1 rounded text-xs font-semibold border ${getPlanoStatusColor(estabelecimento.plano_status)}`}>
+                                            {estabelecimento.plano_status || 'Experimental'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Vencimento</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                            {estabelecimento.vencimento_assinatura ? formatDate(estabelecimento.vencimento_assinatura) : 'Não definido'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Contato e Endereço */}
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <Phone size={18} />
+                                    Contato
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Telefone</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.telefone}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">E-mail</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.email}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                    <MapPin size={18} />
+                                    Endereço
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">Endereço Completo</span>
+                                        <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
+                                            {estabelecimento.logradouro && estabelecimento.numero 
+                                                ? `${estabelecimento.logradouro}, ${estabelecimento.numero}` 
+                                                : 'Endereço não informado'
+                                            }
+                                            {estabelecimento.complemento && `, ${estabelecimento.complemento}`}
+                                            {estabelecimento.bairro && `, ${estabelecimento.bairro}`}
+                                            {estabelecimento.cidade && estabelecimento.estado 
+                                                ? `, ${estabelecimento.cidade}/${estabelecimento.estado}` 
+                                                : ''
+                                            }
+                                        </p>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">CEP</span>
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cep || 'Não informado'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Métricas e Estatísticas */}
+                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <TrendingUp size={18} />
+                            Métricas e Estatísticas
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-4 rounded-xl text-white">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Users size={16} />
+                                    <span className="text-sm text-blue-100">Funcionários</span>
+                                </div>
+                                <p className="text-2xl font-bold">{estabelecimento.total_funcionarios || 0}</p>
+                            </div>
+                            <div className="bg-gradient-to-br from-green-500 to-green-600 p-4 rounded-xl text-white">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Package size={16} />
+                                    <span className="text-sm text-green-100">Produtos</span>
+                                </div>
+                                <p className="text-2xl font-bold">{estabelecimento.total_produtos || 0}</p>
+                            </div>
+                            <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-4 rounded-xl text-white">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <ShoppingBag size={16} />
+                                    <span className="text-sm text-purple-100">Clientes</span>
+                                </div>
+                                <p className="text-2xl font-bold">{estabelecimento.total_clientes || 0}</p>
+                            </div>
+                            <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-4 rounded-xl text-white">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <TrendingUp size={16} />
+                                    <span className="text-sm text-orange-100">Faturamento</span>
+                                </div>
+                                <p className="text-2xl font-bold">{formatCurrency(estabelecimento.faturamento_total || 0)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Informações do Sistema */}
+                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Settings size={18} />
+                            Informações do Sistema
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">ID do Estabelecimento</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">#{estabelecimento.id}</span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Data de Cadastro</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {estabelecimento.data_cadastro ? formatDate(estabelecimento.data_cadastro) : 'Não informado'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Stripe Customer ID</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {estabelecimento.stripe_customer_id || 'Não configurado'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Stripe Subscription ID</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {estabelecimento.stripe_subscription_id || 'Não configurado'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="flex justify-between items-center">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Última atualização: {estabelecimento.data_cadastro ? formatDate(estabelecimento.data_cadastro) : 'Não informado'}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                Fechar
+                            </button>
+                            <button
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                            >
+                                <Eye size={16} />
+                                Ver Detalhes Completos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default EstabelecimentoDetalheModal;

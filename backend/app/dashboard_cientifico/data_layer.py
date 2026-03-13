@@ -18,7 +18,6 @@ class DataLayer:
     """
 
     @staticmethod
-    @staticmethod
     def get_sales_summary_range(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """Resumo de vendas para um período específico (inclui o dia inteiro de end_date)"""
         try:
@@ -48,61 +47,6 @@ class DataLayer:
             db.session.rollback()
             logger.error(f"Erro em get_sales_summary_range: {e}")
             return {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
-
-    @staticmethod
-    def get_sales_financials(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
-        """
-        Retorna dados financeiros agregados (Faturamento, CMV, Lucro Bruto)
-        Corrigido para usar VendaItem para calcular o custo real dos produtos vendidos.
-        """
-        try:
-            # Join Venda -> VendaItem para somar custo * quantidade
-            # Importante: VendaItem.custo_unitario armazena o custo no momento da venda (histórico)
-            
-            # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
-            start_dt = start_date if isinstance(start_date, datetime) else datetime.combine(start_date, datetime.min.time())
-            
-            if isinstance(end_date, datetime):
-                end_dt = end_date
-            else:
-                end_dt = datetime.combine(end_date, datetime.max.time())
-                
-            # Garante que end_dt cubra o dia todo se vier com hora 00:00
-            if end_dt.hour == 0 and end_dt.minute == 0:
-                 end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-            
-            # Query 1: Faturamento Total (Vendas Finalizadas)
-            revenue = db.session.query(
-                func.coalesce(func.sum(Venda.total), 0)
-            ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= start_dt,
-                Venda.data_venda <= end_dt,
-                Venda.status == 'finalizada'
-            ).scalar() or 0
-
-            # Query 2: CMV (Custo da Mercadoria Vendida) via VendaItem
-            cogs = db.session.query(
-                func.coalesce(func.sum(VendaItem.custo_unitario * VendaItem.quantidade), 0)
-            ).join(Venda, Venda.id == VendaItem.venda_id).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= start_dt,
-                Venda.data_venda <= end_dt,
-                Venda.status == 'finalizada'
-            ).scalar() or 0
-
-            revenue_f = float(revenue)
-            cogs_f = float(cogs)
-            
-            return {
-                "revenue": revenue_f,
-                "cogs": cogs_f,
-                "gross_profit": revenue_f - cogs_f
-            }
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro em get_sales_financials: {e}")
-            return {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
 
     @staticmethod
     @staticmethod
@@ -1350,79 +1294,7 @@ class DataLayer:
                 }
             }
 
-    @staticmethod
-    def get_consolidated_financial_summary(estabelecimento_id: int, dt_inicio, dt_fim) -> Dict[str, Any]:
-        """
-        Consolida todas as métricas financeiras (CP, CR, Despesas, Vendas) em apenas 3 queries agregadas.
-        Otimizado para reduzir roundtrip no Vercel.
-        """
-        try:
-            from app.models import ContaPagar, ContaReceber, Despesa
-            from sqlalchemy import func, case
-            from datetime import date, datetime, timedelta
-            
-            hoje = date.today()
-            limite_7d = hoje + timedelta(days=7)
-            limite_30d = hoje + timedelta(days=30)
-
-            # 1. Contas a Pagar (Monitor de Pressão Diária + Posição)
-            cp_stats = db.session.query(
-                func.coalesce(func.sum(case((ContaPagar.status == 'aberto', ContaPagar.valor_atual), else_=0)), 0).label('total_aberto'),
-                func.coalesce(func.sum(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento < hoje), ContaPagar.valor_atual), else_=0)), 0).label('total_vencido'),
-                func.coalesce(func.sum(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento == hoje), ContaPagar.valor_atual), else_=0)), 0).label('vence_hoje_valor'),
-                func.coalesce(func.sum(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento >= hoje) & (ContaPagar.data_vencimento <= limite_7d), ContaPagar.valor_atual), else_=0)), 0).label('vence_7d'),
-                func.coalesce(func.sum(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento >= hoje) & (ContaPagar.data_vencimento <= limite_30d), ContaPagar.valor_atual), else_=0)), 0).label('vence_30d'),
-                func.count(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento < hoje), 1))).label('qtd_vencidos'),
-                func.count(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento == hoje), 1))).label('qtd_vence_hoje'),
-                func.count(case(((ContaPagar.status == 'aberto') & (ContaPagar.data_vencimento >= hoje) & (ContaPagar.data_vencimento <= limite_7d), 1))).label('qtd_vence_7d'),
-                func.coalesce(func.sum(case(((ContaPagar.status == 'pago') & (ContaPagar.data_pagamento >= dt_inicio) & (ContaPagar.data_pagamento <= dt_fim), ContaPagar.valor_pago), else_=0)), 0).label('pago_periodo')
-            ).filter(ContaPagar.estabelecimento_id == estabelecimento_id).first()
-
-            # 3. Despesas (Período)
-            desp_stats = db.session.query(
-                func.coalesce(func.sum(Despesa.valor), 0).label('total'),
-                func.coalesce(func.sum(case((Despesa.recorrente == True, Despesa.valor), else_=0)), 0).label('recorrentes')
-            ).filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.data_despesa >= dt_inicio,
-                Despesa.data_despesa <= dt_fim
-            ).first()
-
-            # 4. Vendas (Integrado via método existente)
-            dt_inicio_full = datetime.combine(dt_inicio, datetime.min.time())
-            dt_fim_full = datetime.combine(dt_fim, datetime.max.time())
-            sales = DataLayer.get_sales_financials(estabelecimento_id, dt_inicio_full, dt_fim_full)
-
-            return {
-                "contas_pagar": {
-                    "total_aberto": float(cp_stats.total_aberto),
-                    "total_vencido": float(cp_stats.total_vencido),
-                    "vence_hoje_valor": float(cp_stats.vence_hoje_valor or 0),
-                    "vence_7d": float(cp_stats.vence_7d),
-                    "vence_30d": float(cp_stats.vence_30d),
-                    "pago_periodo": float(cp_stats.pago_periodo),
-                    "qtd_vencidos": int(cp_stats.qtd_vencidos or 0),
-                    "qtd_vence_hoje": int(cp_stats.qtd_vence_hoje or 0),
-                    "qtd_vence_7d": int(cp_stats.qtd_vence_7d or 0)
-                },
-                "despesas": {
-                    "total": float(desp_stats.total),
-                    "recorrentes": float(desp_stats.recorrentes)
-                },
-                "vendas": sales
-            }
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro em get_consolidated_financial_summary: {e}")
-            return {
-                "contas_pagar": {
-                    "total_aberto": 0.0, "total_vencido": 0.0, "vence_hoje_valor": 0.0,
-                    "vence_7d": 0.0, "vence_30d": 0.0, "pago_periodo": 0.0,
-                    "qtd_vencidos": 0, "qtd_vence_hoje": 0, "qtd_vence_7d": 0
-                },
-                "despesas": { "total": 0.0, "recorrentes": 0.0 },
-                "vendas": { "revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0, "count": 0 }
-            }
+    # (Antigo get_consolidated_financial_summary duplicado foi removido daqui para evitar ambiguidade)
 
     @staticmethod
     def get_sales_financials(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
@@ -1432,31 +1304,33 @@ class DataLayer:
         """
         try:
             # 1. Total Vendas (Revenue)
-            revenue = db.session.query(func.sum(Venda.total)).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
+            q_rev = db.session.query(func.sum(Venda.total)).filter(
                 Venda.data_venda >= start_date,
                 Venda.data_venda <= end_date,
                 Venda.status != 'cancelada'
-            ).scalar() or 0.0
+            )
+            if estabelecimento_id != 'all': q_rev = q_rev.filter(Venda.estabelecimento_id == estabelecimento_id)
+            revenue = q_rev.scalar() or 0.0
 
             # 2. Total Vendas Contagem
-            count = db.session.query(func.count(Venda.id)).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
+            q_count = db.session.query(func.count(Venda.id)).filter(
                 Venda.data_venda >= start_date,
                 Venda.data_venda <= end_date,
                 Venda.status != 'cancelada'
-            ).scalar() or 0
+            )
+            if estabelecimento_id != 'all': q_count = q_count.filter(Venda.estabelecimento_id == estabelecimento_id)
+            count = q_count.scalar() or 0
 
             # 3. CMV (Cost of Goods Sold)
-            # Join explícito para filtrar por data da Venda
-            cogs = db.session.query(func.sum(VendaItem.custo_unitario * VendaItem.quantidade)).join(
+            q_cogs = db.session.query(func.sum(VendaItem.custo_unitario * VendaItem.quantidade)).join(
                 Venda, Venda.id == VendaItem.venda_id
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.data_venda <= end_date,
                 Venda.status != 'cancelada'
-            ).scalar() or 0.0
+            )
+            if estabelecimento_id != 'all': q_cogs = q_cogs.filter(Venda.estabelecimento_id == estabelecimento_id)
+            cogs = q_cogs.scalar() or 0.0
 
             # 4. Gross Profit
             revenue = float(revenue)
@@ -1510,18 +1384,19 @@ class DataLayer:
                     result["vendas"].update(sales_data)
                 
                 # Adicionar total recebido (Cash Flow)
-                total_recebido = db.session.query(func.sum(Venda.valor_recebido)).filter(
-                    Venda.estabelecimento_id == estabelecimento_id,
+                q_total_rec = db.session.query(func.sum(Venda.valor_recebido)).filter(
                     Venda.data_venda >= start_dt,
                     Venda.data_venda <= end_dt,
                     Venda.status != 'cancelada'
-                ).scalar() or 0.0
+                )
+                if estabelecimento_id != 'all': q_total_rec = q_total_rec.filter(Venda.estabelecimento_id == estabelecimento_id)
+                total_recebido = q_total_rec.scalar() or 0.0
                 result["vendas"]["total_recebido"] = float(total_recebido)
 
                 # ── MovimentacaoCaixa do PDV (sangrias e suprimentos) ─────────
                 try:
                     from app.models import MovimentacaoCaixa
-                    mov_stats = db.session.query(
+                    q_mov_stats = db.session.query(
                         func.coalesce(
                             func.sum(case((MovimentacaoCaixa.tipo == 'sangria', MovimentacaoCaixa.valor), else_=0)), 0
                         ).label('sangrias'),
@@ -1529,10 +1404,11 @@ class DataLayer:
                             func.sum(case((MovimentacaoCaixa.tipo == 'suprimento', MovimentacaoCaixa.valor), else_=0)), 0
                         ).label('suprimentos'),
                     ).filter(
-                        MovimentacaoCaixa.estabelecimento_id == estabelecimento_id,
                         MovimentacaoCaixa.created_at >= start_dt,
                         MovimentacaoCaixa.created_at <= end_dt,
-                    ).first()
+                    )
+                    if estabelecimento_id != 'all': q_mov_stats = q_mov_stats.filter(MovimentacaoCaixa.estabelecimento_id == estabelecimento_id)
+                    mov_stats = q_mov_stats.first()
                     result["caixa_pdv"] = {
                         "sangrias": float(mov_stats.sangrias or 0),
                         "suprimentos": float(mov_stats.suprimentos or 0),
@@ -1546,14 +1422,15 @@ class DataLayer:
 
             # 2. DADOS DE DESPESAS
             try:
-                despesas_query = db.session.query(
+                q_desp = db.session.query(
                     func.sum(Despesa.valor).label('total'),
                     func.sum(case((Despesa.recorrente == True, Despesa.valor), else_=0)).label('recorrentes')
                 ).filter(
-                    Despesa.estabelecimento_id == estabelecimento_id,
                     Despesa.data_despesa >= start_dt,
                     Despesa.data_despesa <= end_dt
-                ).first()
+                )
+                if estabelecimento_id != 'all': q_desp = q_desp.filter(Despesa.estabelecimento_id == estabelecimento_id)
+                despesas_query = q_desp.first()
                 
                 if despesas_query:
                     result["despesas"] = {
@@ -1571,7 +1448,7 @@ class DataLayer:
                 
                 # Para "A Pagar", o filtro de data start/end geralmente não se aplica ao SALDO ABERTO,
                 # pois dívidas de meses passados ainda são dívidas hoje.
-                contas_query = db.session.query(
+                q_contas = db.session.query(
                     func.coalesce(func.sum(ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), 0).label('total_aberto'),
                     func.count(ContaPagar.id).filter(ContaPagar.data_vencimento < hoje).label('qtd_vencidos'),
                     func.coalesce(func.sum(case((ContaPagar.data_vencimento < hoje, ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('total_vencido'),
@@ -1581,17 +1458,19 @@ class DataLayer:
                     func.coalesce(func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_7d), ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('vence_7d'),
                     func.coalesce(func.sum(case((and_(ContaPagar.data_vencimento >= hoje, ContaPagar.data_vencimento <= date_30d), ContaPagar.valor_atual - func.coalesce(ContaPagar.valor_pago, 0)), else_=0)), 0).label('vence_30d')
                 ).filter(
-                    ContaPagar.estabelecimento_id == estabelecimento_id,
                     ContaPagar.status.in_(['aberto', 'parcial'])
-                ).first()
+                )
+                if estabelecimento_id != 'all': q_contas = q_contas.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+                contas_query = q_contas.first()
                 
                 # Pagamentos realizados no período específico (para Fluxo de Caixa REAL)
-                pagamentos_query = db.session.query(func.coalesce(func.sum(ContaPagar.valor_pago), 0)).filter(
-                    ContaPagar.estabelecimento_id == estabelecimento_id,
+                q_pagamentos = db.session.query(func.coalesce(func.sum(ContaPagar.valor_pago), 0)).filter(
                     ContaPagar.data_pagamento >= start_dt,
                     ContaPagar.data_pagamento <= end_dt,
                     ContaPagar.status.in_(['pago', 'parcial'])
-                ).scalar()
+                )
+                if estabelecimento_id != 'all': q_pagamentos = q_pagamentos.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+                pagamentos_query = q_pagamentos.scalar()
 
                 result["contas_pagar"] = {
                     "total_aberto": float(contas_query.total_aberto),

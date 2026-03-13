@@ -145,14 +145,16 @@ def calcular_classificacao_fornecedor(fornecedor):
 # ============================================
 
 
-@fornecedores_bp.route("", methods=["GET"])
+@fornecedores_bp.route("/", methods=["GET"], strict_slashes=False)
+@fornecedores_bp.route("", methods=["GET"], strict_slashes=False)
 @funcionario_required
 def listar_fornecedores():
     """Lista todos os fornecedores com filtros e paginação"""
     try:
-        # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
         
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
@@ -230,8 +232,8 @@ def listar_fornecedores():
     except Exception as e:
         current_app.logger.error(f"Erro ao listar fornecedores: {str(e)}")
         try:
-            jwt_data = get_jwt()
-            estabelecimento_id = jwt_data.get("estabelecimento_id")
+            from app.utils.query_helpers import get_authorized_establishment_id
+            estabelecimento_id = get_authorized_establishment_id()
             pagina = request.args.get("pagina", 1, type=int)
             por_pagina = request.args.get("por_pagina", 50, type=int)
             offset = (pagina - 1) * por_pagina
@@ -293,13 +295,10 @@ def listar_fornecedores():
 def obter_fornecedor(id):
     """Obtém detalhes completos de um fornecedor específico"""
     try:
-        # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
-        
-        fornecedor = Fornecedor.query.filter_by(
-            id=id, estabelecimento_id=estabelecimento_id
-        ).first_or_404()
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
         # Dados básicos
         dados_fornecedor = fornecedor.to_dict()
@@ -391,8 +390,8 @@ def criar_fornecedor():
     """Cria um novo fornecedor"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         data = request.get_json()
@@ -473,8 +472,8 @@ def atualizar_fornecedor(id):
     """Atualiza um fornecedor existente"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         fornecedor = Fornecedor.query.filter_by(
@@ -570,8 +569,8 @@ def atualizar_status_fornecedor(id):
     """Ativa/desativa um fornecedor"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         fornecedor = Fornecedor.query.filter_by(
@@ -646,8 +645,8 @@ def excluir_fornecedor(id):
     """Exclui um fornecedor (apenas se não houver vínculos)"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
         fornecedor = Fornecedor.query.filter_by(
@@ -713,8 +712,8 @@ def buscar_fornecedores():
     """Busca rápida de fornecedores para autocomplete"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         termo = request.args.get("q", "", type=str).strip()
         limite = request.args.get("limite", 20, type=int)
@@ -779,8 +778,8 @@ def estatisticas_fornecedores():
     """Retorna estatísticas gerais sobre fornecedores"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         # Total de fornecedores
         total_fornecedores = Fornecedor.query.filter_by(
@@ -893,8 +892,8 @@ def listar_pedidos_fornecedor(id):
     """Lista todos os pedidos de um fornecedor"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 20, type=int)
@@ -966,8 +965,8 @@ def exportar_fornecedores():
     """Exporta fornecedores em formato CSV ou Excel"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         formato = request.args.get("formato", "csv", type=str).lower()
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
@@ -1150,8 +1149,8 @@ def importar_fornecedores():
     """Importa fornecedores a partir de arquivo CSV"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         if "file" not in request.files:
             return jsonify({"success": False, "message": "Nenhum arquivo enviado"}), 400
@@ -1293,8 +1292,8 @@ def relatorio_analitico_fornecedores():
     """Gera relatório analítico detalhado dos fornecedores"""
     try:
         # Get estabelecimento_id from JWT
-        jwt_data = get_jwt()
-        estabelecimento_id = jwt_data.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros de filtro
         data_inicio = request.args.get("data_inicio", None)

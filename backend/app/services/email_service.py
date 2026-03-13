@@ -78,6 +78,55 @@ class EmailService:
         return True
 
     @staticmethod
+    def send_welcome_email_tenant(to_email, nome_usuario, nome_estabelecimento, senha_temporaria):
+        """
+        Envia e-mail profissional de boas-vindas para novo tenant SaaS.
+        """
+        subject = f"🎉 Seu MercadinhoSys está pronto! | {nome_estabelecimento}"
+        
+        content = f"""
+Olá {nome_usuario},
+
+Seja muito bem-vindo(a) ao MercadinhoSys!
+
+Temos o prazer de informar que seu estabelecimento "{nome_estabelecimento}" foi provisionado com sucesso em nossa plataforma SaaS.
+
+🔐 **Seus Dados de Acesso:**
+URL de Acesso: https://app.mercadinhosys.com/login
+E-mail/Usuário: {to_email}
+Senha Temporária: {senha_temporaria}
+
+⚠️ **Importante:** Por favor, altere sua senha no primeiro acesso para maior segurança.
+
+🚀 **O que foi criado para você:**
+• Estabelecimento configurado com plano Basic
+• Usuário Administrador com todas as permissões
+• Configurações básicas e horário comercial padrão
+• Caixa PDV-01 inicial
+• 3 categorias de produtos (Geral, Bebidas, Mercearia)
+
+📚 **Próximos Passos:**
+1. Faça seu primeiro login agora mesmo
+2. Altere sua senha temporária
+3. Cadastre seus primeiros produtos
+4. Comece a vender!
+
+Se precisar de ajuda, nossa equipe está disponível através do suporte@mercadinhosys.com
+
+Vamos alavancar seu negócio juntos! 💪
+
+Atenciosamente,
+Equipe MercadinhoSys
+        """
+        
+        logger.info(f"📧 [EMAIL ONBOARDING SaaS] Enviando para: {to_email}")
+        logger.info(f"Estabelecimento: {nome_estabelecimento}")
+        logger.info(f"Subject: {subject}")
+        logger.info(f"Body: {content[:200]}...")
+        
+        return True
+
+    @staticmethod
     def send_payment_confirmation(to_email, plano_nome):
         """
         Confirmação de ativação de plano SaaS.

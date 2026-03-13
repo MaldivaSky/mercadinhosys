@@ -43,18 +43,15 @@ def listar_despesas():
     - ordenar_por: string (data_despesa, valor, categoria, descricao)
     - ordem: string (asc ou desc, padrão: desc)
     """
-    current_user_id = get_jwt_identity()
-    funcionario = Funcionario.query.get(current_user_id)
-    if funcionario and funcionario.estabelecimento_id:
-        estabelecimento_id = funcionario.estabelecimento_id
-    else:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
-        if not estabelecimento_id:
-            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+    from app.utils.query_helpers import get_authorized_establishment_id
+    estabelecimento_id = get_authorized_establishment_id()
+    if not estabelecimento_id:
+        return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
     # Query base
-    query = Despesa.query.filter(Despesa.estabelecimento_id == estabelecimento_id)
+    query = Despesa.query
+    if estabelecimento_id != 'all':
+        query = query.filter(Despesa.estabelecimento_id == estabelecimento_id)
 
     # ========== FILTRAGEM ==========
 
@@ -202,12 +199,10 @@ def listar_despesas():
             # Calcular soma total das despesas filtradas
             from sqlalchemy import func
 
-            soma_despesas = (
-                db.session.query(func.sum(Despesa.valor))
-                .filter(Despesa.estabelecimento_id == estabelecimento_id)
-                .scalar()
-                or 0.0
-            )
+            soma_query = db.session.query(func.sum(Despesa.valor))
+            if estabelecimento_id != 'all':
+                soma_query = soma_query.filter(Despesa.estabelecimento_id == estabelecimento_id)
+            soma_despesas = soma_query.scalar() or 0.0
 
             # Calcular média
             media_despesas = soma_despesas / total_despesas
@@ -263,13 +258,13 @@ def listar_despesas():
             "categorias": [c[0] for c in categorias if c[0]],
             "tipos": ["fixa", "variavel"],
             "formas_pagamento": [
-                fp[0] for fp in db.session.query(Despesa.forma_pagamento)
-                .filter(
-                    Despesa.estabelecimento_id == estabelecimento_id,
-                    Despesa.forma_pagamento.isnot(None),
+                fp[0] for fp in (
+                    db.session.query(Despesa.forma_pagamento)
+                    .filter(Despesa.forma_pagamento.isnot(None))
+                    .filter(Despesa.estabelecimento_id == estabelecimento_id if estabelecimento_id != 'all' else True)
+                    .distinct()
+                    .all()
                 )
-                .distinct()
-                .all()
                 if fp[0]
             ],
         }
@@ -291,18 +286,14 @@ def listar_despesas():
 
 
 @despesas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
+@despesas_bp.route("/estatisticas/", methods=["GET"], strict_slashes=False)
 @funcionario_required
 def obter_estatisticas_despesas():
     """Obtém estatísticas de despesas para o dashboard, com suporte a filtros de data."""
-    current_user_id = get_jwt_identity()
-    funcionario = Funcionario.query.get(current_user_id)
-    if funcionario and funcionario.estabelecimento_id:
-        estabelecimento_id = funcionario.estabelecimento_id
-    else:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
-        if not estabelecimento_id:
-            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+    from app.utils.query_helpers import get_authorized_establishment_id
+    estabelecimento_id = get_authorized_establishment_id()
+    if not estabelecimento_id:
+        return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
     try:
         from sqlalchemy import func
@@ -328,36 +319,33 @@ def obter_estatisticas_despesas():
         cat_fim = filtro_fim if filtro_fim else hoje
 
         # ── Totais gerais (todos os registros do estabelecimento) ─────────────
-        total_despesas = (
-            Despesa.query.filter(Despesa.estabelecimento_id == estabelecimento_id).count()
-        )
+        query_total = Despesa.query
+        if estabelecimento_id != 'all':
+            query_total = query_total.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        total_despesas = query_total.count()
 
         # CRITICAL FIX: convert to Decimal immediately, before any arithmetic
-        soma_total = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(Despesa.estabelecimento_id == estabelecimento_id)
-            .scalar() or 0
-        ))
+        query_soma = db.session.query(func.sum(Despesa.valor))
+        if estabelecimento_id != 'all':
+             query_soma = query_soma.filter(Despesa.estabelecimento_id == estabelecimento_id)
+             
+        soma_total = Decimal(str(query_soma.scalar() or 0))
 
-        despesas_mes_atual = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
+        query_atual = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= mes_atual_inicio,
                 Despesa.data_despesa <= hoje,
             )
-            .scalar() or 0
-        ))
+        if estabelecimento_id != 'all':
+            query_atual = query_atual.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_mes_atual = Decimal(str(query_atual.scalar() or 0))
 
-        despesas_mes_anterior = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
+        query_anterior = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= mes_anterior_inicio,
                 Despesa.data_despesa <= mes_anterior_fim,
             )
-            .scalar() or 0
-        ))
+        if estabelecimento_id != 'all':
+            query_anterior = query_anterior.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_mes_anterior = Decimal(str(query_anterior.scalar() or 0))
 
         # ── Variação — todos os operandos já são Decimal ─────────────────────
         if despesas_mes_anterior > 0:
@@ -371,70 +359,50 @@ def obter_estatisticas_despesas():
         ontem = hoje - timedelta(days=1)
         semana_inicio = hoje - timedelta(days=6)
 
-        despesas_hoje = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.data_despesa == hoje,
-            )
-            .scalar() or 0
-        ))
+        query_hoje = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == hoje)
+        if estabelecimento_id != 'all':
+            query_hoje = query_hoje.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_hoje = Decimal(str(query_hoje.scalar() or 0))
 
-        despesas_ontem = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.data_despesa == ontem,
-            )
-            .scalar() or 0
-        ))
+        query_ontem = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == ontem)
+        if estabelecimento_id != 'all':
+             query_ontem = query_ontem.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_ontem = Decimal(str(query_ontem.scalar() or 0))
 
-        despesas_semana = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
+        query_semana = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= semana_inicio,
                 Despesa.data_despesa <= hoje,
             )
-            .scalar() or 0
-        ))
+        if estabelecimento_id != 'all':
+            query_semana = query_semana.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_semana = Decimal(str(query_semana.scalar() or 0))
 
         # ── Período filtrado: total e por categoria ───────────────────────────
-        soma_periodo = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
+        query_periodo = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= cat_inicio,
                 Despesa.data_despesa <= cat_fim,
             )
-            .scalar() or 0
-        ))
+        if estabelecimento_id != 'all':
+             query_periodo = query_periodo.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        soma_periodo = Decimal(str(query_periodo.scalar() or 0))
 
-        despesas_por_categoria_raw = (
-            db.session.query(
+        query_cats = db.session.query(
                 Despesa.categoria,
                 func.sum(Despesa.valor).label("total"),
                 func.count(Despesa.id).label("quantidade"),
-            )
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
+            ).filter(
                 Despesa.data_despesa >= cat_inicio,
                 Despesa.data_despesa <= cat_fim,
             )
-            .group_by(Despesa.categoria)
-            .order_by(func.sum(Despesa.valor).desc())
-            .all()
-        )
+        if estabelecimento_id != 'all':
+            query_cats = query_cats.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_por_categoria_raw = query_cats.group_by(Despesa.categoria).order_by(func.sum(Despesa.valor).desc()).all()
 
         # ── Recorrentes ───────────────────────────────────────────────────────
-        despesas_recorrentes = Decimal(str(
-            db.session.query(func.sum(Despesa.valor))
-            .filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
-                Despesa.recorrente == True,
-            )
-            .scalar() or 0
-        ))
+        query_rec = db.session.query(func.sum(Despesa.valor)).filter(Despesa.recorrente == True)
+        if estabelecimento_id != 'all':
+             query_rec = query_rec.filter(Despesa.estabelecimento_id == estabelecimento_id)
+        despesas_recorrentes = Decimal(str(query_rec.scalar() or 0))
 
         # ── Evolução mensal (últimos 6 meses) ─────────────────────────────────
         evolucao_mensal = []
@@ -452,15 +420,13 @@ def obter_estatisticas_despesas():
                 mes_fim = mes_data.replace(month=mes_data.month + 1, day=1) - timedelta(days=1)
 
             try:
-                total_mes = Decimal(str(
-                    db.session.query(func.sum(Despesa.valor))
-                    .filter(
-                        Despesa.estabelecimento_id == estabelecimento_id,
+                query_mes = db.session.query(func.sum(Despesa.valor)).filter(
                         Despesa.data_despesa >= mes_data,
                         Despesa.data_despesa <= mes_fim,
                     )
-                    .scalar() or 0
-                ))
+                if estabelecimento_id != 'all':
+                     query_mes = query_mes.filter(Despesa.estabelecimento_id == estabelecimento_id)
+                total_mes = Decimal(str(query_mes.scalar() or 0))
             except Exception as e_inner:
                 current_app.logger.error(f"Erro ao calcular mês {mes_data}: {e_inner}")
                 total_mes = Decimal('0')
@@ -693,14 +659,8 @@ def boletos_a_vencer():
         from app.models import ContaPagar, Fornecedor
         from datetime import date, timedelta
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        if funcionario and funcionario.estabelecimento_id:
-            estabelecimento_id = funcionario.estabelecimento_id
-        else:
-            claims = get_jwt()
-            estabelecimento_id = claims.get("estabelecimento_id")
-        
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
         
@@ -709,10 +669,9 @@ def boletos_a_vencer():
         apenas_vencidos = request.args.get('apenas_vencidos') == 'true'
         
         # Query base
-        query = db.session.query(ContaPagar).join(Fornecedor).filter(
-            ContaPagar.estabelecimento_id == estabelecimento_id,
-            ContaPagar.status == 'aberto'
-        )
+        query = db.session.query(ContaPagar).join(Fornecedor).filter(ContaPagar.status == 'aberto')
+        if estabelecimento_id != 'all':
+             query = query.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
         
         if apenas_vencidos:
             # Apenas boletos já vencidos
@@ -732,18 +691,26 @@ def boletos_a_vencer():
             dias_vencimento = (boleto.data_vencimento - date.today()).days
 
             # Determinar origem: mercadoria (pedido de compra) ou despesa fixa
-            tem_pedido = boleto.pedido_compra_id is not None and boleto.pedido_compra is not None
+            tem_pedido = boleto.pedido_compra_id is not None and getattr(boleto, 'pedido_compra', None) is not None
             if tem_pedido:
                 origem = "mercadoria"
                 descricao = f"Pedido {boleto.pedido_compra.numero_pedido}"
             else:
                 origem = "despesa"
-                descricao = boleto.observacoes or boleto.tipo_documento or "Despesa"
+                descricao = boleto.observacoes or "Despesa" # tipo_documento was removed from ContaPagar
+
+            status_vencimento = 'normal'
+            if dias_vencimento < 0:
+                 status_vencimento = 'vencido'
+            elif dias_vencimento == 0:
+                 status_vencimento = 'vence_hoje'
+            elif dias_vencimento <= 7:
+                 status_vencimento = 'vence_em_breve'
 
             boleto_info = {
                 'id': boleto.id,
                 'numero_documento': boleto.numero_documento,
-                'tipo_documento': boleto.tipo_documento,
+                'tipo_documento': 'boleto', # fallback since tipo_documento doesn't exist
                 'origem': origem,
                 'descricao': descricao,
                 'fornecedor_nome': boleto.fornecedor.nome_fantasia if boleto.fornecedor else 'N/A',
@@ -753,16 +720,11 @@ def boletos_a_vencer():
                 'data_emissao': boleto.data_emissao.isoformat() if boleto.data_emissao else None,
                 'data_vencimento': boleto.data_vencimento.isoformat() if boleto.data_vencimento else None,
                 'dias_vencimento': dias_vencimento,
-                'status_vencimento': (
-                    'vencido' if dias_vencimento < 0 else
-                    'vence_hoje' if dias_vencimento == 0 else
-                    'vence_em_breve' if dias_vencimento <= 7 else
-                    'normal'
-                ),
+                'status_vencimento': status_vencimento,
                 'pedido_numero': boleto.pedido_compra.numero_pedido if tem_pedido else None,
-                'pedido_id': boleto.pedido_compra.id if tem_pedido else None,
+                'pedido_id': boleto.pedido_compra_id if tem_pedido else None,
                 'data_pedido': boleto.pedido_compra.data_pedido.isoformat() if tem_pedido and boleto.pedido_compra.data_pedido else None,
-                'itens': [item.to_dict() for item in boleto.pedido_compra.itens] if tem_pedido else [],
+                'itens': [item.to_dict() for item in boleto.pedido_compra.itens] if tem_pedido and hasattr(boleto.pedido_compra, 'itens') else [],
                 'observacoes': boleto.observacoes
             }
             
@@ -804,14 +766,8 @@ def resumo_financeiro():
         from app.dashboard_cientifico.data_layer import DataLayer
         from datetime import date, timedelta, datetime
 
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        if funcionario and funcionario.estabelecimento_id:
-            estabelecimento_id = funcionario.estabelecimento_id
-        else:
-            claims = get_jwt()
-            estabelecimento_id = claims.get("estabelecimento_id")
-
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
 

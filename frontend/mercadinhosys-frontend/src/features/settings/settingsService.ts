@@ -74,6 +74,12 @@ export interface SubscriptionStatus {
     is_active: boolean;
 }
 
+export interface PreferenciasUsuario {
+    tema_escuro: boolean;
+    notificacoes_desktop: boolean;
+    idioma: string;
+}
+
 const settingsService = {
     getConfig: async () => {
         const response = await apiClient.get<{ success: boolean; config: Configuracao }>('/configuracao/');
@@ -81,8 +87,24 @@ const settingsService = {
     },
 
     updateConfig: async (data: Partial<Configuracao>) => {
+        console.log('🔧 settingsService.updateConfig - Enviando:', data);
         const response = await apiClient.put<{ success: boolean; config: Configuracao }>('/configuracao/', data);
+        console.log('📦 settingsService.updateConfig - Resposta:', {
+            estabelecimento_id: response.data.config.estabelecimento_id,
+            cor_principal: response.data.config.cor_principal,
+            tema_escuro: response.data.config.tema_escuro
+        });
         return response.data.config;
+    },
+
+    getPreferencias: async () => {
+        const response = await apiClient.get<{ success: boolean; preferencias: PreferenciasUsuario }>('/configuracao/preferencias');
+        return response.data.preferencias;
+    },
+
+    updatePreferencias: async (data: Partial<PreferenciasUsuario>) => {
+        const response = await apiClient.put<{ success: boolean; preferencias: PreferenciasUsuario }>('/configuracao/preferencias', data);
+        return response.data.preferencias;
     },
 
     getEstabelecimento: async () => {

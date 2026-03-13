@@ -5,6 +5,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
 from flask_jwt_extended import get_jwt_identity, get_jwt
+from app.utils.query_helpers import get_authorized_establishment_id
 from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
@@ -211,8 +212,7 @@ def bulk_update_prices():
     """Atualiza preços de múltiplos produtos em massa"""
     try:
         claims = get_jwt()
-        raw_est_id = claims.get("estabelecimento_id")
-        estabelecimento_id = int(raw_est_id) if raw_est_id is not None else 1
+        estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
 
         data = request.get_json() or {}
@@ -297,18 +297,10 @@ def bulk_update_prices():
 def listar_produtos():
     """Lista todos os produtos com filtros avançados e paginação"""
     try:
-        # Obter claims do JWT
-        claims = get_jwt()
-        raw_est_id = claims.get("estabelecimento_id")
-        
-        if raw_est_id is None:
-            # Fallback seguro para o primeiro estabelecimento
-            from app.utils.query_helpers import get_first_estabelecimento_id_safe
-            f_id = get_first_estabelecimento_id_safe()
-            estabelecimento_id = f_id if f_id else 1
-            current_app.logger.warning(f"⚠️ listar_produtos: estabelecimento_id ausente no JWT. Usando fallback: {estabelecimento_id}")
-        else:
-            estabelecimento_id = int(raw_est_id)
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
 
         # Parâmetros de paginação
         pagina = request.args.get("pagina", 1, type=int)
@@ -662,8 +654,8 @@ def listar_produtos():
 def obter_produto(id):
     """Obtém detalhes completos de um produto específico"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -817,8 +809,8 @@ def obter_produto(id):
 def criar_produto():
     """Cria um novo produto"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         data = request.get_json()
 
@@ -1000,8 +992,8 @@ def criar_produto():
 def atualizar_produto(id):
     """Atualiza um produto existente"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -1218,8 +1210,8 @@ def atualizar_produto(id):
 def deletar_produto(id):
     """Desativa um produto (soft delete)"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -1254,8 +1246,8 @@ def deletar_produto(id):
 def ajustar_estoque(id):
     """Ajusta o estoque de um produto com movimentação registrada"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -1387,8 +1379,8 @@ def ajustar_estoque(id):
 def atualizar_preco(id):
     """Atualiza preços do produto com histórico de auditoria"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
         
         produto = Produto.query.filter_by(
@@ -1490,8 +1482,8 @@ def descartar_produto(id):
     3. Cria automaticamente uma despesa na categoria 'Prejuízo Produtos'.
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
         
         produto = Produto.query.filter_by(
@@ -1620,8 +1612,8 @@ def buscar_produtos():
             return jsonify({"success": True, "produtos": []})
 
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
 
         query = Produto.query.filter_by(
             estabelecimento_id=estabelecimento_id
@@ -1709,8 +1701,8 @@ def listar_produtos_estoque():
     """Lista todos os produtos com filtros e paginação - Compatível com JWT"""
     try:
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Atualizar classificações ABC se não foram atualizadas recentemente
         try:
@@ -1912,8 +1904,8 @@ def listar_produtos_estoque():
     except Exception as e:
         current_app.logger.error(f"❌ Erro ao listar produtos: {str(e)}")
         try:
-            claims = get_jwt()
-            estabelecimento_id = claims.get("estabelecimento_id")
+            from app.utils.query_helpers import get_authorized_establishment_id
+            estabelecimento_id = get_authorized_establishment_id()
             pagina = request.args.get("pagina", 1, type=int)
             por_pagina = request.args.get("por_pagina", 50, type=int)
             ordenar_por = request.args.get("ordenar_por", "nome", type=str)
@@ -2039,16 +2031,9 @@ def obter_estatisticas_produtos():
     Suporta os mesmos filtros da listagem para consistência.
     """
     try:
-        # Obter claims do JWT
-        claims = get_jwt()
-        raw_est_id = claims.get("estabelecimento_id")
-        if raw_est_id is None:
-            # Fallback seguro para o primeiro estabelecimento
-            from app.utils.query_helpers import get_first_estabelecimento_id_safe
-            f_id = get_first_estabelecimento_id_safe()
-            estabelecimento_id = f_id if f_id else 1
-        else:
-            estabelecimento_id = int(raw_est_id)
+        # Obter estabelecimento_id usando o helper que resolve 'all'
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Obter filtros (mesmos da listagem)
         ativos = request.args.get("ativos", None, type=str)
@@ -2060,17 +2045,19 @@ def obter_estatisticas_produtos():
         filtro_rapido = request.args.get("filtro_rapido", None, type=str)
 
         # Query base
-        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
+        query = Produto.query
+        if estabelecimento_id != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
 
         # Aplicar mesmos filtros da listagem
         if ativos is not None:
             query = query.filter_by(ativo=ativos.lower() == "true")
 
         if categoria:
-            cat = CategoriaProduto.query.filter(
-                CategoriaProduto.estabelecimento_id == estabelecimento_id,
-                CategoriaProduto.nome.ilike(categoria)
-            ).first()
+            q_cat = CategoriaProduto.query.filter(CategoriaProduto.nome.ilike(categoria))
+            if estabelecimento_id != 'all':
+                q_cat = q_cat.filter(CategoriaProduto.estabelecimento_id == estabelecimento_id)
+            cat = q_cat.first()
             if cat:
                 query = query.filter_by(categoria_id=cat.id)
             else:
@@ -2461,8 +2448,8 @@ def listar_categorias():
     """Lista todas as categorias de produtos"""
     try:
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         categorias = (
             CategoriaProduto.query.filter_by(
@@ -2503,8 +2490,8 @@ def listar_categorias():
     except Exception as e:
         current_app.logger.error(f"Erro ao listar categorias: {str(e)}")
         try:
-            claims = get_jwt()
-            estabelecimento_id = claims.get("estabelecimento_id")
+            from app.utils.query_helpers import get_authorized_establishment_id
+            estabelecimento_id = get_authorized_establishment_id()
             # Fallback: usar categorias_produto se existir, senão extrair de produtos via categoria_id
             sql = text(
                 "SELECT DISTINCT cp.nome FROM categorias_produto cp "
@@ -2527,6 +2514,9 @@ def listar_categorias():
                     "total_categorias": len(categorias_nomes),
                 }
             )
+        except Exception as fallback_e:
+            current_app.logger.error(f"Fallback ao listar categorias falhou: {str(fallback_e)}")
+            return jsonify({"success": False, "message": "Erro ao listar categorias"}), 500
         except Exception as e2:
             current_app.logger.error(f"Fallback categorias falhou: {str(e2)}")
             # Fallback final: retornar lista vazia para evitar 500 (melhor que quebrar a página)
@@ -2556,8 +2546,8 @@ def alertas_produtos():
     - dias: Dias para considerar validade próxima (default: 30)
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros opcionais
         filtro_tipo = request.args.get("tipo")
@@ -2741,8 +2731,8 @@ def alertas_produtos():
 def exportar_produtos():
     """Exporta produtos em formato CSV"""
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
 
@@ -2912,8 +2902,8 @@ def exportar_csv():
         from io import StringIO
         
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         ativos = request.args.get("ativos", None, type=str)
         
@@ -2995,8 +2985,8 @@ def criar_produto_estoque():
     
     try:
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         data = request.get_json()
 
@@ -3072,8 +3062,8 @@ def obter_produto_estoque(id):
     
     try:
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -3169,8 +3159,8 @@ def atualizar_produto_estoque(id):
     
     try:
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -3253,8 +3243,8 @@ def deletar_produto_estoque(id):
     
     try:
         # Obter claims do JWT
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=id, estabelecimento_id=estabelecimento_id
@@ -3295,8 +3285,8 @@ def obter_historico_precos(id):
     - Compliance e auditoria fiscal
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Verificar se produto existe e pertence ao estabelecimento
         produto = Produto.query.filter_by(
@@ -3379,8 +3369,8 @@ def obter_vendas_historico(id):
     - Identificação de padrões e sazonalidade
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Verificar se produto existe e pertence ao estabelecimento
         produto = Produto.query.filter_by(
@@ -3562,8 +3552,8 @@ def atualizar_classificacao_abc():
     }
     """
     try:
-        claims = get_jwt()
-        estabelecimento_id = claims.get("estabelecimento_id")
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         data = request.get_json() or {}
         periodo_dias = data.get("periodo_dias", 90)

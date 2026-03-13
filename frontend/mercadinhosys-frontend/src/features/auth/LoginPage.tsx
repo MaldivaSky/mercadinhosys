@@ -64,7 +64,8 @@ export function LoginPage() {
         localStorage.setItem('access_token', access_token);
         localStorage.setItem('refresh_token', refresh_token);
         localStorage.setItem('user_data', JSON.stringify(user));
-        window.dispatchEvent(new Event('auth-change'));
+        // Hard Refresh: Force full environment load to prevent branding 'flash'
+        window.location.href = '/dashboard';
       }
     } catch (err: any) {
       console.error('❌ Erro no login:', err);
@@ -252,9 +253,9 @@ export function LoginPage() {
                     try {
                       const promise = authService.bootstrapAdmin(identifier, password).then(async bootstrap => {
                         if (bootstrap.success) {
-                          const loginRes = await authService.login(identifier, password);
-                          window.dispatchEvent(new Event('auth-change'));
-                          return loginRes;
+                          await authService.login(identifier, password);
+                          window.location.href = '/dashboard';
+                          return true;
                         }
                         throw new Error('Falha ao criar admin');
                       });

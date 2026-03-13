@@ -1,7 +1,7 @@
-from sqlalchemy import func, extract, text
-from app.models import db
 import logging
 import traceback
+from flask import request
+from flask_jwt_extended import get_jwt
 
 logger = logging.getLogger(__name__)
 
@@ -475,6 +475,41 @@ def get_estabelecimento_full_safe(estabelecimento_id):
         from flask import current_app
         current_app.logger.error(f"⚠️ SQL Full Safe falhou: {e}. Tentando modo resiliente.")
         return get_estabelecimento_safe(estabelecimento_id)
+
+def get_authorized_establishment_id():
+    """
+    Função de Engenharia ERP Master:
+    Resolve o estabelecimento_id levando em conta o papel do usuário.
+    - Se for Super-Admin (maldivas), prioriza o Heaer 'X-Impersonate-Tenant-Id' ou 'X-Establishment-ID'.
+    - Suporta 'all' para visão Holding/Global (retorna 'all' literal para que endpoints específicos saibam agrupar).
+    - Fallback para o estabelecimento_id do JWT.
+    """
+    try:
+        from flask_jwt_extended import get_jwt
+        from flask import request
+        claims = get_jwt()
+        
+        is_super = claims.get("is_super_admin", False)
+        jwt_estab_id = claims.get("estabelecimento_id")
+        
+        # Se for Super-Admin, tentamos o Header de Impersonation
+        if is_super:
+            header_id = request.headers.get("X-Impersonate-Tenant-Id") or request.headers.get("X-Establishment-ID")
+            
+            if header_id:
+                if str(header_id).lower() == "all":
+                    logger.info(f"🎭 [IMPERSONATION] Super-Admin acessando VISÃO GLOBAL (Holding)")
+                    return "all"
+                
+                if str(header_id).isdigit():
+                    logger.info(f"🎭 [IMPERSONATION] Super-Admin acessando estab_id: {header_id}")
+                    return int(header_id)
+        
+        # Fallback para o ID do token (ou None se for SaaS Owner sem unidade)
+        return int(jwt_estab_id) if jwt_estab_id is not None else None
+    except Exception as e:
+        logger.error(f"Erro ao extrair authorized establishment: {e}")
+        return None
 
 def get_first_estabelecimento_id_safe():
     """

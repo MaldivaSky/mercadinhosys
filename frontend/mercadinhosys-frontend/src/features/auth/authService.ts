@@ -196,15 +196,22 @@ class AuthService {
     }
 
     logout(): void {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_data');
-        localStorage.removeItem('estabelecimento_data');
+        const keysToRemove = [
+            'access_token',
+            'refresh_token',
+            'user_data',
+            'estabelecimento_data',
+            'current_estabelecimento_id',
+            'theme',
+            'preferencias_usuario'
+        ];
+
+        keysToRemove.forEach(key => localStorage.removeItem(key));
 
         // Dispara evento para atualizar estado de autenticação
         window.dispatchEvent(new Event('auth-change'));
 
-        console.log('🗑️ Sessão limpa');
+        console.log('🗑️ Sessão limpa integralmente');
     }
 
     getToken(): string | null {

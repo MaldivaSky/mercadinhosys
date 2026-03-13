@@ -1,17 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    Settings, Building, ShoppingCart, Package, Shield, Save,
-    Upload, Bell, Printer, DollarSign, Keyboard, X, Database as DatabaseIcon,
-    Clock, MapPin, CreditCard, Building2, Edit2, CheckCircle2, XCircle, Store, RefreshCw
+    Store, Settings, CreditCard, Printer,
+    Shield, Bell, Upload, MapPin,
+    Save, RotateCcw, CheckCircle, AlertCircle, Info, Building2, Clock,
+    ShoppingCart, Package, Users, TrendingUp, X, Eye, XCircle, Edit2, RefreshCw,
+    Database, Palette, Wifi, HardDrive, Keyboard, DollarSign
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
-import { showToast } from '../../utils/toast';
+import { showToast } from '../../components/elements/Toast';
+import { useAuth } from '../../contexts/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { buscarCep, formatCep, formatCnpj, formatPhone } from '../../utils/cepUtils';
-import { API_CONFIG } from '../../api/apiConfig';
 import { apiClient } from '../../api/apiClient';
 import SubscriptionSettings from './SubscriptionSettings';
-import { authService } from '../auth/authService';
+import SyncManager from '../../components/sync/SyncManager';
+import { SyncDataButton } from './SyncDataButton';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 type SectionTitleProps = {
@@ -55,7 +58,7 @@ const InputField = ({ label, value, onChange, type = "text", step, placeholder =
             onBlur={onBlur}
             disabled={disabled}
             placeholder={placeholder}
-            className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white transition-colors"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
         />
     </div>
 );
@@ -149,7 +152,7 @@ const EstabelecimentosPanel: React.FC = () => {
                         <div className="flex items-center gap-2">
                             <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${est.ativo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                                 }`}>
-                                {est.ativo ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                                {est.ativo ? <CheckCircle size={11} /> : <XCircle size={11} />}
                                 {est.ativo ? 'Ativa' : 'Inativa'}
                             </span>
                             <button
@@ -230,151 +233,143 @@ const SettingsPage: React.FC = () => {
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [loadingGeolocation, setLoadingGeolocation] = useState(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
-    const { config: globalConfig, loading: configLoading, updateConfig: updateGlobalConfig, refreshConfig } = useConfig();
+    const {
+        config: globalConfig,
+        preferencias: userPrefs,
+        isDark,
+        loading: configLoading,
+        updateConfig: updateGlobalConfig,
+        updatePreferencias,
+        refreshConfig
+    } = useConfig();
+    const { user } = useAuth();
 
     const [config, setConfig] = useState<Configuracao>(defaultConfig);
     const [estab, setEstab] = useState<Estabelecimento>(defaultEstab);
 
-    useEffect(() => {
-        if (globalConfig) setConfig(globalConfig);
-    }, [globalConfig]);
+    const isSuperAdmin = user?.is_super_admin || false;
 
-    // Cores predefinidas
     const coresPredefinidas = [
-        { nome: 'Azul', valor: '#2563eb' },
-        { nome: 'Verde', valor: '#10b981' },
+        { nome: 'Azul Padrão', valor: '#2563eb' },
+        { nome: 'Esmeralda', valor: '#10b981' },
+        { nome: 'Indigo', valor: '#6366f1' },
+        { nome: 'Rosa', valor: '#f43f5e' },
+        { nome: 'Laranja', valor: '#f59e0b' },
         { nome: 'Roxo', valor: '#8b5cf6' },
-        { nome: 'Vermelho', valor: '#ef4444' },
+        { nome: 'Ardósia', valor: '#475569' },
+        { nome: 'Preto', valor: '#111827' }
     ];
 
     useEffect(() => {
-        const loadEstab = async () => {
+        if (globalConfig) {
+            setConfig(globalConfig);
+        }
+    }, [globalConfig]);
+
+    useEffect(() => {
+        const fetchEstab = async () => {
+            if (!user?.estabelecimento_id) {
+                setLoadingEstab(false);
+                return;
+            }
             try {
                 setLoadingEstab(true);
                 const data = await settingsService.getEstabelecimento();
                 setEstab(data);
             } catch (error) {
-                console.error("Erro ao carregar estabelecimento:", error);
-                showToast.error("Erro ao carregar dados do estabelecimento.");
+                showToast.error('Erro ao carregar dados do estabelecimento');
             } finally {
                 setLoadingEstab(false);
             }
         };
-        loadEstab();
-    }, []);
+        fetchEstab();
+    }, [user?.id, user?.estabelecimento_id]);
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            showToast.error('Imagem muito grande. Máximo 2MB.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const base64 = event.target?.result as string;
+            setLogoPreview(base64);
+            try {
+                // Enviar o objeto File diretamente, conforme esperado pelo service
+                const logoUrl = await settingsService.uploadLogo(file);
+                if (logoUrl) {
+                    await refreshConfig();
+                    showToast.success('Logo atualizada com sucesso!');
+                }
+            } catch (error) {
+                showToast.error('Erro ao enviar logo');
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleCorChange = (cor: string) => {
+        setConfig({ ...config, cor_principal: cor });
+        updateGlobalConfig({ cor_principal: cor });
+    };
+
+    const handleGetCurrentLocation = () => {
+        setLoadingGeolocation(true);
+        if (!navigator.geolocation) {
+            showToast.error('Geolocalização não suportada');
+            setLoadingGeolocation(false);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setConfig({
+                    ...config,
+                    latitude_estabelecimento: position.coords.latitude,
+                    longitude_estabelecimento: position.coords.longitude
+                });
+                showToast.success('Localização obtida!');
+                setLoadingGeolocation(false);
+            },
+            () => {
+                showToast.error('Erro ao obter localização');
+                setLoadingGeolocation(false);
+            }
+        );
+    };
 
     const handleSave = async () => {
         try {
             setSaving(true);
-            const promise = Promise.all([
-                updateGlobalConfig(config),
-                settingsService.updateEstabelecimento(estab)
-            ]).then(([, updatedEstab]) => {
-                localStorage.setItem('estabelecimento_data', JSON.stringify(updatedEstab));
-                setEstab(updatedEstab);
-                return updatedEstab;
-            });
+            // Removido showToast.info redundante
 
-            await showToast.promise(promise, {
-                loading: 'Salvando configurações...',
-                success: 'Configurações salvas com sucesso!',
-                error: 'Erro ao salvar alterações'
-            });
+            const configToUpdate = { ...config };
+            delete (configToUpdate as any).tema_escuro; // Não sobrescrever tema pessoal via config geral
+            delete (configToUpdate as any).logo_base64;
+
+            await Promise.all([
+                updateGlobalConfig(configToUpdate),
+                settingsService.updateEstabelecimento(estab)
+            ]);
+
+            showToast.success('Configurações salvas!');
         } catch (error) {
-            console.error("Erro ao salvar:", error);
+            showToast.error('Erro ao salvar');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-
-            if (file.size > 5 * 1024 * 1024) {
-                showToast.error("Imagem muito grande! Tamanho máximo: 5MB");
-                return;
-            }
-
-            if (!file.type.startsWith('image/')) {
-                showToast.error("Arquivo inválido! Envie apenas imagens.");
-                return;
-            }
-
-            try {
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                    const base64 = reader.result as string;
-                    setConfig({ ...config, logo_base64: base64 });
-                };
-                reader.readAsDataURL(file);
-
-                await showToast.promise(settingsService.uploadLogo(file), {
-                    loading: 'Fazendo upload da logo...',
-                    success: 'Logo atualizada com sucesso!',
-                    error: 'Erro ao fazer upload da logo'
-                });
-
-                setLogoPreview(null);
-                await refreshConfig();
-            } catch (error) {
-                console.error("Erro ao fazer upload:", error);
-            }
-        }
-    };
-
-    const handleGetCurrentLocation = async () => {
-        if (!navigator.geolocation) {
-            showToast.error('Geolocalização não suportada neste navegador');
-            return;
-        }
-
-        try {
-            setLoadingGeolocation(true);
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const { latitude, longitude } = position.coords;
-                    setConfig({
-                        ...config,
-                        latitude_estabelecimento: parseFloat(latitude.toFixed(6)),
-                        longitude_estabelecimento: parseFloat(longitude.toFixed(6))
-                    });
-                    showToast.success(`Localização capturada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-                    setLoadingGeolocation(false);
-                },
-                (error) => {
-                    console.error('Erro ao obter localização:', error);
-                    if (error.code === error.PERMISSION_DENIED) {
-                        showToast.error('Permissão de localização negada. Verifique as configurações do navegador.');
-                    } else if (error.code === error.POSITION_UNAVAILABLE) {
-                        showToast.error('Localização indisponível. Tente novamente.');
-                    } else {
-                        showToast.error('Erro ao obter localização: ' + error.message);
-                    }
-                    setLoadingGeolocation(false);
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
-            );
-        } catch (error) {
-            showToast.error('Erro ao acessar geolocalização');
-            setLoadingGeolocation(false);
-        }
-    };
-
-    const handleCorChange = async (cor: string) => {
-        setConfig({ ...config, cor_principal: cor });
-        // Aplicar imediatamente
-        await updateGlobalConfig({ cor_principal: cor });
-    };
-
     const handleTemaChange = async (tema: boolean) => {
-        setConfig({ ...config, tema_escuro: tema });
-        // Aplicar imediatamente
-        await updateGlobalConfig({ tema_escuro: tema });
+        try {
+            await updatePreferencias({ tema_escuro: tema });
+        } catch (error) {
+            showToast.error('Erro ao mudar tema');
+        }
     };
 
     const handleCepBlur = async () => {
@@ -398,18 +393,16 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const userRole = authService.getCurrentUser()?.role?.toLowerCase();
-    const isAdmin = userRole === 'admin';
-
     const tabs = [
         { id: 'geral', label: 'Geral', icon: Settings },
-        { id: 'estabelecimento', label: 'Estabelecimento', icon: Building },
+        { id: 'estabelecimento', label: 'Estabelecimento', icon: Building2 },
         { id: 'vendas', label: 'Vendas & PDV', icon: ShoppingCart },
         { id: 'estoque', label: 'Estoque', icon: Package },
         { id: 'ponto', label: 'Ponto & RH', icon: Clock },
         { id: 'sistema', label: 'Sistema & Segurança', icon: Shield },
+        { id: 'sincronizacao', label: 'Sincronização Híbrida', icon: HardDrive },
         { id: 'assinatura', label: 'Assinatura', icon: CreditCard },
-        ...(isAdmin ? [{ id: 'lojas', label: 'Minhas Lojas', icon: Building2 }] : []),
+        ...(isSuperAdmin ? [{ id: 'lojas', label: 'Meus Clientes', icon: Building2 }] : []),
     ];
 
     const loading = configLoading || loadingEstab;
@@ -474,20 +467,30 @@ const SettingsPage: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="col-span-2 flex items-center gap-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
                                     <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden border border-gray-300 dark:border-gray-600 relative group">
-                                        {logoPreview || config.logo_base64 || config.logo_url ? (
+                                        {config?.logo_url || config?.logo_base64 ? (
                                             <img
                                                 src={
                                                     logoPreview ||
-                                                    config.logo_base64 ||
-                                                    (config.logo_url?.startsWith('data:') === true
-                                                        ? (config.logo_url as string)
-                                                        : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}${config.logo_url || ''}`)
+                                                    ((config?.logo_url?.startsWith('data:') || config?.logo_url?.startsWith('/'))
+                                                        ? config.logo_url
+                                                        : (config?.logo_base64 || '/assets/logo.png'))
                                                 }
-                                                alt="Logo"
+                                                alt={`Logo de ${estab.nome_fantasia || 'MercadinhoSys'}`}
                                                 className="w-full h-full object-contain"
+                                                onError={(e) => {
+                                                    // Fallback definitivo caso o src falhe
+                                                    const target = e.target as HTMLImageElement;
+                                                    if (target.src !== window.location.origin + '/assets/logo.png') {
+                                                        target.src = '/assets/logo.png';
+                                                    }
+                                                }}
                                             />
                                         ) : (
-                                            <Building className="w-8 h-8 text-gray-400" />
+                                            <img
+                                                src="/assets/logo.png"
+                                                alt="Logo Padrão"
+                                                className="w-full h-full object-contain opacity-50"
+                                            />
                                         )}
                                         <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                             <label className="cursor-pointer text-white text-xs text-center p-1">
@@ -542,8 +545,8 @@ const SettingsPage: React.FC = () => {
                                 <div className="col-span-2">
                                     <SwitchField
                                         label="Modo Escuro"
-                                        description="Ativar tema escuro por padrão"
-                                        checked={config.tema_escuro}
+                                        description="Ativar tema escuro por padrão (preferência pessoal)"
+                                        checked={isDark}
                                         onChange={handleTemaChange}
                                     />
                                 </div>
@@ -554,7 +557,7 @@ const SettingsPage: React.FC = () => {
                     {/* ABA ESTABELECIMENTO */}
                     {activeTab === 'estabelecimento' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
-                            <SectionTitle title="Dados da Empresa" icon={Building} />
+                            <SectionTitle title="Dados da Empresa" icon={Building2} />
                             <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
                                 Preencha o CEP para buscar endereço automaticamente via ViaCEP.
                             </p>
@@ -579,7 +582,7 @@ const SettingsPage: React.FC = () => {
                                                 value={estab.cep}
                                                 onChange={(e) => setEstab({ ...estab, cep: formatCep(e.target.value) })}
                                                 onBlur={handleCepBlur}
-                                                className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white transition-colors"
+                                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
                                             />
                                             <button
                                                 type="button"
@@ -814,7 +817,7 @@ const SettingsPage: React.FC = () => {
                                             type="time"
                                             value={config.hora_entrada_ponto || '08:00'}
                                             onChange={(e) => setConfig({ ...config, hora_entrada_ponto: e.target.value })}
-                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
                                 </div>
@@ -829,7 +832,7 @@ const SettingsPage: React.FC = () => {
                                             type="time"
                                             value={config.hora_saida_almoco_ponto || '12:00'}
                                             onChange={(e) => setConfig({ ...config, hora_saida_almoco_ponto: e.target.value })}
-                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
                                 </div>
@@ -844,7 +847,7 @@ const SettingsPage: React.FC = () => {
                                             type="time"
                                             value={config.hora_retorno_almoco_ponto || '13:00'}
                                             onChange={(e) => setConfig({ ...config, hora_retorno_almoco_ponto: e.target.value })}
-                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
                                 </div>
@@ -859,7 +862,7 @@ const SettingsPage: React.FC = () => {
                                             type="time"
                                             value={config.hora_saida_ponto || '18:00'}
                                             onChange={(e) => setConfig({ ...config, hora_saida_ponto: e.target.value })}
-                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-bold text-lg"
+                                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
                                 </div>
@@ -908,8 +911,16 @@ const SettingsPage: React.FC = () => {
                                 />
                             </div>
 
-                            <SectionTitle title="Banco & Replicação" icon={DatabaseIcon} />
+                            <SectionTitle title="Banco & Replicação" icon={Database} />
                             <SyncPanel />
+                        </div>
+                    )}
+
+                    {/* ABA SINCRONIZAÇÃO */}
+                    {activeTab === 'sincronizacao' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
+                            <SyncDataButton />
+                            <SyncManager />
                         </div>
                     )}
 
@@ -921,10 +932,10 @@ const SettingsPage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* ABA MINHAS LOJAS (apenas admin) */}
+                    {/* ABA MEUS CLIENTES (apenas super admin) */}
                     {activeTab === 'lojas' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
-                            <SectionTitle title="Minhas Lojas" icon={Building2} />
+                            <SectionTitle title="Meus Clientes" icon={Building2} />
                             <EstabelecimentosPanel />
                         </div>
                     )}
@@ -1051,7 +1062,7 @@ const SyncPanel: React.FC = () => {
         <div className="space-y-4 p-4 border rounded-lg border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <DatabaseIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <Database className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Status do Neon</span>
                 </div>
                 <div className="flex items-center gap-2">

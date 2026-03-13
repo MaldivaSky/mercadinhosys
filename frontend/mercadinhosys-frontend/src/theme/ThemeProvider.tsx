@@ -12,30 +12,37 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderProps) {
-    const { config, updateConfig } = useConfig();
+    const { config, preferencias, updatePreferencias } = useConfig();
+    const defaultThemeMode = defaultMode || 'dark';
 
-    // Mode vem do ConfigContext (API) quando disponível, senão localStorage
+    // O ConfigContext é o cérebro. ThemeProvider é o músculo (MUI).
+    // Senior Mode: Blindagem absoluta contra propriedades undefined
     const mode: 'dark' | 'light' = useMemo(() => {
-        if (config !== null) {
+        // Se temos preferências carregadas, elas mandam
+        if (preferencias?.tema_escuro !== undefined) {
+            return preferencias.tema_escuro ? 'dark' : 'light';
+        }
+
+        // Se o config do estabelecimento carregou, usamos como segundo fallback
+        if (config?.tema_escuro !== undefined) {
             return config.tema_escuro ? 'dark' : 'light';
         }
+
+        // Caso contrário, respeitamos o cache ou o padrão do sistema
         const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
-        return saved || defaultMode;
-    }, [config, defaultMode]);
+        return saved || defaultThemeMode;
+    }, [preferencias?.tema_escuro, config?.tema_escuro, defaultThemeMode]);
 
     const toggleTheme = async () => {
         try {
-            const newMode = mode === 'light' ? 'dark' : 'light';
-            await updateConfig({ tema_escuro: newMode === 'dark' });
+            // Unificação Sênior: Usar o toggle central do ConfigContext
+            const currentIsDark = mode === 'dark';
+            await updatePreferencias({ tema_escuro: !currentIsDark });
         } catch {
-            // Fallback local se API falhar (ex: sem token)
+            // Fallback local redundante para segurança máxima
             const fallback = mode === 'light' ? 'dark' : 'light';
             localStorage.setItem('theme', fallback);
-            if (fallback === 'dark') {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
+            document.documentElement.classList.toggle('dark', fallback === 'dark');
         }
     };
 

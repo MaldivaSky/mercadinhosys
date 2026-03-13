@@ -29,6 +29,10 @@ def funcionario_required(f):
         current_user_id = get_jwt_identity()
         claims = get_jwt()  # ✅ Agora pega os claims adicionais
 
+        # BYPASS PARA SUPER ADMIN (Auditoria SaaS)
+        if claims.get("is_super_admin"):
+            return f(*args, **kwargs)
+
         # Verifica se o usuário está autenticado
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
@@ -60,6 +64,10 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         current_user_id = get_jwt_identity()
         claims = get_jwt()  # ✅ Agora pega os claims adicionais
+
+        # BYPASS PARA SUPER ADMIN (Auditoria SaaS) - Engenharia ERP Master
+        if claims.get("is_super_admin"):
+            return f(*args, **kwargs)
 
         # Verifica se o usuário está autenticado
         if not current_user_id:
@@ -97,6 +105,10 @@ def gerente_ou_admin_required(f):
         current_user_id = get_jwt_identity()
         claims = get_jwt()
 
+        # BYPASS PARA SUPER ADMIN (Auditoria SaaS) - Engenharia ERP Master
+        if claims.get("is_super_admin"):
+            return f(*args, **kwargs)
+
         # Verifica se o usuário está autenticado
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
@@ -126,6 +138,43 @@ def gerente_ou_admin_required(f):
     return decorated_function
 
 
+def super_admin_required(f):
+    """Decorator para exigir autenticação de Super Admin SaaS (acesso global ao sistema)"""
+
+    @wraps(f)
+    @jwt_required()
+    def decorated_function(*args, **kwargs):
+        current_user_id = get_jwt_identity()
+        claims = get_jwt()
+
+        # BYPASS MASTER: Se for Super Admin nas claims, libera direto
+        if claims.get("is_super_admin"):
+            return f(*args, **kwargs)
+
+        # Verifica se o usuário está autenticado
+        if not current_user_id:
+            return jsonify({"error": "Token inválido ou expirado"}), 401
+
+        # Verifica se não está bloqueado
+        status = claims.get("status", "").lower()
+        if status not in ["ativo", "active"]:
+            return jsonify({"error": "Acesso bloqueado"}), 403
+
+        # Verificação de segurança adicional via Role caso claims falhem
+        role = claims.get("role", "").upper()
+        if role != "ADMIN" and role != "SUPER_ADMIN":
+            from flask import current_app
+            current_app.logger.warning(f"Super Admin access DENIED via claims: user {current_user_id}. Role: {role}")
+            return jsonify({
+                "error": "Acesso restrito ao administrador do sistema SaaS",
+                "message": "Apenas o Super Admin pode acessar esta funcionalidade"
+            }), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 def gerente_required(f):
     """Decorator para exigir autenticação de gerente"""
 
@@ -134,6 +183,10 @@ def gerente_required(f):
     def decorated_function(*args, **kwargs):
         current_user_id = get_jwt_identity()
         claims = get_jwt()  # ✅ Agora pega os claims adicionais
+
+        # BYPASS PARA SUPER ADMIN (Auditoria SaaS) - Engenharia ERP Master
+        if claims.get("is_super_admin"):
+            return f(*args, **kwargs)
 
         # Verifica se o usuário está autenticado
         if not current_user_id:
