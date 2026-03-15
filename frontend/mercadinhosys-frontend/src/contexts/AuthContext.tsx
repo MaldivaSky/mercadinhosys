@@ -99,8 +99,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('user_data', JSON.stringify(updatedUser));
     };
 
-    // A autenticação é verdadeira se tivermos um usuário OU se tivermos um token no localStorage (persistence)
-    const isAuthenticated = !!user || (!!localStorage.getItem('access_token') && localStorage.getItem('access_token') !== 'undefined');
+    // A autenticação é verdadeira se tivermos um usuário populado
+    const isAuthenticated = !!user;
 
     return (
         <AuthContext.Provider

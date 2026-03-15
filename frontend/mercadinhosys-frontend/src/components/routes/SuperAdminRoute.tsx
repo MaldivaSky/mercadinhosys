@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { authService } from '../../features/auth/authService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SuperAdminRouteProps {
   children: React.ReactNode;
@@ -8,17 +8,32 @@ interface SuperAdminRouteProps {
 
 /**
  * Componente wrapper que protege rotas exclusivas para Super Admins do SaaS
- * Verifica a flag is_super_admin no contexto de autenticação
  */
 const SuperAdminRoute: React.FC<SuperAdminRouteProps> = ({ children }) => {
-  const user = authService.getCurrentUser();
+  const { user, loading } = useAuth();
+
+  console.log('🛡️ [SuperAdminRoute] Verificando acesso:', {
+    username: user?.username || user?.nome,
+    is_super_admin: user?.is_super_admin,
+    type: typeof user?.is_super_admin
+  });
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">Carregando permissões...</div>;
+  }
 
   // Se não estiver autenticado, redireciona para login
   if (!user) {
+    console.warn('🛡️ [SuperAdminRoute] Usuário não autenticado. Redirecionando para /login');
     return <Navigate to="/login" replace />;
   }
 
-  // Lógica de Super Admin desativada: todos os admins acessam
+  // Se não for super admin, redireciona para dashboard
+  if (user.is_super_admin !== true) {
+    console.warn('🛡️ [SuperAdminRoute] Usuário não é Super Admin. Bloqueando acesso e redirecionando para /dashboard');
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <>{children}</>;
 };
 

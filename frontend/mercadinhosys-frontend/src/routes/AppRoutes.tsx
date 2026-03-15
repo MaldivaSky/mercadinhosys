@@ -1,12 +1,12 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, lazy, useEffect } from 'react';
+import { useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import ConnectionTest from '../components/ConnectionTest';
 import { LoginPage } from '../features/auth/LoginPage';
 import { RegisterPage } from '../features/auth/RegisterPage';
-import { authService } from '../features/auth/authService';
 import SuperAdminRoute from '../components/routes/SuperAdminRoute';
 import PlanoGuard from '../components/routes/PlanoGuard';
+import { useAuth } from '../contexts/AuthContext';
 
 // Lazy loading das páginas
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -29,41 +29,20 @@ const SystemMonitorPage = lazy(() => import('../features/saas/SystemMonitorPage'
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
 
-// Componente para proteção de rotas por role (mantido para compatibilidade)
-const RoleGuard = ({ children, allowedRoles, requireSuperAdmin }: { children: React.ReactNode, allowedRoles?: string[], requireSuperAdmin?: boolean }) => {
-    const user = authService.getCurrentUser();
-    const userRole = user?.role?.toLowerCase() || '';
-    const isSuperAdmin = user?.is_super_admin || false;
-
-    // Se exigir super admin e não for, bloqueia
-    if (requireSuperAdmin && !isSuperAdmin) {
-        return <Navigate to="/login" replace />;
-    }
-
-    // Se a rota for restrita a certos perfis (ex: admin)
-    if (allowedRoles && !allowedRoles.includes(userRole)) {
-        return <Navigate to="/login" replace />;
-    }
-
-    return <>{children}</>;
-};
-
 const AppRoutes: React.FC = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
+    const { isAuthenticated, loading } = useAuth();
+    const navigate = useNavigate();
 
-    // Monitora mudanças no localStorage via evento customizado
+    // Efeito para redirecionamento após login (evita window.location.href)
     useEffect(() => {
-        const checkAuth = () => {
-            setIsAuthenticated(authService.isAuthenticated());
-        };
+        if (isAuthenticated && window.location.pathname === '/login') {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [isAuthenticated, navigate]);
 
-        // Escuta o evento customizado de mudança de autenticação
-        window.addEventListener('auth-change', checkAuth);
-
-        return () => {
-            window.removeEventListener('auth-change', checkAuth);
-        };
-    }, []);
+    if (loading) {
+        return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    }
 
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
@@ -94,7 +73,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="customers" element={<PlanoGuard planoRequerido="gratuito"><CustomersPage /></PlanoGuard>} />
                     <Route path="sales" element={<PlanoGuard planoRequerido="gratuito"><SalesPage /></PlanoGuard>} />
                     <Route path="settings" element={<PlanoGuard planoRequerido="gratuito"><SettingsPage /></PlanoGuard>} />
-                    
+
                     {/* PLANO ADVANCED - Funcionalidades pagas (Gestão de Equipe) */}
                     <Route path="employees" element={<PlanoGuard planoRequerido="advanced"><EmployeesPage /></PlanoGuard>} />
                     <Route path="rh" element={<PlanoGuard planoRequerido="advanced"><RHPage /></PlanoGuard>} />
@@ -104,7 +83,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="ponto-diagnostico" element={<PlanoGuard planoRequerido="advanced"><DiagnosticoFotos /></PlanoGuard>} />
                     <Route path="reports" element={<PlanoGuard planoRequerido="advanced"><ReportsPage /></PlanoGuard>} />
                     <Route path="expenses" element={<PlanoGuard planoRequerido="advanced"><ExpensesPage /></PlanoGuard>} />
-                    
+
                     {/* SUPER ADMIN - Acesso total ao sistema */}
                     <Route path="estabelecimentos" element={<SuperAdminRoute><EstabelecimentosPage /></SuperAdminRoute>} />
                     <Route path="monitor" element={<SuperAdminRoute><SystemMonitorPage /></SuperAdminRoute>} />
