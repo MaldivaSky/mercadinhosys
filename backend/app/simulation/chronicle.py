@@ -33,7 +33,7 @@ class ChronicleSimulator:
                 print(f"Processando DNA {key}: {dna.nome}...")
                 
                 # Injetar Base Master e Gerar Time Realista
-                equipe_info = RealisticInjector.inject_funcionarios_time(est.id)
+                equipe_info = RealisticInjector.inject_funcionarios_time(est.id, scenario_key=key)
                 
                 # Obter o ID real do funcionário admin para auditoria master
                 admin_username = next(f['u'] for f in equipe_info if f['c'] == "Gerente")

@@ -234,12 +234,15 @@ def bulk_update_prices():
 
             if lote_id is not None:
                 # Atualização por lote: altera preço de venda do lote (promoção)
-                lote = ProdutoLote.query.filter_by(
+                lote_query = ProdutoLote.query.filter_by(
                     id=lote_id,
-                    estabelecimento_id=estabelecimento_id,
                     produto_id=prod_id,
                     ativo=True,
-                ).first()
+                )
+                if str(estabelecimento_id).lower() != 'all':
+                    lote_query = lote_query.filter_by(estabelecimento_id=estabelecimento_id)
+                
+                lote = lote_query.first()
                 if lote:
                     lote.preco_venda = novo_preco_dec
                     lote.updated_at = datetime.utcnow()
@@ -247,10 +250,11 @@ def bulk_update_prices():
                 continue
 
             # Atualização no produto (sem lote)
-            produto = Produto.query.filter_by(
-                id=prod_id,
-                estabelecimento_id=estabelecimento_id,
-            ).first()
+            prod_query = Produto.query.filter_by(id=prod_id)
+            if str(estabelecimento_id).lower() != 'all':
+                prod_query = prod_query.filter_by(estabelecimento_id=estabelecimento_id)
+            
+            produto = prod_query.first()
 
             if not produto:
                 continue
@@ -322,8 +326,12 @@ def listar_produtos():
         filtro_rapido = request.args.get("filtro_rapido", None, type=str)
         expandir_por_lote = request.args.get("expandir_por_lote", "").lower() == "true"
 
-        # Lazy load – joinedload causava InFailedSqlTransaction no Aiven/Render.
-        query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id)
+        # Query base - usando db.session.query(Produto) para evitar que o TenantQuery 
+        # aplique o filtro de tenant automaticamente se já estivermos tratando o 'all' aqui
+        query = db.session.query(Produto)
+        
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter(Produto.estabelecimento_id == estabelecimento_id)
 
         # 1. Filtro de Ativo/Inativo
         if ativo is not None:
@@ -386,17 +394,16 @@ def listar_produtos():
                     Produto.data_validade >= hoje,
                     Produto.data_validade <= limite,
                 )
-                subq_lotes = (
-                    db.session.query(ProdutoLote.produto_id)
-                    .filter(
-                        ProdutoLote.estabelecimento_id == estabelecimento_id,
-                        ProdutoLote.ativo == True,
-                        ProdutoLote.quantidade > 0,
-                        ProdutoLote.data_validade >= hoje,
-                        ProdutoLote.data_validade <= limite,
-                    )
-                    .distinct()
+                subq_lotes = db.session.query(ProdutoLote.produto_id).filter(
+                    ProdutoLote.ativo == True,
+                    ProdutoLote.quantidade > 0,
+                    ProdutoLote.data_validade >= hoje,
+                    ProdutoLote.data_validade <= limite,
                 )
+                if str(estabelecimento_id).lower() != 'all':
+                    subq_lotes = subq_lotes.filter(ProdutoLote.estabelecimento_id == estabelecimento_id)
+                
+                subq_lotes = subq_lotes.distinct()
                 query = query.filter(or_(cond_produto, Produto.id.in_(subq_lotes)))
             if vencidos and vencidos.lower() == "true":
                 cond_produto = and_(
@@ -1732,10 +1739,11 @@ def listar_produtos_estoque():
         if categoria:
             # Buscar categoria pelo nome (case insensitive)
             current_app.logger.info(f"🔍 Filtrando por categoria: '{categoria}'")
-            cat = CategoriaProduto.query.filter(
-                CategoriaProduto.estabelecimento_id == estabelecimento_id,
-                CategoriaProduto.nome.ilike(categoria)
-            ).first()
+            cat_filters = [CategoriaProduto.nome.ilike(categoria)]
+            if str(estabelecimento_id).lower() != 'all':
+                cat_filters.append(CategoriaProduto.estabelecimento_id == estabelecimento_id)
+            
+            cat = CategoriaProduto.query.filter(*cat_filters).first()
 
             if cat:
                 current_app.logger.info(f"✅ Categoria encontrada: ID={cat.id}, Nome={cat.nome}")
@@ -1746,10 +1754,11 @@ def listar_produtos_estoque():
                 categoria_normalizada = CategoriaProduto.normalizar_nome_categoria(categoria)
                 current_app.logger.info(f"🔄 Tentando com nome normalizado: '{categoria_normalizada}'")
                 
-                cat = CategoriaProduto.query.filter(
-                    CategoriaProduto.estabelecimento_id == estabelecimento_id,
-                    CategoriaProduto.nome.ilike(categoria_normalizada)
-                ).first()
+                cat_filters_norm = [CategoriaProduto.nome.ilike(categoria_normalizada)]
+                if str(estabelecimento_id).lower() != 'all':
+                    cat_filters_norm.append(CategoriaProduto.estabelecimento_id == estabelecimento_id)
+                
+                cat = CategoriaProduto.query.filter(*cat_filters_norm).first()
                 
                 if cat:
                     current_app.logger.info(f"✅ Categoria encontrada após normalização: ID={cat.id}")
@@ -2496,7 +2505,7 @@ def listar_categorias():
             sql = text(
                 "SELECT DISTINCT cp.nome FROM categorias_produto cp "
                 "INNER JOIN produtos p ON p.categoria_id = cp.id "
-                "WHERE p.estabelecimento_id = :est_id AND (p.ativo = TRUE OR p.ativo IS NULL)"
+                "WHERE (p.estabelecimento_id = :est_id OR :est_id = 'all') AND (p.ativo = TRUE OR p.ativo IS NULL)"
             )
             result = db.session.execute(sql, {"est_id": estabelecimento_id}).fetchall()
             categorias_nomes = []

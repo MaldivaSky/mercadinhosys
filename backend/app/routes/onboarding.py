@@ -39,7 +39,6 @@ def super_admin_required(fn):
     return jwt_required()(wrapper)
 
 @onboarding_bp.route("/registrar", methods=["POST"])
-@super_admin_required
 def registrar_conta():
     """
     Endpoint público para registrar um novo Estabelecimento e seu Usuário Administrador.
@@ -56,7 +55,7 @@ def registrar_conta():
         cnpj = data.get("cnpj")
         telefone_loja = data.get("telefone_loja")
         email_loja = data.get("email_loja")
-        cep = data.get("cep", "00000000")
+        cep = data.get("cep", "00000-000")
         logradouro = data.get("logradouro", "Não informado")
         numero = data.get("numero", "S/N")
         bairro = data.get("bairro", "Não informado")
@@ -94,6 +93,9 @@ def registrar_conta():
         import random
         caracteres = string.ascii_letters + string.digits + "@#$*"
         senha_temporaria = ''.join(random.choice(caracteres) for i in range(8))
+        
+        # LOG DE SEGURANÇA (FACILITAÇÃO DE TESTES)
+        current_app.logger.info(f"🔑 [ONBOARDING] Nova conta criada: {username} | Senha Temporária: {senha_temporaria}")
 
         # Início da Transação Atômica
         try:
@@ -112,12 +114,27 @@ def registrar_conta():
                 estado=estado,
                 data_abertura=date.today(),
                 plano="Basic",
-                plano_status="ativo"
+                plano_status="pendente", # Requer aprovação do Super Admin
+                ativo=False              # Bloqueado até ativação
             )
             db.session.add(novo_estabelecimento)
-            db.session.flush() # Manter na transação para pegar o ID gerado
+            db.session.flush()
 
-            # 2. Criar Configuração Padrão
+            # 2. Criar Lead (Marketing/SaaS Control)
+            try:
+                from app.models import Lead
+                novo_lead = Lead(
+                    nome=nome_admin,
+                    email=email_admin,
+                    whatsapp=celular_admin,
+                    origem='onboarding_publico',
+                    observacao=f"Novo cadastro pendente: {nome_fantasia} (CNPJ: {cnpj})"
+                )
+                db.session.add(novo_lead)
+            except Exception as e_lead:
+                current_app.logger.warning(f"Erro ao criar lead no onboarding: {e_lead}")
+
+            # 3. Criar Configuração Padrão
             permissoes_admin = {
                 "pdv": True,
                 "estoque": True,
@@ -153,6 +170,8 @@ def registrar_conta():
                 data_admissao=date.today(),
                 username=username,
                 role="ADMIN",
+                status="pendente", # Requer aprovação do Super Admin
+                ativo=False,       # Bloqueado até ativação
                 permissoes_json=json.dumps(permissoes_admin),
                 cep=cep,
                 logradouro=logradouro,

@@ -57,6 +57,10 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
         try {
             setLoading(true);
 
+            // Senior Mitigation: Pequeno delay para garantir que o localStorage 
+            // esteja sincronizado após o redirect do login
+            await new Promise(resolve => setTimeout(resolve, 300));
+
             if (!user || !user.id) {
                 setConfig(null);
                 setPreferencias(null);

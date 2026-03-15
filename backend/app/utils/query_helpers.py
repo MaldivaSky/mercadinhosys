@@ -1,15 +1,22 @@
 import logging
+import os
 import traceback
 from flask import request
 from flask_jwt_extended import get_jwt
+from sqlalchemy import func, extract, text
 
 logger = logging.getLogger(__name__)
+
+def _get_db():
+    from app.models import db
+    return db
 
 def get_hour_extract(column):
     """
     Returns the dialect-specific expression to extract the hour.
     Casts to Integer for cross-database consistency.
     """
+    db = _get_db()
     engine_name = db.engine.name
     if engine_name == 'sqlite':
         return func.cast(func.strftime('%H', column), db.Integer)
@@ -21,6 +28,7 @@ def get_dow_extract(column):
     PostgreSQL: 'dow' (0=Sunday)
     SQLite: '%w' (0=Sunday)
     """
+    db = _get_db()
     engine_name = db.engine.name
     if engine_name == 'sqlite':
         return func.cast(func.strftime('%w', column), db.Integer)
@@ -30,6 +38,7 @@ def get_year_extract(column):
     """
     Returns the dialect-specific expression to extract the year.
     """
+    db = _get_db()
     engine_name = db.engine.name
     if engine_name == 'sqlite':
         return func.cast(func.strftime('%Y', column), db.Integer)
@@ -39,6 +48,7 @@ def get_month_extract(column):
     """
     Returns the dialect-specific expression to extract the month (1-12).
     """
+    db = _get_db()
     engine_name = db.engine.name
     if engine_name == 'sqlite':
         return func.cast(func.strftime('%m', column), db.Integer)
@@ -51,7 +61,7 @@ def get_estabelecimento_safe(estab_id):
     """
     try:
         if not estab_id: return None
-        
+        db = _get_db()
         # Colunas core garantidas
         row = db.session.execute(
             text("SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, ativo FROM estabelecimentos WHERE id = :eid"),
@@ -73,6 +83,7 @@ def get_estabelecimento_safe(estab_id):
         # Busca colunas extras de forma isolada
         def _fetch_col(col, default=None):
             try:
+                db = _get_db()
                 r = db.session.execute(
                     text(f"SELECT {col} FROM estabelecimentos WHERE id = :eid"),
                     {"eid": estab_id}
@@ -123,6 +134,7 @@ def get_configuracao_safe(estab_id):
                 WHERE estabelecimento_id = :eid 
                 LIMIT 1
             """
+            db = _get_db()
             row = db.session.execute(text(sql_fast), {"eid": estab_id}).fetchone()
             
             if row:
@@ -163,7 +175,7 @@ def get_configuracao_safe(estab_id):
 
         # --- TENTATIVA 2: SAFE PATH (Fallback Resiliente) ---
         # Se chegou aqui, a query completa falhou.
-        
+        db = _get_db()
         row = db.session.execute(
             text("SELECT id, estabelecimento_id FROM configuracoes WHERE estabelecimento_id = :eid"),
             {"eid": estab_id}
@@ -178,6 +190,7 @@ def get_configuracao_safe(estab_id):
 
         def _fetch_col(col, default=None):
             try:
+                db = _get_db()
                 r = db.session.execute(
                     text(f"SELECT {col} FROM configuracoes WHERE estabelecimento_id = :eid"),
                     {"eid": estab_id}
@@ -234,6 +247,7 @@ def get_funcionario_safe(func_id):
         
         # Tentativa 1: Por ID (Assume que func_id pode ser um ID numérico)
         row = None
+        db = _get_db()
         try:
             # Força cast para int se for puramente numérico para evitar erros de tipo no Postgres
             if str(func_id).isdigit():
@@ -271,6 +285,7 @@ def get_funcionario_safe(func_id):
                 target_col = col
                 if col == "login": target_col = "username"
                 
+                db = _get_db()
                 r = db.session.execute(
                     text(f"SELECT {target_col} FROM funcionarios WHERE id = :fid"),
                     {"fid": func_id}
@@ -307,7 +322,7 @@ def get_produto_safe(prod_id):
     """
     try:
         if not prod_id: return None
-        
+        db = _get_db()
         row = db.session.execute(
             text("SELECT id, nome, preco_venda, preco_custo, quantidade, ativo, estabelecimento_id FROM produtos WHERE id = :pid"),
             {"pid": prod_id}
@@ -327,6 +342,7 @@ def get_produto_safe(prod_id):
 
         def _fetch_col(col, default=None):
             try:
+                db = _get_db()
                 r = db.session.execute(
                     text(f"SELECT {col} FROM produtos WHERE id = :pid"),
                     {"pid": prod_id}
@@ -352,6 +368,7 @@ def get_cliente_safe(cli_id):
     """
     try:
         if not cli_id: return None
+        db = _get_db()
         row = db.session.execute(
             text("SELECT id, nome, email, cpf, telefone, estabelecimento_id FROM clientes WHERE id = :cid"),
             {"cid": cli_id}
@@ -375,6 +392,7 @@ def get_venda_safe(venda_id):
     """
     try:
         if not venda_id: return None
+        db = _get_db()
         row = db.session.execute(
             text("SELECT id, codigo, total, subtotal, desconto, forma_pagamento, cliente_id, funcionario_id, estabelecimento_id, data_venda, valor_recebido, troco FROM vendas WHERE id = :vid"),
             {"vid": venda_id}
@@ -404,7 +422,7 @@ def get_venda_itens_safe(venda_id):
     """
     try:
         if not venda_id: return []
-        
+        db = _get_db()
         sql = """
             SELECT vi.id, vi.produto_id, vi.quantidade, vi.preco_unitario, vi.total_item,
                    p.nome as produto_nome, p.codigo_barras
@@ -448,6 +466,7 @@ def get_estabelecimento_full_safe(estabelecimento_id):
             LEFT JOIN configuracoes c ON c.estabelecimento_id = e.id
             WHERE e.id = :eid LIMIT 1
         """
+        db = _get_db()
         row = db.session.execute(text(sql), {"eid": estabelecimento_id}).fetchone()
         
         if not row: return None
@@ -478,35 +497,12 @@ def get_estabelecimento_full_safe(estabelecimento_id):
 
 def get_authorized_establishment_id():
     """
-    Função de Engenharia ERP Master:
-    Resolve o estabelecimento_id levando em conta o papel do usuário.
-    - Se for Super-Admin (maldivas), prioriza o Heaer 'X-Impersonate-Tenant-Id' ou 'X-Establishment-ID'.
-    - Suporta 'all' para visão Holding/Global (retorna 'all' literal para que endpoints específicos saibam agrupar).
-    - Fallback para o estabelecimento_id do JWT.
+    Versão Simplificada: Sempre retorna o ID do JWT.
     """
     try:
         from flask_jwt_extended import get_jwt
-        from flask import request
         claims = get_jwt()
-        
-        is_super = claims.get("is_super_admin", False)
-        jwt_estab_id = claims.get("estabelecimento_id")
-        
-        # Se for Super-Admin, tentamos o Header de Impersonation
-        if is_super:
-            header_id = request.headers.get("X-Impersonate-Tenant-Id") or request.headers.get("X-Establishment-ID")
-            
-            if header_id:
-                if str(header_id).lower() == "all":
-                    logger.info(f"🎭 [IMPERSONATION] Super-Admin acessando VISÃO GLOBAL (Holding)")
-                    return "all"
-                
-                if str(header_id).isdigit():
-                    logger.info(f"🎭 [IMPERSONATION] Super-Admin acessando estab_id: {header_id}")
-                    return int(header_id)
-        
-        # Fallback para o ID do token (ou None se for SaaS Owner sem unidade)
-        return int(jwt_estab_id) if jwt_estab_id is not None else None
+        return claims.get("estabelecimento_id")
     except Exception as e:
         logger.error(f"Erro ao extrair authorized establishment: {e}")
         return None
@@ -516,6 +512,7 @@ def get_first_estabelecimento_id_safe():
     Busca o ID do primeiro estabelecimento via SQL direto.
     """
     try:
+        db = _get_db()
         row = db.session.execute(text("SELECT id FROM estabelecimentos LIMIT 1")).fetchone()
         return row[0] if row else None
     except Exception as e:

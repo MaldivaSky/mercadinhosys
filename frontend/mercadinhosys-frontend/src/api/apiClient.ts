@@ -59,6 +59,17 @@ apiClient.interceptors.request.use(
         const token = localStorage.getItem('access_token');
         if (token && token !== 'undefined' && token !== 'null') {
             config.headers.Authorization = `Bearer ${token}`;
+        } else if (import.meta.env.DEV) {
+            console.warn(`⚠️ Request sem token para: ${config.url}. LocalStorage access_token:`, token);
+        }
+
+        // DEBUG: Log headers for auth issues
+        if (import.meta.env.DEV) {
+            console.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
+                hasToken: !!token,
+                tokenType: typeof token,
+                tokenValue: token ? `${token.substring(0, 10)}...` : 'none'
+            });
         }
 
         // Injeção de Contexto Super-Admin (Impersonation)
@@ -118,11 +129,12 @@ apiClient.interceptors.response.use(
             try {
                 const refreshToken = localStorage.getItem('refresh_token');
 
-                if (!refreshToken) {
+                if (!refreshToken || refreshToken === 'undefined' || refreshToken === 'null') {
                     throw new Error('No refresh token available');
                 }
 
                 // Tenta renovar o token
+                console.log('🔄 Tentando refresh token...');
                 const response = await axios.post(`${API_CONFIG.BASE_URL}/auth/refresh`, {}, {
                     headers: {
                         'Authorization': `Bearer ${refreshToken}`
@@ -145,14 +157,37 @@ apiClient.interceptors.response.use(
                 // Retorna a requisição original
                 return apiClient(originalRequest);
 
-            } catch (refreshError) {
+            } catch (refreshError: any) {
                 // Processa fila com erro
                 processQueue(refreshError, null);
 
-                console.error('❌ Refresh token falhou, redirecionando para login');
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                window.location.href = '/login';
+                const errorInfo = {
+                    message: refreshError.message,
+                    status: refreshError.response?.status,
+                    data: refreshError.response?.data,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('mercadinhosys_last_refresh_error', JSON.stringify(errorInfo));
+
+                console.error('❌ Refresh token falhou!', errorInfo);
+
+                // BLOQUEIO PROFISSIONAL: Sempre mostramos o erro na tela em vez de redirecionar instantaneamente
+                const overlay = document.createElement('div');
+                overlay.id = 'auth-error-overlay';
+                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);color:white;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;text-align:center;';
+                overlay.innerHTML = `
+                    <h1 style="color:#ff4444;margin-bottom:20px;">ERRO CRÍTICO DE SESSÃO</h1>
+                    <p style="font-size:18px;margin-bottom:10px;">O sistema não conseguiu renovar sua sessão automática.</p>
+                    <p style="font-size:14px;color:#aaa;margin-bottom:20px;">Isso geralmente ocorre por expiração de segurança ou instabilidade de rede.</p>
+                    <pre style="background:#222;padding:15px;border-radius:8px;text-align:left;max-width:600px;overflow:auto;margin-bottom:20px;font-size:12px;color:#0f0;">${JSON.stringify(errorInfo, null, 2)}</pre>
+                    <div style="display:flex;gap:15px;">
+                        <button onclick="localStorage.clear();window.location.href='/login'" style="padding:12px 24px;background:#ff4444;border:none;color:white;border-radius:6px;cursor:pointer;font-weight:bold;">Limpar Sessão e Voltar ao Login</button>
+                        <button onclick="location.reload()" style="padding:12px 24px;background:#444;border:none;color:white;border-radius:6px;cursor:pointer;font-weight:bold;">Recarregar Página</button>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                console.warn('⏸️ Redirecionamento BLOQUEADO. Analise o erro acima.');
+
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;
@@ -162,7 +197,15 @@ apiClient.interceptors.response.use(
             console.error('❌ Falha após refresh; redirecionando para login');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            window.location.href = '/login';
+
+            if (import.meta.env.DEV) {
+                // debugger;
+            }
+
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1000);
+
             return Promise.reject(error);
         }
 
@@ -186,6 +229,27 @@ apiClient.interceptors.response.use(
             });
         } else {
             console.error('❌ Request Error:', error.message);
+        }
+
+        // Tratamento específico para 403 - Acesso Negado
+        if (error.response?.status === 403) {
+            console.error('❌ Acesso Negado (403):', {
+                url: error.config?.url,
+                method: error.config?.method,
+                data: error.response.data,
+                message: 'Você não tem permissão para acessar este recurso'
+            });
+            
+            // Se for erro de permissão, podemos mostrar mensagem amigável
+            const errorData = error.response.data;
+            const errorMsg = errorData?.msg || errorData?.error || 'Acesso negado';
+            
+            // Mostrar toast de erro (se tiver toast disponível)
+            if (typeof window !== 'undefined' && (window as any).showToast) {
+                (window as any).showToast(errorMsg, 'error');
+            }
+            
+            return Promise.reject(error);
         }
 
         // Tratamento específico para 422 (Token malformado etc)

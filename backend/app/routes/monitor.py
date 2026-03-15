@@ -25,7 +25,10 @@ def get_global_logs():
         if tipo:
             query = query.filter(Auditoria.tipo_evento == tipo)
         if estab_id and str(estab_id).lower() != "all":
-            query = query.filter(Auditoria.estabelecimento_id == int(estab_id))
+            try:
+                query = query.filter(Auditoria.estabelecimento_id == int(estab_id))
+            except (ValueError, TypeError):
+                logger.warning(f"ID de estabelecimento inválido na filtragem de logs: {estab_id}")
 
         # Paginação com tratamento de erro
         try:
@@ -87,13 +90,16 @@ def get_global_summary():
         # Base query vendas
         query_vendas = db.session.query(Venda.id, Venda.total, Venda.data_venda)
         if not is_global:
-            query_vendas = query_vendas.filter(Venda.estabelecimento_id == int(estab_id))
+            try:
+                query_vendas = query_vendas.filter(Venda.estabelecimento_id == int(estab_id))
+            except (ValueError, TypeError):
+                pass
 
         # 2. Vendas Hoje (Range Seguro)
         try:
             vendas_hoje_qtd = query_vendas.filter(Venda.data_venda >= hoje_start).count()
             vendas_hoje_valor = db.session.query(func.sum(Venda.total)).filter(
-                Venda.estabelecimento_id == int(estab_id) if not is_global else True,
+                Venda.estabelecimento_id == int(estab_id) if not is_global and str(estab_id).isdigit() else True,
                 Venda.data_venda >= hoje_start
             ).scalar() or 0
         except Exception as e:

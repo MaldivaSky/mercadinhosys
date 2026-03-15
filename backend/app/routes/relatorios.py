@@ -136,7 +136,7 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: 
     ).join(
         Cliente, Venda.cliente_id == Cliente.id
     ).filter(
-        Venda.estabelecimento_id == estabelecimento_id,
+        Venda.estabelecimento_id == estabelecimento_id if str(estabelecimento_id).lower() != 'all' else True,
         Venda.data_venda >= data_inicio,
         Venda.data_venda <= data_fim,
         Venda.status == 'finalizada',
@@ -229,7 +229,7 @@ def calcular_previsao_esgotamento(produto_id: int, estabelecimento_id: int) -> D
         Venda, VendaItem.venda_id == Venda.id
     ).filter(
         VendaItem.produto_id == produto_id,
-        Venda.estabelecimento_id == estabelecimento_id,
+        Venda.estabelecimento_id == estabelecimento_id if str(estabelecimento_id).lower() != 'all' else True,
         Venda.data_venda >= data_inicio,
         Venda.status == 'finalizada'
     ).scalar()
@@ -309,7 +309,7 @@ def relatorio_rentabilidade_abc(estabelecimento_id: int, days: int = 30, data_in
     ).join(
         Venda, VendaItem.venda_id == Venda.id
     ).filter(
-        Venda.estabelecimento_id == estabelecimento_id,
+        Venda.estabelecimento_id == estabelecimento_id if str(estabelecimento_id).lower() != 'all' else True,
         Venda.data_venda >= data_inicio,
         Venda.data_venda <= data_fim,
         Venda.status == 'finalizada'
@@ -435,13 +435,11 @@ def get_rfm_clientes():
     - em_risco: true/false - Filtrar apenas clientes em risco
     """
     try:
-        from flask_jwt_extended import get_jwt_identity
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        
-        if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
         
         # Parâmetros
         days = request.args.get('days', 180, type=int)
@@ -473,7 +471,7 @@ def get_rfm_clientes():
 
         # Análise RFM
         clientes_rfm = analise_rfm_clientes(
-            funcionario.estabelecimento_id, 
+            estabelecimento_id, 
             days=days, 
             data_inicio=data_inicio, 
             data_fim=data_fim
@@ -518,18 +516,16 @@ def exportar_clientes_em_risco():
     Exporta lista de clientes em risco para campanhas de marketing (CSV).
     """
     try:
-        from flask_jwt_extended import get_jwt_identity
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        
-        if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
         
         days = request.args.get('days', 180, type=int)
         
         # Análise RFM
-        clientes_rfm = analise_rfm_clientes(funcionario.estabelecimento_id, days)
+        clientes_rfm = analise_rfm_clientes(estabelecimento_id, days)
         clientes_em_risco = [c for c in clientes_rfm if c['em_risco']]
         
         if not clientes_em_risco:
@@ -590,13 +586,11 @@ def get_rentabilidade_abc():
     - apenas_problemas: true/false - Retornar apenas produtos com problemas
     """
     try:
-        from flask_jwt_extended import get_jwt_identity
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        
-        if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
         
         # Parâmetros
         days = request.args.get('days', 30, type=int)
@@ -621,7 +615,7 @@ def get_rentabilidade_abc():
                 pass
         
         # Análise de rentabilidade
-        relatorio = relatorio_rentabilidade_abc(funcionario.estabelecimento_id, days, dt_inicio, dt_fim)
+        relatorio = relatorio_rentabilidade_abc(estabelecimento_id, days, dt_inicio, dt_fim)
         
         # Aplicar filtros
         if classe_filtro:
@@ -657,34 +651,33 @@ def get_previsao_esgotamento():
     - status: Filtrar por status (CRÍTICO, ATENÇÃO, NORMAL, ESGOTADO, SEM_MOVIMENTO)
     """
     try:
-        from flask_jwt_extended import get_jwt_identity
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        
-        if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
         
         produto_id = request.args.get('produto_id', type=int)
         status_filtro = request.args.get('status', type=str)
         
         # Se produto específico
         if produto_id:
-            previsao = calcular_previsao_esgotamento(produto_id, funcionario.estabelecimento_id)
+            previsao = calcular_previsao_esgotamento(produto_id, estabelecimento_id)
             return jsonify({
                 "success": True,
                 "previsao": previsao
             }), 200
         
         # Todos os produtos
-        produtos = Produto.query.filter_by(
-            estabelecimento_id=funcionario.estabelecimento_id,
-            ativo=True
-        ).all()
+        query_prod = Produto.query.filter_by(ativo=True)
+        if str(estabelecimento_id).lower() != 'all':
+            query_prod = query_prod.filter_by(estabelecimento_id=estabelecimento_id)
+        
+        produtos = query_prod.all()
         
         previsoes = []
         for produto in produtos:
-            previsao = calcular_previsao_esgotamento(produto.id, funcionario.estabelecimento_id)
+            previsao = calcular_previsao_esgotamento(produto.id, estabelecimento_id)
             previsoes.append(previsao)
         
         # Aplicar filtro de status
@@ -731,13 +724,11 @@ def exportar_backup_local():
     - Compressão ZIP
     """
     try:
-        from flask_jwt_extended import get_jwt_identity
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        
-        if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
         
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -747,8 +738,8 @@ def exportar_backup_local():
                 "sistema": "MercadinhoSys",
                 "versao": "2.0.0",
                 "data_exportacao": datetime.now().isoformat(),
-                "estabelecimento_id": funcionario.estabelecimento_id,
-                "exportado_por": funcionario.nome
+                "estabelecimento_id": estabelecimento_id,
+                "exportado_por": "Super Admin" if str(estabelecimento_id).lower() == 'all' else "Funcionário Autenticado"
             },
             "tabelas": {
                 "produtos": {
@@ -803,15 +794,15 @@ def exportar_backup_local():
         current_app.logger.info("Iniciando exportação de backup...")
         
         # Produtos
-        produtos_query = Produto.query.filter_by(estabelecimento_id=funcionario.estabelecimento_id).all()
+        produtos_query = Produto.query.filter_by(estabelecimento_id=estabelecimento_id).all()
         df_produtos = pd.DataFrame([p.to_dict() for p in produtos_query])
         
         # Clientes
-        clientes_query = Cliente.query.filter_by(estabelecimento_id=funcionario.estabelecimento_id).all()
+        clientes_query = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).all()
         df_clientes = pd.DataFrame([c.to_dict() for c in clientes_query])
         
         # Vendas
-        vendas_query = Venda.query.filter_by(estabelecimento_id=funcionario.estabelecimento_id).all()
+        vendas_query = Venda.query.filter_by(estabelecimento_id=estabelecimento_id).all()
         df_vendas = pd.DataFrame([v.to_dict() for v in vendas_query])
         
         # Itens de venda
@@ -885,30 +876,28 @@ def get_dashboard_resumo():
     Retorna resumo executivo para dashboard de relatórios.
     """
     try:
-        from flask_jwt_extended import get_jwt_identity
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
-        current_user_id = get_jwt_identity()
-        funcionario = Funcionario.query.get(current_user_id)
-        
-        if not funcionario:
-            return jsonify({"error": "Funcionário não encontrado"}), 404
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
         
         # RFM Summary
-        clientes_rfm = analise_rfm_clientes(funcionario.estabelecimento_id, 180)
+        clientes_rfm = analise_rfm_clientes(estabelecimento_id, 180)
         clientes_em_risco = len([c for c in clientes_rfm if c['em_risco']])
         
         # Rentabilidade Summary
-        rentabilidade = relatorio_rentabilidade_abc(funcionario.estabelecimento_id, 30)
+        rentabilidade = relatorio_rentabilidade_abc(estabelecimento_id, 30)
         
         # Previsão de Estoque Summary
         produtos = Produto.query.filter_by(
-            estabelecimento_id=funcionario.estabelecimento_id,
+            estabelecimento_id=estabelecimento_id,
             ativo=True
         ).limit(100).all()  # Limitar para performance
         
         previsoes = []
         for produto in produtos:
-            prev = calcular_previsao_esgotamento(produto.id, funcionario.estabelecimento_id)
+            prev = calcular_previsao_esgotamento(produto.id, estabelecimento_id)
             previsoes.append(prev)
         
         criticos = len([p for p in previsoes if p.get('status') == 'CRÍTICO'])

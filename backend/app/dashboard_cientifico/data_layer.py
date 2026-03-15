@@ -25,17 +25,21 @@ class DataLayer:
             end_d = end_date.date() if isinstance(end_date, datetime) else end_date
             end_exclusive = end_d + timedelta(days=1)  # Inclui o dia inteiro de end_d
             
-            result = db.session.query(
+            query = db.session.query(
                 func.count(Venda.id).label('total_vendas'),
                 func.sum(Venda.total).label('total_faturado'),
                 func.avg(Venda.total).label('ticket_medio'),
                 func.count(func.distinct(func.date(Venda.data_venda))).label('dias_com_venda')
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_d,
                 Venda.data_venda < end_exclusive,
                 Venda.status == 'finalizada'
-            ).first()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            result = query.first()
 
             return {
                 "total_vendas": result.total_vendas or 0,
@@ -59,34 +63,46 @@ class DataLayer:
             start_dt = datetime.combine(start_date, datetime.min.time())
             
             # Query Vendas (Agrupa por dia)
-            resultados_venda = db.session.query(
+            query_vendas = db.session.query(
                 func.date(Venda.data_venda).label('data'),
                 func.sum(Venda.total).label('valor'),
                 func.count(Venda.id).label('qtd')
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 func.date(Venda.data_venda) >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(func.date(Venda.data_venda)).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_vendas = query_vendas.filter(Venda.estabelecimento_id == estabelecimento_id)
+            
+            resultados_venda = query_vendas.group_by(func.date(Venda.data_venda)).all()
 
             # Query CMV (Custo)
-            resultados_cogs = db.session.query(
+            query_cogs = db.session.query(
                 func.date(Venda.data_venda).label('data'),
                 func.sum(VendaItem.custo_unitario * VendaItem.quantidade).label('cogs')
             ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 func.date(Venda.data_venda) >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(func.date(Venda.data_venda)).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_cogs = query_cogs.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            resultados_cogs = query_cogs.group_by(func.date(Venda.data_venda)).all()
 
             # Query Despesas
-            resultados_despesas = db.session.query(
+            query_despesas = db.session.query(
                 func.date(Despesa.data_despesa).label('data'),
                 func.sum(Despesa.valor).label('valor')
             ).filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
                 func.date(Despesa.data_despesa) >= start_date
-            ).group_by(func.date(Despesa.data_despesa)).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_despesas = query_despesas.filter(Despesa.estabelecimento_id == estabelecimento_id)
+                
+            resultados_despesas = query_despesas.group_by(func.date(Despesa.data_despesa)).all()
 
             # Construir mapa de dias
             mapa_dias = {}
@@ -144,7 +160,7 @@ class DataLayer:
             hoje = datetime.utcnow().date()
             data_limite = hoje + timedelta(days=days_alert)
             
-            results = db.session.query(
+            query = db.session.query(
                 Produto.id,
                 Produto.nome,
                 Produto.lote,
@@ -153,11 +169,15 @@ class DataLayer:
                 Produto.preco_custo,
                 Produto.preco_venda
             ).filter(
-                Produto.estabelecimento_id == estabelecimento_id,
                 Produto.ativo == True,
                 Produto.data_validade.isnot(None),
                 Produto.data_validade <= data_limite
-            ).order_by(Produto.data_validade.asc()).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Produto.estabelecimento_id == estabelecimento_id)
+                
+            results = query.order_by(Produto.data_validade.asc()).all()
 
             return [
                 {
@@ -183,19 +203,27 @@ class DataLayer:
         """Resumo do inventário (valor total, itens baixo estoque)"""
         try:
             # Valor total do estoque (custo * quantidade)
-            valor_total = db.session.query(
+            query_valor = db.session.query(
                 func.sum(Produto.preco_custo * Produto.quantidade)
             ).filter(
-                Produto.estabelecimento_id == estabelecimento_id,
                 Produto.ativo == True
-            ).scalar()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_valor = query_valor.filter(Produto.estabelecimento_id == estabelecimento_id)
+                
+            valor_total = query_valor.scalar()
 
             # Quantidade de produtos com estoque abaixo do mínimo
-            baixo_estoque = db.session.query(func.count(Produto.id)).filter(
-                Produto.estabelecimento_id == estabelecimento_id,
+            query_baixo = db.session.query(func.count(Produto.id)).filter(
                 Produto.ativo == True,
                 Produto.quantidade <= Produto.quantidade_minima
-            ).scalar()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_baixo = query_baixo.filter(Produto.estabelecimento_id == estabelecimento_id)
+                
+            baixo_estoque = query_baixo.scalar()
 
             return {
                 "valor_total": float(valor_total or 0),
@@ -212,28 +240,34 @@ class DataLayer:
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
-            clientes_unicos = db.session.query(func.count(func.distinct(Venda.cliente_id))).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
+            query_clientes = db.session.query(func.count(func.distinct(Venda.cliente_id))).filter(
                 Venda.data_venda >= start_date,
                 Venda.cliente_id.isnot(None)
-            ).scalar()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_clientes = query_clientes.filter(Venda.estabelecimento_id == estabelecimento_id)
+            clientes_unicos = query_clientes.scalar()
 
             # Ticket médio por cliente (não por venda)
             # Aproximação: Total Faturado / Clientes Únicos
-            total_faturado = db.session.query(func.sum(Venda.total)).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
+            query_faturado = db.session.query(func.sum(Venda.total)).filter(
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).scalar() or 0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_faturado = query_faturado.filter(Venda.estabelecimento_id == estabelecimento_id)
+            total_faturado = query_faturado.scalar() or 0
 
             ticket_medio_cliente = float(total_faturado) / clientes_unicos if clientes_unicos and clientes_unicos > 0 else 0
 
             # Maior compra do período
-            maior_compra = db.session.query(func.max(Venda.total)).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
+            query_maior = db.session.query(func.max(Venda.total)).filter(
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).scalar()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_maior = query_maior.filter(Venda.estabelecimento_id == estabelecimento_id)
+            maior_compra = query_maior.scalar()
 
             return {
                 "clientes_unicos": clientes_unicos or 0,
@@ -263,10 +297,14 @@ class DataLayer:
             ).join(VendaItem, VendaItem.produto_id == Produto.id)\
              .join(Venda, Venda.id == VendaItem.venda_id)\
              .filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                results_query = results_query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = results_query.group_by(
                 Produto.id, Produto.nome, Produto.preco_custo, Produto.preco_venda
             ).order_by(
                 desc('faturamento')
@@ -303,18 +341,22 @@ class DataLayer:
             
             # Subquery para vendas filtradas por data
             # Necessário para não filtrar os produtos quando fizermos o LEFT JOIN
-            vendas_periodo = db.session.query(
+            query_vendas = db.session.query(
                 VendaItem.produto_id,
                 func.sum(VendaItem.quantidade).label('qtd'),
                 func.sum(VendaItem.total_item).label('total')
             ).join(Venda, Venda.id == VendaItem.venda_id).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(VendaItem.produto_id).subquery()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_vendas = query_vendas.filter(Venda.estabelecimento_id == estabelecimento_id)
+            
+            vendas_periodo = query_vendas.group_by(VendaItem.produto_id).subquery()
 
             # Query principal: Produtos LEFT JOIN Vendas
-            results = db.session.query(
+            query_prod = db.session.query(
                 Produto.id,
                 Produto.nome,
                 Produto.preco_custo,
@@ -325,9 +367,13 @@ class DataLayer:
             ).outerjoin(
                 vendas_periodo, Produto.id == vendas_periodo.c.produto_id
             ).filter(
-                Produto.estabelecimento_id == estabelecimento_id,
                 Produto.ativo == True
-            ).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_prod = query_prod.filter(Produto.estabelecimento_id == estabelecimento_id)
+            
+            results = query_prod.all()
 
             return [
                 {
@@ -366,14 +412,18 @@ class DataLayer:
             if end_dt.hour == 0 and end_dt.minute == 0:
                  end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-            results = db.session.query(
+            query_expenses = db.session.query(
                 Despesa.tipo,
                 func.sum(Despesa.valor).label('total')
             ).filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
                 Despesa.data_despesa >= start_dt,
                 Despesa.data_despesa <= end_dt
-            ).group_by(Despesa.tipo).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_expenses = query_expenses.filter(Despesa.estabelecimento_id == estabelecimento_id)
+                
+            results = query_expenses.group_by(Despesa.tipo).all()
 
             return [
                 {
@@ -405,11 +455,15 @@ class DataLayer:
             if end_dt.hour == 0 and end_dt.minute == 0:
                  end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-            total = db.session.query(func.sum(Despesa.valor)).filter(
-                Despesa.estabelecimento_id == estabelecimento_id,
+            query = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= start_dt,
                 Despesa.data_despesa <= end_dt
-            ).scalar()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Despesa.estabelecimento_id == estabelecimento_id)
+                
+            total = query.scalar()
             
             return float(total or 0.0)
         except Exception as e:
@@ -426,16 +480,20 @@ class DataLayer:
             from app.utils.query_helpers import get_hour_extract
             hour_extract = get_hour_extract(Venda.data_venda)
 
-            results = db.session.query(
+            query_hourly = db.session.query(
                 hour_extract.label('hora'),
                 func.count(func.distinct(Venda.id)).label('qtd'),
                 func.sum(VendaItem.total_item).label('total'),
                 func.sum(VendaItem.quantidade * VendaItem.custo_unitario).label('cogs')
             ).join(VendaItem, VendaItem.venda_id == Venda.id).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(hour_extract).order_by(hour_extract).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_hourly = query_hourly.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query_hourly.group_by(hour_extract).order_by(hour_extract).all()
 
             out = []
             for r in results:
@@ -466,7 +524,7 @@ class DataLayer:
             start_date = datetime.utcnow() - timedelta(days=days)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
             
-            results = db.session.query(
+            query_top = db.session.query(
                 hour_extract.label('hora'),
                 Produto.id,
                 Produto.nome,
@@ -475,10 +533,14 @@ class DataLayer:
             ).join(VendaItem, VendaItem.produto_id == Produto.id)\
              .join(Venda, Venda.id == VendaItem.venda_id)\
              .filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-             ).group_by(hour_extract, Produto.id, Produto.nome).all()
+             )
+             
+            if str(estabelecimento_id).lower() != 'all':
+                query_top = query_top.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query_top.group_by(hour_extract, Produto.id, Produto.nome).all()
              
             grouped = {}
             for r in results:
@@ -513,15 +575,19 @@ class DataLayer:
             from app.utils.query_helpers import get_dow_extract
             dow_extract = get_dow_extract(Venda.data_venda)
             
-            results = db.session.query(
+            query_patterns = db.session.query(
                 dow_extract.label('dia_semana'),
                 func.count(Venda.id).label('qtd'),
                 func.sum(Venda.total).label('total')
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(dow_extract).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_patterns = query_patterns.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query_patterns.group_by(dow_extract).all()
             
             dias_map = {
                 '0': 'Domingo', '1': 'Segunda', '2': 'Terça', '3': 'Quarta',
@@ -555,14 +621,18 @@ class DataLayer:
             hour_extract = get_hour_extract(Venda.data_venda)
 
             # Buscar vendas por hora
-            results = db.session.query(
+            query_gini = db.session.query(
                 hour_extract.label('hora'),
                 func.sum(Venda.total).label('total')
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(hour_extract).order_by(hour_extract).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_gini = query_gini.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query_gini.group_by(hour_extract).order_by(hour_extract).all()
             
             if not results:
                 return {
@@ -679,13 +749,17 @@ class DataLayer:
         try:
             # Query para buscar o último pedido finalizado/recebido para cada produto
             # Usando subquery para encontrar a data máxima por produto
-            subquery = db.session.query(
+            sub_query_stmt = db.session.query(
                 PedidoCompraItem.produto_id,
                 func.max(PedidoCompra.data_pedido).label('max_data')
             ).join(PedidoCompra).filter(
-                PedidoCompra.estabelecimento_id == estabelecimento_id,
                 PedidoCompraItem.produto_id.in_(produto_ids)
-            ).group_by(PedidoCompraItem.produto_id).subquery()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                sub_query_stmt = sub_query_stmt.filter(PedidoCompra.estabelecimento_id == estabelecimento_id)
+            
+            subquery = sub_query_stmt.group_by(PedidoCompraItem.produto_id).subquery()
             
             # Join dos dados reais do último pedido
             results = db.session.query(
@@ -733,7 +807,10 @@ class DataLayer:
             hoje_dia = datetime.now().date()
             inicio_mes = hoje_dia.replace(day=1)
 
-            config = ConfiguracaoHorario.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+            config_query = ConfiguracaoHorario.query
+            if str(estabelecimento_id).lower() != 'all':
+                config_query = config_query.filter_by(estabelecimento_id=estabelecimento_id)
+            config = config_query.first()
             hora_saida_ref = config.hora_saida if config and config.hora_saida else datetime.strptime('18:00', '%H:%M').time()
             tolerancia_saida = int(config.tolerancia_saida) if config and config.tolerancia_saida is not None else 5
 
@@ -743,29 +820,37 @@ class DataLayer:
             minuto_saida_ref = _time_to_minutes(hora_saida_ref) + tolerancia_saida
 
             # 1. Custo Mensal de Benefícios Ativos
-            total_beneficios = db.session.query(func.sum(FuncionarioBeneficio.valor)).join(Funcionario).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
+            query_beneficios = db.session.query(func.sum(FuncionarioBeneficio.valor)).join(Funcionario).filter(
                 FuncionarioBeneficio.ativo == True,
                 Funcionario.ativo == True
-            ).scalar() or 0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_beneficios = query_beneficios.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            total_beneficios = query_beneficios.scalar() or 0
 
             # 2. Total Salários Base (Mensal)
-            total_salarios = db.session.query(func.sum(Funcionario.salario_base)).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
+            query_salarios = db.session.query(func.sum(Funcionario.salario_base)).filter(
                 Funcionario.ativo == True
-            ).scalar() or 0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_salarios = query_salarios.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            total_salarios = query_salarios.scalar() or 0
 
             # 3. Análise de Pontualidade e Assiduidade (Baseado em Registros Reais)
             # Busca registros de entrada no período
-            registros_entrada = db.session.query(
+            query_ponto = db.session.query(
                 RegistroPonto.status,
                 func.count(RegistroPonto.id).label('qtd'),
                 func.sum(RegistroPonto.minutos_atraso).label('minutos_atraso')
             ).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= data_inicio_dia,
                 RegistroPonto.tipo_registro == 'entrada'
-            ).group_by(RegistroPonto.status).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_ponto = query_ponto.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+                
+            registros_entrada = query_ponto.group_by(RegistroPonto.status).all()
 
             total_entradas = sum([r.qtd for r in registros_entrada])
             total_atrasos_qtd = sum([r.qtd for r in registros_entrada if r.status == 'atrasado'])
@@ -774,15 +859,19 @@ class DataLayer:
             taxa_pontualidade = ((total_entradas - total_atrasos_qtd) / total_entradas * 100) if total_entradas > 0 else 100.0
 
             # 4. Estimativa de Horas Extras (baseado na configuração do estabelecimento)
-            saidas_periodo = db.session.query(
+            query_saidas = db.session.query(
                 RegistroPonto.funcionario_id,
                 RegistroPonto.data,
                 RegistroPonto.hora
             ).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= data_inicio_dia,
                 RegistroPonto.tipo_registro == 'saida'
-            ).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_saidas = query_saidas.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+                
+            saidas_periodo = query_saidas.all()
 
             minutos_extras_estimados = 0
             overtime_by_employee: Dict[int, int] = {}
@@ -812,16 +901,20 @@ class DataLayer:
 
             # 6. Rotatividade (Turnover)
             # Admissões no período
-            admissoes = db.session.query(func.count(Funcionario.id)).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
+            admissoes_query = db.session.query(func.count(Funcionario.id)).filter(
                 Funcionario.data_admissao >= data_inicio
-            ).scalar() or 0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                admissoes_query = admissoes_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            admissoes = admissoes_query.scalar() or 0
             
             # Demissões no período
-            demissoes = db.session.query(func.count(Funcionario.id)).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
+            demissoes_query = db.session.query(func.count(Funcionario.id)).filter(
                 Funcionario.data_demissao >= data_inicio
-            ).scalar() or 0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                demissoes_query = demissoes_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            demissoes = demissoes_query.scalar() or 0
             
             total_funcionarios = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id).count()
             # Se não tem funcionários hoje, não tem como calcular taxa corretamente, evita divisão por zero
@@ -842,39 +935,48 @@ class DataLayer:
             start_history = (datetime(current_year, current_month, 1) - timedelta(days=365)).date()
             
             # Busca todas as admissões do ano agrupadas por mês
-            admissoes_bulk = db.session.query(
+            admissoes_bulk_query = db.session.query(
                 extract('year', Funcionario.data_admissao).label('ano'),
                 extract('month', Funcionario.data_admissao).label('mes'),
                 func.count(Funcionario.id).label('qtd')
             ).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
                 Funcionario.data_admissao >= start_history
-            ).group_by('ano', 'mes').all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                admissoes_bulk_query = admissoes_bulk_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            
+            admissoes_bulk = admissoes_bulk_query.group_by('ano', 'mes').all()
             
             admissoes_map = {(int(r.ano), int(r.mes)): r.qtd for r in admissoes_bulk}
             
             # Busca todas as demissões do ano agrupadas por mês
-            demissoes_bulk = db.session.query(
+            demissoes_bulk_query = db.session.query(
                 extract('year', Funcionario.data_demissao).label('ano'),
                 extract('month', Funcionario.data_demissao).label('mes'),
                 func.count(Funcionario.id).label('qtd')
             ).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
                 Funcionario.data_demissao >= start_history
-            ).group_by('ano', 'mes').all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                demissoes_bulk_query = demissoes_bulk_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            
+            demissoes_bulk = demissoes_bulk_query.group_by('ano', 'mes').all()
             
             demissoes_map = {(int(r.ano), int(r.mes)): r.qtd for r in demissoes_bulk}
             
             # Busca todos os atrasos do ano agrupados por mês
-            atrasos_bulk = db.session.query(
+            atrasos_bulk_query = db.session.query(
                 extract('year', RegistroPonto.data).label('ano'),
                 extract('month', RegistroPonto.data).label('mes'),
                 func.count(RegistroPonto.id).label('qtd')
             ).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= start_history,
                 RegistroPonto.minutos_atraso > 0
-            ).group_by('ano', 'mes').all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                atrasos_bulk_query = atrasos_bulk_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+            
+            atrasos_bulk = atrasos_bulk_query.group_by('ano', 'mes').all()
             
             atrasos_map = {(int(r.ano), int(r.mes)): r.qtd for r in atrasos_bulk}
 
@@ -913,10 +1015,13 @@ class DataLayer:
             # 9. Top Funcionários com Horas Extras (estimado via ponto, ou via BancoHoras se disponível)
             overtime_list = []
             banco_horas_mes = datetime.now().strftime("%Y-%m")
-            banco_registros = db.session.query(BancoHoras).join(Funcionario).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
+            banco_registros_query = db.session.query(BancoHoras).join(Funcionario).filter(
                 BancoHoras.mes_referencia == banco_horas_mes
-            ).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                banco_registros_query = banco_registros_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            
+            banco_registros = banco_registros_query.all()
 
             if banco_registros:
                 ordenados = sorted(banco_registros, key=lambda r: int(r.saldo_minutos or 0), reverse=True)[:5]
@@ -937,28 +1042,34 @@ class DataLayer:
                             "custo_estimado": round((float(mins) / 60) * valor_hora_medio * 1.5, 2)
                         })
 
-            entradas_mes = db.session.query(
+            entradas_mes_query = db.session.query(
                 RegistroPonto.funcionario_id,
                 func.count(RegistroPonto.id).label("qtd"),
                 func.sum(RegistroPonto.minutos_atraso).label("minutos_atraso")
             ).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= inicio_mes,
                 RegistroPonto.tipo_registro == "entrada",
                 RegistroPonto.status == "atrasado"
-            ).group_by(RegistroPonto.funcionario_id).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                entradas_mes_query = entradas_mes_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+            
+            entradas_mes = entradas_mes_query.group_by(RegistroPonto.funcionario_id).all()
 
             atrasos_por_func_id = {r.funcionario_id: {"qtd": int(r.qtd or 0), "minutos": int(r.minutos_atraso or 0)} for r in entradas_mes}
 
-            saidas_mes = db.session.query(
+            saidas_mes_query = db.session.query(
                 RegistroPonto.funcionario_id,
                 RegistroPonto.data,
                 RegistroPonto.hora
             ).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= inicio_mes,
                 RegistroPonto.tipo_registro == "saida"
-            ).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                saidas_mes_query = saidas_mes_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+                
+            saidas_mes = saidas_mes_query.all()
 
             extras_mes_por_func_id: Dict[int, int] = {}
             extras_mes_por_dia: Dict[str, int] = {}
@@ -1003,21 +1114,27 @@ class DataLayer:
                     dias_uteis_mes += 1
                 d += timedelta(days=1)
 
-            dias_com_entrada_mes = db.session.query(
+            dias_com_entrada_mes_query = db.session.query(
                 RegistroPonto.funcionario_id,
                 func.count(func.distinct(RegistroPonto.data)).label("dias")
             ).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= inicio_mes,
                 RegistroPonto.tipo_registro == "entrada"
-            ).group_by(RegistroPonto.funcionario_id).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                dias_com_entrada_mes_query = dias_com_entrada_mes_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+            
+            dias_com_entrada_mes = dias_com_entrada_mes_query.group_by(RegistroPonto.funcionario_id).all()
 
             dias_com_entrada_mes_por_id = {int(r.funcionario_id): int(r.dias or 0) for r in dias_com_entrada_mes}
 
-            banco_horas_registros = db.session.query(BancoHoras).join(Funcionario).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
+            banco_horas_registros_query = db.session.query(BancoHoras).join(Funcionario).filter(
                 BancoHoras.mes_referencia == banco_horas_mes
-            ).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                banco_horas_registros_query = banco_horas_registros_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+                
+            banco_horas_registros = banco_horas_registros_query.all()
 
             banco_horas_por_id = {
                 int(r.funcionario_id): {
@@ -1128,14 +1245,17 @@ class DataLayer:
                     "ultimo_registro": horario_ultimo
                 })
 
-            recent_points = db.session.query(
+            recent_points_query = db.session.query(
                 RegistroPonto.data,
                 RegistroPonto.hora,
                 RegistroPonto.tipo_registro,
                 Funcionario.nome
-            ).join(Funcionario).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id
-            ).order_by(RegistroPonto.data.desc(), RegistroPonto.hora.desc()).limit(20).all()
+            ).join(Funcionario)
+            
+            if str(estabelecimento_id).lower() != 'all':
+                recent_points_query = recent_points_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+                
+            recent_points = recent_points_query.order_by(RegistroPonto.data.desc(), RegistroPonto.hora.desc()).limit(20).all()
             
             recent_points_list = [
                 {
@@ -1148,7 +1268,7 @@ class DataLayer:
             ]
 
             start_daily = hoje_dia - timedelta(days=6)
-            pontos = db.session.query(
+            pontos_query = db.session.query(
                 RegistroPonto.funcionario_id,
                 Funcionario.nome,
                 RegistroPonto.data,
@@ -1156,9 +1276,13 @@ class DataLayer:
                 RegistroPonto.tipo_registro,
                 RegistroPonto.minutos_atraso
             ).join(Funcionario).filter(
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
                 RegistroPonto.data >= start_daily
-            ).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                pontos_query = pontos_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+                
+            pontos = pontos_query.all()
 
             daily_map: Dict[str, Dict[str, Any]] = {}
             for func_id, nome, data_p, hora_p, tipo, min_atraso in pontos:
@@ -1502,15 +1626,19 @@ class DataLayer:
         """
         try:
             # Agrega totais de saldo_devedor e limite_credito de clientes ativos
-            agg = db.session.query(
+            query_agg = db.session.query(
                 func.coalesce(func.sum(Cliente.saldo_devedor), 0).label('total_aberto'),
                 func.coalesce(func.sum(Cliente.limite_credito), 0).label('total_limite'),
                 func.count(case((Cliente.saldo_devedor > 0, 1))).label('clientes_com_fiado'),
                 func.count(Cliente.id).label('total_clientes'),
             ).filter(
-                Cliente.estabelecimento_id == estabelecimento_id,
                 Cliente.ativo == True
-            ).first()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_agg = query_agg.filter(Cliente.estabelecimento_id == estabelecimento_id)
+                
+            agg = query_agg.first()
 
             total_aberto = float(agg.total_aberto or 0)
             total_limite = float(agg.total_limite or 0)
@@ -1524,70 +1652,86 @@ class DataLayer:
             trinta_dias_atras = hoje - timedelta(days=30)
 
             # 1. Tendência: Novos Fiados vs. Pagamentos (últimos 30 dias)
-            novos_fiados_30d = db.session.query(func.coalesce(func.sum(Venda.total), 0)).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
+            query_novos = db.session.query(func.coalesce(func.sum(Venda.total), 0)).filter(
                 Venda.forma_pagamento.ilike('%fiado%'),
                 Venda.status == 'finalizada',
                 Venda.data_venda >= trinta_dias_atras
-            ).scalar() or 0.0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_novos = query_novos.filter(Venda.estabelecimento_id == estabelecimento_id)
+            novos_fiados_30d = query_novos.scalar() or 0.0
 
             from app.models import MovimentacaoCaixa
-            pagamentos_fiado_30d = db.session.query(func.coalesce(func.sum(MovimentacaoCaixa.valor), 0)).filter(
-                MovimentacaoCaixa.estabelecimento_id == estabelecimento_id,
+            query_pag = db.session.query(func.coalesce(func.sum(MovimentacaoCaixa.valor), 0)).filter(
                 MovimentacaoCaixa.tipo == 'suprimento',
                 db.or_(
                     MovimentacaoCaixa.descricao.ilike('Receb. Fiado%'),
                     MovimentacaoCaixa.observacoes.ilike('%Pagamento de fiado%')
                 ),
                 MovimentacaoCaixa.created_at >= trinta_dias_atras
-            ).scalar() or 0.0
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_pag = query_pag.filter(MovimentacaoCaixa.estabelecimento_id == estabelecimento_id)
+            pagamentos_fiado_30d = query_pag.scalar() or 0.0
 
             taxa_recuperacao = (float(pagamentos_fiado_30d) / float(novos_fiados_30d) * 100) if float(novos_fiados_30d) > 0 else 100.0
 
             # 2. Top Produtos vendidos no Fiado
             from app.models import VendaItem
-            top_produtos_query = db.session.query(
+            query_top_prod = db.session.query(
                 VendaItem.produto_nome,
                 func.sum(VendaItem.quantidade).label('qtde'),
                 func.sum(VendaItem.total_item).label('valor')
             ).join(Venda).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.forma_pagamento.ilike('%fiado%'),
                 Venda.status == 'finalizada'
-            ).group_by(VendaItem.produto_nome).order_by(desc('valor')).limit(5).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_top_prod = query_top_prod.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            top_produtos_query = query_top_prod.group_by(VendaItem.produto_nome).order_by(desc('valor')).limit(5).all()
 
             top_produtos = [{"nome": p.produto_nome, "quantidade": float(p.qtde), "valor": float(p.valor)} for p in top_produtos_query]
 
             # 3. Bons Pagadores: Clientes que frequentemente compram fiado mas quitam as dívidas rapidamente.
-            bons_pagadores_query = db.session.query(
+            query_bons = db.session.query(
                 Cliente.id,
                 Cliente.nome,
                 Cliente.celular,
                 func.sum(Venda.total).label('volume_credito')
             ).join(Venda).filter(
-                Cliente.estabelecimento_id == estabelecimento_id,
                 Cliente.saldo_devedor <= 0,
                 Venda.forma_pagamento.ilike('%fiado%'),
                 Venda.status == 'finalizada'
-            ).group_by(Cliente.id, Cliente.nome, Cliente.celular).order_by(desc('volume_credito')).limit(5).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_bons = query_bons.filter(Cliente.estabelecimento_id == estabelecimento_id)
+                
+            bons_pagadores_query = query_bons.group_by(Cliente.id, Cliente.nome, Cliente.celular).order_by(desc('volume_credito')).limit(5).all()
 
             bons_pagadores = [{"id": c.id, "nome": c.nome, "celular": c.celular or "", "volume_credito": float(c.volume_credito)} for c in bons_pagadores_query]
 
             # Maior devedor — busca separada por clareza
-            maior_devedor = db.session.query(
+            query_maior = db.session.query(
                 Cliente.id,
                 Cliente.nome,
                 Cliente.celular,
                 Cliente.saldo_devedor,
                 Cliente.limite_credito
             ).filter(
-                Cliente.estabelecimento_id == estabelecimento_id,
                 Cliente.ativo == True,
                 Cliente.saldo_devedor > 0
-            ).order_by(Cliente.saldo_devedor.desc()).first()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_maior = query_maior.filter(Cliente.estabelecimento_id == estabelecimento_id)
+                
+            maior_devedor = query_maior.order_by(Cliente.saldo_devedor.desc()).first()
 
             # Top 5 devedores para ranking
-            top_devedores = db.session.query(
+            query_top_dev = db.session.query(
                 Cliente.id,
                 Cliente.nome,
                 Cliente.celular,
@@ -1595,10 +1739,14 @@ class DataLayer:
                 Cliente.limite_credito,
                 Cliente.ultima_compra
             ).filter(
-                Cliente.estabelecimento_id == estabelecimento_id,
                 Cliente.ativo == True,
                 Cliente.saldo_devedor > 0
-            ).order_by(Cliente.saldo_devedor.desc()).limit(5).all()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_top_dev = query_top_dev.filter(Cliente.estabelecimento_id == estabelecimento_id)
+                
+            top_devedores = query_top_dev.order_by(Cliente.saldo_devedor.desc()).limit(5).all()
 
             # % de utilização do limite total
             percentual_limite_utilizado = (total_aberto / total_limite * 100) if total_limite > 0 else 0.0
@@ -1677,13 +1825,16 @@ class DataLayer:
             hoje = datetime.utcnow().date()
             
             # Agrega por status de vencimento
-            stats = db.session.query(
+            query_agg_stats = db.session.query(
                 func.sum(case((and_(ContaReceber.status == 'aberto', ContaReceber.data_vencimento < hoje), ContaReceber.valor_atual), else_=0)).label('total_vencido'),
                 func.sum(case((and_(ContaReceber.status == 'aberto', ContaReceber.data_vencimento >= hoje), ContaReceber.valor_atual), else_=0)).label('total_a_vencer'),
                 func.count(case((and_(ContaReceber.status == 'aberto', ContaReceber.data_vencimento < hoje), 1))).label('titulos_vencidos'),
-            ).filter(
-                ContaReceber.estabelecimento_id == estabelecimento_id
-            ).first()
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_agg_stats = query_agg_stats.filter(ContaReceber.estabelecimento_id == estabelecimento_id)
+                
+            stats = query_agg_stats.first()
 
             total_vencido = float(stats.total_vencido or 0)
             total_a_vencer = float(stats.total_a_vencer or 0)
@@ -1692,7 +1843,7 @@ class DataLayer:
             taxa_inadimplencia = (total_vencido / total_recebível * 100) if total_recebível > 0 else 0.0
 
             # Ranking de Devedores (por valor vencido)
-            ranking_overdue = db.session.query(
+            query_rk = db.session.query(
                 Cliente.id,
                 Cliente.nome,
                 func.sum(ContaReceber.valor_atual).label('valor_vencido'),
@@ -1700,10 +1851,15 @@ class DataLayer:
             ).join(
                 ContaReceber, Cliente.id == ContaReceber.cliente_id
             ).filter(
-                ContaReceber.estabelecimento_id == estabelecimento_id,
                 ContaReceber.status == 'aberto',
+                \
                 ContaReceber.data_vencimento < hoje
-            ).group_by(
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query_rk = query_rk.filter(ContaReceber.estabelecimento_id == estabelecimento_id)
+                
+            ranking_overdue = query_rk.group_by(
                 Cliente.id, Cliente.nome
             ).order_by(
                 desc('valor_vencido')

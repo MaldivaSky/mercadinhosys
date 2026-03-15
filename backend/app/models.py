@@ -2,7 +2,7 @@
 # SISTEMA ERP COMERCIAL COMPLETO - PADRÃO INDUSTRIAL BRASILEIRO
 # Versão completa com todas as tabelas necessárias
 
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, date, time, timezone, timedelta
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 from flask_sqlalchemy import SQLAlchemy
@@ -65,19 +65,23 @@ def validar_cnpj(cnpj: str) -> bool:
     return True # Placeholder para validação completa se necessário, focando no fluxo multi-tenant agora
 
 class TenantQuery(db.Query):
-    """
-    Query customizada para isolamento automático por estabelecimento (Multi-Tenant).
-    Aplica filtro automaticamente na inicialização da query.
-    """
+    """Query customizada para isolamento automático por estabelecimento (Multi-Tenant)."""
+
     def __init__(self, *args, **kwargs):
         super(TenantQuery, self).__init__(*args, **kwargs)
-        # Aplicar filtro de tenant automaticamente
-        estabelecimento_id = getattr(g, 'estabelecimento_id', None)
-        if estabelecimento_id:
-            model = self._primary_entity.class_
-            if model and hasattr(model, 'estabelecimento_id'):
-                # Injetar o critério de filtro de tenant
-                self._criterion = self._criterion & (model.estabelecimento_id == estabelecimento_id) if self._criterion is not None else (model.estabelecimento_id == estabelecimento_id)
+
+    def filter_by_tenant(self):
+        """
+        Filtra a query automaticamente pelo estabelecimento_id do usuário logado.
+        Assume que `g.estabelecimento_id` está disponível no contexto da requisição.
+        """
+        if not hasattr(self, '_primary_entity'):
+            return self # Não é uma query de entidade, não pode ser filtrada por tenant
+
+        model = self._primary_entity.mapper.class_
+        if hasattr(model, 'estabelecimento_id') and g and hasattr(g, 'estabelecimento_id'):
+            return self.filter(model.estabelecimento_id == g.estabelecimento_id)
+        return self
 
 class SoftDeleteMixin:
     """Mixin para exclusão suave (soft delete)"""
@@ -369,10 +373,11 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
         return normalized
 
     username = db.Column(db.String(50), nullable=False)
-    senha_hash = db.Column(db.String(255), nullable=False)
+    senha = db.Column(db.String(255), nullable=False)
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
     status = db.Column(db.String(20), default="ativo")
+    is_super_admin = db.Column(db.Boolean, default=False)
 
     # PROPRIEDADES NECESSÁRIAS PARA FLASK-LOGIN
     @property
@@ -390,23 +395,7 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
         """Retorna False para usuários reais"""
         return False
 
-    @property
-    def is_super_admin(self):
-        """
-        Retorna True se o usuário é o Administrador Global/Dono do Sistema (SaaS Owner).
-        Este nível de acesso permite ver Leads, Estabelecimentos e métricas globais.
-        """
-        if not self.role:
-            return False
-            
-        # Comparação robusta (case-insensitive)
-        role_ok = self.role.strip().upper() == "ADMIN"
-        user_ok = (
-            self.email == "rafaelmaldivas@gmail.com" or 
-            self.username == "superadmin" or
-            self.username == "maldivas"
-        )
-        return role_ok and user_ok
+    # REMOVIDA PROPRIEDADE DINÂMICA EM FAVOR DE COLUNA EXPLÍCITA
 
     def get_id(self):
         """Retorna o ID do usuário como string (requerido pelo Flask-Login)"""
@@ -437,11 +426,19 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
         ),
     )
 
+    def set_password(self, password):
+        self.senha = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.senha, password)
+
     def set_senha(self, senha):
-        self.senha_hash = generate_password_hash(senha)
+        """Alias para manter retrocompatibilidade se necessário"""
+        self.set_password(senha)
 
     def check_senha(self, senha):
-        return check_password_hash(self.senha_hash, senha)
+        """Alias para manter retrocompatibilidade se necessário"""
+        return self.check_password(senha)
 
 
     def to_dict(self):
@@ -2734,7 +2731,7 @@ class RegistroPonto(db.Model, MultiTenantMixin):
         }
 
 
-class ConfiguracaoHorario(db.Model):
+class ConfiguracaoHorario(db.Model, MultiTenantMixin):
     """Configuração de horários de trabalho por estabelecimento"""
     __tablename__ = "configuracoes_horario"
     
@@ -2839,7 +2836,7 @@ class SyncQueue(db.Model):
         }
 
 
-class SyncLog(db.Model):
+class SyncLog(db.Model, MultiTenantMixin):
     __tablename__ = "sync_logs"
 
     id = db.Column(db.Integer, primary_key=True)

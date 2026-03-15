@@ -2,7 +2,6 @@
 import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
-import WelcomeTour from './components/WelcomeTour';
 import DebugRoutes from './components/DebugRoutes';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { ConfigProvider } from './contexts/ConfigContext';
@@ -21,7 +20,6 @@ const App: React.FC = () => {
               <Router>
                 <DebugRoutes />
                 <AppRoutes />
-                <WelcomeTour />
                 <Toaster
                   position="top-right"
                   reverseOrder={false}

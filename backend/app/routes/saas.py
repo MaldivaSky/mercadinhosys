@@ -304,6 +304,43 @@ def tenant_onboarding():
         }), 500
 
 
+@saas_bp.route("/ativar-tenant/<int:id>", methods=["POST"])
+@super_admin_required
+def ativar_tenant(id):
+    """
+    Ativa um estabelecimento (Tenant) e seus usuários após aprovação
+    """
+    try:
+        estabelecimento = Estabelecimento.query.get(id)
+        if not estabelecimento:
+            return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
+        
+        # 1. Ativar Estabelecimento
+        estabelecimento.ativo = True
+        estabelecimento.plano_status = 'ativo'
+        
+        # 2. Ativar Funcionários do Estabelecimento
+        funcionarios = Funcionario.query.filter_by(estabelecimento_id=id).all()
+        for f in funcionarios:
+            f.ativo = True
+            if f.status == 'pendente':
+                f.status = 'ativo'
+        
+        db.session.commit()
+        
+        logger.info(f"🔓 TENANT ATIVADO: {estabelecimento.nome_fantasia} (ID: {id})")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Estabelecimento '{estabelecimento.nome_fantasia}' e seus usuários foram ativados com sucesso."
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao ativar tenant {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ==================== SUBSCRIPTION & PAYMENTS ====================
 
 @saas_bp.route("/assinatura/status", methods=["GET"])

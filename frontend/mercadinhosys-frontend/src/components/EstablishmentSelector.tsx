@@ -26,8 +26,9 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [internalSelectedId, setInternalSelectedId] = useState<number | null>(() => {
+  const [internalSelectedId, setInternalSelectedId] = useState<number | string | null>(() => {
     const stored = localStorage.getItem('selected_establishment_id');
+    if (stored === 'all') return 'all';
     return stored ? parseInt(stored) : null;
   });
 
@@ -60,13 +61,14 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
     }
   };
 
-  const handleSelection = (id: number) => {
-    if (onEstablishmentChange) {
+  const handleSelection = (id: number | string) => {
+    const stringId = id.toString();
+    if (onEstablishmentChange && typeof id === 'number') {
       onEstablishmentChange(id);
     } else {
       setInternalSelectedId(id);
-      localStorage.setItem('selected_establishment_id', id.toString());
-      toast.success('Contexto de auditoria alterado');
+      localStorage.setItem('selected_establishment_id', stringId);
+      toast.success(id === 'all' ? 'Contexto alterado para Visão Global' : 'Contexto de auditoria alterado');
 
       // Forçar recarregamento apenas para modo não-controlado
       setTimeout(() => {
@@ -77,6 +79,7 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
   };
 
   const selectedData = establishments.find(est => est.id === selectedId);
+  const isAllSelected = selectedId === 'all';
 
   if (loading && establishments.length === 0) {
     return (
@@ -87,9 +90,6 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
     );
   }
 
-  // Se não houver estabelecimentos (ex: erro na API), não renderiza nada
-  if (establishments.length === 0) return null;
-
   return (
     <div className={`relative ${className}`}>
       <button
@@ -99,7 +99,7 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
       >
         <Building className="w-4 h-4 text-blue-600" />
         <span className="text-sm font-medium text-blue-900 max-w-[150px] truncate">
-          {selectedData ? selectedData.nome_fantasia : 'Selecionar Unidade'}
+          {isAllSelected ? 'Todos (Geral)' : (selectedData ? selectedData.nome_fantasia : 'Selecionar Unidade')}
         </span>
         <ChevronDown className={`w-3 h-3 text-blue-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -108,10 +108,24 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
         <>
           <div className="fixed inset-0 z-[1300]" onClick={() => setIsOpen(false)} />
           <div className="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[1301] overflow-hidden">
-            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Modo Auditoria Master</span>
             </div>
             <div className="max-h-80 overflow-y-auto">
+              {/* Opção Visualização Global */}
+              <button
+                onClick={() => handleSelection('all')}
+                className={`w-full flex items-start justify-between p-3 hover:bg-indigo-50 transition-colors text-left border-b border-gray-100 ${isAllSelected ? 'bg-indigo-50/50' : ''}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-indigo-900 text-sm">Todos (Visão Geral)</div>
+                  <div className="text-xs text-indigo-500">Soma de todos os estabelecimentos</div>
+                </div>
+                {isAllSelected && (
+                  <CheckCircle2 className="w-4 h-4 text-indigo-500 ml-2 mt-0.5" />
+                )}
+              </button>
+
               {establishments.map((est) => (
                 <button
                   key={est.id}

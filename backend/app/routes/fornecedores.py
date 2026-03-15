@@ -163,9 +163,10 @@ def listar_fornecedores():
         busca = request.args.get("busca", "", type=str).strip()
 
         # Query base
-        query = Fornecedor.query.filter_by(
-            estabelecimento_id=estabelecimento_id
-        )
+        if str(estabelecimento_id).lower() == 'all':
+             query = Fornecedor.query
+        else:
+             query = Fornecedor.query.filter_by(estabelecimento_id=estabelecimento_id)
 
         # Filtros
         if ativo is not None:
@@ -241,7 +242,7 @@ def listar_fornecedores():
             sql = text(
                 "SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, cidade, estado, ativo, classificacao "
                 "FROM fornecedores "
-                "WHERE estabelecimento_id = :estabelecimento_id "
+                "WHERE (estabelecimento_id = :estabelecimento_id OR :estabelecimento_id = 'all') "
                 "ORDER BY nome_fantasia ASC "
                 "LIMIT :limit OFFSET :offset"
             )
