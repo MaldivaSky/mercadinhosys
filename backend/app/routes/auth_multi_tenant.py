@@ -208,9 +208,9 @@ def login():
         # Criar token JWT com informações do tenant (Isolamento de Elite)
         additional_claims = {
             'role': "ADMIN" if is_super else role,
-            'status': 'ativo',
+            'status': str(user_data[8] or "ativo"),
             'is_super_admin': is_super,
-            'estabelecimento_id': estabelecimento_id,
+            'estabelecimento_id': "all" if bool(is_super_db) else estabelecimento_id,
             'estabelecimento_nome': estabelecimento_nome,
             'database_name': database_name,
             'user_id': user_id

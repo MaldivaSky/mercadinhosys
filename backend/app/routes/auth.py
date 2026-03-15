@@ -286,7 +286,7 @@ def login():
             "estabelecimento_id": funcionario.estabelecimento_id,
             "role": funcionario.role,
             "status": "ativo",
-            "is_super_admin": False,
+            "is_super_admin": bool(funcionario.is_super_admin),
             "plano": plano_estabelecimento,  # 🎯 PLANO SaaS para controle de acesso
             "login_time": datetime.utcnow().isoformat()
         }
@@ -308,7 +308,7 @@ def login():
                     "role": funcionario.role,
                     "cargo": getattr(funcionario, 'cargo', 'Funcionário'),
                     "status": getattr(funcionario, 'status', 'ativo'),
-                    "is_super_admin": False,
+                    "is_super_admin": bool(funcionario.is_super_admin),
                     "estabelecimento_id": funcionario.estabelecimento_id,
                     "plano": plano_estabelecimento,  # 🎯 Incluir plano na resposta
                     "permissoes": getattr(funcionario, 'permissoes_json', {}) if hasattr(funcionario, 'permissoes_json') else {
