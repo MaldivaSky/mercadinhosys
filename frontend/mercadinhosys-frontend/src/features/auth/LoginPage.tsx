@@ -18,14 +18,15 @@ import {
   LockOutlined,
   AccountCircleOutlined,
 } from '@mui/icons-material';
-import { authService } from './authService';
+import { useAuth } from '../../contexts/AuthContext';
 import { showToast } from '../../utils/toast';
-import { LoginApiResponse } from '../../types';
+import { authService } from './authService';
 import logo from '../../../logoprincipal.png';
 
 export function LoginPage() {
   const theme = useTheme();
   const mode = theme.palette.mode;
+  const { login: authLogin } = useAuth();
 
   // Estados do formulário
   const [identifier, setIdentifier] = useState('');
@@ -53,20 +54,12 @@ export function LoginPage() {
     setShowBootstrap(false);
 
     try {
-      const response: LoginApiResponse = await authService.login(identifier, password);
+      const success = await authLogin(identifier, password);
 
-      if (!response.success) {
-        throw new Error(response.error || 'Falha no login');
+      if (!success) {
+        setError('Falha no login. Verifique suas credenciais.');
       }
-
-      if (response.data) {
-        const { access_token, refresh_token, user } = response.data;
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', refresh_token);
-        localStorage.setItem('user_data', JSON.stringify(user));
-        // Hard Refresh: Force full environment load to prevent branding 'flash'
-        window.location.href = '/dashboard';
-      }
+      // Note: AuthContext.login already handles the redirect to /dashboard on success
     } catch (err: any) {
       console.error('❌ Erro no login:', err);
       let errorMessage = err.response?.data?.error || 'Erro ao fazer login';
@@ -76,19 +69,16 @@ export function LoginPage() {
       }
 
       setError(errorMessage);
-      authService.logout();
     } finally {
       setLoading(false);
     }
-  }, [identifier, password]);
+  }, [identifier, password, authLogin]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && identifier && password.length >= 6 && !loading) {
       handleSubmit(e as unknown as React.FormEvent);
     }
   };
-
-
 
   const isFormValid = identifier.trim().length > 0 && password.length >= 6;
 
@@ -253,9 +243,9 @@ export function LoginPage() {
                     try {
                       const promise = authService.bootstrapAdmin(identifier, password).then(async bootstrap => {
                         if (bootstrap.success) {
-                          await authService.login(identifier, password);
-                          window.location.href = '/dashboard';
-                          return true;
+                          const loginOk = await authLogin(identifier, password);
+                          // No hard reload here anymore - AuthContext/AppRoutes handle it
+                          return loginOk;
                         }
                         throw new Error('Falha ao criar admin');
                       });
@@ -280,13 +270,36 @@ export function LoginPage() {
 
             </form>
 
-            <Box sx={{ mt: 6, textAlign: 'center', borderTop: '1px solid rgba(0,0,0,0.05)', pt: 4 }}>
+            <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Button
+                onClick={() => {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.reload();
+                }}
+                variant="text"
+                color="secondary"
+                size="small"
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.75rem',
+                  opacity: 0.6,
+                  '&:hover': { opacity: 1 }
+                }}
+              >
+                Limpar Cache e Reiniciar
+              </Button>
               <Button
                 onClick={() => window.location.href = '/'}
                 variant="text"
-                sx={{ color: 'text.secondary', textTransform: 'none', fontWeight: 'bold' }}
+                sx={{
+                  color: 'text.secondary',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.875rem'
+                }}
               >
-                ← Voltar para o Site Principal
+                ← Voltar para o Site
               </Button>
             </Box>
           </Paper>

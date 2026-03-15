@@ -146,54 +146,13 @@ class RealisticInjector:
         db.session.commit()
 
     @classmethod
-    def inject_funcionarios_time(cls, estabelecimento_id):
+    def inject_funcionarios_time(cls, estabelecimento_id, scenario_key=None):
         """Injeta time completo de funcionários com credenciais únicas (Magnitude Master)"""
         from app.models import Funcionario, Estabelecimento
         from werkzeug.security import generate_password_hash
         
-        # Super-Admin Global (Maldivas) - Bypassing MultiTenant filter for global check
-        super_admin = db.session.execute(db.select(Funcionario).filter_by(username="maldivas")).scalar_one_or_none()
-        
-        # Garantir Estabelecimento HQ para o Super Admin
-        hq = Estabelecimento.query.filter_by(cnpj="00.000.000/0001-00").first()
-        if not hq:
-            end_hq = {
-                "cep": "69000-000", "logradouro": "Alameda SaaS", "numero": "10", 
-                "bairro": "Distrito", "cidade": "Manaus", "estado": "AM", "pais": "Brasil"
-            }
-            hq = Estabelecimento(
-                nome_fantasia="MercadinhoSys HQ",
-                razao_social="MercadinhoSys SaaS Technology LTDA",
-                cnpj="00.000.000/0001-00",
-                email="rafaelmaldivas@gmail.com",
-                telefone="(92) 99999-0000",
-                data_abertura=date(2023, 1, 1), 
-                plano="Premium Master", # PLANO MASTER REQUERIDO
-                plano_status="ativo",
-                **end_hq
-            )
-            db.session.add(hq)
-            db.session.flush()
-
-        if not super_admin:
-            end_master = cls.get_endereco_random() # Endereço Real via ViaCEP
-            super_admin = Funcionario(
-                estabelecimento_id=hq.id, # LINKED TO HQ
-                nome="Rafael Maldivas",
-                username="maldivas",
-                senha_hash=generate_password_hash("Mald1v@$"),
-                cargo="PROPRIETÁRIO DO SISTEMA",
-                role="ADMIN", # IMPORTANTE: role ADMIN para is_super_admin retornar True
-                cpf=cls.generate_cpf(),
-                email="rafaelmaldivas@gmail.com", 
-                celular="(92) 99911-2233",
-                data_nascimento=date(1985, 5, 20),
-                data_admissao=date(2023, 1, 1),
-                ativo=True,
-                **end_master
-            )
-            db.session.add(super_admin)
-            db.session.commit() # Garantir persistência imediata para o check do próximo tenant
+        # No longer creating global Super Admin 'maldivas' or HQ establishment.
+        # Establishments and their admins will be created per tenant scenario.
 
         time_config = [
             {"c": "Gerente", "u": "admin", "n": "Gerente Geral"},
@@ -205,10 +164,22 @@ class RealisticInjector:
         # Prefixo do usuário baseado no ID do estabelecimento para garantir unicidade Master
         prefix = f"est{estabelecimento_id}_"
         
+        # Mapeamento de Credenciais por Cenário (Alinhamento Master com seed_simulation_master.py)
+        scenario_map = {
+            "ELITE": ("admin_elite", "adminElite123"),
+            "BOM": ("admin_bom", "adminBom123"),
+            "RAZOAVEL": ("admin_razoavel", "adminRazoavel123"),
+            "MAL": ("admin_mal", "adminMal123"),
+            "PESSIMO": ("admin_pessimo", "adminPessimo123")
+        }
+
         funcionarios = []
         for config in time_config:
-            username = f"{prefix}{config['u']}" if config['u'] != "admin" else f"admin_{estabelecimento_id}"
-            senha_limpa = f"{config['u']}123" if config['u'] != "admin" else f"admin{estabelecimento_id}"
+            if config['u'] == "admin" and scenario_key and scenario_key.upper() in scenario_map:
+                username, senha_limpa = scenario_map[scenario_key.upper()]
+            else:
+                username = f"{prefix}{config['u']}" if config['u'] != "admin" else f"admin_{estabelecimento_id}"
+                senha_limpa = f"{config['u']}123" if config['u'] != "admin" else f"admin{estabelecimento_id}"
             
             func = Funcionario.query.filter_by(username=username).first()
             if not func:
@@ -217,7 +188,6 @@ class RealisticInjector:
                     estabelecimento_id=estabelecimento_id,
                     nome=f"{config['n']} - {estabelecimento_id}",
                     username=username,
-                    senha_hash=generate_password_hash(senha_limpa),
                     cargo=config['c'],
                     role="ADMIN" if config['c'] == "Gerente" else "FUNCIONARIO",
                     cpf=cls.generate_cpf(),
@@ -228,6 +198,7 @@ class RealisticInjector:
                     ativo=True,
                     **end
                 )
+                func.set_password(senha_limpa)
                 db.session.add(func)
                 funcionarios.append({"n": config['n'], "u": username, "s": senha_limpa, "c": config['c']})
         

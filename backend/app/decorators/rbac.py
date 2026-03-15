@@ -43,6 +43,18 @@ def super_admin_required(f):
                     "message": "Acesso restrito ao Super Admin"
                 }), 403
             
+            # NORMALIZAÇÃO DE STATUS (Utilizando utilitário centralizado)
+            from app.utils.auth_utils import normalize_status, is_user_active
+            raw_status = getattr(user, 'status', 'ativo')
+            status_val = normalize_status(raw_status)
+
+            if not is_user_active(status_val):
+                return jsonify({
+                    "success": False,
+                    "error": "Acesso bloqueado",
+                    "message": f"Sua conta Super Admin está {status_val}. (REF: {raw_status})"
+                }), 403
+            
             # Adicionar metadata ao request para uso posterior
             request.current_user = user
             request.is_super_admin = True
@@ -127,6 +139,18 @@ def tenant_or_super_admin_required(f):
                     "message": "Você não tem acesso a este estabelecimento"
                 }), 403
             
+            # NORMALIZAÇÃO DE STATUS (Utilizando utilitário centralizado)
+            from app.utils.auth_utils import normalize_status, is_user_active
+            raw_status = getattr(user, 'status', 'ativo')
+            status_val = normalize_status(raw_status)
+
+            if not is_user_active(status_val):
+                return jsonify({
+                    "success": False,
+                    "error": "Acesso bloqueado",
+                    "message": f"Sua conta está {status_val}. (REF: {raw_status})"
+                }), 403
+            
             # Adicionar metadata ao request
             request.current_user = user
             request.is_super_admin = False
@@ -172,12 +196,25 @@ def role_required(*allowed_roles):
                         "message": "Usuário não encontrado"
                     }), 401
                 
-                # Super Admin tem acesso a tudo
+                # NORMALIZAÇÃO DE STATUS AGRESSIVA (Utilizando utilitário centralizado)
+                from app.utils.auth_utils import normalize_status, is_user_active
+                raw_status = getattr(user, 'status', 'ativo')
+                status_val = normalize_status(raw_status)
+
+                # Super Admin tem acesso a tudo (bypass de status se for realmente super)
                 if user.is_super_admin:
                     request.current_user = user
                     request.is_super_admin = True
                     return f(*args, **kwargs)
                 
+                # Verificar Bloqueio
+                if not is_user_active(status_val):
+                     return jsonify({
+                        "success": False,
+                        "error": "Acesso bloqueado",
+                        "message": f"Sua conta está {status_val}. Contate o administrador. (REF: {raw_status})"
+                    }), 403
+
                 # Verificar role do usuário
                 if not user.role or user.role.upper() not in [role.upper() for role in allowed_roles]:
                     return jsonify({

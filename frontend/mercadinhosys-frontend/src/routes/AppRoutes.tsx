@@ -6,6 +6,7 @@ import { LoginPage } from '../features/auth/LoginPage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { authService } from '../features/auth/authService';
 import SuperAdminRoute from '../components/routes/SuperAdminRoute';
+import PlanoGuard from '../components/routes/PlanoGuard';
 
 // Lazy loading das páginas
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -28,7 +29,7 @@ const SystemMonitorPage = lazy(() => import('../features/saas/SystemMonitorPage'
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
 
-// Componente para proteção de rotas por role
+// Componente para proteção de rotas por role (mantido para compatibilidade)
 const RoleGuard = ({ children, allowedRoles, requireSuperAdmin }: { children: React.ReactNode, allowedRoles?: string[], requireSuperAdmin?: boolean }) => {
     const user = authService.getCurrentUser();
     const userRole = user?.role?.toLowerCase() || '';
@@ -85,21 +86,26 @@ const AppRoutes: React.FC = () => {
 
                 {/* Rotas protegidas (sem prefixo /app para evitar quebrar links) */}
                 <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />}>
-                    <Route path="dashboard" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><DashboardPage /></RoleGuard>} />
-                    <Route path="pdv" element={<PDVPage />} />
-                    <Route path="products" element={<RoleGuard allowedRoles={['admin', 'gerente', 'estoquista']}><ProductsPage /></RoleGuard>} />
-                    <Route path="suppliers" element={<RoleGuard allowedRoles={['admin', 'gerente', 'estoquista']}><SuppliersPage /></RoleGuard>} />
-                    <Route path="customers" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><CustomersPage /></RoleGuard>} />
-                    <Route path="sales" element={<RoleGuard allowedRoles={['admin', 'gerente']}><SalesPage /></RoleGuard>} />
-                    <Route path="expenses" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ExpensesPage /></RoleGuard>} />
-                    <Route path="employees" element={<RoleGuard allowedRoles={['admin', 'gerente']}><EmployeesPage /></RoleGuard>} />
-                    <Route path="rh" element={<RoleGuard allowedRoles={['admin', 'gerente']}><RHPage /></RoleGuard>} />
-                    <Route path="ponto" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><PontoPage /></RoleGuard>} />
-                    <Route path="ponto-historico" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><PontoHistoricoPage /></RoleGuard>} />
-                    <Route path="ponto-relatorios" element={<RoleGuard allowedRoles={['admin', 'gerente']}><RelatoriosPontoPage /></RoleGuard>} />
-                    <Route path="ponto-diagnostico" element={<RoleGuard allowedRoles={['admin', 'gerente']}><DiagnosticoFotos /></RoleGuard>} />
-                    <Route path="reports" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ReportsPage /></RoleGuard>} />
-                    <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><SettingsPage /></RoleGuard>} />
+                    {/* PLANO GRATUITO - Acesso básico para todos */}
+                    <Route path="dashboard" element={<PlanoGuard planoRequerido="gratuito"><DashboardPage /></PlanoGuard>} />
+                    <Route path="pdv" element={<PlanoGuard planoRequerido="gratuito"><PDVPage /></PlanoGuard>} />
+                    <Route path="products" element={<PlanoGuard planoRequerido="gratuito"><ProductsPage /></PlanoGuard>} />
+                    <Route path="suppliers" element={<PlanoGuard planoRequerido="gratuito"><SuppliersPage /></PlanoGuard>} />
+                    <Route path="customers" element={<PlanoGuard planoRequerido="gratuito"><CustomersPage /></PlanoGuard>} />
+                    <Route path="sales" element={<PlanoGuard planoRequerido="gratuito"><SalesPage /></PlanoGuard>} />
+                    <Route path="settings" element={<PlanoGuard planoRequerido="gratuito"><SettingsPage /></PlanoGuard>} />
+                    
+                    {/* PLANO ADVANCED - Funcionalidades pagas (Gestão de Equipe) */}
+                    <Route path="employees" element={<PlanoGuard planoRequerido="advanced"><EmployeesPage /></PlanoGuard>} />
+                    <Route path="rh" element={<PlanoGuard planoRequerido="advanced"><RHPage /></PlanoGuard>} />
+                    <Route path="ponto" element={<PlanoGuard planoRequerido="advanced"><PontoPage /></PlanoGuard>} />
+                    <Route path="ponto-historico" element={<PlanoGuard planoRequerido="advanced"><PontoHistoricoPage /></PlanoGuard>} />
+                    <Route path="ponto-relatorios" element={<PlanoGuard planoRequerido="advanced"><RelatoriosPontoPage /></PlanoGuard>} />
+                    <Route path="ponto-diagnostico" element={<PlanoGuard planoRequerido="advanced"><DiagnosticoFotos /></PlanoGuard>} />
+                    <Route path="reports" element={<PlanoGuard planoRequerido="advanced"><ReportsPage /></PlanoGuard>} />
+                    <Route path="expenses" element={<PlanoGuard planoRequerido="advanced"><ExpensesPage /></PlanoGuard>} />
+                    
+                    {/* SUPER ADMIN - Acesso total ao sistema */}
                     <Route path="estabelecimentos" element={<SuperAdminRoute><EstabelecimentosPage /></SuperAdminRoute>} />
                     <Route path="monitor" element={<SuperAdminRoute><SystemMonitorPage /></SuperAdminRoute>} />
                     <Route path="leads" element={<SuperAdminRoute><LeadDashboard /></SuperAdminRoute>} />

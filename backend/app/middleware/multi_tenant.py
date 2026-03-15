@@ -22,7 +22,7 @@ class MultiTenantManager:
         self.multi_tenant_mode = os.getenv('MULTI_TENANT_MODE', 'false').lower() == 'true'
         
         # Pool principal para gerenciamento de tenants
-        if self.main_db_url:
+        if self.main_db_url and 'postgresql' in self.main_db_url:
             self.main_pool = SimpleConnectionPool(
                 minconn=1,
                 maxconn=10,
@@ -30,6 +30,8 @@ class MultiTenantManager:
             )
         else:
             self.main_pool = None
+            if self.main_db_url and 'sqlite' in self.main_db_url:
+                logger.info("ℹ️ Banco principal em SQLite. Pools psycopg2 desativados.")
     
     def get_tenant_database_url(self, estabelecimento_id):
         """Gera URL do banco de dados do tenant"""
@@ -50,6 +52,13 @@ class MultiTenantManager:
         # Verificar se pool já existe
         if tenant_id not in self.pools:
             db_url = self.get_tenant_database_url(estabelecimento_id)
+            if 'postgresql' not in db_url:
+                logger.warning(f"⚠️ Tentativa de criar pool psycopg2 para banco não-Postgres: {db_url}")
+                # Em modo SQLite/Legado, não usamos pool psycopg2.
+                # Retornamos uma conexão "fake" ou tratamos no chamador.
+                # Por enquanto, tentaremos retornar None e logar.
+                return None
+
             try:
                 # Criar novo pool para o tenant
                 self.pools[tenant_id] = SimpleConnectionPool(
@@ -68,6 +77,10 @@ class MultiTenantManager:
     def _get_legacy_connection(self):
         """Modo legado - conexão única"""
         db_url = os.getenv('DATABASE_URL')
+        if not db_url or 'postgresql' not in db_url:
+            # Em SQLite, não usamos pools via psycopg2
+            return None
+            
         if not hasattr(self, '_legacy_pool'):
             self._legacy_pool = SimpleConnectionPool(
                 minconn=1,
@@ -188,6 +201,12 @@ def get_tenant_connection():
             # Obter conexão do tenant
             try:
                 connection = tenant_manager.get_connection(estabelecimento_id)
+                
+                # Se não obtivemos conexão (ex: modo SQLite), usamos o db.session do SQLAlchemy
+                if connection is None:
+                    # Em modo SQLite, usamos o SQLAlchemy padrão
+                    return f(*args, **kwargs)
+
                 g.tenant_connection = connection
                 g.estabelecimento_id = estabelecimento_id
                 

@@ -45,7 +45,7 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
     """Aplica filtros avançados na query de vendas"""
     
     # Filtro obrigatório por estabelecimento_id (Multi-tenancy)
-    if estabelecimento_id != 'all':
+    if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
         query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
 
     # Aplicar filtros definidos em FILTROS_PERMITIDOS_VENDAS
@@ -569,7 +569,7 @@ def estatisticas_vendas():
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total")
                 ).filter(Venda.id.in_(v_ids_sel))
-                if estabelecimento_id != 'all':
+                if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
                     q_grouped = q_grouped.filter(Venda.estabelecimento_id == estabelecimento_id)
                 return q_grouped.group_by(group_by_col).all()
             else:
@@ -578,7 +578,7 @@ def estatisticas_vendas():
                     func.count(Venda.id).label("quantidade"),
                     func.sum(Venda.total).label("total")
                 )
-                if estabelecimento_id != 'all':
+                if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
                     q_grouped = q_grouped.filter(Venda.estabelecimento_id == estabelecimento_id)
                 return q_grouped.group_by(group_by_col).all()
 
@@ -703,11 +703,13 @@ def relatorio_diario():
 
         # Buscar vendas do dia filtradas
         query = Venda.query.filter(
-            Venda.estabelecimento_id == estabelecimento_id,
             Venda.status == "finalizada",
             Venda.data_venda >= inicio_dia,
             Venda.data_venda <= fim_dia
         )
+        
+        if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
+            query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
         vendas = (
             query
             .options(

@@ -23,20 +23,35 @@ export const usePlanGate = () => {
     const estabelecimento = useMemo((): Partial<Estabelecimento> => {
         try {
             const data = localStorage.getItem('estabelecimento_data');
-            return data ? JSON.parse(data) : {};
+            const parsed = data ? JSON.parse(data) : {};
+            return parsed || {};
         } catch (error) {
             console.error('Erro ao ler dados do estabelecimento para gating:', error);
             return {};
         }
     }, []);
 
-    const plano = (estabelecimento.plano || 'Basic') as string;
-    const status = (estabelecimento.plano_status || 'experimental') as string;
+    const isSuperAdmin = useMemo(() => {
+        try {
+            const userData = localStorage.getItem('user_data');
+            if (!userData) return false;
+            const user = JSON.parse(userData);
+            return user.is_super_admin === true;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    const plano = isSuperAdmin ? 'Premium' : (estabelecimento.plano || 'Basic') as string;
+    const status = isSuperAdmin ? 'ativo' : (estabelecimento.plano_status || 'experimental') as string;
 
     /**
      * Verifica se um recurso específico está disponível no plano atual
      */
     const hasFeature = (feature: FeatureKey): boolean => {
+        // Master Bypass: Super Admin tem acesso a TUDO, ponto final.
+        if (isSuperAdmin) return true;
+
         // Bloqueia recursos premium se a assinatura não estiver ativa ou em período experimental
         if (!['ativo', 'experimental'].includes(status.toLowerCase())) {
             return false;

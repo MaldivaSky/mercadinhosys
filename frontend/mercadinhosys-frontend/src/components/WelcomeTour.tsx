@@ -10,6 +10,8 @@ import {
     Rocket
 } from 'lucide-react';
 
+import { useAuth } from '../contexts/AuthContext';
+
 interface TourStep {
     title: string;
     description: string;
@@ -57,17 +59,23 @@ const steps: TourStep[] = [
 ];
 
 const WelcomeTour: React.FC = () => {
+    const { isAuthenticated } = useAuth();
     const [currentStep, setCurrentStep] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {
-        // Verifica se é o primeiro acesso
+        // Só dispara o tour se o usuário estiver autenticado E for o primeiro acesso
+        if (!isAuthenticated) {
+            setIsVisible(false);
+            return;
+        }
+
         const hasSeenTour = localStorage.getItem('mercadinhosys_tour_seen');
         if (!hasSeenTour) {
             const timer = setTimeout(() => setIsVisible(true), 2000); // 2 segundos após carregar
             return () => clearTimeout(timer);
         }
-    }, []);
+    }, [isAuthenticated]);
 
     const handleNext = () => {
         if (currentStep < steps.length - 1) {
@@ -88,7 +96,7 @@ const WelcomeTour: React.FC = () => {
         setIsVisible(false);
     };
 
-    if (!isVisible) return null;
+    if (!isAuthenticated || !isVisible) return null;
 
     const step = steps[currentStep];
 

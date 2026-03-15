@@ -13,6 +13,7 @@ from app.models import db
 from config import config
 import os
 import logging
+from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
@@ -150,6 +151,33 @@ def create_app(config_name=None):
 
     mail.init_app(app)
 
+    @app.before_request
+    def load_tenant_context():
+        """
+        Handler Global: Carrega as claims do JWT para o objeto 'g' do Flask.
+        Isso permite que o models.py (TenantQuery) acesse is_super_admin e estabelecimento_id
+        sem depender de chamadas diretas ao get_jwt() dentro da classe Query.
+        """
+        from flask_jwt_extended import get_jwt, verify_jwt_in_request
+        from flask import g, request
+
+        # Ignorar OPTIONS e rotas de auth/health que não requerem JWT filtrado
+        if request.method == "OPTIONS" or any(p in request.path for p in ["/api/auth/login", "/api/health", "/api/onboarding"]):
+            return
+
+        try:
+            # Verifica JWT sem forçar erro (algumas rotas podem ser públicas)
+            verify_jwt_in_request(optional=True)
+            claims = get_jwt()
+            if claims:
+                # Priorizar Header de Impersonation se existir (mantemos suporte basico de header se presente no ID do JWT)
+                from app.utils.query_helpers import get_authorized_establishment_id
+                g.estabelecimento_id = get_authorized_establishment_id()
+                g.is_super_admin = False
+        except Exception as e:
+            # Logger silencioso para não poluir em rotas realmente públicas
+            pass
+
 
     @app.errorhandler(404)
     def handle_404_error(e):
@@ -198,7 +226,7 @@ def create_app(config_name=None):
     CORS(app, resources={r"/api/*": {
         "origins": cors_origins,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Access-Control-Allow-Origin"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Access-Control-Allow-Origin", "X-Establishment-ID", "X-Establishment-Id", "X-Impersonate-Tenant-Id", "X-Tenant-ID"],
         "expose_headers": ["Content-Range", "X-Content-Range"],
         "supports_credentials": True,
         "max_age": 600
@@ -389,18 +417,16 @@ def create_app(config_name=None):
 
 
     # ==================== REGISTRO DE BLUEPRINTS ====================
-
-    # Auth - IMPORTANTE: blueprint se chama 'auth_bp' no arquivo
+    # Auth - IMPORTANTE: Usamos a versão Multi-Tenant como padrão para garantir
+    # que rotas como /verify-tenant estejam sempre disponíveis, delegando ao 
+    # blueprint o tratamento de fallback para modo offline/local.
     try:
-        if app.config.get("MULTI_TENANT_MODE"):
-            from app.routes.auth_multi_tenant import auth_bp
-            logger.info("🏢 Usando autenticação Multi-Tenant")
-        else:
-            from app.routes.auth import auth_bp
-            logger.info("🔐 Usando autenticação Single-Tenant")
-
+        from app.routes.auth_multi_tenant import auth_bp
         app.register_blueprint(auth_bp, url_prefix="/api/auth")
-        logger.info("✅ Blueprint auth registrado em /api/auth")
+        logger.info("✅ Blueprint Auth (Multi-Tenant Logic) registrado em /api/auth")
+        
+        # Mapeamento para garantir que rotas legadas ou específicas continuem funcionando
+        # se houver necessidade de manter ambos os blueprints, mas aqui optamos pela unificação.
     except Exception as e:
         logger.error(f"❌ Erro ao registrar auth: {e}")
 

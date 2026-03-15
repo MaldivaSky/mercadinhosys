@@ -34,13 +34,17 @@ def get_establishment_id():
     - Se for Super-Admin, permite Header 'X-Establishment-ID'.
     - Caso contrário, usa Claims do JWT.
     """
-    from app.utils.query_helpers import get_authorized_establishment_id
+    from app.utils.query_helpers import get_authorized_establishment_id, get_first_estabelecimento_id_safe
     est_id = get_authorized_establishment_id()
     
     if est_id is None:
         raise ValueError("Token ou Contexto inválido: estab_id não encontrado")
         
-    return int(est_id)
+    if str(est_id).lower() == "all":
+        # Se for visão Holding ('all'), retornamos 'all' para que o orquestrador/data_layer agrupe.
+        return "all"
+        
+    return int(est_id) if est_id is not None else None
 
 
 @dashboard_bp.route("/cientifico", methods=["GET"])
@@ -146,9 +150,9 @@ def rh_ponto_historico():
         page = request.args.get("page", default=1, type=int)
         per_page = request.args.get("per_page", default=25, type=int)
 
-        query = RegistroPonto.query.join(Funcionario).filter(
-            RegistroPonto.estabelecimento_id == estabelecimento_id
-        )
+        query = RegistroPonto.query.join(Funcionario)
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
 
         if data_inicio:
             data_inicio_obj = datetime.strptime(data_inicio, "%Y-%m-%d").date()
@@ -220,14 +224,15 @@ def rh_ponto_espelho():
         data_fim_obj = datetime.strptime(data_fim, "%Y-%m-%d").date()
         
         # Buscar registros
-        registros = RegistroPonto.query.filter(
-            and_(
-                RegistroPonto.funcionario_id == funcionario_id,
-                RegistroPonto.estabelecimento_id == estabelecimento_id,
-                RegistroPonto.data >= data_inicio_obj,
-                RegistroPonto.data <= data_fim_obj
-            )
-        ).order_by(RegistroPonto.data, RegistroPonto.hora).all()
+        filters = [
+            RegistroPonto.funcionario_id == funcionario_id,
+            RegistroPonto.data >= data_inicio_obj,
+            RegistroPonto.data <= data_fim_obj
+        ]
+        if str(estabelecimento_id).lower() != 'all':
+            filters.append(RegistroPonto.estabelecimento_id == estabelecimento_id)
+            
+        registros = RegistroPonto.query.filter(and_(*filters)).order_by(RegistroPonto.data, RegistroPonto.hora).all()
         
         # Agrupar por dia
         registros_por_dia = defaultdict(list)

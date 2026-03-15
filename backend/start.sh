@@ -25,9 +25,7 @@ else
     echo "✅ Database already has data, skipping seed"
 fi
 
-# 4) Sincronizar schema (garantir colunas críticas no Postgres - margem_lucro_real, etc.)
-echo "📋 Syncing schema (critical columns)..."
-python schema_sync.py || { echo "⚠️ schema_sync failed, continuing..."; true; }
+# Sincronização de schema removida (redundante com migrations)
 
 # Iniciar servidor
 echo "🚀 Starting Gunicorn server..."

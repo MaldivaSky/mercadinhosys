@@ -9,7 +9,6 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { useAuth } from '../../contexts/AuthContext';
 import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
-import EstablishmentSelector from '../EstablishmentSelector';
 
 
 const mobileMenuItems = [
@@ -171,17 +170,8 @@ const HeaderProfessional = () => {
 
                         {/* Desktop Actions */}
                         <div className="hidden md:flex items-center gap-3">
-                            {/* Log de Auditoria Super-Admin */}
-                            {(() => {
-                                if (user?.is_super_admin) {
-                                    console.log("👑 Super-Admin detectado no HeaderProfessional");
-                                }
-                                return null;
-                            })()}
+                            {/* Log de Auditoria Removido (Lógica Super-Admin Desativada) */}
 
-                            {user?.is_super_admin && (
-                                <EstablishmentSelector className="mr-2" />
-                            )}
                             {/* Theme Toggle */}
                             <button
                                 onClick={toggleTheme}

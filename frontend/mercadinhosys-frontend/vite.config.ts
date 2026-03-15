@@ -28,11 +28,13 @@ export default defineConfig(() => {
           target: apiTarget,
           changeOrigin: true,
           secure: false,
+          rewrite: (path) => path.replace(/^\/api/, '/api'),
         },
         '/uploads': {
           target: apiTarget,
           changeOrigin: true,
           secure: false,
+          rewrite: (path) => path.replace(/^\/uploads/, '/uploads'),
         },
       },
     },

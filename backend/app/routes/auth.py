@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from app import db
 from app.models import Funcionario, Estabelecimento, LoginHistory
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 import traceback
 import pytz
 import hashlib
@@ -128,7 +128,7 @@ def setup_db():
                 estab = Estabelecimento(
                     nome_fantasia="MercadinhoSys",
                     razao_social="MercadinhoSys LTDA",
-                    cnpj="00.000.000/0001-00",
+                    cnpj="12.345.678/0001-99",
                     telefone="(00) 0000-0000",
                     email="admin@mercadinhosys.com",
                     cep="00000-000",
@@ -148,7 +148,7 @@ def setup_db():
                 nome="Administrador",
                 username="admin",
                 email="admin@mercadinhosys.com",
-                cpf="000.000.000-00",
+                cpf="123.456.789-09",
                 data_nascimento=datetime(1990, 1, 1).date(),
                 celular="(00) 00000-0000",
                 cargo="Gerente",
@@ -240,21 +240,23 @@ def db_schema_check():
 @auth_bp.route("/login", methods=["POST"])
 def login():
     """
-    Autenticacao de usuario com auditoria de login e suporte a Acesso Global (SaaS Master).
+    Autenticacao de usuario simplificada.
     """
     try:
         data = request.get_json(silent=True) or {}
-        current_app.logger.info(f"[LOGIN] Tentativa de login iniciada. Payload: {data}")
         
-        identifier = (data.get("email") or data.get("username") or data.get("identifier") or "").strip()
-        senha = (data.get("senha") or data.get("password") or "").strip()
+        # Captura flexível mas RIGOROSA
+        identifier = (data.get('identifier') or data.get('username') or data.get('email') or '').strip()
+        senha = (data.get('senha') or data.get('password') or '').strip()
         
+        # Bloqueio imediato se faltar qualquer um dos dois
         if not identifier or not senha:
-            current_app.logger.warning("[LOGIN] Falha: Credenciais obrigatorias nao fornecidas.")
-            return jsonify({"success": False, "error": "Credenciais obrigatorias", "code": "CREDENTIALS_REQUIRED"}), 400
+            return jsonify({
+                "success": False, 
+                "error": "Identificador e senha são obrigatórios para sua segurança.", 
+                "code": "CREDENTIALS_REQUIRED"
+            }), 400
 
-        # BUSCA FORENSE: Ignorar filtros de Tenant para encontrar o usuario (especialmente Global Admin)
-        current_app.logger.info(f"[LOGIN] Buscando usuario '{identifier}' no banco Master...")
         funcionario = db.session.execute(
             db.select(Funcionario).filter(
                 db.or_( 
@@ -265,90 +267,54 @@ def login():
         ).scalar_one_or_none()
 
         if not funcionario:
-            current_app.logger.warning(f"[LOGIN] Falha: Usuario '{identifier}' nao encontrado no banco de dados.")
             return jsonify({"success": False, "error": "Usuario nao encontrado", "code": "USER_NOT_FOUND"}), 401
-
-        current_app.logger.info(f"[LOGIN] Usuario encontrado (ID: {funcionario.id}). Verificando hash de senha...")
         
-        # Verificar senha via Hash Werkzeug
         if not funcionario.check_senha(senha):
-            current_app.logger.warning(f"[LOGIN] Falha: Senha incorreta para o usuario '{identifier}'.")
             return jsonify({"success": False, "error": "Senha incorreta", "code": "WRONG_PASSWORD"}), 401
 
-        # Verificar se esta ativo
         if not funcionario.ativo or funcionario.status != "ativo":
-            current_app.logger.warning(f"[LOGIN] Falha: Conta do usuario '{identifier}' esta inativa ou bloqueada.")
             return jsonify({"success": False, "error": "Conta inativa", "code": "ACCOUNT_INACTIVE"}), 403
 
-        current_app.logger.info(f"[LOGIN] Senha validada. Carregando dados do estabelecimento...")
-
-        # DADOS DO ESTABELECIMENTO (Com Bypass para Super-Admin Global)
-        from app.utils.query_helpers import get_estabelecimento_safe
-        dados_estab = None
-        if funcionario.estabelecimento_id:
-            current_app.logger.info(f"[LOGIN] Localizando estabelecimento ID: {funcionario.estabelecimento_id}")
-            dados_estab = get_estabelecimento_safe(funcionario.estabelecimento_id)
-        elif funcionario.is_super_admin:
-            current_app.logger.info("[LOGIN] Super-Admin detectado. Injetando contexto de Controle SaaS Master.")
-            # Mock de estabelecimento do Sistema para o SaaS Owner
-            dados_estab = {
-                "id": None,
-                "nome_fantasia": "SaaS Master Control",
-                "razao_social": "Antigravity SaaS Corp",
-                "cnpj": "00.000.000/0001-00",
-                "telefone": "(00) 0000-0000",
-                "email": "master@mercadinhosys.com",
-                "endereco": "Nuvem Digital, 0 - Internet/AM",
-                "cidade": "Internet",
-                "estado": "AM",
-                "plano": "Enterprise",
-                "plano_status": "active"
-            }
-
-        if not dados_estab and not funcionario.is_super_admin:
-            current_app.logger.error(f"[LOGIN] Erro: Estabelecimento ID {funcionario.estabelecimento_id} nao encontrado para o usuario.")
-            return jsonify({"success": False, "error": "Estabelecimento nao encontrado", "code": "ESTABLISHMENT_NOT_FOUND"}), 404
-
-        # Gerar Tokens JWT
-        current_app.logger.info(f"[LOGIN] Gerando tokens JWT para a sessao...")
-        
-        # SUPER-ADMIN BYPASS: Garantir acesso master para o desenvolvedor regatado
-        is_super = funcionario.is_super_admin or funcionario.username in ['admin', 'rafaelmaldivas', 'souzacenter']
+        # Buscar plano do estabelecimento para controle SaaS
+        from app.models import Estabelecimento
+        estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
+        plano_estabelecimento = estabelecimento.plano if estabelecimento else "gratuito"
         
         additional_claims = {
             "username": funcionario.username,
             "nome": funcionario.nome,
             "estabelecimento_id": funcionario.estabelecimento_id,
-            "estabelecimento_nome": dados_estab["nome_fantasia"] if dados_estab else "Sistema",
-            "role": "ADMIN" if is_super else funcionario.role,
-            "is_super_admin": is_super,
+            "role": funcionario.role,
+            "status": "ativo",
+            "is_super_admin": False,
+            "plano": plano_estabelecimento,  # 🎯 PLANO SaaS para controle de acesso
             "login_time": datetime.utcnow().isoformat()
         }
 
         identity = str(funcionario.id)
-        access_token = create_access_token(identity=identity, additional_claims=additional_claims, expires_delta=timedelta(hours=8))
+        access_token = create_access_token(identity=identity, additional_claims=additional_claims, expires_delta=timedelta(hours=24))
         refresh_token = create_refresh_token(identity=identity, additional_claims=additional_claims, expires_delta=timedelta(days=7))
-
-        current_app.logger.info(f"[LOGIN] Sessao iniciada com sucesso: {funcionario.username} (SuperAdmin: {is_super})")
 
         return jsonify({
             "success": True,
-            "message": "Login realizado com sucesso",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
             "data": {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
                 "user": {
                     "id": funcionario.id,
-                    "nome": funcionario.nome,
                     "username": funcionario.username,
+                    "nome": funcionario.nome,
                     "email": funcionario.email,
-                    "cargo": funcionario.cargo,
-                    "role": "ADMIN" if is_super else funcionario.role,
-                    "is_super_admin": is_super,
+                    "role": funcionario.role,
+                    "cargo": getattr(funcionario, 'cargo', 'Funcionário'),
+                    "status": getattr(funcionario, 'status', 'ativo'),
+                    "is_super_admin": False,
                     "estabelecimento_id": funcionario.estabelecimento_id,
-                    "estabelecimento_nome": dados_estab["nome_fantasia"] if dados_estab else "Sistema"
-                },
-                "estabelecimento": dados_estab
+                    "plano": plano_estabelecimento,  # 🎯 Incluir plano na resposta
+                    "permissoes": getattr(funcionario, 'permissoes_json', {}) if hasattr(funcionario, 'permissoes_json') else {
+                        "pdv": True, "estoque": True, "vendas": True, "clientes": True, "financeiro": False, "configuracoes": False
+                    }
+                }
             }
         }), 200
 
@@ -429,7 +395,7 @@ def bootstrap_admin():
             estabelecimento_id=estabelecimento.id,
             nome="Administrador Sistema",
             username=username,
-            senha_hash=generate_password_hash(senha),
+            senha=generate_password_hash(senha),
             email=email,
             cpf="111.222.333-44",
             rg="RN-12345678",
@@ -512,9 +478,11 @@ def refresh():
             "nome": claims.get("nome"),
             "estabelecimento_id": claims.get("estabelecimento_id"),
             "estabelecimento_nome": claims.get("estabelecimento_nome"),
-            "status": claims.get("status"),
+            "plano": claims.get("plano", "gratuito"),  # Manter plano no refresh
+            "status": claims.get("status") or "ativo",
             "role": claims.get("role"),
             "cargo": claims.get("cargo"),
+            "is_super_admin": claims.get("is_super_admin", False),
             "refresh_time": datetime.utcnow().isoformat(),
             "ip_address": request.remote_addr,
             "dispositivo": request.headers.get("User-Agent", "Desconhecido")[:100],
@@ -746,10 +714,8 @@ def get_profile():
         # Estatísticas do usuário (se aplicável)
         hoje = datetime.utcnow().date()
         total_vendas_hoje = 0
-        if hasattr(funcionario, "vendas"):
-            total_vendas_hoje = len(
-                [v for v in funcionario.vendas if v.data_venda.date() == hoje]
-            )
+        # Se vendas não está disponível em funcionario_data, mantenha como 0
+        # Caso queira implementar, busque vendas do funcionário pelo ID usando o modelo de vendas
 
         profile_data = {
             "id": funcionario_data.get("id"),
@@ -1094,7 +1060,7 @@ def get_permissions_for_role(role, permissoes_db=None):
     }
 
     # Permissões padrão baseadas no role
-    permissions = role_permissions.get(role_key, ["view_products", "view_clients"])
+    permissions = role_permissions.get(role, ["view_products", "view_clients"])
 
     # Adicionar permissões específicas do banco de dados
     if permissoes_db and isinstance(permissoes_db, dict):
@@ -1157,14 +1123,14 @@ def guest_demo():
             demo_admin = Funcionario(
                 estabelecimento_id=demo_est.id,
                 nome="Administrador Demo",
-                cpf="000.000.000-00",
+                cpf="123.456.789-09",
                 data_nascimento=date(1990, 1, 1),
                 celular="(11) 99999-9999",
                 email="demo@mercadinhosys.com",
                 cargo="admin",
                 data_admissao=date(2020, 1, 1),
                 username="demo",
-                senha_hash=generate_password_hash("demo123"),
+                senha=generate_password_hash("demo123"),
                 ativo=True,
                 # Campos de endereço obrigatórios (EnderecoMixin)
                 cep="01001-000",
@@ -1183,10 +1149,8 @@ def guest_demo():
             "nome": demo_admin.nome,
             "estabelecimento_id": demo_est.id,
             "estabelecimento_nome": demo_est.nome_fantasia,
-            "status": "ativo",
-            "role": "ADMIN",
-            "cargo": "admin",
             "login_time": datetime.utcnow().isoformat(),
+            "status": "ativo",
             "is_demo": True
         }
 

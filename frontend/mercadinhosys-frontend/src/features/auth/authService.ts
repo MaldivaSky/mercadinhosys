@@ -9,11 +9,14 @@ class AuthService {
     async login(identifier: string, password: string): Promise<LoginApiResponse> {
         console.log('📤 Enviando para backend:', { identifier });
 
-        // ✅ Estrutura CORRETA para o backend
+        // ✅ Estrutura CORRETA para o backend (Flexibilidade Total)
         const loginData = {
+            identifier: identifier,
+            username: identifier,
             email: identifier.includes('@') ? identifier : undefined,
-            username: !identifier.includes('@') ? identifier : undefined,
-            senha: password
+            senha: password,
+            password: password,
+            estabelecimento_id: identifier
         };
 
         try {
@@ -21,14 +24,14 @@ class AuthService {
                 `${API_URL}/auth/login`,
                 loginData,
                 {
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': identifier },
                     timeout: 10000
                 }
             );
 
             const data = response.data;
 
-            // ✅ Validação robusta da resposta
+            // ✅ Validação robusta da resposta (Tokens na Raiz)
             if (!data || typeof data !== 'object') {
                 throw new Error('Resposta inválida do servidor');
             }
@@ -37,22 +40,35 @@ class AuthService {
                 throw new Error(data.error || 'Login falhou');
             }
 
-            if (!data.data?.access_token || !data.data?.user) {
+            if (!data.access_token || !data.data?.user) {
                 throw new Error('Dados de autenticação incompletos');
             }
 
-            // ✅ Salva tokens
-            localStorage.setItem('access_token', data.data.access_token);
-            if (data.data.refresh_token) {
-                localStorage.setItem('refresh_token', data.data.refresh_token);
+            // ✅ Salva tokens com Blindagem contra "undefined"
+            if (data.access_token && String(data.access_token) !== 'undefined' && String(data.access_token) !== 'null') {
+                localStorage.setItem('access_token', data.access_token);
+                console.log('🗝️ Access Token persistido');
+            } else {
+                console.error('⚠️ Tentativa de salvar Access Token inválido detectada!');
             }
-            localStorage.setItem('user_data', JSON.stringify(data.data.user));
-            localStorage.setItem('estabelecimento_data', JSON.stringify(data.data.estabelecimento));
+
+            if (data.refresh_token && String(data.refresh_token) !== 'undefined' && String(data.refresh_token) !== 'null') {
+                localStorage.setItem('refresh_token', data.refresh_token);
+                console.log('🔐 Refresh Token persistido');
+            }
+
+            if (data.data?.user) {
+                localStorage.setItem('user_data', JSON.stringify(data.data.user));
+            }
+
+            if (data.data?.estabelecimento) {
+                localStorage.setItem('estabelecimento_data', JSON.stringify(data.data.estabelecimento));
+            }
 
             // Dispara evento para atualizar estado de autenticação
             window.dispatchEvent(new Event('auth-change'));
 
-            console.log('✅ Tokens salvos com sucesso');
+            console.log('✅ Tokens e dados de sessão salvos com sucesso');
             return data;
 
         } catch (error: unknown) {
@@ -75,7 +91,8 @@ class AuthService {
             username: !identifier.includes('@') ? identifier : undefined,
             identifier,
             senha: password,
-            password
+            password,
+            estabelecimento_id: identifier
         };
 
         try {
@@ -83,7 +100,7 @@ class AuthService {
                 `${API_URL}/auth/bootstrap`,
                 bootstrapData,
                 {
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': identifier },
                     timeout: 10000
                 }
             );

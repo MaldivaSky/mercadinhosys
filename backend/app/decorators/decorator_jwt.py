@@ -37,15 +37,24 @@ def funcionario_required(f):
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se não está bloqueado - agora usa claims
-        if claims.get("status") not in ["ativo", "active"]:
-            from flask import current_app
-            current_app.logger.warning(f"Acesso bloqueado: user={current_user_id}, status={claims.get('status')}")
+        # NORMALIZAÇÃO DE STATUS AGRESSIVA (Utilizando utilitário centralizado)
+        from app.utils.auth_utils import normalize_status, is_user_active
+        
+        raw_status = claims.get("status")
+        status_val = normalize_status(raw_status)
+        
+        # LOG DE DEPURAÇÃO (Centralizado e Siliconado)
+        from flask import current_app
+        current_app.logger.info(f"🔍 [AUTH DOCTOR] Fingerprint: MERCADINHOV2_2026_MARCH_15_V1 | User: {current_user_id} | Status: {status_val}")
+
+        # Verifica se não está bloqueado
+        if not is_user_active(status_val):
+            current_app.logger.warning(f"🚫 [BLOQUEIO] Acesso negado: user={current_user_id}, status={status_val}")
             return (
                 jsonify(
                     {
                         "error": "Acesso bloqueado",
-                        "message": f"Sua conta está {claims.get('status')}. Contate o administrador.",
+                        "message": f"Sua conta está {status_val}. Contate o administrador. (REF: {raw_status})",
                     }
                 ),
                 403,
@@ -86,10 +95,12 @@ def admin_required(f):
                 403,
             )
 
-        # Verifica se não está bloqueado - agora usa claims
-        status = claims.get("status", "").lower()
+        # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        raw_status = claims.get("status")
+        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        
         if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado"}), 403
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
 
         return f(*args, **kwargs)
 
@@ -128,10 +139,12 @@ def gerente_ou_admin_required(f):
                 403,
             )
 
-        # Verifica se não está bloqueado - agora usa claims
-        status = (claims.get("status") or "ativo").lower()
+        # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        raw_status = claims.get("status")
+        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        
         if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado"}), 403
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
 
         return f(*args, **kwargs)
 
@@ -155,10 +168,12 @@ def super_admin_required(f):
         if not current_user_id:
             return jsonify({"error": "Token inválido ou expirado"}), 401
 
-        # Verifica se não está bloqueado
-        status = claims.get("status", "").lower()
+        # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        raw_status = claims.get("status")
+        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        
         if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado"}), 403
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
 
         # Verificação de segurança adicional via Role caso claims falhem
         role = claims.get("role", "").upper()
@@ -204,9 +219,12 @@ def gerente_required(f):
                 403,
             )
 
-        # Verifica se não está bloqueado - agora usa claims
-        if claims.get("status") != "ativo":
-            return jsonify({"error": "Acesso bloqueado"}), 403
+        # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        raw_status = claims.get("status")
+        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        
+        if status not in ["ativo", "active"]:
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
 
         return f(*args, **kwargs)
 

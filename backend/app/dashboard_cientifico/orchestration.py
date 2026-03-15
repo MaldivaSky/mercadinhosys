@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class DashboardOrchestrator:
     """Orquestra a geração do dashboard"""
 
-    def __init__(self, establishment_id: int):
+    def __init__(self, establishment_id: Any):
         self.establishment_id = establishment_id
 
     @cache_response(ttl_seconds=60, require_db_check=False)
@@ -511,10 +511,10 @@ class DashboardOrchestrator:
             produto_ids_lentos = [p.get("id") for p in produtos_lentos_candidatos if p.get("id")]
             
             # 🔥 CORREÇÃO: Buscar produtos do banco com todos os dados necessários
-            produtos_db_lentos = Produto.query.filter(
-                Produto.estabelecimento_id == self.establishment_id,
-                Produto.id.in_(produto_ids_lentos)
-            ).all()
+            query_db_lentos = Produto.query.filter(Produto.id.in_(produto_ids_lentos))
+            if str(self.establishment_id).lower() != 'all':
+                query_db_lentos = query_db_lentos.filter(Produto.estabelecimento_id == self.establishment_id)
+            produtos_db_lentos = query_db_lentos.all()
             
             # Criar mapa com estoque E preço de custo do banco (dados reais)
             produtos_db_map = {
@@ -582,10 +582,10 @@ class DashboardOrchestrator:
             produto_ids = [p.get("id") for p in top_20_produtos if p.get("id")]
             
             # Buscar estoque real dos produtos
-            produtos_db = Produto.query.filter(
-                Produto.estabelecimento_id == self.establishment_id,
-                Produto.id.in_(produto_ids)
-            ).all()
+            query_db = Produto.query.filter(Produto.id.in_(produto_ids))
+            if str(self.establishment_id).lower() != 'all':
+                query_db = query_db.filter(Produto.estabelecimento_id == self.establishment_id)
+            produtos_db = query_db.all()
             
             estoque_map = {p.id: p.quantidade for p in produtos_db}
             
@@ -626,13 +626,10 @@ class DashboardOrchestrator:
         ][:50]
         clientes_risco = []
         if risco_ids:
-            rows = (
-                Cliente.query.filter(
-                    Cliente.estabelecimento_id == self.establishment_id,
-                    Cliente.id.in_(risco_ids),
-                )
-                .all()
-            )
+            query_risco = Cliente.query.filter(Cliente.id.in_(risco_ids))
+            if str(self.establishment_id).lower() != 'all':
+                query_risco = query_risco.filter(Cliente.estabelecimento_id == self.establishment_id)
+            rows = query_risco.all()
             by_id = {int(c.id): c for c in rows}
             for cid in risco_ids:
                 cli = by_id.get(int(cid))

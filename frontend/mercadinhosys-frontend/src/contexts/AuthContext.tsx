@@ -37,30 +37,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const token = localStorage.getItem('access_token');
-        const userData = localStorage.getItem('user_data');
+        const checkAuth = () => {
+            const token = localStorage.getItem('access_token');
+            const userData = localStorage.getItem('user_data');
 
-        if (token && userData) {
-            try {
-                const parsedUser = JSON.parse(userData);
-                setUser(parsedUser);
-            } catch (error) {
-                console.error('Erro ao parsear dados do usuário:', error);
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('user_data');
-                localStorage.removeItem('refresh_token');
+            if (token && userData) {
+                try {
+                    const parsedUser = JSON.parse(userData);
+                    setUser(parsedUser);
+                } catch (error) {
+                    console.error('Erro ao parsear dados do usuário:', error);
+                    setUser(null);
+                }
+            } else {
+                setUser(null);
             }
-        }
-        setLoading(false);
+            setLoading(false);
+        };
+
+        checkAuth();
+
+        window.addEventListener('auth-change', checkAuth);
+        return () => window.removeEventListener('auth-change', checkAuth);
     }, []);
 
     const login = async (username: string, senha: string): Promise<boolean> => {
         try {
             const result = await authService.login(username, senha);
+            console.log('🔍 Resultado do login no AuthService:', result);
+
             if (result && result.success && result.data?.user) {
+                // Ao contrário do LoginPage, aqui não sobrescrevemos localStorage, 
+                // pois o authService.login já o fez corretamente.
                 setUser(result.data.user as unknown as User);
-                // Senior-Grade Reset: Reload page to purge all old states/contexts
-                window.location.href = '/dashboard';
+                if (import.meta.env.DEV) {
+                    console.log('✅ Login success');
+                }
+
+                // No forced hard reload. 
+                // AppRoutes.tsx detects 'user' change and navigate to /dashboard automatically.
+                console.log('🏁 [DEBUG] Login efetuado. Redirecionamento automático via React state.');
+
                 return true;
             }
             return false;
@@ -73,8 +90,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const logout = () => {
         authService.logout();
         setUser(null);
-        // Radical Reset: Redirect to root to clear all memory state
-        window.location.href = '/';
+        // No hard reload. AppRoutes will handle navigation to /.
+        console.log('🏁 [DEBUG] Logout efetuado. Navegação via React state.');
     };
 
     const updateUser = (updatedUser: User) => {
@@ -82,7 +99,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('user_data', JSON.stringify(updatedUser));
     };
 
-    const isAuthenticated = !!user;
+    // A autenticação é verdadeira se tivermos um usuário OU se tivermos um token no localStorage (persistence)
+    const isAuthenticated = !!user || (!!localStorage.getItem('access_token') && localStorage.getItem('access_token') !== 'undefined');
 
     return (
         <AuthContext.Provider

@@ -616,10 +616,14 @@ class PracticalModels:
                         get_hour_extract(Venda.data_venda).label('hora'),
                         func.sum(Venda.total).label('total')
                     ).filter(
-                        Venda.estabelecimento_id == target_est_id,
                         Venda.data_venda >= start_date,
                         Venda.status == 'finalizada'
-                    ).group_by('hora').all()
+                    )
+                    
+                    if str(target_est_id).lower() != 'all':
+                        hourly_sales = hourly_sales.filter(Venda.estabelecimento_id == target_est_id)
+                        
+                    hourly_sales = hourly_sales.group_by('hora').all()
                     
                     print(f"DEBUG: Hourly Sales Records Found: {len(hourly_sales)}")
 
@@ -668,10 +672,14 @@ class PracticalModels:
                         get_dow_extract(Venda.data_venda).label('dia'),
                         func.avg(Venda.total).label('ticket_medio')
                     ).filter(
-                        Venda.estabelecimento_id == target_est_id,
                         Venda.data_venda >= start_date,
                         Venda.status == 'finalizada'
-                    ).group_by('dia').all()
+                    )
+                    
+                    if str(target_est_id).lower() != 'all':
+                        dow_sales = dow_sales.filter(Venda.estabelecimento_id == target_est_id)
+                        
+                    dow_sales = dow_sales.group_by('dia').all()
                     
                     print(f"DEBUG: Day of Week Records Found: {len(dow_sales)}")
                     
@@ -721,10 +729,14 @@ class PracticalModels:
                         func.count(func.distinct(VendaItem.produto_id)).label('produtos_unicos'),
                         func.sum(VendaItem.total_item).label('faturamento')
                     ).join(VendaItem, Venda.id == VendaItem.venda_id).filter(
-                        Venda.estabelecimento_id == target_est_id,
                         Venda.data_venda >= start_date,
                         Venda.status == 'finalizada'
-                    ).group_by(func.date(Venda.data_venda)).all()
+                    )
+                    
+                    if str(target_est_id).lower() != 'all':
+                         mix_diario = mix_diario.filter(Venda.estabelecimento_id == target_est_id)
+                         
+                    mix_diario = mix_diario.group_by(func.date(Venda.data_venda)).all()
                     
                     print(f"DEBUG: Product Mix Records Found: {len(mix_diario)}")
                     

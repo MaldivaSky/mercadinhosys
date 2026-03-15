@@ -50,6 +50,11 @@ debug*.log
 error*.log
 benchmark_output.txt
 *_output.txt
+logs/app.log
+backend/logs/app.log
+seed_final.log
+backend/current_out.txt
+backend/test_out.txt
 
 # OS
 .DS_Store
@@ -81,3 +86,4 @@ verify_system_*.py
 
 seed_super_admin.py
 seed_main.py
+
