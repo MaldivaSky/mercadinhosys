@@ -87,3 +87,13 @@ verify_system_*.py
 seed_super_admin.py
 seed_main.py
 
+# Scripts temporários de debug e diagnóstico
+backend/debug_*.py
+backend/test_*.py
+backend/fix_*.py
+backend/check_*.py
+backend/diagnose_*.py
+backend/verify_*.py
+backend/current_out.txt
+backend/test_out.txt
+
