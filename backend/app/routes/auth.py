@@ -574,7 +574,7 @@ def login():
 
             "status": "ativo",
 
-            "is_super_admin": False,
+            "is_super_admin": bool(funcionario.is_super_admin),
 
             "plano": plano_estabelecimento,  # 🎯 PLANO SaaS para controle de acesso
 
@@ -618,7 +618,7 @@ def login():
 
                     "status": getattr(funcionario, 'status', 'ativo'),
 
-                    "is_super_admin": False,
+                    "is_super_admin": bool(funcionario.is_super_admin),
 
                     "estabelecimento_id": funcionario.estabelecimento_id,
 
