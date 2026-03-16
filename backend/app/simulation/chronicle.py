@@ -1,7 +1,7 @@
 import random
 import uuid
 from datetime import datetime, date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     db, Venda, VendaItem, Pagamento, MovimentacaoEstoque, 
     Caixa, MovimentacaoCaixa, Produto, Cliente, ProdutoLote,
@@ -13,6 +13,10 @@ from app.simulation.injectors import RealisticInjector
 from flask import g
 import json
 import os
+
+def round_qty(val):
+    if val is None: return Decimal('0.000')
+    return Decimal(str(val)).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
 
 class ChronicleSimulator:
     """Motor de Simulação MASTER: Cronologia, Lotes, Balança (Peso) e Realidade Brasileira."""
@@ -55,6 +59,21 @@ class ChronicleSimulator:
                 
             print("GEMEO DIGITAL: Simulacao Master finalizada com Magnitude Senior!")
 
+    def _sync_lote_vigente(self, produto):
+        """Sincroniza os campos lote e data_validade do Produto com o lote FIFO ativo."""
+        lote = ProdutoLote.query.filter(
+            ProdutoLote.produto_id == produto.id,
+            ProdutoLote.quantidade > 0,
+            ProdutoLote.ativo == True
+        ).order_by(ProdutoLote.data_validade.asc()).first()
+        
+        if lote:
+            produto.lote = lote.numero_lote
+            produto.data_validade = lote.data_validade
+        else:
+            produto.lote = None
+            produto.data_validade = None
+
     def simulate_history(self, est, dna, months, funcionario_id):
         """Simulação de vendas, reajustes, quebras e inadimplência"""
         end_date = datetime.now()
@@ -93,8 +112,8 @@ class ChronicleSimulator:
                 if weekday == 0: 
                     self.simulate_inventory_shrinkage(est, current_date)
                 
-                if weekday in (1, 4):
-                    self.simulate_expiration_and_restock(est, current_date, funcionario_id)
+                # Monitoramento Diário de Estoque: Magnitude Senior Proativa
+                self.simulate_expiration_and_restock(est, current_date, funcionario_id)
 
                 qty_vendas = int(dna.giro_velocidade * multi * random.uniform(0.8, 1.2))
                 
@@ -239,19 +258,46 @@ class ChronicleSimulator:
         for p in perishables:
             # Perda de 0.5% a 2% por semana
             quebra = float(p.quantidade) * random.uniform(0.005, 0.02)
-            if quebra <= 0: continue
+            if quebra <= 0.001: continue # Evita micro-perdas irrelevantes
             
-            ant = float(p.quantidade)
-            p.quantidade -= Decimal(str(quebra))
-            atu = float(p.quantidade)
+            quebra_decimal = round_qty(quebra)
+            ant = round_qty(p.quantidade)
+            
+            # Consome do estoque via FIFO para garantir integridade dos lotes
+            lotes_afetados = p.consumir_estoque_fifo(quebra_decimal)
+            atu = p.quantidade
 
+            # Registrar Movimentação
+            lote_id = lotes_afetados[0]['lote_id'] if lotes_afetados else None
             mov = MovimentacaoEstoque(
                 estabelecimento_id=est.id, produto_id=p.id,
-                quantidade=quebra, tipo="saida", motivo="QUEBRA/PERDA NATURAL",
+                quantidade=quebra_decimal, tipo="saida", motivo="QUEBRA/PERDA NATURAL (AVARIA)",
                 quantidade_anterior=ant, quantidade_atual=atu,
-                created_at=date_obj
+                lote_id=lote_id, created_at=date_obj
             )
             db.session.add(mov)
+
+            # Sincroniza informações de lote no produto
+            self._sync_lote_vigente(p)
+
+            # Gerar Despesa de Prejuízo (Realismo Financeiro)
+            valor_prejuizo = (quebra_decimal * p.preco_custo).quantize(Decimal("0.01"))
+            if valor_prejuizo > 0:
+                exp = Despesa(
+                    estabelecimento_id=est.id, 
+                    descricao=f"Prejuízo/Quebra: {p.nome} ({quebra_decimal} {p.unidade_medida})",
+                    categoria="Prejuízo Produtos", tipo="variavel", valor=valor_prejuizo,
+                    data_despesa=date_obj.date(), forma_pagamento="Ajuste de Estoque"
+                )
+                db.session.add(exp)
+
+                aud = Auditoria(
+                    estabelecimento_id=est.id, tipo_evento="estoque_ajuste",
+                    descricao=f"Perda/Quebra registrada: {p.nome} - Prejuízo: R$ {valor_prejuizo}",
+                    valor=valor_prejuizo, data_evento=date_obj,
+                    detalhes_json=json.dumps({"produto": p.nome, "quantidade": float(quebra_decimal)})
+                )
+                db.session.add(aud)
 
     def simulate_expiration_and_restock(self, est, date_obj, funcionario_id):
         from app.models import Fornecedor, PedidoCompra, PedidoCompraItem, Produto, ProdutoLote, ContaPagar, Auditoria
@@ -268,22 +314,45 @@ class ChronicleSimulator:
             produto = Produto.query.get(lote.produto_id)
             if not produto: continue
             
-            qtd_perdida = float(lote.quantidade)
+            qtd_perdida = round_qty(lote.quantidade)
             lote.quantidade = 0
             lote.ativo = False
             lote.motivo_inativacao = "Validade expirada"
             
-            ant = float(produto.quantidade)
-            produto.quantidade -= Decimal(str(qtd_perdida))
-            atu = float(produto.quantidade)
+            ant = round_qty(produto.quantidade)
+            produto.quantidade = round_qty(ant - qtd_perdida)
+            atu = produto.quantidade
             
             mov = MovimentacaoEstoque(
                 estabelecimento_id=est.id, produto_id=produto.id,
-                quantidade=qtd_perdida, tipo="saida", motivo="VENCIMENTO DE LOTE",
+                quantidade=qtd_perdida, tipo="saida", motivo="DESCARTE: PRODUTO VENCIDO",
                 quantidade_anterior=ant, quantidade_atual=atu,
                 lote_id=lote.id, created_at=date_obj
             )
             db.session.add(mov)
+
+            # Sincroniza informações de lote no produto
+            self._sync_lote_vigente(produto)
+
+            # Financeiro: Registro de Prejuízo
+            valor_perda = (qtd_perdida * lote.preco_custo_unitario).quantize(Decimal("0.01"))
+            if valor_perda > 0:
+                exp = Despesa(
+                    estabelecimento_id=est.id,
+                    descricao=f"Descarte Vencimento: {produto.nome} (Lote {lote.numero_lote})",
+                    categoria="Prejuízo Produtos", tipo="variavel", valor=valor_perda,
+                    data_despesa=date_obj.date(), forma_pagamento="Ajuste de Estoque"
+                )
+                db.session.add(exp)
+
+                aud = Auditoria(
+                    estabelecimento_id=est.id, usuario_id=funcionario_id,
+                    tipo_evento="estoque_ajuste",
+                    descricao=f"Produto Vencido Descartado: {produto.nome} (R$ {valor_perda})",
+                    valor=valor_perda, data_evento=date_obj,
+                    detalhes_json=json.dumps({"lote": lote.numero_lote, "motivo": "vencimento"})
+                )
+                db.session.add(aud)
 
         db.session.commit()
         
@@ -418,9 +487,9 @@ class ChronicleSimulator:
                     )
                     db.session.add(auditoria_preco)
 
-                ant = float(p.quantidade)
-                p.quantidade += Decimal(str(qtd))
-                atu = float(p.quantidade)
+                ant = round_qty(p.quantidade)
+                p.quantidade = round_qty(ant + Decimal(str(qtd)))
+                atu = p.quantidade
                 
                 mov = MovimentacaoEstoque(
                     estabelecimento_id=est.id, produto_id=p.id,
@@ -431,6 +500,9 @@ class ChronicleSimulator:
                     created_at=date_obj
                 )
                 db.session.add(mov)
+                
+                # Sincroniza informações de lote no produto
+                self._sync_lote_vigente(p)
                 
             cp = ContaPagar(
                 estabelecimento_id=est.id,
@@ -489,14 +561,17 @@ class ChronicleSimulator:
             
             if not lote: continue
             
-            # Lógica MASTER de Balança/Pesagem
             if p.unidade_medida == "KG":
                 # Pesagem real: carne varia de 300g a 2.5kg normalmente no varejo
                 qtd = round(random.uniform(0.200, 3.500), 3)
             else:
                 qtd = random.randint(1, 6)
             
-            qtd = min(float(qtd), float(lote.quantidade))
+            # BLOQUEIO ANTI-NEGATIVO: Não vende o que não tem. ERP Realism.
+            qtd_disponivel = float(lote.quantidade)
+            if qtd > qtd_disponivel:
+                qtd = qtd_disponivel
+                
             if qtd <= 0: continue
             
             preco_un = p.preco_venda * Decimal(str(random.uniform(0.98, 1.02)))
@@ -516,11 +591,12 @@ class ChronicleSimulator:
             )
             db.session.add(vi)
             
-            lote.quantidade -= Decimal(str(qtd))
+            # Subtração Blindada (Simulation)
+            lote.quantidade = round_qty(lote.quantidade - Decimal(str(qtd)))
             
-            ant = float(p.quantidade)
-            p.quantidade -= Decimal(str(qtd))
-            atu = float(p.quantidade)
+            ant = round_qty(p.quantidade)
+            p.quantidade = round_qty(ant - Decimal(str(qtd)))
+            atu = p.quantidade
             
             total_venda += total_item
             items_count += 1
@@ -533,6 +609,7 @@ class ChronicleSimulator:
                 created_at=ts
             )
             db.session.add(mov)
+            self._sync_lote_vigente(p)
 
         if items_count == 0:
             db.session.delete(venda)

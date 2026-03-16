@@ -41,7 +41,7 @@ services:
       PORT: 5000
 
       # Database
-      DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
+      DATABASE_URL: sqlite:////app/instance/mercadinho_local.db
       MULTI_TENANT_MODE: "true"
       HYBRID_MODE: "offline"
 

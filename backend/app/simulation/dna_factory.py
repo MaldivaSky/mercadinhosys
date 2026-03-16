@@ -36,7 +36,7 @@ class DNAFactory:
             est = Estabelecimento.query.filter_by(nome_fantasia=dna.nome).first()
             if not est:
                 # Usar Endereço Real via ViaCEP Master
-                end = RealisticInjector.get_endereco_by_cep("69005000") # Manaus Core
+                end = RealisticInjector.get_endereco_random() # Manaus/SP Core
                 est = Estabelecimento(
                     nome_fantasia=dna.nome,
                     razao_social=f"{dna.nome} EMPRESAS LTDA",

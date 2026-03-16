@@ -171,22 +171,17 @@ apiClient.interceptors.response.use(
 
                 console.error('❌ Refresh token falhou!', errorInfo);
 
-                // BLOQUEIO PROFISSIONAL: Sempre mostramos o erro na tela em vez de redirecionar instantaneamente
-                const overlay = document.createElement('div');
-                overlay.id = 'auth-error-overlay';
-                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);color:white;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;padding:20px;text-align:center;';
-                overlay.innerHTML = `
-                    <h1 style="color:#ff4444;margin-bottom:20px;">ERRO CRÍTICO DE SESSÃO</h1>
-                    <p style="font-size:18px;margin-bottom:10px;">O sistema não conseguiu renovar sua sessão automática.</p>
-                    <p style="font-size:14px;color:#aaa;margin-bottom:20px;">Isso geralmente ocorre por expiração de segurança ou instabilidade de rede.</p>
-                    <pre style="background:#222;padding:15px;border-radius:8px;text-align:left;max-width:600px;overflow:auto;margin-bottom:20px;font-size:12px;color:#0f0;">${JSON.stringify(errorInfo, null, 2)}</pre>
-                    <div style="display:flex;gap:15px;">
-                        <button onclick="localStorage.clear();window.location.href='/login'" style="padding:12px 24px;background:#ff4444;border:none;color:white;border-radius:6px;cursor:pointer;font-weight:bold;">Limpar Sessão e Voltar ao Login</button>
-                        <button onclick="location.reload()" style="padding:12px 24px;background:#444;border:none;color:white;border-radius:6px;cursor:pointer;font-weight:bold;">Recarregar Página</button>
-                    </div>
-                `;
-                document.body.appendChild(overlay);
-                console.warn('⏸️ Redirecionamento BLOQUEADO. Analise o erro acima.');
+                console.error('❌ Refresh token falhou!', errorInfo);
+
+                // Remover tokens inválidos
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user_data');
+
+                // Redirecionar para login automaticamente após pequeno delay
+                setTimeout(() => {
+                    window.location.href = '/login?reason=session_expired';
+                }, 100);
 
                 return Promise.reject(refreshError);
             } finally {

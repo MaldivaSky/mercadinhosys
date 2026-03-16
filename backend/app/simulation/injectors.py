@@ -3,7 +3,7 @@ import uuid
 import requests
 import time
 from datetime import datetime, date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     db, Estabelecimento, Funcionario, Produto, CategoriaProduto, Fornecedor, Cliente, 
     ProdutoLote, ContaPagar, utcnow
@@ -14,6 +14,11 @@ class RealisticInjector:
     
     # Cache de CEPs para evitar excesso de requisições e garantir velocidade MASTER
     CEP_CACHE = {}
+
+    @staticmethod
+    def round_qty(val):
+        if val is None: return Decimal('0.000')
+        return Decimal(str(val)).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
 
     SKU_DB = [
         # --- AÇOUGUE (KG) ---
@@ -94,20 +99,15 @@ class RealisticInjector:
         
         # Fallback Master (Endereço Real de Manaus/SP se API falhar)
         return {
-            "cep": "69000-000", "logradouro": "Avenida Brasil", "numero": "100",
-            "bairro": "Compensa", "cidade": "Manaus", "estado": "AM", "pais": "Brasil"
+            "cep": "69005-000", "logradouro": "Av. Eduardo Ribeiro", "bairro": "Centro",
+            "cidade": "Manaus", "estado": "AM", "numero": str(random.randint(1, 500)), "pais": "Brasil"
         }
 
     @classmethod
     def get_endereco_random(cls):
-        """Gera endereços reais a partir de uma base de CEPs válidos brasileiros"""
-        ceps_validos = [
-            "69005-000", "69050-001", "69040-000", # Manaus
-            "01310-200", "04538-133", "01153-000", # São Paulo (Paulista, Itaim, etc)
-            "20021-130", "22041-001"              # Rio de Janeiro
-        ]
-        cep = random.choice(ceps_validos).replace("-", "")
-        return cls.get_endereco_by_cep(cep)
+        """Retorna um endereço aleatório de uma lista de CEPs reais brasileiros"""
+        ceps = ["69005000", "01001000", "20020010", "30140010", "40020000", "50030000"]
+        return cls.get_endereco_by_cep(random.choice(ceps))
 
     @classmethod
     def inject_fornecedores(cls, estabelecimento_id, count=8):
@@ -151,9 +151,6 @@ class RealisticInjector:
         from app.models import Funcionario, Estabelecimento
         from werkzeug.security import generate_password_hash
         
-        # No longer creating global Super Admin 'maldivas' or HQ establishment.
-        # Establishments and their admins will be created per tenant scenario.
-
         time_config = [
             {"c": "Gerente", "u": "admin", "n": "Gerente Geral"},
             {"c": "Caixa", "u": "caixa1", "n": "Operador de Caixa 01"},
@@ -161,10 +158,8 @@ class RealisticInjector:
             {"c": "Auxiliar", "u": "aux1", "n": "Auxiliar Administrativo"}
         ]
 
-        # Prefixo do usuário baseado no ID do estabelecimento para garantir unicidade Master
         prefix = f"est{estabelecimento_id}_"
         
-        # Mapeamento de Credenciais por Cenário (Alinhamento Master com seed_simulation_master.py)
         scenario_map = {
             "ELITE": ("admin_elite", "adminElite123"),
             "BOM": ("admin_bom", "adminBom123"),
@@ -207,6 +202,7 @@ class RealisticInjector:
 
     @classmethod
     def inject_produtos_reais(cls, estabelecimento_id):
+        """Injeta o MIX de produtos REAIS com Lotes e Validades (Digital Twin)"""
         # Garantir Categorias
         cats = {}
         for cat_nome in set(p["cat"] for p in cls.SKU_DB):
@@ -221,32 +217,39 @@ class RealisticInjector:
         if not fornecedores: return
 
         for item in cls.SKU_DB:
-            p_venda = item["p"] * random.uniform(0.9, 1.1)
-            p_custo = p_venda / 1.4
+            p_venda = Decimal(str(item["p"] * random.uniform(0.9, 1.1)))
+            p_custo = Decimal(str(p_venda / Decimal("1.4")))
             
             prod = Produto(
                 estabelecimento_id=estabelecimento_id,
                 categoria_id=cats[item["cat"]],
                 nome=item["n"],
-                codigo_barras=item["code"],
+                codigo_barras=item.get("code"),
                 codigo_interno=f"SKU-{uuid.uuid4().hex[:6].upper()}",
                 unidade_medida=item["un"],
-                ncm=item["ncm"],
+                ncm=item.get("ncm"),
                 quantidade=0,
                 preco_custo=p_custo,
                 preco_venda=p_venda,
-                ativo=True
+                ativo=True,
+                margem_lucro=Decimal("40.0")
             )
             db.session.add(prod)
             db.session.flush()
 
-            total_qty = 0
+            total_qty = Decimal("0.000")
             for l in range(2):
-                data_fab = date.today() - timedelta(days=random.randint(30, 90))
-                dias_val = 15 if item["cat"] in ["Açougue", "Hortifruti"] else 365
-                data_val = data_fab + timedelta(days=dias_val)
+                data_fab = date.today() - timedelta(days=random.randint(60, 120))
                 
-                qtd = random.uniform(30.0, 100.0)
+                # Lógica MASTER de Validade Diversificada
+                if l == 0: # Lote Mais Antigo (Próximo de Vencer ou Vencido)
+                    dias_val = random.randint(-5, 15) if item["cat"] in ["Açougue", "Hortifruti"] else random.randint(10, 45)
+                else: # Lote Novo (Validade Longa)
+                    dias_val = random.randint(30, 60) if item["cat"] in ["Açougue", "Hortifruti"] else random.randint(180, 365)
+                
+                data_val = date.today() + timedelta(days=dias_val)
+                
+                qtd = cls.round_qty(random.uniform(30.0, 100.0))
                 lote = ProdutoLote(
                     estabelecimento_id=estabelecimento_id,
                     produto_id=prod.id,
@@ -263,8 +266,14 @@ class RealisticInjector:
                 db.session.add(lote)
                 total_qty += qtd
             
-            prod.quantidade = Decimal(str(total_qty))
-            prod.quantidade_minima = Decimal("15.0")
+            prod.quantidade = cls.round_qty(total_qty)
+            prod.quantidade_minima = cls.round_qty("15.0")
+            
+            # Sincroniza informações do lote principal (FIFO) no Produto
+            lote_principal = ProdutoLote.query.filter_by(produto_id=prod.id).order_by(ProdutoLote.data_validade.asc()).first()
+            if lote_principal:
+                prod.lote = lote_principal.numero_lote
+                prod.data_validade = lote_principal.data_validade
 
         db.session.commit()
         print(f"✅ MAGNITUDE MASTER: {len(cls.SKU_DB)} SKUs ativos com endereços REAIS via API (ViaCEP) e CPFs válidos.")
