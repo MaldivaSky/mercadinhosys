@@ -198,8 +198,8 @@ class RealisticInjector:
                     ativo=True,
                     **end
                 )
-                func.set_password(senha_limpa)
                 db.session.add(func)
+                func.set_password(senha_limpa)
                 funcionarios.append({"n": config['n'], "u": username, "s": senha_limpa, "c": config['c']})
         
         db.session.commit()
