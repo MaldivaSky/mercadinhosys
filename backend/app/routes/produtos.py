@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
 import os
-import requests
+from sqlalchemy.orm import joinedload
 from app.models import (
     db,
     Produto,
@@ -28,6 +28,17 @@ from app.models import (
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
+
+def to_decimal(value, precision=2):
+    """Converte qualquer valor numérico para Decimal de forma segura com precisão variável"""
+    quantize_str = '0.' + '0' * (precision - 1) + '1' if precision > 0 else '0'
+    if value is None:
+        return Decimal(quantize_str)
+    try:
+        d = Decimal(str(value))
+        return d.quantize(Decimal(quantize_str), rounding=ROUND_HALF_UP)
+    except (Exception):
+        return Decimal(quantize_str)
 from sqlalchemy import text, func, or_, case, and_, Date, Integer
 produtos_bp = Blueprint("produtos", __name__)
 
@@ -325,13 +336,24 @@ def listar_produtos():
         direcao = request.args.get("direcao", "asc")
         filtro_rapido = request.args.get("filtro_rapido", None, type=str)
         expandir_por_lote = request.args.get("expandir_por_lote", "").lower() == "true"
+        include_metrics = request.args.get("metrics", "false").lower() == "true"
+        filtro_alerta = request.args.get("alerta")
 
-        # Query base - usando db.session.query(Produto) para evitar que o TenantQuery 
-        # aplique o filtro de tenant automaticamente se já estivermos tratando o 'all' aqui
-        query = db.session.query(Produto)
+        # Base query com Eager Loading (Fix N+1)
+        query = db.session.query(Produto).options(
+            joinedload(Produto.categoria),
+            joinedload(Produto.fornecedor)
+        )
         
+        # Filtro de Tenant OBRIGATÓRIO (Zero Leak)
         if str(estabelecimento_id).lower() != 'all':
             query = query.filter(Produto.estabelecimento_id == estabelecimento_id)
+
+        # Alias de filtros de alerta
+        if filtro_alerta == "baixo_estoque":
+            estoque_status = "baixo"
+        elif filtro_alerta == "validade":
+            validade_proxima = "true"
 
         # 1. Filtro de Ativo/Inativo
         if ativo is not None:
@@ -466,7 +488,7 @@ def listar_produtos():
         alertas = []
 
         for produto in paginacao.items:
-            produto_dict = produto.to_dict()
+            produto_dict = produto.to_dict(include_metrics=include_metrics)
 
             # Adicionar informações calculadas com proteção contra None
             p_venda = float(produto.preco_venda or 0)
@@ -803,6 +825,8 @@ def obter_produto(id):
         )
 
     except Exception as e:
+        if "404 Not Found" in str(e):
+            return jsonify({"success": False, "message": "Produto não encontrado"}), 404
         current_app.logger.error(f"Erro ao obter produto {id}: {str(e)}")
         return (
             jsonify({"success": False, "message": "Erro interno ao obter produto"}),
@@ -815,7 +839,17 @@ def obter_produto(id):
 @funcionario_required
 def criar_produto():
     """Cria um novo produto"""
+    claims = {}
     try:
+        from flask_jwt_extended import get_jwt, get_jwt_identity
+        current_app.logger.info("Tentando obter claims em criar_produto...")
+        try:
+            claims = get_jwt()
+            current_app.logger.info(f"Claims obtidas: {list(claims.keys()) if claims else 'None'}")
+        except Exception as je:
+            current_app.logger.error(f"Erro ao obter get_jwt(): {str(je)}")
+            claims = {}
+        
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
@@ -916,6 +950,11 @@ def criar_produto():
         db.session.flush()  # Para obter o ID do produto
 
         # Registrar histórico inicial de preços
+        current_app.logger.warning(f"DEBUG: Criando HistoricoPrecos para produto {produto.id}")
+        current_app.logger.warning(f"DEBUG: preco_custo={produto.preco_custo} ({type(produto.preco_custo)})")
+        current_app.logger.warning(f"DEBUG: preco_venda={produto.preco_venda} ({type(produto.preco_venda)})")
+        current_app.logger.warning(f"DEBUG: margem_nova={produto.margem_lucro} ({type(produto.margem_lucro)})")
+        
         historico_inicial = HistoricoPrecos(
             estabelecimento_id=estabelecimento_id,
             produto_id=produto.id,
@@ -927,7 +966,7 @@ def criar_produto():
             preco_venda_novo=produto.preco_venda,
             margem_nova=produto.margem_lucro,
             motivo="Cadastro inicial do produto",
-            observacoes=f"Produto cadastrado por {claims.get('nome')}"
+            observacoes=f"Produto cadastrado por {get_jwt().get('nome')}"
         )
         db.session.add(historico_inicial)
 
@@ -954,7 +993,7 @@ def criar_produto():
                 custo_unitario=produto.preco_custo,
                 valor_total=produto.quantidade * produto.preco_custo,
                 motivo="Cadastro inicial do produto",
-                observacoes=f"Produto cadastrado por {claims.get('nome')}",
+                observacoes=f"Produto cadastrado por {get_jwt().get('nome')}",
             )
             db.session.add(movimentacao)
 
@@ -971,7 +1010,7 @@ def criar_produto():
         db.session.commit()
 
         current_app.logger.info(
-            f"Produto criado: {produto.id} - {produto.nome} por {claims.get('username')}"
+            f"Produto criado: {produto.id} - {produto.nome} por {get_jwt().get('username')}"
         )
 
         return (
@@ -987,9 +1026,15 @@ def criar_produto():
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Erro ao criar produto: {str(e)}")
+        import traceback
+        error_details = traceback.format_exc()
+        current_app.logger.error(f"Erro ao criar produto: {str(e)}\n{error_details}")
         return (
-            jsonify({"success": False, "message": "Erro interno ao criar produto"}),
+            jsonify({
+                "success": False, 
+                "message": f"Erro interno ao criar produto: {str(e)}",
+                "traceback": error_details
+            }),
             500,
         )
 
@@ -999,6 +1044,8 @@ def criar_produto():
 def atualizar_produto(id):
     """Atualiza um produto existente"""
     try:
+        from flask_jwt_extended import get_jwt, get_jwt_identity
+        claims = get_jwt()
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
@@ -1204,6 +1251,8 @@ def atualizar_produto(id):
         )
 
     except Exception as e:
+        if "404 Not Found" in str(e):
+            return jsonify({"success": False, "message": "Produto não encontrado"}), 404
         db.session.rollback()
         current_app.logger.error(f"Erro ao atualizar produto {id}: {str(e)}")
         return (
@@ -1217,6 +1266,8 @@ def atualizar_produto(id):
 def deletar_produto(id):
     """Desativa um produto (soft delete)"""
     try:
+        from flask_jwt_extended import get_jwt, get_jwt_identity
+        claims = get_jwt()
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
@@ -1229,7 +1280,7 @@ def deletar_produto(id):
         db.session.commit()
 
         current_app.logger.info(
-            f"Produto desativado: {produto.id} por {claims.get('username')}"
+            f"Produto desativado: {id} por {get_jwt().get('username')}"
         )
 
         return jsonify(
@@ -1240,6 +1291,8 @@ def deletar_produto(id):
         )
 
     except Exception as e:
+        if "404 Not Found" in str(e):
+            return jsonify({"success": False, "message": "Produto não encontrado"}), 404
         db.session.rollback()
         current_app.logger.error(f"Erro ao desativar produto {id}: {str(e)}")
         return (
@@ -1253,6 +1306,8 @@ def deletar_produto(id):
 def ajustar_estoque(id):
     """Ajusta o estoque de um produto com movimentação registrada"""
     try:
+        from flask_jwt_extended import get_jwt, get_jwt_identity
+        claims = get_jwt()
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
@@ -1263,7 +1318,7 @@ def ajustar_estoque(id):
         data = request.get_json()
 
         tipo = data.get("tipo")  # 'entrada' ou 'saida'
-        quantidade = data.get("quantidade", 0)
+        quantidade = to_decimal(data.get("quantidade", 0), precision=3)
         custo_unitario = data.get("custo_unitario", None)
         motivo = data.get("motivo", "")
         observacoes = data.get("observacoes", "")
@@ -1285,7 +1340,8 @@ def ajustar_estoque(id):
         if not motivo:
             return jsonify({"success": False, "message": "Motivo é obrigatório"}), 400
 
-        quantidade_anterior = produto.quantidade
+        # ARREDONDAMENTO BLINDADO (Elite Grade)
+        quantidade_anterior = to_decimal(produto.quantidade, precision=3)
 
         if tipo == "entrada":
             # Guardar custo anterior para auditoria
@@ -1300,7 +1356,7 @@ def ajustar_estoque(id):
                 funcionario_id=int(get_jwt_identity()),
                 motivo=motivo
             )
-            produto.quantidade += quantidade
+            produto.quantidade = to_decimal(quantidade_anterior + quantidade, precision=3)
             
             # Registrar no histórico se houve mudança de custo
             if abs(produto.preco_custo - custo_anterior) > Decimal("0.01"):
@@ -1319,7 +1375,7 @@ def ajustar_estoque(id):
                 )
                 db.session.add(historico)
         else:  # saida
-            if produto.quantidade < quantidade:
+            if to_decimal(produto.quantidade, precision=3) < quantidade:
                 return (
                     jsonify(
                         {
@@ -1329,7 +1385,7 @@ def ajustar_estoque(id):
                     ),
                     400,
                 )
-            produto.quantidade -= quantidade
+            produto.quantidade = to_decimal(quantidade_anterior - quantidade, precision=3)
 
         # Criar movimentação
         movimentacao = MovimentacaoEstoque(
@@ -1343,10 +1399,10 @@ def ajustar_estoque(id):
             custo_unitario=(
                 custo_unitario if (tipo == "entrada" and custo_unitario is not None) else produto.preco_custo
             ),
-            valor_total=quantidade
+            valor_total=to_decimal(quantidade
             * (
                 custo_unitario if (tipo == "entrada" and custo_unitario is not None) else produto.preco_custo
-            ),
+            ), precision=2),
             motivo=motivo,
             observacoes=observacoes,
         )
@@ -1386,6 +1442,8 @@ def ajustar_estoque(id):
 def atualizar_preco(id):
     """Atualiza preços do produto com histórico de auditoria"""
     try:
+        from flask_jwt_extended import get_jwt, get_jwt_identity
+        claims = get_jwt()
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
@@ -1489,6 +1547,8 @@ def descartar_produto(id):
     3. Cria automaticamente uma despesa na categoria 'Prejuízo Produtos'.
     """
     try:
+        from flask_jwt_extended import get_jwt, get_jwt_identity
+        claims = get_jwt()
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
@@ -3392,7 +3452,7 @@ def obter_vendas_historico(id):
         
         # Buscar vendas dos últimos 90 dias
         # Agregar por data usando func.date() que é mais compatível
-        from sqlalchemy import func
+        from sqlalchemy.orm import joinedload, aliased
         
         vendas_por_dia = (
             db.session.query(

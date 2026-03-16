@@ -38,7 +38,7 @@ const PlanoGuard: React.FC<PlanoGuardProps> = ({
     // Verificar acesso baseado no plano
     switch (planoRequerido) {
       case 'gratuito':
-        // Plano gratuito tem acesso apenas ao básico
+        // Todos têm acesso ao básico
         return true;
         
       case 'advanced':

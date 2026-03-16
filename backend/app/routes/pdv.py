@@ -13,7 +13,7 @@ OTIMIZAÇÕES IMPLEMENTADAS:
 """
 
 from datetime import datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from app.models import db, Produto, Venda, VendaItem, MovimentacaoEstoque, Configuracao, Funcionario, Cliente, Auditoria
@@ -136,16 +136,17 @@ def calcular_rfm_cliente(cliente_id: int, estabelecimento_id: int) -> dict:
     }
 
 
-def to_decimal(value):
-    """Converte qualquer valor numérico para Decimal de forma segura (2 casas decimais)"""
+def to_decimal(value, precision=2):
+    """Converte qualquer valor numérico para Decimal de forma segura com precisão variável"""
+    quantize_str = '0.' + '0' * (precision - 1) + '1' if precision > 0 else '0'
     if value is None:
-        return Decimal('0.00')
-    if isinstance(value, Decimal):
-        return value.quantize(Decimal('0.01'))
+        return Decimal(quantize_str)
     try:
-        return Decimal(str(value)).quantize(Decimal('0.01'))
+        # Converter para string primeiro para evitar imprecisões de float
+        d = Decimal(str(value))
+        return d.quantize(Decimal(quantize_str), rounding=ROUND_HALF_UP)
     except (ValueError, TypeError, InvalidOperation):
-        return Decimal('0.00')
+        return Decimal(quantize_str)
 
 
 def decimal_to_float(value):
@@ -738,21 +739,23 @@ def finalizar_venda():
 
             for item_data in items:
                 produto_id = item_data.get("id")
-                quantidade = int(item_data.get("quantity", 1))
+                # SUPORTE FRACIONÁRIO (KG): Usar to_decimal com 3 casas
+                quantidade = to_decimal(item_data.get("quantity", 1), precision=3)
 
                 produto = db.session.query(Produto).with_for_update().get(produto_id)
                 if not produto:
                     db.session.rollback()
                     return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
 
-                if produto.quantidade < quantidade:
+                # Comparação segura com 3 casas
+                if to_decimal(produto.quantidade, precision=3) < quantidade:
                     db.session.rollback()
                     return jsonify({"error": f"Estoque insuficiente: {produto.nome}"}), 400
 
                 preco_unitario = to_decimal(item_data.get("price", produto.preco_venda))
-                total_item = preco_unitario * quantidade
+                total_item = to_decimal(preco_unitario * quantidade, precision=2)
 
-                margem_lucro_real = (preco_unitario - to_decimal(produto.preco_custo or 0)) * quantidade
+                margem_lucro_real = to_decimal((preco_unitario - to_decimal(produto.preco_custo or 0)) * quantidade, precision=2)
 
                 novo_item = VendaItem(
                     venda_id=nova_venda.id,
@@ -767,8 +770,9 @@ def finalizar_venda():
                 )
                 db.session.add(novo_item)
 
-                estoque_anterior = produto.quantidade
-                produto.quantidade -= quantidade
+                estoque_anterior = to_decimal(produto.quantidade, precision=3)
+                # SUBTRAÇÃO BLINDADA: Evita resíduos tipo -0.001
+                produto.quantidade = to_decimal(estoque_anterior - quantidade, precision=3)
 
                 mov = MovimentacaoEstoque(
                     estabelecimento_id=funcionario_data.get("estabelecimento_id"),

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Banco de dados principal para gerenciamento de tenants
   postgres-main:
