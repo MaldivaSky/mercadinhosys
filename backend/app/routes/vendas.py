@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from decimal import Decimal
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import (
@@ -9,6 +10,10 @@ from app.models import (
     MovimentacaoEstoque,
     Cliente,
     Fornecedor,
+    Estabelecimento,
+    MovimentacaoCaixa,
+    ContaReceber,
+    Caixa,
 )
 from flask_jwt_extended import jwt_required, get_jwt
 from app.utils.query_helpers import get_authorized_establishment_id
@@ -969,22 +974,25 @@ def analise_tendencia():
 
 
 @vendas_bp.route("/", methods=["POST", "OPTIONS"], strict_slashes=False)
-@jwt_required(optional=True) # Pode vir do PDV com ou sem token em transição, mas preferencialmente com
+@jwt_required(optional=True)
 def criar_venda():
-    """Cria uma nova venda (finalizar compra no PDV)"""
-    # ... (options logic unchanged) ...
+    """Cria uma nova venda (finalizar compra no PDV) com Auditoria e Regras de Negócio SaaS"""
     try:
         claims = get_jwt()
-        estabelecimento_id = int(claims.get("estabelecimento_id") or 1) # Fallback seguro durante transição
+        estabelecimento_id = int(claims.get("estabelecimento_id") or 1)
         data = request.get_json()
         print(f"📦 Dados da venda recebidos: {data}")
 
-        # VALIDAÇÕES BÁSICAS
         if not data:
             return jsonify({"error": "Dados não fornecidos"}), 400
 
         if not data.get("items") or len(data["items"]) == 0:
             return jsonify({"error": "Carrinho vazio"}), 400
+
+        # 0. BUSCAR ESTABELECIMENTO PARA VERIFICAR PLANO (SaaS Enforcement)
+        estabelecimento = Estabelecimento.query.get(estabelecimento_id)
+        if not estabelecimento:
+            return jsonify({"error": "Estabelecimento não encontrado"}), 404
 
         # Validação de valores numéricos
         try:
@@ -992,176 +1000,188 @@ def criar_venda():
             desconto = float(data.get("desconto", 0))
             total = float(data.get("total", 0))
             valor_recebido = float(data.get("cashReceived", 0))
+            forma_pagamento = data.get("paymentMethod", "dinheiro").lower()
+            cliente_id = data.get("cliente_id")
 
-            if total > valor_recebido and data.get("paymentMethod") == "dinheiro":
-                return (
-                    jsonify(
-                        {
-                            "error": "Valor recebido menor que o total para pagamento em dinheiro"
-                        }
-                    ),
-                    400,
-                )
+            if total > valor_recebido and forma_pagamento == "dinheiro":
+                return jsonify({"error": "Valor recebido menor que o total para pagamento em dinheiro"}), 400
 
             if subtotal < 0 or desconto < 0 or total < 0 or valor_recebido < 0:
                 return jsonify({"error": "Valores não podem ser negativos"}), 400
         except ValueError:
             return jsonify({"error": "Valores numéricos inválidos"}), 400
 
-        # 1. GERAR CÓDIGO DA VENDA (escopado por estabelecimento)
+        # ========================
+        # LÓGICA DE FIADO (SaaS)
+        # ========================
+        if forma_pagamento == "fiado":
+            # 1. Verificar Plano (Premium ou Basic permitidos)
+            plano_atual = (estabelecimento.plano or "Basic").upper()
+            if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
+                return jsonify({
+                    "error": "FUNCIONALIDADE_RESTRITA",
+                    "message": f"Seu plano atual ({estabelecimento.plano or 'Basic'}) não permite vendas no FIADO. Faça upgrade para Premium."
+                }), 403
+
+            # 2. Verificar Cliente
+            if not cliente_id:
+                return jsonify({
+                    "error": "CLIENTE_OBRIGATORIO",
+                    "message": "Vendas no FIADO exigem um cliente cadastrado."
+                }), 400
+
+        # 1. GERAR CÓDIGO DA VENDA
         codigo_venda = gerar_codigo_venda()
         while Venda.query.filter_by(estabelecimento_id=estabelecimento_id, codigo=codigo_venda).first():
             codigo_venda = gerar_codigo_venda()
 
-        # 2. CRIAR A VENDA
-        nova_venda = Venda(
-            estabelecimento_id=estabelecimento_id,
-            codigo=codigo_venda,
-            cliente_id=data.get("cliente_id"),
-            funcionario_id=data.get("funcionario_id", 1),
-            subtotal=subtotal,
-            desconto=desconto,
-            total=total,
-            forma_pagamento=data.get("paymentMethod", "dinheiro"),
-            valor_recebido=valor_recebido,
-            troco=float(data.get("change", 0)),
-            status="finalizada",
-            observacoes=data.get("observacoes", ""),
-        )
-
-        db.session.add(nova_venda)
-        db.session.flush()
-
-        # 3. ADICIONAR ITENS DA VENDA E ATUALIZAR ESTOQUE
-        for item_data in data["items"]:
-            produto_id = item_data.get("productId")
-            quantidade = item_data.get("quantity", 1)
-            preco_unitario = float(item_data.get("price", 0))
-            total_item = float(item_data.get("total", 0))
-
-            # Validações do item
-            if not produto_id:
-                db.session.rollback()
-                return jsonify({"error": "ID do produto não informado"}), 400
-
-            if quantidade <= 0:
-                db.session.rollback()
-                return (
-                    jsonify(
-                        {"error": f"Quantidade inválida para produto {produto_id}"}
-                    ),
-                    400,
-                )
-
-            # Buscar produto com bloqueio para evitar condições de corrida (Negative Stock Fix)
-            # Garantir que o produto pertence ao mesmo estabelecimento
-            produto = Produto.query.filter_by(id=produto_id, estabelecimento_id=estabelecimento_id).with_for_update().first()
-            if not produto:
-                db.session.rollback()
-                return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
-
-            # Verificar estoque
-            if produto.quantidade < quantidade:
-                db.session.rollback()
-                return (
-                    jsonify(
-                        {
-                            "error": f"Estoque insuficiente para {produto.nome}. Disponível: {produto.quantidade}, Solicitado: {quantidade}"
-                        }
-                    ),
-                    400,
-                )
-
-            # Criar item da venda
-            venda_item = VendaItem(
-                venda_id=nova_venda.id,
-                produto_id=produto_id,
-                quantidade=quantidade,
-                preco_unitario=preco_unitario,
-                desconto=item_data.get("desconto_item", 0.0),
-                total_item=total_item,
-                produto_nome=produto.nome,
-                produto_codigo=produto.codigo_barras,
-                produto_unidade=produto.unidade_medida,
-                custo_unitario=produto.preco_custo,
-                margem_lucro_real=(float(preco_unitario) - float(produto.preco_custo or 0)) * float(quantidade)
-            )
-
-            db.session.add(venda_item)
-
-            # 4. ATUALIZAR ESTOQUE DO PRODUTO
-            quantidade_anterior = produto.quantidade
-            produto.quantidade -= quantidade
-            quantidade_atual = produto.quantidade
-            
-            # ATUALIZAR CAMPOS DE VENDAS PARA ANÁLISE ABC
-            produto.quantidade_vendida = (produto.quantidade_vendida or 0) + quantidade
-            produto.total_vendido = (produto.total_vendido or 0) + total_item
-            produto.ultima_venda = datetime.utcnow()
-
-            # 5. REGISTRAR MOVIMENTAÇÃO DE ESTOQUE
-            movimentacao = MovimentacaoEstoque(
+        # INÍCIO DA TRANSAÇÃO ATÔMICA
+        try:
+            # 2. BUSCAR CAIXA ABERTO (Obrigatório para Movimentação)
+            caixa_aberto = Caixa.query.filter_by(
                 estabelecimento_id=estabelecimento_id,
-                produto_id=produto_id,
-                tipo="saida",
-                quantidade=quantidade,
-                quantidade_anterior=quantidade_anterior,
-                quantidade_atual=quantidade_atual,
-                motivo=f"Venda #{codigo_venda}",
-                observacoes=f"Venda realizada via PDV",
-                venda_id=nova_venda.id,
-                funcionario_id=nova_venda.funcionario_id,
+                status="aberto"
+            ).order_by(Caixa.data_abertura.desc()).first()
+
+            # 3. CRIAR A VENDA
+            nova_venda = Venda(
+                estabelecimento_id=estabelecimento_id,
+                codigo=codigo_venda,
+                cliente_id=cliente_id,
+                funcionario_id=data.get("funcionario_id", claims.get("sub", 1)),
+                caixa_id=caixa_aberto.id if caixa_aberto else None,
+                subtotal=subtotal,
+                desconto=desconto,
+                total=total,
+                forma_pagamento=forma_pagamento,
+                valor_recebido=valor_recebido,
+                troco=float(data.get("change", 0)),
+                status="finalizada",
+                observacoes=data.get("observacoes", ""),
             )
+            db.session.add(nova_venda)
+            db.session.flush()
 
-            db.session.add(movimentacao)
+            # 4. ADICIONAR ITENS E ATUALIZAR ESTOQUE
+            for item_data in data["items"]:
+                produto_id = item_data.get("productId")
+                quantidade = float(item_data.get("quantity", 1))
+                preco_unitario = float(item_data.get("price", 0))
 
-        # 7. FINALIZAR TRANSAÇÃO
-        db.session.commit()
+                if not produto_id:
+                    raise Exception("ID do produto não informado")
 
-        # 8. PREPARAR RESPOSTA
-        resposta = {
-            "success": True,
-            "message": "Venda finalizada com sucesso!",
-            "venda": {
-                "id": nova_venda.id,
-                "codigo": nova_venda.codigo,
-                "total": nova_venda.total,
-                "data": nova_venda.created_at.isoformat(),
-                "troco": nova_venda.troco,
-                "forma_pagamento": nova_venda.forma_pagamento,
-            },
-            "recibo": {
-                "cabecalho": "MERCADINHO SYS - COMPROVANTE DE VENDA",
-                "codigo": nova_venda.codigo,
-                "data": nova_venda.created_at.strftime("%d/%m/%Y %H:%M"),
-                "itens": [
-                    {
-                        "nome": item.produto_nome,
-                        "quantidade": item.quantidade,
-                        "preco_unitario": item.preco_unitario,
-                        "total": item.total_item,
-                    }
-                    for item in nova_venda.itens
-                ],
-                "subtotal": nova_venda.subtotal,
-                "desconto": nova_venda.desconto,
-                "total": nova_venda.total,
-                "pagamento": nova_venda.forma_pagamento,
-                "recebido": nova_venda.valor_recebido,
-                "troco": nova_venda.troco,
-                "rodape": "Obrigado pela preferência!",
-            },
-        }
+                # Lock pessimista
+                produto = Produto.query.filter_by(id=produto_id, estabelecimento_id=estabelecimento_id).with_for_update().first()
+                if not produto:
+                    raise Exception(f"Produto {produto_id} não encontrado")
 
-        print(f"✅ Venda {codigo_venda} finalizada - Total: R$ {nova_venda.total:.2f}")
-        print(f"📋 Itens vendidos: {len(nova_venda.itens)}")
+                if float(produto.quantidade or 0) < quantidade:
+                    raise Exception(f"Estoque insuficiente para {produto.nome}")
 
-        return jsonify(resposta), 201
+                total_item = preco_unitario * quantidade
+
+                # Criar item
+                venda_item = VendaItem(
+                    venda_id=nova_venda.id,
+                    produto_id=produto_id,
+                    quantidade=quantidade,
+                    preco_unitario=preco_unitario,
+                    desconto=float(item_data.get("desconto_item", 0.0)),
+                    total_item=total_item,
+                    produto_nome=produto.nome,
+                    produto_codigo=produto.codigo_barras,
+                    produto_unidade=produto.unidade_medida,
+                    custo_unitario=float(produto.preco_custo or 0),
+                    margem_lucro_real=(preco_unitario - float(produto.preco_custo or 0)) * quantidade
+                )
+                db.session.add(venda_item)
+
+                # Atualizar Estoque
+                quantidade_anterior = float(produto.quantidade or 0)
+                produto.quantidade = quantidade_anterior - quantidade
+                produto.quantidade_vendida = float(produto.quantidade_vendida or 0) + quantidade
+                produto.total_vendido = float(produto.total_vendido or 0) + total_item
+                produto.ultima_venda = datetime.utcnow()
+
+                # Movimentação Estoque
+                mov_estoque = MovimentacaoEstoque(
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=produto_id,
+                    tipo="saida",
+                    quantidade=quantidade,
+                    quantidade_anterior=quantidade_anterior,
+                    quantidade_atual=float(produto.quantidade),
+                    motivo=f"Venda #{codigo_venda}",
+                    venda_id=nova_venda.id,
+                    funcionario_id=nova_venda.funcionario_id,
+                )
+                db.session.add(mov_estoque)
+
+            # 5. REGISTRAR MOVIMENTAÇÃO DE CAIXA
+            if caixa_aberto:
+                mov_caixa = MovimentacaoCaixa(
+                    caixa_id=caixa_aberto.id,
+                    estabelecimento_id=estabelecimento_id,
+                    tipo="venda",
+                    valor=total,
+                    forma_pagamento=forma_pagamento,
+                    venda_id=nova_venda.id,
+                    descricao=f"Venda #{codigo_venda}"
+                )
+                db.session.add(mov_caixa)
+                
+                # Se for dinheiro, atualiza saldo real do caixa
+                if forma_pagamento == "dinheiro":
+                    caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual or 0) + total
+
+            # 6. TRATAMENTO FINANCEIRO DO FIADO
+            if forma_pagamento == "fiado":
+                cliente = Cliente.query.get(cliente_id)
+                cliente.saldo_devedor = float(cliente.saldo_devedor or 0) + total
+                
+                # Calcular vencimento (30 dias padrão)
+                from datetime import timedelta
+                vencimento = datetime.utcnow().date() + timedelta(days=30)
+                
+                conta = ContaReceber(
+                    estabelecimento_id=estabelecimento_id,
+                    cliente_id=cliente_id,
+                    venda_id=nova_venda.id,
+                    numero_documento=codigo_venda,
+                    valor_original=total,
+                    valor_atual=total,
+                    data_emissao=datetime.utcnow().date(),
+                    data_vencimento=vencimento,
+                    status="aberto",
+                    observacoes=f"FIADO gerado via Venda #{codigo_venda}"
+                )
+                db.session.add(conta)
+
+            db.session.commit()
+
+            # 7. RESPOSTA DE SUCESSO
+            return jsonify({
+                "success": True,
+                "venda": {
+                    "id": nova_venda.id,
+                    "codigo": nova_venda.codigo,
+                    "total": float(nova_venda.total)
+                },
+                "mensagens": ["Venda finalizada com sucesso!", "Estoque atualizado", "Financeiro registrado"]
+            }), 201
+
+        except Exception as inner_e:
+            db.session.rollback()
+            return jsonify({
+                "error": "FALHA_PROCESSAMENTO",
+                "message": f"Erro ao processar itens ou financeiro: {str(inner_e)}"
+            }), 400
 
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Erro ao finalizar venda: {str(e)}")
-        return jsonify({"error": f"Erro ao processar venda: {str(e)}"}), 500
+        print(f"❌ ERRO CRÍTICO VENDA: {str(e)}")
+        return jsonify({"error": "Erro interno no servidor", "details": str(e)}), 500
 
 
 @vendas_bp.route("/<int:venda_id>", methods=["GET"])
