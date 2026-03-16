@@ -169,8 +169,8 @@ def gerar_codigo_venda():
     return codigo
 
 
-def validar_estoque_disponivel(produto_id, quantidade_solicitada):
-    """Valida se há estoque suficiente"""
+def validar_estoque_disponivel(produto_id, quantidade_solicitada, estabelecimento_id=None):
+    """Valida se há estoque suficiente ou se permite venda sem estoque"""
     produto = Produto.query.get(produto_id)
     
     if not produto:
@@ -180,6 +180,13 @@ def validar_estoque_disponivel(produto_id, quantidade_solicitada):
         return False, "Produto inativo"
     
     if produto.quantidade < quantidade_solicitada:
+        # Verifica se o estabelecimento permite venda sem estoque
+        if estabelecimento_id:
+            from app.models import Configuracao
+            config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+            if config and config.permitir_venda_sem_estoque:
+                return True, produto
+                
         return False, f"Estoque insuficiente. Disponível: {produto.quantidade}"
     
     return True, produto
@@ -423,15 +430,21 @@ def validar_produto():
         data = request.get_json()
         produto_id = data.get("produto_id")
         codigo_barras = data.get("codigo_barras")
-        quantidade = data.get("quantidade", 1)
+        quantidade = float(data.get("quantidade", 1))
+        
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
         
         # Buscar produto
         from app.utils.query_helpers import get_produto_safe
         if produto_id:
             produto_data = get_produto_safe(produto_id)
         elif codigo_barras:
-            # Fallback para busca por código de barras via SQL direto se necessário
-            produto = Produto.query.filter_by(codigo_barras=codigo_barras).first()
+            # BUGFIX: Scoping por estabelecimento_id no código de barras
+            produto = Produto.query.filter_by(
+                codigo_barras=codigo_barras, 
+                estabelecimento_id=estabelecimento_id
+            ).first()
             produto_data = get_produto_safe(produto.id) if produto else None
         else:
             return jsonify({"error": "Informe produto_id ou codigo_barras"}), 400
@@ -442,8 +455,8 @@ def validar_produto():
                 "erro": "Produto não encontrado"
             }), 404
         
-        # Validar estoque
-        valido, resultado = validar_estoque_disponivel(produto_data.get("id"), quantidade)
+        # Validar estoque respeitando a config de 'permitir_venda_sem_estoque'
+        valido, resultado = validar_estoque_disponivel(produto_data.get("id"), quantidade, estabelecimento_id)
         
         if not valido:
             return jsonify({
@@ -609,7 +622,6 @@ def buscar_produtos_pdv():
             {lot_join_sql}
             WHERE p.estabelecimento_id = :estab_id
               AND p.ativo = true
-              AND p.quantidade > 0
               AND (
                   p.nome {like_op} :busca
                   OR p.codigo_barras {like_op} :busca
@@ -632,8 +644,8 @@ def buscar_produtos_pdv():
                 "marca": row_map["marca"] or "",
                 "preco_venda": float(row_map["preco_venda"]) if row_map["preco_venda"] else 0.0,
                 "preco_venda_efetivo": float(row_map["preco_venda"]) if row_map["preco_venda"] else 0.0,
-                "quantidade_estoque": int(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0,
-                "estoque_atual": int(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0,
+                "quantidade_estoque": float(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0.0,
+                "estoque_atual": float(row_map["quantidade_estoque"]) if row_map["quantidade_estoque"] else 0.0,
                 "unidade_medida": row_map["unidade_medida"] or "UN",
                 "data_validade": str(row_map["data_validade"]) if row_map.get("data_validade") else None,
             })
