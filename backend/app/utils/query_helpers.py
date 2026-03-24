@@ -92,7 +92,7 @@ def get_estabelecimento_safe(estab_id):
             except:
                 return default
 
-        res["plano"] = _fetch_col("plano", "Basic")
+        res["plano"] = _fetch_col("plano", "Gratuito")
         res["plano_status"] = _fetch_col("plano_status", "experimental")
         res["vencimento_assinatura"] = _fetch_col("vencimento_assinatura")
         res["cep"] = _fetch_col("cep", "00000-000")
@@ -497,12 +497,22 @@ def get_estabelecimento_full_safe(estabelecimento_id):
 
 def get_authorized_establishment_id():
     """
-    Versão Simplificada: Sempre retorna o ID do JWT.
+    Retorna o ID do Estabelecimento. Suporta Impersonation (Espelhamento) para SuperAdmins.
     """
     try:
         from flask_jwt_extended import get_jwt
+        from flask import request
         claims = get_jwt()
-        return claims.get("estabelecimento_id")
+        base_id = claims.get("estabelecimento_id")
+        
+        if claims.get("is_super_admin"):
+            impersonated_id = request.headers.get("X-Impersonate-Tenant-Id") or request.headers.get("X-Establishment-ID")
+            if impersonated_id:
+                if str(impersonated_id).lower() == 'all':
+                    return 'all'
+                return int(impersonated_id)
+                
+        return base_id
     except Exception as e:
         logger.error(f"Erro ao extrair authorized establishment: {e}")
         return None

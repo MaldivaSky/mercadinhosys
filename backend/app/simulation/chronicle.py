@@ -1,6 +1,6 @@
 import random
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     db, Venda, VendaItem, Pagamento, MovimentacaoEstoque, 
@@ -115,6 +115,10 @@ class ChronicleSimulator:
                 # Monitoramento Diário de Estoque: Magnitude Senior Proativa
                 self.simulate_expiration_and_restock(est, current_date, funcionario_id)
 
+                # Simulação de RH: Ponto e Frequência
+                if weekday < 6: # Empresa funciona de Segunda a Sábado no Simulado
+                    self.simulate_ponto(est, current_date)
+
                 qty_vendas = int(dna.giro_velocidade * multi * random.uniform(0.8, 1.2))
                 
                 for _ in range(qty_vendas):
@@ -130,6 +134,7 @@ class ChronicleSimulator:
                 if day == 1:
                     try:
                         self.simulate_monthly_expenses(est, dna, current_date, funcionario_id)
+                        self.simulate_beneficios(est, current_date)
                     except Exception as e:
                         db.session.rollback()
                         print(f"⚠️ Erro ao simular despesas mensais: {str(e)}")
@@ -172,7 +177,7 @@ class ChronicleSimulator:
                 tipo_evento="despesas_insert",
                 descricao=f"Despesa registrada: {desc} (R$ {val:.2f})",
                 valor=val, data_evento=date_obj,
-                detalhes_json=json.dumps({"categoria": "Operacional", "tipo": tipo})
+                detalhes_json={"categoria": "Operacional", "tipo": tipo}
             )
             db.session.add(meta_exp)
 
@@ -193,7 +198,7 @@ class ChronicleSimulator:
                 tipo_evento="despesas_insert",
                 descricao=f"Folha de Pagamento: {f.nome} (R$ {custo_total:.2f})",
                 valor=custo_total, data_evento=date_obj,
-                detalhes_json=json.dumps({"categoria": "RH", "funcionario": f.nome})
+                detalhes_json={"categoria": "RH", "funcionario": f.nome}
             )
             db.session.add(aud_rh)
 
@@ -221,9 +226,88 @@ class ChronicleSimulator:
                 tipo_evento="despesas_insert",
                 descricao=f"Impostos provisionados (R$ {imposto:.2f})",
                 valor=imposto, data_evento=date_obj,
-                detalhes_json=json.dumps({"categoria": "Tributário", "base_calculo": float(revenue)})
+                detalhes_json={"categoria": "Tributário", "base_calculo": float(revenue)}
             )
             db.session.add(aud_tax)
+
+    def simulate_ponto(self, est, date_obj):
+        """Simula batidas de ponto realistas para toda a equipe"""
+        from app.models import RegistroPonto, Funcionario
+        equipe = Funcionario.query.filter_by(estabelecimento_id=est.id, ativo=True).all()
+        
+        for f in equipe:
+            # Pular se for domingo (já filtrado na chamada, mas segurança extra)
+            if date_obj.weekday() == 6: continue
+            
+            # 1. Entrada (07:50 - 08:15)
+            h_in = 8
+            m_in = random.randint(-10, 15)
+            # Atraso ocasional
+            if random.random() < 0.05: m_in += random.randint(15, 60)
+            
+            ts_in = datetime.combine(date_obj.date(), time(h_in + (1 if m_in >= 60 else 0), m_in % 60))
+            
+            p_in = RegistroPonto(
+                estabelecimento_id=est.id, funcionario_id=f.id,
+                data=date_obj.date(), hora=ts_in.time(),
+                tipo_registro="entrada", status="normal" if m_in <= 10 else "atraso",
+                minutos_atraso=max(0, m_in - 5)
+            )
+            db.session.add(p_in)
+            
+            # 2. Almoço Saída (12:00)
+            ts_out_lunch = datetime.combine(date_obj.date(), time(12, random.randint(0, 5)))
+            p_out_l = RegistroPonto(
+                estabelecimento_id=est.id, funcionario_id=f.id,
+                data=date_obj.date(), hora=ts_out_lunch.time(),
+                tipo_registro="intervalo_saida"
+            )
+            db.session.add(p_out_l)
+            
+            # 3. Almoço Retorno (13:00)
+            ts_in_lunch = datetime.combine(date_obj.date(), time(13, random.randint(0, 5)))
+            p_in_l = RegistroPonto(
+                estabelecimento_id=est.id, funcionario_id=f.id,
+                data=date_obj.date(), hora=ts_in_lunch.time(),
+                tipo_registro="intervalo_retorno"
+            )
+            db.session.add(p_in_l)
+            
+            # 4. Saída (17:30 - 18:30)
+            h_out = 17
+            m_out = random.randint(30, 90) # 17:30 até 18:30
+            ts_out = datetime.combine(date_obj.date(), time(h_out + (1 if m_out >= 60 else 0), m_out % 60))
+            
+            p_out = RegistroPonto(
+                estabelecimento_id=est.id, funcionario_id=f.id,
+                data=date_obj.date(), hora=ts_out.time(),
+                tipo_registro="saida"
+            )
+            db.session.add(p_out)
+
+    def simulate_beneficios(self, est, date_obj):
+        """Simula pagamento de benefícios (Vale Refeição, VT, etc)"""
+        from app.models import Beneficio, Funcionario, Despesa
+        equipe = Funcionario.query.filter_by(estabelecimento_id=est.id, ativo=True).all()
+        
+        for f in equipe:
+            # Vale Refeição (R$ 600)
+            vr = Decimal("600.00")
+            exp_vr = Despesa(
+                estabelecimento_id=est.id, descricao=f"Vale Refeição - {f.nome}",
+                categoria="RH", tipo="fixa", valor=vr,
+                data_despesa=date_obj.date()
+            )
+            db.session.add(exp_vr)
+            
+            # Vale Transporte (R$ 250)
+            vt = Decimal("250.00")
+            exp_vt = Despesa(
+                estabelecimento_id=est.id, descricao=f"Vale Transporte - {f.nome}",
+                categoria="RH", tipo="fixa", valor=vt,
+                data_despesa=date_obj.date()
+            )
+            db.session.add(exp_vt)
 
     def apply_economic_pulse(self, est, date_obj, funcionario_id):
         """Reajustes de preços mensais (Inflação real brasileira)"""
@@ -295,7 +379,7 @@ class ChronicleSimulator:
                     estabelecimento_id=est.id, tipo_evento="estoque_ajuste",
                     descricao=f"Perda/Quebra registrada: {p.nome} - Prejuízo: R$ {valor_prejuizo}",
                     valor=valor_prejuizo, data_evento=date_obj,
-                    detalhes_json=json.dumps({"produto": p.nome, "quantidade": float(quebra_decimal)})
+                    detalhes_json={"produto": p.nome, "quantidade": float(quebra_decimal)}
                 )
                 db.session.add(aud)
 
@@ -350,13 +434,82 @@ class ChronicleSimulator:
                     tipo_evento="estoque_ajuste",
                     descricao=f"Produto Vencido Descartado: {produto.nome} (R$ {valor_perda})",
                     valor=valor_perda, data_evento=date_obj,
-                    detalhes_json=json.dumps({"lote": lote.numero_lote, "motivo": "vencimento"})
+                    detalhes_json={"lote": lote.numero_lote, "motivo": "vencimento"}
                 )
                 db.session.add(aud)
 
         db.session.commit()
         
-        # 2. Reabastecer (Estoque < Mínimo)
+        db.session.commit()
+        
+        # 2. Processar Recebimentos Pendentes (Realismo Senior: O pedido leva tempo para chegar)
+        pedidos_pendentes = PedidoCompra.query.filter(
+            PedidoCompra.estabelecimento_id == est.id,
+            PedidoCompra.status == "pendente",
+            PedidoCompra.data_previsao_entrega <= date_obj.date()
+        ).all()
+        
+        for pedido in pedidos_pendentes:
+            pedido.status = "recebido"
+            pedido.data_recebimento = date_obj.date()
+            
+            # Ao receber, gera a despesa/conta a pagar
+            cp = ContaPagar(
+                estabelecimento_id=est.id,
+                fornecedor_id=pedido.fornecedor_id,
+                pedido_compra_id=pedido.id,
+                numero_documento=f"DUP-{pedido.numero_pedido}",
+                observacoes=f"Recebimento de Mercadorias: {pedido.numero_pedido}",
+                valor_original=pedido.total,
+                valor_atual=pedido.total,
+                data_emissao=date_obj.date(),
+                data_vencimento=date_obj.date() + timedelta(days=30),
+                status="pago" if (date_obj.date() + timedelta(days=30)) < datetime.now().date() else "aberto",
+                created_at=date_obj
+            )
+            db.session.add(cp)
+            
+            # Registrar Entrada de Estoque por Itens do Pedido
+            for pi in pedido.itens: # Assume que PedidoCompra tem relacionamento 'itens'
+                p = pi.produto
+                if not p: continue
+                
+                qtd = pi.quantidade_recebida # Aqui assume que o software permite conferência
+                custo = pi.preco_unitario
+                
+                # Criar Lote ao Receber
+                lote = ProdutoLote(
+                    estabelecimento_id=est.id,
+                    produto_id=p.id,
+                    numero_lote=f"L{date_obj.strftime('%Y%m%d')}-{p.id}-{random.randint(1000,9999)}",
+                    quantidade=pi.quantidade_recebida,
+                    quantidade_inicial=pi.quantidade_recebida,
+                    preco_custo_unitario=pi.preco_unitario,
+                    data_fabricacao=date_obj.date() - timedelta(days=random.randint(5, 30)),
+                    data_validade=date_obj.date() + timedelta(days=random.randint(15, 180)),
+                    ativo=True,
+                    created_at=date_obj
+                )
+                db.session.add(lote)
+                db.session.flush()
+                
+                ant = round_qty(p.quantidade)
+                p.quantidade = round_qty(ant + Decimal(str(pi.quantidade_recebida)))
+                atu = p.quantidade
+                
+                mov = MovimentacaoEstoque(
+                    estabelecimento_id=est.id, produto_id=p.id,
+                    quantidade=pi.quantidade_recebida, tipo="entrada", motivo=f"Recebimento PC {pedido.numero_pedido}",
+                    quantidade_anterior=ant, quantidade_atual=atu,
+                    pedido_compra_id=pedido.id, lote_id=lote.id,
+                    created_at=date_obj
+                )
+                db.session.add(mov)
+                self._sync_lote_vigente(p)
+
+            db.session.commit()
+
+        # 3. Gerar Novos Pedidos (Estoque < Mínimo)
         produtos_baixo_estoque = Produto.query.filter(
             Produto.estabelecimento_id == est.id,
             Produto.quantidade <= Produto.quantidade_minima
@@ -370,6 +523,14 @@ class ChronicleSimulator:
         
         pedidos_por_forn = {}
         for p in produtos_baixo_estoque:
+            # Evita duplicar pedido se já houver um pendente para este produto
+            ja_pedido = db.session.query(PedidoCompraItem).join(PedidoCompra).filter(
+                PedidoCompra.estabelecimento_id == est.id,
+                PedidoCompra.status == 'pendente',
+                PedidoCompraItem.produto_id == p.id
+            ).first()
+            if ja_pedido: continue
+
             forn = random.choice(fornecedores_disponiveis)
             if forn.id not in pedidos_por_forn:
                 pedidos_por_forn[forn.id] = []
@@ -399,7 +560,7 @@ class ChronicleSimulator:
                 numero_pedido=f"PC-{uuid.uuid4().hex[:6].upper()}",
                 data_pedido=date_obj,
                 data_previsao_entrega=date_obj.date() + timedelta(days=random.randint(2, 5)),
-                status="recebido", 
+                status="pendente", # REALISMO: Inicia como pendente
                 total=valor_total,
                 created_at=date_obj
             )
@@ -414,7 +575,7 @@ class ChronicleSimulator:
                 descricao=f"Pedido de Compra Automático {pedido.numero_pedido} gerado (Estoque Baixo)",
                 valor=valor_total,
                 data_evento=date_obj,
-                detalhes_json=json.dumps({"fornecedor_id": forn_id, "itens": len(itens)})
+                detalhes_json={"fornecedor_id": forn_id, "itens": len(itens)}
             )
             db.session.add(auditoria_compra)
             
@@ -429,95 +590,11 @@ class ChronicleSimulator:
                     produto_nome=p.nome,
                     produto_unidade=p.unidade_medida,
                     quantidade_solicitada=qtd,
-                    quantidade_recebida=qtd,
+                    quantidade_recebida=qtd, # Previsão
                     preco_unitario=custo,
                     total_item=qtd * custo
                 )
                 db.session.add(pi)
-                
-                validade = date_obj.date() + timedelta(days=random.randint(15, 180))
-                if p.unidade_medida == "KG":
-                    validade = date_obj.date() + timedelta(days=random.randint(5, 15))
-
-                lote = ProdutoLote(
-                    estabelecimento_id=est.id,
-                    produto_id=p.id,
-                    numero_lote=f"L{date_obj.strftime('%Y%m%d')}-{p.id}-{random.randint(1000,9999)}",
-                    quantidade=qtd,
-                    quantidade_inicial=qtd,
-                    preco_custo_unitario=custo,
-                    data_fabricacao=date_obj.date() - timedelta(days=random.randint(5, 30)),
-                    data_validade=validade,
-                    ativo=True,
-                    created_at=date_obj
-                )
-                db.session.add(lote)
-                
-                # Registra histórico se o custo mudou (simula negociação/inflação)
-                old_c = p.preco_custo or Decimal("0.00")
-                custo_dec = Decimal(str(custo))
-                if old_c > 0 and abs(old_c - custo_dec) > Decimal("0.01"):
-                    m_old = Produto.calcular_markup_de_preco(old_c, p.preco_venda)
-                    m_new = Produto.calcular_markup_de_preco(custo_dec, p.preco_venda)
-                    
-                    hp = HistoricoPrecos(
-                        estabelecimento_id=est.id,
-                        produto_id=p.id,
-                        funcionario_id=funcionario_id,
-                        preco_custo_anterior=old_c,
-                        preco_venda_anterior=p.preco_venda,
-                        margem_anterior=m_old,
-                        preco_custo_novo=custo_dec,
-                        preco_venda_novo=p.preco_venda,
-                        margem_nova=m_new,
-                        data_alteracao=date_obj,
-                        motivo=f"Reabastecimento Automático PC-{pedido.numero_pedido}"
-                    )
-                    db.session.add(hp)
-                    # Atualiza o produto com o novo custo
-                    p.preco_custo = custo_dec
-
-                    auditoria_preco = Auditoria(
-                        estabelecimento_id=est.id,
-                        usuario_id=funcionario_id,
-                        tipo_evento="alteracao_preco",
-                        descricao=f"Custo do produto {p.nome} alterado na compra {pedido.numero_pedido} (De R$ {old_c:.2f} para R$ {custo:.2f})",
-                        data_evento=date_obj,
-                        detalhes_json=json.dumps({"produto_id": p.id, "old_custo": old_c, "new_custo": custo})
-                    )
-                    db.session.add(auditoria_preco)
-
-                ant = round_qty(p.quantidade)
-                p.quantidade = round_qty(ant + Decimal(str(qtd)))
-                atu = p.quantidade
-                
-                mov = MovimentacaoEstoque(
-                    estabelecimento_id=est.id, produto_id=p.id,
-                    quantidade=qtd, tipo="entrada", motivo=f"Recebimento PC {pedido.numero_pedido}",
-                    quantidade_anterior=ant, quantidade_atual=atu,
-                    pedido_compra_id=pedido.id,
-                    lote_id=lote.id,
-                    created_at=date_obj
-                )
-                db.session.add(mov)
-                
-                # Sincroniza informações de lote no produto
-                self._sync_lote_vigente(p)
-                
-            cp = ContaPagar(
-                estabelecimento_id=est.id,
-                fornecedor_id=forn_id,
-                pedido_compra_id=pedido.id,
-                numero_documento=f"DUP-{pedido.numero_pedido}",
-                observacoes=f"Pedido de Compra {pedido.numero_pedido}",
-                valor_original=valor_total,
-                valor_atual=valor_total,
-                data_emissao=date_obj.date(),
-                data_vencimento=date_obj.date() + timedelta(days=30),
-                status="pago" if (date_obj.date() + timedelta(days=30)) < datetime.now().date() else "aberto",
-                created_at=date_obj
-            )
-            db.session.add(cp)
 
     def generate_master_sale(self, est, dna, ts, caixa, funcionario_id):
         # Selecionar cesta de compras (1 a 15 produtos)
@@ -628,7 +705,7 @@ class ChronicleSimulator:
             descricao=f"Venda {venda.codigo} finalizada com sucesso (Total: R$ {total_venda:.2f})",
             valor=total_venda,
             data_evento=ts,
-            detalhes_json=json.dumps({"forma_pagamento": forma, "itens": len(basket)})
+            detalhes_json={"forma_pagamento": forma, "itens": len(basket)}
         )
         db.session.add(aud_venda)
         
@@ -666,3 +743,4 @@ class ChronicleSimulator:
                 status="aprovado", data_pagamento=ts
             )
             db.session.add(pag)
+

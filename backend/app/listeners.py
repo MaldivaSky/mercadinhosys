@@ -3,7 +3,7 @@ import os
 from app.models import db, AuditoriaSincronia, Auditoria
 import json
 from flask import g
-from datetime import datetime
+from datetime import datetime, date
 
 # Tabelas que devem ser sincronizadas com a nuvem (Integridade de Dados)
 TABELAS_SINCRONIZAVEIS = [
@@ -26,12 +26,28 @@ TABELAS_MONITOR_MASTER = {
 }
 
 def object_to_dict(obj):
-    """Converte objeto SQLAlchemy para dict de forma segura"""
-    if hasattr(obj, 'to_dict'):
-        return obj.to_dict()
+    """Converte objeto SQLAlchemy para dict de forma segura, tratando tipos não serilizáveis."""
+    from decimal import Decimal
     
-    # Fallback para inspeção de colunas
-    return {c.key: getattr(obj, c.key) for c in inspect(obj).mapper.column_attrs}
+    if hasattr(obj, 'to_dict'):
+        d = obj.to_dict()
+    else:
+        # Fallback para inspeção de colunas
+        d = {c.key: getattr(obj, c.key) for c in inspect(obj).mapper.column_attrs}
+    
+    # Sanitização recursiva para JSON
+    def sanitize(v):
+        if isinstance(v, Decimal):
+            return float(v)
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        if isinstance(v, dict):
+            return {k: sanitize(item) for k, item in v.items()}
+        if isinstance(v, list):
+            return [sanitize(item) for item in v]
+        return v
+
+    return {k: sanitize(v) for k, v in d.items()}
 
 def registrar_evento_forense(mapper, connection, target, operacao):
     """
@@ -70,47 +86,51 @@ def registrar_evento_forense(mapper, connection, target, operacao):
             )
 
         # 3. Registrar na Auditoria Forense (MONITOR SaaS)
-        # SÓ REGISTRA SE ESTIVER NA LISTA DE INTERESSE DO MASTER
-        if target.__tablename__ in TABELAS_MONITOR_MASTER:
-            # Tenta pegar o usuário do contexto global (g)
-            usuario_id = getattr(g, 'user_id', None)
-            
-            # Mapeamento para nome amigável
-            label_tabela = TABELAS_MONITOR_MASTER.get(target.__tablename__, target.__tablename__.title())
-            
-            # Descrição Inteligente baseada na operação
-            if operacao == 'INSERT':
-                descricao = f"{label_tabela} (ID: {target.id}) detectada no sistema."
-                if target.__tablename__ == 'vendas':
-                     descricao = f"Venda #{getattr(target, 'codigo', target.id)} finalizada com sucesso."
-                elif target.__tablename__ == 'despesas':
-                     descricao = f"Despesa registrada: {getattr(target, 'descricao', 'Sem descrição')}."
-            elif operacao == 'UPDATE':
-                descricao = f"Alteração realizada em {label_tabela} (ID: {target.id})."
-                if target.__tablename__ == 'produtos':
-                     descricao = f"Atualização de dados/preço no produto: {getattr(target, 'nome', target.id)}."
-            else:
-                descricao = f"Exclusão de {label_tabela} (ID: {target.id})."
+        # REMOVIDO: Filtro de TABELAS_MONITOR_MASTER para logar TUDO conforme solicitado pelo usuário.
+        
+        # Tenta pegar o usuário do contexto global (g)
+        usuario_id = getattr(g, 'user_id', None)
+        
+        # Mapeamento para nome amigável
+        label_tabela = TABELAS_MONITOR_MASTER.get(target.__tablename__, target.__tablename__.replace('_', ' ').title())
+        
+        # Descrição Inteligente baseada na operação
+        if operacao == 'INSERT':
+            descricao = f"Novo registro em {label_tabela} (ID: {target.id}) criado."
+            if target.__tablename__ == 'vendas':
+                 descricao = f"Venda #{getattr(target, 'codigo', target.id)} finalizada com sucesso."
+            elif target.__tablename__ == 'despesas':
+                 descricao = f"Despesa registrada: {getattr(target, 'descricao', 'Sem descrição')}."
+            elif target.__tablename__ == 'estabelecimentos':
+                 descricao = f"Novo estabelecimento registrado: {getattr(target, 'nome_fantasia', target.id)}."
+        elif operacao == 'UPDATE':
+            descricao = f"Alteração realizada em {label_tabela} (ID: {target.id})."
+            if target.__tablename__ == 'produtos':
+                 descricao = f"Atualização de dados/preço no produto: {getattr(target, 'nome', target.id)}."
+            elif target.__tablename__ == 'estabelecimentos':
+                 descricao = f"Atualização de dados/plano do estabelecimento: {getattr(target, 'nome_fantasia', target.id)}."
+        else:
+            descricao = f"Exclusão de {label_tabela} (ID: {target.id})."
 
-            tipo_evento = f"{target.__tablename__}_{operacao.lower()}"
-            
-            # O campo 'valor' da Auditoria pode ser preenchido se a tabela tiver 'valor' ou 'total'
-            valor = getattr(target, 'total', getattr(target, 'valor', getattr(target, 'valor_original', None)))
+        tipo_evento = f"{target.__tablename__}_{operacao.lower()}"
+        
+        # O campo 'valor' da Auditoria pode ser preenchido se a tabela tiver 'valor' ou 'total'
+        valor = getattr(target, 'total', getattr(target, 'valor', getattr(target, 'valor_original', None)))
 
-            Auditoria.registrar(
-                estabelecimento_id=estabelecimento_id,
-                tipo_evento=tipo_evento,
-                descricao=descricao,
-                usuario_id=usuario_id,
-                valor=valor,
-                detalhes={
-                    "operacao": operacao,
-                    "tabela": target.__tablename__,
-                    "registro_id": target.id,
-                    "timestamp": datetime.now().isoformat(),
-                    "data": payload
-                }
-            )
+        Auditoria.registrar(
+            estabelecimento_id=estabelecimento_id,
+            tipo_evento=tipo_evento,
+            descricao=descricao,
+            usuario_id=usuario_id,
+            valor=valor,
+            detalhes={
+                "operacao": operacao,
+                "tabela": target.__tablename__,
+                "registro_id": target.id,
+                "timestamp": datetime.now().isoformat(),
+                "data": payload
+            }
+        )
 
     except Exception as e:
         print(f"Erro no Listener Forense: {str(e)}")

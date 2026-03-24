@@ -20,6 +20,7 @@ from app import create_app
 from app.models import db, Estabelecimento, Funcionario
 from app.simulation.dna_factory import DNAFactory
 from app.simulation.chronicle import ChronicleSimulator
+from seed_super_admin import seed_super_admin
 
 def run_simulation():
     app = create_app()
@@ -36,13 +37,16 @@ def run_simulation():
         db.create_all()
         db.session.commit()
         print("Banco Resetado.")
+        
+        print("Semeando Super Admin...")
+        seed_super_admin(app)
 
         simulator = ChronicleSimulator(app)
         
         print("\nMERCADINHOSYS: ENGINE DO GEMEO DIGITAL")
         try:
             # Rodar Simulacao Master (1 mês para estabilidade de ambiente)
-            simulator.run_full_simulation(months=1)
+            simulator.run_full_simulation(months=6)
             print("\nSimulacao Concluida com Sucesso!")
             
             # Verificar se os dados de acesso do Super Admin estao corretos

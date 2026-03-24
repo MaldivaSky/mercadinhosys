@@ -90,6 +90,7 @@ button {
   /* Estilos base para tema claro */
   body {
     @apply bg-gray-50 text-gray-900;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
 
   /* Estilos para tema escuro quando a classe 'dark' está presente */
@@ -103,6 +104,7 @@ button {
   /* Componentes reutilizáveis */
   .card {
     @apply rounded-lg border border-gray-200 bg-white shadow-sm;
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   }
 
   .dark .card {

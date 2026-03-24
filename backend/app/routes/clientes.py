@@ -4,7 +4,7 @@
 
 from flask import Blueprint, request, jsonify, current_app
 # from flask_login import login_required, current_user  # Removido - usando JWT
-from flask_jwt_extended import get_jwt_identity, get_jwt
+from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required
 from app.utils.query_helpers import get_authorized_establishment_id
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -13,6 +13,7 @@ import re
 from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber, Funcionario
 from app.utils import validar_cpf, validar_email, formatar_telefone, calcular_idade
 from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.plan_guards import quota_required, permission_required
 
 clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
 
@@ -279,12 +280,12 @@ def listar_clientes():
                         if total_clientes > 0
                         else 0
                     ),
-                    "total_gasto": float(total_gasto_geral),
-                    "total_devido": float(total_devido_geral),
+                    "total_gasto": float(total_gasto_geral or 0),
+                    "total_devido": float(total_devido_geral or 0),
                     "melhor_cliente_nome": melhor_cliente.nome if melhor_cliente and float(melhor_cliente.valor_total_gasto or 0) > 0 else "Nenhum",
-                    "melhor_cliente_valor": float(melhor_cliente.valor_total_gasto) if melhor_cliente else 0.0,
+                    "melhor_cliente_valor": float(melhor_cliente.valor_total_gasto if melhor_cliente and melhor_cliente.valor_total_gasto else 0),
                     "maior_devedor_nome": maior_devedor.nome if maior_devedor and float(maior_devedor.saldo_devedor or 0) > 0 else "Nenhum",
-                    "maior_devedor_valor": float(maior_devedor.saldo_devedor) if maior_devedor and float(maior_devedor.saldo_devedor or 0) > 0 else 0.0,
+                    "maior_devedor_valor": float(maior_devedor.saldo_devedor if maior_devedor and maior_devedor.saldo_devedor else 0),
                 },
             }
         )
@@ -473,8 +474,10 @@ def obter_cliente(id):
         )
 
 
-@clientes_bp.route("/", methods=["POST"])
-@funcionario_required
+@clientes_bp.route("/", methods=["POST"], strict_slashes=False)
+@jwt_required()
+@permission_required('clientes')
+@quota_required('cliente')
 def criar_cliente():
     """Cria um novo cliente"""
     try:

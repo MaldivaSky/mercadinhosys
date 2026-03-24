@@ -15,6 +15,7 @@ from app.models import (
     JustificativaPonto,
 )
 from app.decorators.decorator_jwt import funcionario_required, gerente_ou_admin_required
+from app.decorators.plan_guards import plan_required
 from app.dashboard_cientifico.data_layer import DataLayer
 
 rh_bp = Blueprint("rh", __name__)
@@ -27,6 +28,7 @@ rh_bp = Blueprint("rh", __name__)
 
 @rh_bp.route("/dashboard", methods=["GET"])
 @gerente_ou_admin_required
+@plan_required('Enterprise')
 def rh_dashboard():
     """
     Retorna métricas específicas para o Dashboard de RH.
@@ -62,6 +64,7 @@ def rh_dashboard():
 
 @rh_bp.route("/justificativas", methods=["GET"])
 @funcionario_required
+@plan_required('Enterprise')
 def listar_justificativas():
     """Lista justificativas de ponto com filtros opcionais."""
     try:
@@ -114,6 +117,7 @@ def listar_justificativas():
 
 @rh_bp.route("/justificativas", methods=["POST"])
 @funcionario_required
+@plan_required('Enterprise')
 def criar_justificativa():
     """Cria uma nova justificativa de ponto."""
     try:
@@ -178,6 +182,7 @@ def criar_justificativa():
 
 @rh_bp.route("/justificativas/<int:justificativa_id>/responder", methods=["PUT"])
 @funcionario_required
+@plan_required('Enterprise')
 def responder_justificativa(justificativa_id):
     """Aprova ou rejeita uma justificativa (apenas gerente/admin)."""
     try:
@@ -235,6 +240,7 @@ def responder_justificativa(justificativa_id):
 
 @rh_bp.route("/beneficios", methods=["GET"])
 @funcionario_required
+@plan_required('Enterprise')
 def listar_beneficios():
     """Lista benefícios atribuídos a funcionários."""
     try:
@@ -288,6 +294,7 @@ def listar_beneficios():
 
 @rh_bp.route("/beneficios", methods=["POST"])
 @funcionario_required
+@plan_required('Enterprise')
 def criar_beneficio_funcionario():
     """Atribui um benefício a um funcionário."""
     try:
@@ -346,6 +353,7 @@ def criar_beneficio_funcionario():
 
 @rh_bp.route("/banco-horas", methods=["GET"])
 @funcionario_required
+@plan_required('Enterprise')
 def listar_banco_horas():
     """Lista banco de horas dos funcionários."""
     try:

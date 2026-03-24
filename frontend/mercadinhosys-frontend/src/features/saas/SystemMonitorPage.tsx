@@ -205,8 +205,17 @@ const SystemMonitorPage: React.FC = () => {
     };
 
     const getEventIcon = (type: string) => {
+        if (type.includes('venda')) return <ShoppingBag className="text-green-500" size={20} />;
+        if (type.includes('estabelecimento_registrado')) return <UserPlus className="text-blue-500" size={20} />;
+        if (type.includes('produto')) return <Package className="text-orange-500" size={20} />;
+        if (type.includes('pedido_compra')) return <ShoppingBag className="text-purple-500" size={20} />;
+        if (type.includes('despesa')) return <DollarSign className="text-red-500" size={20} />;
+        if (type.includes('estoque')) return <Activity className="text-amber-500" size={20} />;
+        if (type.includes('caixa')) return <DollarSign className="text-indigo-500" size={20} />;
+
         switch (type) {
             case 'venda_finalizada': return <ShoppingBag className="text-green-500" size={20} />;
+            case 'vendas_insert': return <ShoppingBag className="text-green-600" size={20} />;
             case 'estabelecimento_registrado': return <UserPlus className="text-blue-500" size={20} />;
             case 'produto_criado': return <Package className="text-orange-500" size={20} />;
             default: return <Activity className="text-gray-400" size={20} />;
@@ -214,7 +223,7 @@ const SystemMonitorPage: React.FC = () => {
     };
 
     const filteredLogs = logs.filter(log => {
-        const matchesType = !filterType || log.tipo_evento === filterType;
+        const matchesType = !filterType || log.tipo_evento.includes(filterType);
         const matchesSearch = !searchTerm ||
             log.estabelecimento_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
             log.descricao.toLowerCase().includes(searchTerm.toLowerCase());
@@ -383,8 +392,11 @@ const SystemMonitorPage: React.FC = () => {
                                 onChange={(e) => setFilterType(e.target.value)}
                             >
                                 <option value="">Todos Eventos</option>
-                                <option value="venda_finalizada">Vendas</option>
-                                <option value="produto_criado">Cadastros</option>
+                                <option value="venda">Vendas</option>
+                                <option value="produto">Produtos</option>
+                                <option value="estoque">Estoque</option>
+                                <option value="despesa">Financeiro / Despesas</option>
+                                <option value="pedido_compra">Compras</option>
                                 <option value="estabelecimento_registrado">Onboarding</option>
                             </select>
                         </div>
@@ -725,10 +737,8 @@ const SystemMonitorPage: React.FC = () => {
                                         onChange={(e) => setEditFormData({ ...editFormData, plano: e.target.value })}
                                         className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                                     >
-                                        <option value="Basic">Basic</option>
-                                        <option value="Advanced">Advanced</option>
-                                        <option value="Premium">Premium</option>
-                                        <option value="Enterprise">Enterprise</option>
+                                        <option value="Gratuito">Gratuito</option>
+                                        <option value="Pro">Pro</option>
                                     </select>
                                 </div>
 

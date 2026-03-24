@@ -84,12 +84,13 @@ def admin_required(f):
 
         # Verifica se é admin - agora usa claims (Case Insensitive)
         role = claims.get("role", "").lower()
-        if role != "admin":
+        allowed_admin_roles = ["admin", "administrador", "proprietario", "dono", "master", "gerente"]
+        if role not in allowed_admin_roles:
             return (
                 jsonify(
                     {
                         "error": "Acesso restrito",
-                        "message": "Apenas administradores podem acessar esta funcionalidade",
+                        "message": f"Apenas administradores podem acessar esta funcionalidade. Seu role: {role}",
                     }
                 ),
                 403,
@@ -126,7 +127,7 @@ def gerente_ou_admin_required(f):
 
         # Verifica se é gerente ou admin - agora usa claims (Case Insensitive)
         role = (claims.get("role") or "").lower()
-        allowed_roles = ["gerente", "admin", "administrador"]
+        allowed_roles = ["gerente", "admin", "administrador", "proprietario", "dono", "master"]
         
         if role not in allowed_roles:
             return (

@@ -558,7 +558,7 @@ def login():
 
         estabelecimento = Estabelecimento.query.get(funcionario.estabelecimento_id)
 
-        plano_estabelecimento = estabelecimento.plano if estabelecimento else "gratuito"
+        plano_estabelecimento = estabelecimento.plano if estabelecimento else "Gratuito"
 
         
 
@@ -621,6 +621,10 @@ def login():
                     "is_super_admin": bool(funcionario.is_super_admin),
 
                     "estabelecimento_id": funcionario.estabelecimento_id,
+
+                    "plano": plano_estabelecimento,
+
+                    "plano_status": getattr(estabelecimento, 'plano_status', 'ativo') if estabelecimento else 'ativo',
 
                     "permissoes": getattr(funcionario, 'permissoes_json', {}) if hasattr(funcionario, 'permissoes_json') else {
 

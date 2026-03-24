@@ -299,7 +299,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'
 const DashboardPage: React.FC = () => {
   const { config } = useConfig();
   const navigate = useNavigate();
-  const { plano, hasAdvancedDashboard, hasRHTools } = usePlanGate();
+  const { plano, hasAdvancedDashboard, hasRHTools, isSuperAdmin, refreshPlan } = usePlanGate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -396,22 +396,10 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     if (viewMode === 'rh') {
-      if (!hasRHTools) {
-        showToast.error(`O Plano ${plano} não inclui acesso às ferramentas de RH.`);
-        setViewMode('visao-geral');
-        return;
-      }
       loadRhSupportData();
       loadRhPontoHistorico(1);
     }
-    if (viewMode === 'avancado' || viewMode === 'detalhado') {
-      if (!hasAdvancedDashboard) {
-        showToast.error(`O Plano ${plano} não inclui acesso ao Dashboard Científico.`);
-        setViewMode('visao-geral');
-        return;
-      }
-    }
-  }, [viewMode, hasRHTools, hasAdvancedDashboard, plano]);
+  }, [viewMode]);
 
   // 🔥 NOVO: Aplicar filtro personalizado
   const aplicarFiltroPersonalizado = () => {
@@ -1256,6 +1244,7 @@ const DashboardPage: React.FC = () => {
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <TargetIcon className="w-8 h-8 text-blue-600 dark:text-blue-500" />
               📊 Resumo Executivo - Últimos {periodoDias} dias
+              <span className="ml-4 px-2 py-1 bg-red-600 text-white text-[10px] rounded animate-pulse">V2-BYPASS-PRO-ACTIVE</span>
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

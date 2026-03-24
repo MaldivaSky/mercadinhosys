@@ -367,7 +367,7 @@ def get_assinatura_status():
         return jsonify({
             "success": True,
             "data": {
-                "plano": dados.get("plano", "Basic"),
+                "plano": dados.get("plano", "Gratuito"),
                 "status": plano_status_val,
                 "vencimento": vencimento.isoformat() if vencimento and hasattr(vencimento, 'isoformat') else None,
                 "is_active": plano_status_val in ["ativo", "experimental"],
@@ -426,4 +426,36 @@ def listar_estabelecimentos_monitor():
         }), 200
     except Exception as e:
         logger.error(f"Erro ao listar estabelecimentos monitor: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@saas_bp.route("/estabelecimentos/<int:id>/plano", methods=["PUT"])
+@super_admin_required
+def alterar_plano_estabelecimento(id):
+    """Altera o plano de um estabelecimento (Apenas Super Admin)"""
+    try:
+        data = request.get_json()
+        if not data or "plano" not in data:
+            return jsonify({"success": False, "error": "O campo 'plano' é obrigatório"}), 400
+            
+        estabelecimento = Estabelecimento.query.get(id)
+        if not estabelecimento:
+            return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
+            
+        estabelecimento.plano = data["plano"]
+        if "plano_status" in data:
+            estabelecimento.plano_status = data["plano_status"]
+            
+        db.session.commit()
+        
+        logger.info(f"🔄 PLANO ALTERADO: Estabelecimento {id} mudou para {estabelecimento.plano}")
+        
+        return jsonify({
+            "success": True, 
+            "message": "Plano atualizado com sucesso",
+            "estabelecimento": estabelecimento.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao alterar plano do estabelecimento {id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500

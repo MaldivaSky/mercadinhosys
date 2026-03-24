@@ -5,12 +5,10 @@ import { useAuth } from './AuthContext';
 interface ConfigContextType {
     config: Configuracao | null;
     preferencias: PreferenciasUsuario | null;
-    isDark: boolean;
     loading: boolean;
     updateConfig: (newConfig: Partial<Configuracao>) => Promise<void>;
     updatePreferencias: (newPrefs: Partial<PreferenciasUsuario>) => Promise<void>;
     refreshConfig: () => Promise<void>;
-    applyTheme: () => void;
 }
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
@@ -21,37 +19,9 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const { user } = useAuth();
 
-    // Senior Mode: Cálculo centralizado do tema efetivo
-    const isDark = (() => {
-        const stored = localStorage.getItem('theme');
-        if (preferencias?.tema_escuro !== undefined) return preferencias.tema_escuro;
-        if (stored !== null) return stored === 'dark';
-        return config?.tema_escuro ?? false;
-    })();
+    // Senior Mode: Cálculo centralizado do tema removido daqui.
+    // Agora o ThemeProvider é o único responsável.
 
-    const applyTheme = () => {
-        const root = document.documentElement;
-
-        // 1. Aplicar cores (vêm do estabelecimento)
-        if (config?.cor_principal) {
-            root.style.setProperty('--color-primary', config.cor_principal);
-            const hex = config.cor_principal.replace('#', '');
-            const r = parseInt(hex.substring(0, 2), 16) || 37;
-            const g = parseInt(hex.substring(2, 4), 16) || 99;
-            const b = parseInt(hex.substring(4, 6), 16) || 235;
-            root.style.setProperty('--color-primary-dark', `rgb(${Math.floor(r * 0.8)}, ${Math.floor(g * 0.8)}, ${Math.floor(b * 0.8)})`);
-            root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
-        }
-
-        // 2. Aplicar Tema
-        if (isDark) {
-            root.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            root.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    };
 
     const loadConfig = async () => {
         try {
@@ -114,7 +84,10 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const response = await settingsService.updatePreferencias(newPrefs);
-            setPreferencias(response);
+            // ✅ Only update if backend returned the full object, otherwise keep optimistic
+            if (response && response.tema_escuro !== undefined) {
+                setPreferencias(response);
+            }
         } catch (error) {
             console.error('Erro ao atualizar preferências:', error);
             setPreferencias(previousPrefs);
@@ -145,11 +118,21 @@ export const ConfigProvider = ({ children }: { children: ReactNode }) => {
     }, [user?.id, user?.estabelecimento_id]);
 
     useEffect(() => {
-        applyTheme();
-    }, [config?.cor_principal, isDark]); // Reage especificamente a cor e tema
+        const root = document.documentElement;
+        // Aplicar apenas cores (vêm do estabelecimento) no document root
+        if (config?.cor_principal) {
+            root.style.setProperty('--color-primary', config.cor_principal);
+            const hex = config.cor_principal.replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16) || 37;
+            const g = parseInt(hex.substring(2, 4), 16) || 99;
+            const b = parseInt(hex.substring(4, 6), 16) || 235;
+            root.style.setProperty('--color-primary-dark', `rgb(${Math.floor(r * 0.8)}, ${Math.floor(g * 0.8)}, ${Math.floor(b * 0.8)})`);
+            root.style.setProperty('--color-primary-light', `rgba(${r}, ${g}, ${b}, 0.1)`);
+        }
+    }, [config?.cor_principal]);
 
     return (
-        <ConfigContext.Provider value={{ config, preferencias, isDark, loading, updateConfig, updatePreferencias, refreshConfig, applyTheme }}>
+        <ConfigContext.Provider value={{ config, preferencias, loading, updateConfig, updatePreferencias, refreshConfig }}>
             {children}
         </ConfigContext.Provider>
     );

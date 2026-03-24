@@ -1,7 +1,7 @@
 // src/theme/ThemeProvider.tsx - Sincronizado com ConfigContext
 import { createTheme, ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ThemeContext } from './ThemeContext';
 import { useConfig } from '../contexts/ConfigContext';
@@ -13,46 +13,55 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderProps) {
     const { config, preferencias, updatePreferencias } = useConfig();
-    const defaultThemeMode = defaultMode || 'dark';
 
-    // O ConfigContext é o cérebro. ThemeProvider é o músculo (MUI).
-    // Senior Mode: Blindagem absoluta contra propriedades undefined
-    const mode: 'dark' | 'light' = useMemo(() => {
-        // Se temos preferências carregadas, elas mandam
-        if (preferencias?.tema_escuro !== undefined) {
-            return preferencias.tema_escuro ? 'dark' : 'light';
-        }
-
-        // Se o config do estabelecimento carregou, usamos como segundo fallback
-        if (config?.tema_escuro !== undefined) {
-            return config.tema_escuro ? 'dark' : 'light';
-        }
-
-        // Caso contrário, respeitamos o cache ou o padrão do sistema
+    // 1. Estado local inicial sincronizado com localStorage (Zero Flicker)
+    const [mode, setMode] = useState<'dark' | 'light'>(() => {
         const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
-        return saved || defaultThemeMode;
-    }, [preferencias?.tema_escuro, config?.tema_escuro, defaultThemeMode]);
+        if (saved) return saved;
+        return defaultMode;
+    });
+
+    // 2. Sincronização CONTÍNUA com as preferências do backend (ConfigContext)
+    useEffect(() => {
+        if (preferencias?.tema_escuro !== undefined) {
+            const serverMode = preferencias.tema_escuro ? 'dark' : 'light';
+
+            // Sincroniza o estado local apenas se for diferente do servidor
+            // Isso garante que mudanças no SettingsPage reflitam aqui imediatamente
+            if (serverMode !== mode) {
+                setMode(serverMode);
+                localStorage.setItem('theme', serverMode);
+            }
+        }
+    }, [preferencias?.tema_escuro]);
+
+    // 3. Aplicação do tema no document root
+    useEffect(() => {
+        const root = document.documentElement;
+        if (mode === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
+        localStorage.setItem('theme', mode);
+    }, [mode]);
 
     const toggleTheme = async () => {
+        const newMode = mode === 'dark' ? 'light' : 'dark';
+
+        // Atualização UI Real-time (Otimista)
+        setMode(newMode);
+        localStorage.setItem('theme', newMode);
+
         try {
-            // Unificação Sênior: Usar o toggle central do ConfigContext
-            const currentIsDark = mode === 'dark';
-            await updatePreferencias({ tema_escuro: !currentIsDark });
-        } catch {
-            // Fallback local redundante para segurança máxima
-            const fallback = mode === 'light' ? 'dark' : 'light';
-            localStorage.setItem('theme', fallback);
-            document.documentElement.classList.toggle('dark', fallback === 'dark');
+            // Sincronizar com o backend
+            await updatePreferencias({ tema_escuro: newMode === 'dark' });
+        } catch (error) {
+            console.error('Erro ao salvar preferência de tema no backend:', error);
+            // Mantemos o modo local mesmo se o backend falhar, 
+            // para não frustrar o usuário com rollback de UI.
         }
     };
-
-    useEffect(() => {
-        if (mode === 'dark') {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    }, [mode]);
 
     const theme = useMemo(() => {
         const primaryColor = config?.cor_principal || '#2563eb';
@@ -68,6 +77,16 @@ export function ThemeProvider({ children, defaultMode = 'dark' }: ThemeProviderP
                 background: {
                     default: mode === 'dark' ? '#121212' : '#f8fafc',
                     paper: mode === 'dark' ? '#1e1e1e' : '#ffffff',
+                },
+            },
+            // Adicionar transição padrão do MUI para consistência
+            components: {
+                MuiCssBaseline: {
+                    styleOverrides: `
+                        body {
+                            transition: background-color 0.3s ease, color 0.3s ease;
+                        }
+                    `,
                 },
             },
         });

@@ -22,6 +22,13 @@ def get_main_connection():
     main_url = os.getenv('MAIN_DATABASE_URL')
     return psycopg2.connect(main_url)
 
+def normalize_plan_name(p):
+    """Garante retorno apenas de Pro ou Gratuito no motor de auth"""
+    s = str(p or 'Gratuito').lower().strip()
+    if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago']):
+        return 'Pro'
+    return 'Gratuito'
+
 @auth_bp.route('/bootstrap', methods=['POST'])
 def bootstrap_admin():
     """
@@ -132,7 +139,8 @@ def login():
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT f.id, f.nome, f.email, f.senha, f.role, f.estabelecimento_id,
-                           e.nome_fantasia, 'postgresql' as database_name, e.ativo, e.razao_social, e.cnpj, f.is_super_admin
+                           e.nome_fantasia, 'postgresql' as database_name, e.ativo, e.razao_social, e.cnpj, f.is_super_admin,
+                           e.plano, e.plano_status
                     FROM public.funcionarios f
                     JOIN public.estabelecimentos e ON f.estabelecimento_id = e.id
                     WHERE (LOWER(f.email) = LOWER(%s) OR LOWER(f.username) = LOWER(%s)) 
@@ -161,13 +169,15 @@ def login():
                 is_super = bool(funcionario_local.is_super_admin)
                 
                 additional_claims = {
-                    'role': funcionario_local.role,
+                    'role': (funcionario_local.role or 'FUNCIONARIO').upper(),
                     'status': 'ativo',
                     'is_super_admin': is_super,
                     'estabelecimento_id': "all" if is_super else (funcionario_local.estabelecimento_id or "all"),
                     'estabelecimento_nome': estab.nome_fantasia if estab else "MercadinhoSys",
                     'database_name': 'local',
-                    'user_id': funcionario_local.id
+                    'user_id': funcionario_local.id,
+                    'plano': normalize_plan_name(estab.plano) if estab else 'Gratuito',
+                    'plano_status': estab.plano_status if estab else 'ativo'
                 }
                 
                 identity = str(funcionario_local.id)
@@ -187,6 +197,8 @@ def login():
                             'cargo': getattr(funcionario_local, 'cargo', 'Administrador'),
                             'is_super_admin': is_super,
                             'estabelecimento_id': "all" if is_super else funcionario_local.estabelecimento_id,
+                            'plano': normalize_plan_name(estab.plano) if estab else 'Gratuito',
+                            'plano_status': estab.plano_status if estab else 'ativo',
                             'permissoes': funcionario_local.permissoes
                         }
                     },
@@ -198,7 +210,8 @@ def login():
         # 3. PROCESSAR RESULTADO CLOUD
         user_data = all_matches[0]
         (user_id, user_nome, user_email, senha_val, role, estabelecimento_id,
-         estabelecimento_nome, database_name, estabelecimento_status, razao_social, cnpj, is_super_db) = user_data
+         estabelecimento_nome, database_name, estabelecimento_status, razao_social, cnpj, is_super_db,
+         plano_estab, plano_status_estab) = user_data
         
         if not check_password_hash(senha_val, senha):
             return jsonify({'success': False, 'error': 'Usuário ou senha inválidos'}), 401
@@ -213,7 +226,9 @@ def login():
             'estabelecimento_id': "all" if bool(is_super_db) else estabelecimento_id,
             'estabelecimento_nome': estabelecimento_nome,
             'database_name': database_name,
-            'user_id': user_id
+            'user_id': user_id,
+            'plano': normalize_plan_name(plano_estab),
+            'plano_status': plano_status_estab or 'ativo'
         }
         
         identity = str(user_id)
@@ -239,6 +254,8 @@ def login():
                     'role': "ADMIN" if is_super else role,
                     'cargo': 'Administrador' if is_super else 'Funcionário',
                     'status': 'ativo',
+                    'plano': normalize_plan_name(plano_estab) if not is_super else 'Pro',
+                    'plano_status': plano_status_estab if not is_super else 'ativo',
                     'is_super_admin': is_super,
                     'estabelecimento_id': "all" if is_super else estabelecimento_id,
                     'permissoes': {
@@ -251,7 +268,9 @@ def login():
                     'razao_social': razao_social,
                     'cnpj': cnpj,
                     'database_name': database_name,
-                    'status': estabelecimento_status
+                    'status': estabelecimento_status,
+                    'plano': plano_estab,
+                    'plano_status': plano_status_estab
                 }
             },
             'message': f'Login realizado com sucesso - {estabelecimento_nome}'
@@ -280,7 +299,9 @@ def refresh():
             'estabelecimento_id': claims.get('estabelecimento_id'),
             'estabelecimento_nome': claims.get('estabelecimento_nome'),
             'database_name': claims.get('database_name'),
-            'user_id': claims.get('user_id')
+            'user_id': claims.get('user_id'),
+            'plano': normalize_plan_name(claims.get('plano')),
+            'plano_status': claims.get('plano_status')
         }
 
         # Criar novo access token
@@ -314,7 +335,7 @@ def get_current_user():
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT f.id, f.nome, f.email, f.role, f.estabelecimento_id,
-                       e.nome_fantasia, e.razao_social, e.cnpj
+                       e.nome_fantasia, e.razao_social, e.cnpj, e.plano, e.plano_status
                 FROM public.funcionarios f
                 JOIN public.estabelecimentos e ON f.estabelecimento_id = e.id
                 WHERE f.id = %s AND f.ativo = true
@@ -335,7 +356,9 @@ def get_current_user():
                     f.id, f.nome, f.email, f.role, f.estabelecimento_id,
                     estab.nome_fantasia if estab else "MercadinhoSys",
                     estab.razao_social if estab else "",
-                    estab.cnpj if estab else ""
+                    estab.cnpj if estab else "",
+                    estab.plano if estab else "Gratuito",
+                    estab.plano_status if estab else "ativo"
                 )
         
         if not user_data:
@@ -344,7 +367,7 @@ def get_current_user():
                 'error': 'Usuário não encontrado'
             }), 404
         
-        (user_id, user_nome, user_email, role, estab_id, estab_nome, estab_razao, estab_cnpj) = user_data
+        (user_id, user_nome, user_email, role, estab_id, estab_nome, estab_razao, estab_cnpj, plano, plano_status) = user_data
         
         return jsonify({
             'success': True,
@@ -356,7 +379,9 @@ def get_current_user():
                 'estabelecimento_id': estab_id,
                 'estabelecimento_nome': estab_nome,
                 'estabelecimento_razao_social': estab_razao,
-                'estabelecimento_cnpj': estab_cnpj
+                'estabelecimento_cnpj': estab_cnpj,
+                'plano': normalize_plan_name(plano),
+                'plano_status': plano_status
             }
         }), 200
         

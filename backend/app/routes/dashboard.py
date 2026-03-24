@@ -7,6 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.dashboard_cientifico import DashboardOrchestrator
 from app.models import Funcionario, RegistroPonto
 from app.decorators.decorator_jwt import gerente_ou_admin_required
+from app.decorators.plan_guards import plan_required
 import logging
 from datetime import datetime
 from sqlalchemy import and_
@@ -49,7 +50,9 @@ def get_establishment_id():
 
 @dashboard_bp.route("/cientifico", methods=["GET"])
 @gerente_ou_admin_required
+@plan_required('Pro')
 def dashboard_cientifico():
+    print("🔥 [NUCLEAR_DEBUG] dashboard_cientifico FOI CHAMADA!")
     """
     Endpoint para o Dashboard Científico.
     Suporta filtro por dias OU por datas específicas.
@@ -140,6 +143,7 @@ def dashboard_cientifico():
 
 @dashboard_bp.route("/rh/ponto/historico", methods=["GET"])
 @gerente_ou_admin_required
+@plan_required('Pro')
 def rh_ponto_historico():
     try:
         estabelecimento_id = get_establishment_id()
@@ -186,6 +190,7 @@ def rh_ponto_historico():
 
 @dashboard_bp.route("/rh/ponto/espelho", methods=["GET"])
 @gerente_ou_admin_required
+@plan_required('Pro')
 def rh_ponto_espelho():
     """
     Endpoint para gerar espelho de ponto de um funcionário específico.
@@ -342,6 +347,7 @@ def rh_ponto_espelho():
 
 @dashboard_bp.route("/executivo", methods=["GET"])
 @gerente_ou_admin_required
+@plan_required('Pro')
 def dashboard_executivo():
     try:
         estabelecimento_id = get_establishment_id()
@@ -356,6 +362,7 @@ def dashboard_executivo():
 
 @dashboard_bp.route("/analise/<tipo>", methods=["GET"])
 @gerente_ou_admin_required
+@plan_required('Pro')
 def analise_detalhada(tipo: str):
     try:
         estabelecimento_id = get_establishment_id()

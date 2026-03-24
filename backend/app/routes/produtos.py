@@ -4,7 +4,7 @@
 
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
-from flask_jwt_extended import get_jwt_identity, get_jwt
+from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required
 from app.utils.query_helpers import get_authorized_establishment_id
 from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP, DecimalException
@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.plan_guards import quota_required, permission_required
 
 def to_decimal(value, precision=2):
     """Converte qualquer valor numérico para Decimal de forma segura com precisão variável"""
@@ -836,7 +837,9 @@ def obter_produto(id):
 
 @produtos_bp.route("/", methods=["POST"], strict_slashes=False)
 @produtos_bp.route("", methods=["POST"], strict_slashes=False)
-@funcionario_required
+@jwt_required()
+@permission_required('produtos')
+@quota_required('produto')
 def criar_produto():
     """Cria um novo produto"""
     claims = {}

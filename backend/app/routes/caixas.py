@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.decorators.plan_guards import permission_required
 from app import db
 from app.models import Caixa, MovimentacaoCaixa, Estabelecimento, Funcionario
 
@@ -8,6 +9,7 @@ caixas_bp = Blueprint("caixas", __name__)
 
 @caixas_bp.route("/atual", methods=["GET"])
 @jwt_required()
+@permission_required('gestao_caixa')
 def obter_caixa_atual():
     """Retorna o caixa atualmente aberto para o funcionário logado"""
     try:
@@ -29,6 +31,7 @@ def obter_caixa_atual():
 
 @caixas_bp.route("/abrir", methods=["POST"])
 @jwt_required()
+@permission_required('gestao_caixa')
 def abrir_caixa():
     """Abre um novo caixa para o funcionário logado"""
     try:
@@ -98,6 +101,7 @@ def abrir_caixa():
 
 @caixas_bp.route("/fechar", methods=["POST"])
 @jwt_required()
+@permission_required('gestao_caixa')
 def fechar_caixa():
     """Fecha o caixa atual do funcionário"""
     try:
@@ -160,6 +164,7 @@ def fechar_caixa():
 
 @caixas_bp.route("/movimentacao", methods=["POST"])
 @jwt_required()
+@permission_required('gestao_caixa')
 def registrar_movimentacao():
     """Registra uma Sangria ou Suprimento"""
     try:

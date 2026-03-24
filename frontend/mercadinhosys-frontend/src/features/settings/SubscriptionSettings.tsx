@@ -8,41 +8,35 @@ const SubscriptionSettings: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
 
-    const [isSimulatingBasic, setIsSimulatingBasic] = useState(() => {
-        return localStorage.getItem('mercadinhosys_simulate_basic') === 'true';
-    });
-
-    const toggleSimulator = () => {
-        const newValue = !isSimulatingBasic;
-        setIsSimulatingBasic(newValue);
-        localStorage.setItem('mercadinhosys_simulate_basic', String(newValue));
-        window.location.reload();
-    };
-
     const loadStatus = async (silent = false) => {
         try {
             if (!silent) setLoading(true);
-            // Fetch backend data just to keep session active, but override the UI value
-            await settingsService.getSubscriptionStatus();
+            const statusData = await settingsService.getSubscriptionStatus();
 
-            if (isSimulatingBasic) {
+            // Caso o backend retorne o plano como 'Basic' ou outros termos legados, normalizamos aqui também para a UI
+            const search = (statusData.plano || '').toLowerCase();
+            const isPro = ['pro', 'pago', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'basic', 'basico'].some(p => search.includes(p));
+            let displayPlano = isPro ? 'Pro' : 'Gratuito';
+
+            setStatus({
+                ...statusData,
+                plano: displayPlano
+            });
+        } catch (error) {
+            console.error("Erro ao carregar assinatura:", error);
+            // Fallback para dados locais se o endpoint de SaaS estiver offline
+            const userData = localStorage.getItem('user_data');
+            if (userData) {
+                const user = JSON.parse(userData);
                 setStatus({
-                    plano: "Basic",
-                    status: "experimental",
-                    vencimento: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                    is_active: true
-                });
-            } else {
-                setStatus({
-                    plano: "Vitalício",
-                    status: "ativo",
+                    plano: user.plano === 'Pro' ? 'Pro' : 'Gratuito',
+                    status: 'ativo',
                     vencimento: null,
                     is_active: true
                 });
+            } else {
+                if (!silent) showToast.error("Falha ao recuperar dados da assinatura.");
             }
-        } catch (error) {
-            console.error("Erro ao carregar assinatura:", error);
-            if (!silent) showToast.error("Falha ao recuperar dados da assinatura.");
         } finally {
             setLoading(false);
         }
@@ -290,15 +284,6 @@ const SubscriptionSettings: React.FC = () => {
 
             {/* STRIPE SECURITY NOTE */}
             <div className="pt-20 border-t border-gray-100 dark:border-gray-800 text-center space-y-8 relative">
-                {/* DEV MODE TOGGLE */}
-                <div className="absolute top-8 right-0 pr-4 sm:pr-8 z-50">
-                    <button
-                        onClick={toggleSimulator}
-                        className="text-[10px] sm:text-xs font-black uppercase text-gray-400 hover:text-primary transition-colors cursor-pointer bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-md"
-                    >
-                        {isSimulatingBasic ? "Desativar Simulação" : "Simular Cliente Básico"}
-                    </button>
-                </div>
 
                 <div className="flex flex-col items-center gap-4 opacity-40 grayscale filter hover:grayscale-0 transition-all duration-700">
                     <img src="https://stripe.com/img/v3/home/social-card.png" className="h-10 w-auto rounded-lg hidden dark:block" alt="Stripe" />

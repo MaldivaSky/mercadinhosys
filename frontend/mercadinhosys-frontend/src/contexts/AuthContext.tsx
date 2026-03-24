@@ -14,6 +14,8 @@ interface User {
     foto_url?: string;
     telefone?: string;
     is_super_admin?: boolean;
+    plano?: string;
+    plano_status?: string;
     permissoes: Record<string, boolean>;
 }
 

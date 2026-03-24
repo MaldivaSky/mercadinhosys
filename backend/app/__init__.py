@@ -173,7 +173,7 @@ def create_app(config_name=None):
                 # Priorizar Header de Impersonation se existir (mantemos suporte basico de header se presente no ID do JWT)
                 from app.utils.query_helpers import get_authorized_establishment_id
                 g.estabelecimento_id = get_authorized_establishment_id()
-                g.is_super_admin = False
+                g.is_super_admin = bool(claims.get("is_super_admin", False))
         except Exception as e:
             # Logger silencioso para não poluir em rotas realmente públicas
             pass
@@ -258,6 +258,8 @@ def create_app(config_name=None):
                     db.session.execute(text("SELECT 1"))
                 
                 logger.info("VERIFICANDO: Tabelas no banco de dados...")
+                # Garante que os modelos sejam carregados para o metadata do SQLAlchemy
+                from app.models import FuncionarioPreferencias
                 db.create_all()
                 
                 # Garantir que a tabela de histórico de login também seja criada explicitamente se omitida

@@ -1,18 +1,53 @@
-import React from 'react';
-import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, CreditCard, Settings, Eye } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, CreditCard, Settings, Eye, Edit2, Check, Loader2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiClient } from '../../api/apiClient';
 
 interface EstabelecimentoDetalheModalProps {
     estabelecimento: any;
     isOpen: boolean;
     onClose: () => void;
+    onUpdate?: () => void;
 }
 
 const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = ({
     estabelecimento,
     isOpen,
-    onClose
+    onClose,
+    onUpdate
 }) => {
+    const { user } = useAuth();
+    const isSuperAdmin = user?.is_super_admin;
+
+    const [isEditingPlan, setIsEditingPlan] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState('');
+    const [isSavingPlan, setIsSavingPlan] = useState(false);
+
+    // Initial sync
+    React.useEffect(() => {
+        if (estabelecimento?.plano) {
+            setSelectedPlan(estabelecimento.plano);
+        }
+    }, [estabelecimento]);
+
     if (!isOpen || !estabelecimento) return null;
+
+    const handleSavePlan = async () => {
+        try {
+            setIsSavingPlan(true);
+            await apiClient.put(`/saas/estabelecimentos/${estabelecimento.id}/plano`, {
+                plano: selectedPlan
+            });
+            setIsEditingPlan(false);
+            if (onUpdate) onUpdate();
+            else window.location.reload(); // Fallback se não receber prop
+        } catch (error) {
+            console.error('Erro ao atualizar plano:', error);
+            alert('Falha ao atualizar o plano.');
+        } finally {
+            setIsSavingPlan(false);
+        }
+    };
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -129,9 +164,53 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Plano</span>
-                                        <span className={`px-2 py-1 rounded text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
-                                            {estabelecimento.plano || 'Basic'}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {isEditingPlan ? (
+                                                <div className="flex items-center gap-2">
+                                                    <select
+                                                        value={selectedPlan}
+                                                        onChange={(e) => setSelectedPlan(e.target.value)}
+                                                        className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                                    >
+                                                        <option value="Gratuito">Gratuito</option>
+                                                        <option value="Pro">Pro</option>
+                                                        <option value="Basic">Basic</option>
+                                                        <option value="Advanced">Advanced</option>
+                                                        <option value="Premium">Premium</option>
+                                                    </select>
+                                                    <button
+                                                        onClick={handleSavePlan}
+                                                        disabled={isSavingPlan}
+                                                        className="p-1.5 text-green-600 hover:bg-green-100 rounded-md transition-colors"
+                                                        title="Salvar"
+                                                    >
+                                                        {isSavingPlan ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setIsEditingPlan(false)}
+                                                        className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+                                                        title="Cancelar"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className={`px-2 py-1 rounded text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
+                                                        {estabelecimento.plano || 'Basic'}
+                                                    </span>
+                                                    {isSuperAdmin && (
+                                                        <button
+                                                            onClick={() => setIsEditingPlan(true)}
+                                                            className="p-1 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-md transition-colors ml-1"
+                                                            title="Alterar Plano"
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>

@@ -172,7 +172,7 @@ class Estabelecimento(db.Model, EnderecoMixin, MultiTenantMixin):
         return normalizar_documento(value)
 
     # SaaS / Assinatura
-    plano = db.Column(db.String(20), default="Basic")  # Basic, Advanced, Premium
+    plano = db.Column(db.String(20), default="Gratuito")  # Gratuito ou Pro
     plano_status = db.Column(db.String(20), default="experimental")  # experimental, ativo, atrasado, cancelado
     vencimento_assinatura = db.Column(db.DateTime)
     stripe_customer_id = db.Column(db.String(100))
@@ -471,6 +471,41 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
             "usuario": self.username,
             "nivel_acesso": self.role,
             "salario": float(self.salario_base) if self.salario_base else 0.0,
+        }
+
+class FuncionarioPreferencias(db.Model):
+    """Preferências individuais dos funcionários (Tema, Idioma, Sidebar, etc)"""
+    __tablename__ = "funcionarios_preferencias"
+
+    id = db.Column(db.Integer, primary_key=True)
+    funcionario_id = db.Column(
+        db.Integer,
+        db.ForeignKey("funcionarios.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+    
+    tema_escuro = db.Column(db.Boolean, default=False)
+    notificacoes_push = db.Column(db.Boolean, default=True)
+    idioma = db.Column(db.String(10), default='pt-BR')
+    sidebar_colapsada = db.Column(db.Boolean, default=False)
+    filtros_salvos = db.Column(db.JSON, default=dict)
+    
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+
+    funcionario = db.relationship(
+        "Funcionario",
+        backref=db.backref("preferencias", uselist=False, cascade="all, delete-orphan")
+    )
+
+    def to_dict(self):
+        return {
+            "tema_escuro": bool(self.tema_escuro),
+            "notificacoes_push": bool(self.notificacoes_push),
+            "idioma": self.idioma,
+            "sidebar_colapsada": bool(self.sidebar_colapsada),
+            "filtros_salvos": self.filtros_salvos or {}
         }
 
 
@@ -2047,7 +2082,7 @@ class PedidoCompra(db.Model, MultiTenantMixin):
         "Estabelecimento", backref=db.backref("pedidos_compra", lazy=True)
     )
     fornecedor = db.relationship(
-        "Fornecedor", backref=db.backref("pedidos_compra", lazy=True)
+        "Fornecedor", backref=db.backref("pedidos_compra", lazy='dynamic')
     )
     funcionario = db.relationship(
         "Funcionario", backref=db.backref("pedidos_compra", lazy=True)
