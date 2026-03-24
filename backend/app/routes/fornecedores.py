@@ -3,8 +3,9 @@
 # CRUD completo com todas as operações necessárias
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt, jwt_required
 from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.plan_guards import quota_required, permission_required
 from datetime import datetime
 from decimal import Decimal
 import re
@@ -201,13 +202,12 @@ def listar_fornecedores():
             fornecedor_dict["classificacao"] = calcular_classificacao_fornecedor(
                 fornecedor
             )
-            fornecedor_dict["ultima_compra"] = (
-                fornecedor.pedidos_compra.order_by(PedidoCompra.data_pedido.desc())
-                .first()
-                .data_pedido.isoformat()
-                if fornecedor.pedidos_compra.first()
-                else None
-            )
+            # Adicionar última compra de forma segura
+            try:
+                last_order = fornecedor.pedidos_compra.order_by(PedidoCompra.data_pedido.desc()).first()
+                fornecedor_dict["ultima_compra"] = last_order.data_pedido.isoformat() if last_order and last_order.data_pedido else None
+            except Exception:
+                fornecedor_dict["ultima_compra"] = None
 
             # Contar produtos ativos
             produtos_ativos = Produto.query.filter_by(
@@ -385,8 +385,10 @@ def obter_fornecedor(id):
         )
 
 
-@fornecedores_bp.route("", methods=["POST"])
-@funcionario_required
+@fornecedores_bp.route("/", methods=["POST"], strict_slashes=False)
+@jwt_required()
+@permission_required('fornecedores')
+@quota_required('fornecedor')
 def criar_fornecedor():
     """Cria um novo fornecedor"""
     try:

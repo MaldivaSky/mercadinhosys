@@ -15,6 +15,7 @@ import { apiClient } from '../../api/apiClient';
 import SubscriptionSettings from './SubscriptionSettings';
 import SyncManager from '../../components/sync/SyncManager';
 import { SyncDataButton } from './SyncDataButton';
+import { useTheme } from '../../theme/useTheme';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 type SectionTitleProps = {
@@ -235,12 +236,13 @@ const SettingsPage: React.FC = () => {
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const {
         config: globalConfig,
-        isDark,
         loading: configLoading,
         updateConfig: updateGlobalConfig,
         updatePreferencias,
         refreshConfig
     } = useConfig();
+    const { mode } = useTheme();
+    const isDark = mode === 'dark';
     const { user } = useAuth();
 
     const [config, setConfig] = useState<Configuracao>(defaultConfig);
@@ -364,6 +366,9 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleTemaChange = async (tema: boolean) => {
+        // Agora usamos o toggleTheme centralizado ou updatePreferencias (via ConfigContext)
+        // Como o SwitchField envia o novo estado, o toggleTheme convencional não serve
+        // direto, mas o ThemeProvider já sincroniza com preferencias.tema_escuro.
         try {
             await updatePreferencias({ tema_escuro: tema });
         } catch (error) {

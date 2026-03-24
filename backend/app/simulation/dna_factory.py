@@ -17,11 +17,11 @@ class DNAFactory:
     """Fábrica de Realidade: Cria os 5 cenários do MercadinhoSys"""
     
     SCENARIOS = {
-        "ELITE": ScenarioDNA("Mercado Maldivas Elite", 1.65, 180, 0.01, 155.0, "Premium Master"), # Alta eficiência
-        "BOM": ScenarioDNA("Supermercado Estrela", 1.45, 120, 0.04, 95.0, "Premium"),    # Estável
+        "ELITE": ScenarioDNA("Mercado Maldivas Elite", 1.65, 180, 0.01, 155.0, "Pro"), # Alta eficiência
+        "BOM": ScenarioDNA("Supermercado Estrela", 1.45, 120, 0.04, 95.0, "Pro"),    # Estável
         "RAZOAVEL": ScenarioDNA("Vendas do Bairro", 1.30, 50, 0.15, 55.0, "Pro"),    # Sobrevivendo
-        "MAL": ScenarioDNA("Mercado Popular", 1.18, 25, 0.35, 35.0, "Basico"),         # Crise financeira
-        "PESSIMO": ScenarioDNA("Mini-Mercado Sucata", 1.08, 8, 0.60, 18.0, "Starter")    # O caos (Inadimplência 60%)
+        "MAL": ScenarioDNA("Mercado Popular", 1.18, 25, 0.35, 35.0, "Gratuito"),         # Crise financeira
+        "PESSIMO": ScenarioDNA("Mini-Mercado Sucata", 1.08, 8, 0.60, 18.0, "Gratuito")    # O caos (Inadimplência 60%)
     }
 
     @classmethod

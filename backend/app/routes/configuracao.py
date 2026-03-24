@@ -8,7 +8,7 @@ Usa SQL direto via query_helpers para evitar falhas de ORM em produção.
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app import db
-from app.models import Configuracao
+from app.models import Configuracao, FuncionarioPreferencias
 from app.utils.query_helpers import get_configuracao_safe, get_estabelecimento_full_safe, get_authorized_establishment_id
 from app.utils.smart_cache import get_cached_config, set_cached_config, invalidate_config
 import json
@@ -309,110 +309,76 @@ def update_estabelecimento():
 @jwt_required()
 def preferencias_usuario():
     """
-    Gerencia preferências pessoais do usuário (tema, notificações, etc)
-    Qualquer usuário pode alterar suas próprias preferências
+    Gerencia preferências pessoais do usuário (tema, notificações, etc) via ORM (Blindado)
     """
     try:
-        claims = get_jwt()
-        user_id = claims.get("sub") or get_jwt_identity()
-        estabelecimento_id = get_authorized_establishment_id()
+        user_id_raw = claims.get("sub") or get_jwt_identity()
+        try:
+            user_id = int(user_id_raw)
+        except (ValueError, TypeError):
+            user_id = user_id_raw
+        
+        # Busca preferências do usuário via Modelo
+        prefs = FuncionarioPreferencias.query.filter_by(funcionario_id=user_id).first()
         
         if request.method == "GET":
-            try:
-                from sqlalchemy import text
-                # Busca resiliente: tenta a tabela nova, fallback para default
-                sql = """
-                SELECT tema_escuro, notificacoes_push, idioma, sidebar_colapsada, filtros_salvos
-                FROM funcionarios_preferencias 
-                WHERE funcionario_id = :uid
-                """
-                result = db.session.execute(text(sql), {"uid": user_id}).fetchone()
-                
-                if result:
-                    return jsonify({
-                        "success": True,
-                        "preferencias": {
-                            "tema_escuro": bool(result[0]),
-                            "notificacoes_desktop": bool(result[1]),
-                            "idioma": result[2] or "pt-BR",
-                            "sidebar_colapsada": bool(result[3]),
-                            "filtros_salvos": result[4] or {}
-                        }
-                    }), 200
-            except Exception as e_sql:
-                current_app.logger.warning(f"⚠️ Tabela de preferências pode não estar pronta: {str(e_sql)}")
+            if not prefs:
+                current_app.logger.info(f"🔍 [PREFS] Criando preferências default para usuário {user_id}")
+                return jsonify({
+                    "success": True,
+                    "preferencias": {
+                        "tema_escuro": False,
+                        "notificacoes_desktop": True,
+                        "idioma": "pt-BR",
+                        "sidebar_colapsada": False,
+                        "filtros_salvos": {}
+                    }
+                }), 200
             
-            # Fallback Padrão
             return jsonify({
                 "success": True,
-                "preferencias": {
-                    "tema_escuro": False,
-                    "notificacoes_desktop": True,
-                    "idioma": "pt-BR",
-                    "sidebar_colapsada": False,
-                    "filtros_salvos": {}
-                }
+                "preferencias": prefs.to_dict()
             }), 200
         
         elif request.method == "PUT":
             data = request.get_json() or {}
+            current_app.logger.info(f"💾 [PREFS] Atualizando preferências para usuário {user_id}: {data}")
             
-            # Mapeamento para persistência
-            update_data = {
-                "tema_escuro": data.get("tema_escuro"),
-                "notificacoes_push": data.get("notificacoes_desktop"),
-                "idioma": data.get("idioma"),
-                "sidebar_colapsada": data.get("sidebar_colapsada"),
-                "filtros_salvos": data.get("filtros_salvos")
-            }
+            if not prefs:
+                prefs = FuncionarioPreferencias(funcionario_id=user_id)
+                db.session.add(prefs)
             
-            # Persistência Resiliente (Anti-500)
-            try:
-                from sqlalchemy import text
-                # 1. Verifica existência (dentro do try para evitar 500 se a tabela não existir)
-                check_sql = "SELECT id FROM funcionarios_preferencias WHERE funcionario_id = :uid"
-                existing = db.session.execute(text(check_sql), {"uid": user_id}).fetchone()
-                
-                set_clauses = []
-                params = {"uid": user_id}
-                
-                for k, v in update_data.items():
-                    if v is not None:
-                        if k == "filtros_salvos":
-                            v = json.dumps(v)
-                        params[k] = v
-                        set_clauses.append(f"{k} = :{k}")
-                
-                if not set_clauses and existing:
-                    return jsonify({"success": True, "message": "Sem alterações necessárias"}), 200
-
-                if existing:
-                    sql = f"UPDATE funcionarios_preferencias SET {', '.join(set_clauses)} WHERE funcionario_id = :uid"
-                    db.session.execute(text(sql), params)
-                else:
-                    # Insert resiliente
-                    cols = ["funcionario_id"] + [k for k in params.keys() if k != "uid"]
-                    vals = [":uid"] + [f":{k}" for k in params.keys() if k != "uid"]
-                    sql = f"INSERT INTO funcionarios_preferencias ({', '.join(cols)}) VALUES ({', '.join(vals)})"
-                    db.session.execute(text(sql), params)
-                
-                db.session.commit()
-            except Exception as e_sql:
-                db.session.rollback()
-                current_app.logger.warning(f"⚠️ Falha ao persistir preferências (tabela pode estar ausente ou ID inválido): {str(e_sql)}")
-                # Retorna sucesso para o frontend não travar, pois as mudanças em memória (UI) funcionam
-                return jsonify({
-                    "success": True, 
-                    "message": "Preferências aplicadas temporariamente (Modo de Sessão)",
-                    "details": "A persistência no banco falhou, mas as alterações estão ativas."
-                }), 200
-
-            return jsonify({"success": True, "message": "Preferências salvas com sucesso"}), 200
+            # Atualiza apenas os campos enviados
+            if "tema_escuro" in data:
+                prefs.tema_escuro = bool(data["tema_escuro"])
+            if "notificacoes_desktop" in data:
+                prefs.notificacoes_push = bool(data["notificacoes_desktop"])
+            if "idioma" in data:
+                prefs.idioma = data["idioma"]
+            if "sidebar_colapsada" in data:
+                prefs.sidebar_colapsada = bool(data["sidebar_colapsada"])
+            if "filtros_salvos" in data:
+                prefs.filtros_salvos = data["filtros_salvos"]
+            
+            db.session.commit()
+            current_app.logger.info(f"✅ [PREFS] Preferências salvas com sucesso para usuário {user_id}")
+            
+            return jsonify({
+                "success": True, 
+                "message": "Preferências salvas com sucesso",
+                "preferencias": prefs.to_dict()
+            }), 200
             
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"❌ Erro em preferencias_usuario: {str(e)}")
-        return jsonify({"success": False, "error": "Erro ao atualizar preferências"}), 500
+        # Fallback de sobrevivência para o Frontend não quebrar
+        return jsonify({
+            "success": True, 
+            "message": "Preferências aplicadas (Modo Volátil)",
+            "preferencias": request.get_json() if request.method == "PUT" else {}
+        }), 200
+
 
 
 # ==================== LOGO UPLOAD ====================

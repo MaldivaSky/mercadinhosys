@@ -7,6 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import db, RegistroPonto, ConfiguracaoHorario, Funcionario, Estabelecimento
 from datetime import datetime, date, time, timedelta
 from sqlalchemy import func, and_, or_
+from app.decorators.plan_guards import plan_required, permission_required
 import base64
 import os
 from werkzeug.utils import secure_filename
@@ -126,6 +127,7 @@ def obter_configuracao_com_cache(estabelecimento_id):
 
 @ponto_bp.route('/registrar', methods=['POST'])
 @jwt_required()
+@permission_required('ponto')
 def registrar_ponto():
     """Registra um ponto do funcionário"""
     try:
@@ -257,6 +259,7 @@ def registrar_ponto():
 
 @ponto_bp.route('/hoje', methods=['GET'])
 @jwt_required()
+@permission_required('ponto')
 def pontos_hoje():
     """Retorna os pontos do funcionário logado hoje"""
     try:
@@ -328,6 +331,7 @@ def pontos_hoje():
 
 @ponto_bp.route('/historico', methods=['GET'])
 @jwt_required()
+@permission_required('ponto')
 def historico_pontos():
     """Retorna histórico de pontos do funcionário"""
     try:
@@ -397,6 +401,7 @@ def historico_pontos():
 
 @ponto_bp.route('/admin/todos', methods=['GET'])
 @jwt_required()
+@permission_required('ponto')
 def admin_todos_pontos():
     """
     Retorna histórico de TODOS os funcionários (Apenas Admin/Gerente)
@@ -453,6 +458,7 @@ def admin_todos_pontos():
 
 @ponto_bp.route('/estatisticas', methods=['GET'])
 @jwt_required()
+@permission_required('ponto')
 def estatisticas_ponto():
     """Retorna estatísticas de frequência do funcionário"""
     try:
@@ -586,6 +592,7 @@ def estatisticas_ponto():
 
 @ponto_bp.route('/configuracao', methods=['GET'])
 @jwt_required()
+@permission_required('ponto')
 def obter_configuracao():
     """Obtém configuração de horários do estabelecimento"""
     try:
@@ -617,6 +624,7 @@ def obter_configuracao():
 
 @ponto_bp.route('/configuracao', methods=['PUT'])
 @jwt_required()
+@permission_required('ponto')
 def atualizar_configuracao():
     """Atualiza configuração de horários (apenas admin)"""
     try:
@@ -677,6 +685,7 @@ def atualizar_configuracao():
 
 @ponto_bp.route('/<int:registro_id>', methods=['PUT'])
 @jwt_required()
+@permission_required('ponto')
 def ajustar_ponto(registro_id):
     """Ajusta um registro de ponto existente (apenas admin)"""
     try:
@@ -758,6 +767,7 @@ def ajustar_ponto(registro_id):
 
 @ponto_bp.route('/relatorio/funcionarios', methods=['GET'])
 @jwt_required()
+@permission_required('ponto')
 def relatorio_funcionarios():
     """Relatório consolidado de todos os funcionários (admin)"""
     try:

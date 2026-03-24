@@ -1,18 +1,18 @@
 import React from 'react';
 import { Sun, Moon } from 'lucide-react';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../theme/useTheme';
 
 const ThemeToggle: React.FC = () => {
-  const { theme, toggleTheme } = useTheme();
+  const { mode, toggleTheme } = useTheme();
 
   return (
     <button
       onClick={toggleTheme}
       className="theme-toggle"
-      title={theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
-      aria-label={theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
+      title={mode === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
+      aria-label={mode === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
     >
-      {theme === 'light' ? (
+      {mode === 'light' ? (
         <Moon className="w-5 h-5" />
       ) : (
         <Sun className="w-5 h-5" />

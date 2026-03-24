@@ -94,6 +94,8 @@ export interface Funcionario {
     data_demissao?: string;
     ativo: boolean;
     permissoes: Record<string, boolean>;
+    plano?: string;
+    plano_status?: string;
     created_at?: string;
     updated_at?: string;
 }

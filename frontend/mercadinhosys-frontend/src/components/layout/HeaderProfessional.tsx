@@ -7,8 +7,10 @@ import {
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../theme/useTheme';
 import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
+import EstablishmentSelector from '../EstablishmentSelector';
 
 
 const mobileMenuItems = [
@@ -49,8 +51,11 @@ const HeaderProfessional = () => {
         return checks;
     }, [newPassword, confirmPassword]);
     const navigate = useNavigate();
-    const { updatePreferencias, isDark, config } = useConfig();
+    const { config } = useConfig();
+    const { mode, toggleTheme } = useTheme();
+    const isDark = mode === 'dark';
     const { user, logout } = useAuth();
+    const isSuperAdmin = user?.is_super_admin;
 
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -69,13 +74,8 @@ const HeaderProfessional = () => {
     // Calcular logo URL dinamicamente baseado no config
     const logoUrl = config?.logo_url || '/assets/logo.png';
 
-    const toggleTheme = async () => {
-        try {
-            await updatePreferencias({ tema_escuro: !isDark });
-        } catch (error) {
-            console.error('Erro ao alternar tema:', error);
-        }
-    };
+    // toggleTheme agora vem diretamente do useTheme()
+
 
     const handleLogout = () => {
         setUserMenuOpen(false);
@@ -170,7 +170,9 @@ const HeaderProfessional = () => {
 
                         {/* Desktop Actions */}
                         <div className="hidden md:flex items-center gap-3">
-                            {/* Log de Auditoria Removido (Lógica Super-Admin Desativada) */}
+                            {isSuperAdmin && (
+                                <EstablishmentSelector />
+                            )}
 
                             {/* Theme Toggle */}
                             <button

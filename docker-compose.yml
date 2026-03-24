@@ -43,7 +43,7 @@ services:
       # Database
       DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
       MULTI_TENANT_MODE: "true"
-      HYBRID_MODE: "offline"
+      HYBRID_MODE: "online"
 
       # Security
       SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
@@ -90,7 +90,7 @@ services:
       - VITE_API_URL=http://mercadinhosys-backend:5000/api
       - VITE_API_TARGET=http://mercadinhosys-backend:5000
     healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health" ]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health" ]
       interval: 30s
       timeout: 3s
       retries: 3

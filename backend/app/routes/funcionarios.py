@@ -4,8 +4,9 @@ from app.models import Funcionario, Venda, Estabelecimento
 from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import or_, and_, func, case
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt, jwt_required
 from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.plan_guards import quota_required, permission_required
 
 funcionarios_bp = Blueprint("funcionarios", __name__, url_prefix="/api/funcionarios")
 
@@ -961,8 +962,10 @@ def detalhes_funcionario(id):
 # (mantendo o código original para esses métodos)
 
 
-@funcionarios_bp.route("/", methods=["POST"])
-@funcionario_required
+@funcionarios_bp.route("/", methods=["POST"], strict_slashes=False)
+@jwt_required()
+@permission_required('funcionarios')
+@quota_required('funcionario')
 def criar_funcionario():
     """Criar um novo funcionário"""
     try:

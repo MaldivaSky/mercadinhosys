@@ -16,6 +16,7 @@ from app.models import (
     Caixa,
 )
 from flask_jwt_extended import jwt_required, get_jwt
+from app.decorators.plan_guards import permission_required
 from app.utils.query_helpers import get_authorized_establishment_id
 from sqlalchemy import or_, and_, func, extract, cast, String, Date, distinct, select
 import random
@@ -450,6 +451,7 @@ def listar_vendas():
 
 @vendas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
 @jwt_required()
+@permission_required('financeiro')
 def estatisticas_vendas():
     """Estatísticas gerais de vendas com filtros avançados otimizada"""
     try:
@@ -840,6 +842,7 @@ def relatorio_diario():
 
 @vendas_bp.route("/analise-tendencia", methods=["GET"])
 @jwt_required()
+@permission_required('financeiro')
 def analise_tendencia():
     """Análise de tendência de vendas por período"""
     try:
@@ -975,6 +978,7 @@ def analise_tendencia():
 
 @vendas_bp.route("/", methods=["POST", "OPTIONS"], strict_slashes=False)
 @jwt_required(optional=True)
+@permission_required('vendas')
 def criar_venda():
     """Cria uma nova venda (finalizar compra no PDV) com Auditoria e Regras de Negócio SaaS"""
     try:

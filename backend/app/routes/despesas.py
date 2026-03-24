@@ -7,6 +7,7 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 
 from app import db
 from app.decorators.decorator_jwt import funcionario_required
+from app.decorators.plan_guards import plan_required
 from app.models import Despesa, Funcionario
 from app.dashboard_cientifico.data_layer import DataLayer
 
@@ -16,6 +17,7 @@ despesas_bp = Blueprint("despesas", __name__)
 
 @despesas_bp.route("/", methods=["GET"], strict_slashes=False)
 @funcionario_required
+@plan_required('Enterprise')
 def listar_despesas():
     """Lista despesas do estabelecimento do usuário logado com filtros avançados e paginação.
 
@@ -288,6 +290,7 @@ def listar_despesas():
 @despesas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
 @despesas_bp.route("/estatisticas/", methods=["GET"], strict_slashes=False)
 @funcionario_required
+@plan_required('Enterprise')
 def obter_estatisticas_despesas():
     """Obtém estatísticas de despesas para o dashboard, com suporte a filtros de data."""
     from app.utils.query_helpers import get_authorized_establishment_id
@@ -503,6 +506,7 @@ def obter_estatisticas_despesas():
 # Os endpoints POST, PUT e DELETE permanecem os mesmos
 @despesas_bp.route("/", methods=["POST"], strict_slashes=False)
 @funcionario_required
+@plan_required('Enterprise')
 def criar_despesa():
     """Cria uma despesa para o estabelecimento do usuário logado."""
     current_user_id = get_jwt_identity()
@@ -562,6 +566,7 @@ def criar_despesa():
 
 @despesas_bp.route("/<int:despesa_id>", methods=["PUT"], strict_slashes=False)
 @funcionario_required
+@plan_required('Enterprise')
 def atualizar_despesa(despesa_id: int):
     """Atualiza uma despesa (somente do próprio estabelecimento)."""
     current_user_id = get_jwt_identity()
@@ -635,6 +640,7 @@ def atualizar_despesa(despesa_id: int):
 
 @despesas_bp.route("/<int:despesa_id>", methods=["DELETE"], strict_slashes=False)
 @funcionario_required
+@plan_required('Enterprise')
 def deletar_despesa(despesa_id: int):
     """Remove uma despesa (somente do próprio estabelecimento)."""
     current_user_id = get_jwt_identity()
@@ -653,6 +659,7 @@ def deletar_despesa(despesa_id: int):
     return jsonify({"success": True}), 200
 @despesas_bp.route("/boletos-a-vencer/", methods=["GET"])
 @funcionario_required
+@plan_required('Enterprise')
 def boletos_a_vencer():
     """Lista boletos de fornecedores que estão próximos ao vencimento"""
     try:
@@ -757,6 +764,7 @@ def boletos_a_vencer():
 
 @despesas_bp.route("/resumo-financeiro/", methods=["GET"], strict_slashes=False)
 @funcionario_required
+@plan_required('Enterprise')
 def resumo_financeiro():
     """
     Resumo financeiro consolidado otimizado para Vercel.

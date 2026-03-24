@@ -244,6 +244,29 @@ class AuthService {
         }
     }
 
+    async syncUserData(): Promise<any> {
+        const token = this.getToken();
+        if (!token) return null;
+
+        try {
+            const response = await axios.get(`${API_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.data.success) {
+                const userData = response.data.data;
+                localStorage.setItem('user_data', JSON.stringify(userData));
+
+                // Dispara evento para o usePlanGate e outros hooks
+                window.dispatchEvent(new Event('auth-change'));
+                return userData;
+            }
+        } catch (error) {
+            console.error('❌ Falha ao sincronizar dados do usuário:', error);
+        }
+        return null;
+    }
+
     isAuthenticated(): boolean {
         const token = this.getToken();
         return !!token && token !== 'undefined' && token !== 'null';

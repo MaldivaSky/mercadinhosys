@@ -195,6 +195,8 @@ class RealisticInjector:
                 )
                 db.session.add(func)
                 func.set_password(senha_limpa)
+                if config['c'] == "Gerente":
+                    func.permissoes = {"pdv": True, "estoque": True, "compras": True, "financeiro": True, "configuracoes": True, "relatorios": True}
                 funcionarios.append({"n": config['n'], "u": username, "s": senha_limpa, "c": config['c']})
         
         db.session.commit()
@@ -202,8 +204,8 @@ class RealisticInjector:
 
     @classmethod
     def inject_produtos_reais(cls, estabelecimento_id):
-        """Injeta o MIX de produtos REAIS com Lotes e Validades (Digital Twin)"""
-        # Garantir Categorias
+        """Injeta o MIX de produtos REAIS com Lotes, Validades e PEDIDOS DE COMPRA (Magnitude Master)"""
+        # 1. Garantir Categorias
         cats = {}
         for cat_nome in set(p["cat"] for p in cls.SKU_DB):
             cat = CategoriaProduto.query.filter_by(estabelecimento_id=estabelecimento_id, nome=cat_nome).first()
@@ -213,9 +215,31 @@ class RealisticInjector:
                 db.session.commit()
             cats[cat_nome] = cat.id
 
+        # 2. Obter dependências (Fornecedor e Funcionário ADMIN)
         fornecedores = Fornecedor.query.filter_by(estabelecimento_id=estabelecimento_id).all()
         if not fornecedores: return
+        
+        admin = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id, role="ADMIN").first()
+        if not admin: return
 
+        # 3. Criar Pedido de Compra Inicial (Para auditoria e estoque inicial)
+        pedido = PedidoCompra(
+            estabelecimento_id=estabelecimento_id,
+            fornecedor_id=random.choice(fornecedores).id,
+            funcionario_id=admin.id,
+            numero_pedido=f"PEC-{uuid.uuid4().hex[:6].upper()}",
+            data_pedido=date.today() - timedelta(days=60),
+            data_recebimento=date.today() - timedelta(days=55),
+            status="recebido",
+            condicao_pagamento="30 DIAS",
+            observacoes="Carga inicial de estoque via Simulation Engine"
+        )
+        db.session.add(pedido)
+        db.session.flush()
+
+        # 4. Injetar Produtos e Vincular ao Pedido
+        total_pedido = Decimal("0.00")
+        
         for item in cls.SKU_DB:
             p_venda = Decimal(str(item["p"] * random.uniform(0.9, 1.1)))
             p_custo = Decimal(str(p_venda / Decimal("1.4")))
@@ -223,6 +247,7 @@ class RealisticInjector:
             prod = Produto(
                 estabelecimento_id=estabelecimento_id,
                 categoria_id=cats[item["cat"]],
+                fornecedor_id=pedido.fornecedor_id,
                 nome=item["n"],
                 codigo_barras=item.get("code"),
                 codigo_interno=f"SKU-{uuid.uuid4().hex[:6].upper()}",
@@ -237,43 +262,66 @@ class RealisticInjector:
             db.session.add(prod)
             db.session.flush()
 
+            # Criar Item do Pedido
+            qtd_inicial = cls.round_qty(random.uniform(50.0, 150.0))
+            item_pedido = PedidoCompraItem(
+                pedido_id=pedido.id,
+                produto_id=prod.id,
+                produto_nome=prod.nome,
+                produto_unidade=prod.unidade_medida,
+                quantidade_solicitada=qtd_inicial,
+                quantidade_recebida=qtd_inicial,
+                preco_unitario=p_custo,
+                total_item=p_custo * qtd_inicial,
+                status="recebido",
+                estabelecimento_id=estabelecimento_id
+            )
+            db.session.add(item_pedido)
+            total_pedido += item_pedido.total_item
+
+            # Criar Lotes com Validade
             total_qty = Decimal("0.000")
             for l in range(2):
                 data_fab = date.today() - timedelta(days=random.randint(60, 120))
                 
                 # Lógica MASTER de Validade Diversificada
-                if l == 0: # Lote Mais Antigo (Próximo de Vencer ou Vencido)
+                if l == 0: # Lote Mais Antigo
                     dias_val = random.randint(-5, 15) if item["cat"] in ["Açougue", "Hortifruti"] else random.randint(10, 45)
-                else: # Lote Novo (Validade Longa)
+                else: # Lote Novo
                     dias_val = random.randint(30, 60) if item["cat"] in ["Açougue", "Hortifruti"] else random.randint(180, 365)
                 
                 data_val = date.today() + timedelta(days=dias_val)
                 
-                qtd = cls.round_qty(random.uniform(30.0, 100.0))
+                qtd_lote = cls.round_qty(qtd_inicial / 2)
                 lote = ProdutoLote(
                     estabelecimento_id=estabelecimento_id,
                     produto_id=prod.id,
-                    fornecedor_id=random.choice(fornecedores).id,
+                    fornecedor_id=pedido.fornecedor_id,
+                    pedido_compra_id=pedido.id,
                     numero_lote=f"LT-{uuid.uuid4().hex[:8].upper()}",
-                    quantidade=qtd,
-                    quantidade_inicial=qtd,
+                    quantidade=qtd_lote,
+                    quantidade_inicial=qtd_lote,
                     data_fabricacao=data_fab,
                     data_validade=data_val,
-                    data_entrada=data_fab + timedelta(days=5),
+                    data_entrada=date.today() - timedelta(days=55),
                     preco_custo_unitario=p_custo,
                     ativo=True
                 )
                 db.session.add(lote)
-                total_qty += qtd
+                total_qty += qtd_lote
             
             prod.quantidade = cls.round_qty(total_qty)
             prod.quantidade_minima = cls.round_qty("15.0")
+            prod.controlar_validade = True
             
             # Sincroniza informações do lote principal (FIFO) no Produto
             lote_principal = ProdutoLote.query.filter_by(produto_id=prod.id).order_by(ProdutoLote.data_validade.asc()).first()
             if lote_principal:
                 prod.lote = lote_principal.numero_lote
                 prod.data_validade = lote_principal.data_validade
+                prod.data_fabricacao = lote_principal.data_fabricacao
 
+        pedido.subtotal = total_pedido
+        pedido.total = total_pedido
         db.session.commit()
-        print(f"✅ MAGNITUDE MASTER: {len(cls.SKU_DB)} SKUs ativos com endereços REAIS via API (ViaCEP) e CPFs válidos.")
+        print(f"✅ MAGNITUDE MASTER: {len(cls.SKU_DB)} SKUs ativos vinculados a Pedido de Compra #{pedido.numero_pedido}")
