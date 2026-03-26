@@ -119,7 +119,7 @@ A simulação gera instantaneamente uma multi-empresa com os seguintes acessos:
 
 | Tenant (Cenário) | Plano | Usuário Dono (Owner) | Usuário Caixa | Senha Padrão |
 | :--- | :--- | :--- | :--- | :--- |
-| **MercadinhoSys HQ** | Master | `maldivas` | *N/A* | `Mald1v@$` |
+| **MercadinhoSys HQ** | Master | `admin_saas` | *N/A* | *(Acesso privado via .env)* |
 | Mercado Maldivas Elite | Pro | `admin1` | `caixa1` | Admin: `admin123` / Caixa: `caixa123` |
 | Supermercado Estrela | Pro | `admin2` | `caixa2` | Admin: `admin123` / Caixa: `caixa123` |
 | Vendas do Bairro | Free | `admin3` | `caixa3` | Admin: `admin123` / Caixa: `caixa123` |

@@ -23,7 +23,7 @@ A simulação mestre cria um universo hierárquico com **5 cenários corporativo
 
 | Tenant / Cenário | Plano de Assinatura | Owner (Dono) | Operador (Caixa) | Senha Padrão (Admin / Caixa) |
 | :--- | :--- | :--- | :--- | :--- |
-| **MercadinhoSys HQ** | Master SAAS | `maldivas` | *N/A* | `Mald1v@$` |
+| **MercadinhoSys HQ** | Master SAAS | `admin_saas` | *N/A* | *(Acesso privado via .env)* |
 | Mercado Maldivas Elite | **Pro** | `admin1` | `caixa1` | `admin123` / `caixa123` |
 | Supermercado Estrela | **Pro** | `admin2` | `caixa2` | `admin123` / `caixa123` |
 | Vendas do Bairro | Free | `admin3` | `caixa3` | `admin123` / `caixa123` |
