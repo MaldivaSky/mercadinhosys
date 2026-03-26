@@ -1,81 +1,47 @@
-# MercadinhoSys - Guia de Execução Local (Amazon Digital Twin)
+# MercadinhoSys - Local Development & Setup
 
-## 🚀 Início Rápido (Ambiente de Alta Performance)
+## 🚀 Repositório de Ambientes Críticos
 
-O MercadinhoSys foi arquitetado para rodar com perfeição localmente, utilizando um banco de dados SQLite de alta performance como Gêmeo Digital (Digital Twin) do ecossistema de produção (Aiven PostgreSQL). Este modelo "Local-First" previne problemas com pastas sincronizadas em nuvem (OneDrive) e garante estabilidade da simulação.
+Este documento consolida as diretrizes operacionais de infraestrutura (DevOps & Edge Computing) para inicialização do ecossistema MercadinhoSys diretamente em ambientes *On-Premise* ou *Workstations* de engenheiros de software, mitigando as complexidades de virtualização excessiva (Docker) durante ciclos de desenvolvimento ágil.
 
-### Executar o Ecossistema Completo
+### Stack Operacional Desejada
+*   **Operating System:** Windows PowerShell (Recomendado) ou Ambientes Unix (Linux/macOS).
+*   **Node.js Runtime:** v18+ garantindo compatibilidade com o ecossistema Vite/React 18.
+*   **Python Engine:** `>= 3.11` otimizado para concorrência no Flask/SQLAlchemy.
+*   **Database:** SGBD Relacional (PostgreSQL 14+) ou instâncias Edge locais (SQLite nativo).
+
+---
+
+## 🏗️ Inicialização da Arquitetura (One-Click Setup)
+
+Implementamos scripts de orquestração utilitária focados na experiência do desenvolvedor (DX). A inicialização paralela das camadas de Frontend (UI/UX) e Backend (API/Core Engine) foi simplificada a um único script de orquestração.
 
 ```powershell
-# Este script inicia tanto o Backend quanto o Frontend
+# Execução da pipeline de serviços (Backend + Frontend Client)
 .\start-local.ps1
 ```
 
-Acessos automáticos nas portas padrão:
-- **Painel Gerencial (Frontend)**: http://localhost:5173
-- **API Core (Backend)**: http://localhost:5000
+O orquestrador executará sequencialmente:
+1. Resolução do ambiente virtual (venv) e injeção do `requirements.txt`.
+2. O levantamento do motor Flask na sub-rede `localhost:5000` (API Core + Autenticação JWT).
+3. Acionamento do React Hydration e processamento via Vite (HMR ativo) disponível na porta `5173`.
+4. Estabelecimento da State Machine relacional conectando ao banco de dados `instance/mercadinho.db` (Fallback SQLite Architecture).
 
 ---
 
-## 🔑 Credenciais Multi-Tenant (Simulação de 6 Meses)
+## 🛠️ Diagnostics & DBA Tools (Scripts Administrativos)
 
-A simulação mestre cria um universo hierárquico com **5 cenários corporativos reais**, desde mercados de elite até negócios em dificuldade.
+O repositório disponibiliza nativamente um framework de análise e consistência arquitetural localizado no diretório `/backend/scripts`. Estas ferramentas destinam-se a manter a integridade transacional de ponta a ponta:
 
-| Tenant / Cenário | Plano de Assinatura | Owner (Dono) | Operador (Caixa) | Senha Padrão (Admin / Caixa) |
-| :--- | :--- | :--- | :--- | :--- |
-| **MercadinhoSys HQ** | Master SAAS | `admin_saas` | *N/A* | *(Acesso privado via .env)* |
-| Mercado Maldivas Elite | **Pro** | `admin1` | `caixa1` | `admin123` / `caixa123` |
-| Supermercado Estrela | **Pro** | `admin2` | `caixa2` | `admin123` / `caixa123` |
-| Vendas do Bairro | Free | `admin3` | `caixa3` | `admin123` / `caixa123` |
-| Mercado Popular | Free | `admin4` | `caixa4` | `admin123` / `caixa123` |
-| Mini-Mercado Sucata | Free | `admin5` | `caixa5` | `admin123` / `caixa123` |
+*   **`inspect_db.py`:** Profile e auditoria das integridades transacionais e blocos ACID.
+*   **`compare_schemas.py`:** Validação de *Delta/Schema* comparando o ORM (SQLAlchemy Declarative Base) contra a infraestrutura viva na nuvem (PostgreSQL).
+*   **`force_sync_to_aiven.py`:** Utilitário CRON-like para forçar pipelines `Eventual Consistency` (Hybrid Sync/Local-First Engine), integrando as instâncias nativas com o ecossistema Nuvem AWS/Aiven.
 
----
+## 🔗 Portais Ocupados (Network Map)
 
-## 📊 O Motor Científico (Data Seeding)
-
-Ao executar a inicialização pela primeira vez, o motor `seed_simulation_master.py` cria o ambiente:
-
-*   Mais de **10.000 transações de venda** retroativas.
-*   **Gestão Logística Complexa** (Funcionalidade Delivery Unificada).
-*   Catálogo vivo com EANs reais e validação de Lote (Estoque FIFO e Classificação ABC).
-*   **Eventos de RH** (Pontos, Férias, Benefícios).
-*   Simulação profunda baseada em **DNA Organizacional** (Velocidade de giro, índice de inadimplência e margem de lucro).
+*   **Painel Administrativo B2B (Módulo Operacional/PDV/BI):** `http://localhost:5173`
+*   **API Root & Health Check Engine:** `http://localhost:5000/api/health`
 
 ---
 
-## 🌍 Arquitetura Híbrida & Push-to-Cloud
-
-Desenvolvido para resiliência no extremo norte do Brasil (Manaus/Amazonas), o sistema lida de forma autônoma com conectividade instável.
-
-*   Todas as operações rodam localmente (SQLite).
-*   Todas as tabelas possuem `sync_uuid` e rastreio de Timestamp (`updated_at`).
-*   **Para sincronizar com a Nuvem (Aiven PostgreSQL):**
-    ```powershell
-    cd backend
-    flask push-to-aiven
-    ```
-
----
-
-## 🔧 Ferramentas e Diagnósticos
-
-Na pasta do Backend, você encontrará scripts utilitários focados em DevOps e administração de banco de dados:
-
-*   `seed_simulation_master.py`: Orquestrador completo do Gêmeo Digital.
-*   `compare_schemas.py`: Utilitário para auditoria de schemas (Local vs Nuvem).
-*   `check_sales.py`: Profiling do motor de vendas e entregas.
-
-## 🐛 Troubleshooting
-
-Se precisar "resetar" a simulação completa para o dia zero:
-
-```powershell
-cd backend
-Remove-Item .\instance\mercadinho.db -Force
-python seed_simulation_master.py
-```
-Isso destruirá e recriará perfeitamente o universo simulado e o HQ SaaS.
-
----
-*MercadinhoSys: ERP Industrial da Amazônia para o Mundo.*
+> *Este artefato de documentação técnica foi desenhado para escalabilidade horizontal da equipe de engenharia e transparência algorítmica.*
