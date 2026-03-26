@@ -3,7 +3,7 @@ import { useNavigate, NavLink } from 'react-router-dom';
 import {
     User, LogOut, Settings, Moon, Sun, ChevronDown,
     Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3,
-    CreditCard, FileText, UserCog, Briefcase, Clock, Truck
+    CreditCard, FileText, UserCog, Briefcase, Clock, Truck, Navigation
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,6 +20,7 @@ const mobileMenuItems = [
     { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
     { to: '/customers', icon: Users, label: 'Clientes' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
+    { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/employees', icon: UserCog, label: 'Funcionários' },
     { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
@@ -291,7 +292,7 @@ const HeaderProfessional = () => {
                                 <ul className="space-y-0.5">
                                     {mobileMenuItems.filter(item => {
                                         const role = user?.role?.toLowerCase();
-                                        if (role === 'caixa' && item.to !== '/pdv' && item.to !== '/settings') return false;
+                                        if (role === 'caixa' && !['/pdv', '/settings', '/delivery', '/dashboard'].includes(item.to)) return false;
                                         return true;
                                     }).map((item) => (
                                         <li key={item.to}>

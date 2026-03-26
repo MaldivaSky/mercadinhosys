@@ -17,12 +17,25 @@ class DNAFactory:
     """Fábrica de Realidade: Cria os 5 cenários do MercadinhoSys"""
     
     SCENARIOS = {
-        "ELITE": ScenarioDNA("Mercado Maldivas Elite", 1.65, 180, 0.01, 155.0, "Pro"), # Alta eficiência
-        "BOM": ScenarioDNA("Supermercado Estrela", 1.45, 120, 0.04, 95.0, "Pro"),    # Estável
-        "RAZOAVEL": ScenarioDNA("Vendas do Bairro", 1.30, 50, 0.15, 55.0, "Pro"),    # Sobrevivendo
-        "MAL": ScenarioDNA("Mercado Popular", 1.18, 25, 0.35, 35.0, "Gratuito"),         # Crise financeira
-        "PESSIMO": ScenarioDNA("Mini-Mercado Sucata", 1.08, 8, 0.60, 18.0, "Gratuito")    # O caos (Inadimplência 60%)
+        "ELITE": ScenarioDNA("Mercado Maldivas Elite", 1.65, 180, 0.01, 155.0, "Pro"), 
+        "BOM": ScenarioDNA("Supermercado Estrela", 1.45, 120, 0.04, 95.0, "Pro"),    
+        "RAZOAVEL": ScenarioDNA("Vendas do Bairro", 1.30, 50, 0.15, 55.0, "Gratuito"),    
+        "MAL": ScenarioDNA("Mercado Popular", 1.18, 25, 0.35, 35.0, "Gratuito"),         
+        "PESSIMO": ScenarioDNA("Mini-Mercado Sucata", 1.08, 8, 0.60, 18.0, "Gratuito")    
     }
+
+    CNPJ_SIMULACAO = {
+        "ELITE":    "11.222.333/0001-44",
+        "BOM":      "22.333.444/0001-55",
+        "RAZOAVEL": "33.444.555/0001-66",
+        "MAL":      "44.555.666/0001-77",
+        "PESSIMO":  "55.666.777/0001-88",
+    }
+
+    @classmethod
+    def get_all_tenants(cls):
+        """Retorna todos os estabelecimentos para simulação, atribuindo DNA se necessário"""
+        return Estabelecimento.query.filter(Estabelecimento.id != 1).all()
 
     @classmethod
     def get_dna(cls, scenario_key):
@@ -40,7 +53,7 @@ class DNAFactory:
                 est = Estabelecimento(
                     nome_fantasia=dna.nome,
                     razao_social=f"{dna.nome} EMPRESAS LTDA",
-                    cnpj=f"{random.randint(10,99)}.{random.randint(100,999)}.{random.randint(100,999)}/0001-{random.randint(10,99)}",
+                    cnpj=cls.CNPJ_SIMULACAO.get(key, f'99.{random.randint(100,999)}.000/0001-00'),
                     telefone="(92) 3000-0000",
                     email=f"contato@{key.lower()}.simulacao.com",
                     data_abertura=datetime.now().date() - timedelta(days=365),

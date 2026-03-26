@@ -70,13 +70,13 @@ def create_app(config_name=None):
         app.config["MULTI_TENANT_MODE"] = True
         logger.info("🏢 MODO MULTI-TENANT ATIVADO")
     else:
-        # Modo normal - manter ordem original para não quebrar conexão existente
+        # Modo normal - Prioridade para banco LOCAL (Docker/Postgres) se disponível
         runtime_db_url = (
-            os.environ.get("AIVEN_DATABASE_URL")
-            or os.environ.get("POSTGRES_URL") 
-            or os.environ.get("DATABASE_URL_TARGET")
+            os.environ.get("DATABASE_URL_TARGET")
             or os.environ.get("DB_PRIMARY")
             or os.environ.get("DATABASE_URL")
+            or os.environ.get("POSTGRES_URL")
+            or os.environ.get("AIVEN_DATABASE_URL")
         )
     
     if runtime_db_url:
@@ -85,31 +85,35 @@ def create_app(config_name=None):
         app.config["SQLALCHEMY_DATABASE_URI"] = runtime_db_url
         
         # OTIMIZAÇÃO DE ELITE: Connection Pooling para Aiven (Postgres Cloud)
-        # Ajustado para evitar "SSL connection has been closed unexpectedly" e timeouts
         # OTIMIZAÇÃO DE ELITE: Connection Pooling (Somente para Postgres/Aiven)
         # Se for SQLite (Local/Docker sem env), não aplica configs de pool do Postgres
-        if "postgres" in runtime_db_url:
+        if "postgres" in runtime_db_url or runtime_db_url.startswith("postgresql"):
+            # Detectar se é banco local (sem SSL) ou cloud (com SSL)
+            # CRÍTICO: usar urlparse no HOSTNAME real, não string contains no URL inteiro
+            # (defaultdb contém 'db', causando falso positivo)
+            from urllib.parse import urlparse as _urlparse
+            _parsed_host = _urlparse(runtime_db_url).hostname or ""
+            _is_local_host = _parsed_host in ("localhost", "127.0.0.1", "::1", "postgres", "db", "mercadinhosys-db")
+            
             app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-                "pool_size": 5, # Aiven tem limites estritos de conexão
+                "pool_size": 5,      # Aiven tem limites estritos de conexão
                 "max_overflow": 10,
-                "pool_recycle": 3600, # 1 hora
+                "pool_recycle": 1800,  # 30 minutos (Aiven free tier timeout)
                 "pool_pre_ping": True,
                 "connect_args": {
                     "connect_timeout": 30,
-                    "application_name": "mercadinhosys_backend_prod",
+                    "application_name": "mercadinhosys_backend",
                     "keepalives": 1,
                     "keepalives_idle": 30,
                     "keepalives_interval": 10,
                     "keepalives_count": 5,
-                    "sslmode": "require" if all(h not in runtime_db_url for h in ["localhost", "127.0.0.1", "::1", "postgres", "db"]) else "disable"
+                    # NUNCA colocar sslmode aqui — conflita com o ?sslmode= da URL.
+                    # Aiven já tem ?sslmode=require na URL.
+                    # Para banco local Docker, usamos ?sslmode=disable na URL se necessário.
                 }
             }
-        else:
-             # Configuração simples para SQLite (evita erros de SSL/Pool)
-             app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-                 "pool_pre_ping": True
-             }
-        
+            logger.info(f"[DB] Postgres detectado. Host: {_parsed_host} | SSL: {'DESATIVADO (local)' if _is_local_host else 'via URL (cloud)'}")
+
         for key in ["DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL", "AIVEN_DATABASE_URL"]:
             if os.environ.get(key):
                 db_source = key
@@ -264,7 +268,8 @@ def create_app(config_name=None):
                 
                 # Garantir que a tabela de histórico de login também seja criada explicitamente se omitida
                 from sqlalchemy import text
-                db.session.execute(text("CREATE TABLE IF NOT EXISTS login_history (id SERIAL PRIMARY KEY, username VARCHAR(150), ip_address VARCHAR(45), dispositivo VARCHAR(200), success BOOLEAN, observacoes TEXT, token_hash INTEGER, funcionario_id INTEGER, estabelecimento_id INTEGER, data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+                id_syntax = "SERIAL PRIMARY KEY" if app.config.get("USING_POSTGRES") else "INTEGER PRIMARY KEY AUTOINCREMENT"
+                db.session.execute(text(f"CREATE TABLE IF NOT EXISTS login_history (id {id_syntax}, username VARCHAR(150), ip_address VARCHAR(45), dispositivo VARCHAR(200), success BOOLEAN, observacoes TEXT, token_hash INTEGER, funcionario_id INTEGER, estabelecimento_id INTEGER, data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
                 db.session.commit()
                 
                 logger.info("SUCESSO: Tabelas verificadas/criadas.")
@@ -596,6 +601,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar stripe: {e}")
 
+    # Delivery & Logística
+    try:
+        from app.routes.delivery import delivery_bp
+        app.register_blueprint(delivery_bp, url_prefix="/api/delivery")
+        logger.info("✅ Blueprint delivery registrado em /api/delivery")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar delivery: {e}")
+
     # Onboarding SaaS
     try:
         from app.routes.onboarding import onboarding_bp
@@ -768,5 +781,14 @@ def create_app(config_name=None):
                 
         except Exception as e:
             app.logger.error(f"Erro ao configurar listeners ou worker: {e}")
+
+    # ==================== CLI COMMANDS ====================
+    # Registra comandos de gestão: flask push-to-aiven, flask sync-status
+    try:
+        from app.commands import register_commands
+        register_commands(app)
+        logger.info("✅ CLI commands registrados (flask push-to-aiven, flask sync-status)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar CLI commands: {e}")
 
     return app
