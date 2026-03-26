@@ -133,9 +133,15 @@ def force_sync(app=None, silent=False):
             
             has_id = "id" in valid_cols
             if has_id:
-                # OTIMIZAÇÃO: Ignorar colunas virtuais ou de auditoria se necessário
                 upd = ", ".join([f'"{c}"=EXCLUDED."{c}"' for c in valid_cols if c != 'id'])
-                upsert = f"ON CONFLICT (id) DO UPDATE SET {upd}" if upd else "ON CONFLICT (id) DO NOTHING"
+                if upd:
+                    # Proteção Sênior: Eventual Consistency (Evita Sobrescrever Dados Mais Novos da Nuvem)
+                    if "updated_at" in valid_cols:
+                        upsert = f'ON CONFLICT (id) DO UPDATE SET {upd} WHERE "{table}".updated_at <= EXCLUDED.updated_at'
+                    else:
+                        upsert = f"ON CONFLICT (id) DO UPDATE SET {upd}"
+                else:
+                    upsert = "ON CONFLICT (id) DO NOTHING"
             else:
                 upsert = "ON CONFLICT DO NOTHING"
 

@@ -258,7 +258,7 @@ def criar_venda_entrega_unificada():
         
         # 1. Criar a Venda
         cliente_id = data.get("cliente_id")
-        cliente = Cliente.query.get(cliente_id) if cliente_id else None
+        cliente = Cliente.query.filter_by(id=cliente_id, estabelecimento_id=est_id).first() if cliente_id else None
         
         venda = Venda(
             estabelecimento_id=est_id,
@@ -280,7 +280,11 @@ def criar_venda_entrega_unificada():
         
         # 2. Adicionar Itens
         for item in data.get("itens", []):
-            prod = Produto.query.get(item["produto_id"])
+            # Pessimistic Locking para Consistência de Estoque ACID e isolamento Tenant
+            prod = db.session.query(Produto).filter_by(
+                id=item["produto_id"], 
+                estabelecimento_id=est_id
+            ).with_for_update().first()
             if not prod: continue
             
             v_item = VendaItem(
