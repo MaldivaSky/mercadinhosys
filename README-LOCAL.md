@@ -1,94 +1,81 @@
-# MercadinhoSys - Guia de Execução Local
+# MercadinhoSys - Guia de Execução Local (Amazon Digital Twin)
 
-## 🚀 Início Rápido
+## 🚀 Início Rápido (Ambiente de Alta Performance)
 
-O MercadinhoSys está configurado para rodar localmente sem Docker, evitando problemas de caminho do OneDrive.
+O MercadinhoSys foi arquitetado para rodar com perfeição localmente, utilizando um banco de dados SQLite de alta performance como Gêmeo Digital (Digital Twin) do ecossistema de produção (Aiven PostgreSQL). Este modelo "Local-First" previne problemas com pastas sincronizadas em nuvem (OneDrive) e garante estabilidade da simulação.
 
-### Executar Sistema Local
+### Executar o Ecossistema Completo
 
 ```powershell
+# Este script inicia tanto o Backend quanto o Frontend
 .\start-local.ps1
 ```
 
-Isso iniciará:
-- **Backend**: http://localhost:5000
-- **Frontend**: http://localhost:5173
+Acessos automáticos nas portas padrão:
+- **Painel Gerencial (Frontend)**: http://localhost:5173
+- **API Core (Backend)**: http://localhost:5000
 
-## 🔑 Credenciais de Acesso
+---
 
-| Usuário | Senha | Perfil |
-|---------|--------|---------|
-| maldivas | Mald1v@$ | Super Admin |
-| rafael_owner | 123 | Owner |
-| admin1 | 123 | Admin |
-| caixa1 | 123 | Caixa |
-| estoque1 | 123 | Estoquista |
+## 🔑 Credenciais Multi-Tenant (Simulação de 6 Meses)
 
-## 📊 Dados do Sistema
+A simulação mestre cria um universo hierárquico com **5 cenários corporativos reais**, desde mercados de elite até negócios em dificuldade.
 
-O sistema foi populado com dados completos:
+| Tenant / Cenário | Plano de Assinatura | Owner (Dono) | Operador (Caixa) | Senha Padrão (Admin / Caixa) |
+| :--- | :--- | :--- | :--- | :--- |
+| **MercadinhoSys HQ** | Master SAAS | `maldivas` | *N/A* | `Mald1v@$` |
+| Mercado Maldivas Elite | **Pro** | `admin1` | `caixa1` | `admin123` / `caixa123` |
+| Supermercado Estrela | **Pro** | `admin2` | `caixa2` | `admin123` / `caixa123` |
+| Vendas do Bairro | Free | `admin3` | `caixa3` | `admin123` / `caixa123` |
+| Mercado Popular | Free | `admin4` | `caixa4` | `admin123` / `caixa123` |
+| Mini-Mercado Sucata | Free | `admin5` | `caixa5` | `admin123` / `caixa123` |
 
-### Estabelecimentos
-- **SUPERMERCADO ELITE CENTER** (próspero)
-  - ~9.409 vendas (6 meses)
-  - ~56.477 itens vendidos
-  - Cenário: Crescimento 3%/mês
+---
 
-- **MERCADO ESTRELA DO NORTE** (dificuldade)
-  - ~1.937 vendas (6 meses)
-  - ~4.762 itens vendidos
-  - Cenário: Declínio 5%/mês
+## 📊 O Motor Científico (Data Seeding)
 
-### Produtos
-- 128 produtos com EANs reais brasileiros
-- 20 fornecedores reais brasileiros
-- Categorias completas (Alimentos, Bebidas, Higiene, etc.)
+Ao executar a inicialização pela primeira vez, o motor `seed_simulation_master.py` cria o ambiente:
 
-## 🔧 Estrutura do Projeto
+*   Mais de **10.000 transações de venda** retroativas.
+*   **Gestão Logística Complexa** (Funcionalidade Delivery Unificada).
+*   Catálogo vivo com EANs reais e validação de Lote (Estoque FIFO e Classificação ABC).
+*   **Eventos de RH** (Pontos, Férias, Benefícios).
+*   Simulação profunda baseada em **DNA Organizacional** (Velocidade de giro, índice de inadimplência e margem de lucro).
 
-```
-mercadinhosys/
-├── backend/
-│   ├── venv/                 # Ambiente virtual Python
-│   ├── instance/             # Banco SQLite (33MB)
-│   └── seed_main.py         # Script de dados
-├── frontend/
-│   └── mercadinhosys-frontend/
-├── start-local.ps1          # Script de inicialização
-└── README-LOCAL.md          # Este arquivo
-```
+---
 
-## 🐛 Problemas Conhecidos
+## 🌍 Arquitetura Híbrida & Push-to-Cloud
 
-### Docker com OneDrive
-O Docker ainda referencia caminhos antigos do OneDrive. Solução:
-- Use o sistema local (recomendado)
-- Ou limpe completamente o Docker e reconfigure
+Desenvolvido para resiliência no extremo norte do Brasil (Manaus/Amazonas), o sistema lida de forma autônoma com conectividade instável.
 
-### Erros de Seed
-Se precisar recriar o banco:
+*   Todas as operações rodam localmente (SQLite).
+*   Todas as tabelas possuem `sync_uuid` e rastreio de Timestamp (`updated_at`).
+*   **Para sincronizar com a Nuvem (Aiven PostgreSQL):**
+    ```powershell
+    cd backend
+    flask push-to-aiven
+    ```
+
+---
+
+## 🔧 Ferramentas e Diagnósticos
+
+Na pasta do Backend, você encontrará scripts utilitários focados em DevOps e administração de banco de dados:
+
+*   `seed_simulation_master.py`: Orquestrador completo do Gêmeo Digital.
+*   `compare_schemas.py`: Utilitário para auditoria de schemas (Local vs Nuvem).
+*   `check_sales.py`: Profiling do motor de vendas e entregas.
+
+## 🐛 Troubleshooting
+
+Se precisar "resetar" a simulação completa para o dia zero:
+
 ```powershell
 cd backend
 Remove-Item .\instance\mercadinho.db -Force
-python seed_main.py
+python seed_simulation_master.py
 ```
+Isso destruirá e recriará perfeitamente o universo simulado e o HQ SaaS.
 
-## 📝 Scripts Úteis
-
-- `start-local.ps1` - Inicia backend e frontend
-- `fix-docker-paths.ps1` - Limpa referências antigas do Docker
-
-## 🌐 Acesso Web
-
-Após iniciar, acesse:
-- **Frontend**: http://localhost:5173
-- **API Docs**: http://localhost:5000/api/health
-- **Dashboard Científico**: http://localhost:5000/api/cientifico
-
-## ✅ Status do Sistema
-
-- ✅ Ambiente configurado
-- ✅ Banco populado
-- ✅ Backend Flask rodando
-- ✅ Frontend Vite rodando
-- ✅ Dados completos para demonstração
+---
+*MercadinhoSys: ERP Industrial da Amazônia para o Mundo.*
