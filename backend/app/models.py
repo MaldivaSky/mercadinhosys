@@ -11,13 +11,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import re
 import os
+import uuid as uuid_module
 
-from sqlalchemy import or_, case
+from sqlalchemy import MetaData, or_, case
 from sqlalchemy.orm import validates
 from sqlalchemy.ext.hybrid import hybrid_property
 from flask import g
 
-db = SQLAlchemy()
+# Naming Convention para garantir que todas as Constraints tenham nomes (Necessário para SQLite Batch Migrations)
+naming_convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
+db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
 
 def utcnow():
     """Helper para datetime.now(timezone.utc) - Compatível com Python 3.12+"""
@@ -153,6 +163,12 @@ class Estabelecimento(db.Model, EnderecoMixin, MultiTenantMixin):
     __tablename__ = "estabelecimentos"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
     nome_fantasia = db.Column(db.String(150), nullable=False)
     razao_social = db.Column(db.String(150), nullable=False)
     cnpj = db.Column(db.String(18), nullable=False)
@@ -189,6 +205,7 @@ class Estabelecimento(db.Model, EnderecoMixin, MultiTenantMixin):
         vencimento = getattr(self, "vencimento_assinatura", None)
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
             "nome_fantasia": self.nome_fantasia,
             "razao_social": self.razao_social,
             "cnpj": self.cnpj,
@@ -343,6 +360,17 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
     __tablename__ = "funcionarios"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -362,6 +390,9 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
     data_admissao = db.Column(db.Date, nullable=False)
     data_demissao = db.Column(db.Date)
     salario_base = db.Column(db.Numeric(19, 4), default=0)
+    salario = db.Column(db.Numeric(10, 2))  # Coluna restaurada
+    observacoes = db.Column(db.Text)        # Coluna restaurada
+    permissoes_json = db.Column(db.Text)    # Coluna restaurada
  
     @validates("cpf")
     def validate_cpf(self, key, value):
@@ -444,6 +475,8 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "nome": self.nome,
             "cpf": self.cpf,
             "rg": self.rg,
@@ -467,10 +500,12 @@ class Funcionario(db.Model, UserMixin, EnderecoMixin, MultiTenantMixin):
             "is_super_admin": self.is_super_admin,
             "ativo": self.ativo,
             "permissoes": self.permissoes,
+            "permissoes_json": self.permissoes_json,
+            "observacoes": self.observacoes,
             # Campos de compatibilidade para frontend
             "usuario": self.username,
             "nivel_acesso": self.role,
-            "salario": float(self.salario_base) if self.salario_base else 0.0,
+            "salario": float(self.salario) if self.salario else (float(self.salario_base) if self.salario_base else 0.0),
         }
 
 class FuncionarioPreferencias(db.Model):
@@ -675,6 +710,17 @@ class Cliente(db.Model, EnderecoMixin, MultiTenantMixin, SoftDeleteMixin):
     __tablename__ = "clientes"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -720,8 +766,13 @@ class Cliente(db.Model, EnderecoMixin, MultiTenantMixin, SoftDeleteMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "nome": self.nome,
             "cpf": self.cpf,
+            "rg": self.rg,
+            "data_nascimento": self.data_nascimento.isoformat() if self.data_nascimento else None,
+            "telefone": self.telefone,
             "celular": self.celular,
             "email": self.email,
             "cep": self.cep,
@@ -730,16 +781,13 @@ class Cliente(db.Model, EnderecoMixin, MultiTenantMixin, SoftDeleteMixin):
             "bairro": self.bairro,
             "cidade": self.cidade,
             "estado": self.estado,
-            "endereco_completo": self.endereco_completo(),
-            "limite_credito": (
-                float(self.limite_credito) if self.limite_credito else 0.0
-            ),
+            "limite_credito": float(self.limite_credito) if self.limite_credito else 0.0,
             "saldo_devedor": float(self.saldo_devedor) if self.saldo_devedor else 0.0,
             "total_compras": self.total_compras,
             "valor_total_gasto": float(self.valor_total_gasto) if self.valor_total_gasto else 0.0,
             "ativo": self.ativo,
             "data_cadastro": self.data_cadastro.isoformat() if self.data_cadastro else None,
-            "ultima_compra": self.ultima_compra.isoformat() if self.ultima_compra else None,
+            "ultima_compra": self.ultima_compra.isoformat() if self.ultima_compra else None
         }
 
     @staticmethod
@@ -879,6 +927,17 @@ class Fornecedor(db.Model, EnderecoMixin, MultiTenantMixin, SoftDeleteMixin):
     __tablename__ = "fornecedores"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -932,6 +991,8 @@ class Fornecedor(db.Model, EnderecoMixin, MultiTenantMixin, SoftDeleteMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "nome_fantasia": self.nome_fantasia,
             "cnpj": self.cnpj,
             "telefone": self.telefone,
@@ -951,6 +1012,17 @@ class CategoriaProduto(db.Model, SoftDeleteMixin):
     __tablename__ = "categorias_produto"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -1012,6 +1084,8 @@ class CategoriaProduto(db.Model, SoftDeleteMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "nome": self.nome,
             "descricao": self.descricao,
             "codigo": self.codigo,
@@ -1028,6 +1102,17 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin):
     __tablename__ = "produtos"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -1101,9 +1186,6 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin):
     ativo = db.Column(db.Boolean, default=True)
 
     created_at = db.Column(db.DateTime, default=utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=utcnow, onupdate=utcnow
-    )
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     estabelecimento = db.relationship(
@@ -1463,7 +1545,6 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin):
             return "---"
 
     def to_dict(self, include_metrics=True):
-        # Calcular métricas básicas com fallback seguro (apenas se solicitado - evita N+1 em listas)
         if include_metrics:
             giro = self.calcular_giro(30)
             cobertura = self.calcular_cobertura_dias(30)
@@ -1477,25 +1558,25 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin):
 
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "estabelecimento_id": self.estabelecimento_id,
+            "categoria_id": self.categoria_id,
+            "nome": self.nome,
             "codigo_barras": self.codigo_barras,
             "codigo_interno": self.codigo_interno,
-            "nome": self.nome,
             "descricao": self.descricao,
             "marca": self.marca,
             "fabricante": self.fabricante,
             "tipo": self.tipo,
             "subcategoria": self.subcategoria,
             "unidade_medida": self.unidade_medida,
-            "categoria": self.categoria.nome if self.categoria else None,
-            "categoria_id": self.categoria_id,
-            "quantidade": float(self.quantidade) if self.quantidade else 0.0,
-            "quantidade_minima": float(self.quantidade_minima) if self.quantidade_minima else 0.0,
+            "categoria_nome": self.categoria.nome if self.categoria else None,
             "preco_custo": float(self.preco_custo) if self.preco_custo else 0.0,
             "preco_venda": float(self.preco_venda) if self.preco_venda else 0.0,
-            "margem_lucro": float(self.margem_lucro) if self.margem_lucro and float(self.margem_lucro) > 0 else (
-                round(((float(self.preco_venda) - float(self.preco_custo)) / float(self.preco_custo) * 100), 2)
-                if self.preco_custo and float(self.preco_custo) > 0 else 0.0
-            ),
+            "margem_lucro": float(self.margem_lucro) if self.margem_lucro and float(self.margem_lucro) > 0 else 0.0,
+            "quantidade": float(self.quantidade) if self.quantidade else 0.0,
+            "quantidade_minima": float(self.quantidade_minima) if self.quantidade_minima else 0.0,
             "ncm": self.ncm,
             "origem": self.origem,
             "controlar_validade": self.controlar_validade,
@@ -1504,25 +1585,10 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin):
             "imagem_url": self.imagem_url,
             "ativo": self.ativo,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "estoque_status": self.estoque_status,
             "giro_estoque": giro,
             "cobertura_estoque": cobertura_str,
-            "frequencia_venda": freq,
-            "fornecedor": self.fornecedor.to_dict() if self.fornecedor else None,
-            "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else None,
-            "fornecedor_id": self.fornecedor_id,
-            "data_fabricacao": self.data_fabricacao.isoformat() if self.data_fabricacao else None,
-            "total_vendido": float(self.total_vendido) if self.total_vendido else 0.0,
-            "quantidade_vendida": float(self.quantidade_vendida) if self.quantidade_vendida else 0.0,
-            "ultima_venda": self.ultima_venda.isoformat() if self.ultima_venda else None,
-            "classificacao_abc": self.classificacao_abc or 'C',
-            "metricas_gestao": {
-                "giro_estoque": giro,
-                "dias_estoque": cobertura if isinstance(cobertura, (int, float)) else 0,
-                "cobertura_estoque": cobertura_str,
-                "frequencia_venda": freq
-            }
+            "frequencia_venda": freq
         }
 
     def get_lotes_disponiveis(self):
@@ -1712,6 +1778,17 @@ class Venda(db.Model, MultiTenantMixin, SoftDeleteMixin):
     __tablename__ = "vendas"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -1748,9 +1825,6 @@ class Venda(db.Model, MultiTenantMixin, SoftDeleteMixin):
     motivo_cancelamento = db.Column(db.String(255))
 
     created_at = db.Column(db.DateTime, default=utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=utcnow, onupdate=utcnow
-    )
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     estabelecimento = db.relationship(
@@ -1773,16 +1847,21 @@ class Venda(db.Model, MultiTenantMixin, SoftDeleteMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "codigo": self.codigo,
-            "cliente": self.cliente.to_dict() if self.cliente else None,
-            "funcionario": self.funcionario.to_dict() if self.funcionario else None,
+            "cliente_id": self.cliente_id,
+            "cliente_nome": self.cliente.nome if self.cliente else "NÃO INFORMADO",
+            "funcionario_id": self.funcionario_id,
+            "funcionario_nome": self.funcionario.nome if self.funcionario else "NÃO INFORMADO",
             "subtotal": float(self.subtotal) if self.subtotal else 0.0,
             "desconto": float(self.desconto) if self.desconto else 0.0,
             "total": float(self.total) if self.total else 0.0,
             "forma_pagamento": self.forma_pagamento,
             "tipo_venda": self.tipo_venda,
-            "data_venda": self.data_venda.isoformat() if self.data_venda else None,
             "status": self.status,
+            "data_venda": self.data_venda.isoformat() if self.data_venda else None,
+            "itens": [item.to_dict() for item in self.itens] if hasattr(self, 'itens') else []
         }
 
 
@@ -1795,6 +1874,12 @@ class VendaItem(db.Model, MultiTenantMixin):
     __tablename__ = "venda_itens"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
     venda_id = db.Column(
         db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False
     )
@@ -1814,6 +1899,9 @@ class VendaItem(db.Model, MultiTenantMixin):
     margem_lucro_real = db.Column(db.Numeric(19, 4))
 
     created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=utcnow, onupdate=utcnow
+    )
 
     venda = db.relationship(
         "Venda", backref=db.backref("itens", lazy=True, cascade="all, delete-orphan")
@@ -1823,11 +1911,15 @@ class VendaItem(db.Model, MultiTenantMixin):
     __table_args__ = (
         db.Index("idx_venda_item_venda", "venda_id"),
         db.Index("idx_venda_item_produto", "produto_id"),
+        db.UniqueConstraint("sync_uuid", name="uq_venda_itens_sync_uuid"),
     )
 
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "venda_id": self.venda_id,
             "produto_id": self.produto_id,
             "produto_nome": self.produto_nome,
             "quantidade": float(self.quantidade) if self.quantidade else 0.0,
@@ -1902,6 +1994,17 @@ class MovimentacaoEstoque(db.Model, MultiTenantMixin):
     __tablename__ = "movimentacoes_estoque"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -2240,6 +2343,12 @@ class ContaReceber(db.Model, MultiTenantMixin):
     __tablename__ = "contas_receber"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -2285,6 +2394,8 @@ class ContaReceber(db.Model, MultiTenantMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "cliente_id": self.cliente_id,
             "numero_documento": self.numero_documento,
             "valor_original": (
@@ -2310,6 +2421,12 @@ class Despesa(db.Model, MultiTenantMixin):
     __tablename__ = "despesas"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -2350,6 +2467,8 @@ class Despesa(db.Model, MultiTenantMixin):
     def to_dict(self):
         result = {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "descricao": self.descricao,
             "categoria": self.categoria,
             "tipo": self.tipo,
@@ -2425,6 +2544,12 @@ class Caixa(db.Model, MultiTenantMixin):
     __tablename__ = "caixas"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
     estabelecimento_id = db.Column(
         db.Integer,
         db.ForeignKey("estabelecimentos.id", ondelete="CASCADE"),
@@ -2466,6 +2591,8 @@ class Caixa(db.Model, MultiTenantMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "numero_caixa": self.numero_caixa,
             "funcionario": self.funcionario.to_dict() if self.funcionario else None,
             "saldo_inicial": float(self.saldo_inicial) if self.saldo_inicial else 0.0,
@@ -2489,6 +2616,17 @@ class MovimentacaoCaixa(db.Model, MultiTenantMixin):
     __tablename__ = "movimentacoes_caixa"
 
     id = db.Column(db.Integer, primary_key=True)
+    sync_uuid = db.Column(
+        db.String(36),
+        default=lambda: str(uuid_module.uuid4()),
+        unique=True,
+        nullable=False
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        default=utcnow,
+        onupdate=utcnow
+    )
     caixa_id = db.Column(
         db.Integer, db.ForeignKey("caixas.id", ondelete="CASCADE"), nullable=False
     )
@@ -2527,6 +2665,8 @@ class MovimentacaoCaixa(db.Model, MultiTenantMixin):
     def to_dict(self):
         return {
             "id": self.id,
+            "sync_uuid": self.sync_uuid,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "caixa_id": self.caixa_id,
             "tipo": self.tipo,
             "valor": float(self.valor) if self.valor else 0.0,
@@ -2946,7 +3086,10 @@ class Auditoria(db.Model, MultiTenantMixin):
     
     data_evento = db.Column(db.DateTime, default=utcnow)
 
-    estabelecimento = db.relationship("Estabelecimento", backref=db.backref("auditoria", lazy=True))
+    estabelecimento = db.relationship(
+        "Estabelecimento", 
+        backref=db.backref("auditoria", lazy=True, cascade="all, delete-orphan")
+    )
     usuario = db.relationship("Funcionario", backref=db.backref("atividades", lazy=True))
 
     def to_dict(self):
@@ -2965,8 +3108,16 @@ class Auditoria(db.Model, MultiTenantMixin):
 
     @classmethod
     def registrar(cls, estabelecimento_id, tipo_evento, descricao, usuario_id=None, valor=None, detalhes=None):
-        """Método auxiliar para registrar eventos de auditoria"""
+        """Método auxiliar para registrar eventos de auditoria com segurança Multi-Tenant"""
         from flask import current_app
+        
+        # [ESTRATÉGIA DE SEGURANÇA] Se estabelecimento_id for nulo, recusamos o registro
+        # para evitar IntegrityError em massa em bancos SQLite/Postgres rigorosos.
+        if not estabelecimento_id:
+            if current_app:
+                current_app.logger.warning(f"🚫 Auditoria REJEITADA: estabelecimento_id nulo para evento {tipo_evento}")
+            return False
+
         try:
             novo_log = cls(
                 estabelecimento_id=estabelecimento_id,
@@ -2977,13 +3128,34 @@ class Auditoria(db.Model, MultiTenantMixin):
                 detalhes_json=detalhes
             )
             db.session.add(novo_log)
-            # Removemos o flush para evitar erros de "Session is already flushing" quando chamado de listeners
+            # Obs: Flush removido propositalmente para não interromper a transação original
             return True
         except Exception as e:
             if current_app:
-                current_app.logger.error(f"Erro ao registrar auditoria: {str(e)}")
+                current_app.logger.error(f"❌ Erro ao registrar auditoria: {str(e)}")
             else:
-                print(f"Erro ao registrar auditoria (sem context): {str(e)}")
+                print(f"❌ Erro ao registrar auditoria (sem context): {str(e)}")
+            return False
+
+    @classmethod
+    def registrar_direto(cls, connection, estabelecimento_id, tipo_evento, descricao, usuario_id=None, valor=None, detalhes=None):
+        """Versão de ALTA PERFORMANCE para listeners: insere via connection direta sem afetar a session"""
+        try:
+            # Execução via raw SQL do model (Otimizado para evitar Warnings de Flush no SQLAlchemy)
+            connection.execute(
+                cls.__table__.insert().values(
+                    estabelecimento_id=estabelecimento_id,
+                    usuario_id=usuario_id,
+                    tipo_evento=tipo_evento,
+                    descricao=descricao,
+                    valor=valor,
+                    detalhes_json=detalhes,
+                    data_evento=utcnow()
+                )
+            )
+            return True
+        except Exception:
+            # Falha silenciosa em listener para não quebrar a transação comercial principal
             return False
 
 
@@ -3159,10 +3331,15 @@ class Veiculo(db.Model, MultiTenantMixin):
     # Documentação
     data_vencimento_licenciamento = db.Column(db.Date)
     data_vencimento_seguro = db.Column(db.Date)
+    
+    # NOVO: Consumo médio (km/l) para cálculo de abastecimento
+    # Sugestão: Moto ~30.0, Carro ~8.0
+    consumo_medio = db.Column(db.Numeric(10, 2), default=15.0)
 
     # Status
     ativo = db.Column(db.Boolean, default=True)
     disponivel = db.Column(db.Boolean, default=True)
+    total_entregas = db.Column(db.Integer, default=0)
     
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
@@ -3195,8 +3372,10 @@ class Veiculo(db.Model, MultiTenantMixin):
             "motorista_id": self.motorista_id,
             "motorista_nome": self.motorista.nome if self.motorista else None,
             "km_atual": float(self.km_atual) if self.km_atual else 0.0,
+            "consumo_medio": float(self.consumo_medio) if self.consumo_medio else 15.0,
             "ativo": self.ativo,
             "disponivel": self.disponivel,
+            "total_entregas": self.total_entregas if hasattr(self, 'total_entregas') else 0,
         }
 
 
@@ -3304,6 +3483,9 @@ class Entrega(db.Model, MultiTenantMixin, SoftDeleteMixin):
     taxa_entrega = db.Column(db.Numeric(10, 2), default=0)
     custo_entrega = db.Column(db.Numeric(10, 2), default=0)
     comissao_motorista = db.Column(db.Numeric(10, 2), default=0)
+    
+    # NOVO: Custo estimado de combustível para esta entrega
+    custo_combustivel = db.Column(db.Numeric(10, 2), default=0)
 
     # Pagamento da entrega
     pagamento_tipo = db.Column(db.String(20), default="loja")  # loja, cliente, app
@@ -3371,6 +3553,7 @@ class Entrega(db.Model, MultiTenantMixin, SoftDeleteMixin):
             "km_percorridos": float(self.km_percorridos) if self.km_percorridos else 0.0,
             "taxa_entrega": float(self.taxa_entrega) if self.taxa_entrega else 0.0,
             "custo_entrega": float(self.custo_entrega) if self.custo_entrega else 0.0,
+            "custo_combustivel": float(self.custo_combustivel) if self.custo_combustivel else 0.0,
             "status": self.status,
             "data_prevista": self.data_prevista.isoformat() if self.data_prevista else None,
             "data_saida": self.data_saida.isoformat() if self.data_saida else None,
@@ -3574,3 +3757,69 @@ def load_user_from_request(request):
             return user
 
     return None
+
+
+# ============================================
+# # EVENT LISTENER GLOBAL -> O CORAÇÃO DO OFFLINE-FIRST (HÍBRIDO)
+# # ============================================
+# import json
+# from sqlalchemy import event
+# 
+# def _queue_sync(mapper, connection, target, operacao):
+#     """
+#     Função Master que ouve TODAS as inserções do banco local
+#     e as injeta no SyncQueue para o sync_worker mandar pro Aiven.
+#     """
+#     if os.getenv("SKIP_SYNC_LISTENERS") == "1":
+#         return
+# 
+#     tabela = target.__tablename__
+#     
+#     # Impedir loop infinito ou lixo no SyncWorker
+#     if tabela in ['sync_queue', 'sync_logs', 'auditoria', 'auditoria_sincronia', 'pontos_temporarios']:
+#         return
+# 
+#     estabelecimento_id = getattr(target, 'estabelecimento_id', 1)
+#     
+#     payload = None
+#     if operacao != 'DELETE':
+#         if hasattr(target, 'to_dict'):
+#             try: 
+#                 payload = target.to_dict()
+#             except Exception: 
+#                 payload = {}
+#                 
+#     try:
+#         from app.models import SyncQueue
+#         connection.execute(
+#             SyncQueue.__table__.insert().values(
+#                 estabelecimento_id=estabelecimento_id,
+#                 tabela=tabela,
+#                 registro_id=target.id,
+#                 operacao=operacao,
+#                 payload_json=json.dumps(payload, default=str) if payload else None,
+#                 status="pendente",
+#                 tentativas=0
+#             )
+#         )
+#     except Exception:
+#         # Se falhar a injeção na fila local, falhou silenciosamente pra não quebrar a venda do caixa
+#         pass
+# 
+# def after_insert_listener(mapper, connection, target):
+#     _queue_sync(mapper, connection, target, "INSERT")
+# 
+# def after_update_listener(mapper, connection, target):
+#     _queue_sync(mapper, connection, target, "UPDATE")
+# 
+# def after_delete_listener(mapper, connection, target):
+#     _queue_sync(mapper, connection, target, "DELETE")
+# 
+# # Mapear e ligar a escuta de eventos via Registry do SQLAlchemy
+# for mapper in db.Model.registry.mappers:
+#     cls = mapper.class_
+#     if hasattr(cls, '__tablename__'):
+#         event.listen(cls, 'after_insert', after_insert_listener)
+#         event.listen(cls, 'after_update', after_update_listener)
+#         event.listen(cls, 'after_delete', after_delete_listener)
+

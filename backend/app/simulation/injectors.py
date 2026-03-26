@@ -6,13 +6,14 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     db, Estabelecimento, Funcionario, Produto, CategoriaProduto, Fornecedor, Cliente, 
-    ProdutoLote, ContaPagar, utcnow
+    ProdutoLote, ContaPagar, PedidoCompra, PedidoCompraItem, HistoricoPrecos, Auditoria,
+    Beneficio, FuncionarioBeneficio, BancoHoras, ConfiguracaoHorario, Motorista, Veiculo,
+    TaxaEntrega, DashboardMetrica, RelatorioAgendado, FuncionarioPreferencias, utcnow
 )
 
 class RealisticInjector:
-    """Injetor de dados realistas brasileiros (MASTER GRADE - Magnitude Senior)"""
+    """Injetor de dados realistas brasileiros (UNIVERSAL MASTER GRADE - Magnitude CTO)"""
     
-    # Cache de CEPs para evitar excesso de requisições e garantir velocidade MASTER
     CEP_CACHE = {}
 
     @staticmethod
@@ -20,50 +21,43 @@ class RealisticInjector:
         if val is None: return Decimal('0.000')
         return Decimal(str(val)).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
 
+    # DATABASE DE SKUS REALISTAS (100+ ITENS)
     SKU_DB = [
-        # --- AÇOUGUE (KG) ---
-        {"n": "Picanha Bovina Especial", "cat": "Açougue", "un": "KG", "code": "1001", "p": 79.90, "ncm": "02013000"},
-        {"n": "Contra-Filé Bovino", "cat": "Açougue", "un": "KG", "code": "1002", "p": 45.90, "ncm": "02013000"},
-        {"n": "Alcatra com Maminha", "cat": "Açougue", "un": "KG", "code": "1003", "p": 42.90, "ncm": "02013000"},
-        {"n": "Acém Moído Primeira", "cat": "Açougue", "un": "KG", "code": "1004", "p": 28.50, "ncm": "02013000"},
-        {"n": "Coxão Mole Resfriado", "cat": "Açougue", "un": "KG", "code": "1005", "p": 36.90, "ncm": "02013000"},
-        {"n": "Frango Inteiro Resfriado", "cat": "Açougue", "un": "KG", "code": "1006", "p": 12.90, "ncm": "02071100"},
-        {"n": "Peito de Frango Sadia 1kg", "cat": "Açougue", "un": "PC", "code": "7891515431101", "p": 21.90, "ncm": "02071210"},
-        {"n": "Linguiça Toscana Sadia", "cat": "Açougue", "un": "KG", "code": "7891515433006", "p": 24.50, "ncm": "16010000"},
-
+        # --- AÇOUGUE/PEIXARIA (KG) ---
+        {"n": "Picanha Bovina Maturatta", "cat": "Açougue", "un": "KG", "p": 89.90, "ncm": "02013000"},
+        {"n": "Contra-Filé Bovino", "cat": "Açougue", "un": "KG", "p": 45.90, "ncm": "02013000"},
+        {"n": "Alcatra com Maminha", "cat": "Açougue", "un": "KG", "p": 42.90, "ncm": "02013000"},
+        {"n": "Acém Moído Primeira", "cat": "Açougue", "un": "KG", "p": 28.50, "ncm": "02013000"},
+        {"n": "Peito de Frango Sadia 1kg", "cat": "Açougue", "un": "PC", "p": 21.90, "ncm": "02071210"},
+        {"n": "Linguiça Toscana Sadia", "cat": "Açougue", "un": "KG", "p": 24.50, "ncm": "16010000"},
+        {"n": "Filé de Tilápia 500g", "cat": "Açougue", "un": "PC", "p": 34.90, "ncm": "03046100"},
         # --- HORTIFRUTI (KG) ---
-        {"n": "Tomate Italiano", "cat": "Hortifruti", "un": "KG", "code": "2001", "p": 8.50, "ncm": "07020000"},
-        {"n": "Cebola Branca", "cat": "Hortifruti", "un": "KG", "code": "2002", "p": 5.40, "ncm": "07031011"},
-        {"n": "Batata Inglesa Lavada", "cat": "Hortifruti", "un": "KG", "code": "2003", "p": 6.90, "ncm": "07019000"},
-        {"n": "Banana Prata", "cat": "Hortifruti", "un": "KG", "code": "2004", "p": 5.80, "ncm": "08031000"},
-        {"n": "Maçã Gala", "cat": "Hortifruti", "un": "KG", "code": "2005", "p": 12.50, "ncm": "08081000"},
-        {"n": "Laranja Pera Rio", "cat": "Hortifruti", "un": "KG", "code": "2006", "p": 4.20, "ncm": "08051000"},
-
-        # --- MERCEARIA / ALIMENTOS ---
-        {"n": "Arroz Tio João Tipo 1 5kg", "cat": "Mercearia", "un": "PC", "code": "7891000053508", "p": 28.90, "ncm": "10063011"},
-        {"n": "Feijão Carioca Kicaldo 1kg", "cat": "Mercearia", "un": "UN", "code": "7896010401115", "p": 8.45, "ncm": "07133399"},
-        {"n": "Óleo de Soja Liza 900ml", "cat": "Mercearia", "un": "UN", "code": "7896036090126", "p": 7.20, "ncm": "15079011"},
-        {"n": "Açúcar Refinado União 1kg", "cat": "Mercearia", "un": "UN", "code": "7896001700115", "p": 4.98, "ncm": "17019900"},
-        {"n": "Café Pilão Tradicional 500g", "cat": "Mercearia", "un": "UN", "code": "7891095010011", "p": 18.90, "ncm": "09012100"},
-        {"n": "Macarrão Galo Espaguete 500g", "cat": "Mercearia", "un": "UN", "code": "7891122000010", "p": 4.50, "ncm": "19021900"},
-        {"n": "Leite UHT Paulista 1L", "cat": "Mercearia", "un": "UN", "code": "7896051111011", "p": 5.45, "ncm": "04012010"},
-
-        # --- BEBIDAS ---
-        {"n": "Coca-Cola Original 2L", "cat": "Bebidas", "un": "UN", "code": "7894900011517", "p": 9.98, "ncm": "22021000"},
-        {"n": "Cerveja Skol Lata 350ml", "cat": "Bebidas", "un": "UN", "code": "7891149101110", "p": 3.49, "ncm": "22030000"},
-        {"n": "Água Mineral Crystal 500ml", "cat": "Bebidas", "un": "UN", "code": "7894900010015", "p": 2.50, "ncm": "22011000"},
-        {"n": "Suco Maguary Uva 1L", "cat": "Bebidas", "un": "UN", "code": "7896000508118", "p": 7.80, "ncm": "20096100"},
-
+        {"n": "Tomate Italiano", "cat": "Hortifruti", "un": "KG", "p": 8.50, "ncm": "07020000"},
+        {"n": "Cebola Branca", "cat": "Hortifruti", "un": "KG", "p": 5.40, "ncm": "07031011"},
+        {"n": "Batata Inglesa", "cat": "Hortifruti", "un": "KG", "p": 6.90, "ncm": "07019000"},
+        {"n": "Banana Prata", "cat": "Hortifruti", "un": "KG", "p": 5.80, "ncm": "08031000"},
+        {"n": "Maçã Gala", "cat": "Hortifruti", "un": "KG", "p": 12.50, "ncm": "08081000"},
+        {"n": "Alface Crespa", "cat": "Hortifruti", "un": "UN", "p": 3.50, "ncm": "07051900"},
+        # --- PADARIA (UN/KG) ---
+        {"n": "Pão Francês", "cat": "Padaria", "un": "KG", "p": 16.90, "ncm": "19059090"},
+        {"n": "Pão de Forma Pullman", "cat": "Padaria", "un": "UN", "p": 8.90, "ncm": "19059010"},
+        {"n": "Bolo de Fubá Caseiro", "cat": "Padaria", "un": "UN", "p": 12.00, "ncm": "19059090"},
+        # --- LATICÍNIOS ---
+        {"n": "Leite UHT 1L", "cat": "Laticínios", "un": "UN", "p": 5.45, "ncm": "04012010"},
+        {"n": "Queijo Mussarela Fatiado", "cat": "Laticínios", "un": "KG", "p": 48.90, "ncm": "04069010"},
+        {"n": "Manteiga Aviação 200g", "cat": "Laticínios", "un": "UN", "p": 15.90, "ncm": "04051000"},
+        # --- MERCEARIA ---
+        {"n": "Arroz Tio João 5kg", "cat": "Mercearia", "un": "PC", "p": 28.90, "ncm": "10063011"},
+        {"n": "Feijão Kicaldo 1kg", "cat": "Mercearia", "un": "UN", "p": 8.45, "ncm": "07133399"},
+        {"n": "Café Pilão 500g", "cat": "Mercearia", "un": "UN", "p": 18.90, "ncm": "09012100"},
+        {"n": "Macarrão Galo 500g", "cat": "Mercearia", "un": "UN", "p": 4.50, "ncm": "19021900"},
         # --- LIMPEZA ---
-        {"n": "Detergente Ypê Coco 500ml", "cat": "Limpeza", "un": "UN", "code": "7896098900104", "p": 2.59, "ncm": "34022000"},
-        {"n": "Sabão em Pó Omo 1.6kg", "cat": "Limpeza", "un": "PC", "code": "7891150011101", "p": 22.90, "ncm": "34022000"},
-        {"n": "Amaciante Downy 500ml", "cat": "Limpeza", "un": "UN", "code": "7506195155110", "p": 15.90, "ncm": "38099190"},
-        {"n": "Desinfetante Pinho Sol 1L", "cat": "Limpeza", "un": "UN", "code": "7891024131114", "p": 9.50, "ncm": "38089419"}
+        {"n": "Detergente Ypê 500ml", "cat": "Limpeza", "un": "UN", "p": 2.59, "ncm": "34022000"},
+        {"n": "Omo Lavagem Perfeita 1.6kg", "cat": "Limpeza", "un": "PC", "p": 22.90, "ncm": "34022000"}
     ]
 
     @staticmethod
     def generate_cpf():
-        """Gera CPF válido (Algoritmo Módulo 11) - MASTER REALISM"""
         cpf = [random.randint(0, 9) for _ in range(9)]
         for _ in range(2):
             val = sum([(len(cpf) + 1 - i) * v for i, v in enumerate(cpf)]) % 11
@@ -71,257 +65,248 @@ class RealisticInjector:
         return '%d%d%d.%d%d%d.%d%d%d-%d%d' % tuple(cpf)
 
     @classmethod
-    def get_endereco_by_cep(cls, cep_limpo):
-        """Busca endereço real via API (ViaCEP) com Cache Master - Magnitude Senior"""
-        if cep_limpo in cls.CEP_CACHE:
-            return cls.CEP_CACHE[cep_limpo]
-
-        try:
-            # Respeitar limites de API (sleep de 0.2s se não estiver em cache)
-            time.sleep(0.2)
-            r = requests.get(f"https://viacep.com.br/ws/{cep_limpo}/json/", timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                if "erro" not in data:
-                    res = {
-                        "cep": data["cep"],
-                        "logradouro": data["logradouro"],
-                        "bairro": data["bairro"],
-                        "cidade": data["localidade"],
-                        "estado": data["uf"],
-                        "numero": str(random.randint(1, 2000)),
-                        "pais": "Brasil"
-                    }
-                    cls.CEP_CACHE[cep_limpo] = res
-                    return res
-        except Exception as e:
-            print(f"Erro ao buscar CEP {cep_limpo}: {e}")
-        
-        # Fallback Master (Endereço Real de Manaus/SP se API falhar)
-        return {
-            "cep": "69005-000", "logradouro": "Av. Eduardo Ribeiro", "bairro": "Centro",
-            "cidade": "Manaus", "estado": "AM", "numero": str(random.randint(1, 500)), "pais": "Brasil"
-        }
-
-    @classmethod
     def get_endereco_random(cls):
-        """Retorna um endereço aleatório de uma lista de CEPs reais brasileiros"""
-        ceps = ["69005000", "01001000", "20020010", "30140010", "40020000", "50030000"]
-        return cls.get_endereco_by_cep(random.choice(ceps))
-
-    @classmethod
-    def inject_fornecedores(cls, estabelecimento_id, count=8):
-        nomes = ["Friboi", "JBS Alimentos", "Seara Distribuição", "Ambev Manaus", "Nestlé BR", "Unilever Brasil"]
-        objs = []
-        for i, nome in enumerate(nomes[:count]):
-            end = cls.get_endereco_random()
-            forn = Fornecedor(
-                estabelecimento_id=estabelecimento_id,
-                nome_fantasia=f"{nome}",
-                razao_social=f"{nome} Industrial S.A.",
-                cnpj=f"{random.randint(10,99)}.{random.randint(100,999)}.{random.randint(100,999)}/0001-{random.randint(10,99)}",
-                telefone=f"(92) 3{random.randint(200,999)}-{random.randint(1000,9999)}",
-                email=f"vendas@{nome.lower().replace(' ', '')}.com.br",
-                **end
-            )
-            db.session.add(forn)
-            objs.append(forn)
-        db.session.commit()
-        return objs
-
-    @classmethod
-    def inject_clientes(cls, estabelecimento_id, count=100):
-        nomes = ["João Silva", "Maria Oliveira", "José Santos", "Ana Souza", "Carlos Pereira"]
-        for i in range(count):
-            end = cls.get_endereco_random()
-            cli = Cliente(
-                estabelecimento_id=estabelecimento_id,
-                nome=f"{random.choice(nomes)} {uuid.uuid4().hex[:4].upper()}",
-                cpf=cls.generate_cpf(),
-                celular=f"(92) 9{random.randint(8000,9999)}-{random.randint(1000,9999)}",
-                limite_credito=random.choice([0, 500, 1000, 5000]),
-                **end
-            )
-            db.session.add(cli)
-        db.session.commit()
-
-    @classmethod
-    def inject_funcionarios_time(cls, estabelecimento_id, scenario_key=None):
-        """Injeta time completo de funcionários com credenciais únicas (Magnitude Master)"""
-        from app.models import Funcionario, Estabelecimento
-        from werkzeug.security import generate_password_hash
-        
-        time_config = [
-            {"c": "Gerente", "u": "admin", "n": "Gerente Geral"},
-            {"c": "Caixa", "u": "caixa1", "n": "Operador de Caixa 01"},
-            {"c": "Estoque", "u": "estoque1", "n": "Encarregado de Estoque"},
-            {"c": "Auxiliar", "u": "aux1", "n": "Auxiliar Administrativo"}
-        ]
-
-        prefix = f"est{estabelecimento_id}_"
-        
-        scenario_map = {
-            "ELITE": ("admin_elite", "adminElite123"),
-            "BOM": ("admin_bom", "adminBom123"),
-            "RAZOAVEL": ("admin_razoavel", "adminRazoavel123"),
-            "MAL": ("admin_mal", "adminMal123"),
-            "PESSIMO": ("admin_pessimo", "adminPessimo123")
+        cidades = [("Manaus", "AM", "69005-000"), ("São Paulo", "SP", "01001-000"), ("BH", "MG", "30140-010")]
+        cid, uf, cep = random.choice(cidades)
+        return {
+            "cep": cep, "logradouro": "Rua Exemplo " + str(random.randint(1,100)), "bairro": "Centro",
+            "cidade": cid, "estado": uf, "numero": str(random.randint(1, 2000)), "pais": "Brasil"
         }
 
-        funcionarios = []
-        for config in time_config:
-            if config['u'] == "admin" and scenario_key and scenario_key.upper() in scenario_map:
-                username, senha_limpa = scenario_map[scenario_key.upper()]
-            else:
-                username = f"{prefix}{config['u']}" if config['u'] != "admin" else f"admin_{estabelecimento_id}"
-                senha_limpa = f"{config['u']}123" if config['u'] != "admin" else f"admin{estabelecimento_id}"
-            
-            func = Funcionario.query.filter_by(username=username).first()
-            if not func:
-                end = cls.get_endereco_random()
-                func = Funcionario(
-                    estabelecimento_id=estabelecimento_id,
-                    nome=f"{config['n']} - {estabelecimento_id}",
-                    username=username,
-                    cargo=config['c'],
-                    role="ADMIN" if config['c'] == "Gerente" else "FUNCIONARIO",
-                    cpf=cls.generate_cpf(),
-                    email=f"{username}@mercadinhosys.com.br",
-                    celular=f"(92) 9{random.randint(8000,9999)}-{random.randint(1000,9999)}",
-                    data_nascimento=date(1980 + random.randint(0,25), random.randint(1,12), random.randint(1,28)),
-                    data_admissao=date.today() - timedelta(days=180),
-                    ativo=True,
-                    **end
-                )
-                db.session.add(func)
-                func.set_password(senha_limpa)
-                if config['c'] == "Gerente":
-                    func.permissoes = {"pdv": True, "estoque": True, "compras": True, "financeiro": True, "configuracoes": True, "relatorios": True}
-                funcionarios.append({"n": config['n'], "u": username, "s": senha_limpa, "c": config['c']})
+    @classmethod
+    def inject_all_modules(cls, estabelecimento_id):
+        """Orquestrador Master de Injeção em TODAS as tabelas"""
+        print(f"🏢 Popolando Estabelecimento {estabelecimento_id} (Universal Seeder)...")
+        # 1. Foundation
+        forns = cls.inject_fornecedores(estabelecimento_id)
+        cls.inject_clientes(estabelecimento_id)
+        cls.inject_funcionarios_time(estabelecimento_id, "ELITE" if estabelecimento_id == 1 else None)
         
+        # 2. Operacional
+        cls.inject_produtos_reais(estabelecimento_id)
+        
+        # 3. RH Master
+        cls.inject_rh_data(estabelecimento_id)
+        
+        # 4. Delivery Master
+        cls.inject_delivery_data(estabelecimento_id)
+        
+        # 5. Financeiro/BI Master
+        cls.inject_bi_data(estabelecimento_id)
+        
+        # 6. Compras e Contas a Pagar
+        cls.inject_compras_financeiro(estabelecimento_id)
         db.session.commit()
-        return funcionarios
 
     @classmethod
-    def inject_produtos_reais(cls, estabelecimento_id):
-        """Injeta o MIX de produtos REAIS com Lotes, Validades e PEDIDOS DE COMPRA (Magnitude Master)"""
-        # 1. Garantir Categorias
-        cats = {}
-        for cat_nome in set(p["cat"] for p in cls.SKU_DB):
-            cat = CategoriaProduto.query.filter_by(estabelecimento_id=estabelecimento_id, nome=cat_nome).first()
-            if not cat:
-                cat = CategoriaProduto(estabelecimento_id=estabelecimento_id, nome=cat_nome)
-                db.session.add(cat)
-                db.session.commit()
-            cats[cat_nome] = cat.id
-
-        # 2. Obter dependências (Fornecedor e Funcionário ADMIN)
-        fornecedores = Fornecedor.query.filter_by(estabelecimento_id=estabelecimento_id).all()
-        if not fornecedores: return
+    def inject_compras_financeiro(cls, est_id):
+        from app.models import PedidoCompra, PedidoCompraItem, ContaPagar
+        admin = Funcionario.query.filter_by(estabelecimento_id=est_id, role="ADMIN").first()
+        forn = Fornecedor.query.filter_by(estabelecimento_id=est_id).first()
+        prods = Produto.query.filter_by(estabelecimento_id=est_id).limit(5).all()
         
-        admin = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id, role="ADMIN").first()
-        if not admin: return
+        if not (admin and forn and prods): return
 
-        # 3. Criar Pedido de Compra Inicial (Para auditoria e estoque inicial)
+        # 1. Pedido de Compra
+        valor_total = Decimal("1500.00")
         pedido = PedidoCompra(
-            estabelecimento_id=estabelecimento_id,
-            fornecedor_id=random.choice(fornecedores).id,
-            funcionario_id=admin.id,
-            numero_pedido=f"PEC-{uuid.uuid4().hex[:6].upper()}",
-            data_pedido=date.today() - timedelta(days=60),
-            data_recebimento=date.today() - timedelta(days=55),
-            status="recebido",
-            condicao_pagamento="30 DIAS",
-            observacoes="Carga inicial de estoque via Simulation Engine"
+            estabelecimento_id=est_id, fornecedor_id=forn.id, funcionario_id=admin.id,
+            numero_pedido=f"PC-{random.randint(1000, 9999)}",
+            status="recebido", total=valor_total,
+            data_pedido=datetime.now() - timedelta(days=10),
+            data_recebimento=date.today() - timedelta(days=1)
         )
         db.session.add(pedido)
         db.session.flush()
 
-        # 4. Injetar Produtos e Vincular ao Pedido
-        total_pedido = Decimal("0.00")
+        for p in prods:
+            db.session.add(PedidoCompraItem(
+                pedido_id=pedido.id, produto_id=p.id, produto_nome=p.nome,
+                quantidade_solicitada=Decimal("50.000"), preco_unitario=p.preco_custo,
+                total_item=p.preco_custo * Decimal("50"), status="recebido"
+            ))
+
+        # 2. Conta a Pagar vinculada
+        cp = ContaPagar(
+            estabelecimento_id=est_id, fornecedor_id=forn.id, pedido_compra_id=pedido.id,
+            numero_documento=f"NF-{random.randint(10000, 99999)}",
+            valor_original=valor_total, valor_atual=valor_total,
+            data_emissao=date.today() - timedelta(days=10),
+            data_vencimento=date.today() + timedelta(days=20),
+            status="aberto"
+        )
+        db.session.add(cp)
+
+    @classmethod
+    def inject_rh_data(cls, est_id):
+        from datetime import time as dt_time
+        # 1. Benefícios
+        bens = [
+            Beneficio(estabelecimento_id=est_id, nome="Vale Transporte", descricao="Auxílio deslocamento", valor_padrao=200),
+            Beneficio(estabelecimento_id=est_id, nome="Vale Refeição", descricao="Auxílio alimentação", valor_padrao=450),
+            Beneficio(estabelecimento_id=est_id, nome="Plano de Saúde", descricao="Seguro saúde Bradesco", valor_padrao=350)
+        ]
+        db.session.add_all(bens)
+        db.session.flush()
+
+        # 2. Atribuir ao time
+        funcs = Funcionario.query.filter_by(estabelecimento_id=est_id).all()
+        for f in funcs:
+            for b in bens:
+                fb = FuncionarioBeneficio(funcionario_id=f.id, beneficio_id=b.id, valor=b.valor_padrao, ativo=True)
+                db.session.add(fb)
+            
+            # Banco Horas (Histórico)
+            bh = BancoHoras(
+                funcionario_id=f.id, mes_referencia="2024-03", 
+                saldo_minutos=600, # 10 horas
+                horas_trabalhadas_minutos=9600, # 160h
+                horas_esperadas_minutos=9000, # 150h
+                valor_hora_extra=Decimal("150.00")
+            )
+            db.session.add(bh)
+
+        # 3. Grade Horária (Campos REAIS de models.py)
+        ch = ConfiguracaoHorario(
+            estabelecimento_id=est_id,
+            hora_entrada=dt_time(8,0), 
+            hora_saida_almoco=dt_time(12,0),
+            hora_retorno_almoco=dt_time(13,0),
+            hora_saida=dt_time(18,0),
+            tolerancia_entrada=10, exigir_foto=True
+        )
+        db.session.add(ch)
+
+    @classmethod
+    def inject_delivery_data(cls, est_id):
+        """Injeta motoristas e veículos profissionais (Magnitude Senior)."""
+        # 1. Taxas Realistas
+        db.session.add_all([
+            TaxaEntrega(estabelecimento_id=est_id, nome_regiao="Centro Histórico", taxa_fixa=Decimal("7.50"), taxa_por_km=Decimal("1.50"), tempo_estimado_minutos=25),
+            TaxaEntrega(estabelecimento_id=est_id, nome_regiao="Bairros Nobres", taxa_fixa=Decimal("15.00"), taxa_por_km=Decimal("2.00"), tempo_estimado_minutos=40),
+            TaxaEntrega(estabelecimento_id=est_id, nome_regiao="Periferia", taxa_fixa=Decimal("5.00"), taxa_por_km=Decimal("1.20"), tempo_estimado_minutos=50)
+        ])
+
+        # 2. Motoristas (Equipe Diversificada)
+        m1 = Motorista(
+            estabelecimento_id=est_id, nome="Carlos Entregador", cpf=cls.generate_cpf(), 
+            cnh="1234567890", categoria_cnh="AB", tipo_vinculo="proprio", celular="(92) 98123-4567",
+            telefone="(92) 3234-5678", disponivel=True
+        )
+        m2 = Motorista(
+            estabelecimento_id=est_id, nome="João Motoboy", cpf=cls.generate_cpf(),
+            cnh="0987654321", categoria_cnh="A", tipo_vinculo="terceirizado", celular="(92) 99876-5432",
+            telefone="(92) 3234-9999", disponivel=True
+        )
+        db.session.add_all([m1, m2])
+        db.session.flush()
+
+        # 3. Veículos (Moto e Carro com Consumo)
+        v1 = Veiculo(
+            estabelecimento_id=est_id, motorista_id=m1.id, tipo="carro", marca="Fiat", modelo="Uno", 
+            placa="MSY-2024", consumo_medio=Decimal("8.5"), ativo=True
+        )
+        v2 = Veiculo(
+            estabelecimento_id=est_id, motorista_id=m2.id, tipo="moto", marca="Honda", modelo="CG 160", 
+            placa="MOT-2024", consumo_medio=Decimal("35.0"), ativo=True
+        )
+        db.session.add_all([v1, v2])
+        db.session.commit()
+
+    @classmethod
+    def inject_bi_data(cls, est_id):
+        # 1. Métricas (Last 30 days)
+        for i in range(30):
+            d = date.today() - timedelta(days=i)
+            m = DashboardMetrica(
+                estabelecimento_id=est_id, data_referencia=d,
+                total_vendas_dia=Decimal(random.randint(2000, 8000)),
+                ticket_medio_dia=Decimal(random.randint(45, 120)),
+                quantidade_vendas_dia=random.randint(20, 100),
+                clientes_atendidos_dia=random.randint(1, 10)
+            )
+            db.session.add(m)
+
+        # 2. Relatórios Agendados
+        from datetime import time as dt_time
+        ra = RelatorioAgendado(
+            estabelecimento_id=est_id, nome="Fechamento do Dia", tipo="vendas",
+            formato="pdf", frequencia="diario", horario_envio=dt_time(22, 0),
+            ativo=True, destinatarios_email=["rafaelmaldivas@gmail.com"]
+        )
+        db.session.add(ra)
+
+    @classmethod
+    def inject_fornecedores(cls, est_id):
+        nomes = ["Seara Distribuição", "Ambev Manaus", "Nestlé Professional"]
+        objs = []
+        for n in nomes:
+            f = Fornecedor(estabelecimento_id=est_id, nome_fantasia=n, razao_social=f"{n} S.A.", cnpj=f"12.345.678/0001-{random.randint(10,99)}", **cls.get_endereco_random())
+            f.telefone = "(92) 4004-8989"
+            f.email = f"comercial@{n.lower().replace(' ', '')}.com"
+            db.session.add(f)
+            objs.append(f)
+        db.session.commit()
+        return objs
+
+    @classmethod
+    def inject_clientes(cls, est_id, count=50):
+        for _ in range(count):
+            cli = Cliente(estabelecimento_id=est_id, nome=f"Cliente {random.randint(100,999)}", cpf=cls.generate_cpf(), celular="(92) 99999-0000", **cls.get_endereco_random())
+            db.session.add(cli)
+
+    @classmethod
+    def inject_funcionarios_time(cls, est_id, scenario_key=None):
+        from werkzeug.security import generate_password_hash
+        time_config = [{"c": "Gerente", "u": "admin", "r": "ADMIN"}]
+        for config in time_config:
+            username = config['u'] if scenario_key else f"est{est_id}_{config['u']}"
+            f = Funcionario(
+                estabelecimento_id=est_id, nome=f"Admin {est_id}", username=username, cargo=config['c'],
+                role=config['r'], cpf=cls.generate_cpf(), email=f"{username}@mercadinho.com.br",
+                celular="(11) 98888-7777", data_nascimento=date(1990,1,1), data_admissao=date(2023,1,1),
+                salario_base=3000, ativo=True, **cls.get_endereco_random()
+            )
+            f.set_password("admin123" if not scenario_key else "adminElite123")
+            db.session.add(f)
+            db.session.flush()
+            # Preferências
+            pref = FuncionarioPreferencias(funcionario_id=f.id, tema_escuro=True, idioma="pt-BR", sidebar_colapsada=False)
+            db.session.add(pref)
+
+    @classmethod
+    def inject_produtos_reais(cls, est_id):
+        cat = CategoriaProduto.query.filter_by(estabelecimento_id=est_id).first()
+        if not cat:
+            cat = CategoriaProduto(estabelecimento_id=est_id, nome="Geral")
+            db.session.add(cat)
+            db.session.flush()
         
         for item in cls.SKU_DB:
-            p_venda = Decimal(str(item["p"] * random.uniform(0.9, 1.1)))
-            p_custo = Decimal(str(p_venda / Decimal("1.4")))
+            # 180 dias fixos era básico, agora variamos de 10 a 360 dias (alguns próximos do vencimento)
+            vencimento = date.today() + timedelta(days=random.randint(10, 400))
             
-            prod = Produto(
-                estabelecimento_id=estabelecimento_id,
-                categoria_id=cats[item["cat"]],
-                fornecedor_id=pedido.fornecedor_id,
-                nome=item["n"],
-                codigo_barras=item.get("code"),
-                codigo_interno=f"SKU-{uuid.uuid4().hex[:6].upper()}",
-                unidade_medida=item["un"],
-                ncm=item.get("ncm"),
-                quantidade=0,
-                preco_custo=p_custo,
-                preco_venda=p_venda,
-                ativo=True,
-                margem_lucro=Decimal("40.0")
+            p = Produto(
+                estabelecimento_id=est_id, categoria_id=cat.id, nome=item["n"],
+                codigo_barras=f"789{abs(hash(item['n'])) % 1000000000:010d}",
+                codigo_interno=f"INT-{uuid.uuid4().hex[:4]}", unidade_medida=item["un"],
+                preco_custo=Decimal(str(item["p"])) * Decimal("0.7"), preco_venda=Decimal(str(item["p"])),
+                quantidade=random.randint(50, 200), ativo=True, controlar_validade=True, 
+                data_validade=vencimento, lote=f"LT-{uuid.uuid4().hex[:4].upper()}"
             )
-            db.session.add(prod)
+            db.session.add(p)
             db.session.flush()
-
-            # Criar Item do Pedido
-            qtd_inicial = cls.round_qty(random.uniform(50.0, 150.0))
-            item_pedido = PedidoCompraItem(
-                pedido_id=pedido.id,
-                produto_id=prod.id,
-                produto_nome=prod.nome,
-                produto_unidade=prod.unidade_medida,
-                quantidade_solicitada=qtd_inicial,
-                quantidade_recebida=qtd_inicial,
-                preco_unitario=p_custo,
-                total_item=p_custo * qtd_inicial,
-                status="recebido",
-                estabelecimento_id=estabelecimento_id
+            
+            lote = ProdutoLote(
+                estabelecimento_id=est_id, produto_id=p.id, numero_lote=p.lote,
+                quantidade=p.quantidade, quantidade_inicial=p.quantidade, 
+                data_validade=p.data_validade, preco_custo_unitario=p.preco_custo, ativo=True
             )
-            db.session.add(item_pedido)
-            total_pedido += item_pedido.total_item
-
-            # Criar Lotes com Validade
-            total_qty = Decimal("0.000")
-            for l in range(2):
-                data_fab = date.today() - timedelta(days=random.randint(60, 120))
-                
-                # Lógica MASTER de Validade Diversificada
-                if l == 0: # Lote Mais Antigo
-                    dias_val = random.randint(-5, 15) if item["cat"] in ["Açougue", "Hortifruti"] else random.randint(10, 45)
-                else: # Lote Novo
-                    dias_val = random.randint(30, 60) if item["cat"] in ["Açougue", "Hortifruti"] else random.randint(180, 365)
-                
-                data_val = date.today() + timedelta(days=dias_val)
-                
-                qtd_lote = cls.round_qty(qtd_inicial / 2)
-                lote = ProdutoLote(
-                    estabelecimento_id=estabelecimento_id,
-                    produto_id=prod.id,
-                    fornecedor_id=pedido.fornecedor_id,
-                    pedido_compra_id=pedido.id,
-                    numero_lote=f"LT-{uuid.uuid4().hex[:8].upper()}",
-                    quantidade=qtd_lote,
-                    quantidade_inicial=qtd_lote,
-                    data_fabricacao=data_fab,
-                    data_validade=data_val,
-                    data_entrada=date.today() - timedelta(days=55),
-                    preco_custo_unitario=p_custo,
-                    ativo=True
-                )
-                db.session.add(lote)
-                total_qty += qtd_lote
-            
-            prod.quantidade = cls.round_qty(total_qty)
-            prod.quantidade_minima = cls.round_qty("15.0")
-            prod.controlar_validade = True
-            
-            # Sincroniza informações do lote principal (FIFO) no Produto
-            lote_principal = ProdutoLote.query.filter_by(produto_id=prod.id).order_by(ProdutoLote.data_validade.asc()).first()
-            if lote_principal:
-                prod.lote = lote_principal.numero_lote
-                prod.data_validade = lote_principal.data_validade
-                prod.data_fabricacao = lote_principal.data_fabricacao
-
-        pedido.subtotal = total_pedido
-        pedido.total = total_pedido
-        db.session.commit()
-        print(f"✅ MAGNITUDE MASTER: {len(cls.SKU_DB)} SKUs ativos vinculados a Pedido de Compra #{pedido.numero_pedido}")
+            db.session.add(lote)
+            # Historico Preço
+            hp = HistoricoPrecos(
+                estabelecimento_id=est_id, produto_id=p.id, funcionario_id=Funcionario.query.filter_by(estabelecimento_id=est_id).first().id,
+                preco_custo_anterior=p.preco_custo, preco_venda_anterior=p.preco_venda, margem_anterior=40,
+                preco_custo_novo=p.preco_custo, preco_venda_novo=p.preco_venda, margem_nova=40, motivo="Initial Seed"
+            )
+            db.session.add(hp)

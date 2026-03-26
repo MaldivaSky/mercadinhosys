@@ -75,18 +75,19 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_recycle": 300,  # Aumentado para 5 minutos
-        "pool_size": 10,      # Aumentado para suportar mais threads
-        "max_overflow": 20,   # Margem de manobra maior
-        "pool_timeout": 30,   # Esperar até 30s por uma conexão livre
+        "pool_recycle": 300,
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30,
         "connect_args": {
             "keepalives": 1,
             "keepalives_idle": 30,
             "keepalives_interval": 10,
             "keepalives_count": 5,
             "connect_timeout": 10,
-            "sslmode": "disable" # Força desativação de SSL para evitar erro em localhost
-            # "options": "-c statement_timeout=30000" # Removido para compatibilidade Neon/PgBouncer
+            # NOTA: sslmode NÃO é definido aqui — é controlado pelo __init__.py
+            # que detecta se é localhost (disable) ou cloud/Aiven (require).
+            # A URL do Aiven já inclui ?sslmode=require na query string.
         },
     } if _using_postgres else {}
 
@@ -117,6 +118,13 @@ class Config:
     # ==================== CACHE ====================
     CACHE_TYPE = os.environ.get("CACHE_TYPE", "SimpleCache")
     CACHE_DEFAULT_TIMEOUT = 300
+
+    # ==================== SYNC ====================
+    APP_MODE = os.environ.get("APP_MODE", "local")
+    SYNC_ENABLED = os.environ.get("SYNC_ENABLED", "false").lower() == "true"
+    SYNC_WORKER_INTERVAL = int(os.environ.get("SYNC_WORKER_INTERVAL", "30"))
+    SYNC_MAX_RETRIES = int(os.environ.get("SYNC_MAX_RETRIES", "3"))
+    CLOUD_API_URL = os.environ.get("CLOUD_API_URL", "https://mercadinhosys.onrender.com")
 
 
 class DevelopmentConfig(Config):

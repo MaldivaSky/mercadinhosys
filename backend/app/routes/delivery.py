@@ -1,497 +1,483 @@
 """
-MercadinhoSys - Rotas de Delivery
-Módulo profissional para gerenciamento de entregas
+MercadinhoSys - Rotas de Delivery Profissional
+Integração total com os modelos: Motorista, Veiculo, Entrega, TaxaEntrega
 """
 
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import (
-    db, Entregador, DeliveryConfig, PedidoDelivery, 
-    DeliveryRastreamento, DeliveryMetricas, Cliente, VendaItem, Produto
+    db, Motorista, Veiculo, TaxaEntrega, Entrega, 
+    EntregaItem, RastreamentoEntrega, CustoEntrega,
+    Venda, Cliente, Produto
 )
 from app.decorators.rbac import tenant_or_super_admin_required
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import json
-import secrets
 import logging
+from sqlalchemy import or_, and_, func
 
 delivery_bp = Blueprint("delivery", __name__)
 logger = logging.getLogger(__name__)
 
-# ==================== ENTREGADORES ====================
+# ==================== MOTORISTAS & VEÍCULOS ====================
 
-@delivery_bp.route("/entregadores", methods=["GET"])
+@delivery_bp.route("/motoristas", methods=["GET"])
 @tenant_or_super_admin_required
-def listar_entregadores():
-    """Lista todos os entregadores do estabelecimento"""
+def listar_motoristas():
+    """Lista todos os motoristas do estabelecimento"""
     try:
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 20, type=int)
-        ativos = request.args.get("ativos", type=bool)
+        ativos = request.args.get("ativos", "true").lower() == "true"
+        query = Motorista.query.filter_by(estabelecimento_id=request.allowed_estabelecimento_id)
         
-        query = Entregador.query.filter_by(estabelecimento_id=request.allowed_estabelecimento_id)
-        
-        if ativos is not None:
-            query = query.filter_by(ativo=ativos)
-        
-        entregadores = query.order_by(Entregador.nome).paginate(
-            page=page, per_page=per_page, error_out=False
-        )
+        if ativos:
+            query = query.filter_by(ativo=True)
+            
+        motoristas = query.order_by(Motorista.nome).all()
         
         return jsonify({
             "success": True,
-            "entregadores": [e.to_dict() for e in entregadores.items],
-            "total": entregadores.total,
-            "pages": entregadores.pages,
-            "current_page": entregadores.page
+            "motoristas": [m.to_dict() for m in motoristas]
         })
-        
     except Exception as e:
-        logger.error(f"Erro ao listar entregadores: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
+        logger.error(f"Erro ao listar motoristas: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@delivery_bp.route("/entregadores", methods=["POST"])
+@delivery_bp.route("/motoristas", methods=["POST"])
 @tenant_or_super_admin_required
-def criar_entregador():
-    """Cria um novo entregador"""
+def criar_motorista():
+    """Cadastra um novo motorista"""
     try:
         data = request.get_json()
-        
-        # Validações
-        required_fields = ["nome", "cpf", "telefone", "data_contratacao"]
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({
-                    "success": False,
-                    "error": f"Campo obrigatório: {field}"
-                }), 400
-        
-        # Verificar CPF duplicado
-        if Entregador.query.filter_by(cpf=data["cpf"]).first():
-            return jsonify({
-                "success": False,
-                "error": "CPF já cadastrado"
-            }), 400
-        
-        entregador = Entregador(
+        motorista = Motorista(
             estabelecimento_id=request.allowed_estabelecimento_id,
             nome=data["nome"],
             cpf=data["cpf"],
-            rg=data.get("rg"),
-            telefone=data["telefone"],
-            whatsapp=data.get("whatsapp"),
+            cnh=data.get("cnh"),
+            categoria_cnh=data.get("categoria_cnh"),
+            telefone=data.get("telefone"),
+            celular=data.get("celular"),
             email=data.get("email"),
-            data_nascimento=datetime.strptime(data.get("data_nascimento", "1990-01-01"), "%Y-%m-%d").date(),
-            data_contratacao=datetime.strptime(data["data_contratacao"], "%Y-%m-%d").date(),
-            tipo_veiculo=data.get("tipo_veiculo", "moto"),
-            placa_veiculo=data.get("placa_veiculo"),
-            modelo_veiculo=data.get("modelo_veiculo"),
-            taxa_entrega_padrao=Decimal(str(data.get("taxa_entrega_padrao", "5.00"))),
-            comissao_por_entrega=Decimal(str(data.get("comissao_por_entrega", "0.00"))),
-            forma_pagamento_padrao=data.get("forma_pagamento_padrao", "PIX")
+            tipo_vinculo=data.get("tipo_vinculo", "CLT"),
+            percentual_comissao=Decimal(str(data.get("percentual_comissao", 0))),
+            salario_fixo=Decimal(str(data.get("salario_fixo", 0)))
         )
-        
-        db.session.add(entregador)
+        db.session.add(motorista)
         db.session.commit()
+        return jsonify({"success": True, "motorista": motorista.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@delivery_bp.route("/veiculos", methods=["GET"])
+@tenant_or_super_admin_required
+def listar_veiculos():
+    """Lista veículos disponíveis"""
+    try:
+        veiculos = Veiculo.query.filter_by(
+            estabelecimento_id=request.allowed_estabelecimento_id,
+            ativo=True
+        ).all()
+        return jsonify({"success": True, "veiculos": [v.to_dict() for v in veiculos]})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ==================== TAXAS DE ENTREGA ====================
+
+@delivery_bp.route("/taxas", methods=["GET"])
+@tenant_or_super_admin_required
+def listar_taxas():
+    """Lista taxas por região/bairro"""
+    try:
+        taxas = TaxaEntrega.query.filter_by(
+            estabelecimento_id=request.allowed_estabelecimento_id,
+            ativo=True
+        ).all()
+        return jsonify({"success": True, "taxas": [t.to_dict() for t in taxas]})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@delivery_bp.route("/taxas", methods=["POST"])
+@tenant_or_super_admin_required
+def criar_taxa():
+    """Cria nova configuração de taxa de entrega"""
+    try:
+        data = request.get_json()
+        taxa = TaxaEntrega(
+            estabelecimento_id=request.allowed_estabelecimento_id,
+            nome_regiao=data["nome_regiao"],
+            bairros=json.dumps(data.get("bairros", [])),
+            taxa_fixa=Decimal(str(data.get("taxa_fixa", 0))),
+            tempo_estimado_minutos=data.get("tempo_estimado_minutos", 30)
+        )
+        db.session.add(taxa)
+        db.session.commit()
+        return jsonify({"success": True, "taxa": taxa.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ==================== ENTREGAS ====================
+
+@delivery_bp.route("/entregas", methods=["GET"])
+@tenant_or_super_admin_required
+def listar_entregas():
+    """Lista entregas com filtros avançados"""
+    try:
+        status = request.args.get("status")
+        motorista_id = request.args.get("motorista_id")
         
-        logger.info(f"Entregador {entregador.nome} criado com sucesso")
+        query = Entrega.query.filter_by(estabelecimento_id=request.allowed_estabelecimento_id)
+        
+        if status and status != "todos":
+            query = query.filter_by(status=status)
+        if motorista_id:
+            query = query.filter_by(motorista_id=motorista_id)
+            
+        entregas = query.order_by(Entrega.created_at.desc()).limit(100).all()
         
         return jsonify({
             "success": True,
-            "message": "Entregador criado com sucesso",
-            "entregador": entregador.to_dict()
-        }), 201
+            "entregas": [e.to_dict() for e in entregas]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@delivery_bp.route("/entregas", methods=["POST"])
+@tenant_or_super_admin_required
+def criar_entrega():
+    """Vincula uma venda a uma nova entrega com itens e detalhes financeiros"""
+    try:
+        data = request.get_json()
+        venda = Venda.query.get_or_404(data["venda_id"])
         
+        # Gerar código de rastreamento único
+        codigo = f"MS{datetime.now().strftime('%y%m%d')}{str(venda.id).zfill(5)}"
+        
+        entrega = Entrega(
+            estabelecimento_id=request.allowed_estabelecimento_id,
+            venda_id=venda.id,
+            cliente_id=venda.cliente_id,
+            codigo_rastreamento=codigo,
+            endereco_cep=data.get("endereco_cep", venda.cliente.cep if venda.cliente else ""),
+            endereco_logradouro=data.get("endereco_logradouro", ""),
+            endereco_numero=data.get("endereco_numero", ""),
+            endereco_bairro=data.get("endereco_bairro", ""),
+            endereco_cidade=data.get("endereco_cidade", "Manaus"),
+            endereco_estado=data.get("endereco_estado", "AM"),
+            endereco_complemento=data.get("endereco_complemento", ""),
+            endereco_referencia=data.get("endereco_referencia", ""),
+            status="pendente",
+            data_prevista=datetime.now() + timedelta(minutes=45),
+            taxa_entrega=Decimal(str(data.get("taxa_entrega", 0))),
+            pagamento_tipo=data.get("pagamento_tipo", "loja"), # loja ou entrega
+            pagamento_status=data.get("pagamento_status", "pendente"),
+            observacoes=data.get("observacoes", "")
+        )
+        
+        db.session.add(entrega)
+        db.session.flush() # Para pegar o ID da entrega
+        
+        # Clonar itens da venda para a entrega
+        for item_venda in venda.itens:
+            item_entrega = EntregaItem(
+                entrega_id=entrega.id,
+                produto_id=item_venda.produto_id,
+                venda_item_id=item_venda.id,
+                quantidade=item_venda.quantidade,
+                quantidade_entregue=0,
+                status="pendente"
+            )
+            db.session.add(item_entrega)
+        
+        # Adicionar histórico inicial
+        rastreio = RastreamentoEntrega(
+            entrega_id=entrega.id,
+            status="pedido_recebido",
+            observacao="Entrega agendada no sistema"
+        )
+        db.session.add(rastreio)
+        db.session.commit()
+        
+        return jsonify({"success": True, "entrega": entrega.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao criar entregador: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
+        logger.error(f"Erro ao criar entrega: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@delivery_bp.route("/entregadores/<int:id>", methods=["PUT"])
+@delivery_bp.route("/entregas/<int:id>/status", methods=["PUT"])
 @tenant_or_super_admin_required
-def atualizar_entregador(id):
-    """Atualiza dados do entregador"""
+def atualizar_status(id):
+    """Atualiza o status da entrega e registra no histórico"""
     try:
-        entregador = Entregador.query.filter_by(
+        data = request.get_json()
+        entrega = Entrega.query.filter_by(
             id=id, 
             estabelecimento_id=request.allowed_estabelecimento_id
         ).first_or_404()
         
-        data = request.get_json()
-        
-        # Atualizar campos permitidos
-        campos_atualizaveis = [
-            "nome", "telefone", "whatsapp", "email", "tipo_veiculo",
-            "placa_veiculo", "modelo_veiculo", "ativo", "disponivel_entrega",
-            "taxa_entrega_padrao", "comissao_por_entrega", "forma_pagamento_padrao"
-        ]
-        
-        for campo in campos_atualizaveis:
-            if campo in data:
-                if campo in ["taxa_entrega_padrao", "comissao_por_entrega"]:
-                    setattr(entregador, campo, Decimal(str(data[campo])))
-                else:
-                    setattr(entregador, campo, data[campo])
-        
-        db.session.commit()
-        
-        return jsonify({
-            "success": True,
-            "message": "Entregador atualizado com sucesso",
-            "entregador": entregador.to_dict()
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao atualizar entregador {id}: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
-
-# ==================== CONFIGURAÇÕES ====================
-
-@delivery_bp.route("/config", methods=["GET"])
-@tenant_or_super_admin_required
-def get_config():
-    """Obtém configurações de delivery do estabelecimento"""
-    try:
-        config = DeliveryConfig.query.filter_by(
-            estabelecimento_id=request.allowed_estabelecimento_id
-        ).first()
-        
-        if not config:
-            # Criar configuração padrão
-            config = DeliveryConfig(
-                estabelecimento_id=request.allowed_estabelecimento_id,
-                formas_pagamento_entrega=json.dumps(["dinheiro", "pix", "cartao"]),
-                bairros_atendidos=json.dumps(["Centro", "Bairro Novo", "Vila Industrial"])
-            )
-            db.session.add(config)
-            db.session.commit()
-        
-        return jsonify({
-            "success": True,
-            "config": config.to_dict()
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao obter config delivery: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
-
-@delivery_bp.route("/config", methods=["PUT"])
-@tenant_or_super_admin_required
-def update_config():
-    """Atualiza configurações de delivery"""
-    try:
-        config = DeliveryConfig.query.filter_by(
-            estabelecimento_id=request.allowed_estabelecimento_id
-        ).first_or_404()
-        
-        data = request.get_json()
-        
-        # Atualizar campos
-        campos_numericos = [
-            "taxa_entrega_fixa", "taxa_entrega_por_km", "km_minimo_cobranca",
-            "taxa_entrega_gratuita_valor", "taxa_entrega_gratuita_km", "raio_entrega_km"
-        ]
-        
-        for campo in campos_numericos:
-            if campo in data:
-                setattr(config, campo, Decimal(str(data[campo])))
-        
-        campos_texto_json = ["bairros_atendidos", "formas_pagamento_entrega"]
-        for campo in campos_texto_json:
-            if campo in data:
-                setattr(config, campo, json.dumps(data[campo]))
-        
-        campos_simples = [
-            "tempo_preparo_padrao", "tempo_entrega_padrao", "aceita_pagamento_entrega",
-            "rastreamento_entrega", "notificacao_cliente", "integracao_maps"
-        ]
-        for campo in campos_simples:
-            if campo in data:
-                setattr(config, campo, data[campo])
-        
-        db.session.commit()
-        
-        return jsonify({
-            "success": True,
-            "message": "Configurações atualizadas com sucesso",
-            "config": config.to_dict()
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao atualizar config delivery: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
-
-# ==================== PEDIDOS DELIVERY ====================
-
-@delivery_bp.route("/pedidos", methods=["GET"])
-@tenant_or_super_admin_required
-def listar_pedidos():
-    """Lista pedidos de delivery"""
-    try:
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 20, type=int)
-        status = request.args.get("status")
-        data_inicio = request.args.get("data_inicio")
-        data_fim = request.args.get("data_fim")
-        
-        query = PedidoDelivery.query.filter_by(
-            estabelecimento_id=request.allowed_estabelecimento_id
-        )
-        
-        if status:
-            query = query.filter_by(status=status)
-        
-        if data_inicio:
-            query = query.filter(PedidoDelivery.created_at >= datetime.strptime(data_inicio, "%Y-%m-%d"))
-        
-        if data_fim:
-            query = query.filter(PedidoDelivery.created_at <= datetime.strptime(data_fim, "%Y-%m-%d 23:59:59"))
-        
-        pedidos = query.order_by(PedidoDelivery.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
-        )
-        
-        return jsonify({
-            "success": True,
-            "pedidos": [p.to_dict() for p in pedidos.items],
-            "total": pedidos.total,
-            "pages": pedidos.pages,
-            "current_page": pedidos.page
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao listar pedidos delivery: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
-
-@delivery_bp.route("/pedidos", methods=["POST"])
-@tenant_or_super_admin_required
-def criar_pedido():
-    """Cria um novo pedido de delivery"""
-    try:
-        data = request.get_json()
-        
-        # Validações básicas
-        required_fields = [
-            "nome_cliente", "telefone_cliente", "endereco_entrega",
-            "valor_produtos", "forma_pagamento", "itens"
-        ]
-        
-        for field in required_fields:
-            if field not in data or not data[field]:
-                return jsonify({
-                    "success": False,
-                    "error": f"Campo obrigatório: {field}"
-                }), 400
-        
-        # Gerar código único
-        codigo = f"DEL{datetime.now().strftime('%Y%m%d')}{secrets.token_hex(2).upper()}"
-        
-        # Calcular taxa de entrega
-        config = DeliveryConfig.query.filter_by(
-            estabelecimento_id=request.allowed_estabelecimento_id
-        ).first()
-        
-        taxa_entrega = Decimal("0.00")
-        if config:
-            if data.get("distancia_km"):
-                distancia = Decimal(str(data["distancia_km"]))
-                if distancia >= config.km_minimo_cobranca:
-                    taxa_entrega = config.taxa_entrega_fixa + (distancia * config.taxa_entrega_por_km)
-            else:
-                taxa_entrega = config.taxa_entrega_fixa
-        
-        valor_total = Decimal(str(data["valor_produtos"])) + taxa_entrega
-        
-        # Criar pedido
-        pedido = PedidoDelivery(
-            estabelecimento_id=request.allowed_estabelecimento_id,
-            cliente_id=data.get("cliente_id"),
-            codigo_pedido=codigo,
-            nome_cliente=data["nome_cliente"],
-            telefone_cliente=data["telefone_cliente"],
-            whatsapp_cliente=data.get("whatsapp_cliente"),
-            cep_entrega=data["endereco_entrega"]["cep"],
-            logradouro_entrega=data["endereco_entrega"]["logradouro"],
-            numero_entrega=data["endereco_entrega"]["numero"],
-            complemento_entrega=data["endereco_entrega"].get("complemento"),
-            bairro_entrega=data["endereco_entrega"]["bairro"],
-            cidade_entrega=data["endereco_entrega"]["cidade"],
-            estado_entrega=data["endereco_entrega"]["estado"],
-            referencia_entrega=data["endereco_entrega"].get("referencia"),
-            latitude_entrega=data["endereco_entrega"].get("latitude"),
-            longitude_entrega=data["endereco_entrega"].get("longitude"),
-            valor_produtos=Decimal(str(data["valor_produtos"])),
-            taxa_entrega=taxa_entrega,
-            valor_total=valor_total,
-            distancia_km=Decimal(str(data.get("distancia_km", 0))),
-            forma_pagamento=data["forma_pagamento"],
-            pagamento_na_entrega=data.get("pagamento_na_entrega", False),
-            troco_para=Decimal(str(data["troco_para"])) if data.get("troco_para") else None,
-            observacoes_pedido=data.get("observacoes_pedido"),
-            observacoes_entrega=data.get("observacoes_entrega")
-        )
-        
-        db.session.add(pedido)
-        db.session.flush()  # Obter ID
-        
-        # Adicionar itens do pedido
-        for item_data in data["itens"]:
-            item = VendaItem(
-                pedido_delivery_id=pedido.id,
-                produto_id=item_data["produto_id"],
-                quantidade=item_data["quantidade"],
-                preco_unitario=Decimal(str(item_data["preco_unitario"])),
-                total_item=Decimal(str(item_data["total_item"]))
-            )
-            db.session.add(item)
-        
-        # Calcular previsão de entrega
-        if config:
-            tempo_total = config.tempo_preparo_padrao + config.tempo_entrega_padrao
-            pedido.data_previsao_entrega = datetime.now() + timedelta(minutes=tempo_total)
-        
-        db.session.commit()
-        
-        logger.info(f"Pedido delivery {codigo} criado com sucesso")
-        
-        return jsonify({
-            "success": True,
-            "message": "Pedido criado com sucesso",
-            "pedido": pedido.to_dict()
-        }), 201
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao criar pedido delivery: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
-
-@delivery_bp.route("/pedidos/<int:id>/status", methods=["PUT"])
-@tenant_or_super_admin_required
-def atualizar_status_pedido(id):
-    """Atualiza status do pedido de delivery"""
-    try:
-        pedido = PedidoDelivery.query.filter_by(
-            id=id,
-            estabelecimento_id=request.allowed_estabelecimento_id
-        ).first_or_404()
-        
-        data = request.get_json()
         novo_status = data.get("status")
+        entrega.status = novo_status
         
-        if novo_status not in ["pendente", "preparando", "pronto", "entregando", "entregue", "cancelado"]:
-            return jsonify({
-                "success": False,
-                "error": "Status inválido"
-            }), 400
-        
-        # Atualizar status e datas
-        pedido.status = novo_status
-        
-        if novo_status == "entregando":
-            pedido.data_inicio_entrega = datetime.now()
-            pedido.entregador_id = data.get("entregador_id")
+        if novo_status == "em_rota":
+            entrega.data_saida = datetime.now()
+            entrega.motorista_id = data.get("motorista_id")
+            entrega.veiculo_id = data.get("veiculo_id")
         elif novo_status == "entregue":
-            pedido.data_entrega_real = datetime.now()
-            
-            # Atualizar métricas do entregador
-            if pedido.entregador:
-                entregador = pedido.entregador
-                entregador.total_entregas += 1
-                if pedido.distancia_km:
-                    entregador.total_km_percorridos += pedido.distancia_km
-                
-                db.session.add(entregador)
+            entrega.data_entrega = datetime.now()
+            # Incrementar estatística do motorista
+            if entrega.motorista:
+                entrega.motorista.total_entregas += 1
         
+        # Registro no Rastreamento
+        rastreio = RastreamentoEntrega(
+            entrega_id=entrega.id,
+            status=novo_status,
+            observacao=data.get("observacao", f"Status alterado para {novo_status}"),
+            latitude=data.get("latitude"),
+            longitude=data.get("longitude")
+        )
+        db.session.add(rastreio)
+        db.session.commit()
+        
+        return jsonify({"success": True, "entrega": entrega.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@delivery_bp.route("/venda-entrega", methods=["POST"])
+@tenant_or_super_admin_required
+def criar_venda_entrega_unificada():
+    """
+    Cria uma Venda e uma Entrega vinculada em uma única transação atômica.
+    Ideal para o fluxo 'Venda Entrega na Prática'.
+    """
+    try:
+        data = request.get_json()
+        est_id = request.allowed_estabelecimento_id
+        
+        # 1. Criar a Venda
+        cliente_id = data.get("cliente_id")
+        cliente = Cliente.query.get(cliente_id) if cliente_id else None
+        
+        venda = Venda(
+            estabelecimento_id=est_id,
+            cliente_id=cliente_id,
+            funcionario_id=data.get("funcionario_id"), # Opcional
+            codigo=f"VE-{datetime.now().strftime('%y%m%d%H%M%S')}",
+            status="finalizada",
+            tipo_venda="delivery",
+            forma_pagamento=data.get("forma_pagamento", "dinheiro"),
+            subtotal=Decimal(str(data.get("subtotal", 0))),
+            desconto=Decimal(str(data.get("desconto", 0))),
+            total=Decimal(str(data.get("total", 0))),
+            valor_recebido=Decimal(str(data.get("total", 0))),
+            troco=Decimal("0.00"),
+            data_venda=datetime.now()
+        )
+        db.session.add(venda)
+        db.session.flush() # ID da venda
+        
+        # 2. Adicionar Itens
+        for item in data.get("itens", []):
+            prod = Produto.query.get(item["produto_id"])
+            if not prod: continue
+            
+            v_item = VendaItem(
+                venda_id=venda.id,
+                produto_id=prod.id,
+                produto_nome=prod.nome,
+                quantidade=Decimal(str(item["quantidade"])),
+                preco_unitario=Decimal(str(item["preco_unitario"])),
+                total_item=Decimal(str(item["total_item"])),
+                estabelecimento_id=est_id
+            )
+            db.session.add(v_item)
+            # O processamento de estoque deve ser feito pelos listeners ou manualmente aqui
+            if hasattr(prod, 'estoque_atual'):
+                prod.estoque_atual -= v_item.quantidade
+
+        # 3. Criar a Entrega
+        motorista_id = data.get("motorista_id")
+        veiculo_id = data.get("veiculo_id")
+        
+        # Calcular KM e Combustível se informados (ou usar padrões)
+        distancia = Decimal(str(data.get("distancia_km", 5.0)))
+        km_total = distancia * 2
+        custo_fuel = Decimal("0.00")
+        
+        if veiculo_id:
+            veiculo = Veiculo.query.get(veiculo_id)
+            if veiculo and veiculo.consumo_medio:
+                custo_fuel = (km_total / veiculo.consumo_medio) * Decimal("5.80")
+
+        entrega = Entrega(
+            estabelecimento_id=est_id,
+            venda_id=venda.id,
+            cliente_id=cliente_id,
+            motorista_id=motorista_id,
+            veiculo_id=veiculo_id,
+            codigo_rastreamento=f"TRK{venda.codigo.split('-')[-1]}",
+            status="em_preparo",
+            data_prevista=datetime.now() + timedelta(minutes=45),
+            taxa_entrega=Decimal(str(data.get("taxa_entrega", 0))),
+            custo_combustivel=custo_fuel,
+            distancia_km=distancia,
+            km_percorridos=km_total,
+            endereco_cep=data.get("endereco_cep", cliente.cep if cliente else ""),
+            endereco_logradouro=data.get("endereco_logradouro", ""),
+            endereco_numero=data.get("endereco_numero", ""),
+            endereco_bairro=data.get("endereco_bairro", ""),
+            endereco_cidade=data.get("endereco_cidade", "Manaus"),
+            endereco_estado=data.get("endereco_estado", "AM"),
+            endereco_complemento=data.get("endereco_complemento", ""),
+            pagamento_tipo="loja" if venda.forma_pagamento != "entrega" else "entrega",
+            pagamento_status="pago" if venda.forma_pagamento != "entrega" else "pendente"
+        )
+        
+        db.session.add(entrega)
+        
+        # 4. Movimentação de Caixa
+        caixa = Caixa.query.filter_by(estabelecimento_id=est_id, status="aberto").first()
+        if caixa and venda.forma_pagamento in ["dinheiro", "pix"]:
+            mov = MovimentacaoCaixa(
+                caixa_id=caixa.id,
+                estabelecimento_id=est_id,
+                venda_id=venda.id,
+                tipo="entrada",
+                valor=venda.total,
+                descricao=f"Venda Entrega Unificada #{venda.codigo}"
+            )
+            db.session.add(mov)
+            caixa.saldo_atual += venda.total
+
         db.session.commit()
         
         return jsonify({
-            "success": True,
-            "message": f"Status atualizado para {novo_status}",
-            "pedido": pedido.to_dict()
-        })
-        
+            "success": True, 
+            "venda_id": venda.id, 
+            "entrega_id": entrega.id,
+            "codigo": venda.codigo
+        }), 201
+
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao atualizar status pedido {id}: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
+        logger.error(f"Erro na Venda Entrega Unificada: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-# ==================== MÉTRICAS ====================
+# ==================== VENDAS PENDENTES ====================
 
-@delivery_bp.route("/metricas", methods=["GET"])
+@delivery_bp.route("/vendas-pendentes", methods=["GET"])
 @tenant_or_super_admin_required
-def get_metricas():
-    """Obtém métricas consolidadas de delivery"""
+def listar_vendas_pendentes():
+    """Lista vendas que ainda não possuem uma entrega vinculada"""
     try:
-        # Período padrão: últimos 30 dias
-        dias = request.args.get("dias", 30, type=int)
-        data_inicio = date.today() - timedelta(days=dias)
+        est_id = request.allowed_estabelecimento_id
         
-        # Métricas gerais
-        metricas = db.session.query(
-            db.func.count(PedidoDelivery.id).label('total_pedidos'),
-            db.func.sum(PedidoDelivery.valor_total).label('faturamento_total'),
-            db.func.sum(PedidoDelivery.taxa_entrega).label('total_taxas'),
-            db.func.avg(PedidoDelivery.distancia_km).label('distancia_media')
-        ).filter(
-            PedidoDelivery.estabelecimento_id == request.allowed_estabelecimento_id,
-            PedidoDelivery.created_at >= data_inicio,
-            PedidoDelivery.status != 'cancelado'
-        ).first()
+        # Subquery para pegar IDs de vendas que já têm entrega
+        vendas_com_entrega = db.session.query(Entrega.venda_id).filter(
+            Entrega.estabelecimento_id == est_id
+        ).all()
+        vendas_com_entrega_ids = [v[0] for v in vendas_com_entrega]
         
-        # Pedidos por status
-        pedidos_por_status = db.session.query(
-            PedidoDelivery.status,
-            db.func.count(PedidoDelivery.id).label('quantidade')
-        ).filter(
-            PedidoDelivery.estabelecimento_id == request.allowed_estabelecimento_id,
-            PedidoDelivery.created_at >= data_inicio
-        ).group_by(PedidoDelivery.status).all()
-        
-        # Top entregadores
-        top_entregadores = db.session.query(
-            Entregador.nome,
-            db.func.count(PedidoDelivery.id).label('entregas'),
-            db.func.sum(PedidoDelivery.distancia_km).label('km_percorridos')
-        ).join(
-            PedidoDelivery, Entregador.id == PedidoDelivery.entregador_id
-        ).filter(
-            PedidoDelivery.estabelecimento_id == request.allowed_estabelecimento_id,
-            PedidoDelivery.created_at >= data_inicio,
-            PedidoDelivery.status == 'entregue'
-        ).group_by(Entregador.id, Entregador.nome).order_by(
-            db.func.count(PedidoDelivery.id).desc()
-        ).limit(5).all()
+        # Vendas finalizadas que não estão na lista
+        vendas = Venda.query.filter(
+            Venda.estabelecimento_id == est_id,
+            Venda.status == "finalizada",
+            ~Venda.id.in_(vendas_com_entrega_ids)
+        ).order_by(Venda.data_venda.desc()).limit(50).all()
         
         return jsonify({
             "success": True,
-            "periodo": {
-                "dias": dias,
-                "data_inicio": data_inicio.isoformat(),
-                "data_fim": date.today().isoformat()
-            },
-            "metricas_gerais": {
-                "total_pedidos": metricas.total_pedidos or 0,
-                "faturamento_total": float(metricas.faturamento_total or 0),
-                "total_taxas": float(metricas.total_taxas or 0),
-                "distancia_media": float(metricas.distancia_media or 0),
-                "ticket_medio": float(metricas.faturamento_total or 0) / max(metricas.total_pedidos or 1, 1)
-            },
-            "pedidos_por_status": {
-                item.status: item.quantidade for item in pedidos_por_status
-            },
-            "top_entregadores": [
-                {
-                    "nome": item.nome,
-                    "entregas": item.entregas,
-                    "km_percorridos": float(item.km_percorridos or 0)
-                }
-                for item in top_entregadores
-            ]
+            "vendas": [{
+                "id": v.id,
+                "codigo": v.codigo,
+                "data": v.data_venda.isoformat(),
+                "total": float(v.total),
+                "cliente": v.cliente.to_dict() if v.cliente else None,
+                "itens": [{"nome": i.produto_nome, "qtd": float(i.quantidade)} for i in v.itens]
+            } for v in vendas]
         })
-        
     except Exception as e:
-        logger.error(f"Erro ao obter métricas delivery: {e}")
-        return jsonify({"success": False, "error": "Erro interno"}), 500
+        logger.error(f"Erro ao listar vendas pendentes: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ==================== DASHBOARD & ESTATÍSTICAS ====================
+
+@delivery_bp.route("/stats", methods=["GET"])
+@tenant_or_super_admin_required
+def get_stats():
+    """Estatísticas consolidadas para o Dashboard de Delivery"""
+    try:
+        est_id = request.allowed_estabelecimento_id
+        
+        total_hoje = Entrega.query.filter(
+            Entrega.estabelecimento_id == est_id,
+            func.date(Entrega.created_at) == date.today()
+        ).count()
+        
+        pendentes = Entrega.query.filter_by(estabelecimento_id=est_id, status="pendente").count()
+        em_rota = Entrega.query.filter_by(estabelecimento_id=est_id, status="em_rota").count()
+        entregues_hoje = Entrega.query.filter(
+            Entrega.estabelecimento_id == est_id,
+            Entrega.status == "entregue",
+            func.date(Entrega.data_entrega) == date.today()
+        ).count()
+        
+        # Top Motoristas (últimos 30 dias)
+        top_motoristas = db.session.query(
+            Motorista.nome,
+            func.count(Entrega.id).label("total")
+        ).join(Entrega).filter(
+            Motorista.estabelecimento_id == est_id,
+            Entrega.status == "entregue",
+            Entrega.data_entrega >= datetime.now() - timedelta(days=30)
+        ).group_by(Motorista.id).order_by(func.count(Entrega.id).desc()).limit(5).all()
+
+        # MÉTRICAS AVANÇADAS (Magnitude Senior)
+        vendas_delivery = db.session.query(Venda).filter(
+            Venda.estabelecimento_id == est_id,
+            Venda.tipo_venda == "delivery",
+            Venda.status == "finalizada"
+        ).all()
+        
+        total_vendas_val = sum(v.total for v in vendas_delivery)
+        ticket_medio = total_vendas_val / len(vendas_delivery) if vendas_delivery else 0
+        
+        stats_entregas = db.session.query(
+            func.sum(Entrega.km_percorridos).label("km_total"),
+            func.sum(Entrega.custo_combustivel).label("combustivel_total"),
+            func.avg(Entrega.distancia_km).label("dist_media")
+        ).filter(Entrega.estabelecimento_id == est_id, Entrega.status == "entregue").first()
+
+        # Top Produto entregue
+        top_produto = db.session.query(
+            EntregaItem.produto_id,
+            func.sum(EntregaItem.quantidade).label("total")
+        ).join(Entrega).filter(
+            Entrega.estabelecimento_id == est_id,
+            Entrega.status == "entregue"
+        ).group_by(EntregaItem.produto_id).order_by(func.sum(EntregaItem.quantidade).desc()).first()
+        
+        nome_top_prod = "N/A"
+        if top_produto:
+            p_obj = db.session.get(Produto, top_produto.produto_id)
+            nome_top_prod = p_obj.nome if p_obj else "Desconhecido"
+
+        return jsonify({
+            "success": True,
+            "stats": {
+                "total_hoje": total_hoje,
+                "pendentes": pendentes,
+                "em_rota": em_rota,
+                "entregues_hoje": entregues_hoje,
+                "ticket_medio": float(ticket_medio),
+                "km_totais": float(stats_entregas.km_total or 0),
+                "combustivel_total": float(stats_entregas.combustivel_total or 0),
+                "distancia_media": float(stats_entregas.dist_media or 0),
+                "top_produto": nome_top_prod,
+                "top_motoristas": [{"nome": m[0], "total": m[1]} for m in top_motoristas]
+            }
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

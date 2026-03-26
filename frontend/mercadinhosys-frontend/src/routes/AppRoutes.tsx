@@ -28,6 +28,7 @@ const LeadDashboard = lazy(() => import('../features/saas/LeadDashboard'));
 const SystemMonitorPage = lazy(() => import('../features/saas/SystemMonitorPage'));
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
+const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
 
 
 
@@ -58,6 +59,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="suppliers" element={<PlanoGuard planoRequerido="gratuito"><SuppliersPage /></PlanoGuard>} />
                     <Route path="customers" element={<PlanoGuard planoRequerido="gratuito"><CustomersPage /></PlanoGuard>} />
                     <Route path="settings" element={<PlanoGuard planoRequerido="gratuito"><SettingsPage /></PlanoGuard>} />
+                    <Route path="delivery" element={<PlanoGuard planoRequerido="gratuito"><DeliveryPage /></PlanoGuard>} />
 
                     {/* USANDO PRO EM VEZ DE ENTERPRISE PARA CONSISTÊNCIA */}
                     <Route path="sales" element={<PlanoGuard planoRequerido="pro"><SalesPage /></PlanoGuard>} />

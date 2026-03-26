@@ -23,7 +23,7 @@ class SyncWorker:
     
     def __init__(self):
         self.app = create_app()
-        self.cloud_api_url = os.getenv("CLOUD_API_URL", "https://mercadinhosys.vercel.app")
+        self.cloud_api_url = os.getenv("CLOUD_API_URL", "https://mercadinhosys.onrender.com")
         self.sync_token = os.getenv("CLOUD_SYNC_TOKEN", "")
         self.worker_interval = int(os.getenv("SYNC_WORKER_INTERVAL", "30"))  # segundos
         self.max_retries = int(os.getenv("SYNC_MAX_RETRIES", "3"))
@@ -72,9 +72,25 @@ class SyncWorker:
             except Exception as e:
                 logger.error(f"❌ Erro no ciclo de sync: {e}")
                 time.sleep(self.worker_interval)
+                
+    def _check_connectivity(self) -> bool:
+        """Verifica se há conexão com a API na nuvem"""
+        try:
+            response = requests.get(
+                f"{self.cloud_api_url}/api/health",
+                timeout=5,
+                headers={"User-Agent": "MercadinhoSys-SyncWorker/1.0"}
+            )
+            return response.status_code == 200
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout):
+            return False
     
     def _process_pending_syncs(self):
         """Processa todos os itens pendentes na SyncQueue"""
+        if not self._check_connectivity():
+            logger.info("Sem conexão com a nuvem. Sync adiado.")
+            return
         
         # Buscar itens pendentes (limitado para evitar sobrecarga)
         pending_items = SyncQueue.query.filter_by(status="pendente")\
@@ -93,8 +109,8 @@ class SyncWorker:
                 success = self._sync_item(item)
                 if success:
                     item.status = "sincronizado"
-                    item.synced_at = datetime.utcnow()
                     item.tentativas += 1
+                    item.synced_at = datetime.utcnow()
                     item.mensagem_erro = None
                     logger.info(f"✅ Item {item.id} sincronizado com sucesso")
                 else:

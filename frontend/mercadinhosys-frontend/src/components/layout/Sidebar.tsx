@@ -18,7 +18,8 @@ import {
     DollarSign,
     Building2,
     Target,
-    Activity
+    Activity,
+    Navigation
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 
@@ -30,6 +31,7 @@ const menuItems = [
     { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
     { to: '/customers', icon: Users, label: 'Clientes' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
+    { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/employees', icon: UserCog, label: 'Funcionários' },
     { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
@@ -76,12 +78,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
 
                         // Se for caixa ou estoquista, aplicamos o filtro seletivo a áreas estritas
                         if (role === 'caixa') {
-                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/customers', '/ponto', '/settings'];
+                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/customers', '/ponto', '/settings', '/delivery'];
                             return permitidos.includes(item.to);
                         }
 
                         if (role === 'estoquista') {
-                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings'];
+                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings', '/delivery'];
                             return permitidos.includes(item.to);
                         }
 
