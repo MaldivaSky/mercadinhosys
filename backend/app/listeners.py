@@ -10,7 +10,8 @@ TABELAS_SINCRONIZAVEIS = [
     "produtos", "categorias_produto", "fornecedores", "clientes", 
     "vendas", "venda_itens", "pagamentos", "movimentacao_estoque",
     "caixas", "transacoes_caixa", "funcionarios", "estabelecimentos",
-    "despesas", "contas_pagar", "estoque_lotes"
+    "despesas", "contas_pagar", "estoque_lotes",
+    "motoristas", "veiculos", "entregas", "taxas_entrega" # ADICIONADO DELIVERY
 ]
 
 # Tabelas que aparecem no MONITOR do Super Admin (Inteligência de Negócio)
@@ -54,12 +55,19 @@ def registrar_evento_forense(mapper, connection, target, operacao):
     Hook global para Auditoria Forense e Sincronia.
     Captura o estado do objeto para reconstrução total e auditoria.
     """
+    from app.models import Auditoria, AuditoriaSincronia
+
     # [ESTRATÉGIA DE ELITE] Bypass total e imediato em Simulação ou Sincronia
     if os.environ.get("FLASK_ENV") == "simulation" or \
        os.environ.get("SYNC_IN_PROGRESS") == "1":
         return
 
     if isinstance(target, (Auditoria, AuditoriaSincronia)):
+        return
+
+    # Só processa se a tabela estiver na lista de sincronizáveis ou monitoradas
+    tabela = target.__tablename__
+    if tabela not in TABELAS_SINCRONIZAVEIS and tabela not in TABELAS_MONITOR_MASTER:
         return
 
     # 1. Resolução de Estabelecimento ID com Precisão de Auditoria
@@ -127,6 +135,27 @@ def registrar_evento_forense(mapper, connection, target, operacao):
                 "data": payload
             }
         )
+
+        # 4. Registrar na Auditoria Sincronia (SYNC ENGINE)
+        # IMPLEMENTAÇÃO DE ELITE: Se a tabela for sincronizável, enfileira para a nuvem
+        if tabela in TABELAS_SINCRONIZAVEIS:
+            try:
+                from app.models import AuditoriaSincronia
+                connection.execute(
+                    AuditoriaSincronia.__table__.insert().values(
+                        estabelecimento_id=estabelecimento_id,
+                        tabela=tabela,
+                        registro_id=registro_id,
+                        operacao=operacao,
+                        payload_json=json.dumps(payload, default=str),
+                        status="pendente",
+                        tentativas=0,
+                        data_criacao=datetime.now()
+                    )
+                )
+            except Exception as e:
+                # Falha silenciosa no sync para não travar a venda
+                pass
 
     except Exception as e:
         # Erros em listeners não devem quebrar a transação principal

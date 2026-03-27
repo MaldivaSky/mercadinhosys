@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Package, MapPin, User, Truck, ChevronRight, DollarSign, FileText } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { X, Search, Package, MapPin, Truck, ChevronRight, DollarSign, FileText } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { deliveryService } from './deliveryService';
 import toast from 'react-hot-toast';
 

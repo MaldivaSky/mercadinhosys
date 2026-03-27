@@ -282,31 +282,34 @@ class RealisticInjector:
             db.session.add(cat)
             db.session.flush()
         
-        for item in cls.SKU_DB:
-            # 180 dias fixos era básico, agora variamos de 10 a 360 dias (alguns próximos do vencimento)
-            vencimento = date.today() + timedelta(days=random.randint(10, 400))
-            
-            p = Produto(
-                estabelecimento_id=est_id, categoria_id=cat.id, nome=item["n"],
-                codigo_barras=f"789{abs(hash(item['n'])) % 1000000000:010d}",
-                codigo_interno=f"INT-{uuid.uuid4().hex[:4]}", unidade_medida=item["un"],
-                preco_custo=Decimal(str(item["p"])) * Decimal("0.7"), preco_venda=Decimal(str(item["p"])),
-                quantidade=random.randint(50, 200), ativo=True, controlar_validade=True, 
-                data_validade=vencimento, lote=f"LT-{uuid.uuid4().hex[:4].upper()}"
-            )
-            db.session.add(p)
-            db.session.flush()
-            
-            lote = ProdutoLote(
-                estabelecimento_id=est_id, produto_id=p.id, numero_lote=p.lote,
-                quantidade=p.quantidade, quantidade_inicial=p.quantidade, 
-                data_validade=p.data_validade, preco_custo_unitario=p.preco_custo, ativo=True
-            )
-            db.session.add(lote)
-            # Historico Preço
-            hp = HistoricoPrecos(
-                estabelecimento_id=est_id, produto_id=p.id, funcionario_id=Funcionario.query.filter_by(estabelecimento_id=est_id).first().id,
-                preco_custo_anterior=p.preco_custo, preco_venda_anterior=p.preco_venda, margem_anterior=40,
-                preco_custo_novo=p.preco_custo, preco_venda_novo=p.preco_venda, margem_nova=40, motivo="Initial Seed"
-            )
-            db.session.add(hp)
+        # Gerar 130 SKUs por Tenant — SEM LIMITACOES (5 variacoes x 26 SKUs base)
+        for variacao in range(5):
+            for item in cls.SKU_DB:
+                marca = f" - Marca {variacao}" if variacao > 0 else ""
+                vencimento = date.today() + timedelta(days=random.randint(10, 400))
+
+                p = Produto(
+                    estabelecimento_id=est_id, categoria_id=cat.id, nome=item["n"] + marca,
+                    codigo_barras=f"789{abs(hash(item['n'] + marca)) % 1000000000:010d}",
+                    codigo_interno=f"INT-{uuid.uuid4().hex[:4]}", unidade_medida=item["un"],
+                    preco_custo=Decimal(str(item["p"])) * Decimal("0.7"), preco_venda=Decimal(str(item["p"])),
+                    quantidade=random.randint(50, 500), ativo=True, controlar_validade=True,
+                    data_validade=vencimento, lote=f"LT-{uuid.uuid4().hex[:4].upper()}"
+                )
+                db.session.add(p)
+                db.session.flush()
+
+                lote = ProdutoLote(
+                    estabelecimento_id=est_id, produto_id=p.id, numero_lote=p.lote,
+                    quantidade=p.quantidade, quantidade_inicial=p.quantidade,
+                    data_validade=p.data_validade, preco_custo_unitario=p.preco_custo, ativo=True
+                )
+                db.session.add(lote)
+
+                hp = HistoricoPrecos(
+                    estabelecimento_id=est_id, produto_id=p.id,
+                    funcionario_id=Funcionario.query.filter_by(estabelecimento_id=est_id).first().id,
+                    preco_custo_anterior=p.preco_custo, preco_venda_anterior=p.preco_venda, margem_anterior=40,
+                    preco_custo_novo=p.preco_custo, preco_venda_novo=p.preco_venda, margem_nova=40, motivo="Initial Seed"
+                )
+                db.session.add(hp)

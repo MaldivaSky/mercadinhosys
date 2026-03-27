@@ -1,269 +1,167 @@
 """
 MercadinhoSys - Cloud Sync Receiver
 API para receber dados sincronizados dos clientes locais
-Roda apenas no modo cloud (Vercel/Aiven)
+Roda apenas no modo cloud (Vercel/Aiven) ou como receptor híbrido
 """
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
 import json
 import logging
+import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from app import db
-from app.models import SyncLog
 
-sync_bp = Blueprint("sync", __name__)
+sync_cloud_bp = Blueprint("sync_cloud", __name__)
 logger = logging.getLogger(__name__)
 
-@sync_bp.route("/receive", methods=["POST"])
-def receive_sync():
-    """
-    Recebe dados sincronizados dos clientes locais
-    Endpoint seguro com token de autenticação
-    """
+# LÓGICA DE ELITE: Desacoplamento de Persistência Híbrida (Singleton Engine)
+_cloud_engine = None
+_CloudSession = None
+
+def _get_cloud_session():
+    """Retorna uma sessão vinculada diretamente à Aiven se disponível"""
+    global _cloud_engine, _CloudSession
+    cloud_url = os.environ.get("AIVEN_DATABASE_URL")
+    
+    if not cloud_url:
+        return None
+        
+    if not _cloud_engine:
+        if cloud_url.startswith("postgres://"):
+            cloud_url = cloud_url.replace("postgres://", "postgresql://", 1)
+        
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        
+        # OTIMIZAÇÃO: Connection Pooling para evitar erro de conexões esgotadas na Aiven
+        _cloud_engine = create_engine(
+            cloud_url, 
+            pool_size=5, 
+            max_overflow=0, 
+            pool_pre_ping=True,
+            pool_recycle=1800
+        )
+        _CloudSession = sessionmaker(bind=_cloud_engine)
+        logger.info("📡 Motor de Sincronia: Engine Global AIVEN inicializada")
+        
+    return _CloudSession()
+
+@sync_cloud_bp.route("/receive", methods=["POST"])
+def receber_sincronia():
+    """Endpoint receptor para dados vindos do Gêmeo Digital (SQLite)"""
+    session = None
     try:
-        # Verificar se está no modo cloud
-        if current_app.config.get("APP_MODE", "local") == "local":
-            return jsonify({
-                "success": False,
-                "error": "Endpoint disponível apenas no modo cloud"
-            }), 403
-        
-        # Verificar token de sincronização
+        # 1. Autenticação via Token Estático (Sync Token)
         sync_token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        expected_token = current_app.config.get("CLOUD_SYNC_TOKEN", "")
-        
-        if not sync_token or sync_token != expected_token:
-            logger.warning("❌ Token de sync inválido")
-            return jsonify({
-                "success": False,
-                "error": "Não autorizado"
-            }), 401
-        
-        # Obter payload
+        if sync_token != current_app.config.get("CLOUD_SYNC_TOKEN"):
+            logger.warning("🚫 Tentativa de sincronia com token inválido")
+            return jsonify({"success": False, "error": "Não autorizado"}), 401
+            
+        # 2. Obter payload
         data = request.get_json()
         if not data:
-            return jsonify({
-                "success": False,
-                "error": "Payload inválido"
-            }), 400
-        
-        # Validar campos obrigatórios
-        required_fields = ["tabela", "operacao", "estabelecimento_id"]
-        for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    "success": False,
-                    "error": f"Campo obrigatório ausente: {field}"
-                }), 400
-        
-        # Processar sincronização
-        success = _process_sync_data(data)
+            return jsonify({"success": False, "error": "Payload inválido"}), 400
+            
+        # 3. Tentar obter sessão dedicada Aiven (Fix Connection Exhaustion)
+        session = _get_cloud_session()
+        if not session:
+            session = db.session
+            logger.warning(f"⚠️ Usando DB local: AIVEN_DATABASE_URL não definida")
+        else:
+            logger.info(f"💾 Receptor Híbrido: Persistindo na AIVEN")
+            
+        # 4. Processar sincronização
+        success = _process_sync_data(data, session)
         
         if success:
+            # Commit explícito se for sessão dedicada (evitar fechar db.session global)
+            if _cloud_engine and session is not db.session:
+                session.commit()
+                session.close()
+            elif session is db.session:
+                session.commit()
+            
             return jsonify({
                 "success": True,
                 "message": "Dados sincronizados com sucesso",
                 "timestamp": datetime.utcnow().isoformat()
             })
         else:
-            return jsonify({
-                "success": False,
-                "error": "Falha ao processar sincronização"
-            }), 500
+            if os.environ.get("AIVEN_DATABASE_URL"):
+                session.rollback()
+                session.close()
+            return jsonify({"success": False, "error": "Falha no processamento"}), 500
             
     except Exception as e:
-        logger.error(f"💥 Erro no recebimento de sync: {e}")
-        return jsonify({
-            "success": False,
-            "error": "Erro interno no servidor"
-        }), 500
+        if session and os.environ.get("AIVEN_DATABASE_URL"):
+            session.rollback()
+            session.close()
+        logger.error(f"💥 Erro fatal no recebimento: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-def _process_sync_data(data: Dict[str, Any]) -> bool:
-    """
-    Processa os dados sincronizados e realiza o upsert no PostgreSQL
-    Preserva rigorosamente os IDs primários originais
-    """
+def _process_sync_data(data: Dict[str, Any], session) -> bool:
+    """Upsert atômico de dados sincronizados no destino correto"""
     try:
         tabela = data["tabela"]
         operacao = data["operacao"]
-        estabelecimento_id = data["estabelecimento_id"]
         payload = data.get("payload", {})
         registro_id = data.get("registro_id")
         
-        logger.info(f"📥 Processando sync: {tabela} {operacao} ID {registro_id}")
+        # OTIMIZAÇÃO: Importação direta e segura
+        from app.models import get_model_by_table
+        model_class = get_model_by_table(tabela)
         
-        # Importar modelos dinamicamente
-        model_class = _get_model_class(tabela)
         if not model_class:
-            logger.error(f"❌ Modelo não encontrado para tabela: {tabela}")
+            logger.error(f"❌ Modelo não mapeado: {tabela}")
             return False
-        
-        # Iniciar transação
-        with db.session.begin_nested():
-            if operacao == "DELETE":
-                # Deletar registro
-                registro = model_class.query.filter_by(id=registro_id).first()
-                if registro:
-                    db.session.delete(registro)
-                    logger.info(f"🗑️ Registro {registro_id} deletado")
-                    
-            elif operacao in ["INSERT", "UPDATE"]:
-                # Fazer upsert preservando ID original
-                if not payload:
-                    logger.error(f"❌ Payload ausente para operação {operacao}")
-                    return False
-                
-                # Verificar se já existe
-                registro_existente = model_class.query.filter_by(id=registro_id).first()
-                
-                if registro_existente:
-                    # Atualizar registro existente
-                    _update_model_from_payload(registro_existente, payload)
-                    logger.info(f"📝 Registro {registro_id} atualizado")
-                else:
-                    # Criar novo registro com ID original
-                    novo_registro = _create_model_from_payload(model_class, payload, registro_id)
-                    db.session.add(novo_registro)
-                    logger.info(f"➕ Registro {registro_id} criado")
-        
-        # Commit da transação principal
-        db.session.commit()
-        
-        # Criar log de sincronização
-        _create_sync_log(data, "success")
-        
-        return True
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"❌ Erro ao processar sync data: {e}")
-        _create_sync_log(data, "error", str(e))
-        return False
 
-def _get_model_class(tabela: str):
-    """Retorna a classe do modelo baseada no nome da tabela"""
-    from app.models import (
-        Venda, Fiado, Cliente, Fornecedor, Produto, 
-        CategoriaProduto, Despesa, Funcionario, Estabelecimento,
-        Configuracao, Caixa
-    )
-    
-    models_map = {
-        "vendas": Venda,
-        "fiados": Fiado,
-        "clientes": Cliente,
-        "fornecedores": Fornecedor,
-        "produtos": Produto,
-        "categoria_produtos": CategoriaProduto,
-        "despesas": Despesa,
-        "funcionarios": Funcionario,
-        "estabelecimentos": Estabelecimento,
-        "configuracoes": Configuracao,
-        "caixas": Caixa
-    }
-    
-    return models_map.get(tabela)
-
-def _update_model_from_payload(model, payload: Dict[str, Any]):
-    """Atualiza um modelo existente a partir do payload"""
-    for key, value in payload.items():
-        if hasattr(model, key):
-            # Tratar campos especiais
-            if key.endswith("_at") or key.endswith("_date"):
-                # Campos de data/hora
-                if isinstance(value, str):
-                    try:
-                        from datetime import datetime
-                        if "T" in value:
-                            setattr(model, key, datetime.fromisoformat(value.replace("Z", "+00:00")))
+        if operacao == "DELETE":
+            registro = session.query(model_class).get(registro_id)
+            if registro:
+                session.delete(registro)
+        
+        elif operacao in ["INSERT", "UPDATE"]:
+            # Fazer upsert preservando ID original
+            from sqlalchemy import inspect
+            mapper = inspect(model_class)
+            columns = [c.key for c in mapper.column_attrs]
+            
+            # Verificar se já existe (Upsert)
+            registro = session.query(model_class).get(registro_id)
+            
+            if registro:
+                # UPDATE
+                for key, value in payload.items():
+                    if key in columns and key != 'id':
+                        # Tratar datas
+                        if (key.endswith("_at") or "data_" in key) and isinstance(value, str):
+                            try:
+                                from datetime import datetime
+                                setattr(registro, key, datetime.fromisoformat(value.replace("Z", "+00:00")))
+                            except:
+                                setattr(registro, key, value)
                         else:
-                            from datetime import date
-                            setattr(model, key, datetime.strptime(value, "%Y-%m-%d").date())
-                    except:
-                        continue
-            elif key.endswith("_json"):
-                # Campos JSON
-                if isinstance(value, (dict, list)):
-                    setattr(model, key, json.dumps(value))
+                            setattr(registro, key, value)
             else:
-                # Campos normais
-                setattr(model, key, value)
-
-def _create_model_from_payload(model_class, payload: Dict[str, Any], registro_id: int):
-    """Cria uma nova instância do modelo com ID original"""
-    # Criar instância sem ID primeiro
-    novo_registro = model_class()
-    
-    # Definir ID explicitamente
-    novo_registro.id = registro_id
-    
-    # Preencher outros campos
-    _update_model_from_payload(novo_registro, payload)
-    
-    return novo_registro
-
-def _create_sync_log(data: Dict[str, Any], status: str, error: str = None):
-    """Cria um registro de log da sincronização"""
-    try:
-        log = SyncLog(
-            estabelecimento_id=data.get("estabelecimento_id", 1),
-            operacao=f"{data.get('tabela', 'unknown')}_{data.get('operacao', 'unknown')}",
-            status=status,
-            payload_json=json.dumps(data),
-            mensagem_erro=error,
-            started_at=datetime.utcnow(),
-            finished_at=datetime.utcnow() if status == "success" else None
-        )
-        db.session.add(log)
-        db.session.commit()
+                # INSERT
+                novo_registro = model_class()
+                setattr(novo_registro, 'id', registro_id)
+                for key, value in payload.items():
+                    if key in columns and key != 'id':
+                         # Tratar datas
+                        if (key.endswith("_at") or "data_" in key) and isinstance(value, str):
+                            try:
+                                from datetime import datetime
+                                setattr(novo_registro, key, datetime.fromisoformat(value.replace("Z", "+00:00")))
+                            except:
+                                setattr(novo_registro, key, value)
+                        else:
+                            setattr(novo_registro, key, value)
+                session.add(novo_registro)
+                
+        return True
     except Exception as e:
-        logger.error(f"❌ Erro ao criar sync log: {e}")
-
-@sync_bp.route("/status", methods=["GET"])
-@jwt_required()
-def sync_status():
-    """Retorna status da sincronização (apenas para debugging)"""
-    try:
-        # Contar itens pendentes na SyncQueue (apenas no modo local)
-        if current_app.config.get("APP_MODE", "local") == "local":
-            from app.models import SyncQueue
-            pending_count = SyncQueue.query.filter_by(status="pendente").count()
-            error_count = SyncQueue.query.filter_by(status="erro").count()
-        else:
-            pending_count = 0
-            error_count = 0
-        
-        # Logs recentes
-        recent_logs = SyncLog.query.order_by(SyncLog.created_at.desc())\
-                                 .limit(10)\
-                                 .all()
-        
-        logs_data = []
-        for log in recent_logs:
-            logs_data.append({
-                "id": log.id,
-                "operacao": log.operacao,
-                "status": log.status,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
-                "mensagem_erro": log.mensagem_erro
-            })
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "mode": current_app.config.get("APP_MODE", "local"),
-                "pending_items": pending_count,
-                "error_items": error_count,
-                "recent_logs": logs_data
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Erro ao obter status de sync: {e}")
-        return jsonify({
-            "success": False,
-            "error": "Erro interno"
-        }), 500
+        logger.error(f"❌ Erro no processamento de {data.get('tabela')}: {e}")
+        return False

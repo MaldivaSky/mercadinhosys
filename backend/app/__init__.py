@@ -589,8 +589,12 @@ def create_app(config_name=None):
         from app.routes.sync_hybrid import sync_hybrid_bp
         app.register_blueprint(sync_hybrid_bp, url_prefix="/api/sync-hybrid")
         logger.info("✅ Blueprint Sincronização Híbrida registrado em /api/sync-hybrid")
+        
+        from app.routes.sync_cloud import sync_cloud_bp
+        app.register_blueprint(sync_cloud_bp, url_prefix="/api/sync")
+        logger.info("✅ Blueprint Cloud Sync (Receiver) registrado em /api/sync")
     except Exception as e:
-        logger.error(f"❌ Erro ao registrar sync_hybrid: {e}")
+        logger.error(f"❌ Erro ao registrar sync_hybrid ou sync_cloud: {e}")
 
 
     # Stripe

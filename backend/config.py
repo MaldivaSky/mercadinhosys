@@ -125,6 +125,7 @@ class Config:
     SYNC_WORKER_INTERVAL = int(os.environ.get("SYNC_WORKER_INTERVAL", "30"))
     SYNC_MAX_RETRIES = int(os.environ.get("SYNC_MAX_RETRIES", "3"))
     CLOUD_API_URL = os.environ.get("CLOUD_API_URL", "https://mercadinhosys.onrender.com")
+    CLOUD_SYNC_TOKEN = os.environ.get("CLOUD_SYNC_TOKEN", "")
 
 
 class DevelopmentConfig(Config):

@@ -45,7 +45,9 @@ class MasterSeeder:
                 username="maldivas",
                 cargo="SUPER ADMIN",
                 role="ADMIN",
-                cpf=RealisticInjector.generate_cpf(),
+                is_super_admin=True,  # FIX: campo obrigatório para acesso superadmin
+                status="ativo",
+                cpf="34372131801",
                 email="rafaelmaldivas@gmail.com",
                 celular="(92) 99911-2233",
                 data_nascimento=date(1985, 5, 20),
@@ -53,8 +55,19 @@ class MasterSeeder:
                 ativo=True,
                 **end_hq
             )
-            rafael.set_password("Mald1v@$")
+            # Tenta set_senha primeiro (padrão do modelo), fallback para set_password
+            if hasattr(rafael, 'set_senha'):
+                rafael.set_senha("Mald1v@$")
+            else:
+                rafael.set_password("Mald1v@$")
             db.session.add(rafael)
+        else:
+            # Garantir que um superadmin existente sempre tenha is_super_admin=True
+            if not rafael.is_super_admin:
+                rafael.is_super_admin = True
+                rafael.status = "ativo"
+                rafael.ativo = True
+                print("[FIX] is_super_admin atualizado para maldivas existente.")
         
         db.session.commit()
 

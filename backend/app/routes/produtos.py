@@ -340,10 +340,10 @@ def listar_produtos():
         include_metrics = request.args.get("metrics", "false").lower() == "true"
         filtro_alerta = request.args.get("alerta")
 
-        # Base query com Eager Loading (Fix N+1)
         query = db.session.query(Produto).options(
             joinedload(Produto.categoria),
-            joinedload(Produto.fornecedor)
+            joinedload(Produto.fornecedor),
+            joinedload(Produto.lotes)
         )
         
         # Filtro de Tenant OBRIGATÓRIO (Zero Leak)
@@ -385,7 +385,7 @@ def listar_produtos():
             if estoque_status == "esgotado":
                 query = query.filter(Produto.quantidade <= 0)
             elif estoque_status == "baixo":
-                query = query.filter(and_(Produto.quantidade > 0, Produto.quantidade <= Produto.quantidade_minima))
+                query = query.filter(Produto.quantidade <= Produto.quantidade_minima)
             elif estoque_status == "normal":
                 query = query.filter(Produto.quantidade > Produto.quantidade_minima)
 
@@ -515,14 +515,17 @@ def listar_produtos():
                 produto_dict["estoque_status"] = "normal"
 
             # --- LÓGICA FIFO PARA EXIBIÇÃO DE LOTE E VALIDADE ---
-            # Se o produto não tem lote/validade direto, buscamos do lote mais antigo (FIFO)
+            # SEEDER OPTIMIZATION: Usar lotes já carregados via joinedload (Fix N+1)
             lote_atual = None
             try:
-                lote_atual = ProdutoLote.query.filter_by(
-                    produto_id=produto.id, 
-                    estabelecimento_id=estabelecimento_id, 
-                    ativo=True
-                ).filter(ProdutoLote.quantidade > 0).order_by(ProdutoLote.data_validade.asc()).first()
+                lotes_validos = [
+                    l for l in produto.lotes 
+                    if l.ativo and (l.quantidade or 0) > 0 and 
+                    (str(estabelecimento_id).lower() == 'all' or l.estabelecimento_id == estabelecimento_id)
+                ]
+                # Ordenar por validade asc para FIFO
+                lotes_validos.sort(key=lambda x: x.data_validade if x.data_validade else date.max)
+                lote_atual = lotes_validos[0] if lotes_validos else None
             except Exception:
                 pass
 
