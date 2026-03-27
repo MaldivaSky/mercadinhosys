@@ -424,7 +424,7 @@ def relatorio_rentabilidade_abc(estabelecimento_id: int, days: int = 30, data_in
 
 @relatorios_bp.route("/rfm/clientes", methods=["GET"])
 @funcionario_required
-@plan_required('Enterprise')
+@plan_required('Pro')
 def get_rfm_clientes():
     """
     GET /api/relatorios/rfm/clientes
@@ -511,7 +511,7 @@ def get_rfm_clientes():
 
 @relatorios_bp.route("/rfm/clientes/em-risco/exportar", methods=["GET"])
 @funcionario_required
-@plan_required('Enterprise')
+@plan_required('Pro')
 def exportar_clientes_em_risco():
     """
     GET /api/relatorios/rfm/clientes/em-risco/exportar
@@ -577,7 +577,7 @@ def exportar_clientes_em_risco():
 
 @relatorios_bp.route("/rentabilidade/abc", methods=["GET"])
 @funcionario_required
-@plan_required('Enterprise')
+@plan_required('Pro')
 def get_rentabilidade_abc():
     """
     GET /api/relatorios/rentabilidade/abc
@@ -644,7 +644,7 @@ def get_rentabilidade_abc():
 
 @relatorios_bp.route("/estoque/previsao-esgotamento", methods=["GET"])
 @funcionario_required
-@plan_required('Enterprise')
+@plan_required('Pro')
 def get_previsao_esgotamento():
     """
     GET /api/relatorios/estoque/previsao-esgotamento
@@ -716,7 +716,7 @@ def get_previsao_esgotamento():
 
 @relatorios_bp.route("/backup/exportar", methods=["GET"])
 @funcionario_required
-@plan_required('Enterprise')
+@plan_required('Pro')
 def exportar_backup_local():
     """
     GET /api/relatorios/backup/exportar

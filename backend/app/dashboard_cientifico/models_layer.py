@@ -9,7 +9,8 @@ from collections import defaultdict
 import logging
 import numpy as np
 from sqlalchemy import func
-from app.models import db, Venda, VendaItem, Produto
+from app.models import Venda, VendaItem, Produto
+from app.utils.query_helpers import _get_db
 
 logger = logging.getLogger(__name__)
 
@@ -555,10 +556,11 @@ class PracticalModels:
         Calcula correlações REAIS baseadas em dados do banco de dados.
         Sem simulações, sem dados fake.
         """
-        from app.models import db, Venda, VendaItem, Produto
+        from app.models import Venda, VendaItem, Produto
         from datetime import datetime, timedelta
         import numpy as np
         from sqlalchemy import func
+        db = _get_db()
         
         correlations: List[Dict[str, Any]] = []
         
@@ -571,7 +573,6 @@ class PracticalModels:
             if not target_est_id and expense_details and len(expense_details) > 0:
                 target_est_id = expense_details[0].get('estabelecimento_id')
 
-            print(f"DEBUG: Starting correlation analysis for EstID={target_est_id}, StartDate={start_date}")
 
             # 1️⃣ CORRELAÇÃO REAL: Vendas vs Despesas (Pearson)
             if sales_timeseries and expense_details:
@@ -605,13 +606,13 @@ class PracticalModels:
                                     "insight": f"Vendas e despesas {'caminham juntas' if corr > 0 else 'divergem'}"
                                 })
                 except Exception as e:
-                    print(f"DEBUG: Error in Sales vs Expenses: {e}")
+                    logger.warning(f"Error in Sales vs Expenses: {e}")
 
             if target_est_id:
                 # 2️⃣ Hora do Dia vs Volume de Vendas
                 try:
                     from app.utils.query_helpers import get_hour_extract
-                    print("DEBUG: Executing Hourly Sales Query...")
+                    # print("DEBUG: Executing Hourly Sales Query...")
                     hourly_sales = db.session.query(
                         get_hour_extract(Venda.data_venda).label('hora'),
                         func.sum(Venda.total).label('total')
@@ -625,7 +626,6 @@ class PracticalModels:
                         
                     hourly_sales = hourly_sales.group_by('hora').all()
                     
-                    print(f"DEBUG: Hourly Sales Records Found: {len(hourly_sales)}")
 
                     market_insight = None
                     if len(hourly_sales) > 0:
@@ -658,16 +658,14 @@ class PracticalModels:
                             }
                             
                         if market_insight:
-                             print(f"DEBUG: Adding Hourly Insight: {market_insight['insight']}")
                              correlations.append(market_insight)
                 except Exception as e:
                     db.session.rollback()
-                    print(f"DEBUG: Error in Hourly Sales: {e}")
+                    logger.warning(f"Error in Hourly Sales: {e}")
 
                 # 3️⃣ Dia da Semana vs Ticket Médio
                 try:
                     from app.utils.query_helpers import get_dow_extract
-                    print("DEBUG: Executing Day of Week Query...")
                     dow_sales = db.session.query(
                         get_dow_extract(Venda.data_venda).label('dia'),
                         func.avg(Venda.total).label('ticket_medio')
@@ -681,7 +679,6 @@ class PracticalModels:
                         
                     dow_sales = dow_sales.group_by('dia').all()
                     
-                    print(f"DEBUG: Day of Week Records Found: {len(dow_sales)}")
                     
                     market_insight = None
                     if len(dow_sales) > 0:
@@ -715,15 +712,13 @@ class PracticalModels:
                                }
 
                         if market_insight:
-                            print(f"DEBUG: Adding Day Insight: {market_insight['insight']}")
                             correlations.append(market_insight)
                 except Exception as e:
                     db.session.rollback()
-                    print(f"DEBUG: Error in Day Sales: {e}")
+                    logger.warning(f"Error in Day Sales: {e}")
 
                 # 4️⃣ Variedade de Produtos (Mix) vs Faturamento Diário
                 try:
-                    print("DEBUG: Executing Product Mix Query...")
                     mix_diario = db.session.query(
                         func.date(Venda.data_venda).label('data'),
                         func.count(func.distinct(VendaItem.produto_id)).label('produtos_unicos'),
@@ -738,7 +733,6 @@ class PracticalModels:
                          
                     mix_diario = mix_diario.group_by(func.date(Venda.data_venda)).all()
                     
-                    print(f"DEBUG: Product Mix Records Found: {len(mix_diario)}")
                     
                     if len(mix_diario) > 0:
                         market_insight = None
@@ -770,15 +764,13 @@ class PracticalModels:
                                 }
                         
                         if market_insight:
-                            print(f"DEBUG: Adding Mix Insight: {market_insight['insight']}")
                             correlations.append(market_insight)
                 except Exception as e:
                     db.session.rollback()
-                    print(f"DEBUG: Error in Product Mix: {e}")
+                    logger.warning(f"Error in Product Mix: {e}")
 
             # Fallbacks garantidos se a lista estiver vazia
             if len(correlations) < 3:
-                print("DEBUG: Few correlations found, adding hardcoded fallbacks to fill")
                 correlations.append({
                      "variavel1": "Estoque Atual",
                      "variavel2": "Quantidade Vendida",
@@ -805,7 +797,6 @@ class PracticalModels:
                 })
 
         except Exception as e:
-            print(f"DEBUG: CRITICAL ERROR IN CORRELATIONS: {e}")
             logger.warning(f"Erro geral ao calcular correlações: {e}")
             return []
 
