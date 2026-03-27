@@ -3193,9 +3193,12 @@ class AuditoriaSincronia(db.Model, MultiTenantMixin):
         return {
             "id": self.id,
             "tabela": self.tabela,
+            "registro_id": self.registro_id,
             "operacao": self.operacao,
+            "estabelecimento_id": self.estabelecimento_id,
+            "payload": json.loads(self.payload_json) if self.payload_json else {},
             "status": self.status,
-            "data_criacao": self.data_criacao.isoformat(),
+            "data_criacao": self.data_criacao.isoformat() if self.data_criacao else None,
             "tentativas": self.tentativas
         }
 
@@ -3759,67 +3762,34 @@ def load_user_from_request(request):
     return None
 
 
-# ============================================
-# # EVENT LISTENER GLOBAL -> O CORAÇÃO DO OFFLINE-FIRST (HÍBRIDO)
-# # ============================================
-# import json
-# from sqlalchemy import event
-# 
-# def _queue_sync(mapper, connection, target, operacao):
-#     """
-#     Função Master que ouve TODAS as inserções do banco local
-#     e as injeta no SyncQueue para o sync_worker mandar pro Aiven.
-#     """
-#     if os.getenv("SKIP_SYNC_LISTENERS") == "1":
-#         return
-# 
-#     tabela = target.__tablename__
-#     
-#     # Impedir loop infinito ou lixo no SyncWorker
-#     if tabela in ['sync_queue', 'sync_logs', 'auditoria', 'auditoria_sincronia', 'pontos_temporarios']:
-#         return
-# 
-#     estabelecimento_id = getattr(target, 'estabelecimento_id', 1)
-#     
-#     payload = None
-#     if operacao != 'DELETE':
-#         if hasattr(target, 'to_dict'):
-#             try: 
-#                 payload = target.to_dict()
-#             except Exception: 
-#                 payload = {}
-#                 
-#     try:
-#         from app.models import SyncQueue
-#         connection.execute(
-#             SyncQueue.__table__.insert().values(
-#                 estabelecimento_id=estabelecimento_id,
-#                 tabela=tabela,
-#                 registro_id=target.id,
-#                 operacao=operacao,
-#                 payload_json=json.dumps(payload, default=str) if payload else None,
-#                 status="pendente",
-#                 tentativas=0
-#             )
-#         )
-#     except Exception:
-#         # Se falhar a injeção na fila local, falhou silenciosamente pra não quebrar a venda do caixa
-#         pass
-# 
-# def after_insert_listener(mapper, connection, target):
-#     _queue_sync(mapper, connection, target, "INSERT")
-# 
-# def after_update_listener(mapper, connection, target):
-#     _queue_sync(mapper, connection, target, "UPDATE")
-# 
-# def after_delete_listener(mapper, connection, target):
-#     _queue_sync(mapper, connection, target, "DELETE")
-# 
-# # Mapear e ligar a escuta de eventos via Registry do SQLAlchemy
-# for mapper in db.Model.registry.mappers:
-#     cls = mapper.class_
-#     if hasattr(cls, '__tablename__'):
-#         event.listen(cls, 'after_insert', after_insert_listener)
-#         event.listen(cls, 'after_update', after_update_listener)
-#         event.listen(cls, 'after_delete', after_delete_listener)
+def get_model_by_table(table_name: str):
+    """Retorna a classe do modelo dada o nome da tabela (Sync Helper)"""
+    from app.models import (
+        Estabelecimento, Funcionario, CategoriaProduto, Fornecedor,
+        Produto, ProdutoLote, MovimentacaoEstoque, Venda, VendaItem,
+        ContaReceber, Cliente, Caixa, HistoricoPrecos, Configuracao
+    )
+    mapping = {
+        "estabelecimentos": Estabelecimento,
+        "funcionarios": Funcionario,
+        "categorias_produtos": CategoriaProduto,
+        "fornecedores": Fornecedor,
+        "produtos": Produto,
+        "produtos_lotes": ProdutoLote,
+        "movimentacoes_estoque": MovimentacaoEstoque,
+        "vendas": Venda,
+        "venda_itens": VendaItem,
+        "contas_receber": ContaReceber,
+        "clientes": Cliente,
+        "caixas": Caixa,
+        "historico_precos": HistoricoPrecos,
+        "configuracoes": Configuracao
+    }
+    return mapping.get(table_name)
 
+
+# ============================================
+
+# ============================================
+# FIM DO ARQUIVO MODELS.PY
+# ============================================

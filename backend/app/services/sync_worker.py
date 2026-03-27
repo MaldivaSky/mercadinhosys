@@ -41,12 +41,11 @@ class GuerrillaSyncWorker(threading.Thread):
 
             print(f"🔄 Sincronizador: Processando {len(pendentes)} mutações...")
             
-            # Agrupar por estabelecimento (em cenários de gateway local com múltiplos silos)
             for sync_item in pendentes:
                 try:
-                    # IMPLEMENTAÇÃO DE ELITE: Aqui enviaríamos o payload para o endpoint /sync/receive na nuvem
-                    # Por enquanto, vamos simular o sucesso se houver internet para validar a infra
-                    if self.envio_para_nuvem(sync_item):
+                    res = self.envio_para_nuvem(sync_item)
+                    print(f"📡 Item {sync_item.id} -> {sync_item.tabela}: Envio {'SUCESSO' if res else 'FALHA'}")
+                    if res:
                         sync_item.status = "sincronizado"
                         sync_item.data_sincronia = datetime.utcnow()
                     else:
@@ -55,22 +54,32 @@ class GuerrillaSyncWorker(threading.Thread):
                             sync_item.status = "erro"
                             sync_item.msg_erro = "Máximo de tentativas atingido"
                 except Exception as e:
+                    print(f"❌ Erro individual no item {sync_item.id}: {e}")
                     sync_item.tentativas += 1
                     sync_item.msg_erro = str(e)
             
-            db.session.commit()
+            try:
+                db.session.commit()
+                print("💾 Sincronizador: Commit realizado na fila local.")
+            except Exception as e:
+                db.session.rollback()
+                print(f"💥 Erro no commit da fila: {e}")
 
     def envio_para_nuvem(self, sync_item):
         """Simula ou executa o envio do delta para o banco central"""
         # Se CLOUD_API_URL estiver configurado, faz o POST real
         if self.cloud_api_url:
             try:
-                # O endpoint na nuvem deve ser capaz de reconstruir o objeto a partir do payload
+                # Sincronização de Guerrilha: Handshake Industrial
+                sync_token = os.getenv("CLOUD_SYNC_TOKEN", "")
                 resp = requests.post(
                     f"{self.cloud_api_url}/api/sync/receive",
                     json=sync_item.to_dict(),
-                    timeout=10,
-                    headers={"X-Sync-Token": os.getenv("SYNC_SECRET_KEY")}
+                    timeout=15,
+                    headers={
+                        "Authorization": f"Bearer {sync_token}",
+                        "Content-Type": "application/json"
+                    }
                 )
                 return resp.status_code == 200
             except:

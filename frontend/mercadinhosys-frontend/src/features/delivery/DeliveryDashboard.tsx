@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
     Truck,
     Package,
-    Clock,
     CheckCircle,
     MapPin,
     TrendingUp,

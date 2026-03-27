@@ -39,6 +39,27 @@ export interface Entrega {
     motorista_nome?: string;
 }
 
+export interface CreateMotoristaData {
+    nome: string;
+    cpf: string;
+    cnh: string;
+    categoria_cnh: string;
+    telefone?: string;
+    celular?: string;
+    email?: string;
+    tipo_vinculo: string;
+    percentual_comissao: number;
+}
+
+export interface CreateVeiculoData {
+    placa: string;
+    modelo: string;
+    ano: number;
+    tipo: string;
+    cor: string;
+    consumo_medio: number;
+}
+
 export const deliveryService = {
     getStats: async () => {
         const response = await apiClient.get('/delivery/stats');
@@ -51,8 +72,8 @@ export const deliveryService = {
         return response.data;
     },
 
-    getMotoristas: async () => {
-        const response = await apiClient.get('/delivery/motoristas');
+    getMotoristas: async (somenteDisponiveis: boolean = true) => {
+        const response = await apiClient.get(`/delivery/motoristas${somenteDisponiveis ? '?disponiveis=true' : ''}`);
         return response.data;
     },
 
@@ -84,5 +105,17 @@ export const deliveryService = {
     criarVendaEntrega: async (data: any) => {
         const response = await apiClient.post('/delivery/venda-entrega', data);
         return response.data;
+    },
+
+    criarMotorista: async (data: CreateMotoristaData) => {
+        const response = await apiClient.post('/delivery/motoristas', data);
+        return response.data;
+    },
+
+    criarVeiculo: async (data: CreateVeiculoData) => {
+        const response = await apiClient.post('/delivery/veiculos', data);
+        return response.data;
     }
 };
+
+export default deliveryService;
