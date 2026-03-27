@@ -1626,7 +1626,10 @@ def comprovante_venda(venda_id):
         claims = get_jwt()
         estabelecimento_id = int(claims.get("estabelecimento_id"))
         
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
+        query_venda = Venda.query.filter(Venda.id == venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query_venda = query_venda.filter(Venda.estabelecimento_id == estabelecimento_id)
+        venda = query_venda.first()
         if not venda:
             return jsonify({"error": "Venda não encontrada"}), 404
 
@@ -1770,12 +1773,18 @@ def adicionar_item_pdv(venda_id):
             return jsonify({"error": "Produto é obrigatório"}), 400
 
         # Buscar venda
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
+        query_venda = Venda.query.filter(Venda.id == venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query_venda = query_venda.filter(Venda.estabelecimento_id == estabelecimento_id)
+        venda = query_venda.first()
         if not venda or venda.status != "em_andamento":
             return jsonify({"error": "Venda não encontrada ou não está ativa"}), 404
 
         # Buscar produto
-        produto = Produto.query.filter_by(id=produto_id, estabelecimento_id=estabelecimento_id).first()
+        query_prod = Produto.query.filter(Produto.id == produto_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query_prod = query_prod.filter(Produto.estabelecimento_id == estabelecimento_id)
+        produto = query_prod.first()
         if not produto:
             return jsonify({"error": "Produto não encontrado"}), 404
 
@@ -1860,7 +1869,10 @@ def remover_item_pdv(venda_id, item_id):
         db.session.delete(item)
 
         # Recalcular totais da venda
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
+        query_venda = Venda.query.filter(Venda.id == venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query_venda = query_venda.filter(Venda.estabelecimento_id == estabelecimento_id)
+        venda = query_venda.first()
         if not venda:
             return jsonify({"error": "Venda não encontrada"}), 404
         venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
@@ -1915,7 +1927,10 @@ def atualizar_quantidade_pdv(venda_id):
             return jsonify({"error": "Item não encontrado"}), 404
 
         # Verificar estoque
-        produto = Produto.query.filter_by(id=item.produto_id, estabelecimento_id=estabelecimento_id).first()
+        query_prod = Produto.query.filter(Produto.id == item.produto_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query_prod = query_prod.filter(Produto.estabelecimento_id == estabelecimento_id)
+        produto = query_prod.first()
         if not produto:
              return jsonify({"error": "Produto não encontrado"}), 404
         if produto.quantidade < nova_quantidade:
@@ -1931,7 +1946,10 @@ def atualizar_quantidade_pdv(venda_id):
         item.total_item = nova_quantidade * item.preco_unitario
 
         # Recalcular totais da venda
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first()
+        query_venda = Venda.query.filter(Venda.id == venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query_venda = query_venda.filter(Venda.estabelecimento_id == estabelecimento_id)
+        venda = query_venda.first()
         if not venda:
             return jsonify({"error": "Venda não encontrada"}), 404
         venda.itens = VendaItem.query.filter_by(venda_id=venda_id).all()
@@ -2044,7 +2062,10 @@ def listar_carrinhos_ativos():
         estabelecimento_id = int(claims.get("estabelecimento_id"))
         
         # Buscar vendas em andamento
-        vendas_ativas = Venda.query.filter_by(status="em_andamento", estabelecimento_id=estabelecimento_id).all()
+        query_ativas = Venda.query.filter(Venda.status == "em_andamento")
+        if str(estabelecimento_id).lower() != 'all':
+            query_ativas = query_ativas.filter(Venda.estabelecimento_id == estabelecimento_id)
+        vendas_ativas = query_ativas.all()
 
         return (
             jsonify(

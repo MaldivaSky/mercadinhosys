@@ -442,10 +442,11 @@ def validar_produto():
             produto_data = get_produto_safe(produto_id)
         elif codigo_barras:
             # BUGFIX: Scoping por estabelecimento_id no código de barras
-            produto = Produto.query.filter_by(
-                codigo_barras=codigo_barras, 
-                estabelecimento_id=estabelecimento_id
-            ).first()
+            # Suporte SuperAdmin 'all'
+            query = Produto.query.filter_by(codigo_barras=codigo_barras)
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter_by(estabelecimento_id=estabelecimento_id)
+            produto = query.first()
             produto_data = get_produto_safe(produto.id) if produto else None
         else:
             return jsonify({"error": "Informe produto_id ou codigo_barras"}), 400
@@ -606,6 +607,13 @@ def buscar_produtos_pdv():
             ) pl ON p.id = pl.produto_id
             """
 
+        # Filtro de Tenant Híbrido (Suporte SuperAdmin 'all')
+        estab_filter = ""
+        params = {"busca": busca_termo}
+        if str(estabelecimento_id).lower() != 'all':
+            estab_filter = "AND p.estabelecimento_id = :estab_id"
+            params["estab_id"] = estabelecimento_id
+
         from sqlalchemy import text as sql_text
         resultado = db.session.execute(sql_text(f"""
             SELECT
@@ -621,8 +629,8 @@ def buscar_produtos_pdv():
                 COALESCE(pl.numero_lote, p.lote) as lote
             FROM produtos p
             {lot_join_sql}
-            WHERE p.estabelecimento_id = :estab_id
-              AND p.ativo = true
+            WHERE p.ativo = true
+              {estab_filter}
               AND (
                   p.nome {like_op} :busca
                   OR p.codigo_barras {like_op} :busca
@@ -631,7 +639,7 @@ def buscar_produtos_pdv():
               )
             ORDER BY p.nome ASC
             LIMIT 20
-        """), {"estab_id": estabelecimento_id, "busca": busca_termo}).fetchall()
+        """), params).fetchall()
 
 
         produtos = []

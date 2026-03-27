@@ -254,7 +254,8 @@ def criar_venda_entrega_unificada():
     """
     try:
         data = request.get_json()
-        est_id = request.allowed_estabelecimento_id
+        from app.utils.query_helpers import get_authorized_establishment_id
+        est_id = get_authorized_establishment_id()
         
         # 1. Criar a Venda
         cliente_id = data.get("cliente_id")
@@ -281,10 +282,12 @@ def criar_venda_entrega_unificada():
         # 2. Adicionar Itens
         for item in data.get("itens", []):
             # Pessimistic Locking para Consistência de Estoque ACID e isolamento Tenant
-            prod = db.session.query(Produto).filter_by(
-                id=item["produto_id"], 
-                estabelecimento_id=est_id
-            ).with_for_update().first()
+            # Suporte SuperAdmin 'all'
+            query_prod = db.session.query(Produto).filter(Produto.id == item["produto_id"])
+            if str(est_id).lower() != 'all':
+                query_prod = query_prod.filter(Produto.id == item["produto_id"], Produto.estabelecimento_id == est_id)
+            
+            prod = query_prod.with_for_update().first()
             if not prod: continue
             
             v_item = VendaItem(
