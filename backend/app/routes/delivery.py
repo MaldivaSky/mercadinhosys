@@ -8,7 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import (
     db, Motorista, Veiculo, TaxaEntrega, Entrega, 
     EntregaItem, RastreamentoEntrega, CustoEntrega,
-    Venda, Cliente, Produto
+    Venda, Cliente, Produto, VendaItem, Caixa, MovimentacaoCaixa
 )
 from app.decorators.rbac import tenant_or_super_admin_required
 from datetime import datetime, date, timedelta

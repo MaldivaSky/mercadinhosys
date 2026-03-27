@@ -119,27 +119,53 @@ def fechar_caixa():
         if not caixa:
             return jsonify({"success": False, "error": "Nenhum caixa aberto encontrado"}), 404
 
-        # Diferença entre o esperado e o informado (Quebra de Caixa)
-        diferenca = valor_informado - float(caixa.saldo_atual)
+        # ─── Cálculo do Saldo Final (Regra de Negócio Sprint 08) ───────────
+        # Fórmula: saldo_inicial + entradas - saídas
+        # Entradas = Vendas (todas) + Suprimentos
+        # Saídas = Sangrias
+        
+        movimentacoes = MovimentacaoCaixa.query.filter_by(caixa_id=caixa.id).all()
+        from collections import defaultdict
+        totais_por_forma = defaultdict(lambda: {"quantidade": 0, "total": 0.0})
+        total_sangrias = 0.0
+        total_suprimentos = 0.0
+        total_vendas = 0.0
 
-        caixa.saldo_final = valor_informado
-        caixa.data_fechamento = datetime.utcnow()
+        for m in movimentacoes:
+            valor_mov = float(m.valor or 0)
+            tipo_mov = m.tipo.lower()
+            if tipo_mov == "venda":
+                forma = str(m.forma_pagamento or "outros").lower()
+                totais_por_forma[forma]["quantidade"] += 1
+                totais_por_forma[forma]["total"] += valor_mov
+                total_vendas += valor_mov
+            elif tipo_mov == "sangria":
+                total_sangrias += valor_mov
+            elif tipo_mov == "suprimento":
+                total_suprimentos += valor_mov
+
+        # Cálculo Final (Auditado)
+        entradas = total_vendas + total_suprimentos
+        saidas = total_sangrias
+        saldo_calculado = float(caixa.saldo_inicial) + entradas - saidas
+
+        # Diferença entre o informado (físico) e o saldo atual da GAVETA (dinheiro real)
+        # Importante: A quebra de caixa é baseada no que REALMENTE deveria estar na gaveta (Dinheiro)
+        diferenca_gaveta = valor_informado - float(caixa.saldo_atual)
+
         caixa.status = "fechado"
-        
-        obs_geral = f"{caixa.observacoes or ''} | Fechamento: {observacoes_fechamento}"
-        if abs(diferenca) > 0.01:
-            obs_geral += f" | ATENÇÃO: Quebra de caixa de {'+' if diferenca > 0 else ''}{diferenca:.2f}"
-            
-        caixa.observacoes = obs_geral
-        
+        caixa.data_fechamento = datetime.now()
+        caixa.saldo_final = saldo_calculado # Armazenamos o calculado conforme solicitado
+        caixa.observacoes = (caixa.observacoes or "") + f"\n[FECHAMENTO] Calculado: {saldo_calculado:.2f} | Informado Gaveta: {valor_informado:.2f} | Diferença: {diferenca_gaveta:.2f}"
+
         # Registrar movimentacao de fechamento
         mov = MovimentacaoCaixa(
             caixa_id=caixa.id,
             estabelecimento_id=caixa.estabelecimento_id,
             tipo="fechamento",
             valor=valor_informado,
-            descricao="Fechamento de Caixa",
-            observacoes=f"Diferença apurada: {diferenca:.2f}"
+            descricao="Fechamento de Caixa (Conferência Física)",
+            observacoes=f"Saldo Calculado Total: {saldo_calculado:.2f}"
         )
         db.session.add(mov)
 
@@ -148,11 +174,20 @@ def fechar_caixa():
         return jsonify({
             "success": True, 
             "message": "Caixa fechado com sucesso", 
-            "data": caixa.to_dict(),
-            "resumo": {
-                "saldo_sistema": float(caixa.saldo_atual),
-                "valor_informado": valor_informado,
-                "diferenca": diferenca
+            "data": {
+                "id": caixa.id,
+                "status": caixa.status,
+                "saldo_final_calculado": round(saldo_calculado, 2),
+                "saldo_final_informado": valor_informado,
+                "diferenca_balanço": round(valor_informado - saldo_calculado, 2)
+            },
+            "resumo_fechamento": {
+                "saldo_inicial": float(caixa.saldo_inicial),
+                "entradas": round(entradas, 2),
+                "saidas": round(saidas, 2),
+                "saldo_final": round(saldo_calculado, 2),
+                "quebra_gaveta": round(diferenca_gaveta, 2),
+                "por_forma_pagamento": dict(totais_por_forma)
             }
         }), 200
 

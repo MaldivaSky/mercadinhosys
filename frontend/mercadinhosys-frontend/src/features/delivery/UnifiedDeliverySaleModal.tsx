@@ -13,6 +13,7 @@ interface Props {
 }
 
 const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated }) => {
+    console.log("UnifiedDeliverySaleModal: Renderizado! isOpen=", isOpen);
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
 
@@ -137,8 +138,8 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
 
     if (!isOpen) return null;
 
-    const filteredProds = allProducts.filter(p => p.nome.toLowerCase().includes(prodSearch.toLowerCase()));
-    const filteredCusts = allCustomers.filter(c => c.nome.toLowerCase().includes(custSearch.toLowerCase()));
+    const filteredProds = allProducts.filter(p => p.nome?.toLowerCase().includes(prodSearch?.toLowerCase() || ''));
+    const filteredCusts = allCustomers.filter(c => c.nome?.toLowerCase().includes(custSearch?.toLowerCase() || ''));
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">

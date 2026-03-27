@@ -3,10 +3,11 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy import func, desc, extract, case, and_
 from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
-    db, Venda, VendaItem, Produto, Cliente,
+    Venda, VendaItem, Produto, Cliente,
     Funcionario, FuncionarioBeneficio, Beneficio, BancoHoras, RegistroPonto, ConfiguracaoHorario,
     Despesa, ContaPagar, ContaReceber
 )
+from app.utils.query_helpers import _get_db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class DataLayer:
             end_d = end_date.date() if isinstance(end_date, datetime) else end_date
             end_exclusive = end_d + timedelta(days=1)  # Inclui o dia inteiro de end_d
             
+            db = _get_db()
             query = db.session.query(
                 func.count(Venda.id).label('total_vendas'),
                 func.sum(Venda.total).label('total_faturado'),
@@ -53,7 +55,6 @@ class DataLayer:
             return {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
 
     @staticmethod
-    @staticmethod
     def get_sales_timeseries(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """Série temporal de vendas diárias integrando Receita, CMV e Despesas."""
         try:
@@ -62,6 +63,7 @@ class DataLayer:
             # Garante formato start_date datetime
             start_dt = datetime.combine(start_date, datetime.min.time())
             
+            db = _get_db()
             # Query Vendas (Agrupa por dia)
             query_vendas = db.session.query(
                 func.date(Venda.data_venda).label('data'),
@@ -202,6 +204,7 @@ class DataLayer:
     def get_inventory_summary(estabelecimento_id: int) -> Dict[str, Any]:
         """Resumo do inventário (valor total, itens baixo estoque)"""
         try:
+            db = _get_db()
             # Valor total do estoque (custo * quantidade)
             query_valor = db.session.query(
                 func.sum(Produto.preco_custo * Produto.quantidade)
@@ -283,6 +286,7 @@ class DataLayer:
     def get_top_products(estabelecimento_id: int, days: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Top produtos mais vendidos (Curva ABC)"""
         try:
+            db = _get_db()
             # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
             start_date = datetime.utcnow() - timedelta(days=days)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
