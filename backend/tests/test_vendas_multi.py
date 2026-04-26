@@ -36,6 +36,7 @@ def test_venda_multi_pagamento_sucesso(client, session):
         nome="Cliente Teste",
         cpf="12345678901",
         estabelecimento_id=estab.id,
+        celular="11999999999",
         cep="01001-000",
         logradouro="Rua Teste",
         numero="1",
@@ -66,7 +67,7 @@ def test_venda_multi_pagamento_sucesso(client, session):
         ]
     }
 
-    response = client.post("/vendas/", json=payload, headers=headers)
+    response = client.post("/api/vendas/", json=payload, headers=headers)
     assert response.status_code == 201 or response.status_code == 200
     data = response.get_json()
     assert "venda" in data
@@ -75,7 +76,7 @@ def test_venda_multi_pagamento_sucesso(client, session):
     # Verify Database State (Bypass TenantQuery Filters in Test)
     venda = db.session.query(Venda).filter_by(codigo=data["venda"]["codigo"]).first()
     assert venda is not None
-    assert venda.total == 71.80
+    assert float(venda.total) == 71.80
     assert len(venda.pagamentos) == 2
     
     formas = [p.forma_pagamento for p in venda.pagamentos]
@@ -86,8 +87,29 @@ def test_venda_multi_pagamento_sucesso(client, session):
     assert float(total_pg) == 71.80
 
 def test_venda_valor_insuficiente_erro(client, session):
-    estab = Estabelecimento.query.first()
-    prod = Produto.query.first()
+    estab = session.query(Estabelecimento).first()
+    if not estab:
+        estab = Estabelecimento(nome="Teste Insuficiente", plano="Pro")
+        session.add(estab)
+        session.flush()
+    
+    cat = CategoriaProduto.query.filter_by(estabelecimento_id=estab.id).first()
+    if not cat:
+        cat = CategoriaProduto(nome="Geral", estabelecimento_id=estab.id)
+        session.add(cat)
+        session.flush()
+
+    prod = Produto(
+        estabelecimento_id=estab.id,
+        categoria_id=cat.id,
+        nome="Produto Teste Erro",
+        preco_custo=20.00,
+        preco_venda=35.90,
+        quantidade=100
+    )
+    session.add(prod)
+    session.commit()
+
     token = create_access_token(identity="1", additional_claims={"estabelecimento_id": estab.id})
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -100,6 +122,6 @@ def test_venda_valor_insuficiente_erro(client, session):
         ]
     }
 
-    response = client.post("/vendas/", json=payload, headers=headers)
+    response = client.post("/api/vendas/", json=payload, headers=headers)
     assert response.status_code == 400
     assert "menor que o total da venda" in response.get_json()["error"]

@@ -1509,6 +1509,60 @@ class DataLayer:
 
     @staticmethod
     @provide_session
+    def get_payment_methods_metrics(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+        """
+        Retorna as métricas destrinchadas de formas de pagamento usando a tabela Pagamento,
+        com os devidos percentuais perante o montante total.
+        """
+        try:
+            start_dt = start_date if start_date.tzinfo else start_date.replace(tzinfo=timezone.utc)
+            end_dt = end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
+
+            from app.models import Pagamento, Venda
+
+            # Fazer SUM do valor por forma_pagamento
+            q = db.session.query(
+                Pagamento.forma_pagamento,
+                func.sum(Pagamento.valor).label("total_valor"),
+                func.count(Pagamento.id).label("quantidade")
+            ).join(Venda).filter(
+                Venda.data_venda >= start_dt,
+                Venda.data_venda <= end_dt,
+                Venda.status != 'cancelada',
+                Pagamento.status == 'aprovado'
+            )
+
+            if str(estabelecimento_id).lower() != 'all':
+                q = q.filter(Venda.estabelecimento_id == estabelecimento_id)
+
+            resultados = q.group_by(Pagamento.forma_pagamento).all()
+
+            total_geral = sum([float(r.total_valor or 0) for r in resultados])
+            
+            metricas = []
+            for r in resultados:
+                total_fp = float(r.total_valor or 0)
+                percentual = (total_fp / total_geral * 100) if total_geral > 0 else 0.0
+                metricas.append({
+                    "forma_pagamento": r.forma_pagamento or "Indefinida",
+                    "total_valor": total_fp,
+                    "quantidade": int(r.quantidade or 0),
+                    "percentual": round(percentual, 2)
+                })
+
+            # Ordenar por percentual
+            metricas.sort(key=lambda x: x["percentual"], reverse=True)
+
+            return {
+                "metricas": metricas,
+                "total_processado": total_geral
+            }
+        except Exception as e:
+            logger.error(f"Erro ao agregar formas de pagamento: {e}")
+            return {"metricas": [], "total_processado": 0.0}
+
+    @staticmethod
+    @provide_session
     def get_sales_financials(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """
         Retorna dados financeiros de vendas for DRE (Revenue, COGS, Margin).
@@ -1748,8 +1802,12 @@ class DataLayer:
             trinta_dias_atras = hoje - timedelta(days=30)
 
             # 1. Tendência: Novos Fiados vs. Pagamentos (últimos 30 dias)
-            query_novos = db.session.query(func.coalesce(func.sum(Venda.total), 0)).filter(
-                Venda.forma_pagamento.ilike('%fiado%'),
+            from app.models import Pagamento as PagamentoModel
+            query_novos = db.session.query(
+                func.coalesce(func.sum(PagamentoModel.valor), 0)
+            ).join(Venda).filter(
+                PagamentoModel.forma_pagamento.ilike('%fiado%'),
+                PagamentoModel.status == 'aprovado',
                 Venda.status == 'finalizada',
                 Venda.data_venda >= trinta_dias_atras
             )
@@ -1778,8 +1836,11 @@ class DataLayer:
                 VendaItem.produto_nome,
                 func.sum(VendaItem.quantidade).label('qtde'),
                 func.sum(VendaItem.total_item).label('valor')
-            ).join(Venda).filter(
-                Venda.forma_pagamento.ilike('%fiado%'),
+            ).join(Venda, Venda.id == VendaItem.venda_id).join(
+                PagamentoModel, PagamentoModel.venda_id == Venda.id
+            ).filter(
+                PagamentoModel.forma_pagamento.ilike('%fiado%'),
+                PagamentoModel.status == 'aprovado',
                 Venda.status == 'finalizada'
             )
             
@@ -1795,10 +1856,13 @@ class DataLayer:
                 Cliente.id,
                 Cliente.nome,
                 Cliente.celular,
-                func.sum(Venda.total).label('volume_credito')
-            ).join(Venda).filter(
+                func.sum(PagamentoModel.valor).label('volume_credito')
+            ).join(Venda, Venda.cliente_id == Cliente.id).join(
+                PagamentoModel, PagamentoModel.venda_id == Venda.id
+            ).filter(
                 Cliente.saldo_devedor <= 0,
-                Venda.forma_pagamento.ilike('%fiado%'),
+                PagamentoModel.forma_pagamento.ilike('%fiado%'),
+                PagamentoModel.status == 'aprovado',
                 Venda.status == 'finalizada'
             )
             

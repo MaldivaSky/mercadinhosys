@@ -410,7 +410,7 @@ def obter_cliente(id):
                         venda.data_venda.isoformat() if venda.data_venda else None
                     ),
                     "total": float(venda.total),
-                    "forma_pagamento": venda.forma_pagamento,
+                    "forma_pagamento": (venda.pagamentos[0].forma_pagamento if venda.pagamentos else "N/A"),
                     "status": venda.status,
                     "quantidade_itens": venda.quantidade_itens,
                 }
@@ -1261,7 +1261,7 @@ def listar_compras_cliente(id):
                     "subtotal": float(venda.subtotal),
                     "desconto": float(venda.desconto),
                     "total": float(venda.total),
-                    "forma_pagamento": venda.forma_pagamento,
+                    "forma_pagamento": (venda.pagamentos[0].forma_pagamento if venda.pagamentos else "N/A"),
                     "quantidade_itens": venda.quantidade_itens,
                     "funcionario": (
                         venda.funcionario.nome if venda.funcionario else None
