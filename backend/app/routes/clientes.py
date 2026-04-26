@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/clientes.py
 # MÓDULO COMPLETO DE CLIENTES - ERP INDUSTRIAL BRASILEIRO
 # CRUD completo com todas as operações necessárias para clientes CPF
@@ -230,7 +231,7 @@ def listar_clientes():
             # Dias desde última compra
             if cliente.ultima_compra:
                 dias_desde_ultima_compra = (
-                    datetime.utcnow() - cliente.ultima_compra
+                    datetime.now(timezone.utc) - cliente.ultima_compra
                 ).days
                 cliente_dict["dias_sem_comprar"] = dias_desde_ultima_compra
             else:
@@ -360,7 +361,7 @@ def obter_cliente(id):
             [
                 v
                 for v in vendas
-                if v.data_venda and (datetime.utcnow() - v.data_venda).days <= 30
+                if v.data_venda and (datetime.now(timezone.utc) - v.data_venda).days <= 30
             ]
         )
         valor_medio_compra = (
@@ -381,7 +382,7 @@ def obter_cliente(id):
         )
 
         # Ticket médio por período
-        hoje = datetime.utcnow()
+        hoje = datetime.now(timezone.utc)
         periodos = {
             "ultimo_mes": (hoje - timedelta(days=30), hoje),
             "ultimos_3_meses": (hoje - timedelta(days=90), hoje),
@@ -671,7 +672,7 @@ def atualizar_cliente(id):
             if campo in data:
                 setattr(cliente, campo, data[campo])
 
-        cliente.data_atualizacao = datetime.utcnow()
+        cliente.data_atualizacao = datetime.now(timezone.utc)
 
         db.session.commit()
 
@@ -734,7 +735,7 @@ def atualizar_status_cliente(id):
                 )
 
         cliente.ativo = novo_status
-        cliente.data_atualizacao = datetime.utcnow()
+        cliente.data_atualizacao = datetime.now(timezone.utc)
 
         db.session.commit()
 
@@ -1553,7 +1554,7 @@ def curva_compras():
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
-        hoje = datetime.utcnow()
+        hoje = datetime.now(timezone.utc)
         meses = []
 
         # Gerar lista dos últimos 12 meses
@@ -1715,7 +1716,7 @@ def relatorio_analitico_clientes():
             # CLV = valor médio da compra × frequência de compras × tempo de vida do cliente
             tempo_vida_meses = 0
             if cliente.data_cadastro:
-                tempo_vida_dias = (datetime.utcnow() - cliente.data_cadastro).days
+                tempo_vida_dias = (datetime.now(timezone.utc) - cliente.data_cadastro).days
                 tempo_vida_meses = tempo_vida_dias / 30.44  # Média de dias por mês
 
             clv = (
@@ -1760,7 +1761,7 @@ def relatorio_analitico_clientes():
                             else None
                         ),
                         "dias_sem_comprar": (
-                            (datetime.utcnow() - cliente.ultima_compra).days
+                            (datetime.now(timezone.utc) - cliente.ultima_compra).days
                             if cliente.ultima_compra
                             else None
                         ),
@@ -1812,12 +1813,12 @@ def sincronizar_metricas_cliente(cliente_id, valor_venda):
         )
 
         # Atualizar data da última compra
-        cliente.ultima_compra = datetime.utcnow()
+        cliente.ultima_compra = datetime.now(timezone.utc)
 
         # Atualizar saldo devedor se a venda foi a crédito
         # Esta lógica deve ser implementada com base na forma de pagamento da venda
 
-        cliente.data_atualizacao = datetime.utcnow()
+        cliente.data_atualizacao = datetime.now(timezone.utc)
 
         db.session.commit()
 
@@ -1844,7 +1845,7 @@ def atualizar_saldo_devedor(cliente_id, valor, tipo="adicionar"):
         elif tipo == "definir":
             cliente.saldo_devedor = Decimal(str(valor))
 
-        cliente.data_atualizacao = datetime.utcnow()
+        cliente.data_atualizacao = datetime.now(timezone.utc)
         db.session.commit()
 
     except Exception as e:

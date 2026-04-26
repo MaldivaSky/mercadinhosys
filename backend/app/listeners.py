@@ -150,7 +150,7 @@ def registrar_evento_forense(mapper, connection, target, operacao):
                         payload_json=json.dumps(payload, default=str),
                         status="pendente",
                         tentativas=0,
-                        data_criacao=datetime.now()
+                        created_at=datetime.now()
                     )
                 )
             except Exception as e:

@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/produtos.py
 # MÓDULO COMPLETO DE PRODUTOS - ERP INDUSTRIAL BRASILEIRO
 # CRUD completo com controle de estoque, validade, precificação
@@ -257,7 +258,7 @@ def bulk_update_prices():
                 lote = lote_query.first()
                 if lote:
                     lote.preco_venda = novo_preco_dec
-                    lote.updated_at = datetime.utcnow()
+                    lote.updated_at = datetime.now(timezone.utc)
                     cont_sucesso += 1
                 continue
 
@@ -820,7 +821,7 @@ def obter_produto(id):
                         else None
                     ),
                     "dias_ultima_venda": (
-                        (datetime.utcnow().date() - produto.ultima_venda.date()).days
+                        (datetime.now(timezone.utc).date() - produto.ultima_venda.date()).days
                         if produto.ultima_venda
                         else None
                     ),
@@ -1197,7 +1198,7 @@ def atualizar_produto(id):
             )
             db.session.add(historico)
 
-        produto.updated_at = datetime.utcnow()
+        produto.updated_at = datetime.now(timezone.utc)
 
         # Se quantidade foi alterada, criar movimentação
         if "quantidade" in data:
@@ -1495,7 +1496,7 @@ def atualizar_preco(id):
         else:
             produto.margem_lucro = Decimal("0")
 
-        produto.updated_at = datetime.utcnow()
+        produto.updated_at = datetime.now(timezone.utc)
         
         # Registrar histórico de preços para auditoria
         historico = HistoricoPrecos(
@@ -2196,7 +2197,7 @@ def obter_estatisticas_produtos():
 
         # Aplicar filtro rápido
         if filtro_rapido:
-            hoje = datetime.utcnow()
+            hoje = datetime.now(timezone.utc)
             
             if filtro_rapido == "classe_a":
                 # Para classe A, precisamos calcular baseado no faturamento
@@ -2286,7 +2287,7 @@ def obter_estatisticas_produtos():
         # Monitor de validade
         val_counts = {"vencidos": 0, "vence_15": 0, "vence_30": 0, "vence_90": 0}
         
-        hoje = datetime.utcnow()
+        hoje = datetime.now(timezone.utc)
         hoje_date = hoje.date()
         
         # CALCULAR FATURAMENTO REAL E ÚLTIMA VENDA DOS ITENS (Sincronização Dinâmica)
@@ -2742,7 +2743,7 @@ def alertas_produtos():
         # 💤 SEM MOVIMENTAÇÃO
         # ═══════════════════════════════════════════════════════════
         if not filtro_tipo or filtro_tipo == "sem_movimento":
-            data_limite = datetime.utcnow() - timedelta(days=180)
+            data_limite = datetime.now(timezone.utc) - timedelta(days=180)
             produtos_sem_movimento = Produto.query.filter(
                 Produto.estabelecimento_id == estabelecimento_id,
                 Produto.ativo == True,
@@ -2752,7 +2753,7 @@ def alertas_produtos():
 
             for produto in produtos_sem_movimento:
                 if produto.ultima_venda:
-                    dias_sem_venda = (datetime.utcnow() - produto.ultima_venda).days
+                    dias_sem_venda = (datetime.now(timezone.utc) - produto.ultima_venda).days
                     alertas.append({
                         "tipo": "sem_movimento",
                         "nivel": "baixo",
@@ -2948,12 +2949,12 @@ def registrar_venda_produto(produto_id, quantidade, preco_venda, venda_id):
         produto.total_vendido = (produto.total_vendido or 0) + (
             quantidade * preco_venda
         )
-        produto.ultima_venda = datetime.utcnow()
+        produto.ultima_venda = datetime.now(timezone.utc)
 
         # Atualizar classificação ABC
         produto.classificacao_abc = calcular_classificacao_abc(produto)
 
-        produto.updated_at = datetime.utcnow()
+        produto.updated_at = datetime.now(timezone.utc)
 
         db.session.commit()
 
@@ -3292,7 +3293,7 @@ def atualizar_produto_estoque(id):
             else:
                 produto.margem_lucro = 0
 
-        produto.updated_at = datetime.utcnow()
+        produto.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
         current_app.logger.info(f"Produto atualizado: {produto.id}")
@@ -3454,7 +3455,7 @@ def obter_vendas_historico(id):
         
         # Calcular data de 90 dias atrás
         from datetime import datetime, timedelta
-        data_inicio = datetime.utcnow() - timedelta(days=90)
+        data_inicio = datetime.now(timezone.utc) - timedelta(days=90)
         
         # Buscar vendas dos últimos 90 dias
         # Agregar por data usando func.date() que é mais compatível
@@ -3529,7 +3530,7 @@ def obter_vendas_historico(id):
             "estatisticas": estatisticas,
             "periodo": {
                 "data_inicio": data_inicio.date().isoformat(),
-                "data_fim": datetime.utcnow().date().isoformat(),
+                "data_fim": datetime.now(timezone.utc).date().isoformat(),
                 "dias": 90
             }
         })

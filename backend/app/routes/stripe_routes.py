@@ -1,3 +1,4 @@
+from datetime import timezone
 from flask import Blueprint, request, jsonify
 from app.services.stripe_service import StripeService
 from app.models import Estabelecimento, Funcionario, db
@@ -98,7 +99,7 @@ def public_checkout():
             estado="AM",               # Placeholder (Amazonas, target region)
             plano=plan_name,
             plano_status='pendente',
-            data_abertura=datetime.utcnow().date()
+            data_abertura=datetime.now(timezone.utc).date()
         )
         db.session.add(novo_estab)
         db.session.flush()
@@ -116,7 +117,7 @@ def public_checkout():
             cargo="Gerente",
             status="ativo",
             ativo=True,
-            data_admissao=datetime.utcnow().date(),
+            data_admissao=datetime.now(timezone.utc).date(),
             cep="00000-000",             # Placeholder
             logradouro="Pendente",       # Placeholder
             numero="0",                  # Placeholder

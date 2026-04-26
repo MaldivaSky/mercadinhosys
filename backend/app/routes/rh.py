@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/routes/rh.py
 # Módulo de RH - Justificativas de ponto e Benefícios de funcionários
 
@@ -217,7 +218,7 @@ def responder_justificativa(justificativa_id):
             return jsonify({"success": False, "message": "Ação deve ser 'aprovar' ou 'rejeitar'"}), 400
 
         justificativa.aprovador_id = user_id
-        justificativa.data_resposta = datetime.utcnow()
+        justificativa.data_resposta = datetime.now(timezone.utc)
 
         db.session.commit()
 

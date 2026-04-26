@@ -161,6 +161,7 @@ def criar_pedido():
             
             item = PedidoCompraItem(
                 pedido_id=pedido.id,
+                estabelecimento_id=user.estabelecimento_id,
                 produto_id=produto.id,
                 produto_nome=produto.nome,
                 produto_unidade=produto.unidade_medida,

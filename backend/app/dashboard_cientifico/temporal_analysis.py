@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Análise Temporal Avançada - Pensando como o dono do mercado
 Responde: Qual horário vende mais? Qual produto em cada hora? Quanto faturar por hora?
@@ -22,7 +23,7 @@ class TemporalAnalysis:
         Exemplo: Cerveja vende mais à noite, Pão vende mais de manhã
         """
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Simplificado: Retornar vazio por enquanto (dados complexos)
             # Será implementado com cache em versão futura
@@ -40,7 +41,7 @@ class TemporalAnalysis:
         Responde: Como varia o faturamento ao longo do dia?
         """
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Compatibilidade cross-database para extração de hora
             # Compatibilidade cross-database para extração de hora
@@ -116,7 +117,7 @@ class TemporalAnalysis:
         Responde: Sexta e sábado vendem mais cerveja? Qual dia pedir mais pão?
         """
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Compatibilidade cross-database para extração de dia da semana
             from app.utils.query_helpers import get_dow_extract

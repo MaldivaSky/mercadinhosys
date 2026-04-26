@@ -1,3 +1,4 @@
+from datetime import timezone
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -21,7 +22,7 @@ from app.models import (
     Pagamento,
     MovimentacaoEstoque,
     Despesa,
-    SyncLog,
+    SyncQueue,
 )
 
 sync_bp = Blueprint("sync", __name__)
@@ -61,14 +62,12 @@ def replicar_para_neon():
             return jsonify({"success": False, "message": "DATABASE_URL não configurada"}), 400
 
         engine = create_engine(db_url)
-        # Teste de conexão
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
 
         RemoteSession = sessionmaker(bind=engine)
         remote_session = RemoteSession()
 
-        # Garantir schema
         db.metadata.create_all(engine)
 
         models = [
@@ -86,13 +85,14 @@ def replicar_para_neon():
         ]
 
         since = request.args.get("since")
-        sync_log = SyncLog(
+        sync_log = SyncQueue(
             estabelecimento_id=estabelecimento_id,
-            funcionario_id=funcionario_id,
+            tabela="sync_replicar",
+            registro_id=0,
             operacao="replicar_para_neon",
+            payload_json=json.dumps({"since": since}),
             status="running",
-            since=since,
-            started_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         db.session.add(sync_log)
         db.session.commit()
@@ -104,14 +104,11 @@ def replicar_para_neon():
                 try:
                     since_dt = datetime.fromisoformat(since)
                 except Exception:
-                    sync_log.status = "error"
+                    sync_log.status = "erro"
                     sync_log.mensagem_erro = "Parâmetro 'since' inválido"
-                    sync_log.finished_at = datetime.utcnow()
+                    sync_log.synced_at = datetime.now(timezone.utc)
                     db.session.commit()
-                    return (
-                        jsonify({"success": False, "message": "Parâmetro 'since' inválido"}),
-                        400,
-                    )
+                    return jsonify({"success": False, "message": "Parâmetro 'since' inválido"}), 400
 
             with remote_session.begin():
                 for model in models:
@@ -142,17 +139,17 @@ def replicar_para_neon():
                         "total_local": len(rows),
                     }
 
-            sync_log.status = "success"
-            sync_log.resultado_json = json.dumps(resultado, ensure_ascii=False)
-            sync_log.finished_at = datetime.utcnow()
+            sync_log.status = "sincronizado"
+            sync_log.payload_json = json.dumps(resultado, ensure_ascii=False)
+            sync_log.synced_at = datetime.now(timezone.utc)
             db.session.commit()
 
             return jsonify({"success": True, "resultado": resultado, "sync_log_id": sync_log.id}), 200
         except Exception as e:
             remote_session.rollback()
-            sync_log.status = "error"
+            sync_log.status = "erro"
             sync_log.mensagem_erro = str(e)[:2000]
-            sync_log.finished_at = datetime.utcnow()
+            sync_log.synced_at = datetime.now(timezone.utc)
             db.session.commit()
             raise
 

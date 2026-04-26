@@ -70,17 +70,23 @@ export interface FinalizarVendaRequest {
         id: number;
         quantity: number;
         discount: number;
+        price: number;
     }[];
     subtotal: number;
     desconto: number;
     total: number;
-    paymentMethod: string;
+    pagamentos: {
+        forma_pagamento: string;
+        valor: number;
+        bandeira?: string;
+    }[];
     valor_recebido: number;
     troco: number;
     cliente_id?: number | null;
     email_destino?: string;
     observacoes?: string;
-    data_vencimento_fiado?: string; // YYYY-MM-DD - data prevista de pagamento do fiado
+    data_vencimento_fiado?: string;
+    paymentMethod?: string; // Mantido para compatibilidade temporária
 }
 
 export interface AutorizarGerenteRequest {

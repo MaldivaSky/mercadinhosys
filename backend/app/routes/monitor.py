@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/routes/monitor.py
 from flask import Blueprint, jsonify, request, current_app
 from app.models import db, Auditoria, Estabelecimento, Venda, Funcionario
@@ -80,7 +81,7 @@ def get_global_summary():
         estab_id = request.args.get('estab_id', 'all')
         is_global = str(estab_id).lower() == "all"
 
-        agora = datetime.utcnow()
+        agora = datetime.now(timezone.utc)
         hoje_start = agora.replace(hour=0, minute=0, second=0, microsecond=0)
         mes_start = hoje_start - timedelta(days=30)
         

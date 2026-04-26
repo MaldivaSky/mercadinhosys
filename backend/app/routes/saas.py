@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/routes/saas.py
 from flask import Blueprint, request, jsonify
 from app.models import (
@@ -154,7 +155,7 @@ def tenant_onboarding():
             status='ativo',
             ativo=True,
             data_admissao=date.today(),
-            data_cadastro=datetime.utcnow(),
+            data_cadastro=datetime.now(timezone.utc),
             # Endereço opcional - não requerido no cadastro rápido
             cep=data.get('cep', ''),
             logradouro=data.get('logradouro', ''),

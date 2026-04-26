@@ -1,366 +1,247 @@
+from datetime import timezone
 """
 Sistema Híbrido - Sincronização Local ↔ Cloud
-SQLite local para velocidade + PostgreSQL/Aiven para backup
+Utiliza modelos SQLAlchemy para garantir integridade dos dados.
 """
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
-import sqlite3
-import psycopg2
 import json
 import os
 from datetime import datetime
 import logging
-try:
-    from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaIoBaseUpload
-    GOOGLE_DRIVE_AVAILABLE = True
-except ImportError:
-    GOOGLE_DRIVE_AVAILABLE = False
-import io
+from app import db
+from app.models import (
+    Estabelecimento,
+    Funcionario,
+    Cliente,
+    Fornecedor,
+    CategoriaProduto,
+    Produto,
+    Venda,
+    VendaItem,
+    Pagamento,
+    MovimentacaoEstoque,
+    Despesa,
+    SyncQueue,
+)
 
 sync_hybrid_bp = Blueprint('sync_hybrid', __name__)
 logger = logging.getLogger(__name__)
 
-class HybridSyncManager:
-    """Gerenciador de sincronização híbrida"""
-    
-    def __init__(self):
-        self.local_db_path = "mercadinho.db"
-        self.cloud_db_url = os.getenv('AIVEN_DATABASE_URL')
-        self.backup_providers = ['google_drive', 'onedrive']
-    
-    def get_local_connection(self):
-        """Conexão com banco local SQLite"""
-        return sqlite3.connect(self.local_db_path)
-    
-    def get_cloud_connection(self):
-        """Conexão com banco nuvem PostgreSQL"""
-        return psycopg2.connect(self.cloud_db_url)
-    
-    def export_local_data(self):
-        """Exporta todos os dados do banco local"""
-        try:
-            conn = self.get_local_connection()
-            cursor = conn.cursor()
-            
-            # Obter todas as tabelas
-            cursor.execute("SELECT name FROM sqlite_master WHERE type=\"table\"")
-            tables = [row[0] for row in cursor.fetchall()]
-            
-            data = {}
-            for table in tables:
-                cursor.execute(f"SELECT * FROM {table}")
-                columns = [description[0] for description in cursor.description]
-                rows = cursor.fetchall()
-                
-                # Converter para lista de dicionários
-                table_data = []
-                for row in rows:
-                    row_dict = {}
-                    for i, value in enumerate(row):
-                        # Converter tipos especiais para JSON serializable
-                        if isinstance(value, datetime):
-                            row_dict[columns[i]] = value.isoformat()
-                        elif value is None:
-                            row_dict[columns[i]] = None
-                        else:
-                            row_dict[columns[i]] = value
-                    table_data.append(row_dict)
-                
-                data[table] = {
-                    'columns': columns,
-                    'rows': table_data,
-                    'count': len(table_data)
-                }
-            
-            cursor.close()
-            conn.close()
-            
-            return {
-                'success': True,
-                'data': data,
-                'timestamp': datetime.now().isoformat(),
-                'total_tables': len(tables)
-            }
-            
-        except Exception as e:
-            logger.error(f"Erro ao exportar dados locais: {e}")
-            return {'success': False, 'error': str(e)}
-    
-    def import_to_cloud(self, data):
-        """Importa dados para o banco na nuvem"""
-        try:
-            conn = self.get_cloud_connection()
-            cursor = conn.cursor()
-            
-            imported_tables = 0
-            total_rows = 0
-            
-            for table_name, table_data in data['data'].items():
-                if table_name == 'sqlite_sequence':  # Pular tabela interna do SQLite
-                    continue
-                
-                columns = table_data['columns']
-                rows = table_data['rows']
-                
-                if not rows:
-                    continue
-                
-                # Criar tabela se não existir
-                create_table_sql = f"""
-                    CREATE TABLE IF NOT EXISTS {table_name} (
-                        id SERIAL PRIMARY KEY,
-                        {', '.join([f"{col} TEXT" for col in columns if col != 'id'])}
-                    )
-                """
-                cursor.execute(create_table_sql)
-                
-                # Inserir dados
-                for row in rows:
-                    # Preparar valores (ignorar id se existir)
-                    values = []
-                    cols_to_insert = []
-                    
-                    for col in columns:
-                        if col == 'id':
-                            continue  # Deixa o PostgreSQL gerar o ID
-                        
-                        value = row.get(col)
-                        if value is None:
-                            values.append('NULL')
-                        else:
-                            values.append(f"'{str(value).replace(chr(39), chr(39)+chr(39))}'")
-                        cols_to_insert.append(col)
-                    
-                    if values:
-                        insert_sql = f"""
-                            INSERT INTO {table_name} ({', '.join(cols_to_insert)})
-                            VALUES ({', '.join(values)})
-                            ON CONFLICT DO NOTHING
-                        """
-                        cursor.execute(insert_sql)
-                        total_rows += 1
-                
-                imported_tables += 1
-            
-            conn.commit()
-            cursor.close()
-            conn.close()
-            
-            return {
-                'success': True,
-                'imported_tables': imported_tables,
-                'total_rows': total_rows
-            }
-            
-        except Exception as e:
-            logger.error(f"Erro ao importar para nuvem: {e}")
-            return {'success': False, 'error': str(e)}
-    
-    def backup_to_google_drive(self, data):
-        """Faz backup para Google Drive"""
-        try:
-            # Criar arquivo JSON em memória
-            json_data = json.dumps(data, indent=2, ensure_ascii=False)
-            
-            # Autenticação OAuth (precisa ser configurada)
-            SCOPES = ['https://www.googleapis.com/auth/drive.file']
-            
-            # Aqui você precisa configurar as credenciais OAuth
-            # Por enquanto, retorna simulação
-            return {
-                'success': True,
-                'provider': 'google_drive',
-                'file_size': len(json_data),
-                'message': 'Backup simulado - configure OAuth2 para Google Drive'
-            }
-            
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def backup_to_onedrive(self, data):
-        """Faz backup para OneDrive"""
-        try:
-            json_data = json.dumps(data, indent=2, ensure_ascii=False)
-            
-            # Aqui você precisa configurar Microsoft Graph API
-            return {
-                'success': True,
-                'provider': 'onedrive',
-                'file_size': len(json_data),
-                'message': 'Backup simulado - configure Microsoft Graph API'
-            }
-            
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
+MODELS = [
+    Estabelecimento,
+    Funcionario,
+    Cliente,
+    Fornecedor,
+    CategoriaProduto,
+    Produto,
+    Venda,
+    VendaItem,
+    Pagamento,
+    MovimentacaoEstoque,
+    Despesa,
+]
 
-sync_manager = HybridSyncManager()
+def export_model_data(model):
+    """Exporta dados de um modelo para formato JSON serializável."""
+    rows = model.query.all()
+    data = []
+    for obj in rows:
+        item = {}
+        for col in obj.__table__.columns:
+            value = getattr(obj, col.name)
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            elif isinstance(value, (int, float, str, bool, type(None))):
+                value = value
+            else:
+                value = str(value)
+            item[col.name] = value
+        data.append(item)
+    return data
+
+@sync_hybrid_bp.route('/export', methods=['GET'])
+@jwt_required()
+def export_all():
+    """Exporta todos os dados locais em JSON."""
+    try:
+        export_data = {}
+        for model in MODELS:
+            export_data[model.__tablename__] = export_model_data(model)
+        
+        return jsonify({
+            'success': True,
+            'data': export_data,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'tables': len(export_data)
+        })
+    except Exception as e:
+        logger.error(f"Erro na exportação: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @sync_hybrid_bp.route('/status', methods=['GET'])
 @jwt_required()
 def sync_status():
-    """Status da sincronização"""
+    """Status da sincronização híbrida."""
     try:
-        # Verificar banco local
-        local_info = {}
-        try:
-            conn = sync_manager.get_local_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-            local_info['tables'] = cursor.fetchone()[0]
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            local_info['table_names'] = [row[0] for row in cursor.fetchall()]
-            cursor.close()
-            conn.close()
-            local_info['status'] = 'online'
-        except Exception as e:
-            local_info['status'] = 'error'
-            local_info['error'] = str(e)
+        local_counts = {}
+        for model in MODELS:
+            local_counts[model.__tablename__] = model.query.count()
         
-        # Verificar banco nuvem
-        cloud_info = {}
-        try:
-            conn = sync_manager.get_cloud_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
-            cloud_info['tables'] = len(cursor.fetchall())
-            cursor.close()
-            conn.close()
-            cloud_info['status'] = 'online'
-        except Exception as e:
-            cloud_info['status'] = 'error'
-            cloud_info['error'] = str(e)
+        # Contagem de itens na fila de sincronização
+        pending = SyncQueue.query.filter_by(status='pendente').count()
+        synced = SyncQueue.query.filter_by(status='sincronizado').count()
+        error = SyncQueue.query.filter_by(status='erro').count()
         
         return jsonify({
             'success': True,
-            'data': {
-                'local_db': local_info,
-                'cloud_db': cloud_info,
-                'last_sync': None,  # Implementar rastreamento de última sincronização
-                'available_backups': sync_manager.backup_providers
-            }
+            'local_counts': local_counts,
+            'sync_queue': {
+                'pending': pending,
+                'synced': synced,
+                'error': error
+            },
+            'cloud_url': os.getenv('CLOUD_API_URL', 'Não configurada')
         })
-        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @sync_hybrid_bp.route('/upload', methods=['POST'])
 @jwt_required()
 def sync_upload():
-    """Sincroniza dados locais para nuvem"""
+    """Sincroniza dados locais para a nuvem via API."""
     try:
         claims = get_jwt()
         estabelecimento_id = claims.get('estabelecimento_id')
         
-        # 1. Exportar dados locais
-        export_result = sync_manager.export_local_data()
-        if not export_result['success']:
-            return jsonify(export_result), 500
+        # Exportar dados
+        export_data = {}
+        for model in MODELS:
+            export_data[model.__tablename__] = export_model_data(model)
         
-        # 2. Importar para nuvem
-        import_result = sync_manager.import_to_cloud(export_result)
-        if not import_result['success']:
-            return jsonify(import_result), 500
-        
-        # 3. Fazer backup adicional (opcional)
-        backup_provider = request.json.get('backup_provider') if request.json else None
-        
-        backup_result = None
-        if backup_provider in sync_manager.backup_providers:
-            if backup_provider == 'google_drive':
-                backup_result = sync_manager.backup_to_google_drive(export_result)
-            elif backup_provider == 'onedrive':
-                backup_result = sync_manager.backup_to_onedrive(export_result)
+        # Registrar operação na SyncQueue
+        sync_entry = SyncQueue(
+            estabelecimento_id=estabelecimento_id,
+            tabela='sync_hybrid_upload',
+            registro_id=0,
+            operacao='upload',
+            payload_json=json.dumps({'tables': list(export_data.keys())}),
+            status='pendente',
+            created_at=datetime.now(timezone.utc)
+        )
+        db.session.add(sync_entry)
+        db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': 'Sincronização concluída com sucesso!',
-            'data': {
-                'exported_tables': export_result['total_tables'],
-                'imported_tables': import_result['imported_tables'],
-                'total_rows': import_result['total_rows'],
-                'backup': backup_result,
-                'timestamp': export_result['timestamp'],
-                'estabelecimento_id': estabelecimento_id
-            }
+            'message': 'Dados preparados para upload. Worker processará em breve.',
+            'sync_entry_id': sync_entry.id,
+            'tables_exported': len(export_data)
         })
-        
     except Exception as e:
-        logger.error(f"Erro na sincronização: {e}")
+        logger.error(f"Erro no upload: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @sync_hybrid_bp.route('/download', methods=['POST'])
 @jwt_required()
 def sync_download():
-    """Sincroniza dados da nuvem para local"""
+    """Recebe dados da nuvem e importa para o banco local."""
     try:
-        # Implementar download da nuvem para local
+        data = request.get_json()
+        if not data or 'data' not in data:
+            return jsonify({'success': False, 'error': 'Payload inválido'}), 400
+        
+        imported = {}
+        for table_name, rows in data['data'].items():
+            model = next((m for m in MODELS if m.__tablename__ == table_name), None)
+            if not model:
+                continue
+            
+            count = 0
+            for row in rows:
+                # Remove id para evitar conflito (SQLite autoincrement)
+                row.pop('id', None)
+                obj = model(**row)
+                db.session.add(obj)
+                count += 1
+            imported[table_name] = count
+        
+        db.session.commit()
         return jsonify({
             'success': True,
-            'message': 'Download da nuvem implementação pendente'
+            'imported': imported,
+            'message': 'Dados importados com sucesso'
         })
-        
     except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro no download: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @sync_hybrid_bp.route('/backup', methods=['POST'])
 @jwt_required()
 def create_backup():
-    """Cria backup dos dados"""
+    """Cria um backup local dos dados em JSON."""
     try:
-        data = request.get_json()
-        backup_provider = data.get('provider', 'local')
+        export_data = {}
+        for model in MODELS:
+            export_data[model.__tablename__] = export_model_data(model)
         
-        # Exportar dados locais
-        export_result = sync_manager.export_local_data()
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        filename = f"backup_{timestamp}.json"
         
-        if not export_result['success']:
-            return jsonify(export_result), 500
-        
-        # Fazer backup no provider selecionado
-        if backup_provider == 'google_drive':
-            backup_result = sync_manager.backup_to_google_drive(export_result['data'])
-        elif backup_provider == 'onedrive':
-            backup_result = sync_manager.backup_to_onedrive(export_result['data'])
-        else:
-            # Backup local
-            json_data = json.dumps(export_result['data'], indent=2, ensure_ascii=False)
-            backup_result = {
-                'provider': 'local',
-                'file_size': len(json_data),
-                'timestamp': datetime.now().isoformat(),
-                'filename': f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            }
+        # Salvar localmente (opcional)
+        backup_path = os.path.join('/app/backups', filename)
+        os.makedirs('/app/backups', exist_ok=True)
+        with open(backup_path, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, ensure_ascii=False, indent=2)
         
         return jsonify({
             'success': True,
-            'backup': backup_result
+            'filename': filename,
+            'tables': len(export_data),
+            'path': backup_path
         })
-        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @sync_hybrid_bp.route('/restore', methods=['POST'])
 @jwt_required()
 def restore_backup():
-    """Restaura dados de um backup"""
+    """Restaura dados a partir de um arquivo de backup JSON."""
     try:
         data = request.get_json()
-        backup_data = data.get('backup_data')
+        filename = data.get('filename')
+        if not filename:
+            return jsonify({'success': False, 'error': 'Nome do arquivo não fornecido'}), 400
         
-        if not backup_data:
-            return jsonify({'success': False, 'error': 'Dados do backup não fornecidos'}), 400
+        backup_path = os.path.join('/app/backups', filename)
+        if not os.path.exists(backup_path):
+            return jsonify({'success': False, 'error': 'Arquivo de backup não encontrado'}), 404
         
-        # Restaurar para banco local
-        # Implementar lógica de restauração
+        with open(backup_path, 'r', encoding='utf-8') as f:
+            backup_data = json.load(f)
         
+        restored = {}
+        for table_name, rows in backup_data.items():
+            model = next((m for m in MODELS if m.__tablename__ == table_name), None)
+            if not model:
+                continue
+            
+            count = 0
+            for row in rows:
+                row.pop('id', None)
+                obj = model(**row)
+                db.session.add(obj)
+                count += 1
+            restored[table_name] = count
+        
+        db.session.commit()
         return jsonify({
             'success': True,
+            'restored': restored,
             'message': 'Backup restaurado com sucesso'
         })
-        
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500

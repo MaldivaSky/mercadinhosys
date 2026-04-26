@@ -9,7 +9,7 @@ from app.models import Funcionario, RegistroPonto
 from app.decorators.decorator_jwt import gerente_ou_admin_required
 from app.decorators.plan_guards import plan_required
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import and_
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,6 @@ def get_establishment_id():
 @gerente_ou_admin_required
 @plan_required('Pro')
 def dashboard_cientifico():
-    print("🔥 [NUCLEAR_DEBUG] dashboard_cientifico FOI CHAMADA!")
     """
     Endpoint para o Dashboard Científico.
     Suporta filtro por dias OU por datas específicas.
@@ -74,13 +73,19 @@ def dashboard_cientifico():
         
         if start_date_str and end_date_str:
             try:
-                from datetime import datetime as dt
-                start_date_obj = dt.fromisoformat(start_date_str.replace('Z', '').replace('+00:00', ''))
-                end_date_obj = dt.fromisoformat(end_date_str.replace('Z', '').replace('+00:00', ''))
+                # Usa imports globais datetime e timezone (linha 12)
+                start_date_obj = datetime.fromisoformat(start_date_str)
+                if start_date_obj.tzinfo is None:
+                    start_date_obj = start_date_obj.replace(tzinfo=timezone.utc)
+                
+                end_date_obj = datetime.fromisoformat(end_date_str)
+                if end_date_obj.tzinfo is None:
+                    end_date_obj = end_date_obj.replace(tzinfo=timezone.utc)
+                    
                 days = (end_date_obj - start_date_obj).days
                 if days < 1:
                     days = 1
-                logger.info(f"📊 Dashboard com datas específicas: {start_date_str} a {end_date_str} ({days} dias)")
+                logger.info(f"📊 Dashboard com datas específicas (AWARE): {start_date_obj} a {end_date_obj} ({days} dias)")
             except Exception as date_err:
                 logger.warning(f"Datas inválidas: {date_err}, usando days={days}")
                 start_date_obj = None
@@ -93,7 +98,13 @@ def dashboard_cientifico():
         elif days > 365:
             days = 365
         
-        orchestrator = DashboardOrchestrator(estabelecimento_id)
+        # 2. Inicializar Orquestrador com contexto seguro
+        claims = get_jwt()
+        is_super_admin = claims.get("is_super_admin", False)
+        orchestrator = DashboardOrchestrator(
+            establishment_id=estabelecimento_id,
+            is_super_admin=is_super_admin
+        )
         data = orchestrator.get_scientific_dashboard(
             days=days,
             start_date=start_date_obj,
@@ -101,7 +112,6 @@ def dashboard_cientifico():
         )
         
         if not data.get("success", True):
-            logger.error(f"❌ Orchestrator returned success=False: {data.get('error')}")
             return jsonify(data), 500
 
         logger.info(f"✅ Dashboard retornou com sucesso")
@@ -110,7 +120,7 @@ def dashboard_cientifico():
         return jsonify({
             "success": True,
             "metadata": {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "version": "2.0",
                 "cache_strategy": "smartcache",
                 "period_days": days
@@ -121,8 +131,12 @@ def dashboard_cientifico():
     except Exception as e:
         # Log detalhado para debug de infraestrutura
         import traceback
+        tb = traceback.format_exc()
         logger.error(f"❌ Erro Crítico Dashboard Científico: {e}")
-        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        logger.error(f"Traceback:\n{tb}")
+        
+        with open('error_dump_500.txt', 'w') as f:
+            f.write(tb)
         
         # Diferenciação básica de erros (poderia ser expandida)
         error_msg = str(e)

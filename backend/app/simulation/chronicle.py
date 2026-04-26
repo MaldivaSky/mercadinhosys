@@ -202,6 +202,7 @@ class ChronicleSimulator:
             valor_item = p.preco_custo * Decimal(str(qty_to_buy))
             db.session.add(PedidoCompraItem(
                 pedido_id=pedido.id, produto_id=p.id, produto_nome=p.nome,
+                estabelecimento_id=est.id,
                 quantidade_solicitada=Decimal(str(qty_to_buy)),
                 quantidade_recebida=Decimal(str(qty_to_buy)),
                 preco_unitario=p.preco_custo, total_item=valor_item, status="recebido"
@@ -231,7 +232,7 @@ class ChronicleSimulator:
         venda = Venda(
             estabelecimento_id=est.id, cliente_id=client.id if client else None, 
             funcionario_id=admin_id, caixa_id=caixa.id, data_venda=ts, 
-            status="finalizada", tipo_venda="balcao", forma_pagamento=forma_pgto,
+            status="finalizada", tipo_venda="balcao",
             codigo=f"V-{uuid.uuid4().hex[:8].upper()}", subtotal=0, total=0
         )
         db.session.add(venda)
@@ -244,6 +245,7 @@ class ChronicleSimulator:
             item_total = p.preco_venda * qty
             db.session.add(VendaItem(
                 venda_id=venda.id, produto_id=p.id, produto_nome=p.nome,
+                estabelecimento_id=est.id,
                 quantidade=round_qty(qty), preco_unitario=p.preco_venda, total_item=item_total
             ))
             total += item_total

@@ -5,12 +5,9 @@ import {
     ShoppingCart,
     Check,
     CreditCard,
-    DollarSign,
-    Smartphone,
-    User,
-    Tag,
-    X,
     Plus,
+    X,
+    User,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -25,6 +22,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
 import PDVSkeleton from './components/PDVSkeleton';
 import CaixaManager from './components/CaixaManager';
+import MultiPaymentManager from './components/MultiPaymentManager';
 
 const PDVPage: React.FC = () => {
 
@@ -38,10 +36,9 @@ const PDVPage: React.FC = () => {
         cliente,
         setCliente,
         formasPagamento,
-        formaPagamentoSelecionada,
-        setFormaPagamentoSelecionada,
-        valorRecebido,
-        setValorRecebido,
+        pagamentos,
+        adicionarPagamento,
+        removerPagamento,
         configuracoes,
         loading,
         subtotal,
@@ -68,7 +65,7 @@ const PDVPage: React.FC = () => {
     const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
     const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
 
-    const isFiado = formaPagamentoSelecionada === 'fiado';
+    const isFiado = pagamentos.some(p => p.forma === 'fiado');
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -84,15 +81,23 @@ const PDVPage: React.FC = () => {
 
     const handleFinalizarVenda = async () => {
         if (carrinho.length === 0) return showToast.error('Carrinho vazio');
-        if (!formaPagamentoSelecionada) {
-            showToast.warning('Selecione uma forma de pagamento');
+        if (pagamentos.length === 0) {
+            showToast.warning('Adicione ao menos uma forma de pagamento');
             setActiveSection('pagamento');
             setFormaPagamentoAberta(true);
             return;
         }
+
+        const totalPago = pagamentos.reduce((sum, p) => sum + p.valor, 0);
+        if (totalPago < (total - 0.01)) {
+            showToast.error(`Valor insuficiente. Valor total pago (R$ ${totalPago.toFixed(2)}) é menor que o total da venda (R$ ${total.toFixed(2)})`);
+            setFormaPagamentoAberta(true);
+            return;
+        }
+
         // Validação de Fiado: cliente obrigatório
         if (isFiado && !cliente) {
-            showToast.error('Selecione um cliente cadastrado para vender no Fiado!');
+            showToast.error('Vendas no FIADO exigem um cliente cadastrado!');
             setActiveSection('cliente');
             return;
         }
@@ -151,15 +156,7 @@ const PDVPage: React.FC = () => {
         }
     };
 
-    const renderIconPagamento = (tipo: string) => {
-        switch (tipo) {
-            case 'dinheiro': return <DollarSign className="w-6 h-6" />;
-            case 'cartao_credito':
-            case 'cartao_debito': return <CreditCard className="w-6 h-6" />;
-            case 'pix': return <Smartphone className="w-6 h-6" />;
-            default: return <Tag className="w-6 h-6" />;
-        }
-    };
+
 
     if (loading && !configuracoes) return <PDVSkeleton />;
 
@@ -359,44 +356,33 @@ const PDVPage: React.FC = () => {
                                         className="w-full p-5 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all"
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${formaPagamentoSelecionada ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}>
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${pagamentos.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'}`}>
                                                 <CreditCard className="w-5 h-5" />
                                             </div>
                                             <div className="text-left">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pagamento</p>
                                                 <p className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase">
-                                                    {formasPagamento.find((f: any) => f.tipo === formaPagamentoSelecionada)?.label || 'Selecione a Forma'}
+                                                    {pagamentos.length === 0 ? 'Selecione as Formas' : `${pagamentos.length} Forma(s) Adicionada(s)`}
                                                 </p>
                                             </div>
                                         </div>
-                                        <Check className={`w-5 h-5 ${formaPagamentoSelecionada ? 'text-green-500' : 'text-slate-200'}`} />
+                                        <Check className={`w-5 h-5 ${pagamentos.length > 0 ? 'text-green-500' : 'text-slate-200'}`} />
                                     </button>
                                     <AnimatePresence>
                                         {activeSection === 'pagamento' && (
                                             <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden p-5 pt-0">
-                                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 gap-3">
-                                                    {formasPagamento.map((forma: any) => (
-                                                        <button
-                                                            key={forma.tipo}
-                                                            onClick={() => setFormaPagamentoSelecionada(forma.tipo)}
-                                                            className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${formaPagamentoSelecionada === forma.tipo
-                                                                ? forma.tipo === 'fiado' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 shadow-lg' : 'border-blue-600 bg-white dark:bg-slate-900 shadow-lg'
-                                                                : 'border-transparent bg-slate-200/50 dark:bg-slate-700/50 hover:bg-slate-200'
-                                                                }`}
-                                                        >
-                                                            <div className={formaPagamentoSelecionada === forma.tipo ? (forma.tipo === 'fiado' ? 'text-orange-500' : 'text-blue-600') : 'text-slate-400'}>
-                                                                {forma.tipo === 'fiado' ? <span className="text-2xl">🤝</span> : renderIconPagamento(forma.tipo)}
-                                                            </div>
-                                                            <span className={`text-[10px] font-black uppercase tracking-wider text-center ${formaPagamentoSelecionada === forma.tipo ? (forma.tipo === 'fiado' ? 'text-orange-500' : 'text-blue-600') : 'text-slate-500'
-                                                                }`}>
-                                                                {forma.label}
-                                                            </span>
-                                                        </button>
-                                                    ))}
+                                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                                    <MultiPaymentManager
+                                                        totalVenda={total}
+                                                        formasDisponiveis={formasPagamento}
+                                                        pagamentosatuais={pagamentos}
+                                                        onAdicionar={adicionarPagamento}
+                                                        onRemover={removerPagamento}
+                                                    />
                                                 </div>
 
                                                 {/* Campo de Data de Vencimento - Visível apenas para Fiado */}
-                                                {formaPagamentoSelecionada === 'fiado' && (
+                                                {isFiado && (
                                                     <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-2xl border border-orange-500/20">
                                                         {!cliente && (
                                                             <p className="text-xs text-orange-700 font-bold mb-3 text-center">
@@ -415,25 +401,12 @@ const PDVPage: React.FC = () => {
                                                         />
                                                         <p className="text-[10px] text-orange-500 mt-1">Opcional. Padrão: 30 dias.</p>
                                                     </div>
-                                                )}                               {formasPagamento.find((f: any) => f.tipo === formaPagamentoSelecionada)?.permite_troco && (
-                                                    <div className="mt-6 p-6 bg-white dark:bg-slate-900 rounded-3xl border border-blue-500/10 shadow-2xl">
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Cédula / Valor Recebido</span>
-                                                        <input
-                                                            type="number"
-                                                            value={valorRecebido || ''}
-                                                            onChange={(e) => setValorRecebido(parseFloat(e.target.value) || 0)}
-                                                            className="w-full text-5xl font-black text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 outline-none tabular-nums text-right"
-                                                            placeholder="0,00"
-                                                            autoFocus
-                                                        />
-                                                        {valorRecebido > 0 && (
-                                                            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center px-2">
-                                                                <span className="text-xs font-black text-slate-400 uppercase">Troco</span>
-                                                                <span className="text-3xl font-black text-green-500 tabular-nums">
-                                                                    {formatCurrency(troco)}
-                                                                </span>
-                                                            </div>
-                                                        )}
+                                                )}                                                {troco > 0 && (
+                                                    <div className="mt-6 p-6 bg-white dark:bg-slate-900 rounded-3xl border border-green-500/10 shadow-2xl flex justify-between items-center">
+                                                        <span className="text-xs font-black text-slate-400 uppercase">Troco Calculado</span>
+                                                        <span className="text-3xl font-black text-green-500 tabular-nums">
+                                                            {formatCurrency(troco)}
+                                                        </span>
                                                     </div>
                                                 )}
                                             </motion.div>

@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 app/utils/logger.py
 Sistema de logging estruturado
@@ -39,7 +40,7 @@ class StructuredLogger:
 
         def format(self, record):
             log_data = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "level": record.levelname,
                 "logger": record.name,
                 "message": record.getMessage(),

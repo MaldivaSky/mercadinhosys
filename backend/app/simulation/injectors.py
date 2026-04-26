@@ -21,39 +21,89 @@ class RealisticInjector:
         if val is None: return Decimal('0.000')
         return Decimal(str(val)).quantize(Decimal('0.000'), rounding=ROUND_HALF_UP)
 
-    # DATABASE DE SKUS REALISTAS (100+ ITENS)
+    # DATABASE DE SKUS REALISTAS (100+ ITENS - MAGNITUDE INDUSTRIAL)
     SKU_DB = [
-        # --- AÇOUGUE/PEIXARIA (KG) ---
+        # --- BEBIDAS (REFRIGERANTES / SUCOS) ---
+        {"n": "Coca-Cola Original 2L", "cat": "Bebidas", "un": "UN", "p": 12.90, "ncm": "22021000"},
+        {"n": "Coca-Cola Zero 2L", "cat": "Bebidas", "un": "UN", "p": 12.90, "ncm": "22021000"},
+        {"n": "Fanta Laranja 2L", "cat": "Bebidas", "un": "UN", "p": 9.90, "ncm": "22021000"},
+        {"n": "Guaraná Antarctica 2L", "cat": "Bebidas", "un": "UN", "p": 10.50, "ncm": "22021000"},
+        {"n": "Sprite 2L", "cat": "Bebidas", "un": "UN", "p": 9.50, "ncm": "22021000"},
+        {"n": "Água Mineral Crystal 500ml", "cat": "Bebidas", "un": "UN", "p": 2.50, "ncm": "22011000"},
+        {"n": "Suco Del Valle Uva 1L", "cat": "Bebidas", "un": "UN", "p": 8.90, "ncm": "22029900"},
+        {"n": "Red Bull Energy Drink 250ml", "cat": "Bebidas", "un": "UN", "p": 10.90, "ncm": "22029900"},
+        {"n": "Cerveja Heineken Long Neck 330ml", "cat": "Bebidas", "un": "UN", "p": 7.50, "ncm": "22030000"},
+        {"n": "Cerveja Skol Lata 350ml", "cat": "Bebidas", "un": "UN", "p": 3.80, "ncm": "22030000"},
+
+        # --- AÇOUGUE / PESCADOS (KG / PC) ---
         {"n": "Picanha Bovina Maturatta", "cat": "Açougue", "un": "KG", "p": 89.90, "ncm": "02013000"},
         {"n": "Contra-Filé Bovino", "cat": "Açougue", "un": "KG", "p": 45.90, "ncm": "02013000"},
         {"n": "Alcatra com Maminha", "cat": "Açougue", "un": "KG", "p": 42.90, "ncm": "02013000"},
         {"n": "Acém Moído Primeira", "cat": "Açougue", "un": "KG", "p": 28.50, "ncm": "02013000"},
-        {"n": "Peito de Frango Sadia 1kg", "cat": "Açougue", "un": "PC", "p": 21.90, "ncm": "02071210"},
+        {"n": "Cupim Bovino", "cat": "Açougue", "un": "KG", "p": 34.90, "ncm": "02013000"},
+        {"n": "Costela Bovina Ripada", "cat": "Açougue", "un": "KG", "p": 22.90, "ncm": "02012000"},
+        {"n": "Filé de Frango Sadia 1kg", "cat": "Açougue", "un": "PC", "p": 21.90, "ncm": "02071210"},
+        {"n": "Coxa e Sobrecoxa de Frango 1kg", "cat": "Açougue", "un": "PC", "p": 16.50, "ncm": "02071411"},
         {"n": "Linguiça Toscana Sadia", "cat": "Açougue", "un": "KG", "p": 24.50, "ncm": "16010000"},
-        {"n": "Filé de Tilápia 500g", "cat": "Açougue", "un": "PC", "p": 34.90, "ncm": "03046100"},
-        # --- HORTIFRUTI (KG) ---
+        {"n": "Lombo Suíno", "cat": "Açougue", "un": "KG", "p": 29.90, "ncm": "02031900"},
+        {"n": "Filé de Tilápia Copacol 500g", "cat": "Açougue", "un": "PC", "p": 34.90, "ncm": "03046100"},
+        {"n": "Bacalhau do Porto (KG)", "cat": "Açougue", "un": "KG", "p": 120.00, "ncm": "03055100"},
+
+        # --- HORTIFRUTI (KG / UN) ---
         {"n": "Tomate Italiano", "cat": "Hortifruti", "un": "KG", "p": 8.50, "ncm": "07020000"},
         {"n": "Cebola Branca", "cat": "Hortifruti", "un": "KG", "p": 5.40, "ncm": "07031011"},
         {"n": "Batata Inglesa", "cat": "Hortifruti", "un": "KG", "p": 6.90, "ncm": "07019000"},
         {"n": "Banana Prata", "cat": "Hortifruti", "un": "KG", "p": 5.80, "ncm": "08031000"},
         {"n": "Maçã Gala", "cat": "Hortifruti", "un": "KG", "p": 12.50, "ncm": "08081000"},
-        {"n": "Alface Crespa", "cat": "Hortifruti", "un": "UN", "p": 3.50, "ncm": "07051900"},
-        # --- PADARIA (UN/KG) ---
-        {"n": "Pão Francês", "cat": "Padaria", "un": "KG", "p": 16.90, "ncm": "19059090"},
-        {"n": "Pão de Forma Pullman", "cat": "Padaria", "un": "UN", "p": 8.90, "ncm": "19059010"},
-        {"n": "Bolo de Fubá Caseiro", "cat": "Padaria", "un": "UN", "p": 12.00, "ncm": "19059090"},
-        # --- LATICÍNIOS ---
-        {"n": "Leite UHT 1L", "cat": "Laticínios", "un": "UN", "p": 5.45, "ncm": "04012010"},
-        {"n": "Queijo Mussarela Fatiado", "cat": "Laticínios", "un": "KG", "p": 48.90, "ncm": "04069010"},
-        {"n": "Manteiga Aviação 200g", "cat": "Laticínios", "un": "UN", "p": 15.90, "ncm": "04051000"},
-        # --- MERCEARIA ---
-        {"n": "Arroz Tio João 5kg", "cat": "Mercearia", "un": "PC", "p": 28.90, "ncm": "10063011"},
-        {"n": "Feijão Kicaldo 1kg", "cat": "Mercearia", "un": "UN", "p": 8.45, "ncm": "07133399"},
-        {"n": "Café Pilão 500g", "cat": "Mercearia", "un": "UN", "p": 18.90, "ncm": "09012100"},
-        {"n": "Macarrão Galo 500g", "cat": "Mercearia", "un": "UN", "p": 4.50, "ncm": "19021900"},
-        # --- LIMPEZA ---
-        {"n": "Detergente Ypê 500ml", "cat": "Limpeza", "un": "UN", "p": 2.59, "ncm": "34022000"},
-        {"n": "Omo Lavagem Perfeita 1.6kg", "cat": "Limpeza", "un": "PC", "p": 22.90, "ncm": "34022000"}
+        {"n": "Laranja Pêra", "cat": "Hortifruti", "un": "KG", "p": 4.50, "ncm": "08051000"},
+        {"n": "Alface Crespa Hidropônica", "cat": "Hortifruti", "un": "UN", "p": 4.50, "ncm": "07051900"},
+        {"n": "Cenoura", "cat": "Hortifruti", "un": "KG", "p": 5.90, "ncm": "07061000"},
+        {"n": "Pimentão Verde", "cat": "Hortifruti", "un": "KG", "p": 9.80, "ncm": "07096000"},
+        {"n": "Uva sem Semente 500g", "cat": "Hortifruti", "un": "PC", "p": 14.90, "ncm": "08061000"},
+
+        # --- MERCEARIA (SECOS E MOLHADOS) ---
+        {"n": "Arroz Tio João Tipo 1 5kg", "cat": "Mercearia", "un": "PC", "p": 28.90, "ncm": "10063011"},
+        {"n": "Feijão Camil Carioca 1kg", "cat": "Mercearia", "un": "UN", "p": 8.45, "ncm": "07133399"},
+        {"n": "Açúcar União Refinado 1kg", "cat": "Mercearia", "un": "UN", "p": 4.80, "ncm": "17019900"},
+        {"n": "Sal Refinado Lebre 1kg", "cat": "Mercearia", "un": "UN", "p": 2.50, "ncm": "25010011"},
+        {"n": "Óleo de Soja Liza 900ml", "cat": "Mercearia", "un": "UN", "p": 6.90, "ncm": "15079011"},
+        {"n": "Café Pilão Vácuo 500g", "cat": "Mercearia", "un": "UN", "p": 19.90, "ncm": "09012100"},
+        {"n": "Macarrão Barilla Penne 500g", "cat": "Mercearia", "un": "UN", "p": 12.50, "ncm": "19021900"},
+        {"n": "Molho de Tomate Pomarola 340g", "cat": "Mercearia", "un": "UN", "p": 3.90, "ncm": "21032010"},
+        {"n": "Maionese Hellmann's 500g", "cat": "Mercearia", "un": "UN", "p": 14.50, "ncm": "21039011"},
+        {"n": "Ketchup Heinz 397g", "cat": "Mercearia", "un": "UN", "p": 15.90, "ncm": "21032010"},
+        {"n": "Azeite de Oliva Gallo 500ml", "cat": "Mercearia", "un": "UN", "p": 38.90, "ncm": "15091000"},
+        {"n": "Farinha de Trigo Dona Benta 1kg", "cat": "Mercearia", "un": "UN", "p": 5.90, "ncm": "11010010"},
+
+        # --- PADARIA / LATICÍNIOS ---
+        {"n": "Pão Francês", "cat": "Padaria", "un": "KG", "p": 18.90, "ncm": "19059090"},
+        {"n": "Pão de Forma Pullman 450g", "cat": "Padaria", "un": "UN", "p": 9.50, "ncm": "19059010"},
+        {"n": "Leite UHT Elegê Integral 1L", "cat": "Laticínios", "un": "UN", "p": 5.45, "ncm": "04012010"},
+        {"n": "Iogurte Grego Vigor Tradicional", "cat": "Laticínios", "un": "UN", "p": 3.50, "ncm": "04031000"},
+        {"n": "Manteiga Aviação com Sal 200g", "cat": "Laticínios", "un": "UN", "p": 16.90, "ncm": "04051000"},
+        {"n": "Requeijão Cremoso Itambé 200g", "cat": "Laticínios", "un": "UN", "p": 10.90, "ncm": "04061010"},
+        {"n": "Queijo Mussarela Fatiada", "cat": "Laticínios", "un": "KG", "p": 54.90, "ncm": "04069010"},
+        {"n": "Presunto Cozido Sadia", "cat": "Laticínios", "un": "KG", "p": 38.50, "ncm": "16024900"},
+
+        # --- LIMPEZA / HIGIENE ---
+        {"n": "Detergente Ypê Neutro 500ml", "cat": "Limpeza", "un": "UN", "p": 2.59, "ncm": "34022000"},
+        {"n": "Sabão em Pó Ariel 1.6kg", "cat": "Limpeza", "un": "PC", "p": 26.90, "ncm": "34022000"},
+        {"n": "Amaciante Downy Concentrado 500ml", "cat": "Limpeza", "un": "UN", "p": 16.50, "ncm": "38099190"},
+        {"n": "Desinfetante Veja Multi-Uso", "cat": "Limpeza", "un": "UN", "p": 7.90, "ncm": "38089419"},
+        {"n": "Água Sanitária Qboa 2L", "cat": "Limpeza", "un": "UN", "p": 5.50, "ncm": "28289011"},
+        {"n": "Papel Higiênico Neve 12 unidades", "cat": "Higiene", "un": "PC", "p": 24.90, "ncm": "48181000"},
+        {"n": "Creme Dental Colgate Luminous White", "cat": "Higiene", "un": "UN", "p": 9.90, "ncm": "33061000"},
+        {"n": "Sabonete Dove Original 90g", "cat": "Higiene", "un": "UN", "p": 4.50, "ncm": "34011190"},
+        {"n": "Shampoo L'Oréal Elseve 400ml", "cat": "Higiene", "un": "UN", "p": 18.90, "ncm": "33051000"},
+        {"n": "Desodorante Rexona Clinical", "cat": "Higiene", "un": "UN", "p": 22.90, "ncm": "33072010"},
+
+        # --- BISCOITOS / CHOCOLATES / SNACKS ---
+        {"n": "Biscoito Oreo 90g", "cat": "Snacks", "un": "UN", "p": 3.90, "ncm": "19053100"},
+        {"n": "Chocolate Bis Lacta 126g", "cat": "Snacks", "un": "UN", "p": 6.50, "ncm": "18063220"},
+        {"n": "Batata Pringles Original 114g", "cat": "Snacks", "un": "UN", "p": 14.90, "ncm": "19059090"},
+        {"n": "Salgadinho Doritos Nacho 140g", "cat": "Snacks", "un": "UN", "p": 12.90, "ncm": "19059090"},
+        {"n": "Bombom Sonho de Valsa (Unidade)", "cat": "Snacks", "un": "UN", "p": 1.50, "ncm": "18069000"},
+        {"n": "Barra de Chocolate Nestlé Classic", "cat": "Snacks", "un": "UN", "p": 6.80, "ncm": "18063210"}
     ]
 
     @staticmethod
@@ -122,6 +172,7 @@ class RealisticInjector:
         for p in prods:
             db.session.add(PedidoCompraItem(
                 pedido_id=pedido.id, produto_id=p.id, produto_nome=p.nome,
+                estabelecimento_id=est_id,
                 quantidade_solicitada=Decimal("50.000"), preco_unitario=p.preco_custo,
                 total_item=p.preco_custo * Decimal("50"), status="recebido"
             ))
@@ -285,31 +336,69 @@ class RealisticInjector:
         # Gerar 130 SKUs por Tenant — SEM LIMITACOES (5 variacoes x 26 SKUs base)
         for variacao in range(5):
             for item in cls.SKU_DB:
-                marca = f" - Marca {variacao}" if variacao > 0 else ""
-                vencimento = date.today() + timedelta(days=random.randint(10, 400))
+                marca_str = f"Marca {variacao}" if variacao > 0 else "Líder"
+                nome_formatado = f"{item['n']} - {marca_str}"
+                
+                vencimento = date.today() + timedelta(days=random.randint(30, 500))
+                fabricacao = vencimento - timedelta(days=random.randint(180, 720))
+                
+                # Gerar Lote Único Robusto (8 chars + ID do Estabelecimento)
+                lote_id_str = f"LT-{est_id}-{uuid.uuid4().hex[:8].upper()}"
 
                 p = Produto(
-                    estabelecimento_id=est_id, categoria_id=cat.id, nome=item["n"] + marca,
-                    codigo_barras=f"789{abs(hash(item['n'] + marca)) % 1000000000:010d}",
-                    codigo_interno=f"INT-{uuid.uuid4().hex[:4]}", unidade_medida=item["un"],
-                    preco_custo=Decimal(str(item["p"])) * Decimal("0.7"), preco_venda=Decimal(str(item["p"])),
-                    quantidade=random.randint(50, 500), ativo=True, controlar_validade=True,
-                    data_validade=vencimento, lote=f"LT-{uuid.uuid4().hex[:4].upper()}"
+                    estabelecimento_id=est_id,
+                    categoria_id=cat.id,
+                    nome=nome_formatado,
+                    descricao=f"Descrição detalhada do produto {nome_formatado} para fins de teste de dashboard científico.",
+                    marca=marca_str,
+                    fabricante=f"Indústrias {marca_str} S.A.",
+                    tipo="Nacional" if random.random() > 0.1 else "Importado",
+                    subcategoria=item["cat"],
+                    unidade_medida=item["un"],
+                    codigo_barras=f"789{abs(hash(nome_formatado)) % 1000000000:010d}",
+                    codigo_interno=f"INT-{uuid.uuid4().hex[:6].upper()}",
+                    preco_custo=Decimal(str(item["p"])) * Decimal("0.65"),
+                    preco_venda=Decimal(str(item["p"])),
+                    margem_lucro=Decimal("35.0"),
+                    quantidade=random.randint(100, 1000),
+                    quantidade_minima=Decimal("20.000"),
+                    ncm=item.get("ncm", "00000000"),
+                    origem=0, # Nacional
+                    controlar_validade=True,
+                    data_validade=vencimento,
+                    lote=lote_id_str,
+                    ativo=True,
+                    imagem_url=f"https://picsum.photos/seed/{abs(hash(nome_formatado))}/400/400"
                 )
                 db.session.add(p)
                 db.session.flush()
 
-                lote = ProdutoLote(
-                    estabelecimento_id=est_id, produto_id=p.id, numero_lote=p.lote,
-                    quantidade=p.quantidade, quantidade_inicial=p.quantidade,
-                    data_validade=p.data_validade, preco_custo_unitario=p.preco_custo, ativo=True
+                lote_obj = ProdutoLote(
+                    estabelecimento_id=est_id,
+                    produto_id=p.id,
+                    numero_lote=lote_id_str,
+                    quantidade=p.quantidade,
+                    quantidade_inicial=p.quantidade,
+                    data_fabricacao=fabricacao,
+                    data_validade=p.data_validade,
+                    data_entrada=date.today() - timedelta(days=random.randint(0, 30)),
+                    preco_custo_unitario=p.preco_custo,
+                    preco_venda=p.preco_venda,
+                    ativo=True
                 )
-                db.session.add(lote)
+                db.session.add(lote_obj)
 
+                # Histórico de Preços (Magnitude CTO)
                 hp = HistoricoPrecos(
-                    estabelecimento_id=est_id, produto_id=p.id,
+                    estabelecimento_id=est_id,
+                    produto_id=p.id,
                     funcionario_id=Funcionario.query.filter_by(estabelecimento_id=est_id).first().id,
-                    preco_custo_anterior=p.preco_custo, preco_venda_anterior=p.preco_venda, margem_anterior=40,
-                    preco_custo_novo=p.preco_custo, preco_venda_novo=p.preco_venda, margem_nova=40, motivo="Initial Seed"
+                    preco_custo_anterior=p.preco_custo * Decimal("0.9"),
+                    preco_venda_anterior=p.preco_venda * Decimal("0.9"),
+                    margem_anterior=Decimal("35.0"),
+                    preco_custo_novo=p.preco_custo,
+                    preco_venda_novo=p.preco_venda,
+                    margem_nova=Decimal("35.0"),
+                    motivo="Ajuste de Mercado (Seeder Inicial)"
                 )
                 db.session.add(hp)
