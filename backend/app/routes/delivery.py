@@ -4,7 +4,7 @@ Integração total com os modelos: Motorista, Veiculo, Entrega, TaxaEntrega
 """
 
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.models import (
     db, Motorista, Veiculo, TaxaEntrega, Entrega, 
     EntregaItem, RastreamentoEntrega, CustoEntrega,
@@ -266,7 +266,7 @@ def criar_venda_entrega_unificada():
         venda = Venda(
             estabelecimento_id=est_id,
             cliente_id=cliente_id,
-            funcionario_id=data.get("funcionario_id"), 
+            funcionario_id=data.get("funcionario_id") or int(get_jwt_identity()), 
             codigo=f"VE-{datetime.now().strftime('%y%m%d%H%M%S')}",
             status="finalizada",
             tipo_venda="delivery",
@@ -311,7 +311,11 @@ def criar_venda_entrega_unificada():
             if str(est_id).lower() != 'all':
                 query_prod = query_prod.filter(Produto.id == item["produto_id"], Produto.estabelecimento_id == est_id)
             
-            prod = query_prod.with_for_update().first()
+            # with_for_update() não é suportado em SQLite; usar apenas em PostgreSQL
+            try:
+                prod = query_prod.with_for_update().first()
+            except Exception:
+                prod = query_prod.first()
             if not prod: continue
             
             v_item = VendaItem(
@@ -342,46 +346,49 @@ def criar_venda_entrega_unificada():
             if veiculo and veiculo.consumo_medio:
                 custo_fuel = (km_total / veiculo.consumo_medio) * Decimal("5.80")
 
-            main_payment = pagamentos_data[0]["forma_pagamento"] if pagamentos_data else "loja"
-            entrega = Entrega(
-                estabelecimento_id=est_id, # Blindado via variável local
-                venda_id=venda.id,
-                cliente_id=cliente_id,
-                motorista_id=motorista_id,
-                veiculo_id=veiculo_id,
-                codigo_rastreamento=f"TRK{venda.codigo.split('-')[-1]}",
-                status="em_preparo",
-                data_prevista=datetime.now() + timedelta(minutes=45),
-                taxa_entrega=Decimal(str(data.get("taxa_entrega", 0))),
-                custo_combustivel=custo_fuel,
-                distancia_km=distancia,
-                km_percorridos=km_total,
-                endereco_cep=data.get("endereco_cep", cliente.cep if cliente else ""),
-                endereco_logradouro=data.get("endereco_logradouro", ""),
-                endereco_numero=data.get("endereco_numero", ""),
-                endereco_bairro=data.get("endereco_bairro", ""),
-                endereco_cidade=data.get("endereco_cidade", "Manaus"),
-                endereco_estado=data.get("endereco_estado", "AM"),
-                endereco_complemento=data.get("endereco_complemento", ""),
-                pagamento_tipo="loja" if main_payment != "entrega" else "entrega",
-                pagamento_status="pago" if main_payment != "entrega" else "pendente"
-            )
+        main_payment = pagamentos_data[0]["forma_pagamento"] if pagamentos_data else "loja"
+        entrega = Entrega(
+            estabelecimento_id=est_id,
+            venda_id=venda.id,
+            cliente_id=cliente_id,
+            motorista_id=motorista_id,
+            veiculo_id=veiculo_id,
+            codigo_rastreamento=f"TRK{venda.codigo.split('-')[-1]}",
+            status="em_preparo",
+            data_prevista=datetime.now() + timedelta(minutes=45),
+            taxa_entrega=Decimal(str(data.get("taxa_entrega", 0))),
+            custo_combustivel=custo_fuel,
+            distancia_km=distancia,
+            km_percorridos=km_total,
+            endereco_cep=data.get("endereco_cep", cliente.cep if cliente else ""),
+            endereco_logradouro=data.get("endereco_logradouro", ""),
+            endereco_numero=data.get("endereco_numero", ""),
+            endereco_bairro=data.get("endereco_bairro", ""),
+            endereco_cidade=data.get("endereco_cidade", "Manaus"),
+            endereco_estado=data.get("endereco_estado", "AM"),
+            endereco_complemento=data.get("endereco_complemento", ""),
+            pagamento_tipo="loja" if main_payment != "entrega" else "entrega",
+            pagamento_status="pago" if main_payment != "entrega" else "pendente"
+        )
         
         db.session.add(entrega)
         
-        # 4. Movimentação de Caixa
+        # 4. Movimentação de Caixa (usando Pagamento, não mais venda.forma_pagamento)
         caixa = Caixa.query.filter_by(estabelecimento_id=est_id, status="aberto").first()
-        if caixa and venda.forma_pagamento in ["dinheiro", "pix"]:
-            mov = MovimentacaoCaixa(
-                caixa_id=caixa.id,
-                estabelecimento_id=est_id,
-                venda_id=venda.id,
-                tipo="entrada",
-                valor=venda.total,
-                descricao=f"Venda Entrega Unificada #{venda.codigo}"
-            )
-            db.session.add(mov)
-            caixa.saldo_atual += venda.total
+        if caixa:
+            # Verificar se há pagamentos em dinheiro/pix para dar entrada no caixa
+            formas_caixa = [p["forma_pagamento"] for p in pagamentos_data if p["forma_pagamento"] in ["dinheiro", "pix"]]
+            if formas_caixa:
+                mov = MovimentacaoCaixa(
+                    caixa_id=caixa.id,
+                    estabelecimento_id=est_id,
+                    venda_id=venda.id,
+                    tipo="entrada",
+                    valor=venda.total,
+                    descricao=f"Venda Entrega Unificada #{venda.codigo}"
+                )
+                db.session.add(mov)
+                caixa.saldo_atual += venda.total
 
         db.session.commit()
         

@@ -713,13 +713,33 @@ def criar_venda():
         if total_pago < total:
             return jsonify({"error": f"Valor total pago (R$ {total_pago:.2f}) é menor que o total da venda (R$ {total:.2f})"}), 400
 
-        tem_fiado = any(p.get("forma_pagamento") == "fiado" for p in pagamentos_data)
-        if tem_fiado:
+        tem_restrito = any(p.get("forma_pagamento") in ["fiado", "voucher"] for p in pagamentos_data)
+        if tem_restrito:
             plano_atual = (estabelecimento.plano or "Basic").upper()
             if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
-                return jsonify({"error": "FUNCIONALIDADE_RESTRITA", "message": "Seu plano não permite vendas no FIADO."}), 403
+                return jsonify({"error": "FUNCIONALIDADE_RESTRITA", "message": "Seu plano não permite vendas no FIADO/VOUCHER."}), 403
             if not cliente_id:
-                return jsonify({"error": "CLIENTE_OBRIGATORIO", "message": "Vendas no FIADO exigem um cliente cadastrado."}), 400
+                return jsonify({"error": "CLIENTE_OBRIGATORIO", "message": "Vendas no FIADO/VOUCHER exigem um cliente cadastrado."}), 400
+
+            cliente_obj = Cliente.query.get(cliente_id)
+            if not cliente_obj:
+                return jsonify({"error": "CLIENTE_NAO_ENCONTRADO", "message": "Cliente informado não foi encontrado."}), 404
+
+            valor_restrito = sum(float(p.get("valor", 0)) for p in pagamentos_data if p.get("forma_pagamento") in ["fiado", "voucher"])
+            limite = float(cliente_obj.limite_credito or 0)
+            saldo_atual = float(cliente_obj.saldo_devedor or 0)
+
+            if limite == 0:
+                return jsonify({
+                    "error": "SEM_LIMITE_CREDITO", 
+                    "message": "Este cliente não possui limite de crédito aprovado (Limite R$ 0,00)."
+                }), 400
+
+            if (saldo_atual + valor_restrito) > limite:
+                return jsonify({
+                    "error": "LIMITE_CREDITO_EXCEDIDO", 
+                    "message": f"Limite de crédito excedido. Limite: R$ {limite:.2f}, Saldo Atual: R$ {saldo_atual:.2f}, Tentativa de Compra: R$ {valor_restrito:.2f}"
+                }), 400
 
         db.session.begin_nested()
         try:

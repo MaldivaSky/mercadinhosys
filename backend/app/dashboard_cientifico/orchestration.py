@@ -317,6 +317,11 @@ class DashboardOrchestrator:
         category_performance_by_time = safe_get(TemporalAnalysis.get_category_performance_by_time, "cat_perf", {}, 
                                               self.establishment_id, days)
 
+        # 🔥 NOVO: Métricas de Formas de Pagamento com Percentuais (via tabela Pagamento)
+        payment_methods_metrics = safe_get(DataLayer.get_payment_methods_metrics, "payment_methods",
+                                          {"metricas": [], "total_processado": 0.0},
+                                          self.establishment_id, start_current, end_date)
+
         _logger.info(f"DONE: Coleta sequencial concluida em {time.time()-start_exec:.2f}s")
 
         # Dados Financeiros Reais (processar resultados coletados)
@@ -996,6 +1001,8 @@ class DashboardOrchestrator:
             "rh": rh_metrics,
             "inventory": inventory_summary,
             "trend": sales_trend,
+            # 🔥 NOVO: Formas de Pagamento com porcentagem (Multi-Payment Engine)
+            "payment_methods": payment_methods_metrics,
             # 🔥 FIADO: Dados completos de carteira de crédito
             "fiado": {
                 "total_aberto": fiado_metrics.get("total_aberto", 0.0),

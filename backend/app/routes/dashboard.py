@@ -135,9 +135,6 @@ def dashboard_cientifico():
         logger.error(f"❌ Erro Crítico Dashboard Científico: {e}")
         logger.error(f"Traceback:\n{tb}")
         
-        with open('error_dump_500.txt', 'w') as f:
-            f.write(tb)
-        
         # Diferenciação básica de erros (poderia ser expandida)
         error_msg = str(e)
         status_code = 500

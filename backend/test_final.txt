@@ -1,0 +1,132 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\rafae\Dev\mercadinhosys\backend
+configfile: pytest.ini
+plugins: Faker-40.4.0, cov-7.0.0
+collecting ... collected 3 items
+
+tests/test_delivery_multi.py::test_venda_entrega_multi_pagamento_sucesso FAILED [ 33%]
+tests/test_vendas_multi.py::test_venda_multi_pagamento_sucesso PASSED    [ 66%]
+tests/test_vendas_multi.py::test_venda_valor_insuficiente_erro PASSED    [100%]
+
+================================== FAILURES ===================================
+_________________ test_venda_entrega_multi_pagamento_sucesso __________________
+tests\test_delivery_multi.py:88: in test_venda_entrega_multi_pagamento_sucesso
+    assert response.status_code == 201 or response.status_code == 200
+E   assert (500 == 201 or 500 == 200)
+E    +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code
+E    +  and   500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code
+---------------------------- Captured stdout setup ----------------------------
+Muralha Forense: Listeners de Auditoria e Sincronia (Business Intelligence) ativados!
+­ƒôí Worker de Sincronia de Guerrilha iniciado (Frequ├¬ncia: 30.0s)
+---------------------------- Captured stderr setup ----------------------------
+INFO:app:DB URI: sqlite:///:memory:
+INFO:app:DB SOURCE: DATABASE_URL
+INFO:app:­ƒîÉ CORS configurado (Regex habilitado para Vercel/Render)
+INFO:app:INFO: db.create_all() pulado (SKIP_DB_SETUP=true). Schema sync ainda sera executado.
+INFO:app:ÔÜí Iniciando Schema Sync Otimizado...
+INFO:app:Ô£à Schema sync concluido: 0 colunas novas adicionadas.
+INFO:app:Ô£à Blueprint Auth (Multi-Tenant Logic) registrado em /api/auth
+INFO:app:Ô£à Blueprint produtos registrado em /api/produtos
+INFO:app:Ô£à Blueprint fornecedores registrado em /api/fornecedores
+INFO:app:Ô£à Blueprint funcionarios registrado em /api/funcionarios
+INFO:app:Ô£à Blueprint clientes registrado em /api/clientes
+INFO:app:Ô£à Blueprint vendas registrado em /api/vendas
+INFO:app:Ô£à Blueprint pdv registrado em /api/pdv
+INFO:app:Ô£à Blueprint caixas registrado em /api/caixas
+INFO:app:Ô£à Blueprint configuracao registrado em /api/configuracao
+INFO:app:Ô£à Blueprint dashboard registrado em /api/dashboard
+INFO:app:Ô£à Blueprint saas registrado em /api/saas
+INFO:app:Ô£à Blueprint despesas registrado em /api/despesas
+INFO:app:Ô£à Blueprint relatorios registrado em /api/relatorios
+INFO:app:Ô£à Blueprint sync registrado (/api/sync/replicar)
+INFO:app:Ô£à Blueprint ponto registrado em /api/ponto
+INFO:app:Ô£à Blueprint rh registrado em /api/rh
+INFO:app:Ô£à Blueprint pedidos_compra registrado em /api
+INFO:app:Ô£à Blueprint SaaS Monitor registrado em /api/saas/monitor
+INFO:app:Ô£à Blueprint Sincroniza├º├úo H├¡brida registrado em /api/sync-hybrid
+INFO:app:Ô£à Blueprint Cloud Sync (Receiver) registrado em /api/sync
+INFO:app:Ô£à Blueprint Stripe registrado
+INFO:app:Ô£à Blueprint delivery registrado em /api/delivery
+INFO:app:Ô£à Blueprint SaaS Onboarding registrado em /api/onboarding
+INFO:app:
+    ============================================================
+    MercadinhoSys API v2.0.0 INICIALIZADA
+    Ambiente: testing
+    Banco: sqlite:///:memory:
+    Dashboard Cientifico: [OK] Disponivel
+    ============================================================
+    
+INFO:app:Ô£à CLI commands registrados (flask push-to-aiven, flask sync-status)
+----------------------------- Captured log setup ------------------------------
+INFO     app:__init__.py:208 DB URI: sqlite:///:memory:
+INFO     app:__init__.py:209 DB SOURCE: DATABASE_URL
+INFO     app:__init__.py:238 ­ƒîÉ CORS configurado (Regex habilitado para Vercel/Render)
+INFO     app:__init__.py:305 INFO: db.create_all() pulado (SKIP_DB_SETUP=true). Schema sync ainda sera executado.
+INFO     app:__init__.py:398 ÔÜí Iniciando Schema Sync Otimizado...
+INFO     app:__init__.py:419 Ô£à Schema sync concluido: 0 colunas novas adicionadas.
+INFO     app:__init__.py:433 Ô£à Blueprint Auth (Multi-Tenant Logic) registrado em /api/auth
+INFO     app:__init__.py:445 Ô£à Blueprint produtos registrado em /api/produtos
+INFO     app:__init__.py:453 Ô£à Blueprint fornecedores registrado em /api/fornecedores
+INFO     app:__init__.py:462 Ô£à Blueprint funcionarios registrado em /api/funcionarios
+INFO     app:__init__.py:471 Ô£à Blueprint clientes registrado em /api/clientes
+INFO     app:__init__.py:480 Ô£à Blueprint vendas registrado em /api/vendas
+INFO     app:__init__.py:489 Ô£à Blueprint pdv registrado em /api/pdv
+INFO     app:__init__.py:498 Ô£à Blueprint caixas registrado em /api/caixas
+INFO     app:__init__.py:506 Ô£à Blueprint configuracao registrado em /api/configuracao
+INFO     app:__init__.py:514 Ô£à Blueprint dashboard registrado em /api/dashboard
+INFO     app:__init__.py:525 Ô£à Blueprint saas registrado em /api/saas
+INFO     app:__init__.py:534 Ô£à Blueprint despesas registrado em /api/despesas
+INFO     app:__init__.py:543 Ô£à Blueprint relatorios registrado em /api/relatorios
+INFO     app:__init__.py:551 Ô£à Blueprint sync registrado (/api/sync/replicar)
+INFO     app:__init__.py:559 Ô£à Blueprint ponto registrado em /api/ponto
+INFO     app:__init__.py:567 Ô£à Blueprint rh registrado em /api/rh
+INFO     app:__init__.py:575 Ô£à Blueprint pedidos_compra registrado em /api
+INFO     app:__init__.py:583 Ô£à Blueprint SaaS Monitor registrado em /api/saas/monitor
+INFO     app:__init__.py:591 Ô£à Blueprint Sincroniza├º├úo H├¡brida registrado em /api/sync-hybrid
+INFO     app:__init__.py:595 Ô£à Blueprint Cloud Sync (Receiver) registrado em /api/sync
+INFO     app:__init__.py:604 Ô£à Blueprint Stripe registrado
+INFO     app:__init__.py:612 Ô£à Blueprint delivery registrado em /api/delivery
+INFO     app:__init__.py:620 Ô£à Blueprint SaaS Onboarding registrado em /api/onboarding
+INFO     app:__init__.py:764 
+    ============================================================
+    MercadinhoSys API v2.0.0 INICIALIZADA
+    Ambiente: testing
+    Banco: sqlite:///:memory:
+    Dashboard Cientifico: [OK] Disponivel
+    ============================================================
+    
+INFO     app:__init__.py:794 Ô£à CLI commands registrados (flask push-to-aiven, flask sync-status)
+---------------------------- Captured stderr call -----------------------------
+ERROR:app.routes.delivery:Erro na Venda Entrega Unificada: (sqlite3.IntegrityError) NOT NULL constraint failed: vendas.funcionario_id
+[SQL: INSERT INTO vendas (estabelecimento_id, cliente_id, funcionario_id, caixa_id, codigo, subtotal, desconto, total, valor_recebido, troco, status, quantidade_itens, observacoes, tipo_venda, data_venda, data_cancelamento, motivo_cancelamento, created_at, deleted_at, updated_at, sync_uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (1, 1, None, None, 'VE-260426184804', 45.0, 0.0, 50.0, 0.0, 0.0, 'finalizada', 0, None, 'delivery', '2026-04-26 18:48:04.005063', None, None, '2026-04-26 22:48:04.006598', None, '2026-04-26 22:48:04.006600', 'f1bd1dd1-26a0-4ea9-8176-60a3877b1013')]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+------------------------------ Captured log call ------------------------------
+ERROR    app.routes.delivery:delivery.py:397 Erro na Venda Entrega Unificada: (sqlite3.IntegrityError) NOT NULL constraint failed: vendas.funcionario_id
+[SQL: INSERT INTO vendas (estabelecimento_id, cliente_id, funcionario_id, caixa_id, codigo, subtotal, desconto, total, valor_recebido, troco, status, quantidade_itens, observacoes, tipo_venda, data_venda, data_cancelamento, motivo_cancelamento, created_at, deleted_at, updated_at, sync_uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: (1, 1, None, None, 'VE-260426184804', 45.0, 0.0, 50.0, 0.0, 0.0, 'finalizada', 0, None, 'delivery', '2026-04-26 18:48:04.005063', None, None, '2026-04-26 22:48:04.006598', None, '2026-04-26 22:48:04.006600', 'f1bd1dd1-26a0-4ea9-8176-60a3877b1013')]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+============================== warnings summary ===============================
+tests/test_delivery_multi.py::test_venda_entrega_multi_pagamento_sucesso
+  C:\Users\rafae\Dev\mercadinhosys\backend\app\decorators\rbac.py:95: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    user = Funcionario.query.get(current_user_id)
+
+tests/test_vendas_multi.py::test_venda_multi_pagamento_sucesso
+tests/test_vendas_multi.py::test_venda_valor_insuficiente_erro
+  C:\Users\rafae\Dev\mercadinhosys\backend\app\decorators\plan_guards.py:154: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    est = Estabelecimento.query.get(est_id)
+
+tests/test_vendas_multi.py::test_venda_multi_pagamento_sucesso
+tests/test_vendas_multi.py::test_venda_valor_insuficiente_erro
+  C:\Users\rafae\Dev\mercadinhosys\backend\app\routes\vendas.py:698: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    estabelecimento = Estabelecimento.query.get(estabelecimento_id)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_delivery_multi.py::test_venda_entrega_multi_pagamento_sucesso - assert (500 == 201 or 500 == 200)
+ +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code
+ +  and   500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code
+=================== 1 failed, 2 passed, 5 warnings in 2.76s ===================
+­ƒôÂ Sem internet. Aguardando sinal para sincronizar...

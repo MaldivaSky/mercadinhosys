@@ -1,17 +1,23 @@
 import pytest
-from app.models import Venda, Pagamento, Produto, Estabelecimento, Motorista, Veiculo, Cliente, Entrega, CategoriaProduto
+from datetime import date
+from app.models import (
+    db, Venda, Pagamento, Produto, Estabelecimento, Motorista,
+    Veiculo, Cliente, Entrega, CategoriaProduto, Funcionario
+)
 from flask_jwt_extended import create_access_token
 from decimal import Decimal
 
+
 def test_venda_entrega_multi_pagamento_sucesso(client, session):
-    # Get official establishment from conftest
+    """Testa venda com entrega e múltiplos pagamentos atomicamente."""
+    # Use existing Estabelecimento + Funcionario from conftest session fixture
     estab = session.query(Estabelecimento).first()
-    assert estab is not None
-    
+    admin = session.query(Funcionario).filter_by(estabelecimento_id=estab.id).first()
+
     cat = CategoriaProduto(nome="Geral", estabelecimento_id=estab.id)
     session.add(cat)
     session.flush()
-    
+
     prod = Produto(
         estabelecimento_id=estab.id,
         categoria_id=cat.id,
@@ -24,20 +30,20 @@ def test_venda_entrega_multi_pagamento_sucesso(client, session):
 
     # Motorista and Veiculo
     mot = Motorista(
-        estabelecimento_id=estab.id, 
-        nome="Flash Entregador", 
-        cpf="12345678901", 
-        cnh="123456789", 
-        telefone="92988888888", 
+        estabelecimento_id=estab.id,
+        nome="Flash Entregador",
+        cpf="12345678901",
+        cnh="123456789",
+        telefone="92988888888",
         celular="92999999999",
         ativo=True
     )
     vei = Veiculo(
-        estabelecimento_id=estab.id, 
-        tipo="MOTO", 
-        placa="ABC1234", 
-        marca="Honda", 
-        modelo="CG 160", 
+        estabelecimento_id=estab.id,
+        tipo="MOTO",
+        placa="ABC1234",
+        marca="Honda",
+        modelo="CG 160",
         consumo_medio=30
     )
     session.add_all([mot, vei])
@@ -46,6 +52,7 @@ def test_venda_entrega_multi_pagamento_sucesso(client, session):
         nome="Cliente Delivery",
         cpf="98765432100",
         estabelecimento_id=estab.id,
+        celular="11999999999",
         cep="01001-000",
         logradouro="Rua Delivery",
         numero="500",
@@ -56,7 +63,11 @@ def test_venda_entrega_multi_pagamento_sucesso(client, session):
     session.add(cust)
     session.commit()
 
-    token = create_access_token(identity="1", additional_claims={"estabelecimento_id": estab.id})
+    # Use the admin Funcionario's ID as JWT identity
+    token = create_access_token(
+        identity=str(admin.id),
+        additional_claims={"estabelecimento_id": estab.id}
+    )
     headers = {"Authorization": f"Bearer {token}"}
 
     # Total: Pizza (45) + Taxa (5) = 50.00
@@ -81,19 +92,21 @@ def test_venda_entrega_multi_pagamento_sucesso(client, session):
         "endereco_bairro": "Centro"
     }
 
-    response = client.post("/delivery/venda-entrega", json=payload, headers=headers)
-    assert response.status_code == 201 or response.status_code == 200
+    response = client.post("/api/delivery/venda-entrega", json=payload, headers=headers)
+    
+    # Accept both 201 and 200
+    assert response.status_code in (200, 201), f"Expected 200/201, got {response.status_code}: {response.get_json()}"
     data = response.get_json()
     assert data["success"] is True
 
     # Verify Database State
-    venda = db.session.query(Venda).filter_by(codigo=data["codigo"]).first()
+    venda = session.query(Venda).filter_by(codigo=data["codigo"]).first()
     assert venda is not None
     assert float(venda.total) == 50.00
     assert len(venda.pagamentos) == 2
-    
+
     # Check if Entrega was created
-    entrega = Entrega.query.filter_by(venda_id=venda.id).first()
+    entrega = session.query(Entrega).filter_by(venda_id=venda.id).first()
     assert entrega is not None
     assert entrega.motorista_id == mot.id
     assert float(venda.total) == 50.00
