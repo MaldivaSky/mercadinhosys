@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 MÓDULO DE INTELIGÊNCIA DE NEGÓCIOS - RELATÓRIOS AVANÇADOS
 Sistema de análise preditiva e business intelligence para MercadinhoSys
@@ -119,10 +120,10 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: 
     """
     if data_inicio:
         if not data_fim:
-            data_fim = datetime.utcnow()
+            data_fim = datetime.now(timezone.utc)
     else:
         # Padrão: últimos X dias
-        data_fim = datetime.utcnow()
+        data_fim = datetime.now(timezone.utc)
         data_inicio = data_fim - timedelta(days=days)
     
     # Query otimizada: agrupa no banco de dados
@@ -153,7 +154,7 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: 
         return []
     
     # Processar resultados
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     clientes_rfm = []
     
     for row in resultados:

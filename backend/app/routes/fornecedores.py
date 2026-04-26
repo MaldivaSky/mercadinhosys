@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/fornecedores.py
 # MÓDULO COMPLETO DE FORNECEDORES - ERP INDUSTRIAL BRASILEIRO
 # CRUD completo com todas as operações necessárias
@@ -538,7 +539,7 @@ def atualizar_fornecedor(id):
             if campo in data:
                 setattr(fornecedor, campo, data[campo])
 
-        fornecedor.data_atualizacao = datetime.utcnow()
+        fornecedor.data_atualizacao = datetime.now(timezone.utc)
 
         db.session.commit()
 
@@ -609,7 +610,7 @@ def atualizar_status_fornecedor(id):
                 )
 
         fornecedor.ativo = novo_status
-        fornecedor.data_atualizacao = datetime.utcnow()
+        fornecedor.data_atualizacao = datetime.now(timezone.utc)
 
         db.session.commit()
 
@@ -1225,7 +1226,7 @@ def importar_fornecedores():
                     fornecedor_existente.razao_social = linha["razao_social"].strip()
                     fornecedor_existente.email = linha["email"].strip().lower()
                     fornecedor_existente.telefone = formatar_telefone(linha["telefone"])
-                    fornecedor_existente.data_atualizacao = datetime.utcnow()
+                    fornecedor_existente.data_atualizacao = datetime.now(timezone.utc)
                     fornecedores_atualizados += 1
                 else:
                     # Criar novo fornecedor

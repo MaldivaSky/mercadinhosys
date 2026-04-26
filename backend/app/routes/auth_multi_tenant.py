@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Rotas de Autenticação Multi-Tenant
 Autenticação global com redirecionamento para banco do tenant
@@ -76,7 +77,7 @@ def bootstrap_admin():
                 email="suporte@mercadinhosys.com",
                 telefone="(00) 0000-0000",
                 ativo=True,
-                data_abertura=datetime.utcnow().date()
+                data_abertura=datetime.now(timezone.utc).date()
             )
             db.session.add(estabelecimento)
             db.session.flush()
@@ -93,7 +94,7 @@ def bootstrap_admin():
             is_super_admin=True,
             ativo=True,
             status="ativo",
-            data_admissao=datetime.utcnow().date(),
+            data_admissao=datetime.now(timezone.utc).date(),
             permissoes_json='{"pdv":true,"estoque":true,"compras":true,"financeiro":true,"configuracoes":true,"relatorios":true}'
         )
         db.session.add(admin)

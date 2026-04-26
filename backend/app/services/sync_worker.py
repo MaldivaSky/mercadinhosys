@@ -1,3 +1,4 @@
+from datetime import timezone
 import time
 import threading
 import requests
@@ -34,7 +35,7 @@ class GuerrillaSyncWorker(threading.Thread):
     def sync_deltas(self):
         """Processa a fila de sincronização"""
         with self.app.app_context():
-            pendentes = AuditoriaSincronia.query.filter_by(status="pendente").order_by(AuditoriaSincronia.data_criacao.asc()).limit(50).all()
+            pendentes = AuditoriaSincronia.query.filter_by(status="pendente").order_by(SyncQueue.created_at.asc()).limit(50).all()
             
             if not pendentes:
                 return
@@ -47,7 +48,7 @@ class GuerrillaSyncWorker(threading.Thread):
                     print(f"📡 Item {sync_item.id} -> {sync_item.tabela}: Envio {'SUCESSO' if res else 'FALHA'}")
                     if res:
                         sync_item.status = "sincronizado"
-                        sync_item.data_sincronia = datetime.utcnow()
+                        sync_item.data_sincronia = datetime.now(timezone.utc)
                     else:
                         sync_item.tentativas += 1
                         if sync_item.tentativas > 5:

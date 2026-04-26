@@ -256,6 +256,8 @@ def criar_venda_entrega_unificada():
         data = request.get_json()
         from app.utils.query_helpers import get_authorized_establishment_id
         est_id = get_authorized_establishment_id()
+        claims = get_jwt()
+        est_id = int(claims.get("estabelecimento_id") or 1)
         
         # 1. Criar a Venda
         cliente_id = data.get("cliente_id")
@@ -264,20 +266,42 @@ def criar_venda_entrega_unificada():
         venda = Venda(
             estabelecimento_id=est_id,
             cliente_id=cliente_id,
-            funcionario_id=data.get("funcionario_id"), # Opcional
+            funcionario_id=data.get("funcionario_id"), 
             codigo=f"VE-{datetime.now().strftime('%y%m%d%H%M%S')}",
             status="finalizada",
             tipo_venda="delivery",
-            forma_pagamento=data.get("forma_pagamento", "dinheiro"),
             subtotal=Decimal(str(data.get("subtotal", 0))),
             desconto=Decimal(str(data.get("desconto", 0))),
             total=Decimal(str(data.get("total", 0))),
-            valor_recebido=Decimal(str(data.get("total", 0))),
-            troco=Decimal("0.00"),
             data_venda=datetime.now()
         )
         db.session.add(venda)
         db.session.flush() # ID da venda
+
+        # 1.1 Processar Multi-Pagamentos
+        pagamentos_data = data.get("pagamentos", [])
+        if not pagamentos_data:
+            # Fallback para compatibilidade se enviarem o formato antigo
+            forma_antiga = data.get("forma_pagamento", "dinheiro")
+            pagamentos_data = [{"forma_pagamento": forma_antiga, "valor": data.get("total", 0)}]
+
+        total_recebido = Decimal("0")
+        from app.models import Pagamento
+        for p_data in pagamentos_data:
+            valor_p = Decimal(str(p_data["valor"]))
+            total_recebido += valor_p
+            pagamento = Pagamento(
+                estabelecimento_id=est_id,
+                venda_id=venda.id,
+                forma_pagamento=p_data["forma_pagamento"],
+                valor=valor_p,
+                status="aprovado",
+                data_pagamento=datetime.now()
+            )
+            db.session.add(pagamento)
+        
+        venda.valor_recebido = total_recebido
+        venda.troco = max(Decimal("0"), total_recebido - venda.total)
         
         # 2. Adicionar Itens
         for item in data.get("itens", []):
@@ -292,12 +316,12 @@ def criar_venda_entrega_unificada():
             
             v_item = VendaItem(
                 venda_id=venda.id,
+                estabelecimento_id=est_id, # Usar variável local garantida
                 produto_id=prod.id,
                 produto_nome=prod.nome,
-                quantidade=Decimal(str(item["quantidade"])),
-                preco_unitario=Decimal(str(item["preco_unitario"])),
-                total_item=Decimal(str(item["total_item"])),
-                estabelecimento_id=est_id
+                quantidade=Decimal(str(item.get("quantidade") or item.get("quantity", 1))),
+                preco_unitario=Decimal(str(item.get("preco_unitario") or item.get("price", prod.preco_venda))),
+                total_item=Decimal(str(item.get("total_item") or item.get("total", 0))),
             )
             db.session.add(v_item)
             # O processamento de estoque deve ser feito pelos listeners ou manualmente aqui
@@ -318,29 +342,30 @@ def criar_venda_entrega_unificada():
             if veiculo and veiculo.consumo_medio:
                 custo_fuel = (km_total / veiculo.consumo_medio) * Decimal("5.80")
 
-        entrega = Entrega(
-            estabelecimento_id=est_id,
-            venda_id=venda.id,
-            cliente_id=cliente_id,
-            motorista_id=motorista_id,
-            veiculo_id=veiculo_id,
-            codigo_rastreamento=f"TRK{venda.codigo.split('-')[-1]}",
-            status="em_preparo",
-            data_prevista=datetime.now() + timedelta(minutes=45),
-            taxa_entrega=Decimal(str(data.get("taxa_entrega", 0))),
-            custo_combustivel=custo_fuel,
-            distancia_km=distancia,
-            km_percorridos=km_total,
-            endereco_cep=data.get("endereco_cep", cliente.cep if cliente else ""),
-            endereco_logradouro=data.get("endereco_logradouro", ""),
-            endereco_numero=data.get("endereco_numero", ""),
-            endereco_bairro=data.get("endereco_bairro", ""),
-            endereco_cidade=data.get("endereco_cidade", "Manaus"),
-            endereco_estado=data.get("endereco_estado", "AM"),
-            endereco_complemento=data.get("endereco_complemento", ""),
-            pagamento_tipo="loja" if venda.forma_pagamento != "entrega" else "entrega",
-            pagamento_status="pago" if venda.forma_pagamento != "entrega" else "pendente"
-        )
+            main_payment = pagamentos_data[0]["forma_pagamento"] if pagamentos_data else "loja"
+            entrega = Entrega(
+                estabelecimento_id=est_id, # Blindado via variável local
+                venda_id=venda.id,
+                cliente_id=cliente_id,
+                motorista_id=motorista_id,
+                veiculo_id=veiculo_id,
+                codigo_rastreamento=f"TRK{venda.codigo.split('-')[-1]}",
+                status="em_preparo",
+                data_prevista=datetime.now() + timedelta(minutes=45),
+                taxa_entrega=Decimal(str(data.get("taxa_entrega", 0))),
+                custo_combustivel=custo_fuel,
+                distancia_km=distancia,
+                km_percorridos=km_total,
+                endereco_cep=data.get("endereco_cep", cliente.cep if cliente else ""),
+                endereco_logradouro=data.get("endereco_logradouro", ""),
+                endereco_numero=data.get("endereco_numero", ""),
+                endereco_bairro=data.get("endereco_bairro", ""),
+                endereco_cidade=data.get("endereco_cidade", "Manaus"),
+                endereco_estado=data.get("endereco_estado", "AM"),
+                endereco_complemento=data.get("endereco_complemento", ""),
+                pagamento_tipo="loja" if main_payment != "entrega" else "entrega",
+                pagamento_status="pago" if main_payment != "entrega" else "pendente"
+            )
         
         db.session.add(entrega)
         

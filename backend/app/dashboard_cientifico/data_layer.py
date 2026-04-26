@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy import func, desc, extract, case, and_
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,7 +10,39 @@ from app.models import (
 from app.utils.query_helpers import _get_db
 import logging
 
+from functools import wraps
+
 logger = logging.getLogger(__name__)
+
+def provide_session(f):
+    """Decorator sênior para injetar db.session e gerenciar transações/erros/timezones."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        db = _get_db()
+        
+        # Normalização sênior: converter todos os argumentos datetime para naive UTC
+        # Isso resolve o erro 'can't subtract offset-naive and offset-aware datetimes'
+        new_args = []
+        for arg in args:
+            if isinstance(arg, datetime) and arg.tzinfo is not None:
+                new_args.append(arg.astimezone(timezone.utc).replace(tzinfo=None))
+            else:
+                new_args.append(arg)
+        
+        for k, v in kwargs.items():
+            if isinstance(v, datetime) and v.tzinfo is not None:
+                kwargs[k] = v.astimezone(timezone.utc).replace(tzinfo=None)
+                
+        try:
+            return f(db, *new_args, **kwargs)
+        except Exception as e:
+            db.session.rollback()
+            method_name = f.__name__
+            logger.error(f"Erro em DataLayer.{method_name}: {e}")
+            if 'timeseries' in method_name or 'list' in method_name or 'details' in method_name:
+                return []
+            return {}
+    return wrapper
 
 class DataLayer:
     """
@@ -19,14 +51,33 @@ class DataLayer:
     """
 
     @staticmethod
-    def get_sales_summary_range(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    def _filter_tenant(query, model, est_id):
+        """Helper sênior para centralizar a filtragem multi-tenant."""
+        if str(est_id).lower() != 'all':
+            return query.filter(model.estabelecimento_id == est_id)
+        return query
+
+    @staticmethod
+    @provide_session
+    def get_sales_summary_range(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """Resumo de vendas para um período específico (inclui o dia inteiro de end_date)"""
         try:
-            start_d = start_date.date() if isinstance(start_date, datetime) else start_date
-            end_d = end_date.date() if isinstance(end_date, datetime) else end_date
-            end_exclusive = end_d + timedelta(days=1)  # Inclui o dia inteiro de end_d
-            
-            db = _get_db()
+            from datetime import timezone
+            # Garantir timezone UTC para todas as datas de entrada
+            if isinstance(start_date, datetime):
+                start_dt = start_date if start_date.tzinfo else start_date.replace(tzinfo=timezone.utc)
+            else:
+                start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+                
+            if isinstance(end_date, datetime):
+                end_dt = end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
+            else:
+                end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+
+            start_d = start_dt.date()
+            end_d = end_dt.date()
+            end_exclusive = end_d + timedelta(days=1)
+        
             query = db.session.query(
                 func.count(Venda.id).label('total_vendas'),
                 func.sum(Venda.total).label('total_faturado'),
@@ -49,21 +100,28 @@ class DataLayer:
                 "ticket_medio": float(result.ticket_medio or 0),
                 "dias_com_venda": result.dias_com_venda or 0
             }
+
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro em get_sales_summary_range: {e}")
-            return {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+            logger.error(f"ERRO CRÍTICO em get_sales_summary_range: {e}", exc_info=True)
+            return {
+                "total_vendas": 0,
+                "total_faturado": 0.0,
+                "ticket_medio": 0.0,
+                "dias_com_venda": 0
+            }
 
     @staticmethod
-    def get_sales_timeseries(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
+    @provide_session
+    def get_sales_timeseries(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """Série temporal de vendas diárias integrando Receita, CMV e Despesas."""
         try:
-            start_date = (datetime.utcnow() - timedelta(days=days)).date()
+            start_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
             
             # Garante formato start_date datetime
             start_dt = datetime.combine(start_date, datetime.min.time())
             
-            db = _get_db()
+            # db injetado pelo decorator
             # Query Vendas (Agrupa por dia)
             query_vendas = db.session.query(
                 func.date(Venda.data_venda).label('data'),
@@ -156,10 +214,13 @@ class DataLayer:
     # ... (other replacements will follow same pattern)
 
     @staticmethod
-    def get_expiring_products(estabelecimento_id: int, days_alert: int = 30) -> List[Dict[str, Any]]:
-        """Busca produtos com data de validade próxima ao vencimento"""
+    @provide_session
+    def get_expiring_products(db, estabelecimento_id: int, days_alert: int = 30) -> List[Dict[str, Any]]:
         try:
-            hoje = datetime.utcnow().date()
+            # db injetado pelo decorator
+            # Normalizar para naive e garantir compatibilidade
+            hoje_dt = datetime.now(timezone.utc)
+            hoje = hoje_dt.date()
             data_limite = hoje + timedelta(days=days_alert)
             
             query = db.session.query(
@@ -187,10 +248,13 @@ class DataLayer:
                     "nome": r.nome,
                     "lote": r.lote or "N/D",
                     "data_validade": r.data_validade.isoformat() if r.data_validade else None,
-                    "dias_para_vencer": (r.data_validade - hoje).days if r.data_validade else 0,
-                    "quantidade": r.quantidade,
-                    "valor_risco_custo": float(r.preco_custo or 0) * (r.quantidade or 0),
-                    "valor_risco_venda": float(r.preco_venda or 0) * (r.quantidade or 0)
+                    "dias_para_vencer": (
+                        ((r.data_validade.date() if hasattr(r.data_validade, "date") else r.data_validade) - hoje).days 
+                        if r.data_validade else 0
+                    ),
+                    "quantidade": float(r.quantidade or 0),
+                    "valor_risco_custo": float(r.preco_custo or 0) * float(r.quantidade or 0),
+                    "valor_risco_venda": float(r.preco_venda or 0) * float(r.quantidade or 0)
                 }
                 for r in results
                 if r.quantidade and r.quantidade > 0
@@ -201,10 +265,11 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_inventory_summary(estabelecimento_id: int) -> Dict[str, Any]:
+    @provide_session
+    def get_inventory_summary(db, estabelecimento_id: int) -> Dict[str, Any]:
         """Resumo do inventário (valor total, itens baixo estoque)"""
         try:
-            db = _get_db()
+            # db injetado pelo decorator
             # Valor total do estoque (custo * quantidade)
             query_valor = db.session.query(
                 func.sum(Produto.preco_custo * Produto.quantidade)
@@ -238,10 +303,12 @@ class DataLayer:
             return {"valor_total": 0.0, "baixo_estoque": 0}
 
     @staticmethod
-    def get_customer_metrics(estabelecimento_id: int, days: int) -> Dict[str, Any]:
+    @provide_session
+    def get_customer_metrics(db, estabelecimento_id: int, days: int) -> Dict[str, Any]:
         """Métricas de clientes (únicos, ticket médio)"""
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            # db injetado pelo decorator
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             query_clientes = db.session.query(func.count(func.distinct(Venda.cliente_id))).filter(
                 Venda.data_venda >= start_date,
@@ -283,15 +350,16 @@ class DataLayer:
             return {"clientes_unicos": 0, "ticket_medio_cliente": 0.0, "maior_compra": 0.0}
 
     @staticmethod
-    def get_top_products(estabelecimento_id: int, days: int, limit: int = 10) -> List[Dict[str, Any]]:
+    @provide_session
+    def get_top_products(db, estabelecimento_id: int, days: int, limit: int = 10) -> List[Dict[str, Any]]:
         """Top produtos mais vendidos (Curva ABC)"""
         try:
-            db = _get_db()
+            # db injetado pelo decorator
             # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
             
-            results = db.session.query(
+            query_top = db.session.query(
                 Produto.id,
                 Produto.nome,
                 Produto.preco_custo,
@@ -306,9 +374,9 @@ class DataLayer:
             )
             
             if str(estabelecimento_id).lower() != 'all':
-                results_query = results_query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                query_top = query_top.filter(Venda.estabelecimento_id == estabelecimento_id)
                 
-            results = results_query.group_by(
+            results = query_top.group_by(
                 Produto.id, Produto.nome, Produto.preco_custo, Produto.preco_venda
             ).order_by(
                 desc('faturamento')
@@ -333,14 +401,16 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_all_products_performance(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
+    @provide_session
+    def get_all_products_performance(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """
         Retorna TODOS os produtos ativos com sua performance de vendas no período.
         Essencial para análise ABC correta (incluindo produtos sem vendas).
         """
         try:
+            # db injetado pelo decorator
             # 🔥 CORREÇÃO: Usar datetime completo
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
             
             # Subquery para vendas filtradas por data
@@ -399,29 +469,22 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_expense_details(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+    @provide_session
+    def get_expense_details(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Detalhamento de despesas por categoria (período específico)"""
         try:
-            # 🔥 CORREÇÃO: Usar datetime completo para garantir compatibilidade com Postgres
-            # Se receber apenas data, forçar inicio 00:00 e fim 23:59
-            
-            start_dt = start_date if isinstance(start_date, datetime) else datetime.combine(start_date, datetime.min.time())
-            
-            if isinstance(end_date, datetime):
-                end_dt = end_date
-            else:
-                end_dt = datetime.combine(end_date, datetime.max.time())
-                
-            # Garante que end_dt cubra o dia todo se vier com hora 00:00
-            if end_dt.hour == 0 and end_dt.minute == 0:
-                 end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            # db injetado pelo decorator
+            # 🔥 CORREÇÃO: Despesa.data_despesa é do tipo DATE no banco.
+            # Devemos comparar com objetos date simples, sem time ou tzinfo.
+            start_date_norm = start_date.date() if isinstance(start_date, datetime) else start_date
+            end_date_norm = end_date.date() if isinstance(end_date, datetime) else end_date
 
             query_expenses = db.session.query(
                 Despesa.tipo,
                 func.sum(Despesa.valor).label('total')
             ).filter(
-                Despesa.data_despesa >= start_dt,
-                Despesa.data_despesa <= end_dt
+                Despesa.data_despesa >= start_date_norm,
+                Despesa.data_despesa <= end_date_norm
             )
             
             if str(estabelecimento_id).lower() != 'all':
@@ -438,30 +501,26 @@ class DataLayer:
             ]
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro em get_expense_details: {e}")
+            logger.error(f"ERRO CRÍTICO em get_expense_details: {e}", exc_info=True)
             return []
 
     @staticmethod
-    def get_total_expenses_value(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> float:
+    @provide_session
+    def get_total_expenses_value(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> float:
         """
         Retorna o valor TOTAL de despesas para o período, sem agrupamento.
         Usado para cálculo de Lucro Líquido no Dashboard (Sincronizado com DRE).
         """
         try:
-            # Normalização de datas idêntica ao DRE
-            start_dt = start_date if isinstance(start_date, datetime) else datetime.combine(start_date, datetime.min.time())
-            
-            if isinstance(end_date, datetime):
-                end_dt = end_date
-            else:
-                end_dt = datetime.combine(end_date, datetime.max.time())
-                
-            if end_dt.hour == 0 and end_dt.minute == 0:
-                 end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            # db injetado pelo decorator
+            # 🔥 CORREÇÃO: Despesa.data_despesa é DATE.
+            # Normalização rigorosa para objetos date (sem timezone/time)
+            start_date_norm = start_date.date() if isinstance(start_date, datetime) else start_date
+            end_date_norm = end_date.date() if isinstance(end_date, datetime) else end_date
 
             query = db.session.query(func.sum(Despesa.valor)).filter(
-                Despesa.data_despesa >= start_dt,
-                Despesa.data_despesa <= end_dt
+                Despesa.data_despesa >= start_date_norm,
+                Despesa.data_despesa <= end_date_norm
             )
             
             if str(estabelecimento_id).lower() != 'all':
@@ -471,14 +530,16 @@ class DataLayer:
             
             return float(total or 0.0)
         except Exception as e:
-            logger.error(f"Erro em get_total_expenses_value: {e}")
+            logger.error(f"ERRO CRÍTICO em get_total_expenses_value: {e}", exc_info=True)
             return 0.0
 
     @staticmethod
-    def get_sales_by_hour(estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
+    @provide_session
+    def get_sales_by_hour(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """Vendas agrupadas por hora do dia (Heatmap)"""
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            # db injetado pelo decorator
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Compatibilidade cross-database para extração de hora
             from app.utils.query_helpers import get_hour_extract
@@ -519,13 +580,15 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_top_products_by_hour(estabelecimento_id: int, days: int, top_n: int = 5) -> List[Dict[str, Any]]:
+    @provide_session
+    def get_top_products_by_hour(db, estabelecimento_id: int, days: int, top_n: int = 5) -> List[Dict[str, Any]]:
         """Top produtos por faixa horária (Manhã, Tarde, Noite) agrupados dinamicamente"""
         try:
+            # db injetado pelo decorator
             from app.utils.query_helpers import get_hour_extract
             hour_extract = get_hour_extract(Venda.data_venda)
             
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
             
             query_top = db.session.query(
@@ -570,10 +633,12 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_customer_temporal_patterns(estabelecimento_id: int, days: int) -> Dict[str, Any]:
+    @provide_session
+    def get_customer_temporal_patterns(db, estabelecimento_id: int, days: int) -> Dict[str, Any]:
         """Padrões de compra por dia da semana"""
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            # db injetado pelo decorator
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Compatibilidade cross-database para extração de dia da semana
             from app.utils.query_helpers import get_dow_extract
@@ -612,13 +677,15 @@ class DataLayer:
             return []
 
     @staticmethod
-    def get_hourly_concentration_metrics(estabelecimento_id: int, days: int) -> Dict[str, Any]:
+    @provide_session
+    def get_hourly_concentration_metrics(db, estabelecimento_id: int, days: int) -> Dict[str, Any]:
         """
         Concentração de vendas em horários de pico com Índice de Gini
         Gini = 0 (distribuição perfeita) a 1 (concentração total)
         """
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            # db injetado pelo decorator
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Compatibilidade cross-database para extração de hora
             from app.utils.query_helpers import get_hour_extract
@@ -740,7 +807,8 @@ class DataLayer:
         return []
 
     @staticmethod
-    def get_last_purchase_orders(estabelecimento_id: int, produto_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    @provide_session
+    def get_last_purchase_orders(db, estabelecimento_id: int, produto_ids: List[int]) -> Dict[int, Dict[str, Any]]:
         """
         Retorna o último pedido de compra para cada produto da lista.
         Responde ao requisito: "LINK EACH PRODUCT TO AN ORDER"
@@ -751,6 +819,7 @@ class DataLayer:
         from app.models import PedidoCompra, PedidoCompraItem, Fornecedor
         
         try:
+            # db injetado pelo decorator
             # Query para buscar o último pedido finalizado/recebido para cada produto
             # Usando subquery para encontrar a data máxima por produto
             sub_query_stmt = db.session.query(
@@ -801,11 +870,13 @@ class DataLayer:
             return {}
 
     @staticmethod
-    def get_rh_metrics(estabelecimento_id: int, days: int = 30) -> Dict[str, Any]:
+    @provide_session
+    def get_rh_metrics(db, estabelecimento_id: int, days: int = 30) -> Dict[str, Any]:
         """
         Métricas de RH: Horas Extras, Benefícios, Folha e Assiduidade
         """
         try:
+            # db injetado pelo decorator
             data_inicio = datetime.now() - timedelta(days=days)
             data_inicio_dia = data_inicio.date()
             hoje_dia = datetime.now().date()
@@ -900,7 +971,10 @@ class DataLayer:
             # 5. Custo Total Estimado
             custo_folha_estimado = float(total_salarios) + float(total_beneficios) + custo_extras_estimado
 
-            funcionarios_ativos = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True).all()
+            query_ativos = Funcionario.query.filter_by(ativo=True)
+            if str(estabelecimento_id).lower() != 'all':
+                query_ativos = query_ativos.filter_by(estabelecimento_id=estabelecimento_id)
+            funcionarios_ativos = query_ativos.all()
             funcionarios_ativos_ids = [f.id for f in funcionarios_ativos]
 
             # 6. Rotatividade (Turnover)
@@ -920,7 +994,10 @@ class DataLayer:
                 demissoes_query = demissoes_query.filter(Funcionario.estabelecimento_id == estabelecimento_id)
             demissoes = demissoes_query.scalar() or 0
             
-            total_funcionarios = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id).count()
+            query_total = Funcionario.query
+            if str(estabelecimento_id).lower() != 'all':
+                query_total = query_total.filter_by(estabelecimento_id=estabelecimento_id)
+            total_funcionarios = query_total.count()
             # Se não tem funcionários hoje, não tem como calcular taxa corretamente, evita divisão por zero
             media_funcionarios = total_funcionarios if total_funcionarios > 0 else 1
             
@@ -1005,14 +1082,17 @@ class DataLayer:
                 })
 
             # 8. Detalhamento de Benefícios
-            benefits_breakdown = db.session.query(
+            query_benefits = db.session.query(
                 Beneficio.nome, 
                 func.sum(FuncionarioBeneficio.valor).label('total')
             ).select_from(FuncionarioBeneficio).join(Beneficio).join(Funcionario).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
                 FuncionarioBeneficio.ativo == True,
                 Funcionario.ativo == True
-            ).group_by(Beneficio.nome).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                 query_benefits = query_benefits.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            
+            benefits_breakdown = query_benefits.group_by(Beneficio.nome).all()
             
             benefits_data = [{"name": b[0] or "Outros", "value": float(b[1] or 0)} for b in benefits_breakdown]
 
@@ -1088,15 +1168,18 @@ class DataLayer:
                 if data_ponto:
                     extras_mes_por_dia[data_ponto.isoformat()] = extras_mes_por_dia.get(data_ponto.isoformat(), 0) + int(extra)
 
-            beneficios_por_func = db.session.query(
+            query_ben_func = db.session.query(
                 FuncionarioBeneficio.funcionario_id,
                 Beneficio.nome,
                 FuncionarioBeneficio.valor
             ).select_from(FuncionarioBeneficio).join(Beneficio).join(Funcionario).filter(
-                Funcionario.estabelecimento_id == estabelecimento_id,
                 Funcionario.ativo == True,
                 FuncionarioBeneficio.ativo == True
-            ).all()
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                 query_ben_func = query_ben_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+                 
+            beneficios_por_func = query_ben_func.all()
 
             beneficios_por_func_id = {}
             beneficios_detalhes_por_id = {}
@@ -1425,16 +1508,22 @@ class DataLayer:
     # (Antigo get_consolidated_financial_summary duplicado foi removido daqui para evitar ambiguidade)
 
     @staticmethod
-    def get_sales_financials(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    @provide_session
+    def get_sales_financials(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """
         Retorna dados financeiros de vendas for DRE (Revenue, COGS, Margin).
         Calculado via queries separadas para evitar multiplicação de linhas em JOINs.
         """
         try:
+            # db injetado pelo decorator
+            # Usar as datas já normalizadas pelo decorator @provide_session
+            start_dt = start_date
+            end_dt = end_date
+
             # 1. Total Vendas (Revenue)
             q_rev = db.session.query(func.sum(Venda.total)).filter(
-                Venda.data_venda >= start_date,
-                Venda.data_venda <= end_date,
+                Venda.data_venda >= start_dt,
+                Venda.data_venda <= end_dt,
                 Venda.status != 'cancelada'
             )
             if estabelecimento_id != 'all': q_rev = q_rev.filter(Venda.estabelecimento_id == estabelecimento_id)
@@ -1442,8 +1531,8 @@ class DataLayer:
 
             # 2. Total Vendas Contagem
             q_count = db.session.query(func.count(Venda.id)).filter(
-                Venda.data_venda >= start_date,
-                Venda.data_venda <= end_date,
+                Venda.data_venda >= start_dt,
+                Venda.data_venda <= end_dt,
                 Venda.status != 'cancelada'
             )
             if estabelecimento_id != 'all': q_count = q_count.filter(Venda.estabelecimento_id == estabelecimento_id)
@@ -1453,8 +1542,8 @@ class DataLayer:
             q_cogs = db.session.query(func.sum(VendaItem.custo_unitario * VendaItem.quantidade)).join(
                 Venda, Venda.id == VendaItem.venda_id
             ).filter(
-                Venda.data_venda >= start_date,
-                Venda.data_venda <= end_date,
+                Venda.data_venda >= start_dt,
+                Venda.data_venda <= end_dt,
                 Venda.status != 'cancelada'
             )
             if estabelecimento_id != 'all': q_cogs = q_cogs.filter(Venda.estabelecimento_id == estabelecimento_id)
@@ -1472,10 +1561,11 @@ class DataLayer:
                 "count": int(count)
             }
         except Exception as e:
-            logger.error(f"Erro em get_sales_financials: {e}")
+            logger.error(f"ERRO CRÍTICO em get_sales_financials: {e}", exc_info=True)
             return {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0, "count": 0}
     @staticmethod
-    def get_consolidated_financial_summary(estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    @provide_session
+    def get_consolidated_financial_summary(db, estabelecimento_id: int, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """
         Consolida dados financeiros para o Resumo Financeiro (DRE + Fluxo).
         Otimizado para reduzir round-trips ao banco.
@@ -1492,18 +1582,18 @@ class DataLayer:
         }
 
         try:
-            # Garantir datas completas
+            # db injetado pelo decorator
             if isinstance(start_date, datetime):
-                start_dt = start_date
+                start_dt = start_date if start_date.tzinfo else start_date.replace(tzinfo=timezone.utc)
             else:
-                start_dt = datetime.combine(start_date, datetime.min.time())
+                start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
                 
             if isinstance(end_date, datetime):
-                end_dt = end_date
+                end_dt = end_date if end_date.tzinfo else end_date.replace(tzinfo=timezone.utc)
             else:
-                end_dt = datetime.combine(end_date, datetime.max.time())
+                end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
                 if end_dt.hour == 0:
-                    end_dt = end_dt.replace(hour=23, minute=59, second=59)
+                    end_dt = end_dt.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
 
             # 1. DADOS DE VENDAS
             try:
@@ -1570,7 +1660,7 @@ class DataLayer:
 
             # 3. CONTAS A PAGAR (Cálculo Independente de Filtro de Data para Aberto/Vencido)
             try:
-                hoje = datetime.utcnow().date()
+                hoje = datetime.now(timezone.utc).date()
                 date_7d = hoje + timedelta(days=7)
                 date_30d = hoje + timedelta(days=30)
                 
@@ -1622,13 +1712,15 @@ class DataLayer:
             return result # Retorna estrutura vazia/zerada em caso de catástrofe
 
     @staticmethod
-    def get_fiado_metrics(estabelecimento_id: int) -> Dict[str, Any]:
+    @provide_session
+    def get_fiado_metrics(db, estabelecimento_id: int) -> Dict[str, Any]:
         """
         Métricas de Carteira de Fiado/Crédito.
         Retorna dados reais de exposição de crédito a partir de Cliente.saldo_devedor.
         Usado no Dashboard Principal e no módulo de Inteligência de Negócio.
         """
         try:
+            # db injetado pelo decorator
             # Agrega totais de saldo_devedor e limite_credito de clientes ativos
             query_agg = db.session.query(
                 func.coalesce(func.sum(Cliente.saldo_devedor), 0).label('total_aberto'),
@@ -1652,7 +1744,7 @@ class DataLayer:
             # -------------------------------------------------------------
             # AI & Predictive Metrics para Gestão de Fiados
             # -------------------------------------------------------------
-            hoje = datetime.utcnow()
+            hoje = datetime.now(timezone.utc)
             trinta_dias_atras = hoje - timedelta(days=30)
 
             # 1. Tendência: Novos Fiados vs. Pagamentos (últimos 30 dias)
@@ -1819,14 +1911,16 @@ class DataLayer:
             }
 
     @staticmethod
-    def get_receivables_metrics(estabelecimento_id: int) -> Dict[str, Any]:
+    @provide_session
+    def get_receivables_metrics(db, estabelecimento_id: int) -> Dict[str, Any]:
         """
         Métricas de Contas a Receber (Vencidos vs A Receber).
         Diferente de get_fiado_metrics (que olha o saldo total do cliente),
         esta foca nos títulos (ContaReceber) individuais.
         """
         try:
-            hoje = datetime.utcnow().date()
+            # db injetado pelo decorator
+            hoje = datetime.now(timezone.utc).date()
             
             # Agrega por status de vencimento
             query_agg_stats = db.session.query(
@@ -1856,7 +1950,6 @@ class DataLayer:
                 ContaReceber, Cliente.id == ContaReceber.cliente_id
             ).filter(
                 ContaReceber.status == 'aberto',
-                \
                 ContaReceber.data_vencimento < hoje
             )
             

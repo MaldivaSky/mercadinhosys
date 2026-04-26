@@ -1,3 +1,4 @@
+from datetime import timezone
 from flask import Blueprint, request, jsonify, current_app
 from app import db
 from app.models import Funcionario, Venda, Estabelecimento
@@ -182,7 +183,7 @@ def listar_funcionarios():
         funcionario_ids = [f.id for f in funcionarios]
         stats_map = {}
         if incluir_estatisticas and funcionario_ids:
-            data_30_dias_atras = datetime.utcnow() - timedelta(days=30)
+            data_30_dias_atras = datetime.now(timezone.utc) - timedelta(days=30)
             stats_rows = (
                 db.session.query(
                     Venda.funcionario_id.label("funcionario_id"),
@@ -820,7 +821,7 @@ def detalhes_funcionario(id):
         ).count()
 
         # Vendas dos últimos 30 dias
-        data_30_dias_atras = datetime.utcnow() - timedelta(days=30)
+        data_30_dias_atras = datetime.now(timezone.utc) - timedelta(days=30)
         vendas_30_dias = Venda.query.filter(
             Venda.funcionario_id == id, 
             Venda.estabelecimento_id == estabelecimento_id,
@@ -839,7 +840,7 @@ def detalhes_funcionario(id):
         )
 
         # Vendas por mês (últimos 6 meses)
-        hoje = datetime.utcnow()
+        hoje = datetime.now(timezone.utc)
         vendas_por_mes = []
 
         for i in range(6):

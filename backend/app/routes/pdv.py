@@ -1,3 +1,4 @@
+from datetime import timezone
 # app/routes/pdv.py
 """
 PDV - Ponto de Venda MISSION-CRITICAL
@@ -55,7 +56,7 @@ def calcular_rfm_cliente(cliente_id: int, estabelecimento_id: int) -> dict:
     from datetime import datetime, timedelta
     
     # Buscar vendas do cliente nos últimos 180 dias
-    data_inicio = datetime.utcnow() - timedelta(days=180)
+    data_inicio = datetime.now(timezone.utc) - timedelta(days=180)
     
     vendas = Venda.query.filter(
         Venda.estabelecimento_id == estabelecimento_id,
@@ -74,7 +75,7 @@ def calcular_rfm_cliente(cliente_id: int, estabelecimento_id: int) -> dict:
         }
     
     # Calcular métricas
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     ultima_compra = max(v.data_venda for v in vendas)
     recency_days = (now - ultima_compra).days
     frequency = len(vendas)
@@ -723,16 +724,16 @@ def finalizar_venda():
             manaus_tz = pytz.timezone('America/Manaus')
             data_venda = datetime.now(manaus_tz)
 
+            estab_id = funcionario_data.get("estabelecimento_id")
             nova_venda = Venda(
                 codigo=codigo_venda,
-                estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                estabelecimento_id=estab_id,
                 cliente_id=cliente_id,
                 funcionario_id=funcionario_data.get("id"),
                 caixa_id=caixa_aberto.id,
                 subtotal=subtotal,
                 desconto=desconto,
                 total=total,
-                forma_pagamento=forma_pagamento,
                 valor_recebido=valor_recebido,
                 troco=troco,
                 status="finalizada",
@@ -743,12 +744,24 @@ def finalizar_venda():
             db.session.add(nova_venda)
             db.session.flush()
 
+            # Criar registro de pagamento (Novo sistema multi-pagamento)
+            from app.models import Pagamento
+            novo_pagamento = Pagamento(
+                estabelecimento_id=estab_id,
+                venda_id=nova_venda.id,
+                forma_pagamento=forma_pagamento,
+                valor=valor_recebido, # No PDV simples é o valor total recebido
+                status="aprovado",
+                data_pagamento=data_venda
+            )
+            db.session.add(novo_pagamento)
+
             itens_formatados_para_resposta = []
 
             for item_data in items:
-                produto_id = item_data.get("id")
-                # SUPORTE FRACIONÁRIO (KG): Usar to_decimal com 3 casas
-                quantidade = to_decimal(item_data.get("quantity", 1), precision=3)
+                # Suporte a múltiplos nomes de campos
+                produto_id = item_data.get("id") or item_data.get("productId") or item_data.get("produto_id")
+                quantidade = to_decimal(item_data.get("quantity") or item_data.get("quantidade", 1), precision=3)
 
                 produto = db.session.query(Produto).with_for_update().get(produto_id)
                 if not produto:
@@ -760,13 +773,14 @@ def finalizar_venda():
                     db.session.rollback()
                     return jsonify({"error": f"Estoque insuficiente: {produto.nome}"}), 400
 
-                preco_unitario = to_decimal(item_data.get("price", produto.preco_venda))
+                preco_unitario = to_decimal(item_data.get("price") or item_data.get("preco_unitario", produto.preco_venda))
                 total_item = to_decimal(preco_unitario * quantidade, precision=2)
 
                 margem_lucro_real = to_decimal((preco_unitario - to_decimal(produto.preco_custo or 0)) * quantidade, precision=2)
 
                 novo_item = VendaItem(
                     venda_id=nova_venda.id,
+                    estabelecimento_id=estab_id, # Herança robusta via variável local
                     produto_id=produto.id,
                     produto_nome=produto.nome,
                     produto_codigo=produto.codigo_interno or produto.codigo_barras,
@@ -783,16 +797,16 @@ def finalizar_venda():
                 produto.quantidade = to_decimal(estoque_anterior - quantidade, precision=3)
 
                 mov = MovimentacaoEstoque(
-                    estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                    estabelecimento_id=nova_venda.estabelecimento_id,
                     produto_id=produto.id,
                     tipo="saida",
                     quantidade=quantidade,
                     quantidade_anterior=estoque_anterior,
                     quantidade_atual=produto.quantidade,
                     venda_id=nova_venda.id,
-                    funcionario_id=funcionario_data.get("id"),
+                    funcionario_id=nova_venda.funcionario_id,
                     created_at=data_venda,
-                    motivo=f"Venda PDV {codigo_venda}"
+                    motivo=f"Venda PDV {nova_venda.codigo}"
                 )
                 db.session.add(mov)
 

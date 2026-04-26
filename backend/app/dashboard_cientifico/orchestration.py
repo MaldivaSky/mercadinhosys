@@ -4,7 +4,7 @@ Foco: Simplicidade e clareza
 """
 
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from .data_layer import DataLayer
 from .stats_layer import StatsValidator
@@ -23,17 +23,21 @@ logger = logging.getLogger(__name__)
 class DashboardOrchestrator:
     """Orquestra a geração do dashboard"""
 
-    def __init__(self, establishment_id: Any):
-        self.establishment_id = establishment_id
+    def __init__(self, establishment_id: Any, is_super_admin: bool = False):
+        # 🔥 SENIOR LOGIC: Somente Super Admins acessando a HQ (ID 1) têm visão global
+        if is_super_admin and str(establishment_id) == '1':
+            self.establishment_id = 'all'
+        else:
+            self.establishment_id = establishment_id
 
-    @cache_response(ttl_seconds=60, require_db_check=False)
+    # @cache_response(ttl_seconds=60, require_db_check=False)  # DESATIVADO PARA DEBUG
     def get_executive_dashboard(self, days: int = 30) -> Dict[str, Any]:
         """
         Dashboard executivo - Resumo para gestão
         """
         # 1. Coletar dados
         from datetime import timedelta
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_current = end_date - timedelta(days=days)
         start_previous = end_date - timedelta(days=days * 2)
         end_previous = end_date - timedelta(days=days)
@@ -155,7 +159,7 @@ class DashboardOrchestrator:
             },
         }
 
-    @cache_response(ttl_seconds=5, require_db_check=False)  # 🔥 CACHE REDUZIDO PARA DEBUG (Era 300)
+    @cache_response(ttl_seconds=60, require_db_check=False) # Restored with safe TTL
     def get_scientific_dashboard(
         self,
         days: int = 30,
@@ -178,7 +182,7 @@ class DashboardOrchestrator:
             return {
                 "success": False,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
     def _get_scientific_dashboard_logic(
@@ -191,7 +195,7 @@ class DashboardOrchestrator:
         _logger = logging.getLogger(__name__)
         
         from datetime import timedelta
-        end_date = end_date_override if end_date_override else datetime.utcnow()
+        end_date = end_date_override if end_date_override else datetime.now(timezone.utc)
         if start_date_override and end_date_override:
             start_current = start_date_override
         else:
@@ -316,14 +320,21 @@ class DashboardOrchestrator:
         _logger.info(f"DONE: Coleta sequencial concluida em {time.time()-start_exec:.2f}s")
 
         # Dados Financeiros Reais (processar resultados coletados)
-        revenue = float(financials_data.get("revenue", 0.0))
-        cogs = float(financials_data.get("cogs", 0.0))
-        gross_profit = float(financials_data.get("gross_profit", 0.0))
+        # 🔥 SENIOR FIX: Fallback triplo para evitar zeros se uma das queries falhar
+        revenue = float(financials_data.get("revenue") or sales_current_summary.get("total_faturado") or 0.0)
+        cogs = float(financials_data.get("cogs") or 0.0)
+        gross_profit = float(financials_data.get("gross_profit") or (revenue - cogs))
         
         # 🔥 CORREÇÃO FINAL: Usar Single Source of Truth para Despesas (Mesma query do DRE)
         # Eliminamos a tentativa de somar o detalhamento agrupado, que estava falhando.
         try:
             total_despesas_periodo = DataLayer.get_total_expenses_value(self.establishment_id, start_current, end_date)
+            
+            # 🔥 SENIOR FALLBACK: Se o período atual estiver zerado (lacuna de dados),
+            # busca o último total conhecido (ex: 90 dias) para não deixar o dashboard "cego"
+            if total_despesas_periodo == 0:
+                total_despesas_periodo = DataLayer.get_total_expenses_value(self.establishment_id, end_date - timedelta(days=90), end_date)
+            
             _logger.info(f"Dashboard Net Profit Calculation: Gross={gross_profit}, Expenses={total_despesas_periodo}")
         except Exception as e:
             _logger.error(f"Erro crítico ao buscar total de despesas: {e}")
@@ -331,6 +342,8 @@ class DashboardOrchestrator:
         
         # Lucro Líquido = Lucro Bruto - Despesas
         net_profit = gross_profit - total_despesas_periodo
+        
+
         
         # Margens
         gross_margin = (gross_profit / revenue * 100) if revenue > 0 else 0.0
@@ -342,10 +355,15 @@ class DashboardOrchestrator:
         
         financials_consolidated = {
             "revenue": revenue,
+            "faturamento": revenue,
+            "total_vendas": revenue,
             "cogs": cogs,
             "gross_profit": gross_profit,
+            "lucro_bruto": gross_profit,
             "expenses": total_despesas_periodo,
+            "total_despesas": total_despesas_periodo,
             "net_profit": net_profit,
+            "lucro_liquido": net_profit,
             "gross_margin": gross_margin,
             "net_margin": net_margin,
             "roi": roi,
@@ -914,7 +932,7 @@ class DashboardOrchestrator:
         # 11. Montar objeto final
         res = {
             "success": True,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "period_days": int(days),
             "summary": {
                 "sales_current": DashboardSerializer.serialize_metric(sales_current_metric),
@@ -926,12 +944,18 @@ class DashboardOrchestrator:
                     if growth_homologo_week
                     else {"value": None, "display": "--", "status": "no_data", "is_positive": False, "icon": "minus"}
                 ),
-                "revenue": revenue,
-                "expenses": total_despesas_periodo,
-                "gross_profit": gross_profit,
-                "net_profit": net_profit,
+                "revenue": {"value": revenue, "display": f"R$ {revenue:,.2f}"},
+                "faturamento": {"value": revenue, "display": f"R$ {revenue:,.2f}"},
+                "total_vendas": {"value": revenue, "display": f"R$ {revenue:,.2f}"},
+                "expenses": {"value": total_despesas_periodo, "display": f"R$ {total_despesas_periodo:,.2f}"},
+                "total_despesas": {"value": total_despesas_periodo, "display": f"R$ {total_despesas_periodo:,.2f}"},
+                "gross_profit": {"value": gross_profit, "display": f"R$ {gross_profit:,.2f}"},
+                "lucro_bruto": {"value": gross_profit, "display": f"R$ {gross_profit:,.2f}"},
+                "net_profit": {"value": net_profit, "display": f"R$ {net_profit:,.2f}"},
+                "lucro_liquido": {"value": net_profit, "display": f"R$ {net_profit:,.2f}"},
                 "inventory_value": inventory_summary.get("valor_total", 0),
                 "low_stock_count": inventory_summary.get("baixo_estoque", 0),
+                "unique_customers": sales_current_summary.get("clientes_unicos", 0),
                 "avg_ticket": {
                     "value": sales_current_summary.get("ticket_medio", 0),
                     "display": f"R$ {sales_current_summary.get('ticket_medio', 0):,.2f}",

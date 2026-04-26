@@ -19,13 +19,19 @@ export interface FormaPagamento {
     permite_troco: boolean;
 }
 
+export interface PagamentoItem {
+    id: string;
+    forma: string;
+    valor: number;
+    bandeira?: string;
+}
+
 export interface PDVSession {
     id: string;
     carrinho: ItemCarrinho[];
     cliente: Cliente | null;
     emailRecibo: string;
-    formaPagamentoSelecionada: string;
-    valorRecebido: number;
+    pagamentos: PagamentoItem[];
     observacoes: string;
     descontoGeral: number;
     descontoPercentual: boolean;
@@ -36,8 +42,7 @@ const createInitialSession = (): PDVSession => ({
     carrinho: [],
     cliente: null,
     emailRecibo: '',
-    formaPagamentoSelecionada: 'dinheiro',
-    valorRecebido: 0,
+    pagamentos: [],
     observacoes: '',
     descontoGeral: 0,
     descontoPercentual: false,
@@ -60,8 +65,7 @@ export const usePDV = () => {
     const carrinho = sessaoAtiva.carrinho;
     const cliente = sessaoAtiva.cliente;
     const emailRecibo = sessaoAtiva.emailRecibo;
-    const formaPagamentoSelecionada = sessaoAtiva.formaPagamentoSelecionada;
-    const valorRecebido = sessaoAtiva.valorRecebido;
+    const pagamentos = sessaoAtiva.pagamentos || [];
     const observacoes = sessaoAtiva.observacoes;
     const descontoGeral = sessaoAtiva.descontoGeral;
     const descontoPercentual = sessaoAtiva.descontoPercentual;
@@ -86,14 +90,24 @@ export const usePDV = () => {
     }, [sessaoAtivaId]);
 
     const setEmailRecibo = useCallback((e: string) => updateSessao({ emailRecibo: e }), [updateSessao]);
-    const setFormaPagamentoSelecionada = useCallback((f: string) => updateSessao({ formaPagamentoSelecionada: f }), [updateSessao]);
-    const setValorRecebido = useCallback((v: number | ((prev: number) => number)) => {
+
+    const setPagamentos = useCallback((p: PagamentoItem[] | ((prev: PagamentoItem[]) => PagamentoItem[])) => {
         setSessoes(prev => prev.map(s => {
             if (s.id !== sessaoAtivaId) return s;
-            const n = typeof v === 'function' ? v(s.valorRecebido) : v;
-            return { ...s, valorRecebido: n };
+            const n = typeof p === 'function' ? p(s.pagamentos) : p;
+            return { ...s, pagamentos: n };
         }));
     }, [sessaoAtivaId]);
+
+    const adicionarPagamento = useCallback((forma: string, valor: number, bandeira?: string) => {
+        const novo: PagamentoItem = { id: Date.now().toString(), forma, valor, bandeira };
+        setPagamentos(prev => [...prev, novo]);
+    }, [setPagamentos]);
+
+    const removerPagamento = useCallback((id: string) => {
+        setPagamentos(prev => prev.filter(p => p.id !== id));
+    }, [setPagamentos]);
+
     const setObservacoes = useCallback((o: string) => updateSessao({ observacoes: o }), [updateSessao]);
     const setDescontoGeral = useCallback((d: number | ((prev: number) => number)) => {
         setSessoes(prev => prev.map(s => {
@@ -168,11 +182,13 @@ export const usePDV = () => {
     const descontoTotal = round(descontoItens + descontoGeralCalculado);
     const total = Math.max(0, round(subtotal - descontoTotal));
 
+    const totalPago = round(pagamentos.reduce((sum, p) => sum + p.valor, 0));
+
     const troco = (() => {
-        const formaPg = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
-        return (formaPg?.permite_troco && valorRecebido > total)
-            ? round(valorRecebido - total)
-            : 0;
+        // O troco é calculado se o total pago exceder o total da venda,
+        // mas tecnicamente só aplicamos para Dinheiro. 
+        // Em multi-pagamento, verificamos se há excedente geral.
+        return totalPago > total ? round(totalPago - total) : 0;
     })();
 
     // Adicionar produto ao carrinho
@@ -340,8 +356,7 @@ export const usePDV = () => {
             carrinho: [],
             cliente: null,
             emailRecibo: '',
-            formaPagamentoSelecionada: 'dinheiro',
-            valorRecebido: 0,
+            pagamentos: [],
             observacoes: '',
             descontoGeral: 0,
             descontoPercentual: false,
@@ -358,12 +373,9 @@ export const usePDV = () => {
             throw new Error('Selecione um cliente para continuar');
         }
 
-        const formaPg = formasPagamento.find(f => f.tipo === formaPagamentoSelecionada);
-
-        if (formaPg?.permite_troco) {
-            if (valorRecebido < (total - 0.01)) {
-                throw new Error(`Valor recebido insuficiente. Faltam R$ ${(total - valorRecebido).toFixed(2)}`);
-            }
+        const totalPago = round(pagamentos.reduce((sum, p) => sum + p.valor, 0));
+        if (totalPago < (total - 0.01)) {
+            throw new Error(`Valor recebido insuficiente (R$ ${totalPago.toFixed(2)}). Faltam R$ ${(total - totalPago).toFixed(2)}`);
         }
 
         setLoading(true);
@@ -379,8 +391,12 @@ export const usePDV = () => {
                 subtotal,
                 desconto: descontoTotal,
                 total,
-                paymentMethod: formaPagamentoSelecionada,
-                valor_recebido: formaPg?.permite_troco ? valorRecebido : total,
+                pagamentos: pagamentos.map(p => ({
+                    forma_pagamento: p.forma,
+                    valor: p.valor,
+                    bandeira: p.bandeira
+                })),
+                valor_recebido: totalPago,
                 troco,
                 cliente_id: cliente?.id ? Number(cliente.id) : null,
                 email_destino: emailRecibo.trim() || undefined,
@@ -391,9 +407,9 @@ export const usePDV = () => {
             const venda = await pdvService.finalizarVenda(vendaData);
 
             // ── Alerta de Sangria ──────────────────────────────────────────
-            // Se a venda foi em dinheiro, verifica o saldo no caixa
-            const LIMITE_SANGRIA = 500; // R$ — ajuste conforme política da loja
-            if (formaPagamentoSelecionada === 'dinheiro') {
+            const totalDinheiro = pagamentos.filter(p => p.forma === 'dinheiro').reduce((sum, p) => sum + p.valor, 0);
+            const LIMITE_SANGRIA = 500;
+            if (totalDinheiro > 0) {
                 try {
                     const resumo = await pdvService.getResumoCaixa();
                     const saldoDinheiro = resumo?.por_forma?.dinheiro ?? resumo?.saldo_atual ?? 0;
@@ -404,7 +420,7 @@ export const usePDV = () => {
                         );
                     }
                 } catch {
-                    // Alerta de sangria é não-crítico — não bloqueia o fluxo
+                    // Alerta de sangria é não-crítico
                 }
             }
 
@@ -432,10 +448,10 @@ export const usePDV = () => {
         emailRecibo,
         setEmailRecibo,
         formasPagamento,
-        formaPagamentoSelecionada,
-        setFormaPagamentoSelecionada,
-        valorRecebido,
-        setValorRecebido,
+        pagamentos,
+        setPagamentos,
+        adicionarPagamento,
+        removerPagamento,
         observacoes,
         setObservacoes,
         descontoGeral,

@@ -438,19 +438,31 @@ const DashboardPage: React.FC = () => {
       console.log('📊 Período retornado pelo backend:', response.data?.metadata?.period_days);
 
       // 🔥 MAPEAR ESTRUTURA DO BACKEND PARA O FORMATO ESPERADO PELO FRONTEND
-      const backendData = response.data.data;
+      // 🔥 BACKEND PAYLOAD CORRIGIDO (Ação obrigatória)
+      const backendPayload = response.data?.data || response.data;
+      console.log('🔥 BACKEND PAYLOAD CORRIGIDO:', backendPayload);
+      const backendData = backendPayload;
+
+      if (!backendData || Object.keys(backendData).length === 0) {
+        setError('Nenhum dado encontrado para o período.');
+        setLoading(false);
+        return;
+      }
+
       const financials = backendData?.financials || {};
 
-      // 🔥 CORREÇÃO: Usar dados financeiros pré-calculados pelo backend (Unica Fonte de Verdade)
-      const totalVendas = financials.revenue || backendData?.summary?.revenue?.value || 0;
-      const cogs = financials.cogs || 0; // Custo das Mercadorias Vendidas (Real)
-      const totalDespesas = financials.expenses || backendData?.total_despesas || 0;
+      // 🔥 SENIOR FIX: Mapeamento Ultra-Resiliente para evitar indicadores zerados
+      const totalVendas = Number(financials.revenue) ||
+        Number(backendData?.summary?.revenue?.value) ||
+        Number(backendData?.summary?.sales_current?.value) ||
+        Number(backendData?.faturamento) || 0;
 
-      const lucroBruto = financials.gross_profit || (totalVendas - cogs);
-      const lucroLiquido = financials.net_profit || (lucroBruto - totalDespesas);
-
-      const margemLucro = financials.net_margin || (totalVendas > 0 ? (lucroLiquido / totalVendas) * 100 : 0);
-      const roiMensal = financials.roi || 0;
+      const cogs = Number(financials.cogs) || 0;
+      const totalDespesas = Number(backendData?.total_despesas) || Number(backendData?.expenses) || Number(backendData?.summary?.expenses?.value) || 0;
+      const lucroBruto = Number(financials.gross_profit) || Number(backendData?.summary?.gross_profit?.value) || (totalVendas - cogs);
+      const lucroLiquido = Number(financials.net_profit) || Number(backendData?.summary?.net_profit?.value) || (lucroBruto - totalDespesas);
+      const margemLucro = totalVendas > 0 ? (lucroLiquido / totalVendas) * 100 : 0;
+      const roiMensal = Number(financials.roi) || Number(backendData?.summary?.roi?.value) || 0;
 
       // Valor do estoque (Ativo) - Diferente de COGS (Despesa)
       const valorEstoqueAtivo = backendData?.inventory?.custo_total || 0;
@@ -902,12 +914,18 @@ const DashboardPage: React.FC = () => {
     </div>
   );
 
-  const { hoje, mes, rh, analise_produtos, analise_financeira, insights_cientificos = {
-    correlações: [],
-    anomalias: [],
-    previsoes: [],
-    recomendacoes_otimizacao: []
-  }, analise_temporal = {
+  const hoje = data.data?.summary || {};
+  const mes = data.data?.summary || {};
+  const analise_financeira = data.data?.financials || {};
+  const rh = data.data?.rh || {};
+  const analise_produtos = data.data?.analise_produtos || {};
+  const insights_cientificos = {
+    correlações: data.data?.correlations || [],
+    anomalias: data.data?.anomalies || [],
+    previsoes: data.data?.previsoes || [],
+    recomendacoes_otimizacao: data.data?.recomendacoes || []
+  };
+  const { analise_temporal = {
     tendencia_vendas: [],
     sazonalidade: [],
     comparacao_meses: [],
@@ -1147,14 +1165,14 @@ const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           {
-            title: 'Faturamento',
+            title: 'Faturamento Realizado',
             periodo: `Últimos ${periodoDias} dias`,
             value: `R$ ${(mes?.total_vendas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: mes?.crescimento_mensal || 0,
             icon: DollarIcon,
             color: 'from-green-500 to-emerald-600',
             subtitle: `${mes?.margem_lucro?.toFixed(1) || 0}% de margem`,
-            key: `faturamento-${periodoDias}` // 🔥 Key única para forçar re-render
+            key: `faturamento-final-v10-${periodoDias}`
           },
           {
             title: 'Lucro Líquido',

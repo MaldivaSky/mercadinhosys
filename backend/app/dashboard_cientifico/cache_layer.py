@@ -19,6 +19,12 @@ class SmartCache:
     _lock = threading.Lock()
 
     @classmethod
+    def clear(cls):
+        """Limpa todo o cache"""
+        with cls._lock:
+            cls._cache = {}
+
+    @classmethod
     def get(cls, key: str, max_age_seconds: int = 300) -> Optional[Any]:
         """
         Obtém valor do cache se não estiver expirado

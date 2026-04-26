@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Rotas para Sistema de Controle de Ponto
 """
@@ -668,7 +669,7 @@ def atualizar_configuracao():
         if 'raio_permitido_metros' in data:
             config.raio_permitido_metros = data['raio_permitido_metros']
         
-        config.updated_at = datetime.utcnow()
+        config.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         return jsonify({
@@ -748,7 +749,7 @@ def ajustar_ponto(registro_id):
         if 'minutos_atraso' in data:
             registro.minutos_atraso = int(data['minutos_atraso'])
         
-        registro.updated_at = datetime.utcnow()
+        registro.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         logger.info(f"✅ Ponto ajustado: {registro.funcionario.nome} - {registro.data} {registro.hora}")

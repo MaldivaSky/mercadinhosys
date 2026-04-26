@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 Models Layer - Algoritmos científicos práticos
 Foco: Utilidade imediata sem complexidade excessiva
@@ -565,7 +566,7 @@ class PracticalModels:
         correlations: List[Dict[str, Any]] = []
         
         try:
-            start_date = datetime.utcnow() - timedelta(days=365)
+            start_date = datetime.now(timezone.utc) - timedelta(days=365)
             
             # Determinar ID do estabelecimento
             target_est_id = establishment_id
@@ -612,7 +613,8 @@ class PracticalModels:
                 # 2️⃣ Hora do Dia vs Volume de Vendas
                 try:
                     from app.utils.query_helpers import get_hour_extract
-                    # print("DEBUG: Executing Hourly Sales Query...")
+                    db = _get_db()
+
                     hourly_sales = db.session.query(
                         get_hour_extract(Venda.data_venda).label('hora'),
                         func.sum(Venda.total).label('total')
@@ -660,12 +662,14 @@ class PracticalModels:
                         if market_insight:
                              correlations.append(market_insight)
                 except Exception as e:
+                    db = _get_db()
                     db.session.rollback()
                     logger.warning(f"Error in Hourly Sales: {e}")
 
                 # 3️⃣ Dia da Semana vs Ticket Médio
                 try:
                     from app.utils.query_helpers import get_dow_extract
+                    db = _get_db()
                     dow_sales = db.session.query(
                         get_dow_extract(Venda.data_venda).label('dia'),
                         func.avg(Venda.total).label('ticket_medio')
@@ -714,11 +718,13 @@ class PracticalModels:
                         if market_insight:
                             correlations.append(market_insight)
                 except Exception as e:
+                    db = _get_db()
                     db.session.rollback()
                     logger.warning(f"Error in Day Sales: {e}")
 
                 # 4️⃣ Variedade de Produtos (Mix) vs Faturamento Diário
                 try:
+                    db = _get_db()
                     mix_diario = db.session.query(
                         func.date(Venda.data_venda).label('data'),
                         func.count(func.distinct(VendaItem.produto_id)).label('produtos_unicos'),
@@ -766,6 +772,7 @@ class PracticalModels:
                         if market_insight:
                             correlations.append(market_insight)
                 except Exception as e:
+                    db = _get_db()
                     db.session.rollback()
                     logger.warning(f"Error in Product Mix: {e}")
 

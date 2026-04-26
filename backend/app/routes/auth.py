@@ -1,3 +1,4 @@
+from datetime import timezone
 from flask import Blueprint, request, jsonify, current_app
 
 from flask_jwt_extended import (
@@ -92,7 +93,7 @@ def health_check():
 
         "environment": environment,
 
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
 
         "version": "2.0.0"
 
@@ -276,7 +277,7 @@ def setup_db():
 
                     estado="SP",
 
-                    data_abertura=datetime.utcnow().date()
+                    data_abertura=datetime.now(timezone.utc).date()
 
                 )
 
@@ -306,7 +307,7 @@ def setup_db():
 
                 cargo="Gerente",
 
-                data_admissao=datetime.utcnow().date(),
+                data_admissao=datetime.now(timezone.utc).date(),
 
                 role="ADMIN",
 
@@ -578,7 +579,7 @@ def login():
 
             "plano": plano_estabelecimento,  # 🎯 PLANO SaaS para controle de acesso
 
-            "login_time": datetime.utcnow().isoformat()
+            "login_time": datetime.now(timezone.utc).isoformat()
 
         }
 
@@ -774,9 +775,9 @@ def bootstrap_admin():
 
                 ativo=True,
 
-                data_abertura=datetime.utcnow().date(),
+                data_abertura=datetime.now(timezone.utc).date(),
 
-                data_cadastro=datetime.utcnow(),
+                data_cadastro=datetime.now(timezone.utc),
 
             )
 
@@ -816,7 +817,7 @@ def bootstrap_admin():
 
             status="ativo",
 
-            data_admissao=datetime.utcnow().date(),
+            data_admissao=datetime.now(timezone.utc).date(),
 
             salario_base=Decimal("3500.00"),
 
@@ -970,7 +971,7 @@ def refresh():
 
             "is_super_admin": claims.get("is_super_admin", False),
 
-            "refresh_time": datetime.utcnow().isoformat(),
+            "refresh_time": datetime.now(timezone.utc).isoformat(),
 
             "ip_address": request.remote_addr,
 
@@ -1344,7 +1345,7 @@ def logout():
 
                     "message": "Logout realizado com sucesso",
 
-                    "logout_time": datetime.utcnow().isoformat(),
+                    "logout_time": datetime.now(timezone.utc).isoformat(),
 
                 }
 
@@ -1428,7 +1429,7 @@ def get_profile():
 
         # Estatísticas do usuário (se aplicável)
 
-        hoje = datetime.utcnow().date()
+        hoje = datetime.now(timezone.utc).date()
 
         total_vendas_hoje = 0
 
@@ -2014,7 +2015,7 @@ def password_reset_request():
 
         funcionario.reset_token = reset_token
 
-        funcionario.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+        funcionario.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
 
         db.session.commit()
 
@@ -2302,7 +2303,7 @@ def guest_demo():
 
             "estabelecimento_nome": demo_est.nome_fantasia,
 
-            "login_time": datetime.utcnow().isoformat(),
+            "login_time": datetime.now(timezone.utc).isoformat(),
 
             "status": "ativo",
 

@@ -5,6 +5,8 @@ import { deliveryService, Motorista, Veiculo } from './deliveryService';
 import { productsService } from '../products/productsService';
 import { customerService } from '../customers/customerService';
 import toast from 'react-hot-toast';
+import MultiPaymentManager, { PagamentoItem } from '../pdv/components/MultiPaymentManager';
+import { FormaPagamentoPDV } from '../pdv/pdvService';
 
 interface Props {
     isOpen: boolean;
@@ -35,7 +37,6 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         veiculo_id: '',
         taxa_entrega: 0,
         distancia_km: 5,
-        forma_pagamento: 'dinheiro',
         endereco_cep: '',
         endereco_logradouro: '',
         endereco_numero: '',
@@ -43,6 +44,15 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         endereco_referencia: '',
         observacoes: ''
     });
+
+    const [pagamentosDelivery, setPagamentosDelivery] = useState<PagamentoItem[]>([]);
+    const formasDisponiveis: FormaPagamentoPDV[] = [
+        { tipo: 'dinheiro', label: 'Dinheiro', taxa: 0, permite_troco: true },
+        { tipo: 'pix', label: 'PIX', taxa: 0, permite_troco: false },
+        { tipo: 'cartao_credito', label: 'C. Crédito', taxa: 0, permite_troco: false },
+        { tipo: 'cartao_debito', label: 'C. Débito', taxa: 0, permite_troco: false },
+        { tipo: 'fiado', label: 'Fiado', taxa: 0, permite_troco: false },
+    ];
 
     useEffect(() => {
         if (isOpen) {
@@ -74,10 +84,11 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         setCart([]);
         setLogistics({
             motorista_id: '', veiculo_id: '', taxa_entrega: 0,
-            distancia_km: 5, forma_pagamento: 'dinheiro',
+            distancia_km: 5,
             endereco_cep: '', endereco_logradouro: '', endereco_numero: '',
             endereco_bairro: '', endereco_referencia: '', observacoes: ''
         });
+        setPagamentosDelivery([]);
     };
 
     const addToCart = (product: any) => {
@@ -114,6 +125,13 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         if (cart.length === 0) return toast.error("Adicione itens ao carrinho");
         if (!logistics.motorista_id || !logistics.veiculo_id) return toast.error("Selecione motorista e veículo");
 
+        const totalVenda = calculateTotal();
+        const totalPago = pagamentosDelivery.reduce((sum, p) => sum + p.valor, 0);
+
+        if (totalPago < (totalVenda - 0.01)) {
+            return toast.error(`Valor pago insuficiente (R$ ${totalPago.toFixed(2)}). Faltam R$ ${(totalVenda - totalPago).toFixed(2)}`);
+        }
+
         try {
             setLoading(true);
             const payload = {
@@ -121,6 +139,11 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
                 itens: cart,
                 subtotal: calculateTotal() - logistics.taxa_entrega,
                 total: calculateTotal(),
+                pagamentos: pagamentosDelivery.map(p => ({
+                    forma_pagamento: p.forma,
+                    valor: p.valor,
+                    bandeira: p.bandeira
+                })),
                 ...logistics
             };
             const res = await deliveryService.criarVendaEntrega(payload);
@@ -274,6 +297,24 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
                                             <option value="">Selecione o Veículo</option>
                                             {veiculos.map(v => <option key={v.id} value={v.id}>{v.placa} - {v.modelo} ({v.tipo})</option>)}
                                         </select>
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4" /> Pagamento Delivery
+                                    </h3>
+                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700">
+                                        <MultiPaymentManager
+                                            totalVenda={calculateTotal()}
+                                            formasDisponiveis={formasDisponiveis}
+                                            pagamentosatuais={pagamentosDelivery}
+                                            onAdicionar={(forma, valor, bandeira) => {
+                                                const novo = { id: Date.now().toString(), forma, valor, bandeira };
+                                                setPagamentosDelivery([...pagamentosDelivery, novo]);
+                                            }}
+                                            onRemover={(id) => setPagamentosDelivery(pagamentosDelivery.filter(p => p.id !== id))}
+                                        />
                                     </div>
                                 </section>
 

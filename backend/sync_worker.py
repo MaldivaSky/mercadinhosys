@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 MercadinhoSys - SyncWorker Background Service
 Responsável por sincronizar dados locais (SQLite) com a nuvem (PostgreSQL)
@@ -11,10 +12,9 @@ import logging
 import requests
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import text
 
 from app import create_app, db
-from app.models import SyncQueue, SyncLog, Estabelecimento
+from app.models import SyncQueue, Estabelecimento
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class SyncWorker:
         self.app = create_app()
         self.cloud_api_url = os.getenv("CLOUD_API_URL", "https://mercadinhosys.onrender.com")
         self.sync_token = os.getenv("CLOUD_SYNC_TOKEN", "")
-        self.worker_interval = int(os.getenv("SYNC_WORKER_INTERVAL", "30"))  # segundos
+        self.worker_interval = int(os.getenv("SYNC_WORKER_INTERVAL", "30"))
         self.max_retries = int(os.getenv("SYNC_MAX_RETRIES", "3"))
         self.is_running = False
         
@@ -65,10 +65,7 @@ class SyncWorker:
             try:
                 with self.app.app_context():
                     self._process_pending_syncs()
-                    
-                # Aguardar próximo ciclo
                 time.sleep(self.worker_interval)
-                
             except Exception as e:
                 logger.error(f"❌ Erro no ciclo de sync: {e}")
                 time.sleep(self.worker_interval)
@@ -92,7 +89,6 @@ class SyncWorker:
             logger.info("Sem conexão com a nuvem. Sync adiado.")
             return
         
-        # Buscar itens pendentes (limitado para evitar sobrecarga)
         pending_items = SyncQueue.query.filter_by(status="pendente")\
                                      .filter(SyncQueue.tentativas < self.max_retries)\
                                      .order_by(SyncQueue.created_at)\
@@ -109,8 +105,7 @@ class SyncWorker:
                 success = self._sync_item(item)
                 if success:
                     item.status = "sincronizado"
-                    item.tentativas += 1
-                    item.synced_at = datetime.utcnow()
+                    item.synced_at = datetime.now(timezone.utc)
                     item.mensagem_erro = None
                     logger.info(f"✅ Item {item.id} sincronizado com sucesso")
                 else:
@@ -119,22 +114,17 @@ class SyncWorker:
                         item.status = "erro"
                         item.mensagem_erro = "Máximo de tentativas atingido"
                         logger.error(f"❌ Item {item.id} marcado como erro (máx tentativas)")
-                    
             except Exception as e:
                 item.tentativas += 1
                 item.mensagem_erro = str(e)
                 logger.error(f"❌ Erro ao sincronizar item {item.id}: {e}")
-                
                 if item.tentativas >= self.max_retries:
                     item.status = "erro"
-            
             finally:
                 db.session.commit()
     
     def _sync_item(self, item: SyncQueue) -> bool:
         """Sincroniza um item individual com a nuvem"""
-        
-        # Preparar payload para API
         payload = {
             "tabela": item.tabela,
             "registro_id": item.registro_id,
@@ -143,8 +133,6 @@ class SyncWorker:
             "payload": json.loads(item.payload_json) if item.payload_json else None,
             "timestamp": item.created_at.isoformat() if item.created_at else None
         }
-        
-        # Fazer requisição para API na nuvem
         try:
             response = requests.post(
                 f"{self.cloud_api_url}/api/sync/receive",
@@ -156,14 +144,12 @@ class SyncWorker:
                 },
                 timeout=30
             )
-            
             if response.status_code == 200:
                 result = response.json()
                 return result.get("success", False)
             else:
                 logger.error(f"❌ Erro HTTP {response.status_code}: {response.text}")
                 return False
-                
         except requests.exceptions.Timeout:
             logger.error(f"⏱️ Timeout na sincronização do item {item.id}")
             return False
@@ -173,23 +159,6 @@ class SyncWorker:
         except Exception as e:
             logger.error(f"💥 Erro na requisição do item {item.id}: {e}")
             return False
-    
-    def _create_sync_log(self, operation: str, status: str, payload: Dict[str, Any], 
-                        result: Optional[Dict[str, Any]] = None, error: Optional[str] = None):
-        """Cria um registro de log da sincronização"""
-        try:
-            log = SyncLog(
-                estabelecimento_id=1,  # Ajustar conforme necessário
-                operacao=operation,
-                status=status,
-                payload_json=json.dumps(payload),
-                resultado_json=json.dumps(result) if result else None,
-                mensagem_erro=error
-            )
-            db.session.add(log)
-            db.session.commit()
-        except Exception as e:
-            logger.error(f"❌ Erro ao criar sync log: {e}")
 
 def main():
     """Função principal para executar o SyncWorker"""
@@ -197,7 +166,6 @@ def main():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
     worker = SyncWorker()
     worker.start()
 

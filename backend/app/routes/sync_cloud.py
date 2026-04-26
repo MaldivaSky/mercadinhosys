@@ -1,3 +1,4 @@
+from datetime import timezone
 """
 MercadinhoSys - Cloud Sync Receiver
 API para receber dados sincronizados dos clientes locais
@@ -86,7 +87,7 @@ def receber_sincronia():
             return jsonify({
                 "success": True,
                 "message": "Dados sincronizados com sucesso",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
         else:
             if os.environ.get("AIVEN_DATABASE_URL"):
