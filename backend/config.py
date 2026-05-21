@@ -66,8 +66,17 @@ else:
         print(f"[DB: HYBRID] Mode: ONLINE | No Cloud URL found. Fallback to Local SQLite.")
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-fallback-secret-key-12345"
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or "dev-fallback-jwt-key-67890"
+    _secret_key = os.environ.get("SECRET_KEY")
+    _jwt_secret = os.environ.get("JWT_SECRET_KEY")
+    
+    if os.environ.get("FLASK_ENV") == "production":
+        if not _secret_key:
+            raise ValueError("CRITICAL: SECRET_KEY não configurada no ambiente de produção!")
+        if not _jwt_secret:
+            raise ValueError("CRITICAL: JWT_SECRET_KEY não configurada no ambiente de produção!")
+
+    SECRET_KEY = _secret_key or "dev-fallback-secret-key-12345"
+    JWT_SECRET_KEY = _jwt_secret or "dev-fallback-jwt-key-67890"
 
     SQLALCHEMY_DATABASE_URI = _sqlalchemy_database_uri
     USING_POSTGRES = _using_postgres

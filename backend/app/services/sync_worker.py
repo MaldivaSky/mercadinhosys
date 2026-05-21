@@ -35,17 +35,18 @@ class GuerrillaSyncWorker(threading.Thread):
     def sync_deltas(self):
         """Processa a fila de sincronização"""
         with self.app.app_context():
-            pendentes = AuditoriaSincronia.query.filter_by(status="pendente").order_by(SyncQueue.created_at.asc()).limit(50).all()
+            # BUGFIX: SyncQueue não existe, deve ser AuditoriaSincronia
+            pendentes = AuditoriaSincronia.query.filter_by(status="pendente").order_by(AuditoriaSincronia.created_at.asc()).limit(50).all()
             
             if not pendentes:
                 return
 
-            print(f"🔄 Sincronizador: Processando {len(pendentes)} mutações...")
+            self.app.logger.info(f"🔄 Sincronizador: Processando {len(pendentes)} mutações...")
             
             for sync_item in pendentes:
                 try:
                     res = self.envio_para_nuvem(sync_item)
-                    print(f"📡 Item {sync_item.id} -> {sync_item.tabela}: Envio {'SUCESSO' if res else 'FALHA'}")
+                    self.app.logger.info(f"📡 Item {sync_item.id} -> {sync_item.tabela}: Envio {'SUCESSO' if res else 'FALHA'}")
                     if res:
                         sync_item.status = "sincronizado"
                         sync_item.data_sincronia = datetime.now(timezone.utc)
@@ -55,16 +56,16 @@ class GuerrillaSyncWorker(threading.Thread):
                             sync_item.status = "erro"
                             sync_item.msg_erro = "Máximo de tentativas atingido"
                 except Exception as e:
-                    print(f"❌ Erro individual no item {sync_item.id}: {e}")
+                    self.app.logger.error(f"❌ Erro individual no item {sync_item.id}: {e}")
                     sync_item.tentativas += 1
                     sync_item.msg_erro = str(e)
             
             try:
                 db.session.commit()
-                print("💾 Sincronizador: Commit realizado na fila local.")
+                self.app.logger.info("💾 Sincronizador: Commit realizado na fila local.")
             except Exception as e:
                 db.session.rollback()
-                print(f"💥 Erro no commit da fila: {e}")
+                self.app.logger.error(f"💥 Erro no commit da fila: {e}")
 
     def envio_para_nuvem(self, sync_item):
         """Simula ou executa o envio do delta para o banco central"""
@@ -91,16 +92,16 @@ class GuerrillaSyncWorker(threading.Thread):
 
     def run(self):
         """Loop principal do worker"""
-        print(f"📡 Worker de Sincronia de Guerrilha iniciado (Frequência: {self.intervalo_check}s)")
+        self.app.logger.info(f"📡 Worker de Sincronia de Guerrilha iniciado (Frequência: {self.intervalo_check}s)")
         
         while True:
             if self.check_internet():
                 try:
                     self.sync_deltas()
                 except Exception as e:
-                    print(f"❌ Erro durante sincronização: {str(e)}")
+                    self.app.logger.error(f"❌ Erro durante sincronização: {str(e)}")
             else:
-                print("📶 Sem internet. Aguardando sinal para sincronizar...")
+                self.app.logger.warning("📶 Sem internet. Aguardando sinal para sincronizar...")
                 
             time.sleep(self.intervalo_check)
 

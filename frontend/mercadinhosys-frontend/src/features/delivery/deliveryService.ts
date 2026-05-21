@@ -73,7 +73,7 @@ export const deliveryService = {
     },
 
     getMotoristas: async (somenteDisponiveis: boolean = true) => {
-        const response = await apiClient.get(`/delivery/motoristas${somenteDisponiveis ? '?disponiveis=true' : ''}`);
+        const response = await apiClient.get(`/delivery/motoristas${somenteDisponiveis ? '?ativos=true' : '?ativos=false'}`);
         return response.data;
     },
 
@@ -114,6 +114,11 @@ export const deliveryService = {
 
     criarVeiculo: async (data: CreateVeiculoData) => {
         const response = await apiClient.post('/delivery/veiculos', data);
+        return response.data;
+    },
+
+    getRastreamento: async (id: number) => {
+        const response = await apiClient.get(`/delivery/rastreamento/${id}`);
         return response.data;
     }
 };

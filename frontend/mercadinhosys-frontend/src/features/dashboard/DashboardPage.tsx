@@ -5,7 +5,7 @@ import {
   TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
   ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
   DollarSign as DollarIcon, Target as TargetIcon, AlertCircle, Shield, CheckCircle, UsbProxy, Pickaxe, BookText, Fingerprint, Focus, Ghost, GlassWater, Hammer, HeartPulse, HeartHandshake, Home, Locate, Lock, LogOut, FileText,
-  TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
+  TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart, BarChart,
   LineChart as LineChartIcon, TrendingDown, RefreshCw, X, Clock, Lightbulb, Users, ArrowRight
 } from 'lucide-react';
 import {
@@ -720,11 +720,12 @@ const DashboardPage: React.FC = () => {
           receivables: backendData?.receivables, // 🔥 NOVO: Dados de Recebíveis Avançados
           fiados_ativos: backendData?.fiados_ativos || [],
           fiado_summary: backendData?.fiado_summary || {
-            total_fiado: 0,
-            quantidade_clientes: 0,
-            vencido: 0,
-            a_vencer: 0
+            total_fiado: backendData?.fiado?.total_aberto || 0,
+            quantidade_clientes: backendData?.fiado?.clientes_com_fiado || 0,
+            vencido: backendData?.fiado?.vencido || backendData?.receivables?.total_vencido || 0,
+            a_vencer: backendData?.fiado?.a_vencer || backendData?.receivables?.total_a_vencer || 0
           },
+          rfm: backendData?.rfm || { segments: {}, window_days: 180 },
           analise_produtos: {
             curva_abc: backendData?.abc || { produtos: [], resumo: { A: { quantidade: 0, faturamento_total: 0, percentual: 0 }, B: { quantidade: 0, faturamento_total: 0, percentual: 0 }, C: { quantidade: 0, faturamento_total: 0, percentual: 0 } }, pareto_80_20: false },
             produtos_estrela: produtosEstrela,
@@ -1160,6 +1161,452 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 🔥 NOVO: SEÇÃO 1 - VISÃO GERAL (KPIs) - JÁ EXISTE, MANTIDA */}
+      {/* 🔥 NOVO: SEÇÃO 2 - ANÁLISE DETALHADA (Curva ABC, RFM) */}
+      {viewMode === 'detalhado' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+              <BarChartIcon className="w-8 h-8 text-green-600 dark:text-green-500" />
+              📊 Análise Detalhada - Curva ABC & RFM
+            </h2>
+
+            {/* Curva ABC - Cards com Barras */}
+            <div className="mb-8">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <TargetIcon className="w-5 h-5 text-green-600" />
+                Curva ABC de Produtos
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {['A', 'B', 'C'].map((classe) => {
+                  const dados = analise_produtos?.curva_abc?.resumo?.[classe as 'A' | 'B' | 'C'];
+                  const totalABC = (analise_produtos?.curva_abc?.resumo?.A?.faturamento_total || 0) +
+                    (analise_produtos?.curva_abc?.resumo?.B?.faturamento_total || 0) +
+                    (analise_produtos?.curva_abc?.resumo?.C?.faturamento_total || 0);
+                  const percentual = totalABC > 0 ? (dados?.faturamento_total || 0) / totalABC * 100 : 0;
+
+                  return (
+                    <div key={classe} className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800/50 dark:to-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${classe === 'A' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                          classe === 'B' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
+                            'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+                          }`}>
+                          {classe}
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${classe === 'A' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                          classe === 'B' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
+                            'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+                          }`}>
+                          {dados?.percentual?.toFixed(1) || 0}% do faturamento
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-slate-600 dark:text-slate-400">Faturamento</span>
+                            <span className="font-bold text-slate-900 dark:text-white">R$ {(dados?.faturamento_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                            <div className={`h-2 rounded-full ${classe === 'A' ? 'bg-green-500' : classe === 'B' ? 'bg-yellow-500' : 'bg-red-500'}`}
+                              style={{ width: `${percentual}%` }}></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-600 dark:text-slate-400">Produtos</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{dados?.quantidade || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* RFM Analysis */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-5 rounded-xl border border-blue-200 dark:border-blue-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <h4 className="font-bold text-blue-900 dark:text-blue-400">Recência (R)</h4>
+                </div>
+                <p className="text-3xl font-black text-blue-700 dark:text-blue-300 mb-1">
+                  {data?.data?.rfm?.recencia_media?.toFixed(0) || 0} dias
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400">Média de dias desde última compra</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 p-5 rounded-xl border border-purple-200 dark:border-purple-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <TargetIcon className="w-5 h-5 text-purple-600" />
+                  <h4 className="font-bold text-purple-900 dark:text-purple-400">Frequência (F)</h4>
+                </div>
+                <p className="text-3xl font-black text-purple-700 dark:text-purple-300 mb-1">
+                  {data?.data?.rfm?.frequencia_media?.toFixed(1) || 0}x
+                </p>
+                <p className="text-xs text-purple-600 dark:text-purple-400">Número médio de compras</p>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/10 dark:to-green-900/10 p-5 rounded-xl border border-emerald-200 dark:border-emerald-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <DollarIcon className="w-5 h-5 text-emerald-600" />
+                  <h4 className="font-bold text-emerald-900 dark:text-emerald-400">Monetário (M)</h4>
+                </div>
+                <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 mb-1">
+                  R$ {(data?.data?.rfm?.valor_medio_compra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">Valor médio por compra</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 NOVO: SEÇÃO 3 - ANÁLISE TEMPORAL (Gráficos de Tendência) */}
+      {viewMode === 'detalhado' && (
+        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl mb-8 overflow-hidden border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+          <div
+            className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            onClick={() => toggleCard('analise-temporal')}
+          >
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-8 h-8 text-purple-600 dark:text-purple-500" />
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white transition-colors">Análise Temporal de Vendas</h2>
+                <p className="text-slate-600 dark:text-slate-400">Tendência • Sazonalidade • Previsões</p>
+              </div>
+            </div>
+            <ChevronDown className={`w-6 h-6 text-gray-500 transform transition-transform ${expandedCards['analise-temporal'] ? 'rotate-180' : ''}`} />
+          </div>
+
+          {expandedCards['analise-temporal'] && (
+            <div className="p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* LineChart para Tendência de Vendas */}
+                <div className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-900/50 p-6 rounded-2xl border border-purple-200 dark:border-purple-500/20 lg:col-span-2">
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-6 text-lg flex items-center gap-2">
+                    <LineChartIcon className="w-5 h-5 text-purple-600 dark:text-purple-500" />
+                    Evolução das Vendas (30 dias)
+                  </h3>
+                  <div className="h-[300px]">
+                    {analise_temporal?.tendencia_vendas?.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={analise_temporal?.tendencia_vendas || []}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                          <XAxis
+                            dataKey="data"
+                            tick={{ fontSize: 12 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis tick={{ fontSize: 12 }} />
+                          <Tooltip
+                            content={({ payload, label }) => (
+                              <div className="bg-white dark:bg-slate-800 p-4 shadow-xl rounded-xl border border-slate-200 dark:border-slate-700">
+                                <p className="font-bold text-slate-900 dark:text-white">{label}</p>
+                                {payload?.map((entry, index) => (
+                                  <p key={index} className="text-sm" style={{ color: entry.color }}>
+                                    {entry.name}: R$ {entry.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="vendas"
+                            stroke="#8b5cf6"
+                            strokeWidth={3}
+                            dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                            name="Vendas Diárias"
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="previsao"
+                            stroke="#ef4444"
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={false}
+                            name="Previsão"
+                            connectNulls={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <LineChartIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500">Dados de tendência não disponíveis</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 🔥 NOVO: SEÇÃO 4 - INSIGHTS (Anomalias, Recomendações) */}
+      {viewMode === 'avancado' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+              <Brain className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+              🔍 Insights Científicos - Anomalias & Recomendações
+            </h2>
+
+            {/* Anomalias (Cards Vermelhos, Clicáveis) */}
+            <div className="mb-8">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+                ⚠️ Anomalias Detectadas
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {insights_cientificos?.anomalias?.slice(0, 6).map((anomalia: any, idx: number) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedAnomaly(anomalia)}
+                    className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/10 dark:to-rose-900/10 p-5 rounded-xl border border-red-200 dark:border-red-500/30 hover:shadow-lg hover:border-red-400 dark:hover:border-red-600 cursor-pointer transition-all duration-300"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="px-2 py-1 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 text-xs font-bold rounded-full">
+                        {anomalia.tipo || 'Anomalia'}
+                      </span>
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                    </div>
+                    <h4 className="font-bold text-slate-900 dark:text-white mb-2 line-clamp-2">{anomalia.descricao || anomalia.mensagem || 'Anomalia detectada'}</h4>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-red-600 dark:text-red-400 font-bold">
+                        Impacto: R$ {(anomalia.impacto_estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Confiança: {anomalia.confianca || 85}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {insights_cientificos?.anomalias?.length === 0 && (
+                  <div className="col-span-3 bg-green-50 dark:bg-green-900/10 p-6 rounded-xl border border-green-200 dark:border-green-500/20 text-center">
+                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                    <p className="text-green-700 dark:text-green-400 font-bold">Nenhuma anomalia detectada no período</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Recomendações (Cards Azuis, Clicáveis) */}
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <Lightbulb className="w-5 h-5 text-blue-600" />
+                💡 Recomendações de Otimização
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {insights_cientificos?.recomendacoes_otimizacao?.slice(0, 6).map((rec: any, idx: number) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedRecommendation(rec)}
+                    className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-5 rounded-xl border border-blue-200 dark:border-blue-500/30 hover:shadow-lg hover:border-blue-400 dark:hover:border-blue-600 cursor-pointer transition-all duration-300"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-full">
+                        {rec.area || 'Geral'}
+                      </span>
+                      <Lightbulb className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <h4 className="font-bold text-slate-900 dark:text-white mb-2 line-clamp-2">{rec.acao || 'Recomendação'}</h4>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-blue-600 dark:text-blue-400 font-bold">
+                        Impacto: R$ {(rec.impacto_esperado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {rec.complexidade ? rec.complexidade.charAt(0).toUpperCase() + rec.complexidade.slice(1) : 'Média'} complexidade
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {insights_cientificos?.recomendacoes_otimizacao?.length === 0 && (
+                  <div className="col-span-3 bg-amber-50 dark:bg-amber-900/10 p-6 rounded-xl border border-amber-200 dark:border-amber-500/20 text-center">
+                    <Lightbulb className="w-12 h-12 text-amber-600 mx-auto mb-2" />
+                    <p className="text-amber-700 dark:text-amber-400 font-bold">Nenhuma recomendação disponível no momento</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 NOVO: SEÇÃO 5 - RH (Funcionários, Horas, Folha) */}
+      {viewMode === 'rh' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+              <Users className="w-8 h-8 text-purple-600 dark:text-purple-500" />
+              👥 Análise de Recursos Humanos
+            </h2>
+
+            {/* Cards de Métricas de RH (3 métricas) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/10 dark:to-indigo-900/10 p-5 rounded-xl border border-purple-200 dark:border-purple-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-5 h-5 text-purple-600" />
+                  <h4 className="font-bold text-purple-900 dark:text-purple-400">Funcionários Ativos</h4>
+                </div>
+                <p className="text-3xl font-black text-purple-700 dark:text-purple-300">
+                  {data?.data?.rh?.funcionarios_ativos || 0}
+                </p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Colaboradores registrados</p>
+              </div>
+              <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-900/10 dark:to-red-900/10 p-5 rounded-xl border border-orange-200 dark:border-orange-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-5 h-5 text-orange-600" />
+                  <h4 className="font-bold text-orange-900 dark:text-orange-400">Custo Folha Mensal</h4>
+                </div>
+                <p className="text-3xl font-black text-orange-700 dark:text-orange-300">
+                  R$ {data?.data?.rh?.custo_folha_estimado?.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) || 0}
+                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Salários + Benefícios + Extras</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 p-5 rounded-xl border border-green-200 dark:border-green-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <TargetIcon className="w-5 h-5 text-green-600" />
+                  <h4 className="font-bold text-green-900 dark:text-green-400">Taxa de Pontualidade</h4>
+                </div>
+                <p className="text-3xl font-black text-green-700 dark:text-green-300">
+                  {data?.data?.rh?.taxa_pontualidade?.toFixed(1) || 0}%
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">Atrasos registrados no mês</p>
+              </div>
+            </div>
+
+            {/* Tabela de Atrasos por Funcionário */}
+            <div className="bg-white dark:bg-slate-800/30 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-slate-600" />
+                Atrasos por Funcionário (Mês)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 dark:bg-slate-700/50">
+                    <tr>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white">Funcionário</th>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white">Cargo</th>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white text-right">Ocorrências</th>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white text-right">Minutos</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                    {data?.data?.rh?.atrasos_por_funcionario_mes?.slice(0, 5).map((row: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{row.nome}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{row.cargo}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${row.atrasos_qtd > 0 ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'}`}>
+                            {row.atrasos_qtd}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">{row.minutos_atraso}m</td>
+                      </tr>
+                    ))}
+                    {(!data?.data?.rh?.atrasos_por_funcionario_mes || data.data.rh.atrasos_por_funcionario_mes.length === 0) && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">Sem dados de atrasos no mês</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔥 NOVO: SEÇÃO 6 - Fiados (Total, Vencidas, Clientes) */}
+      {viewMode === 'financeiro' && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+              <DollarIcon className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+              💰 Análise de Fiados e Crédito
+            </h2>
+
+            {/* Cards de Métricas de Fiados (3 métricas, cores diferenciadas) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 p-5 rounded-xl border border-amber-200 dark:border-amber-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarIcon className="w-5 h-5 text-amber-600" />
+                  <h4 className="font-bold text-amber-900 dark:text-amber-400">Total Fiado</h4>
+                </div>
+                <p className="text-3xl font-black text-amber-700 dark:text-amber-300">
+                  R$ {data?.data?.fiado_summary?.total_fiado?.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) || 0}
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Dívida ativa em aberto</p>
+              </div>
+              <div className="bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/10 dark:to-rose-900/10 p-5 rounded-xl border border-red-200 dark:border-red-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <h4 className="font-bold text-red-900 dark:text-red-400">Vencidas (Risco)</h4>
+                </div>
+                <p className="text-3xl font-black text-red-700 dark:text-red-300">
+                  R$ {data?.data?.fiado_summary?.vencido?.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) || 0}
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">Dívidas atrasadas</p>
+              </div>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-5 rounded-xl border border-blue-200 dark:border-blue-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <h4 className="font-bold text-blue-900 dark:text-blue-400">Clientes com Fiado</h4>
+                </div>
+                <p className="text-3xl font-black text-blue-700 dark:text-blue-300">
+                  {data?.data?.fiado_summary?.quantidade_clientes || 0}
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Clientes com débitos ativos</p>
+              </div>
+            </div>
+
+            {/* Ranking de Devedores */}
+            <div className="bg-white dark:bg-slate-800/30 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+              <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                Top Devedores (Maior Risco)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 dark:bg-slate-700/50">
+                    <tr>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white">Cliente</th>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white text-right">Saldo Devedor</th>
+                      <th className="px-4 py-3 font-bold text-slate-900 dark:text-white text-right">Dias Atraso</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                    {data?.data?.fiados_ativos?.slice(0, 5).map((fiado: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{fiado.cliente_nome}</td>
+                        <td className="px-4 py-3 text-right font-bold text-red-600 dark:text-red-400">
+                          R$ {fiado.total_debitos.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${fiado.dias_atraso > 30 ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'}`}>
+                            {fiado.dias_atraso} dias
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!data?.data?.fiados_ativos || data.data.fiados_ativos.length === 0) && (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">Nenhum fiado ativo</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPIs PRINCIPAIS - COM INDICADOR DE PERÍODO */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

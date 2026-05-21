@@ -12,10 +12,10 @@ class MasterSeeder:
         """
         Orquestração Master: HQ, Super Admin e Povoamento Industrial de Cenários.
         """
-        print("🚀 [MASTER SEEDER] - INICIANDO ENGENHARIA DE DADOS INDUSTRIAL")
+        print("[MASTER SEEDER] - INICIANDO ENGENHARIA DE DADOS INDUSTRIAL")
         
         # 1. HQ MERCADINHOSYS (RAFAEL MALDIVAS)
-        print("👑 Criando HQ e Super Admin (Rafael)...")
+        print("[HQ] Criando HQ e Super Admin (Rafael)...")
         end_hq = {
             "cep": "69000-000", "logradouro": "Alameda Master SaaS", "numero": "1", 
             "bairro": "Distrito Industrial", "cidade": "Manaus", "estado": "AM", "pais": "Brasil"
@@ -52,8 +52,8 @@ class MasterSeeder:
                 celular="(92) 99911-2233",
                 data_nascimento=date(1985, 5, 20),
                 data_admissao=date(2023, 1, 1),
-                ativo=True,
-                **end_hq
+                ativo=True
+                # Funcionario não tem campos de endereço - removido **end_hq
             )
             # Tenta set_senha primeiro (padrão do modelo), fallback para set_password
             if hasattr(rafael, 'set_senha'):
@@ -83,7 +83,7 @@ class MasterSeeder:
         simulator = ChronicleSimulator(app)
 
         for config in tenants_config:
-            print(f"\n📦 [PROVISIONANDO] {config['nome']} | {config['meses']} meses de história...")
+            print(f"\n[PROVISIONANDO] {config['nome']} | {config['meses']} meses de história...")
             
             dna = DNAFactory.get_dna(config['dna'])
             end_tenant = RealisticInjector.get_endereco_random()
@@ -118,8 +118,8 @@ class MasterSeeder:
                     celular="(92) 98888-0000",
                     data_nascimento=date(1980, 1, 1),
                     data_admissao=est.data_abertura,
-                    ativo=True,
-                    **end_tenant
+                    ativo=True
+                    # Funcionario não tem campos de endereço
                 )
                 dono.set_password("admin123")
                 db.session.add(dono)
@@ -138,8 +138,8 @@ class MasterSeeder:
                     celular="(92) 97777-0000",
                     data_nascimento=date(1995, 1, 1),
                     data_admissao=est.data_abertura,
-                    ativo=True,
-                    **end_tenant
+                    ativo=True
+                    # Funcionario não tem campos de endereço
                 )
                 operador.set_password("caixa123")
                 db.session.add(operador)

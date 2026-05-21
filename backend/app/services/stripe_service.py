@@ -1,8 +1,8 @@
 import stripe
 import os
-from flask import url_for
+from flask import url_for, current_app
 from app.models import Estabelecimento, db
-from datetime import datetime
+from datetime import datetime, timezone
 
 class StripeService:
     def __init__(self):
@@ -16,8 +16,6 @@ class StripeService:
         self.publishable_key = os.getenv('STRIPE_PUBLIC_KEY', '')
         # Preços em centavos (BRL) por plano
         self.PLAN_PRICES = {
-            'Basic': 4990,      # R$ 49,90/mês
-            'Advanced': 6990,   # R$ 69,90/mês
             'Premium': 9990     # R$ 99,90/mês
         }
 
@@ -71,7 +69,7 @@ class StripeService:
             )
             return checkout_session.url
         except Exception as e:
-            print(f"Erro ao criar checkout: {str(e)}")
+            current_app.logger.error(f"Erro ao criar checkout: {str(e)}")
             raise e
 
     def _get_or_create_customer(self, estab, email):
@@ -89,7 +87,7 @@ class StripeService:
         return customer.id
 
     def _get_price_amount(self, plan_name):
-        return self.PLAN_PRICES.get(plan_name, 2990)
+        return self.PLAN_PRICES.get(plan_name, 9990)
 
     def handle_webhook(self, payload, sig_header):
         """
@@ -143,7 +141,7 @@ class StripeService:
         if estab:
             # period_end é timestamp unix
             period_end = invoice['lines']['data'][0]['period']['end']
-            estab.vencimento_assinatura = datetime.fromtimestamp(period_end)
+            estab.vencimento_assinatura = datetime.fromtimestamp(period_end, tz=timezone.utc)
             estab.plano_status = 'ativo'
             db.session.commit()
 

@@ -83,7 +83,7 @@ const LandingPage: React.FC = () => {
         }
     };
 
-    const handlePlanSelect = (tier: any) => {
+    const handlePlanSelect = (tier: { name: string, price: string }) => {
         setSelectedPlan({ name: tier.name, price: tier.price });
         setConversionModalOpen(true);
     };
@@ -162,51 +162,19 @@ const LandingPage: React.FC = () => {
 
     const tiers = [
         {
-            name: 'Basic',
-            price: 'R$ 49,90',
-            period: '/mês',
-            description: 'Para quem quer sair do caderno e profissionalizar a gestão.',
-            features: [
-                'Até 500 produtos ativos',
-                'PDV Híbrido (Online/Offline)',
-                'Gestão de Estoque Essencial',
-                'Relatórios Mensais de Vendas',
-                'Suporte Garantido'
-            ],
-            cta: 'Dominar meu Bairro',
-            highlight: false
-        },
-        {
-            name: 'Advanced',
-            price: 'R$ 69,90',
-            period: '/mês',
-            description: 'A potência científica para quem quer dobrar o lucro.',
-            features: [
-                'Produtos Ilimitados',
-                'Dashboard Científico Completo',
-                'Análise de Correlação (Vendas vs Horário)',
-                'Segmentation RFM de Clientes',
-                'Previsão de Demanda para 30 dias (Forecast)',
-                'Curva ABC Dinâmica de Estoque'
-            ],
-            cta: 'Ativar Modo Ciência',
-            highlight: true
-        },
-        {
             name: 'Premium',
             price: 'R$ 99,90',
             period: '/mês',
-            description: 'Controle total de redes e grandes volumes de dados.',
+            description: 'A potência científica e o controle total para quem quer dominar o lucro local.',
             features: [
-                'Multi-estabelecimentos (Redes)',
-                'Auditoria de Perdas & Furtos',
-                'Relatórios de ROI por Categoria',
-                'Detecção de Anomalias Financeiras',
-                'Plano de Resgate Financeiro Personalizado',
-                'Gestão de RH & Holerite Integrado'
+                'Terminais PDV Ultra-Rápidos Ilimitados',
+                'Dashboard Científico Completo (IA & RFM)',
+                'Estoque Híbrido com Análise Automática de Rupturas',
+                'Previsão de Demanda para 30 dias (Forecast)',
+                'Backup Atômico Sincronizado Offline-First'
             ],
-            cta: 'Escalar meu Império',
-            highlight: false
+            cta: 'Ativar Modo Premium',
+            highlight: true
         }
     ];
 
@@ -863,7 +831,7 @@ const LandingPage: React.FC = () => {
                         <p className="text-xl text-gray-500 font-medium leading-relaxed">Planos desenhados para escalar seu lucro através de ciência de dados e automação extrema.</p>
                     </div>
 
-                    <div className="grid lg:grid-cols-3 gap-8 items-stretch">
+                    <div className="flex justify-center max-w-lg mx-auto">
                         {tiers.map((tier, idx) => (
                             <motion.div
                                 key={idx}

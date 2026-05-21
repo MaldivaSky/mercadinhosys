@@ -4,6 +4,7 @@ from app.services.stripe_service import StripeService
 from app.models import Estabelecimento, Funcionario, db
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import logging
+from app.middleware.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ def create_checkout():
         claims = get_jwt()
 
         data = request.get_json() or {}
-        plan_name = data.get('plan_name', 'Basic')
+        plan_name = data.get('plan_name', 'Premium')
 
         # Buscar estabelecimento_id primeiro via JWT claims (mais eficiente)
         estabelecimento_id = claims.get('estabelecimento_id')
@@ -63,6 +64,7 @@ def create_checkout():
 
 
 @stripe_bp.route('/public-checkout', methods=['POST'])
+@limiter.limit("5 per minute")
 def public_checkout():
     """
     Cria uma conta e inicia o checkout para novos clientes da Landing Page.
@@ -75,7 +77,7 @@ def public_checkout():
         email = data.get('email')
         whatsapp = data.get('whatsapp')
         nome_loja = data.get('nome_loja')
-        plan_name = data.get('plan_name', 'Basic')
+        plan_name = data.get('plan_name', 'Premium')
 
         if not email or not nome_loja:
             return jsonify({'success': False, 'message': 'Email e nome da loja são obrigatórios'}), 400
@@ -88,7 +90,7 @@ def public_checkout():
         novo_estab = Estabelecimento(
             nome_fantasia=nome_loja,
             razao_social=nome_loja,
-            cnpj="00.000.000/0001-00", # Placeholder
+            cnpj=None,                 # Removido placeholder para evitar colisão UNIQUE
             telefone=whatsapp or "(00) 0000-0000",
             email=email,
             cep="00000-000",           # Placeholder
@@ -110,7 +112,7 @@ def public_checkout():
             nome="Proprietário",
             username=email.split('@')[0],
             email=email,
-            cpf="000.000.000-00",        # Placeholder
+            cpf=None,                    # Removido placeholder para evitar colisão UNIQUE
             data_nascimento=datetime(1990, 1, 1).date(), # Placeholder
             celular=whatsapp or "(00) 00000-0000",
             role="ADMIN",
@@ -158,6 +160,7 @@ def public_checkout():
 
 
 @stripe_bp.route('/webhook', methods=['POST'])
+@limiter.limit("60 per minute")
 def webhook():
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get('Stripe-Signature')

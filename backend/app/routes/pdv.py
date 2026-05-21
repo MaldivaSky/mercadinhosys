@@ -691,6 +691,12 @@ def finalizar_venda():
         if not data:
             return jsonify({"error": "Dados não fornecidos"}), 400
 
+        # Carregar Estabelecimento para validação de plano
+        estab_id = funcionario_data.get("estabelecimento_id")
+        from app.models import Estabelecimento
+        estabelecimento = Estabelecimento.query.get(estab_id)
+        is_saas_admin = funcionario_data.get("is_super_admin", False)
+        
         items = data.get("items", [])
         if not items:
             return jsonify({"error": "Nenhum produto na venda"}), 400
@@ -699,14 +705,57 @@ def finalizar_venda():
         subtotal = to_decimal(data.get("subtotal", 0))
         desconto = to_decimal(data.get("desconto", 0))
         total = to_decimal(data.get("total", 0))
-        forma_pagamento = data.get("paymentMethod", "dinheiro")
-        valor_recebido = to_decimal(data.get("valor_recebido", total))
+        
+        # 🔥 NOVO: Suporte a múltiplos pagamentos
+        pagamentos_data = data.get("pagamentos", [])
+        
+        # Compatibilidade com sistema antigo (pagamento único)
+        if not pagamentos_data:
+            forma_pagamento = data.get("paymentMethod", "dinheiro")
+            valor_recebido = to_decimal(data.get("valor_recebido", total))
+            pagamentos_data = [{
+                "forma": forma_pagamento,
+                "valor": valor_recebido
+            }]
+        
         troco = to_decimal(data.get("troco", 0))
         email_destino = data.get("email_destino")
 
         # Início do processo atômico
+        # 1. VALIDAÇÃO DE REGRAS DE NEGÓCIO (PLANO E CRÉDITO)
+        tem_fiado = any((p.get("forma") or p.get("forma_pagamento", "")).lower() == "fiado" for p in pagamentos_data)
+        if tem_fiado and not is_saas_admin:
+            # Trava de Plano SaaS (Gratuito/Pro vs Premium/Basic)
+            plano_atual = (estabelecimento.plano or "Basic").upper()
+            if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
+                return jsonify({
+                    "error": "FUNCIONALIDADE_RESTRITA", 
+                    "message": "Seu plano não permite vendas no FIADO/VOUCHER."
+                }), 403
+            
+            if not cliente_id:
+                return jsonify({
+                    "error": "CLIENTE_OBRIGATORIO", 
+                    "message": "Vendas no FIADO exigem identificação do cliente."
+                }), 400
+            
+            # Validação de Limite de Crédito (Sincronizado com vendas.py)
+            cliente = Cliente.query.get(cliente_id)
+            if not cliente:
+                 return jsonify({"error": "CLIENTE_NAO_ENCONTRADO"}), 404
+            
+            valor_fiado = sum(to_decimal(p.get("valor", 0)) for p in pagamentos_data if (p.get("forma") or p.get("forma_pagamento", "")).lower() == "fiado")
+            limite = float(cliente.limite_credito or 0)
+            saldo_devedor = float(cliente.saldo_devedor or 0)
+            
+            if limite > 0 and (saldo_devedor + float(valor_fiado)) > limite:
+                return jsonify({
+                    "error": "LIMITE_EXCEDIDO",
+                    "message": f"Cliente sem limite. Disponível: R$ {limite - saldo_devedor:.2f}"
+                }), 403
+
+        # 2. VERIFICAR CAIXA ABERTO OBRIGATÓRIO (RBAC/CASHIER)
         try:
-            # 1. VERIFICAR CAIXA ABERTO OBRIGATÓRIO (RBAC/CASHIER)
             from app.models import Caixa, MovimentacaoCaixa
             caixa_aberto = Caixa.query.filter_by(
                 funcionario_id=funcionario_data.get("id"),
@@ -724,7 +773,9 @@ def finalizar_venda():
             manaus_tz = pytz.timezone('America/Manaus')
             data_venda = datetime.now(manaus_tz)
 
-            estab_id = funcionario_data.get("estabelecimento_id")
+            total_recebido = sum(to_decimal(p.get("valor", 0)) for p in pagamentos_data)
+            troco_calculado = max(Decimal('0'), total_recebido - total)
+
             nova_venda = Venda(
                 codigo=codigo_venda,
                 estabelecimento_id=estab_id,
@@ -734,8 +785,8 @@ def finalizar_venda():
                 subtotal=subtotal,
                 desconto=desconto,
                 total=total,
-                valor_recebido=valor_recebido,
-                troco=troco,
+                valor_recebido=total_recebido,
+                troco=troco_calculado,
                 status="finalizada",
                 data_venda=data_venda,
                 quantidade_itens=len(items),
@@ -744,22 +795,44 @@ def finalizar_venda():
             db.session.add(nova_venda)
             db.session.flush()
 
-            # Criar registro de pagamento (Novo sistema multi-pagamento)
+            # NOVO: Criar registros de pagamento (um por forma)
             from app.models import Pagamento
-            novo_pagamento = Pagamento(
-                estabelecimento_id=estab_id,
-                venda_id=nova_venda.id,
-                forma_pagamento=forma_pagamento,
-                valor=valor_recebido, # No PDV simples é o valor total recebido
-                status="aprovado",
-                data_pagamento=data_venda
-            )
-            db.session.add(novo_pagamento)
+            total_pagamentos = Decimal('0')
+            tem_fiado = False
+            valor_fiado = Decimal('0')
+            
+            for pagamento_info in pagamentos_data:
+                forma = pagamento_info.get("forma") or pagamento_info.get("forma_pagamento", "dinheiro")
+                valor = to_decimal(pagamento_info.get("valor", 0))
+                
+                novo_pagamento = Pagamento(
+                    estabelecimento_id=estab_id,
+                    venda_id=nova_venda.id,
+                    forma_pagamento=forma,
+                    valor=valor,
+                    codigo_voucher=pagamento_info.get("referencia"),
+                    status="aprovado",
+                    data_pagamento=data_venda
+                )
+                db.session.add(novo_pagamento)
+                total_pagamentos += valor
+                
+                if forma.lower() == "fiado":
+                    tem_fiado = True
+                    valor_fiado += valor
+            
+            # Validar que soma dos pagamentos >= total da venda (suporte a troco)
+            if total_pagamentos < (total - Decimal('0.01')):
+                db.session.rollback()
+                return jsonify({
+                    "success": False,
+                    "error": "PAGAMENTO_INSUFICIENTE",
+                    "message": f"Soma dos pagamentos (R$ {float(total_pagamentos):.2f}) é inferior ao total da venda (R$ {float(total):.2f})"
+                }), 400
 
             itens_formatados_para_resposta = []
 
             for item_data in items:
-                # Suporte a múltiplos nomes de campos
                 produto_id = item_data.get("id") or item_data.get("productId") or item_data.get("produto_id")
                 quantidade = to_decimal(item_data.get("quantity") or item_data.get("quantidade", 1), precision=3)
 
@@ -768,19 +841,17 @@ def finalizar_venda():
                     db.session.rollback()
                     return jsonify({"error": f"Produto {produto_id} não encontrado"}), 404
 
-                # Comparação segura com 3 casas
                 if to_decimal(produto.quantidade, precision=3) < quantidade:
                     db.session.rollback()
                     return jsonify({"error": f"Estoque insuficiente: {produto.nome}"}), 400
 
                 preco_unitario = to_decimal(item_data.get("price") or item_data.get("preco_unitario", produto.preco_venda))
                 total_item = to_decimal(preco_unitario * quantidade, precision=2)
-
                 margem_lucro_real = to_decimal((preco_unitario - to_decimal(produto.preco_custo or 0)) * quantidade, precision=2)
 
                 novo_item = VendaItem(
                     venda_id=nova_venda.id,
-                    estabelecimento_id=estab_id, # Herança robusta via variável local
+                    estabelecimento_id=estab_id,
                     produto_id=produto.id,
                     produto_nome=produto.nome,
                     produto_codigo=produto.codigo_interno or produto.codigo_barras,
@@ -793,7 +864,6 @@ def finalizar_venda():
                 db.session.add(novo_item)
 
                 estoque_anterior = to_decimal(produto.quantidade, precision=3)
-                # SUBTRAÇÃO BLINDADA: Evita resíduos tipo -0.001
                 produto.quantidade = to_decimal(estoque_anterior - quantidade, precision=3)
 
                 mov = MovimentacaoEstoque(
@@ -817,24 +887,33 @@ def finalizar_venda():
                     "total": float(total_item)
                 })
 
-            # Registrar Movimentação no Caixa
-            mov_caixa = MovimentacaoCaixa(
-                caixa_id=caixa_aberto.id,
-                estabelecimento_id=funcionario_data.get("estabelecimento_id"),
-                tipo="venda",
-                valor=total,
-                forma_pagamento=forma_pagamento,
-                venda_id=nova_venda.id,
-                descricao=f"Venda PDV {codigo_venda}"
-            )
-            db.session.add(mov_caixa)
+            for pagamento_info in pagamentos_data:
+                forma = (pagamento_info.get("forma") or pagamento_info.get("forma_pagamento") or "dinheiro")
+                valor = to_decimal(pagamento_info.get("valor", 0))
+                
+                if forma.lower() != "fiado":
+                    mov_caixa = MovimentacaoCaixa(
+                        caixa_id=caixa_aberto.id if caixa_aberto else None,
+                        estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                        tipo="venda",
+                        valor=valor,
+                        forma_pagamento=forma,
+                        venda_id=nova_venda.id,
+                        descricao=f"Venda PDV {codigo_venda} - {forma}"
+                    )
+                    db.session.add(mov_caixa)
+                    
+                    if forma.lower() == "dinheiro" and caixa_aberto:
+                        # LÓGICA DE TROCO: O troco é subtraído prioritariamente da entrada em dinheiro
+                        entrada_dinheiro = float(valor)
+                        if troco_calculado > 0:
+                            valor_abatido = min(Decimal(entrada_dinheiro), troco_calculado)
+                            entrada_dinheiro -= float(valor_abatido)
+                            troco_calculado -= valor_abatido
+                        
+                        caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual) + entrada_dinheiro
 
-            # ========================
-            # LÓGICA DE FIADO
-            # ========================
-            forma_lower = str(forma_pagamento).lower()
-            if forma_lower == "fiado":
-                # Fiado exige cliente cadastrado
+            if tem_fiado:
                 if not cliente_id:
                     db.session.rollback()
                     return jsonify({
@@ -848,67 +927,39 @@ def finalizar_venda():
                     db.session.rollback()
                     return jsonify({"success": False, "error": "Cliente não encontrado"}), 404
 
-                # Incrementar saldo devedor
-                cliente.saldo_devedor = float(cliente.saldo_devedor or 0) + float(total)
+                cliente.saldo_devedor = float(cliente.saldo_devedor or 0) + float(valor_fiado)
 
-                # Criar ContaReceber para rastreabilidade financeira
-                data_vencimento_str = data.get("data_vencimento_fiado")
-                data_vencimento = None
-                if data_vencimento_str:
-                    try:
-                        data_vencimento = datetime.strptime(data_vencimento_str, "%Y-%m-%d").date()
-                    except Exception:
-                        pass
-                if not data_vencimento:
-                    from datetime import timedelta
-                    data_vencimento = (data_venda + timedelta(days=30)).date()
-
+                from datetime import timedelta
                 from app.models import ContaReceber
+                data_vencimento = (data_venda + timedelta(days=30)).date()
                 conta = ContaReceber(
                     estabelecimento_id=funcionario_data.get("estabelecimento_id"),
                     cliente_id=cliente_id,
                     venda_id=nova_venda.id,
                     numero_documento=codigo_venda,
-                    valor_original=total,
-                    valor_atual=total,
+                    valor_original=valor_fiado,
+                    valor_atual=valor_fiado,
                     data_emissao=data_venda.date(),
                     data_vencimento=data_vencimento,
                     status="aberto",
                     observacoes=f"Fiado PDV - {cliente.nome}. Venda fiado em {data_venda.strftime('%d/%m/%Y')}"
                 )
                 db.session.add(conta)
-                # Não entra dinheiro no caixa (é fiado)
-            elif forma_lower == "dinheiro":
-                # Atualizar saldo apenas se for dinheiro (caixa físico)
-                caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual) + float(total)
 
-            # ========================
-            # ATUALIZAR MÉTRICAS DO CLIENTE
-            # ========================
-            # Independente da forma de pagamento, toda venda com cliente
-            # deve atualizar os campos de agregação (total_compras, valor_total_gasto, ultima_compra)
-            if cliente_id and forma_lower != "fiado":
-                # Para fiado o cliente já foi carregado acima; para outros buscamos aqui
-                cliente_para_metrica = Cliente.query.get(cliente_id)
-                if cliente_para_metrica:
-                    cliente_para_metrica.total_compras = int(cliente_para_metrica.total_compras or 0) + 1
-                    cliente_para_metrica.valor_total_gasto = float(cliente_para_metrica.valor_total_gasto or 0) + float(total)
-                    cliente_para_metrica.ultima_compra = data_venda
-            elif cliente_id and forma_lower == "fiado":
-                # cliente já está em memória da seção fiado acima (variável 'cliente')
-                if cliente:
-                    cliente.total_compras = int(cliente.total_compras or 0) + 1
-                    cliente.valor_total_gasto = float(cliente.valor_total_gasto or 0) + float(total)
-                    cliente.ultima_compra = data_venda
-            
-            # Auditoria Global (SaaS Monitor)
+            if cliente_id:
+                cl_metrica = Cliente.query.get(cliente_id)
+                if cl_metrica:
+                    cl_metrica.total_compras = int(cl_metrica.total_compras or 0) + 1
+                    cl_metrica.valor_total_gasto = float(cl_metrica.valor_total_gasto or 0) + float(total)
+                    cl_metrica.ultima_compra = data_venda
+
             Auditoria.registrar(
                 estabelecimento_id=funcionario_data.get("estabelecimento_id"),
                 tipo_evento="venda_finalizada",
                 descricao=f"Venda {codigo_venda} finalizada - Total: R$ {float(total):.2f}",
                 usuario_id=funcionario_data.get("id"),
                 valor=total,
-                detalhes={"codigo": codigo_venda, "itens": len(items), "forma_pagamento": forma_pagamento}
+                detalhes={"codigo": codigo_venda}
             )
 
             db.session.commit()
@@ -925,13 +976,9 @@ def finalizar_venda():
             }), 201
 
         except Exception as e:
-            import traceback
             db.session.rollback()
-            trace = traceback.format_exc()
-            current_app.logger.error(f"ERRO TRANSAÇÃO PDV: {str(e)}\n{trace}")
-            with open('backend_finalizar_erro.txt', 'a', encoding='utf-8') as f:
-                f.write(f"\n--- ERRO TRANSAÇÃO ---\n{str(e)}\n{trace}\n")
-            return jsonify({"error": "Erro ao salvar venda no banco", "details": str(e), "trace": trace}), 500
+            current_app.logger.error(f"ERRO PDV: {str(e)}")
+            return jsonify({"error": "Erro ao salvar venda", "details": str(e)}), 500
 
     except Exception as e:
         import traceback
