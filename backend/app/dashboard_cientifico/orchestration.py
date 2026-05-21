@@ -988,7 +988,17 @@ class DashboardOrchestrator:
             "product_hourly_recommendations": product_hourly_recommendations,
             "category_performance_by_time": category_performance_by_time,
             "abc": abc_analysis,
-            "rfm": {"segments": segments, "window_days": rfm_analysis.get("window_days", 180)},
+            "rfm": {"segments": segments, "window_days": rfm_analysis.get("window_days", 180),
+                    "recencia_media": rfm_analysis.get("customers", []) and round(
+                        sum(c.get("recency_days", 0) for c in rfm_analysis.get("customers", [])) / len(rfm_analysis.get("customers", [])), 1
+                    ) or 0,
+                    "frequencia_media": rfm_analysis.get("customers", []) and round(
+                        sum(c.get("frequency", 0) for c in rfm_analysis.get("customers", [])) / len(rfm_analysis.get("customers", [])), 1
+                    ) or 0,
+                    "valor_medio_compra": rfm_analysis.get("customers", []) and round(
+                        sum(c.get("monetary", 0) for c in rfm_analysis.get("customers", [])) / len(rfm_analysis.get("customers", [])), 2
+                    ) or 0,
+            },
             "recomendacoes": recomendacoes,
             "correlations": correlations,
             "anomalies": anomalies,

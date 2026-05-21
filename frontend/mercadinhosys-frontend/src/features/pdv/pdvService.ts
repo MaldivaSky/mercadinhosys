@@ -76,7 +76,8 @@ export interface FinalizarVendaRequest {
     desconto: number;
     total: number;
     pagamentos: {
-        forma_pagamento: string;
+        forma?: string; // Novo padrão
+        forma_pagamento?: string; // Mantido para compatibilidade
         valor: number;
         bandeira?: string;
     }[];

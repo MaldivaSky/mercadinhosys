@@ -113,7 +113,8 @@ class MultiTenantManager:
             db_name = f"tenant_{estabelecimento_id}"
             
             # Criar banco de dados
-            cursor.execute(f"CREATE DATABASE {db_name}")
+            from psycopg2 import sql
+            cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
             conn.commit()
             
             # Conectar ao novo banco e criar schema

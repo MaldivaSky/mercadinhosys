@@ -82,6 +82,40 @@ def listar_veiculos():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@delivery_bp.route("/veiculos", methods=["POST"])
+@tenant_or_super_admin_required
+def criar_veiculo():
+    """Cadastra um novo veículo da frota."""
+    try:
+        data = request.get_json() or {}
+
+        veiculo = Veiculo(
+            estabelecimento_id=request.allowed_estabelecimento_id,
+            motorista_id=data.get("motorista_id"),
+            placa=(data.get("placa") or "").upper(),
+            tipo=data.get("tipo", "carro"),
+            marca=data.get("marca"),
+            modelo=data.get("modelo"),
+            ano=data.get("ano"),
+            cor=data.get("cor"),
+            capacidade_kg=Decimal(str(data.get("capacidade_kg", 0))),
+            capacidade_m3=Decimal(str(data.get("capacidade_m3", 0))),
+            proprietario=data.get("proprietario", "motorista"),
+            valor_aluguel=Decimal(str(data.get("valor_aluguel", 0))),
+            km_atual=Decimal(str(data.get("km_atual", 0))),
+            consumo_medio=Decimal(str(data.get("consumo_medio", 15))),
+            ativo=bool(data.get("ativo", True)),
+            disponivel=bool(data.get("disponivel", True)),
+        )
+
+        db.session.add(veiculo)
+        db.session.commit()
+        return jsonify({"success": True, "veiculo": veiculo.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar veículo: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # ==================== TAXAS DE ENTREGA ====================
 
 @delivery_bp.route("/taxas", methods=["GET"])
@@ -243,6 +277,31 @@ def atualizar_status(id):
         return jsonify({"success": True, "entrega": entrega.to_dict()})
     except Exception as e:
         db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@delivery_bp.route("/rastreamento/<int:id>", methods=["GET"])
+@tenant_or_super_admin_required
+def obter_rastreamento(id):
+    """Retorna timeline e dados de rastreamento de uma entrega."""
+    try:
+        entrega = Entrega.query.filter_by(
+            id=id,
+            estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+
+        rastreamentos = (
+            RastreamentoEntrega.query.filter_by(entrega_id=entrega.id)
+            .order_by(RastreamentoEntrega.data_hora.asc())
+            .all()
+        )
+
+        return jsonify({
+            "success": True,
+            "entrega": entrega.to_dict(),
+            "timeline": [item.to_dict() for item in rastreamentos],
+        })
+    except Exception as e:
+        logger.error(f"Erro ao obter rastreamento da entrega {id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @delivery_bp.route("/venda-entrega", methods=["POST"])

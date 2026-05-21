@@ -166,7 +166,7 @@ class Estabelecimento(db.Model, EnderecoMixin, SerializableMixin, AuditMixin):
     tema_principal = db.Column(db.String(50), default="blue")
     configuracoes_json = db.Column(db.Text, default="{}")
     ativo = db.Column(db.Boolean, default=True)
-    data_abertura = db.Column(db.Date, nullable=False)
+    data_abertura = db.Column(db.Date, nullable=False, default=date.today)
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     
     # Campos de Assinatura e Integração

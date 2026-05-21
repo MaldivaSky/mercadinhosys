@@ -126,7 +126,7 @@ class RealisticInjector:
     @classmethod
     def inject_all_modules(cls, estabelecimento_id):
         """Orquestrador Master de Injeção em TODAS as tabelas"""
-        print(f"🏢 Popolando Estabelecimento {estabelecimento_id} (Universal Seeder)...")
+        print(f"[SEED] Popolando Estabelecimento {estabelecimento_id} (Universal Seeder)...")
         # 1. Foundation
         forns = cls.inject_fornecedores(estabelecimento_id)
         cls.inject_clientes(estabelecimento_id)
@@ -204,15 +204,23 @@ class RealisticInjector:
         funcs = Funcionario.query.filter_by(estabelecimento_id=est_id).all()
         for f in funcs:
             for b in bens:
-                fb = FuncionarioBeneficio(funcionario_id=f.id, beneficio_id=b.id, valor=b.valor_padrao, ativo=True)
+                fb = FuncionarioBeneficio(
+                    estabelecimento_id=est_id,
+                    funcionario_id=f.id,
+                    beneficio_id=b.id,
+                    valor=b.valor_padrao,
+                    ativo=True
+                )
                 db.session.add(fb)
             
             # Banco Horas (Histórico)
             bh = BancoHoras(
-                funcionario_id=f.id, mes_referencia="2024-03", 
-                saldo_minutos=600, # 10 horas
-                horas_trabalhadas_minutos=9600, # 160h
-                horas_esperadas_minutos=9000, # 150h
+                estabelecimento_id=est_id,
+                funcionario_id=f.id,
+                mes_referencia="2024-03",
+                saldo_minutos=600,  # 10 horas
+                horas_trabalhadas_minutos=9600,  # 160h
+                horas_esperadas_minutos=9000,  # 150h
                 valor_hora_extra=Decimal("150.00")
             )
             db.session.add(bh)
@@ -316,13 +324,20 @@ class RealisticInjector:
                 estabelecimento_id=est_id, nome=f"Admin {est_id}", username=username, cargo=config['c'],
                 role=config['r'], cpf=cls.generate_cpf(), email=f"{username}@mercadinho.com.br",
                 celular="(11) 98888-7777", data_nascimento=date(1990,1,1), data_admissao=date(2023,1,1),
-                salario_base=3000, ativo=True, **cls.get_endereco_random()
+                salario_base=3000, ativo=True
+                # Funcionario não tem campos de endereço
             )
             f.set_password("admin123" if not scenario_key else "adminElite123")
             db.session.add(f)
             db.session.flush()
             # Preferências
-            pref = FuncionarioPreferencias(funcionario_id=f.id, tema_escuro=True, idioma="pt-BR", sidebar_colapsada=False)
+            pref = FuncionarioPreferencias(
+                estabelecimento_id=est_id,
+                funcionario_id=f.id,
+                tema_escuro=True,
+                idioma="pt-BR",
+                sidebar_colapsada=False
+            )
             db.session.add(pref)
 
     @classmethod

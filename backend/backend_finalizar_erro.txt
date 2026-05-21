@@ -1,0 +1,9 @@
+
+--- ERRO TRANSAÇÃO ---
+cannot access local variable 'cliente' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/app/routes/pdv.py", line 932, in finalizar_venda
+    cliente.total_compras = int(cliente.total_compras or 0) + 1
+                                ^^^^^^^
+UnboundLocalError: cannot access local variable 'cliente' where it is not associated with a value
+

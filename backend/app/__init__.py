@@ -123,6 +123,8 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    from app.middleware.rate_limit import limiter
+    limiter.init_app(app)
 
     # Callbacks JWT: unificar falhas de autenticação como 401 (ERP/API padrão)
     # Evita 422 para token inválido; frontend trata apenas 401 (refresh ou redirect)

@@ -4,7 +4,7 @@ from flask_jwt_extended import get_jwt
 
 PLAN_HIERARCHY = {
     'Gratuito': 1,
-    'Pro': 2,
+    'Premium': 2,
     'Superadmin': 99
 }
 
@@ -42,12 +42,12 @@ def plan_required(min_plan='Gratuito'):
                 current_plan = claims.get('plano', 'Gratuito')
                 current_status = claims.get('plano_status', 'ativo')
 
-            # Normalização Sênior (SÓ PRO E GRATUITO EXISTEM AGORA)
+            # Normalização Sênior (SÓ PREMIUM E GRATUITO EXISTEM AGORA)
             def normalize_plan(p):
                 """Normalização Sênior unificada com o sistema de autenticação"""
                 s = str(p or 'Gratuito').lower().strip()
                 if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago', 'basic', 'basico']):
-                    return 'Pro'
+                    return 'Premium'
                 return 'Gratuito'
 
             user_plan_norm = normalize_plan(current_plan)
@@ -59,7 +59,7 @@ def plan_required(min_plan='Gratuito'):
             if user_level < required_level:
                 return jsonify({
                     "success": False,
-                    "error": f"Acesso Negado: O Plano {user_plan_norm} não inclui esta ferramenta. Upgrade para Pro necessário.",
+                    "error": f"Acesso Negado: O Plano {user_plan_norm} não inclui esta ferramenta. Upgrade para Premium necessário.",
                     "code": "PLAN_RESTRICTED"
                 }), 403
             
@@ -96,11 +96,11 @@ def quota_required(model_name):
                 
                 plano = (est.plano or 'Gratuito').title()
                 if plano in ['Pro', 'Enterprise', 'Premium', 'Advanced']:
-                    # Plano Pro tem cotas ilimitadas (exceto funcionários que é 3)
+                    # Plano Premium tem cotas ilimitadas (exceto funcionários que é 3)
                     if model_name == 'funcionario':
                         count = Funcionario.query.filter_by(estabelecimento_id=est_id, ativo=True).count()
                         if count >= 3:
-                            return jsonify({"success": False, "error": "Limite de 3 funcionários atingido no Plano Pro."}), 403
+                            return jsonify({"success": False, "error": "Limite de 3 funcionários atingido no Plano Premium."}), 403
                     return f(*args, **kwargs)
 
                 # Regras Plano Gratuito
@@ -154,9 +154,9 @@ def permission_required(resource):
                 est = Estabelecimento.query.get(est_id)
                 plano = (est.plano or 'Gratuito').title()
                 
-                # Normalização Pro
+                # Normalização Premium
                 if plano in ['Pro', 'Enterprise', 'Premium', 'Advanced']:
-                    plano = 'Pro'
+                    plano = 'Premium'
                 else:
                     plano = 'Gratuito'
             except:
@@ -167,11 +167,11 @@ def permission_required(resource):
             # 3. REGRAS POR CARGO (Mapeamento solicitado pelo usuário)
             if role == 'caixa':
                 # No Gratuito: PDV, Clientes, Vendas
-                # No Pro: PDV, Clientes, Vendas + Ponto
+                # No Premium: PDV, Clientes, Vendas + Ponto
                 allowed_gratuito = ['pdv', 'clientes', 'vendas', 'gestao_caixa']
-                allowed_pro = ['pdv', 'clientes', 'vendas', 'gestao_caixa', 'ponto']
+                allowed_premium = ['pdv', 'clientes', 'vendas', 'gestao_caixa', 'ponto']
                 
-                allowed_list = allowed_pro if plano == 'Pro' else allowed_gratuito
+                allowed_list = allowed_premium if plano == 'Premium' else allowed_gratuito
                 
                 if resource not in allowed_list:
                     return jsonify({
@@ -179,15 +179,15 @@ def permission_required(resource):
                         "error": f"Acesso Negado: O cargo 'Caixa' no Plano {plano} não tem permissão para acessar '{resource}'."
                     }), 403
             
-            # 4. Outros cargos no Plano Pro (Estoque, Gerente) liberados
-            if plano == 'Pro':
+            # 4. Outros cargos no Plano Premium (Estoque, Gerente) liberados
+            if plano == 'Premium':
                 return f(*args, **kwargs)
             
             # 5. No Plano Gratuito, recursos avançados (Ponto) negados para todos
             if resource == 'ponto' and plano == 'Gratuito':
                 return jsonify({
                     "success": False,
-                    "error": "O Controle de Ponto está disponível apenas no Plano Pro."
+                    "error": "O Controle de Ponto está disponível apenas no Plano Premium."
                 }), 403
 
             return f(*args, **kwargs)

@@ -11,6 +11,7 @@ from datetime import datetime, date
 import logging
 from app.services.email_service import email_service
 import json
+from app.middleware.rate_limit import limiter
 
 saas_bp = Blueprint("saas", __name__)
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # ==================== LEAD MANAGEMENT ====================
 
 @saas_bp.route("/leads/registrar", methods=["POST"])
+@limiter.limit("5 per minute")
 def registrar_lead():
     """
     Captura leads do formulário da Landing Page
@@ -132,7 +134,7 @@ def tenant_onboarding():
             cpf=documento if len(documento) <= 14 else None,
             telefone=data['telefone'].strip(),
             email=data['email_estabelecimento'].strip(),
-            plano='Basic',
+            plano='Premium',
             plano_status='ativo',
             data_abertura=date.today(),
             ativo=True,
@@ -279,7 +281,7 @@ def tenant_onboarding():
                 },
                 "acesso": {
                     "login": admin_funcionario.username,
-                    "senha": data['senha_admin'],  # Retorno apenas para confirmação
+                    "senha": "*****",  # Retorno mascarado por segurança
                     "url_acesso": "https://app.mercadinhosys.com/login"
                 },
                 "recursos_criados": [
@@ -383,32 +385,7 @@ def get_assinatura_status():
 
 
 
-@saas_bp.route("/assinatura/webhook", methods=["POST"])
-def pagarme_webhook():
-    """
-    Recebe notificações de pagamento do Pagar.me
-    """
-    try:
-        # Pagar.me envia o payload no body
-        data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "error": "Payload vazio"}), 400
-            
-        logger.info(f"💰 WEBHOOK PAGAR.ME: Evento {data.get('type')} recebido.")
-        
-        # TODO: Implementar lógica de validação de assinatura X-PagarMe-Signature
-        # TODO: Processar eventos de subscription_updated, transaction_paid, etc.
-        
-        # Exemplo de lógica para 'subscription_updated' ou 'paid'
-        # Se evento for de pagamento confirmado:
-        #   1. Identificar estabelecimento via metadata ou pagarme_id
-        #   2. Atualizar plano_status para 'ativo'
-        #   3. Estender vencimento_assinatura
-        
-        return jsonify({"success": True}), 200
-        
-    except Exception as e:
-        from flask import current_app
+
 @saas_bp.route("/monitor/estabelecimentos", methods=["GET"])
 @jwt_required()
 def listar_estabelecimentos_monitor():

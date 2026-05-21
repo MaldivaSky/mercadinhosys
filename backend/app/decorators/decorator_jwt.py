@@ -97,11 +97,12 @@ def admin_required(f):
             )
 
         # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        from app.utils.auth_utils import normalize_status, is_user_active
         raw_status = claims.get("status")
-        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        status_val = normalize_status(raw_status)
         
-        if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
+        if not is_user_active(status_val):
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status_val}"}), 403
 
         return f(*args, **kwargs)
 
@@ -141,54 +142,20 @@ def gerente_ou_admin_required(f):
             )
 
         # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        from app.utils.auth_utils import normalize_status, is_user_active
         raw_status = claims.get("status")
-        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        status_val = normalize_status(raw_status)
         
-        if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
+        if not is_user_active(status_val):
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status_val}"}), 403
 
         return f(*args, **kwargs)
 
     return decorated_function
 
 
-def super_admin_required(f):
-    """Decorator para exigir autenticação de Super Admin SaaS (acesso global ao sistema)"""
-
-    @wraps(f)
-    @jwt_required()
-    def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        claims = get_jwt()
-
-        # BYPASS MASTER: Se for Super Admin nas claims, libera direto
-        if claims.get("is_super_admin"):
-            return f(*args, **kwargs)
-
-        # Verifica se o usuário está autenticado
-        if not current_user_id:
-            return jsonify({"error": "Token inválido ou expirado"}), 401
-
-        # NORMALIZAÇÃO DE STATUS AGRESSIVA
-        raw_status = claims.get("status")
-        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
-        
-        if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
-
-        # Verificação de segurança adicional via Role caso claims falhem
-        role = claims.get("role", "").upper()
-        if role != "ADMIN" and role != "SUPER_ADMIN":
-            from flask import current_app
-            current_app.logger.warning(f"Super Admin access DENIED via claims: user {current_user_id}. Role: {role}")
-            return jsonify({
-                "error": "Acesso restrito ao administrador do sistema SaaS",
-                "message": "Apenas o Super Admin pode acessar esta funcionalidade"
-            }), 403
-
-        return f(*args, **kwargs)
-
-    return decorated_function
+# Decorator unificado para Super Admin
+from app.decorators.rbac import super_admin_required
 
 
 def gerente_required(f):
@@ -221,11 +188,12 @@ def gerente_required(f):
             )
 
         # NORMALIZAÇÃO DE STATUS AGRESSIVA
+        from app.utils.auth_utils import normalize_status, is_user_active
         raw_status = claims.get("status")
-        status = "ativo" if not raw_status or str(raw_status).lower() in ["none", "null", ""] else str(raw_status).lower()
+        status_val = normalize_status(raw_status)
         
-        if status not in ["ativo", "active"]:
-            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status}"}), 403
+        if not is_user_active(status_val):
+            return jsonify({"error": "Acesso bloqueado", "message": f"Sua conta está {status_val}"}), 403
 
         return f(*args, **kwargs)
 

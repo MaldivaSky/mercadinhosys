@@ -392,7 +392,7 @@ export const usePDV = () => {
                 desconto: descontoTotal,
                 total,
                 pagamentos: pagamentos.map(p => ({
-                    forma_pagamento: p.forma,
+                    forma: p.forma,
                     valor: p.valor,
                     bandeira: p.bandeira
                 })),

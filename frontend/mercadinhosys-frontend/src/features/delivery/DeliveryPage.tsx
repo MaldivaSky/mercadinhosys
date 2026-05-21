@@ -1,61 +1,141 @@
 import React, { useState } from 'react';
+import { Plus, Package, Truck, LayoutDashboard } from 'lucide-react';
 import DeliveryDashboard from './DeliveryDashboard';
 import DeliveryList from './DeliveryList';
 import DriverManagement from './DriverManagement';
-import { Truck, Home, Map } from 'lucide-react';
+import CreateDeliveryModal from './CreateDeliveryModal';
+
+type DeliveryTab = 'dashboard' | 'entregas' | 'frota';
+
+const tabs: Array<{
+    id: DeliveryTab;
+    label: string;
+    description: string;
+    icon: React.ElementType;
+}> = [
+    {
+        id: 'dashboard',
+        label: 'Dashboard',
+        description: 'KPIs operacionais e visão executiva',
+        icon: LayoutDashboard,
+    },
+    {
+        id: 'entregas',
+        label: 'Entregas',
+        description: 'Acompanhamento, fila e status',
+        icon: Package,
+    },
+    {
+        id: 'frota',
+        label: 'Frota e Motoristas',
+        description: 'Equipe, veículos e capacidade',
+        icon: Truck,
+    },
+];
 
 const DeliveryPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'drivers'>('dashboard');
+    const [activeTab, setActiveTab] = useState<DeliveryTab>('dashboard');
+    const [createModalOpen, setCreateModalOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleCreated = () => {
+        setCreateModalOpen(false);
+        setRefreshKey((current) => current + 1);
+    };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] dark:bg-gray-950">
-            {/* Top Navigation */}
-            <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30">
-                <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                                <Truck className="w-5 h-5 text-white" />
-                            </div>
-                            <span className="font-black text-xl tracking-tighter text-gray-900 dark:text-white">LOGS<span className="text-blue-600">PRO</span></span>
+        <div className="space-y-6">
+            <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl dark:border-slate-800">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="max-w-3xl">
+                        <div className="mb-3 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-200">
+                            Operacao Delivery
                         </div>
-
-                        <nav className="hidden md:flex items-center gap-1">
-                            {[
-                                { id: 'dashboard', label: 'Overview', icon: Home },
-                                { id: 'list', label: 'Monitoramento', icon: Map },
-                                { id: 'drivers', label: 'Frota/Equipe', icon: Truck },
-                            ].map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as any)}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
-                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600'
-                                        : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
-                                        }`}
-                                >
-                                    <tab.icon className="w-4 h-4" />
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </nav>
+                        <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
+                            Central profissional de entregas
+                        </h1>
+                        <p className="mt-3 text-sm text-slate-300 sm:text-base">
+                            Controle a operação ponta a ponta: criação de entrega, despacho, acompanhamento de rota,
+                            frota e performance logística em uma única interface.
+                        </p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 rounded-full border border-green-100 dark:border-green-900/30">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[10px] font-black text-green-700 dark:text-green-400 uppercase tracking-widest">Servidor Online</span>
-                        </div>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            onClick={() => setCreateModalOpen(true)}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/40 transition hover:bg-blue-700"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Nova Entrega
+                        </button>
+                        <button
+                            onClick={() => setRefreshKey((current) => current + 1)}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-bold text-slate-100 transition hover:bg-white/10"
+                        >
+                            Atualizar Painel
+                        </button>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* Main Content */}
-            <main className="transition-all duration-500">
+            <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="grid gap-3 lg:grid-cols-3">
+                    {tabs.map((tab) => {
+                        const Icon = tab.icon;
+                        const active = activeTab === tab.id;
+
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`rounded-2xl border px-4 py-4 text-left transition ${
+                                    active
+                                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:border-blue-500 dark:bg-blue-950/40'
+                                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800'
+                                }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <div
+                                        className={`rounded-xl p-2 ${
+                                            active
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                                        }`}
+                                    >
+                                        <Icon className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <div
+                                            className={`font-bold ${
+                                                active
+                                                    ? 'text-blue-700 dark:text-blue-300'
+                                                    : 'text-slate-900 dark:text-white'
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </div>
+                                        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                            {tab.description}
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </section>
+
+            <section key={`${activeTab}-${refreshKey}`}>
                 {activeTab === 'dashboard' && <DeliveryDashboard />}
-                {activeTab === 'list' && <DeliveryList />}
-                {activeTab === 'drivers' && <DriverManagement />}
-            </main>
+                {activeTab === 'entregas' && <DeliveryList />}
+                {activeTab === 'frota' && <DriverManagement />}
+            </section>
+
+            <CreateDeliveryModal
+                isOpen={createModalOpen}
+                onClose={() => setCreateModalOpen(false)}
+                onCreated={handleCreated}
+            />
         </div>
     );
 };

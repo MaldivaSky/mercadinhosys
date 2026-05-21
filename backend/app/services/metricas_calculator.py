@@ -73,7 +73,7 @@ def calcular_metricas_diarias():
         db.session.add(metrica)
 
     db.session.commit()
-    print(f"✅ Métricas calculadas para {len(estabelecimentos)} estabelecimentos")
+    current_app.logger.info(f"✅ Métricas calculadas para {len(estabelecimentos)} estabelecimentos")
 
 
 # Agendar job para rodar todo dia às 23:59

@@ -16,7 +16,7 @@ const SubscriptionSettings: React.FC = () => {
             // Caso o backend retorne o plano como 'Basic' ou outros termos legados, normalizamos aqui também para a UI
             const search = (statusData.plano || '').toLowerCase();
             const isPro = ['pro', 'pago', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'basic', 'basico'].some(p => search.includes(p));
-            let displayPlano = isPro ? 'Pro' : 'Gratuito';
+            const displayPlano = isPro ? 'Pro' : 'Gratuito';
 
             setStatus({
                 ...statusData,
@@ -63,7 +63,7 @@ const SubscriptionSettings: React.FC = () => {
             if (response.checkout_url) {
                 window.location.href = response.checkout_url;
             }
-        } catch (error) {
+        } catch {
             showToast.error("Erro ao iniciar processamento de pagamento.");
         } finally {
             setProcessing(false);
@@ -78,7 +78,7 @@ const SubscriptionSettings: React.FC = () => {
             if (response.portal_url) {
                 window.location.href = response.portal_url;
             }
-        } catch (error) {
+        } catch {
             showToast.error("Erro ao acessar portal de faturamento.");
         } finally {
             setProcessing(false);
@@ -209,50 +209,19 @@ const SubscriptionSettings: React.FC = () => {
                     <p className="text-gray-500 dark:text-gray-400 font-bold uppercase tracking-[0.2em] text-sm">Escalabilidade profissional para o seu negócio</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 max-w-5xl mx-auto px-6">
-                    {/* PLANO PROFESSIONAL */}
-                    <div className="bg-white dark:bg-gray-900 p-14 rounded-[4rem] border border-gray-100 dark:border-gray-800 hover:border-primary/20 transition-all duration-500 group relative">
+                <div className="flex justify-center max-w-5xl mx-auto px-6">
+                    {/* PLANO PREMIUM ÚNICO */}
+                    <div className="bg-gray-900 p-14 rounded-[4rem] shadow-4xl shadow-primary/20 relative scale-105 border-2 border-primary overflow-hidden max-w-md w-full">
+                        <div className="absolute top-0 right-14 -translate-y-1/2 bg-primary text-white text-[11px] font-black uppercase tracking-[0.3em] px-8 py-3 rounded-full shadow-xl">Plano Único</div>
+
                         <div className="mb-10 text-left">
-                            <h3 className="text-3xl font-black text-gray-900 dark:text-white italic mb-2">Professional</h3>
-                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">A base do seu crescimento</p>
+                            <h3 className="text-3xl font-black text-white italic mb-2">Premium</h3>
+                            <p className="text-xs font-black text-white/40 uppercase tracking-widest">Acesso completo ao sistema</p>
                         </div>
 
                         <div className="mb-12 text-left">
                             <div className="flex items-baseline gap-2">
-                                <span className="text-7xl font-black text-gray-900 dark:text-white tracking-tight">R$97</span>
-                                <span className="text-gray-400 font-bold uppercase tracking-widest text-xs">/mês</span>
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => handleAction('Pro')}
-                            disabled={processing}
-                            className="w-full py-6 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white rounded-[2rem] font-black text-sm hover:bg-primary hover:text-white transition-all duration-300 mb-12 disabled:opacity-50"
-                        >
-                            Assinar Professional
-                        </button>
-
-                        <div className="space-y-5 text-left">
-                            {['Até 5 terminais PDV', 'Controle Total de Estoque', 'Relatórios Financeiros', 'Suporte Especializado'].map(f => (
-                                <div key={f} className="flex items-center gap-4 text-sm font-bold text-gray-600 dark:text-gray-400">
-                                    <div className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-700"></div> {f}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* PLANO UNLIMITED ELITE */}
-                    <div className="bg-gray-900 p-14 rounded-[4rem] shadow-4xl shadow-primary/20 relative scale-105 border-2 border-primary overflow-hidden">
-                        <div className="absolute top-0 right-14 -translate-y-1/2 bg-primary text-white text-[11px] font-black uppercase tracking-[0.3em] px-8 py-3 rounded-full shadow-xl">Best Value</div>
-
-                        <div className="mb-10 text-left">
-                            <h3 className="text-3xl font-black text-white italic mb-2">Unlimited Elite</h3>
-                            <p className="text-xs font-black text-white/40 uppercase tracking-widest">Sem limites para vencer</p>
-                        </div>
-
-                        <div className="mb-12 text-left">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-7xl font-black text-white tracking-tight">R$197</span>
+                                <span className="text-7xl font-black text-white tracking-tight">R$99,90</span>
                                 <span className="text-white/40 font-bold uppercase tracking-widest text-xs">/mês</span>
                             </div>
                         </div>
@@ -262,16 +231,16 @@ const SubscriptionSettings: React.FC = () => {
                             disabled={processing}
                             className="w-full py-6 bg-primary text-white rounded-[2rem] font-black text-lg hover:scale-[1.03] hover:brightness-110 active:scale-[0.98] transition-all duration-300 mb-12 shadow-3xl shadow-primary/40 disabled:opacity-50"
                         >
-                            Assinar Unlimited <ArrowRight className="w-6 h-6 ml-2" />
+                            Assinar Premium <ArrowRight className="w-6 h-6 ml-2" />
                         </button>
 
                         <div className="space-y-5 text-left">
                             {[
-                                'Terminais Ilimitados',
-                                'NF-e e NFC-e Sem Limites',
-                                'Backup em Tempo Real',
-                                'Suporte VIP via WhatsApp',
-                                'Treinamento de Equipe'
+                                'Terminais PDV Híbridos',
+                                'Gestão Multi-Estabelecimento',
+                                'Dashboard Científico (IA & RFM)',
+                                'Backup em Tempo Real na Nuvem',
+                                'Suporte Suporte VIP WhatsApp'
                             ].map(f => (
                                 <div key={f} className="flex items-center gap-4 text-sm font-bold text-white">
                                     <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" /> {f}

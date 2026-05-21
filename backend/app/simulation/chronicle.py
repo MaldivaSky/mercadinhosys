@@ -224,10 +224,12 @@ class ChronicleSimulator:
     def _create_sale(self, est, ts, caixa, admin_id, products, clients):
         client = random.choice(clients) if clients else None
         
+        # 🔥 NOVO: 30% de chance de múltiplos pagamentos
+        usar_multiplos_pagamentos = random.random() < 0.30
+        
         # Diversidade de Pagamento baseada em DNA
         # 10% de chance de Fiado (ContaReceber) se for ELITE/BOM
         is_fiado = random.random() < 0.10 and client is not None
-        forma_pgto = "fiado" if is_fiado else random.choice(["dinheiro", "cartao_debito", "cartao_credito", "pix"])
         
         venda = Venda(
             estabelecimento_id=est.id, cliente_id=client.id if client else None, 
@@ -254,7 +256,39 @@ class ChronicleSimulator:
         venda.total = total
         venda.quantidade_itens = items_count
         
-        if is_fiado:
+        # 🔥 NOVO: Lógica de múltiplos pagamentos
+        if usar_multiplos_pagamentos and not is_fiado:
+            # Criar 2-3 formas de pagamento
+            formas_disponiveis = ["dinheiro", "cartao_debito", "cartao_credito", "pix"]
+            num_formas = random.randint(2, 3)
+            formas_selecionadas = random.sample(formas_disponiveis, num_formas)
+            
+            total_restante = total
+            for i, forma in enumerate(formas_selecionadas):
+                if i == len(formas_selecionadas) - 1:
+                    # Última forma pega o restante
+                    valor_pagamento = total_restante
+                else:
+                    # Divide proporcionalmente
+                    percentual = Decimal(str(random.uniform(0.3, 0.6)))
+                    valor_pagamento = round(total_restante * percentual, 2)
+                    total_restante -= valor_pagamento
+                
+                db.session.add(Pagamento(
+                    venda_id=venda.id, estabelecimento_id=est.id, valor=valor_pagamento, 
+                    forma_pagamento=forma, status="aprovado", data_pagamento=ts
+                ))
+                
+                # Movimentação de Caixa (Apenas se for Dinheiro ou PIX)
+                if forma in ["dinheiro", "pix"]:
+                    db.session.add(MovimentacaoCaixa(
+                        caixa_id=caixa.id, estabelecimento_id=est.id, tipo="entrada",
+                        valor=valor_pagamento, venda_id=venda.id, descricao=f"Venda {venda.codigo} - {forma}",
+                        created_at=ts
+                    ))
+                    caixa.saldo_atual += valor_pagamento
+        
+        elif is_fiado:
             # Gerar Conta a Receber
             db.session.add(ContaReceber(
                 estabelecimento_id=est.id, cliente_id=client.id, venda_id=venda.id,
@@ -262,8 +296,14 @@ class ChronicleSimulator:
                 data_emissao=ts.date(), data_vencimento=ts.date() + timedelta(days=30),
                 status="aberto"
             ))
+            # Criar pagamento fiado
+            db.session.add(Pagamento(
+                venda_id=venda.id, estabelecimento_id=est.id, valor=total, 
+                forma_pagamento="fiado", status="aprovado", data_pagamento=ts
+            ))
         else:
-            # Pagamento Imediato
+            # Pagamento Único (forma antiga)
+            forma_pgto = random.choice(["dinheiro", "cartao_debito", "cartao_credito", "pix"])
             db.session.add(Pagamento(
                 venda_id=venda.id, estabelecimento_id=est.id, valor=total, 
                 forma_pagamento=forma_pgto, status="aprovado", data_pagamento=ts
