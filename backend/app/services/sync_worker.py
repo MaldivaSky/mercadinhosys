@@ -3,11 +3,8 @@ import time
 import threading
 import requests
 import os
-import json
 from datetime import datetime
-from sqlalchemy import create_engine
-from app.models import db, AuditoriaSincronia, Estabelecimento
-from flask import current_app
+from app.models import db, AuditoriaSincronia
 
 class GuerrillaSyncWorker(threading.Thread):
     """
@@ -20,14 +17,17 @@ class GuerrillaSyncWorker(threading.Thread):
         self.app = app
         self.daemon = True
         self.intervalo_check = float(os.getenv("SYNC_INTERVAL_SEC", 30))
-        self.cloud_api_url = os.getenv("CLOUD_API_URL") # URL da API na nuvem para receber os deltas
+        self.max_retries = int(os.getenv("SYNC_MAX_RETRIES", 3))
+        self.cloud_api_url = os.getenv("CLOUD_API_URL", "").rstrip("/")
+        self.sync_token = os.getenv("CLOUD_SYNC_TOKEN", "")
         
     def check_internet(self):
         """Verifica conectividade com a nuvem"""
+        if not self.cloud_api_url:
+            self.app.logger.warning("CLOUD_API_URL nao configurada. Worker de sync nao pode validar conectividade.")
+            return False
         try:
-            # Tenta pingar a API da nuvem ou o Google como fallback
-            target = self.cloud_api_url if self.cloud_api_url else "https://www.google.com"
-            requests.get(target, timeout=5)
+            requests.get(self.cloud_api_url, timeout=5)
             return True
         except:
             return False
@@ -35,7 +35,6 @@ class GuerrillaSyncWorker(threading.Thread):
     def sync_deltas(self):
         """Processa a fila de sincronização"""
         with self.app.app_context():
-            # BUGFIX: SyncQueue não existe, deve ser AuditoriaSincronia
             pendentes = AuditoriaSincronia.query.filter_by(status="pendente").order_by(AuditoriaSincronia.created_at.asc()).limit(50).all()
             
             if not pendentes:
@@ -49,16 +48,19 @@ class GuerrillaSyncWorker(threading.Thread):
                     self.app.logger.info(f"📡 Item {sync_item.id} -> {sync_item.tabela}: Envio {'SUCESSO' if res else 'FALHA'}")
                     if res:
                         sync_item.status = "sincronizado"
-                        sync_item.data_sincronia = datetime.now(timezone.utc)
+                        sync_item.synced_at = datetime.now(timezone.utc)
+                        sync_item.mensagem_erro = None
                     else:
                         sync_item.tentativas += 1
-                        if sync_item.tentativas > 5:
+                        if sync_item.tentativas >= self.max_retries:
                             sync_item.status = "erro"
-                            sync_item.msg_erro = "Máximo de tentativas atingido"
+                            sync_item.mensagem_erro = "Maximo de tentativas atingido"
                 except Exception as e:
                     self.app.logger.error(f"❌ Erro individual no item {sync_item.id}: {e}")
                     sync_item.tentativas += 1
-                    sync_item.msg_erro = str(e)
+                    sync_item.mensagem_erro = str(e)
+                    if sync_item.tentativas >= self.max_retries:
+                        sync_item.status = "erro"
             
             try:
                 db.session.commit()
@@ -69,26 +71,26 @@ class GuerrillaSyncWorker(threading.Thread):
 
     def envio_para_nuvem(self, sync_item):
         """Simula ou executa o envio do delta para o banco central"""
-        # Se CLOUD_API_URL estiver configurado, faz o POST real
-        if self.cloud_api_url:
-            try:
-                # Sincronização de Guerrilha: Handshake Industrial
-                sync_token = os.getenv("CLOUD_SYNC_TOKEN", "")
-                resp = requests.post(
-                    f"{self.cloud_api_url}/api/sync/receive",
-                    json=sync_item.to_dict(),
-                    timeout=15,
-                    headers={
-                        "Authorization": f"Bearer {sync_token}",
-                        "Content-Type": "application/json"
-                    }
-                )
-                return resp.status_code == 200
-            except:
-                return False
-        
-        # Fallback para simulação (Validação de infraestrutura local)
-        return True
+        if not self.cloud_api_url or not self.sync_token:
+            self.app.logger.error(
+                "Sincronizacao cloud indisponivel: CLOUD_API_URL ou CLOUD_SYNC_TOKEN nao configurados."
+            )
+            return False
+
+        try:
+            resp = requests.post(
+                f"{self.cloud_api_url}/api/sync/receive",
+                json=sync_item.to_sync_payload(),
+                timeout=15,
+                headers={
+                    "Authorization": f"Bearer {self.sync_token}",
+                    "Content-Type": "application/json"
+                }
+            )
+            return resp.status_code == 200
+        except Exception as exc:
+            self.app.logger.error(f"Falha ao enviar item {sync_item.id} para a nuvem: {exc}")
+            return False
 
     def run(self):
         """Loop principal do worker"""
@@ -105,8 +107,16 @@ class GuerrillaSyncWorker(threading.Thread):
                 
             time.sleep(self.intervalo_check)
 
+    def process_queue(self):
+        """Processa a fila uma vez, usado por CLI e smoke tests."""
+        with self.app.app_context():
+            self.sync_deltas()
+
 def start_sync_worker(app):
     """Entry point para iniciar o worker sem travar o Flask"""
     worker = GuerrillaSyncWorker(app)
+    if not worker.cloud_api_url or not worker.sync_token:
+        app.logger.warning("Worker de sync nao iniciado: configuracao cloud incompleta.")
+        return None
     worker.start()
     return worker

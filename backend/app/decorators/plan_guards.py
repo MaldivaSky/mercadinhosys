@@ -8,6 +8,14 @@ PLAN_HIERARCHY = {
     'Superadmin': 99
 }
 
+
+def normalize_plan(plan_name):
+    """Normaliza aliases legados de plano para a hierarquia atual."""
+    s = str(plan_name or 'Gratuito').lower().strip()
+    if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago']):
+        return 'Premium'
+    return 'Gratuito'
+
 def plan_required(min_plan='Gratuito'):
     """
     Decorator para exigir um plano mínimo para acesso à rota.
@@ -42,14 +50,6 @@ def plan_required(min_plan='Gratuito'):
                 current_plan = claims.get('plano', 'Gratuito')
                 current_status = claims.get('plano_status', 'ativo')
 
-            # Normalização Sênior (SÓ PREMIUM E GRATUITO EXISTEM AGORA)
-            def normalize_plan(p):
-                """Normalização Sênior unificada com o sistema de autenticação"""
-                s = str(p or 'Gratuito').lower().strip()
-                if any(x in s for x in ['pro', 'premium', 'elite', 'advanced', 'enterprise', 'master', 'pago', 'basic', 'basico']):
-                    return 'Premium'
-                return 'Gratuito'
-
             user_plan_norm = normalize_plan(current_plan)
             min_plan_norm = normalize_plan(min_plan)
             
@@ -60,6 +60,7 @@ def plan_required(min_plan='Gratuito'):
                 return jsonify({
                     "success": False,
                     "error": f"Acesso Negado: O Plano {user_plan_norm} não inclui esta ferramenta. Upgrade para Premium necessário.",
+                    "msg": f"Acesso Negado: O Plano {user_plan_norm} nao inclui esta ferramenta. Upgrade para Premium necessario.",
                     "code": "PLAN_RESTRICTED"
                 }), 403
             
@@ -73,6 +74,9 @@ def plan_required(min_plan='Gratuito'):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+
+premium_required = plan_required("Premium")
 
 def quota_required(model_name):
     """

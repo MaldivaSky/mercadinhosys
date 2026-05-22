@@ -82,3 +82,5 @@ psycopg2-binary==2.9.11
 statsmodels==0.14.6
 plotly==6.5.1
 stripe==11.4.0
+pytest-cov==4.1.0
+sentry-sdk[flask]==1.39.1

@@ -28,6 +28,19 @@ from app.models import (
 sync_bp = Blueprint("sync", __name__)
 
 
+def _resolve_remote_db_url():
+    db_url = (
+        os.environ.get("AIVEN_DATABASE_URL")
+        or os.environ.get("DATABASE_URL_TARGET")
+        or os.environ.get("DB_PRIMARY")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+    )
+    if db_url and db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    return db_url
+
+
 def _clone_data(instance):
     data = {}
     for col in instance.__table__.columns:
@@ -57,9 +70,9 @@ def replicar_para_neon():
         estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
 
-        db_url = os.environ.get("DATABASE_URL")
+        db_url = _resolve_remote_db_url()
         if not db_url:
-            return jsonify({"success": False, "message": "DATABASE_URL não configurada"}), 400
+            return jsonify({"success": False, "message": "Banco cloud nao configurado"}), 400
 
         engine = create_engine(db_url)
         with engine.connect() as conn:
@@ -91,7 +104,7 @@ def replicar_para_neon():
             registro_id=0,
             operacao="replicar_para_neon",
             payload_json=json.dumps({"since": since}),
-            status="running",
+            status="sincronizando",
             created_at=datetime.now(timezone.utc),
         )
         db.session.add(sync_log)
@@ -165,13 +178,7 @@ def replicar_para_neon():
 @gerente_ou_admin_required
 def sync_health():
     try:
-        db_url = (
-            current_app.config.get("SQLALCHEMY_DATABASE_URI")
-            or os.environ.get("AIVEN_DATABASE_URL")
-            or os.environ.get("NEON_DATABASE_URL")
-            or os.environ.get("DATABASE_URL")
-            or ""
-        )
+        db_url = _resolve_remote_db_url() or current_app.config.get("SQLALCHEMY_DATABASE_URI") or ""
         local_counts = {}
         for model in [Estabelecimento, Funcionario, Cliente, Fornecedor, CategoriaProduto, Produto, Venda, VendaItem, Pagamento, MovimentacaoEstoque, Despesa]:
             try:

@@ -229,6 +229,23 @@ class SyncQueue(db.Model, MultiTenantMixin):
                 "status": self.status, "created_at": self.created_at.isoformat() if self.created_at else None,
                 "synced_at": self.synced_at.isoformat() if self.synced_at else None}
 
+    def to_sync_payload(self):
+        payload = {}
+        if self.payload_json:
+            try:
+                payload = json.loads(self.payload_json)
+            except Exception:
+                payload = {}
+
+        return {
+            "tabela": self.tabela,
+            "registro_id": self.registro_id,
+            "operacao": (self.operacao or "").upper(),
+            "estabelecimento_id": self.estabelecimento_id,
+            "payload": payload,
+            "timestamp": self.created_at.isoformat() if self.created_at else None,
+        }
+
     @classmethod
     def registrar_mutacao(cls, estabelecimento_id, tabela, registro_id, operacao, payload):
         if not estabelecimento_id: return False
@@ -1588,14 +1605,25 @@ def get_model_by_table(table_name: str):
         "fornecedores": Fornecedor,
         "produtos": Produto,
         "produto_lotes": ProdutoLote,
+        "estoque_lotes": ProdutoLote,
         "movimentacoes_estoque": MovimentacaoEstoque,
+        "movimentacao_estoque": MovimentacaoEstoque,
         "vendas": Venda,
         "venda_itens": VendaItem,
+        "pagamentos": Pagamento,
+        "movimentacoes_caixa": MovimentacaoCaixa,
+        "transacoes_caixa": MovimentacaoCaixa,
+        "contas_pagar": ContaPagar,
         "contas_receber": ContaReceber,
         "clientes": Cliente,
         "caixas": Caixa,
         "historico_precos": HistoricoPrecos,
         "configuracoes": Configuracao,
+        "despesas": Despesa,
+        "motoristas": Motorista,
+        "veiculos": Veiculo,
+        "taxas_entrega": TaxaEntrega,
+        "entregas": Entrega,
     }
     return mapping.get(table_name)
 SyncLog = SyncQueue

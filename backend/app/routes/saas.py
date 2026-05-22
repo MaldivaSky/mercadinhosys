@@ -7,7 +7,7 @@ from app.models import (
 )
 from app.decorators.decorator_jwt import super_admin_required
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from datetime import datetime, date
+from datetime import datetime, date, time
 import logging
 from app.services.email_service import email_service
 import json
@@ -130,15 +130,21 @@ def tenant_onboarding():
         estabelecimento = Estabelecimento(
             nome_fantasia=data['nome_fantasia'].strip(),
             razao_social=data['razao_social'].strip(),
-            cnpj=documento if len(documento) > 14 else None,
-            cpf=documento if len(documento) <= 14 else None,
+            cnpj=documento,
             telefone=data['telefone'].strip(),
             email=data['email_estabelecimento'].strip(),
             plano='Premium',
             plano_status='ativo',
             data_abertura=date.today(),
             ativo=True,
-            regime_tributario='SIMPLES NACIONAL'  # Padrão para novos clientes
+            regime_tributario='SIMPLES NACIONAL',
+            cep=(data.get('cep') or '00000-000').strip() or '00000-000',
+            logradouro=(data.get('logradouro') or 'Nao Informado').strip() or 'Nao Informado',
+            numero=(data.get('numero') or 'S/N').strip() or 'S/N',
+            bairro=(data.get('bairro') or 'Centro').strip() or 'Centro',
+            cidade=(data.get('cidade') or 'Manaus').strip() or 'Manaus',
+            estado=(data.get('estado') or 'AM').strip() or 'AM',
+            pais='Brasil',
         )
         
         db.session.add(estabelecimento)
@@ -151,6 +157,9 @@ def tenant_onboarding():
             nome=data['nome_admin'].strip(),
             username=data['email_admin'].strip().split('@')[0],  # Usa parte do email como username
             email=data['email_admin'].strip(),
+            cpf=(data.get('cpf_admin') or documento[:11] or '00000000000'),
+            data_nascimento=date(1990, 1, 1),
+            celular=(data.get('celular_admin') or data['telefone'].strip()),
             role='ADMIN',
             cargo='Proprietário',
             salario_base=0.0,  # Define zero para proprietário inicial
@@ -158,14 +167,6 @@ def tenant_onboarding():
             ativo=True,
             data_admissao=date.today(),
             data_cadastro=datetime.now(timezone.utc),
-            # Endereço opcional - não requerido no cadastro rápido
-            cep=data.get('cep', ''),
-            logradouro=data.get('logradouro', ''),
-            numero=data.get('numero', ''),
-            bairro=data.get('bairro', ''),
-            cidade=data.get('cidade', ''),
-            estado=data.get('estado', ''),
-            pais='Brasil',
             permissoes_json=json.dumps({
                 "pdv": True,
                 "estoque": True,
@@ -193,8 +194,7 @@ def tenant_onboarding():
             controlar_validade=True,
             alerta_estoque_minimo=True,
             permitir_venda_sem_estoque=False,
-            imprimir_cupom=False,
-            tema_visual="default"
+            impressao_automatica=False
         )
         db.session.add(config)
         logger.info(f"✅ Configuração padrão criada")
@@ -202,13 +202,10 @@ def tenant_onboarding():
         # 4. Criar ConfiguraçãoHorario padrão
         config_horario = ConfiguracaoHorario(
             estabelecimento_id=estabelecimento.id,
-            seg_aberta=True, seg_abertura="08:00", seg_fechamento="18:00",
-            ter_aberta=True, ter_abertura="08:00", ter_fechamento="18:00",
-            qua_aberta=True, qua_abertura="08:00", qua_fechamento="18:00",
-            qui_aberta=True, qui_abertura="08:00", qui_fechamento="18:00",
-            sex_aberta=True, sex_abertura="08:00", sex_fechamento="18:00",
-            sab_aberta=True, sab_abertura="08:00", sab_fechamento="12:00",
-            dom_aberta=False, dom_abertura="00:00", dom_fechamento="00:00"
+            hora_entrada=time(8, 0),
+            hora_saida_almoco=time(12, 0),
+            hora_retorno_almoco=time(13, 0),
+            hora_saida=time(18, 0)
         )
         db.session.add(config_horario)
         logger.info(f"✅ Horário comercial criado")
@@ -216,12 +213,12 @@ def tenant_onboarding():
         # 5. Criar Caixa inicial
         caixa = Caixa(
             estabelecimento_id=estabelecimento.id,
+            funcionario_id=admin_funcionario.id,
             numero_caixa="PDV-01",
             status="fechado",
             saldo_inicial=0.0,
             saldo_atual=0.0,
-            funcionario_abertura_id=admin_funcionario.id,
-            data_abertura=date.today()
+            data_abertura=datetime.now(timezone.utc)
         )
         db.session.add(caixa)
         logger.info(f"✅ Caixa inicial criado")
