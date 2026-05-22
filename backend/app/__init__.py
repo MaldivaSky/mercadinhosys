@@ -17,6 +17,13 @@ from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+except ModuleNotFoundError:
+    sentry_sdk = None
+    FlaskIntegration = None
+
 # Função para horário de Manaus (GMT-4)
 def get_manaus_time():
     """Retorna datetime atual no fuso de Manaus (GMT-4)"""
@@ -27,6 +34,7 @@ def get_manaus_time():
 # Inicializa as extensões
 migrate = Migrate()
 jwt = JWTManager()
+# O cache será configurado dinamicamente no factory para suportar Redis
 cache = Cache()
 mail = Mail()
 
@@ -42,6 +50,20 @@ def create_app(config_name=None):
         config_name = os.getenv("FLASK_ENV", "default")
 
     load_dotenv()
+    
+    # 1. MONITORAMENTO (SENTRY)
+    sentry_dsn = os.getenv("SENTRY_DSN")
+    if sentry_dsn and sentry_sdk and FlaskIntegration:
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=1.0,
+            profiles_sample_rate=1.0,
+            environment=config_name
+        )
+    elif sentry_dsn:
+        logger.warning("SENTRY_DSN configurado, mas pacote sentry_sdk nao esta instalado. Monitoramento desativado.")
+
     app = Flask(__name__)
 
 
@@ -155,6 +177,17 @@ def create_app(config_name=None):
             "msg": error_string or "Token não informado.",
         }), 401
 
+    # 2. CACHE (REDIS VS SIMPLE)
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        app.config["CACHE_TYPE"] = "RedisCache"
+        app.config["CACHE_REDIS_URL"] = redis_url
+        logger.info(f"🚀 CACHE: Redis detectado em {redis_url[:15]}...")
+    else:
+        app.config["CACHE_TYPE"] = "SimpleCache"
+        logger.info("📦 CACHE: Redis não detectado. Usando SimpleCache (Local).")
+    
+    cache.init_app(app)
     mail.init_app(app)
 
     @app.before_request
@@ -323,7 +356,6 @@ def create_app(config_name=None):
                     ("estabelecimentos", "stripe_customer_id",      "VARCHAR(100)"),
                     ("estabelecimentos", "stripe_subscription_id",  "VARCHAR(100)"),
                     ("estabelecimentos", "vencimento_assinatura",   "TIMESTAMP"),
-                    ("estabelecimentos", "pagarme_id",              "VARCHAR(100)"),
                     # Estabelecimento - Endereço completo
                     ("estabelecimentos", "cep",                     "VARCHAR(9)   DEFAULT '00000-000'"),
                     ("estabelecimentos", "logradouro",              "VARCHAR(200) DEFAULT 'Nao Informado'"),
@@ -632,29 +664,42 @@ def create_app(config_name=None):
     @app.route("/api/health", methods=["GET"])
     def health_check():
         from sqlalchemy import text
+        import psutil
 
+        health = {
+            "status": "healthy",
+            "service": "mercadinhosys-api",
+            "version": "2.0.0",
+            "timestamp": get_manaus_time().isoformat(),
+        }
+
+        # Database Check
         try:
             db.session.execute(text("SELECT 1"))
-            db_status = "connected"
+            health["database"] = "connected"
         except Exception as e:
-            db_status = f"error: {str(e)}"
+            health["status"] = "degraded"
+            health["database"] = f"error: {str(e)}"
 
-        return jsonify(
-            {
-                "status": "healthy",
-                "service": "mercadinhosys-api",
-                "version": "2.0.0",
-                "database": db_status,
-                "db_source": "POSTGRES_CLOUD" if app.config.get("USING_POSTGRES") else "SQLITE_LOCAL",
-                "db_url_redacted": redacted_db_uri,
-                "timestamp": get_manaus_time().isoformat(),
-                "dashboard_cientifico": (
-                    "disponível"
-                    if app.config.get('DASHBOARD_CIENTIFICO_DISPONIVEL')
-                    else "não disponível"
-                ),
+        # Cache Check
+        try:
+            cache.set("health_ping", 1, timeout=5)
+            ping = cache.get("health_ping")
+            health["cache"] = "alive" if ping == 1 else "fail"
+        except Exception:
+            health["cache"] = "unreachable"
+
+        # System Metrics
+        try:
+            health["system"] = {
+                "cpu_percent": psutil.cpu_percent(),
+                "memory_usage_mb": round(psutil.Process().memory_info().rss / (1024 * 1024), 2),
+                "disk_usage_percent": psutil.disk_usage('/').percent
             }
-        )
+        except:
+            pass
+
+        return jsonify(health), 200 if health["status"] == "healthy" else 503
 
     # Rota inicial
     @app.route("/", methods=["GET"])

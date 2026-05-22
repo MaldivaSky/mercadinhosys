@@ -106,8 +106,15 @@ def _process_sync_data(data: Dict[str, Any], session) -> bool:
     """Upsert atômico de dados sincronizados no destino correto"""
     try:
         tabela = data["tabela"]
-        operacao = data["operacao"]
-        payload = data.get("payload", {})
+        operacao = str(data["operacao"]).upper()
+        payload = data.get("payload")
+        if payload is None and data.get("payload_json"):
+            try:
+                payload = json.loads(data["payload_json"])
+            except Exception:
+                payload = {}
+        if payload is None:
+            payload = {}
         registro_id = data.get("registro_id")
         
         # OTIMIZAÇÃO: Importação direta e segura

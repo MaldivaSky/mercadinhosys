@@ -8,10 +8,10 @@ from datetime import datetime, date
 # Tabelas que devem ser sincronizadas com a nuvem (Integridade de Dados)
 TABELAS_SINCRONIZAVEIS = [
     "produtos", "categorias_produto", "fornecedores", "clientes", 
-    "vendas", "venda_itens", "pagamentos", "movimentacao_estoque",
-    "caixas", "transacoes_caixa", "funcionarios", "estabelecimentos",
-    "despesas", "contas_pagar", "estoque_lotes",
-    "motoristas", "veiculos", "entregas", "taxas_entrega" # ADICIONADO DELIVERY
+    "vendas", "venda_itens", "pagamentos", "movimentacoes_estoque",
+    "caixas", "movimentacoes_caixa", "funcionarios", "estabelecimentos",
+    "despesas", "contas_pagar", "produto_lotes", "configuracoes",
+    "motoristas", "veiculos", "entregas", "taxas_entrega"
 ]
 
 # Tabelas que aparecem no MONITOR do Super Admin (Inteligência de Negócio)
@@ -22,7 +22,7 @@ TABELAS_MONITOR_MASTER = {
     "despesas": "Nova Despesa Registrada",
     "produtos": "Alteração em Produto/Preço",
     "clientes": "Movimentação de Cliente",
-    "movimentacao_estoque": "Ajuste de Estoque (Perda/Ganho)",
+    "movimentacoes_estoque": "Ajuste de Estoque (Perda/Ganho)",
     "movimentacoes_caixa": "Intervenção de Caixa (Sangria/Suprimento)",
 }
 
