@@ -75,8 +75,8 @@ class Config:
         if not _jwt_secret:
             raise ValueError("CRITICAL: JWT_SECRET_KEY não configurada no ambiente de produção!")
 
-    SECRET_KEY = _secret_key or "dev-fallback-secret-key-12345"
-    JWT_SECRET_KEY = _jwt_secret or "dev-fallback-jwt-key-67890"
+    SECRET_KEY = _secret_key
+    JWT_SECRET_KEY = _jwt_secret
 
     SQLALCHEMY_DATABASE_URI = _sqlalchemy_database_uri
     USING_POSTGRES = _using_postgres
@@ -139,6 +139,8 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    SECRET_KEY = Config._secret_key or "dev-fallback-secret-key-12345"
+    JWT_SECRET_KEY = Config._jwt_secret or "dev-fallback-jwt-key-67890"
     if not Config.CORS_ORIGINS:
         Config.CORS_ORIGINS = ["http://localhost:3000", "http://localhost:5173"]
 
@@ -151,6 +153,8 @@ class ProductionConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    SECRET_KEY = Config._secret_key or "test-fallback-secret-key-12345"
+    JWT_SECRET_KEY = Config._jwt_secret or "test-fallback-jwt-key-67890"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
     DEBUG = True

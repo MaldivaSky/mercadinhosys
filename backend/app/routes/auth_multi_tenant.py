@@ -73,7 +73,7 @@ def bootstrap_admin():
             estabelecimento = Estabelecimento(
                 nome_fantasia="Sistema Central",
                 razao_social="MercadinhoSys Bootstrap",
-                cnpj="00.000.000/0001-00",
+                cnpj=None,
                 email="suporte@mercadinhosys.com",
                 telefone="(00) 0000-0000",
                 ativo=True,

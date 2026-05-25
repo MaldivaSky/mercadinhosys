@@ -5,7 +5,7 @@ from datetime import timezone
 
 from datetime import datetime, timedelta
 from decimal import Decimal
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, current_app
 from app import db
 from app.models import (
     Venda,
@@ -350,7 +350,7 @@ def listar_vendas():
 
         return jsonify({"vendas": resultado, "ponto_venda": "PDV 01", "paginacao": paginacao})
     except Exception as e:
-        print(f"❌ Erro ao listar vendas: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao listar vendas: {str(e)}")
         return jsonify({"error": f"Erro ao listar vendas: {str(e)}"}), 500
 
 # Continuação direta da Parte 1
@@ -476,7 +476,7 @@ def estatisticas_vendas():
             "vendas_por_fornecedor": [{"fornecedor": f[0], "quantidade_vendas": f[1], "total": float(f[2] or 0)} for f in fornecedores_res],
         }), 200
     except Exception as e:
-        print(f"❌ Erro ao obter estatísticas: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao obter estatísticas: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Erro ao obter estatísticas: {str(e)}"}), 500
@@ -584,7 +584,7 @@ def relatorio_diario():
         else:
             return jsonify({"error": "Formato não suportado"}), 400
     except Exception as e:
-        print(f"❌ Erro ao gerar relatório diário: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao gerar relatório diário: {str(e)}")
         return jsonify({"error": f"Erro ao gerar relatório diário: {str(e)}"}), 500
 
 
@@ -670,7 +670,7 @@ def analise_tendencia():
             "media_mensal": sum(r["total"] for r in resultados) / len(resultados) if resultados else 0,
         }), 200
     except Exception as e:
-        print(f"❌ Erro na análise de tendência: {str(e)}")
+        current_app.logger.error(f"❌ Erro na análise de tendência: {str(e)}")
         return jsonify({"error": f"Erro na análise de tendência: {str(e)}"}), 500
 
 
@@ -780,7 +780,7 @@ def criar_venda():
                     raise Exception(f"Estoque insuficiente para {produto.nome}")
 
                 total_item = preco_unitario * quantidade
-                print(f"DEBUG: Criando VendaItem - VendaID: {nova_venda.id}, EstabID: {estabelecimento_id}, ProdID: {produto_id}")
+                current_app.logger.debug(f"DEBUG: Criando VendaItem - VendaID: {nova_venda.id}, EstabID: {estabelecimento_id}, ProdID: {produto_id}")
                 venda_item = VendaItem(
                     venda_id=nova_venda.id,
                     estabelecimento_id=estabelecimento_id, # Usar variável local garantida
@@ -884,7 +884,7 @@ def criar_venda():
 
     except Exception as e:
         db.session.rollback()
-        print(f"❌ ERRO CRÍTICO VENDA: {str(e)}")
+        current_app.logger.error(f"❌ ERRO CRÍTICO VENDA: {str(e)}")
         return jsonify({"error": "Erro interno no servidor", "details": str(e)}), 500
 
 # Continuação direta da Parte 2 – FINAL
@@ -964,7 +964,7 @@ def obter_venda(venda_id):
             ],
         }}), 200
     except Exception as e:
-        print(f"❌ Erro ao obter venda: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao obter venda: {str(e)}")
         return jsonify({"error": f"Erro ao obter venda: {str(e)}"}), 500
 
 
@@ -1037,7 +1037,7 @@ def vendas_do_dia():
             }
         }), 200
     except Exception as e:
-        print(f"❌ Erro ao obter vendas do dia: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao obter vendas do dia: {str(e)}")
         return jsonify({"error": f"Erro ao obter vendas do dia: {str(e)}"}), 500
 
 
@@ -1137,7 +1137,7 @@ def exportar_vendas():
         resp.headers["Content-Disposition"] = f'attachment; filename="vendas-{datetime.now().strftime("%Y%m%d")}.{ext}"'
         return resp
     except Exception as e:
-        print(f"❌ Erro ao exportar vendas: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao exportar vendas: {str(e)}")
         return jsonify({"error": f"Erro ao exportar: {str(e)}"}), 500
 
 
@@ -1185,7 +1185,7 @@ def comprovante_venda(venda_id):
         resp.headers["Content-Disposition"] = f'attachment; filename="comprovante-{venda.codigo}.txt"'
         return resp
     except Exception as e:
-        print(f"❌ Erro ao gerar comprovante: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao gerar comprovante: {str(e)}")
         return jsonify({"error": f"Erro ao gerar comprovante: {str(e)}"}), 500
 
 
@@ -1222,7 +1222,7 @@ def iniciar_venda_pdv():
         return jsonify({"success": True, "venda_id": venda.id, "codigo_temp": codigo_temp}), 201
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Erro ao iniciar venda PDV: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao iniciar venda PDV: {str(e)}")
         return jsonify({"error": f"Erro ao iniciar venda: {str(e)}"}), 500
 
 
@@ -1271,7 +1271,7 @@ def adicionar_item_pdv(venda_id):
         }), 200
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Erro ao adicionar item: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao adicionar item: {str(e)}")
         return jsonify({"error": f"Erro ao adicionar item: {str(e)}"}), 500
 
 
@@ -1304,7 +1304,7 @@ def remover_item_pdv(venda_id, item_id):
         }), 200
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Erro ao remover item: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao remover item: {str(e)}")
         return jsonify({"error": f"Erro ao remover item: {str(e)}"}), 500
 
 
@@ -1348,7 +1348,7 @@ def atualizar_quantidade_pdv(venda_id):
         }), 200
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Erro ao atualizar quantidade: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao atualizar quantidade: {str(e)}")
         return jsonify({"error": f"Erro ao atualizar quantidade: {str(e)}"}), 500
 
 
@@ -1371,7 +1371,7 @@ def obter_configuracoes_pdv():
             "arredondamento_valores": 0.05,
         }), 200
     except Exception as e:
-        print(f"❌ Erro ao obter configurações PDV: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao obter configurações PDV: {str(e)}")
         return jsonify({"error": f"Erro ao obter configurações: {str(e)}"}), 500
 
 
@@ -1394,7 +1394,7 @@ def calcular_troco():
             "total": total
         }), 200
     except Exception as e:
-        print(f"❌ Erro ao calcular troco: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao calcular troco: {str(e)}")
         return jsonify({"error": f"Erro ao calcular troco: {str(e)}"}), 500
 
 
@@ -1422,7 +1422,7 @@ def listar_carrinhos_ativos():
             ]
         }), 200
     except Exception as e:
-        print(f"❌ Erro ao listar carrinhos ativos: {str(e)}")
+        current_app.logger.error(f"❌ Erro ao listar carrinhos ativos: {str(e)}")
         return jsonify({"error": f"Erro ao listar carrinhos ativos: {str(e)}"}), 500
 
 # ============================================

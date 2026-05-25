@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import jsonify
+from flask import jsonify, current_app
 from flask_jwt_extended import get_jwt
 
 PLAN_HIERARCHY = {
@@ -30,7 +30,7 @@ def plan_required(min_plan='Gratuito'):
             
             # 1. Super Admin Bypass (Total)
             if claims.get('is_super_admin'):
-                print(f"DEBUG: SUPER ADMIN BYPASS PLANO ATIVADO PARA: {claims.get('sub')}")
+                current_app.logger.debug(f"SUPER ADMIN BYPASS PLANO ATIVADO PARA: {claims.get('sub')}")
                 return f(*args, **kwargs)
             
             # 2. Busca em Tempo Real
