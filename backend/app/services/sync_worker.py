@@ -4,7 +4,7 @@ import threading
 import requests
 import os
 from datetime import datetime
-from app.models import db, AuditoriaSincronia
+from app.models import db, SyncQueue
 
 class GuerrillaSyncWorker(threading.Thread):
     """
@@ -35,7 +35,7 @@ class GuerrillaSyncWorker(threading.Thread):
     def sync_deltas(self):
         """Processa a fila de sincronização"""
         with self.app.app_context():
-            pendentes = AuditoriaSincronia.query.filter_by(status="pendente").order_by(AuditoriaSincronia.created_at.asc()).limit(50).all()
+            pendentes = SyncQueue.query.filter_by(status="pendente").order_by(SyncQueue.created_at.asc()).limit(50).all()
             
             if not pendentes:
                 return

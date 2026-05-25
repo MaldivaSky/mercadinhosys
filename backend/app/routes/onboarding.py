@@ -12,31 +12,7 @@ import json
 
 onboarding_bp = Blueprint("onboarding", __name__)
 
-def super_admin_required(fn):
-    """Custom decorator for super admin routes"""
-    from functools import wraps
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        from flask import current_app
-        claims = get_jwt()
-        
-        # 1. Verificação Primária: Claim no Token JWT (Rápida)
-        if claims.get("is_super_admin") is True:
-            return fn(*args, **kwargs)
-            
-        # 2. Verificação de Redundância: Fail-safe Senior via DB
-        try:
-            from app.models import Funcionario
-            user_id = get_jwt_identity()
-            user = Funcionario.query.get(int(user_id))
-            
-            if user and user.username in ['maldivas', 'admin']:
-                return fn(*args, **kwargs)
-        except Exception as e:
-            current_app.logger.error(f"Erro na redundância de onboarding: {str(e)}")
-            
-        return jsonify({"success": False, "error": "Acesso restrito ao Administrador do Sistema"}), 403
-    return jwt_required()(wrapper)
+from app.decorators.rbac import super_admin_required
 
 @onboarding_bp.route("/registrar", methods=["POST"])
 def registrar_conta():
