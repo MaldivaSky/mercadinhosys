@@ -915,9 +915,9 @@ const DashboardPage: React.FC = () => {
     </div>
   );
 
-  const hoje = data.data?.summary || {};
-  const mes = data.data?.summary || {};
-  const analise_financeira = data.data?.financials || {};
+  const hoje = data.data?.hoje || {};
+  const mes = data.data?.mes || {};
+  const analise_financeira = data.data?.analise_financeira || {};
   const rh = data.data?.rh || {};
   const analise_produtos = data.data?.analise_produtos || {};
   const insights_cientificos = {
