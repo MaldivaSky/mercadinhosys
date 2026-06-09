@@ -1,5 +1,12 @@
 import os
 import sys
+
+# Garante codificação UTF-8 para evitar erros de encode em consoles Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import time
 import psycopg2
 import psycopg2.extras
@@ -171,12 +178,15 @@ def force_sync(app=None, silent=False):
                     data.append(tuple(row_data))
 
                 try:
-                    acur.executemany(f'INSERT INTO "{table}" ({cols_str}) VALUES ({ph}) {upsert}', data)
+                    # Usar execute_values de alta performance
+                    sql = f'INSERT INTO "{table}" ({cols_str}) VALUES %s {upsert}'
+                    psycopg2.extras.execute_values(acur, sql, data, page_size=BATCH_SIZE)
                     aconn.commit()
                     synced += len(data)
                 except Exception as e:
                     aconn.rollback()
-                    log(f"    ⚠️ Erro no Batch {table}: {str(e)[:50]}")
+                    log(f"    ⚠️ Erro no Batch {table}: {str(e)[:100]}")
+                    log("    🔄 Executando fallback linha por linha...")
                     # Fallback row-by-row
                     for row_tuple in data:
                         try:

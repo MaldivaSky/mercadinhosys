@@ -894,88 +894,78 @@ class DataLayer:
 
             minuto_saida_ref = _time_to_minutes(hora_saida_ref) + tolerancia_saida
 
-            # 1. Custo Mensal de Benefícios Ativos
-            query_beneficios = db.session.query(func.sum(FuncionarioBeneficio.valor)).join(Funcionario).filter(
-                FuncionarioBeneficio.ativo == True,
-                Funcionario.ativo == True
+            # Query todos os pontos do período de 30 dias em lote (aprox. 1800 registros)
+            pontos_bulk_query = db.session.query(RegistroPonto).filter(
+                RegistroPonto.data >= data_inicio_dia
             )
             if str(estabelecimento_id).lower() != 'all':
-                query_beneficios = query_beneficios.filter(Funcionario.estabelecimento_id == estabelecimento_id)
-            total_beneficios = query_beneficios.scalar() or 0
+                pontos_bulk_query = pontos_bulk_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+            pontos_bulk = pontos_bulk_query.all()
 
-            # 2. Total Salários Base (Mensal)
-            query_salarios = db.session.query(func.sum(Funcionario.salario_base)).filter(
-                Funcionario.ativo == True
-            )
-            if str(estabelecimento_id).lower() != 'all':
-                query_salarios = query_salarios.filter(Funcionario.estabelecimento_id == estabelecimento_id)
-            total_salarios = query_salarios.scalar() or 0
+            # 3. Análise de Pontualidade e Assiduidade (Python in-memory)
+            entradas_por_status = {}
+            for p in pontos_bulk:
+                if p.tipo_registro == 'entrada':
+                    status = p.status or 'normal'
+                    if status not in entradas_por_status:
+                        entradas_por_status[status] = []
+                    entradas_por_status[status].append(p)
 
-            # 3. Análise de Pontualidade e Assiduidade (Baseado em Registros Reais)
-            # Busca registros de entrada no período
-            query_ponto = db.session.query(
-                RegistroPonto.status,
-                func.count(RegistroPonto.id).label('qtd'),
-                func.sum(RegistroPonto.minutos_atraso).label('minutos_atraso')
-            ).filter(
-                RegistroPonto.data >= data_inicio_dia,
-                RegistroPonto.tipo_registro == 'entrada'
-            )
-            
-            if str(estabelecimento_id).lower() != 'all':
-                query_ponto = query_ponto.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
-                
-            registros_entrada = query_ponto.group_by(RegistroPonto.status).all()
-
-            total_entradas = sum([r.qtd for r in registros_entrada])
-            total_atrasos_qtd = sum([r.qtd for r in registros_entrada if r.status == 'atrasado'])
-            total_minutos_atraso = sum([float(r.minutos_atraso or 0) for r in registros_entrada])
-
+            total_entradas = sum(len(lst) for lst in entradas_por_status.values())
+            total_atrasos_qtd = len(entradas_por_status.get('atrasado', []))
+            total_minutos_atraso = sum(float(p.minutos_atraso or 0) for status, lst in entradas_por_status.items() for p in lst)
             taxa_pontualidade = ((total_entradas - total_atrasos_qtd) / total_entradas * 100) if total_entradas > 0 else 100.0
 
-            # 4. Estimativa de Horas Extras (baseado na configuração do estabelecimento)
-            query_saidas = db.session.query(
-                RegistroPonto.funcionario_id,
-                RegistroPonto.data,
-                RegistroPonto.hora
-            ).filter(
-                RegistroPonto.data >= data_inicio_dia,
-                RegistroPonto.tipo_registro == 'saida'
-            )
-            
-            if str(estabelecimento_id).lower() != 'all':
-                query_saidas = query_saidas.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
-                
-            saidas_periodo = query_saidas.all()
-
+            # 4. Estimativa de Horas Extras (Python in-memory)
             minutos_extras_estimados = 0
-            overtime_by_employee: Dict[int, int] = {}
-            overtime_by_day: Dict[str, int] = {}
+            overtime_by_employee = {}
+            overtime_by_day = {}
+            saidas_periodo = [p for p in pontos_bulk if p.tipo_registro == 'saida']
 
-            for func_id, data_ponto, hora_ponto in saidas_periodo:
-                if not hora_ponto:
+            for p in saidas_periodo:
+                if not p.hora:
                     continue
-                minutos_saida = _time_to_minutes(hora_ponto)
+                minutos_saida = _time_to_minutes(p.hora)
                 extra = minutos_saida - minuto_saida_ref
                 if extra <= 0:
                     continue
                 minutos_extras_estimados += extra
-                overtime_by_employee[func_id] = overtime_by_employee.get(func_id, 0) + extra
-                day_key = data_ponto.isoformat() if data_ponto else None
+                overtime_by_employee[p.funcionario_id] = overtime_by_employee.get(p.funcionario_id, 0) + extra
+                day_key = p.data.isoformat() if p.data else None
                 if day_key:
                     overtime_by_day[day_key] = overtime_by_day.get(day_key, 0) + extra
 
-            valor_hora_medio = (float(total_salarios) / 220) if total_salarios > 0 else 10.0
-            custo_extras_estimado = (minutos_extras_estimados / 60) * valor_hora_medio * 1.5 # 50% adicional
+            # Buscamos a query dos benefícios por funcionário primeiro para evitar queries duplicadas
+            query_ben_func = db.session.query(
+                FuncionarioBeneficio.funcionario_id,
+                Beneficio.nome,
+                FuncionarioBeneficio.valor
+            ).select_from(FuncionarioBeneficio).join(Beneficio).join(Funcionario).filter(
+                Funcionario.ativo == True,
+                FuncionarioBeneficio.ativo == True
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                 query_ben_func = query_ben_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            beneficios_por_func = query_ben_func.all()
 
-            # 5. Custo Total Estimado
-            custo_folha_estimado = float(total_salarios) + float(total_beneficios) + custo_extras_estimado
+            # 1. Custo Mensal de Benefícios Ativos (Calculado em Python)
+            total_beneficios = sum(float(b[2] or 0) for b in beneficios_por_func)
 
+            # Buscamos todos os funcionários ativos
             query_ativos = Funcionario.query.filter_by(ativo=True)
             if str(estabelecimento_id).lower() != 'all':
                 query_ativos = query_ativos.filter_by(estabelecimento_id=estabelecimento_id)
             funcionarios_ativos = query_ativos.all()
             funcionarios_ativos_ids = [f.id for f in funcionarios_ativos]
+
+            # 2. Total Salários Base (Calculado em Python)
+            total_salarios = sum(float(f.salario_base or 0) for f in funcionarios_ativos)
+
+            valor_hora_medio = (float(total_salarios) / 220) if total_salarios > 0 else 10.0
+            custo_extras_estimado = (minutos_extras_estimados / 60) * valor_hora_medio * 1.5
+
+            # 5. Custo Total Estimado
+            custo_folha_estimado = float(total_salarios) + float(total_beneficios) + custo_extras_estimado
 
             # 6. Rotatividade (Turnover)
             # Admissões no período
@@ -1081,20 +1071,11 @@ class DataLayer:
                     "horas_extras": 0  # Simplificado para performance
                 })
 
-            # 8. Detalhamento de Benefícios
-            query_benefits = db.session.query(
-                Beneficio.nome, 
-                func.sum(FuncionarioBeneficio.valor).label('total')
-            ).select_from(FuncionarioBeneficio).join(Beneficio).join(Funcionario).filter(
-                FuncionarioBeneficio.ativo == True,
-                Funcionario.ativo == True
-            )
-            if str(estabelecimento_id).lower() != 'all':
-                 query_benefits = query_benefits.filter(Funcionario.estabelecimento_id == estabelecimento_id)
-            
-            benefits_breakdown = query_benefits.group_by(Beneficio.nome).all()
-            
-            benefits_data = [{"name": b[0] or "Outros", "value": float(b[1] or 0)} for b in benefits_breakdown]
+            # 8. Detalhamento de Benefícios (Python in-memory)
+            benefits_map = {}
+            for _, nome, valor in beneficios_por_func:
+                benefits_map[nome] = benefits_map.get(nome, 0.0) + float(valor or 0)
+            benefits_data = [{"name": name or "Outros", "value": val} for name, val in benefits_map.items()]
 
             # 9. Top Funcionários com Horas Extras (estimado via ponto, ou via BancoHoras se disponível)
             overtime_list = []
@@ -1126,61 +1107,32 @@ class DataLayer:
                             "custo_estimado": round((float(mins) / 60) * valor_hora_medio * 1.5, 2)
                         })
 
-            entradas_mes_query = db.session.query(
-                RegistroPonto.funcionario_id,
-                func.count(RegistroPonto.id).label("qtd"),
-                func.sum(RegistroPonto.minutos_atraso).label("minutos_atraso")
-            ).filter(
-                RegistroPonto.data >= inicio_mes,
-                RegistroPonto.tipo_registro == "entrada",
-                RegistroPonto.status == "atrasado"
-            )
-            if str(estabelecimento_id).lower() != 'all':
-                entradas_mes_query = entradas_mes_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
-            
-            entradas_mes = entradas_mes_query.group_by(RegistroPonto.funcionario_id).all()
+            # 12. Entradas Atrasadas no Mês (Python in-memory de pontos_bulk)
+            atrasos_por_func_id = {}
+            for p in pontos_bulk:
+                if p.data >= inicio_mes and p.tipo_registro == 'entrada' and p.status == 'atrasado':
+                    fid = p.funcionario_id
+                    if fid not in atrasos_por_func_id:
+                        atrasos_por_func_id[fid] = {"qtd": 0, "minutos": 0}
+                    atrasos_por_func_id[fid]["qtd"] += 1
+                    atrasos_por_func_id[fid]["minutos"] += int(p.minutos_atraso or 0)
 
-            atrasos_por_func_id = {r.funcionario_id: {"qtd": int(r.qtd or 0), "minutos": int(r.minutos_atraso or 0)} for r in entradas_mes}
-
-            saidas_mes_query = db.session.query(
-                RegistroPonto.funcionario_id,
-                RegistroPonto.data,
-                RegistroPonto.hora
-            ).filter(
-                RegistroPonto.data >= inicio_mes,
-                RegistroPonto.tipo_registro == "saida"
-            )
-            if str(estabelecimento_id).lower() != 'all':
-                saidas_mes_query = saidas_mes_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
-                
-            saidas_mes = saidas_mes_query.all()
-
+            # 13. Saídas no Mês (Python in-memory de pontos_bulk)
             extras_mes_por_func_id: Dict[int, int] = {}
             extras_mes_por_dia: Dict[str, int] = {}
-            for func_id, data_ponto, hora_ponto in saidas_mes:
-                if not hora_ponto:
-                    continue
-                minutos_saida = _time_to_minutes(hora_ponto)
-                extra = minutos_saida - minuto_saida_ref
-                if extra <= 0:
-                    continue
-                extras_mes_por_func_id[func_id] = extras_mes_por_func_id.get(func_id, 0) + int(extra)
-                if data_ponto:
-                    extras_mes_por_dia[data_ponto.isoformat()] = extras_mes_por_dia.get(data_ponto.isoformat(), 0) + int(extra)
+            for p in pontos_bulk:
+                if p.data >= inicio_mes and p.tipo_registro == 'saida':
+                    if not p.hora:
+                        continue
+                    minutos_saida = _time_to_minutes(p.hora)
+                    extra = minutos_saida - minuto_saida_ref
+                    if extra <= 0:
+                        continue
+                    extras_mes_por_func_id[p.funcionario_id] = extras_mes_por_func_id.get(p.funcionario_id, 0) + int(extra)
+                    if p.data:
+                        extras_mes_por_dia[p.data.isoformat()] = extras_mes_por_dia.get(p.data.isoformat(), 0) + int(extra)
 
-            query_ben_func = db.session.query(
-                FuncionarioBeneficio.funcionario_id,
-                Beneficio.nome,
-                FuncionarioBeneficio.valor
-            ).select_from(FuncionarioBeneficio).join(Beneficio).join(Funcionario).filter(
-                Funcionario.ativo == True,
-                FuncionarioBeneficio.ativo == True
-            )
-            if str(estabelecimento_id).lower() != 'all':
-                 query_ben_func = query_ben_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
-                 
-            beneficios_por_func = query_ben_func.all()
-
+            # Organizar detalhes de benefícios (já populados de beneficios_por_func)
             beneficios_por_func_id = {}
             beneficios_detalhes_por_id = {}
             for fid, nome, valor in beneficios_por_func:
@@ -1201,19 +1153,18 @@ class DataLayer:
                     dias_uteis_mes += 1
                 d += timedelta(days=1)
 
-            dias_com_entrada_mes_query = db.session.query(
-                RegistroPonto.funcionario_id,
-                func.count(func.distinct(RegistroPonto.data)).label("dias")
-            ).filter(
-                RegistroPonto.data >= inicio_mes,
-                RegistroPonto.tipo_registro == "entrada"
-            )
-            if str(estabelecimento_id).lower() != 'all':
-                dias_com_entrada_mes_query = dias_com_entrada_mes_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
+            # 15. Dias com Entrada no Mês (Python in-memory de pontos_bulk)
+            dias_com_entrada_mes_por_id = {}
+            dias_entrada_func_dates = {}  # funcionario_id -> set of dates
+            for p in pontos_bulk:
+                if p.data >= inicio_mes and p.tipo_registro == 'entrada':
+                    fid = p.funcionario_id
+                    if fid not in dias_entrada_func_dates:
+                        dias_entrada_func_dates[fid] = set()
+                    dias_entrada_func_dates[fid].add(p.data)
             
-            dias_com_entrada_mes = dias_com_entrada_mes_query.group_by(RegistroPonto.funcionario_id).all()
-
-            dias_com_entrada_mes_por_id = {int(r.funcionario_id): int(r.dias or 0) for r in dias_com_entrada_mes}
+            for fid, dates in dias_entrada_func_dates.items():
+                dias_com_entrada_mes_por_id[fid] = len(dates)
 
             banco_horas_registros_query = db.session.query(BancoHoras).join(Funcionario).filter(
                 BancoHoras.mes_referencia == banco_horas_mes
@@ -1306,14 +1257,21 @@ class DataLayer:
             banco_horas_por_funcionario_mes.sort(key=lambda x: x["saldo_minutos"], reverse=True)
             espelho_pagamento_mes.sort(key=lambda x: x["total_estimado"], reverse=True)
 
+            # Otimização sênior contra loop N+1: Buscar todos os pontos de hoje de uma vez só
+            pontos_hoje_todos = db.session.query(RegistroPonto).filter(
+                RegistroPonto.data == hoje_dia
+            ).order_by(RegistroPonto.funcionario_id, RegistroPonto.hora.desc()).all()
+
+            pontos_hoje_map = {}
+            for p in pontos_hoje_todos:
+                if p.funcionario_id not in pontos_hoje_map:
+                    pontos_hoje_map[p.funcionario_id] = p
+
             team_status = []
             todos_funcionarios = funcionarios_ativos
             
             for funcionario in todos_funcionarios:
-                ultimo_ponto = db.session.query(RegistroPonto).filter(
-                    RegistroPonto.funcionario_id == funcionario.id,
-                    RegistroPonto.data == hoje_dia
-                ).order_by(RegistroPonto.hora.desc()).first()
+                ultimo_ponto = pontos_hoje_map.get(funcionario.id)
                 
                 status_atual = "Ausente"
                 horario_ultimo = "-"

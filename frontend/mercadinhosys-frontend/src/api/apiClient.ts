@@ -47,7 +47,7 @@ apiClient.interceptors.request.use(
             // Se a URL contiver o host interno do Docker ou 'backend', reduz para caminho relativo
             if (/backend|:\d+|https?:\/\//.test(val) && (val.includes('backend') || val.includes(':5000'))) {
                 const parts = val.split('/api');
-                const path = parts.length > 1 ? `/api${parts[1]}` : val.replace(/^https?:\/\/[^\/]+/, '');
+                const path = parts.length > 1 ? `/api${parts[1]}` : val.replace(/^https?:\/\/[^/]+/, '');
                 return path.startsWith('/api') ? path : `/api${path.startsWith('/') ? '' : '/'}${path}`;
             }
             return val;
@@ -168,8 +168,6 @@ apiClient.interceptors.response.use(
                     timestamp: new Date().toISOString()
                 };
                 localStorage.setItem('mercadinhosys_last_refresh_error', JSON.stringify(errorInfo));
-
-                console.error('❌ Refresh token falhou!', errorInfo);
 
                 console.error('❌ Refresh token falhou!', errorInfo);
 

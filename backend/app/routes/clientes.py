@@ -97,14 +97,12 @@ def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
         except:
             erros.append("Limite de crédito inválido")
 
-    # Validação de endereço
-    campos_endereco = ["cep", "logradouro", "numero", "bairro", "cidade", "estado"]
-    for campo in campos_endereco:
-        if not data.get(campo):
-            # Se for obrigatório na tabela, deve ser obrigatório aqui
-            erros.append(
-                f'O campo {campo.replace("_", " ").title()} é obrigatório'
-            )
+    # Endereço é opcional para clientes PF em mercadinhos físicos.
+    # Validação de CEP apenas se informado
+    if data.get("cep"):
+        cep = re.sub(r"\D", "", data["cep"])
+        if len(cep) not in [8]:
+            erros.append("CEP deve conter 8 dígitos")
 
     return erros
 
@@ -154,6 +152,9 @@ def listar_clientes():
         # Get estabelecimento_id from JWT
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
+
+        if estabelecimento_id is None:
+            return jsonify({"success": False, "message": "Estabelecimento não identificado"}), 400
         
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 50, type=int)
@@ -241,15 +242,19 @@ def listar_clientes():
 
         # Estatísticas
         total_clientes = paginacao.total
+        # Contagem de ativos: usa nova query para não acumular filtros da query paginada
+        query_ativos = Cliente.query
+        if estabelecimento_id != 'all':
+            query_ativos = query_ativos.filter_by(estabelecimento_id=estabelecimento_id)
         clientes_ativos = (
-            query.filter_by(ativo=True).count() if ativo is None else paginacao.total
+            query_ativos.filter_by(ativo=True).count() if ativo is None else paginacao.total
         )
         clientes_inativos = total_clientes - clientes_ativos
         
         # Calcular Dashboard do Cliente Global (apenas para o estabelecimento atual)
         query_gasto = db.session.query(db.func.sum(Cliente.valor_total_gasto))
         query_devido = db.session.query(db.func.sum(Cliente.saldo_devedor))
-        if estabelecimento_id != 'all':
+        if estabelecimento_id is not None and estabelecimento_id != 'all':
              query_gasto = query_gasto.filter_by(estabelecimento_id=estabelecimento_id)
              query_devido = query_devido.filter_by(estabelecimento_id=estabelecimento_id)
         total_gasto_geral = query_gasto.scalar() or 0
@@ -257,7 +262,7 @@ def listar_clientes():
         
         query_melhor = Cliente.query
         query_maior = Cliente.query
-        if estabelecimento_id != 'all':
+        if estabelecimento_id is not None and estabelecimento_id != 'all':
             query_melhor = query_melhor.filter_by(estabelecimento_id=estabelecimento_id)
             query_maior = query_maior.filter_by(estabelecimento_id=estabelecimento_id)
         
@@ -307,10 +312,17 @@ def obter_cliente(id):
         # Get estabelecimento_id from JWT
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        
-        cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=estabelecimento_id
-        ).first_or_404()
+
+        if estabelecimento_id is None:
+            return jsonify({"success": False, "message": "Estabelecimento não identificado"}), 400
+
+        # SuperAdmin pode buscar qualquer cliente; outros usuários são filtrados pelo estabelecimento
+        if estabelecimento_id == 'all':
+            cliente = Cliente.query.filter_by(id=id).first_or_404()
+        else:
+            cliente = Cliente.query.filter_by(
+                id=id, estabelecimento_id=estabelecimento_id
+            ).first_or_404()
 
         # Dados básicos
         dados_cliente = cliente.to_dict()
@@ -486,6 +498,9 @@ def criar_cliente():
         jwt_data = get_jwt()
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
+
+        if estabelecimento_id is None:
+            return jsonify({"success": False, "message": "Estabelecimento não identificado"}), 400
         
         data = request.get_json()
 
@@ -601,10 +616,16 @@ def atualizar_cliente(id):
         jwt_data = get_jwt()
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
-        
-        cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=estabelecimento_id
-        ).first_or_404()
+
+        if estabelecimento_id is None:
+            return jsonify({"success": False, "message": "Estabelecimento não identificado"}), 400
+
+        if estabelecimento_id == 'all':
+            cliente = Cliente.query.filter_by(id=id).first_or_404()
+        else:
+            cliente = Cliente.query.filter_by(
+                id=id, estabelecimento_id=estabelecimento_id
+            ).first_or_404()
 
         data = request.get_json()
 
@@ -707,10 +728,16 @@ def atualizar_status_cliente(id):
         jwt_data = get_jwt()
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
-        
-        cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=estabelecimento_id
-        ).first_or_404()
+
+        if estabelecimento_id is None:
+            return jsonify({"success": False, "message": "Estabelecimento não identificado"}), 400
+
+        if estabelecimento_id == 'all':
+            cliente = Cliente.query.filter_by(id=id).first_or_404()
+        else:
+            cliente = Cliente.query.filter_by(
+                id=id, estabelecimento_id=estabelecimento_id
+            ).first_or_404()
 
         data = request.get_json()
         novo_status = data.get("ativo")
@@ -775,10 +802,16 @@ def excluir_cliente(id):
         jwt_data = get_jwt()
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
-        
-        cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=estabelecimento_id
-        ).first_or_404()
+
+        if estabelecimento_id is None:
+            return jsonify({"success": False, "message": "Estabelecimento não identificado"}), 400
+
+        if estabelecimento_id == 'all':
+            cliente = Cliente.query.filter_by(id=id).first_or_404()
+        else:
+            cliente = Cliente.query.filter_by(
+                id=id, estabelecimento_id=estabelecimento_id
+            ).first_or_404()
 
         # Verificar vínculos
         # 1. Vendas vinculadas

@@ -392,6 +392,11 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
 
     def to_dict(self, depth=0):
         data = super().to_dict(depth=depth)
+        # Security: Never expose password fields in API responses
+        # Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5
+        data.pop("senha", None)
+        data.pop("password", None)
+        data.pop("password_hash", None)
         data["usuario"] = self.username
         data["nivel_acesso"] = self.role
         data["salario"] = float(self.salario) if self.salario else (float(self.salario_base) if self.salario_base else 0.0)
