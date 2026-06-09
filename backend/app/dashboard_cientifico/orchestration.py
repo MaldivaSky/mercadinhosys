@@ -20,6 +20,43 @@ _PM = PracticalModels
 logger = logging.getLogger(__name__)
 
 
+def run_in_parallel(task_dict: Dict[str, Any], max_workers: int = 10) -> Dict[str, Any]:
+    """
+    Executes multiple database tasks in parallel, safely propagating Flask app context
+    and releasing SQLAlchemy sessions to prevent connection pool overflow.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    import flask
+    import time
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    app = flask.current_app._get_current_object()
+    results = {}
+
+    def worker(name, func):
+        with app.app_context():
+            t_start = time.time()
+            try:
+                res = func()
+                _logger.info(f"⚡ Parallel task '{name}' finished in {time.time() - t_start:.3f}s")
+                return name, res, None
+            except Exception as ex:
+                _logger.error(f"❌ Parallel task '{name}' failed: {ex}", exc_info=True)
+                return name, None, ex
+            finally:
+                from app.models import db
+                db.session.remove()
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(worker, name, func) for name, func in task_dict.items()]
+        for fut in futures:
+            name, res, err = fut.result()
+            results[name] = res
+
+    return results
+
+
 class DashboardOrchestrator:
     """Orquestra a geração do dashboard"""
 
@@ -225,104 +262,64 @@ class DashboardOrchestrator:
         # Obter a instância da app (para logs ou acesso ao config se necessário)
         app = current_app._get_current_object()
         
-        # 🔥 ALTERAÇÃO CRÍTICA: Executar queries FINANCEIRAS fundamentais de forma SÍNCRONA
-        # Isso garante que não haja falhas silenciosas de thread pool para os números mais importantes (Lucro, Despesas)
+        # 🔥 ALTERAÇÃO CRÍTICA OTIMIZADA: Executar todas as queries em paralelo via ThreadPoolExecutor seguro
+        _logger.info(f"START: Coleta de dados em paralelo seguro (est_id: {self.establishment_id})")
+        tasks = {
+            "financials_data": lambda: DataLayer.get_sales_financials(self.establishment_id, start_current, end_date),
+            "expense_details": lambda: DataLayer.get_expense_details(self.establishment_id, start_current, end_date),
+            "sales_current_summary": lambda: DataLayer.get_sales_summary_range(self.establishment_id, start_current, end_date),
+            "sales_previous_summary": lambda: DataLayer.get_sales_summary_range(self.establishment_id, start_previous, end_previous),
+            "inventory_summary": lambda: DataLayer.get_inventory_summary(self.establishment_id),
+            "sales_by_hour": lambda: DataLayer.get_sales_by_hour(self.establishment_id, days),
+            "top_products_by_hour": lambda: DataLayer.get_top_products_by_hour(self.establishment_id, days, top_n=5),
+            "customer_temporal_patterns": lambda: DataLayer.get_customer_temporal_patterns(self.establishment_id, days=90),
+            "hourly_concentration": lambda: DataLayer.get_hourly_concentration_metrics(self.establishment_id, days),
+            "hourly_sales_by_category": lambda: TemporalAnalysis.get_hourly_sales_by_category(self.establishment_id, days),
+            "period_analysis": lambda: TemporalAnalysis.get_period_analysis(self.establishment_id, days),
+            "weekday_analysis": lambda: TemporalAnalysis.get_weekday_analysis(self.establishment_id, days),
+            "rh_metrics": lambda: DataLayer.get_rh_metrics(self.establishment_id, days),
+            "sales_timeseries": lambda: DataLayer.get_sales_timeseries(self.establishment_id, max(days, 90)),
+            "fiado_metrics": lambda: DataLayer.get_fiado_metrics(self.establishment_id),
+            "receivables_metrics": lambda: DataLayer.get_receivables_metrics(self.establishment_id),
+            "abc_analysis": lambda: self.get_abc_analysis(days=days, limit=None),
+            "expiring_products": lambda: DataLayer.get_expiring_products(self.establishment_id, 30),
+            "customer_metrics": lambda: DataLayer.get_customer_metrics(self.establishment_id, days),
+            "product_hourly_recommendations": lambda: TemporalAnalysis.get_product_hourly_recommendations(self.establishment_id, days),
+            "category_performance_by_time": lambda: TemporalAnalysis.get_category_performance_by_time(self.establishment_id, days),
+            "payment_methods_metrics": lambda: DataLayer.get_payment_methods_metrics(self.establishment_id, start_current, end_date),
+        }
+
         try:
-            financials_data = DataLayer.get_sales_financials(self.establishment_id, start_current, end_date)
-            # Garantir que a lista de despesas nunca seja vazia por erro de thread
-            expense_details = DataLayer.get_expense_details(self.establishment_id, start_current, end_date)
-            sales_current_summary = DataLayer.get_sales_summary_range(self.establishment_id, start_current, end_date)
-            sales_previous_summary = DataLayer.get_sales_summary_range(self.establishment_id, start_previous, end_previous)
-        except Exception as e:
-            _logger.error(f"Erro ao buscar dados financeiros síncronos: {e}")
-            financials_data = {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
-            expense_details = []
-            sales_current_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
-            sales_previous_summary = {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+            parallel_results = run_in_parallel(tasks, max_workers=10)
+        except Exception as parallel_err:
+            _logger.critical(f"Falha critica no executor paralelo: {parallel_err}")
+            parallel_results = {}
 
-        # 1. Obter métricas secundárias e pesadas de forma SÍNCRONA e SEGURA
-        # Otimização: Removido ThreadPoolExecutor para evitar "QueuePool limit overflow"
-        # A execução sequencial é mais estável em ambientes com conexões limitadas (Aiven/Render)
-        
-        _logger.info(f"START: Coleta de dados secundários sequencial (est_id: {self.establishment_id})")
-        
-        def safe_get(func, name, default, *args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                _logger.warning(f"⚠️ Query '{name}' falhou: {e}")
-                return default
+        # Mapeamento com fallbacks robustos
+        financials_data = parallel_results.get("financials_data") or {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
+        expense_details = parallel_results.get("expense_details") or []
+        sales_current_summary = parallel_results.get("sales_current_summary") or {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+        sales_previous_summary = parallel_results.get("sales_previous_summary") or {"total_vendas": 0, "total_faturado": 0.0, "ticket_medio": 0.0, "dias_com_venda": 0}
+        inventory_summary = parallel_results.get("inventory_summary") or {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}
+        sales_by_hour = parallel_results.get("sales_by_hour") or []
+        top_products_by_hour = parallel_results.get("top_products_by_hour") or []
+        customer_temporal_patterns = parallel_results.get("customer_temporal_patterns") or []
+        hourly_concentration = parallel_results.get("hourly_concentration") or {}
+        hourly_sales_by_category = parallel_results.get("hourly_sales_by_category") or {}
+        period_analysis = parallel_results.get("period_analysis") or {}
+        weekday_analysis = parallel_results.get("weekday_analysis") or {}
+        rh_metrics = parallel_results.get("rh_metrics") or {}
+        sales_timeseries = parallel_results.get("sales_timeseries") or []
+        fiado_metrics = parallel_results.get("fiado_metrics") or {"total_aberto": 0.0, "total_limite": 0.0, "clientes_com_fiado": 0, "percentual_limite_utilizado": 0.0, "maior_devedor_nome": "", "maior_devedor_valor": 0.0, "ticket_medio_fiado": 0.0, "percentual_clientes_com_fiado": 0.0, "top_devedores": []}
+        receivables_metrics = parallel_results.get("receivables_metrics") or {"total_vencido": 0.0, "total_a_vencer": 0.0, "total_recebivel": 0.0, "taxa_inadimplencia": 0.0, "titulos_vencidos": 0, "ranking_atraso": []}
+        abc_analysis = parallel_results.get("abc_analysis") or {"produtos": [], "resumo": {}, "total_value": 0}
+        expiring_products = parallel_results.get("expiring_products") or []
+        customer_metrics = parallel_results.get("customer_metrics") or {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}
+        product_hourly_recommendations = parallel_results.get("product_hourly_recommendations") or []
+        category_performance_by_time = parallel_results.get("category_performance_by_time") or {}
+        payment_methods_metrics = parallel_results.get("payment_methods_metrics") or {"metricas": [], "total_processado": 0.0}
 
-        inventory_summary = safe_get(DataLayer.get_inventory_summary, "inventory", 
-                                   {"total_produtos": 0, "valor_total": 0.0, "custo_total": 0.0, "baixo_estoque": 0}, 
-                                   self.establishment_id)
-        
-        sales_by_hour = safe_get(DataLayer.get_sales_by_hour, "sales_hour", [], 
-                               self.establishment_id, days)
-                               
-        top_products_by_hour = safe_get(DataLayer.get_top_products_by_hour, "top_hour", [], 
-                                      self.establishment_id, days, top_n=5)
-                                      
-        customer_temporal_patterns = safe_get(DataLayer.get_customer_temporal_patterns, "cust_patterns", [], 
-                                            self.establishment_id, days=90)
-                                            
-        hourly_concentration = safe_get(DataLayer.get_hourly_concentration_metrics, "hourly_conc", {}, 
-                                      self.establishment_id, days)
-        
-        hourly_sales_by_category = safe_get(TemporalAnalysis.get_hourly_sales_by_category, "hourly_cat", {}, 
-                                          self.establishment_id, days)
-                                          
-        period_analysis = safe_get(TemporalAnalysis.get_period_analysis, "period_anal", {}, 
-                                 self.establishment_id, days)
-                                 
-        weekday_analysis = safe_get(TemporalAnalysis.get_weekday_analysis, "weekday_anal", {}, 
-                                  self.establishment_id, days)
-                                  
-        rh_metrics = safe_get(DataLayer.get_rh_metrics, "rh_metrics", {}, 
-                            self.establishment_id, days)
-                            
-        sales_timeseries = safe_get(DataLayer.get_sales_timeseries, "sales_series", [], 
-                                  self.establishment_id, max(days, 90))
-
-        # 🔥 FIADO: Métricas de Carteira de Crédito (dados reais de exposição)
-        fiado_metrics = safe_get(DataLayer.get_fiado_metrics, "fiado_metrics",
-                                {"total_aberto": 0.0, "total_limite": 0.0, "clientes_com_fiado": 0,
-                                 "percentual_limite_utilizado": 0.0, "maior_devedor_nome": "",
-                                 "maior_devedor_valor": 0.0, "ticket_medio_fiado": 0.0,
-                                 "percentual_clientes_com_fiado": 0.0, "top_devedores": []},
-                                self.establishment_id)
-
-        receivables_metrics = safe_get(DataLayer.get_receivables_metrics, "receivables",
-                                     {"total_vencido": 0.0, "total_a_vencer": 0.0, "total_recebivel": 0.0,
-                                      "taxa_inadimplencia": 0.0, "titulos_vencidos": 0, "ranking_atraso": []},
-                                     self.establishment_id)
-        
-        # Análises mais pesadas
-        # 🔥 CORREÇÃO: Usar get_all_products_performance para incluir produtos sem vendas na análise ABC
-        abc_analysis = safe_get(self.get_abc_analysis, "abc", 
-                              {"produtos": [], "resumo": {}, "total_value": 0}, 
-                              days=days, limit=None) # Limit None para pegar tudo
-                              
-        # 🔥 NOVO: Coletando Produtos Próximos do Vencimento (30 dias)
-        expiring_products = safe_get(DataLayer.get_expiring_products, "expiring_products", [],
-                                   self.establishment_id, 30)
-                              
-        customer_metrics = safe_get(DataLayer.get_customer_metrics, "cust_metrics", 
-                                  {"ticket_medio": 0, "clientes_unicos": 0, "novos_clientes": 0, "vendas_no_periodo": 0}, 
-                                  self.establishment_id, days)
-                                  
-        product_hourly_recommendations = safe_get(TemporalAnalysis.get_product_hourly_recommendations, "recomm", [], 
-                                                self.establishment_id, days)
-                                                
-        category_performance_by_time = safe_get(TemporalAnalysis.get_category_performance_by_time, "cat_perf", {}, 
-                                              self.establishment_id, days)
-
-        # 🔥 NOVO: Métricas de Formas de Pagamento com Percentuais (via tabela Pagamento)
-        payment_methods_metrics = safe_get(DataLayer.get_payment_methods_metrics, "payment_methods",
-                                          {"metricas": [], "total_processado": 0.0},
-                                          self.establishment_id, start_current, end_date)
-
-        _logger.info(f"DONE: Coleta sequencial concluida em {time.time()-start_exec:.2f}s")
+        _logger.info(f"DONE: Coleta paralela concluida em {time.time()-start_exec:.2f}s")
 
         # Dados Financeiros Reais (processar resultados coletados)
         # 🔥 SENIOR FIX: Fallback triplo para evitar zeros se uma das queries falhar

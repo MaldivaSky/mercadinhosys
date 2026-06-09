@@ -354,7 +354,14 @@ class RealisticInjector:
                 marca_str = f"Marca {variacao}" if variacao > 0 else "Líder"
                 nome_formatado = f"{item['n']} - {marca_str}"
                 
-                vencimento = date.today() + timedelta(days=random.randint(30, 500))
+                # 5% expired, 15% expiring soon, 80% normal
+                rand_val = random.random()
+                if rand_val < 0.05:
+                    vencimento = date.today() - timedelta(days=random.randint(1, 15))
+                elif rand_val < 0.20:
+                    vencimento = date.today() + timedelta(days=random.randint(0, 29))
+                else:
+                    vencimento = date.today() + timedelta(days=random.randint(30, 500))
                 fabricacao = vencimento - timedelta(days=random.randint(180, 720))
                 
                 # Gerar Lote Único Robusto (8 chars + ID do Estabelecimento)

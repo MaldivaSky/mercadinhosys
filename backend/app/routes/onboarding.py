@@ -8,6 +8,7 @@ from datetime import datetime, date
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.models import db, Estabelecimento, Funcionario, Configuracao, Auditoria
+from app.utils.response_utils import sanitize_response
 import json
 
 onboarding_bp = Blueprint("onboarding", __name__)
@@ -185,11 +186,11 @@ def registrar_conta():
                 from flask import current_app
                 current_app.logger.warning(f"Conta criada, mas erro ao enviar e-mail: {str(email_e)}")
 
-            return jsonify({
+            return jsonify(sanitize_response({
                 "success": True, 
                 "message": "Conta criada com sucesso! Verifique seu e-mail para acessar suas credenciais de login.",
                 "estabelecimento_id": novo_estabelecimento.id
-            }), 201
+            })), 201
 
         except Exception as intern_e:
             db.session.rollback()

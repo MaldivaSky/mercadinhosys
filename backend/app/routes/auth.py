@@ -23,6 +23,8 @@ from app import db
 
 from app.models import Funcionario, Estabelecimento, LoginHistory
 
+from app.utils.response_utils import sanitize_response
+
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import traceback

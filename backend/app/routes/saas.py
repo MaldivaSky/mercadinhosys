@@ -257,7 +257,11 @@ def tenant_onboarding():
             logger.warning(f"Erro ao enviar email de boas-vindas: {e}")
 
         # Retorno sucesso com dados de acesso
-        return jsonify({
+        # Security: Sanitize response to ensure no password fields are exposed
+        # Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5
+        from app.utils.response_utils import sanitize_response
+        
+        return jsonify(sanitize_response({
             "success": True,
             "message": "Ambiente do cliente provisionado com sucesso!",
             "data": {
@@ -290,7 +294,7 @@ def tenant_onboarding():
                     "3 Categorias de Produtos"
                 ]
             }
-        }), 201
+        })), 201
 
     except Exception as e:
         # Rollback em caso de qualquer erro
@@ -395,10 +399,14 @@ def listar_estabelecimentos_monitor():
             return jsonify({"success": False, "error": "Acesso restrito"}), 403
             
         estabelecimentos = Estabelecimento.query.all()
-        return jsonify({
+        
+        # Security: Sanitize response to ensure no password fields are exposed
+        # Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5
+        from app.utils.response_utils import sanitize_response
+        return jsonify(sanitize_response({
             "success": True,
             "estabelecimentos": [e.to_dict() for e in estabelecimentos]
-        }), 200
+        })), 200
     except Exception as e:
         logger.error(f"Erro ao listar estabelecimentos monitor: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -425,11 +433,14 @@ def alterar_plano_estabelecimento(id):
         
         logger.info(f"🔄 PLANO ALTERADO: Estabelecimento {id} mudou para {estabelecimento.plano}")
         
-        return jsonify({
+        # Security: Sanitize response to ensure no password fields are exposed
+        # Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5
+        from app.utils.response_utils import sanitize_response
+        return jsonify(sanitize_response({
             "success": True, 
             "message": "Plano atualizado com sucesso",
             "estabelecimento": estabelecimento.to_dict()
-        }), 200
+        })), 200
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao alterar plano do estabelecimento {id}: {e}")

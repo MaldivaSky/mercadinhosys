@@ -1,7 +1,11 @@
 import os
+import logging
 from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
+
+# Configure logger for config module
+logger = logging.getLogger(__name__)
 
 basedir = Path(__file__).parent.absolute()
 db_path = Path("c:/temp/mercadinho_instance/mercadinho.db")
@@ -139,6 +143,19 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    
+    # Log warning when using fallback keys in development
+    if not Config._secret_key:
+        logger.warning(
+            "SECURITY WARNING: Using fallback SECRET_KEY in development. "
+            "Set SECRET_KEY environment variable for better security."
+        )
+    if not Config._jwt_secret:
+        logger.warning(
+            "SECURITY WARNING: Using fallback JWT_SECRET_KEY in development. "
+            "Set JWT_SECRET_KEY environment variable for better security."
+        )
+    
     SECRET_KEY = Config._secret_key or "dev-fallback-secret-key-12345"
     JWT_SECRET_KEY = Config._jwt_secret or "dev-fallback-jwt-key-67890"
     if not Config.CORS_ORIGINS:
@@ -153,8 +170,10 @@ class ProductionConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
-    SECRET_KEY = Config._secret_key or "test-fallback-secret-key-12345"
-    JWT_SECRET_KEY = Config._jwt_secret or "test-fallback-jwt-key-67890"
+    # Fixed test keys for reproducibility (Requirement 7.4)
+    # No logging needed as these are intentionally fixed for testing
+    SECRET_KEY = "test-fixed-secret-key-for-reproducibility"
+    JWT_SECRET_KEY = "test-fixed-jwt-key-for-reproducibility"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
     DEBUG = True

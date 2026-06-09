@@ -25,7 +25,7 @@ class AuthService {
                 loginData,
                 {
                     headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': identifier },
-                    timeout: 10000
+                    timeout: API_CONFIG.TIMEOUT
                 }
             );
 
@@ -101,7 +101,7 @@ class AuthService {
                 bootstrapData,
                 {
                     headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': identifier },
-                    timeout: 10000
+                    timeout: API_CONFIG.TIMEOUT
                 }
             );
             const data = response.data as { success: boolean; message?: string; error?: string; code?: string };
@@ -127,7 +127,7 @@ class AuthService {
                 payload,
                 {
                     headers: { 'Content-Type': 'application/json' },
-                    timeout: 15000
+                    timeout: API_CONFIG.TIMEOUT
                 }
             );
             const data = response.data;
@@ -159,7 +159,7 @@ class AuthService {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    timeout: 10000
+                    timeout: API_CONFIG.TIMEOUT
                 }
             );
             const data = response.data as { success: boolean; data?: { nome?: string; email?: string; telefone?: string; foto_url?: string }; message?: string; error?: string };
@@ -192,7 +192,7 @@ class AuthService {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    timeout: 10000
+                    timeout: API_CONFIG.TIMEOUT
                 }
             );
             const data = response.data;
