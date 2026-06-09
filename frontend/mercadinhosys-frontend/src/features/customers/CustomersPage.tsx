@@ -1,14 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { Cliente } from '../../types';
-import CustomerTable from './components/CustomerTable';
-import CustomerDetailsModal from './components/CustomerDetailsModal.tsx';
-import CustomerForm from './components/CustomerForm';
-import CustomerDashboard from './components/CustomerDashboard';
-import { customerService } from './customerService';
-import { apiClient } from '../../api/apiClient';
-import { pdvService } from '../pdv/pdvService';
-import { Button, Typography, CircularProgress, TextField, Box, FormControl, InputLabel, Select, MenuItem, InputAdornment, Chip, Tooltip, Menu, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import { showToast } from '../../utils/toast';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    Box,
+    Button,
+    Card,
+    CardContent,
+    Chip,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    FormControl,
+    InputAdornment,
+    InputLabel,
+    Menu,
+    MenuItem,
+    Select,
+    TextField,
+    Tooltip,
+    Typography,
+} from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -18,10 +29,238 @@ import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import HandshakeIcon from '@mui/icons-material/Handshake';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import StarIcon from '@mui/icons-material/Star';
+import InsightsIcon from '@mui/icons-material/Insights';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
+import { Cliente } from '../../types';
+import { apiClient } from '../../api/apiClient';
+import { showToast } from '../../utils/toast';
+import { pdvService } from '../pdv/pdvService';
+import { customerService } from './customerService';
+import CustomerDashboard from './components/CustomerDashboard';
+import CustomerDetailsModal from './components/CustomerDetailsModal';
+import CustomerForm from './components/CustomerForm';
+import CustomerTable from './components/CustomerTable';
+
+type CRMTab = 'overview' | 'recovery' | 'campaigns' | 'portfolio';
+type CampaignKey = 'reactivation' | 'vip' | 'debt' | 'promotion';
+type StatusFilter = 'todos' | 'ativos' | 'inativos';
+type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo';
+
+type DashboardState = {
+    total: number;
+    total_gasto: number;
+    total_devido: number;
+    melhor_cliente_nome: string;
+    melhor_cliente_valor: number;
+    maior_devedor_nome: string;
+    maior_devedor_valor: number;
+};
+
+type RfmCustomer = {
+    cliente_id: number;
+    segment: string;
+    recency_days?: number;
+    frequency?: number;
+    monetary?: number;
+};
+
+type CRMCustomer = Cliente & {
+    crmSegment: string;
+    lifecycle: string;
+    lastPurchaseDays: number | null;
+    whatsappNumber: string;
+    hasDebt: boolean;
+    actionPriority: number;
+};
+
+type CampaignConfig = {
+    key: CampaignKey;
+    title: string;
+    subtitle: string;
+    badge: string;
+    color: string;
+    description: string;
+};
+
+const initialDashboard: DashboardState = {
+    total: 0,
+    total_gasto: 0,
+    total_devido: 0,
+    melhor_cliente_nome: 'Nenhum',
+    melhor_cliente_valor: 0,
+    maior_devedor_nome: 'Nenhum',
+    maior_devedor_valor: 0,
+};
+
+const tabs: Array<{ id: CRMTab; label: string; description: string }> = [
+    { id: 'overview', label: 'CRM Executivo', description: 'Visao comercial, segmentos e prioridades' },
+    { id: 'recovery', label: 'Recuperacao', description: 'Clientes em risco, inativos e cobranca consultiva' },
+    { id: 'campaigns', label: 'Campanhas', description: 'Mensagens inteligentes para WhatsApp e reativacao' },
+    { id: 'portfolio', label: 'Base de Clientes', description: 'Cadastro, carteira, filtros e historico' },
+];
+
+const campaignConfigs: CampaignConfig[] = [
+    {
+        key: 'reactivation',
+        title: 'Reativacao',
+        subtitle: 'Clientes em risco ou inativos',
+        badge: 'Retencao',
+        color: '#2563eb',
+        description: 'Traz de volta clientes com baixa recencia usando abordagem de retorno.',
+    },
+    {
+        key: 'vip',
+        title: 'VIP & Fidelidade',
+        subtitle: 'Campeoes e clientes fieis',
+        badge: 'LTV',
+        color: '#7c3aed',
+        description: 'Fortalece relacionamento com clientes de alto valor e frequencia.',
+    },
+    {
+        key: 'debt',
+        title: 'Carteira em Aberto',
+        subtitle: 'Clientes com saldo devedor',
+        badge: 'Cash',
+        color: '#ea580c',
+        description: 'Acelera recebimento com mensagem profissional e conciliadora.',
+    },
+    {
+        key: 'promotion',
+        title: 'Promocao Direcionada',
+        subtitle: 'Clientes ativos com potencial de recompra',
+        badge: 'Growth',
+        color: '#16a34a',
+        description: 'Aciona base elegivel para oferta, novidade ou campanha sazonal.',
+    },
+];
+
+const segmentColors: Record<string, string> = {
+    'Campeão': '#16a34a',
+    'Fiel': '#2563eb',
+    'Regular': '#7c3aed',
+    'Risco': '#ea580c',
+    'Perdido': '#dc2626',
+    'Novo': '#0f766e',
+};
+
+const formatCurrency = (value: number) =>
+    value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const normalizePhone = (value?: string) => (value || '').replace(/\D/g, '');
+
+const firstName = (name?: string) => (name || '').trim().split(' ')[0] || 'cliente';
+
+const buildWhatsAppUrl = (cliente: Cliente, message: string) => {
+    const phone = normalizePhone(cliente.celular || cliente.telefone);
+    if (!phone) {
+        return null;
+    }
+    const withCountry = phone.startsWith('55') ? phone : `55${phone}`;
+    return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
+};
+
+const classifyLifecycle = (cliente: Cliente, segment: string, lastPurchaseDays: number | null) => {
+    const debt = Number(cliente.saldo_devedor || 0);
+    const totalPurchases = Number(cliente.total_compras || 0);
+    const totalSpent = Number(cliente.valor_total_gasto || 0);
+
+    if (debt > 0) return 'carteira_aberta';
+    if (segment === 'Campeão' || totalSpent >= 5000) return 'vip';
+    if (segment === 'Risco' || (lastPurchaseDays !== null && lastPurchaseDays >= 45)) return 'em_risco';
+    if (!cliente.ativo || segment === 'Perdido' || (lastPurchaseDays !== null && lastPurchaseDays >= 90)) return 'inativo';
+    if (totalPurchases <= 1) return 'novo';
+    return 'ativo';
+};
+
+const lifecyclePriority = (lifecycle: string, debt: number) => {
+    if (lifecycle === 'carteira_aberta' && debt >= 300) return 100;
+    if (lifecycle === 'inativo') return 90;
+    if (lifecycle === 'em_risco') return 80;
+    if (lifecycle === 'vip') return 70;
+    if (lifecycle === 'novo') return 60;
+    return 40;
+};
+
+const buildCampaignMessage = (campaign: CampaignKey, cliente: CRMCustomer) => {
+    const name = firstName(cliente.nome);
+    switch (campaign) {
+        case 'reactivation':
+            return `Olá, ${name}! Sentimos sua falta aqui no MercadinhoSys. Preparamos uma condição especial para incentivar sua próxima compra. Se quiser, me responde aqui que eu separo as melhores ofertas para o seu perfil.`;
+        case 'vip':
+            return `Olá, ${name}! Você faz parte do nosso grupo de clientes mais importantes. Queremos te avisar em primeira mão sobre vantagens exclusivas, promoções premium e novidades pensadas para o seu perfil de compra.`;
+        case 'debt':
+            return `Olá, ${name}! Passando para te apoiar na regularização do seu saldo em aberto conosco. Se preferir, podemos alinhar a melhor forma de pagamento por aqui mesmo com rapidez e segurança.`;
+        case 'promotion':
+        default:
+            return `Olá, ${name}! Temos uma promoção selecionada para clientes com o seu perfil. Se quiser, eu te envio agora mesmo as ofertas mais interessantes e separo os produtos com melhor custo-benefício para sua próxima compra.`;
+    }
+};
+
+const lifecycleLabel = (value: string) => {
+    const map: Record<string, string> = {
+        carteira_aberta: 'Carteira em aberto',
+        inativo: 'Inativo',
+        em_risco: 'Em risco',
+        vip: 'VIP',
+        novo: 'Novo',
+        ativo: 'Ativo',
+    };
+    return map[value] || value;
+};
+
+const KpiCard = ({
+    title,
+    value,
+    subtitle,
+    color,
+    icon,
+}: {
+    title: string;
+    value: string | number;
+    subtitle: string;
+    color: string;
+    icon: React.ReactNode;
+}) => (
+    <Card sx={{ height: '100%', border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+        <CardContent sx={{ p: 2.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
+                <Box>
+                    <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>
+                        {title}
+                    </Typography>
+                    <Typography variant="h4" sx={{ color, fontWeight: 800, mt: 1 }}>
+                        {value}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
+                        {subtitle}
+                    </Typography>
+                </Box>
+                <Box
+                    sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 52,
+                        height: 52,
+                        borderRadius: 3,
+                        bgcolor: `${color}15`,
+                        color,
+                    }}
+                >
+                    {icon}
+                </Box>
+            </Box>
+        </CardContent>
+    </Card>
+);
 
 const CustomersPage: React.FC = () => {
     const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -32,79 +271,48 @@ const CustomersPage: React.FC = () => {
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [clienteDetalhado, setClienteDetalhado] = useState<Cliente | null>(null);
     const [detalheLoading, setDetalheLoading] = useState(false);
-    const [dashboard, setDashboard] = useState<{
-        total: number;
-        total_gasto: number;
-        total_devido: number;
-        melhor_cliente_nome: string;
-        melhor_cliente_valor: number;
-        maior_devedor_nome: string;
-        maior_devedor_valor: number;
-    }>({
-        total: 0,
-        total_gasto: 0,
-        total_devido: 0,
-        melhor_cliente_nome: "Nenhum",
-        melhor_cliente_valor: 0,
-        maior_devedor_nome: "Nenhum",
-        maior_devedor_valor: 0
-    });
+    const [dashboard, setDashboard] = useState<DashboardState>(initialDashboard);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('todos');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
+    const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>('todos');
     const [fiadoFilter, setFiadoFilter] = useState(false);
-    const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
     const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
-
-    // Estado do Modal de Fiado
     const [fiadoModal, setFiadoModal] = useState<{ open: boolean; cliente: Cliente | null }>({ open: false, cliente: null });
     const [fiadoValor, setFiadoValor] = useState('');
     const [fiadoForma, setFiadoForma] = useState('Dinheiro');
     const [fiadoLoading, setFiadoLoading] = useState(false);
     const [recalcLoading, setRecalcLoading] = useState(false);
-    const [rfmData, setRfmData] = useState<any>(null);
-
-    const handleRecalcularMetricas = async () => {
-        setRecalcLoading(true);
-        try {
-            const res = await apiClient.post('/clientes/recalcular-metricas');
-            showToast.success(res.data.message || 'Métricas recalculadas com sucesso!');
-            fetchClientes();
-            fetchDashboard();
-        } catch {
-            showToast.error('Erro ao recalcular métricas');
-        } finally {
-            setRecalcLoading(false);
-        }
-    };
-
-    // Indicadores de Fiado
-    const clientesComFiado = clientes.filter(c => (c.saldo_devedor ?? 0) > 0);
-    const totalFiadoAberto = clientesComFiado.reduce((acc, c) => acc + (c.saldo_devedor ?? 0), 0);
-    const maiorDevedor = clientesComFiado.length > 0
-        ? clientesComFiado.reduce((prev, curr) => (curr.saldo_devedor ?? 0) > (prev.saldo_devedor ?? 0) ? curr : prev)
-        : null;
+    const [rfmData, setRfmData] = useState<{ customers?: RfmCustomer[]; segments?: Record<string, number>; window_days?: number } | null>(null);
+    const [activeTab, setActiveTab] = useState<CRMTab>('overview');
+    const [selectedCampaign, setSelectedCampaign] = useState<CampaignKey>('reactivation');
+    const [campaignCustomerId, setCampaignCustomerId] = useState<number | null>(null);
 
     const fetchDashboard = async () => {
         try {
-            const res = await apiClient.get('/clientes/');
-            if (res.data && res.data.estatisticas) {
+            const [clientesRes, rfmRes] = await Promise.all([
+                apiClient.get('/clientes/'),
+                apiClient.get('/clientes/rfm'),
+            ]);
+
+            if (clientesRes.data?.estatisticas) {
                 setDashboard({
-                    total: res.data.estatisticas.total || 0,
-                    total_gasto: res.data.estatisticas.total_gasto || 0,
-                    total_devido: res.data.estatisticas.total_devido || 0,
-                    melhor_cliente_nome: res.data.estatisticas.melhor_cliente_nome || "Nenhum",
-                    melhor_cliente_valor: res.data.estatisticas.melhor_cliente_valor || 0,
-                    maior_devedor_nome: res.data.estatisticas.maior_devedor_nome || "Nenhum",
-                    maior_devedor_valor: res.data.estatisticas.maior_devedor_valor || 0,
+                    total: clientesRes.data.estatisticas.total || 0,
+                    total_gasto: clientesRes.data.estatisticas.total_gasto || 0,
+                    total_devido: clientesRes.data.estatisticas.total_devido || 0,
+                    melhor_cliente_nome: clientesRes.data.estatisticas.melhor_cliente_nome || 'Nenhum',
+                    melhor_cliente_valor: clientesRes.data.estatisticas.melhor_cliente_valor || 0,
+                    maior_devedor_nome: clientesRes.data.estatisticas.maior_devedor_nome || 'Nenhum',
+                    maior_devedor_valor: clientesRes.data.estatisticas.maior_devedor_valor || 0,
                 });
             }
-            // Fetch RFM
-            const rfmRes = await apiClient.get('/clientes/rfm');
-            if (rfmRes.data && rfmRes.data.rfm) {
+
+            if (rfmRes.data?.rfm) {
                 setRfmData(rfmRes.data.rfm);
+            } else {
+                setRfmData({ customers: [], segments: {}, window_days: 180 });
             }
         } catch {
-            showToast.error('Erro ao carregar métricas do dashboard');
+            showToast.error('Erro ao carregar métricas do CRM');
         }
     };
 
@@ -120,38 +328,36 @@ const CustomersPage: React.FC = () => {
         }
     };
 
+    const refreshAll = async () => {
+        await Promise.all([fetchClientes(), fetchDashboard()]);
+    };
+
     useEffect(() => {
-        fetchDashboard();
-        fetchClientes();
+        refreshAll();
     }, []);
 
-    // Atalhos de teclado
     useEffect(() => {
         const handleKeyPress = (event: KeyboardEvent) => {
-            // Só funciona se não estiver digitando em um input
             if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
                 return;
             }
 
-            switch (event.key) {
-                case 'n':
-                case 'N':
-                    if (!formOpen && !selectedCliente) {
-                        event.preventDefault();
-                        handleAdd();
-                    }
-                    break;
-                case 'Escape':
-                    if (formOpen) {
-                        event.preventDefault();
-                        setFormOpen(false);
-                        setEditData(undefined);
-                    } else if (selectedCliente) {
-                        event.preventDefault();
-                        setSelectedCliente(null);
-                        setClienteDetalhado(null);
-                    }
-                    break;
+            if ((event.key === 'n' || event.key === 'N') && !formOpen && !selectedCliente) {
+                event.preventDefault();
+                setEditData(undefined);
+                setFormOpen(true);
+            }
+
+            if (event.key === 'Escape') {
+                if (formOpen) {
+                    event.preventDefault();
+                    setFormOpen(false);
+                    setEditData(undefined);
+                } else if (selectedCliente) {
+                    event.preventDefault();
+                    setSelectedCliente(null);
+                    setClienteDetalhado(null);
+                }
             }
         };
 
@@ -159,34 +365,118 @@ const CustomersPage: React.FC = () => {
         return () => document.removeEventListener('keydown', handleKeyPress);
     }, [formOpen, selectedCliente]);
 
-    // Filtragem em tempo real
-    useEffect(() => {
-        let filtered = clientes;
+    const rfmMap = useMemo(() => {
+        const map = new Map<number, RfmCustomer>();
+        (rfmData?.customers || []).forEach((customer) => {
+            map.set(Number(customer.cliente_id), customer);
+        });
+        return map;
+    }, [rfmData]);
 
-        if (statusFilter !== 'todos') {
-            filtered = filtered.filter(cliente => {
-                if (statusFilter === 'ativos') return cliente.ativo === true;
-                if (statusFilter === 'inativos') return cliente.ativo === false;
-                return true;
-            });
-        }
+    const crmClientes = useMemo<CRMCustomer[]>(() => {
+        return clientes
+            .map((cliente) => {
+                const rfmCustomer = rfmMap.get(Number(cliente.id));
+                const lastPurchaseDays = cliente.ultima_compra
+                    ? Math.floor((Date.now() - new Date(cliente.ultima_compra).getTime()) / (1000 * 60 * 60 * 24))
+                    : null;
+                const crmSegment =
+                    rfmCustomer?.segment ||
+                    (Number(cliente.total_compras || 0) <= 1 ? 'Novo' : 'Regular');
+                const lifecycle = classifyLifecycle(cliente, crmSegment, lastPurchaseDays);
+                const debt = Number(cliente.saldo_devedor || 0);
 
-        if (fiadoFilter) {
-            filtered = filtered.filter(c => (c.saldo_devedor ?? 0) > 0);
-        }
+                return {
+                    ...cliente,
+                    crmSegment,
+                    lifecycle,
+                    lastPurchaseDays,
+                    whatsappNumber: normalizePhone(cliente.celular || cliente.telefone),
+                    hasDebt: debt > 0,
+                    actionPriority: lifecyclePriority(lifecycle, debt),
+                };
+            })
+            .sort((a, b) => b.actionPriority - a.actionPriority);
+    }, [clientes, rfmMap]);
 
-        if (searchTerm.trim()) {
+    const filteredClientes = useMemo(() => {
+        return crmClientes.filter((cliente) => {
+            if (statusFilter === 'ativos' && !cliente.ativo) return false;
+            if (statusFilter === 'inativos' && cliente.ativo !== false) return false;
+            if (fiadoFilter && !cliente.hasDebt) return false;
+            if (segmentFilter !== 'todos' && cliente.crmSegment !== segmentFilter) return false;
+
+            if (!searchTerm.trim()) return true;
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(cliente =>
+            return (
                 cliente.nome?.toLowerCase().includes(term) ||
                 cliente.cpf?.includes(term) ||
                 cliente.email?.toLowerCase().includes(term) ||
-                cliente.celular?.includes(term)
+                cliente.celular?.includes(term) ||
+                cliente.telefone?.includes(term)
             );
-        }
+        });
+    }, [crmClientes, statusFilter, fiadoFilter, segmentFilter, searchTerm]);
 
-        setFilteredClientes(filtered);
-    }, [clientes, searchTerm, statusFilter, fiadoFilter]);
+    const clientesComFiado = useMemo(() => crmClientes.filter((cliente) => cliente.hasDebt), [crmClientes]);
+    const totalFiadoAberto = useMemo(
+        () => clientesComFiado.reduce((acc, cliente) => acc + Number(cliente.saldo_devedor || 0), 0),
+        [clientesComFiado],
+    );
+    const clientesRecuperacao = useMemo(
+        () => crmClientes.filter((cliente) => ['inativo', 'em_risco'].includes(cliente.lifecycle)),
+        [crmClientes],
+    );
+    const clientesVip = useMemo(
+        () => crmClientes.filter((cliente) => ['vip', 'Campeão', 'Fiel'].includes(cliente.lifecycle) || ['Campeão', 'Fiel'].includes(cliente.crmSegment)),
+        [crmClientes],
+    );
+    const clientesPromotion = useMemo(
+        () => crmClientes.filter((cliente) => cliente.lifecycle === 'ativo' || cliente.lifecycle === 'vip').slice(0, 12),
+        [crmClientes],
+    );
+
+    const campaignTargets = useMemo(() => {
+        switch (selectedCampaign) {
+            case 'reactivation':
+                return clientesRecuperacao;
+            case 'vip':
+                return clientesVip;
+            case 'debt':
+                return clientesComFiado;
+            case 'promotion':
+            default:
+                return clientesPromotion;
+        }
+    }, [selectedCampaign, clientesRecuperacao, clientesVip, clientesComFiado, clientesPromotion]);
+
+    const selectedCampaignCustomer =
+        campaignTargets.find((cliente) => cliente.id === campaignCustomerId) || campaignTargets[0] || null;
+
+    useEffect(() => {
+        setCampaignCustomerId(campaignTargets[0]?.id || null);
+    }, [selectedCampaign, campaignTargets]);
+
+    const crmStats = useMemo(() => {
+        const vip = clientesVip.length;
+        const inRisk = crmClientes.filter((cliente) => cliente.lifecycle === 'em_risco').length;
+        const inactive = crmClientes.filter((cliente) => cliente.lifecycle === 'inativo').length;
+        const debt = clientesComFiado.length;
+        return { vip, inRisk, inactive, debt };
+    }, [crmClientes, clientesVip, clientesComFiado]);
+
+    const handleRecalcularMetricas = async () => {
+        setRecalcLoading(true);
+        try {
+            const res = await apiClient.post('/clientes/recalcular-metricas');
+            showToast.success(res.data.message || 'Métricas recalculadas com sucesso!');
+            await refreshAll();
+        } catch {
+            showToast.error('Erro ao recalcular métricas');
+        } finally {
+            setRecalcLoading(false);
+        }
+    };
 
     const handleAbrirModalFiado = (cliente: Cliente) => {
         setFiadoModal({ open: true, cliente });
@@ -197,17 +487,19 @@ const CustomersPage: React.FC = () => {
     const handlePagarFiado = async () => {
         const { cliente } = fiadoModal;
         if (!cliente?.id) return;
+
         const valor = parseFloat(fiadoValor.replace(',', '.'));
-        if (isNaN(valor) || valor <= 0) {
+        if (Number.isNaN(valor) || valor <= 0) {
             showToast.error('Informe um valor válido');
             return;
         }
+
         setFiadoLoading(true);
         try {
             const res = await pdvService.pagarFiado(cliente.id, valor, fiadoForma);
             showToast.success(res.message || 'Pagamento registrado!');
             setFiadoModal({ open: false, cliente: null });
-            fetchClientes();
+            await refreshAll();
         } catch (err: any) {
             const msg = err?.response?.data?.message || 'Erro ao registrar pagamento';
             showToast.error(msg);
@@ -216,25 +508,19 @@ const CustomersPage: React.FC = () => {
         }
     };
 
-    const handleAdd = () => {
-        setEditData(undefined);
-        setFormOpen(true);
-    };
-
     const handleEdit = async (cliente: Cliente) => {
-        if (!cliente || !cliente.id) {
-            showToast.error('Erro: Cliente inválido para edição');
+        if (!cliente?.id) {
+            showToast.error('Erro: cliente inválido para edição');
             return;
         }
 
         setSaving(true);
         try {
             const res = await apiClient.get(`/clientes/${cliente.id}`);
-            const clienteData = { ...res.data.cliente, id: cliente.id };
-            setEditData(clienteData);
+            setEditData({ ...res.data.cliente, id: cliente.id });
             setFormOpen(true);
             setSelectedCliente(null);
-        } catch (err: any) {
+        } catch {
             showToast.error('Erro ao buscar dados do cliente para edição');
         } finally {
             setSaving(false);
@@ -242,9 +528,7 @@ const CustomersPage: React.FC = () => {
     };
 
     const handleRowClick = async (cliente: Cliente) => {
-        if (!cliente || !cliente.id) {
-            return;
-        }
+        if (!cliente?.id) return;
 
         setDetalheLoading(true);
         setSelectedCliente(cliente);
@@ -252,7 +536,7 @@ const CustomersPage: React.FC = () => {
             const res = await apiClient.get(`/clientes/${cliente.id}`);
             const detalhado = res.data.cliente ? { ...res.data.cliente, ...res.data } : res.data;
             setClienteDetalhado(detalhado);
-        } catch (err: any) {
+        } catch {
             setClienteDetalhado(null);
             setSelectedCliente(null);
             showToast.error('Erro ao buscar detalhes do cliente');
@@ -262,47 +546,58 @@ const CustomersPage: React.FC = () => {
     };
 
     const handleDelete = async (cliente: Cliente) => {
-        if (!cliente || !cliente.id) {
-            showToast.error('Erro: Cliente inválido para exclusão');
+        if (!cliente?.id) {
+            showToast.error('Erro: cliente inválido para exclusão');
             return;
         }
 
         const confirmed = window.confirm(
-            `Tem certeza que deseja excluir o cliente "${cliente.nome}"?\n\nEsta ação não pode ser desfeita e removerá permanentemente todos os dados do cliente.`
+            `Tem certeza que deseja excluir o cliente "${cliente.nome}"?\n\nEsta ação não pode ser desfeita e removerá permanentemente os dados do cliente.`,
         );
         if (!confirmed) return;
 
         try {
-            await showToast.promise(customerService.remove(cliente.id), {
-                loading: 'Excluindo cliente...',
-                success: `Cliente "${cliente.nome}" excluído com sucesso`,
-                error: 'Erro ao excluir cliente'
-            }, { theme: 'error' });
-            fetchClientes();
-            fetchDashboard();
+            await showToast.promise(
+                customerService.remove(cliente.id),
+                {
+                    loading: 'Excluindo cliente...',
+                    success: `Cliente "${cliente.nome}" excluído com sucesso`,
+                    error: 'Erro ao excluir cliente',
+                },
+                { theme: 'error' },
+            );
+            await refreshAll();
         } catch (error: unknown) {
-            const err = error as { response?: { status?: number; data?: { message?: string; vinculos?: { vendas: number; contas_a_receber: number } } } };
+            const err = error as {
+                response?: {
+                    status?: number;
+                    data?: {
+                        message?: string;
+                        vinculos?: { vendas: number; contas_a_receber: number };
+                    };
+                };
+            };
 
-            // Tratamento específico para erro de vínculos (400)
             if (err.response?.status === 400 && err.response?.data?.vinculos) {
                 const { vendas, contas_a_receber } = err.response.data.vinculos;
-                const msg = `Não é possível excluir este cliente pois ele possui registros vinculados:\n` +
-                    `• ${vendas} Vendas\n` +
-                    `• ${contas_a_receber} Débitos em Aberto\n\n` +
-                    `Deseja DESATIVAR o cliente em vez de excluir?\n` +
-                    `Isso impedirá novas vendas mas manterá o histórico.`;
+                const msg =
+                    `Não é possível excluir este cliente pois ele possui registros vinculados:\n` +
+                    `• ${vendas} vendas\n` +
+                    `• ${contas_a_receber} débitos em aberto\n\n` +
+                    `Deseja desativar o cliente em vez de excluir?`;
 
                 if (window.confirm(msg)) {
                     try {
                         await apiClient.patch(`/clientes/${cliente.id}/status`, { ativo: false });
-                        showToast.error(`Cliente "${cliente.nome}" desativado com sucesso`);
-                        fetchClientes();
-                        fetchDashboard();
+                        showToast.success(`Cliente "${cliente.nome}" desativado com sucesso`);
+                        await refreshAll();
                     } catch (patchErr: unknown) {
-                        const patchMsg = (patchErr as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erro ao desativar cliente';
+                        const patchMsg =
+                            (patchErr as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                            'Erro ao desativar cliente';
                         showToast.error(patchMsg);
                     }
-                    return; // Interrompe para não mostrar o erro original
+                    return;
                 }
             }
 
@@ -315,50 +610,38 @@ const CustomersPage: React.FC = () => {
 
     const handleSave = async (data: Partial<Cliente>) => {
         try {
-            const promise = editData && editData.id
-                ? customerService.update(editData.id, data)
-                : customerService.create(data);
+            const promise =
+                editData && editData.id
+                    ? customerService.update(editData.id, data)
+                    : customerService.create(data);
 
             const savedCustomer = await showToast.promise(promise, {
-                loading: editData && editData.id ? 'Atualizando cliente...' : 'Cadastrando cliente...',
-                success: editData && editData.id ? 'Cliente atualizado com sucesso' : 'Cliente cadastrado com sucesso',
-                error: 'Erro ao salvar cliente'
+                loading: editData?.id ? 'Atualizando cliente...' : 'Cadastrando cliente...',
+                success: editData?.id ? 'Cliente atualizado com sucesso' : 'Cliente cadastrado com sucesso',
+                error: 'Erro ao salvar cliente',
             });
 
-            if (editData && editData.id) {
-                // Atualizar na lista local
-                setClientes(prev => prev.map(c => c.id === editData.id ? { ...c, ...savedCustomer } : c));
+            if (editData?.id) {
+                setClientes((prev) => prev.map((cliente) => (cliente.id === editData.id ? { ...cliente, ...savedCustomer } : cliente)));
             } else {
-                // Adicionar no topo da lista local
-                setClientes(prev => [savedCustomer, ...prev]);
-                setSearchTerm(''); // Limpar busca para mostrar o novo cliente
+                setClientes((prev) => [savedCustomer, ...prev]);
             }
 
             setFormOpen(false);
             setEditData(undefined);
-
-            // fetchClientes() e fetchDashboard() podem rodar em background para garantir sincronia total
-            fetchClientes();
-            fetchDashboard();
+            await refreshAll();
         } catch (error: unknown) {
-            if (
-                typeof error === 'object' &&
-                error !== null &&
-                'response' in error &&
-                typeof (error as { response?: { data?: { message?: string; error?: string } } }).response === 'object'
-            ) {
-                const errResponse = (error as { response?: { data?: { message?: string; error?: string } } }).response;
-                const errorMessage = errResponse?.data?.message || errResponse?.data?.error || 'Erro ao salvar cliente';
-                showToast.error(errorMessage);
-            } else {
-                showToast.error('Erro ao salvar cliente');
-            }
+            const errResponse =
+                typeof error === 'object' && error !== null && 'response' in error
+                    ? (error as { response?: { data?: { message?: string; error?: string } } }).response
+                    : undefined;
+            const errorMessage = errResponse?.data?.message || errResponse?.data?.error || 'Erro ao salvar cliente';
+            showToast.error(errorMessage);
         } finally {
             setSaving(false);
         }
     };
 
-    // Função de exportação
     const handleExportClick = (event: React.MouseEvent<HTMLButtonElement>) => {
         setExportMenuAnchor(event.currentTarget);
     };
@@ -367,393 +650,723 @@ const CustomersPage: React.FC = () => {
         setExportMenuAnchor(null);
     };
 
+    const exportRows = filteredClientes.map((cliente) => ({
+        Nome: cliente.nome || '',
+        CPF: cliente.cpf || '',
+        Telefone: cliente.celular || cliente.telefone || '',
+        Email: cliente.email || '',
+        Segmento: cliente.crmSegment,
+        Carteira: lifecycleLabel(cliente.lifecycle),
+        Status: cliente.ativo ? 'Ativo' : 'Inativo',
+        'Ultima Compra': cliente.ultima_compra ? new Date(cliente.ultima_compra).toLocaleDateString('pt-BR') : '',
+        'Valor Gasto': Number(cliente.valor_total_gasto || 0),
+        'Saldo Devedor': Number(cliente.saldo_devedor || 0),
+    }));
+
     const exportarCSV = () => {
         const csvContent = [
-            ['Nome', 'CPF', 'Telefone', 'Email', 'Endereço', 'Status', 'Data Cadastro', 'Total Compras'],
-            ...filteredClientes.map(cliente => [
-                cliente.nome || '',
-                cliente.cpf || '',
-                cliente.celular || cliente.telefone || '',
-                cliente.email || '',
-                cliente.endereco_completo || '',
-                cliente.ativo ? 'Ativo' : 'Inativo',
-                cliente.data_cadastro ? new Date(cliente.data_cadastro).toLocaleDateString('pt-BR') : '',
-                cliente.total_compras?.toString() || '0'
-            ])
-        ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+            Object.keys(exportRows[0] || {
+                Nome: '',
+                CPF: '',
+                Telefone: '',
+                Email: '',
+                Segmento: '',
+                Carteira: '',
+                Status: '',
+                'Ultima Compra': '',
+                'Valor Gasto': '',
+                'Saldo Devedor': '',
+            }),
+            ...exportRows.map(Object.values),
+        ]
+            .map((row) => row.map((cell) => `"${String(cell ?? '')}"`).join(','))
+            .join('\n');
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
-        link.setAttribute('download', `clientes_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
+        link.setAttribute('download', `crm-clientes_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-
         handleExportClose();
-        showToast.info('CSV exportado com sucesso');
+        showToast.success('CSV CRM exportado com sucesso');
     };
 
     const exportarExcel = () => {
-        const wsData = [
-            ['Nome', 'CPF', 'Telefone', 'Email', 'Endereço', 'Status', 'Data Cadastro', 'Total Compras'],
-            ...filteredClientes.map(cliente => [
-                cliente.nome || '',
-                cliente.cpf || '',
-                cliente.celular || cliente.telefone || '',
-                cliente.email || '',
-                cliente.endereco_completo || '',
-                cliente.ativo ? 'Ativo' : 'Inativo',
-                cliente.data_cadastro ? new Date(cliente.data_cadastro).toLocaleDateString('pt-BR') : '',
-                cliente.total_compras || 0
-            ])
-        ];
-
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const ws = XLSX.utils.json_to_sheet(exportRows);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Clientes");
-        XLSX.writeFile(wb, `clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
-
+        XLSX.utils.book_append_sheet(wb, ws, 'CRM Clientes');
+        XLSX.writeFile(wb, `crm-clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
         handleExportClose();
-        showToast.info('Excel exportado com sucesso');
+        showToast.success('Excel CRM exportado com sucesso');
     };
 
     const exportarPDF = () => {
         const doc = new jsPDF();
-
-        // Cabeçalho
-        doc.setFillColor(25, 118, 210); // Cor primária (Blue 700)
-        doc.rect(0, 0, 210, 40, 'F');
-
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, 210, 34, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(22);
-        doc.text("Relatório de Clientes", 105, 20, { align: "center" });
-
-        doc.setFontSize(10);
-        doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 105, 30, { align: "center" });
-
-        // Tabela
-        const headers = [['Nome', 'CPF', 'Telefone', 'Status', 'Total Compras']];
-        const data = filteredClientes.map(c => [
-            c.nome,
-            c.cpf,
-            c.celular || c.telefone,
-            c.ativo ? "Ativo" : "Inativo",
-            c.total_compras?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) || "R$ 0,00"
-        ]);
-
-        autoTable(doc, {
-            head: headers,
-            body: data.map(row => row.map(cell => cell ?? '')),
-            startY: 50,
-            theme: 'grid',
-            styles: { fontSize: 8, cellPadding: 2 },
-            headStyles: { fillColor: [25, 118, 210], textColor: [255, 255, 255] },
-            alternateRowStyles: { fillColor: [245, 245, 245] }
+        doc.setFontSize(20);
+        doc.text('Relatório CRM de Clientes', 105, 18, { align: 'center' });
+        doc.setFontSize(9);
+        doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 105, 26, {
+            align: 'center',
         });
 
-        // Rodapé
-        const pageCount = doc.getNumberOfPages();
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.text(`Página ${i} de ${pageCount} - MercadinhoSys`, 105, 290, { align: "center" });
+        autoTable(doc, {
+            startY: 42,
+            head: [['Nome', 'Segmento', 'Carteira', 'Telefone', 'Valor Gasto', 'Saldo Devedor']],
+            body: filteredClientes.map((cliente) => [
+                cliente.nome || '',
+                cliente.crmSegment,
+                lifecycleLabel(cliente.lifecycle),
+                cliente.celular || cliente.telefone || '',
+                formatCurrency(Number(cliente.valor_total_gasto || 0)),
+                formatCurrency(Number(cliente.saldo_devedor || 0)),
+            ]),
+            headStyles: { fillColor: [37, 99, 235] },
+            styles: { fontSize: 8 },
+        });
+
+        doc.save(`crm-clientes_${new Date().toISOString().split('T')[0]}.pdf`);
+        handleExportClose();
+        showToast.success('PDF CRM exportado com sucesso');
+    };
+
+    const handleCampaignAction = async (cliente: CRMCustomer, action: 'open' | 'copy') => {
+        const message = buildCampaignMessage(selectedCampaign, cliente);
+        const whatsappUrl = buildWhatsAppUrl(cliente, message);
+
+        if (action === 'copy') {
+            await navigator.clipboard.writeText(message);
+            showToast.success(`Mensagem copiada para ${cliente.nome}`);
+            return;
         }
 
-        doc.save(`clientes-${new Date().toISOString().split('T')[0]}.pdf`);
+        if (!whatsappUrl) {
+            showToast.error('Cliente sem numero de WhatsApp valido');
+            return;
+        }
 
-        handleExportClose();
-        showToast.info('PDF exportado com sucesso');
+        window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleCopyCampaignBatch = async () => {
+        const payload = campaignTargets
+            .slice(0, 20)
+            .map((cliente) => {
+                const message = buildCampaignMessage(selectedCampaign, cliente);
+                return `${cliente.nome} - ${cliente.celular || cliente.telefone || 'sem telefone'}\n${message}`;
+            })
+            .join('\n\n-----------------\n\n');
+
+        await navigator.clipboard.writeText(payload);
+        showToast.success('Roteiro da campanha copiado para a equipe comercial');
     };
 
     return (
-        <div className="max-w-6xl mx-auto p-4">
+        <div className="mx-auto max-w-7xl space-y-6 p-4">
+            <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-6 text-white shadow-xl">
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ maxWidth: 760 }}>
+                        <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1.4 }}>
+                            CRM comercial e relacionamento
+                        </Typography>
+                        <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 1 }}>
+                            CustomersPage evoluída para CRM de crescimento
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.82)', maxWidth: 720 }}>
+                            Organize carteira, recupere clientes, priorize cobrança, opere campanhas segmentadas e acione
+                            WhatsApp com mensagens inteligentes baseadas no momento de compra e no valor do cliente.
+                        </Typography>
+                    </Box>
 
-            {/* ===== PAINEL DE INDICADORES DE FIADO ===== */}
-            {clientesComFiado.length > 0 && (
-                <Box sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-                    gap: 2,
-                    mb: 3,
-                    p: 2.5,
-                    borderRadius: 2,
-                    border: '1.5px solid #f57c00',
-                    background: 'linear-gradient(135deg, #fff8f0 0%, #fff3e0 100%)'
-                }}>
-                    <Box>
-                        <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Total Fiado em Aberto</Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#bf360c' }}>
-                            {totalFiadoAberto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </Typography>
-                    </Box>
-                    <Box>
-                        <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Clientes com Fiado</Typography>
-                        <Typography variant="h5" sx={{ fontWeight: 800, color: '#bf360c' }}>
-                            {clientesComFiado.length}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            de {clientes.length} cadastrados
-                        </Typography>
-                    </Box>
-                    {maiorDevedor && (
-                        <Box>
-                            <Typography variant="caption" sx={{ color: '#e65100', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Maior Devedor</Typography>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#bf360c' }}>{maiorDevedor.nome}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                {(maiorDevedor.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </Typography>
-                        </Box>
-                    )}
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Button
-                            variant={fiadoFilter ? 'contained' : 'outlined'}
-                            size="small"
-                            startIcon={<HandshakeIcon />}
-                            onClick={() => setFiadoFilter(!fiadoFilter)}
-                            sx={{
-                                borderColor: '#f57c00',
-                                color: fiadoFilter ? '#fff' : '#f57c00',
-                                bgcolor: fiadoFilter ? '#f57c00' : 'transparent',
-                                '&:hover': { bgcolor: fiadoFilter ? '#e65100' : '#fff3e0' }
-                            }}
-                        >
-                            {fiadoFilter ? 'Ver Todos' : 'Só com Fiado'}
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <Button variant="outlined" startIcon={<GetAppIcon />} onClick={handleExportClick} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}>
+                            Exportar
+                        </Button>
+                        <Tooltip title="Recalcula total de compras, valor gasto e segmentacao">
+                            <span>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={recalcLoading ? <CircularProgress size={16} sx={{ color: '#fff' }} /> : <SyncIcon />}
+                                    onClick={handleRecalcularMetricas}
+                                    disabled={recalcLoading}
+                                    sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}
+                                >
+                                    {recalcLoading ? 'Sincronizando...' : 'Sincronizar CRM'}
+                                </Button>
+                            </span>
+                        </Tooltip>
+                        <Button variant="contained" startIcon={<PersonAddAlt1Icon />} onClick={() => { setEditData(undefined); setFormOpen(true); }} sx={{ bgcolor: '#22c55e', '&:hover': { bgcolor: '#16a34a' } }}>
+                            Novo Cliente
                         </Button>
                     </Box>
+                </Box>
+            </section>
+
+            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(5, minmax(0, 1fr))' } }}>
+                <KpiCard title="Base Ativa" value={dashboard.total} subtitle="Clientes gerenciados no CRM" color="#2563eb" icon={<AutoGraphIcon />} />
+                <KpiCard title="Clientes Em Risco" value={crmStats.inRisk} subtitle="Exigem contato de retencao" color="#ea580c" icon={<AutorenewIcon />} />
+                <KpiCard title="Clientes Inativos" value={crmStats.inactive} subtitle="Fila de reativacao comercial" color="#dc2626" icon={<WarningAmberIcon />} />
+                <KpiCard title="VIP & Fidelidade" value={crmStats.vip} subtitle="Carteira de alto valor" color="#7c3aed" icon={<StarIcon />} />
+                <KpiCard title="Fiado Em Aberto" value={formatCurrency(totalFiadoAberto)} subtitle={`${crmStats.debt} clientes com saldo`} color="#d97706" icon={<AttachMoneyIcon />} />
+            </Box>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="grid gap-3 lg:grid-cols-4">
+                    {tabs.map((tab) => {
+                        const active = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`rounded-2xl border px-4 py-4 text-left transition ${
+                                    active
+                                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                            >
+                                <div className="space-y-1">
+                                    <p className={`text-sm font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>{tab.label}</p>
+                                    <p className="text-xs text-slate-500">{tab.description}</p>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {activeTab === 'overview' && (
+                <div className="space-y-6">
+                    <CustomerDashboard {...dashboard} rfmData={rfmData} />
+
+                    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1.4fr 1fr' } }}>
+                        <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+                            <CardContent sx={{ p: 3 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                    <div>
+                                        <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                            Fila de prioridade comercial
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                            Clientes que devem entrar na cadencia de contato agora.
+                                        </Typography>
+                                    </div>
+                                    <Chip label="Top 6" sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 700 }} />
+                                </Box>
+
+                                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                    {crmClientes.slice(0, 6).map((cliente) => (
+                                        <Box
+                                            key={cliente.id}
+                                            sx={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                gap: 2,
+                                                p: 2,
+                                                borderRadius: 2,
+                                                border: '1px solid #e2e8f0',
+                                                bgcolor: '#f8fafc',
+                                            }}
+                                        >
+                                            <Box>
+                                                <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>{cliente.nome}</Typography>
+                                                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                                    {lifecycleLabel(cliente.lifecycle)} • Segmento {cliente.crmSegment}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                <Chip
+                                                    size="small"
+                                                    label={cliente.hasDebt ? formatCurrency(Number(cliente.saldo_devedor || 0)) : cliente.lastPurchaseDays !== null ? `${cliente.lastPurchaseDays} dias` : 'Sem historico'}
+                                                    sx={{
+                                                        bgcolor: cliente.hasDebt ? '#fff7ed' : '#eff6ff',
+                                                        color: cliente.hasDebt ? '#c2410c' : '#1d4ed8',
+                                                        fontWeight: 700,
+                                                    }}
+                                                />
+                                                <Button size="small" variant="outlined" onClick={() => handleRowClick(cliente)}>
+                                                    Ver cliente
+                                                </Button>
+                                            </Box>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </CardContent>
+                        </Card>
+
+                        <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+                            <CardContent sx={{ p: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                    <CampaignIcon sx={{ color: '#2563eb' }} />
+                                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                        Centro de acao CRM
+                                    </Typography>
+                                </Box>
+
+                                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                    {campaignConfigs.map((campaign) => {
+                                        const isSelected = selectedCampaign === campaign.key;
+                                        const targetCount =
+                                            campaign.key === 'reactivation'
+                                                ? clientesRecuperacao.length
+                                                : campaign.key === 'vip'
+                                                    ? clientesVip.length
+                                                    : campaign.key === 'debt'
+                                                        ? clientesComFiado.length
+                                                        : clientesPromotion.length;
+
+                                        return (
+                                            <button
+                                                key={campaign.key}
+                                                onClick={() => {
+                                                    setSelectedCampaign(campaign.key);
+                                                    setActiveTab('campaigns');
+                                                }}
+                                                className={`rounded-2xl border p-4 text-left transition ${
+                                                    isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-slate-900">{campaign.title}</p>
+                                                        <p className="mt-1 text-xs text-slate-500">{campaign.subtitle}</p>
+                                                    </div>
+                                                    <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                                                        {targetCount}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    </Box>
+                </div>
+            )}
+
+            {activeTab === 'recovery' && (
+                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: 'repeat(3, minmax(0, 1fr))' } }}>
+                    {[
+                        {
+                            title: 'Recuperacao de Inativos',
+                            description: 'Clientes que ficaram sem comprar e precisam de reativacao.',
+                            customers: crmClientes.filter((cliente) => cliente.lifecycle === 'inativo').slice(0, 8),
+                            empty: 'Nenhum cliente inativo critico no momento.',
+                            action: 'reactivation' as CampaignKey,
+                            color: '#dc2626',
+                        },
+                        {
+                            title: 'Clientes Em Risco',
+                            description: 'Carteira com sinais de queda de recorrencia.',
+                            customers: crmClientes.filter((cliente) => cliente.lifecycle === 'em_risco').slice(0, 8),
+                            empty: 'Nenhum cliente em risco identificado.',
+                            action: 'reactivation' as CampaignKey,
+                            color: '#ea580c',
+                        },
+                        {
+                            title: 'Carteira Para Cobranca',
+                            description: 'Clientes com fiado em aberto para abordagem consultiva.',
+                            customers: clientesComFiado.slice(0, 8),
+                            empty: 'Nenhum saldo em aberto para contato.',
+                            action: 'debt' as CampaignKey,
+                            color: '#b45309',
+                        },
+                    ].map((panel) => (
+                        <Card key={panel.title} sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+                            <CardContent sx={{ p: 3 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                    {panel.title}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
+                                    {panel.description}
+                                </Typography>
+
+                                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                    {panel.customers.length === 0 && (
+                                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', color: '#64748b' }}>{panel.empty}</Box>
+                                    )}
+
+                                    {panel.customers.map((cliente) => (
+                                        <Box
+                                            key={cliente.id}
+                                            sx={{
+                                                p: 2,
+                                                borderRadius: 2,
+                                                border: '1px solid #e2e8f0',
+                                                bgcolor: '#fff',
+                                            }}
+                                        >
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                                <Box>
+                                                    <Typography sx={{ fontWeight: 700 }}>{cliente.nome}</Typography>
+                                                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                                        {cliente.lastPurchaseDays !== null
+                                                            ? `${cliente.lastPurchaseDays} dias sem compra`
+                                                            : 'Sem historico recente'}
+                                                    </Typography>
+                                                </Box>
+                                                <Chip
+                                                    size="small"
+                                                    label={cliente.crmSegment}
+                                                    sx={{ bgcolor: `${panel.color}15`, color: panel.color, fontWeight: 700 }}
+                                                />
+                                            </Box>
+
+                                            <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+                                                <Button size="small" variant="contained" color="success" startIcon={<WhatsAppIcon />} onClick={() => {
+                                                    setSelectedCampaign(panel.action);
+                                                    handleCampaignAction(cliente, 'open');
+                                                }}>
+                                                    WhatsApp
+                                                </Button>
+                                                <Button size="small" variant="outlined" onClick={() => handleRowClick(cliente)}>
+                                                    Ver detalhes
+                                                </Button>
+                                                {cliente.hasDebt && (
+                                                    <Button size="small" variant="outlined" color="warning" onClick={() => handleAbrirModalFiado(cliente)}>
+                                                        Receber fiado
+                                                    </Button>
+                                                )}
+                                            </Box>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </Box>
             )}
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography
-                    variant="h4"
-                    sx={{
-                        fontWeight: 700,
-                        color: '#1976d2',
-                        textShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                    }}
-                >
-                    Gestão de Clientes
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                        variant="outlined"
-                        startIcon={<GetAppIcon />}
-                        onClick={handleExportClick}
-                        sx={{
-                            color: '#1976d2',
-                            borderColor: '#1976d2',
-                            '&:hover': {
-                                borderColor: '#1565c0',
-                                bgcolor: '#e3f2fd'
-                            }
-                        }}
-                    >
-                        Exportar
-                    </Button>
-                    <Menu
-                        anchorEl={exportMenuAnchor}
-                        open={Boolean(exportMenuAnchor)}
-                        onClose={handleExportClose}
-                    >
-                        <MenuItem onClick={exportarCSV}>Exportar CSV</MenuItem>
-                        <MenuItem onClick={exportarExcel}>Exportar Excel</MenuItem>
-                        <MenuItem onClick={exportarPDF}>Exportar PDF</MenuItem>
-                    </Menu>
-                    <Tooltip title="Recalcula total de compras e valor gasto de todos os clientes com base nas vendas reais do banco">
-                        <span>
-                            <Button
-                                variant="outlined"
-                                startIcon={recalcLoading ? <CircularProgress size={16} /> : <SyncIcon />}
-                                onClick={handleRecalcularMetricas}
-                                disabled={recalcLoading}
-                                sx={{ color: '#388e3c', borderColor: '#388e3c', '&:hover': { bgcolor: '#e8f5e9' } }}
-                            >
-                                {recalcLoading ? 'Sincronizando...' : 'Sincronizar Métricas'}
-                            </Button>
-                        </span>
-                    </Tooltip>
-                    <Button
-                        variant="contained"
-                        startIcon={<PersonAddAlt1Icon />}
-                        onClick={handleAdd}
-                        sx={{
-                            bgcolor: '#1976d2',
-                            '&:hover': {
-                                bgcolor: '#1565c0'
-                            }
-                        }}
-                    >
-                        Novo Cliente
-                    </Button>
+            {activeTab === 'campaigns' && (
+                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1.15fr 0.85fr' } }}>
+                    <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                                <Box>
+                                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                        Campanhas inteligentes por WhatsApp
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                        Selecione um playbook e acione a carteira certa com discurso comercial adequado.
+                                    </Typography>
+                                </Box>
+                                <Button variant="outlined" startIcon={<CampaignIcon />} onClick={handleCopyCampaignBatch}>
+                                    Copiar roteiro da campanha
+                                </Button>
+                            </Box>
+
+                            <Box sx={{ display: 'grid', gap: 1.5, mb: 3, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' } }}>
+                                {campaignConfigs.map((campaign) => {
+                                    const active = selectedCampaign === campaign.key;
+                                    return (
+                                        <button
+                                            key={campaign.key}
+                                            onClick={() => setSelectedCampaign(campaign.key)}
+                                            className={`rounded-2xl border p-4 text-left transition ${
+                                                active ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-900">{campaign.title}</p>
+                                                    <p className="mt-1 text-xs text-slate-500">{campaign.description}</p>
+                                                </div>
+                                                <span
+                                                    className="rounded-full px-2 py-1 text-xs font-semibold text-white"
+                                                    style={{ backgroundColor: campaign.color }}
+                                                >
+                                                    {campaign.badge}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </Box>
+
+                            <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                {campaignTargets.slice(0, 12).map((cliente) => (
+                                    <Box
+                                        key={cliente.id}
+                                        sx={{
+                                            border: cliente.id === selectedCampaignCustomer?.id ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                                            bgcolor: cliente.id === selectedCampaignCustomer?.id ? '#eff6ff' : '#fff',
+                                            borderRadius: 2,
+                                            p: 2,
+                                            cursor: 'pointer',
+                                        }}
+                                        onClick={() => setCampaignCustomerId(cliente.id)}
+                                    >
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
+                                            <Box>
+                                                <Typography sx={{ fontWeight: 700 }}>{cliente.nome}</Typography>
+                                                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                                    {lifecycleLabel(cliente.lifecycle)} • Segmento {cliente.crmSegment}
+                                                </Typography>
+                                            </Box>
+                                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                {cliente.whatsappNumber && (
+                                                    <Chip size="small" icon={<WhatsAppIcon />} label="WhatsApp" color="success" variant="outlined" />
+                                                )}
+                                                <Chip
+                                                    size="small"
+                                                    label={cliente.hasDebt ? formatCurrency(Number(cliente.saldo_devedor || 0)) : formatCurrency(Number(cliente.valor_total_gasto || 0))}
+                                                    sx={{ bgcolor: '#f8fafc', color: '#0f172a', fontWeight: 700 }}
+                                                />
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                ))}
+                            </Box>
+                        </CardContent>
+                    </Card>
+
+                    <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                                <InsightsIcon sx={{ color: '#2563eb' }} />
+                                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                    Preview da abordagem
+                                </Typography>
+                            </Box>
+
+                            {!selectedCampaignCustomer ? (
+                                <Box sx={{ p: 3, borderRadius: 2, bgcolor: '#f8fafc', color: '#64748b' }}>
+                                    Nenhum cliente elegivel para esta campanha neste momento.
+                                </Box>
+                            ) : (
+                                <Box sx={{ display: 'grid', gap: 2 }}>
+                                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                        <Typography sx={{ fontWeight: 700 }}>{selectedCampaignCustomer.nome}</Typography>
+                                        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
+                                            {selectedCampaignCustomer.email || 'Sem e-mail'} •{' '}
+                                            {selectedCampaignCustomer.celular || selectedCampaignCustomer.telefone || 'Sem telefone'}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                                            <Chip
+                                                size="small"
+                                                label={`Segmento ${selectedCampaignCustomer.crmSegment}`}
+                                                sx={{
+                                                    bgcolor: `${segmentColors[selectedCampaignCustomer.crmSegment] || '#64748b'}15`,
+                                                    color: segmentColors[selectedCampaignCustomer.crmSegment] || '#64748b',
+                                                    fontWeight: 700,
+                                                }}
+                                            />
+                                            <Chip size="small" label={lifecycleLabel(selectedCampaignCustomer.lifecycle)} sx={{ bgcolor: '#e2e8f0', color: '#0f172a', fontWeight: 700 }} />
+                                        </Box>
+                                    </Box>
+
+                                    <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: '#0f172a', color: '#fff' }}>
+                                        <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1 }}>
+                                            Mensagem sugerida
+                                        </Typography>
+                                        <Typography sx={{ mt: 1.5, whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+                                            {buildCampaignMessage(selectedCampaign, selectedCampaignCustomer)}
+                                        </Typography>
+                                    </Box>
+
+                                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            startIcon={<WhatsAppIcon />}
+                                            onClick={() => handleCampaignAction(selectedCampaignCustomer, 'open')}
+                                        >
+                                            Abrir WhatsApp
+                                        </Button>
+                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy')}>
+                                            Copiar mensagem
+                                        </Button>
+                                        <Button variant="outlined" onClick={() => handleRowClick(selectedCampaignCustomer)}>
+                                            Ver cliente
+                                        </Button>
+                                    </Box>
+
+                                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                                        <Typography variant="subtitle2" sx={{ color: '#1d4ed8', fontWeight: 700 }}>
+                                            Operacao recomendada
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: '#334155', mt: 0.5 }}>
+                                            Use esta area como cadencia comercial. A automacao assistida por WhatsApp ja prepara a
+                                            mensagem com base no momento do cliente. Para disparo automatico massivo sem interacao do
+                                            operador, o proximo passo tecnico e integrar API oficial de WhatsApp Business.
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            )}
+                        </CardContent>
+                    </Card>
                 </Box>
-            </Box>
-            <CustomerDashboard {...dashboard} />
+            )}
 
-            {/* Controles de Busca e Filtros */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-                <TextField
-                    placeholder="Buscar por nome, CPF, email ou telefone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    variant="outlined"
-                    size="small"
-                    sx={{ minWidth: 300, flex: 1 }}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start">
-                                <SearchIcon />
-                            </InputAdornment>
-                        ),
-                        endAdornment: searchTerm && (
-                            <InputAdornment position="end">
-                                <ClearIcon
-                                    sx={{ cursor: 'pointer' }}
-                                    onClick={() => setSearchTerm('')}
-                                />
-                            </InputAdornment>
-                        ),
-                    }}
-                />
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                        value={statusFilter}
-                        label="Status"
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        startAdornment={<FilterListIcon sx={{ mr: 1 }} />}
-                    >
-                        <MenuItem value="todos">Todos</MenuItem>
-                        <MenuItem value="ativos">Ativos</MenuItem>
-                        <MenuItem value="inativos">Inativos</MenuItem>
-                    </Select>
-                </FormControl>
-
-                {(searchTerm || statusFilter !== 'todos') && (
-                    <Chip
-                        label={`${filteredClientes.length} resultado${filteredClientes.length !== 1 ? 's' : ''}`}
-                        sx={{
-                            bgcolor: '#e3f2fd',
-                            color: '#1976d2',
-                            fontWeight: 500
-                        }}
-                        size="small"
-                    />
-                )}
-
-                <Tooltip title="Exportar dados filtrados">
-                    <span>
-                        <Button
+            {activeTab === 'portfolio' && (
+                <div className="space-y-4">
+                    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr 1fr' }, alignItems: 'center' }}>
+                        <TextField
+                            placeholder="Buscar por nome, CPF, telefone ou email"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                             variant="outlined"
-                            onClick={handleExportClick}
-                            startIcon={<GetAppIcon />}
-                            disabled={filteredClientes.length === 0}
-                            sx={{
-                                color: '#1976d2',
-                                borderColor: '#1976d2',
-                                '&:hover': {
-                                    borderColor: '#1565c0',
-                                    bgcolor: '#e3f2fd'
-                                }
+                            size="small"
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: searchTerm && (
+                                    <InputAdornment position="end">
+                                        <ClearIcon sx={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
+                                    </InputAdornment>
+                                ),
                             }}
-                        >
-                            Exportar
-                        </Button>
-                    </span>
-                </Tooltip>
-            </Box>
+                        />
 
-            <CustomerTable
-                clientes={filteredClientes}
-                loading={loading}
-                onRowClick={handleRowClick}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                selectedClienteId={selectedCliente?.id}
-                onReceberFiado={handleAbrirModalFiado}
+                        <FormControl size="small">
+                            <InputLabel>Status</InputLabel>
+                            <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} startAdornment={<FilterListIcon sx={{ mr: 1 }} />}>
+                                <MenuItem value="todos">Todos</MenuItem>
+                                <MenuItem value="ativos">Ativos</MenuItem>
+                                <MenuItem value="inativos">Inativos</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <FormControl size="small">
+                            <InputLabel>Segmento</InputLabel>
+                            <Select value={segmentFilter} label="Segmento" onChange={(e) => setSegmentFilter(e.target.value as SegmentFilter)}>
+                                <MenuItem value="todos">Todos</MenuItem>
+                                <MenuItem value="Campeão">Campeão</MenuItem>
+                                <MenuItem value="Fiel">Fiel</MenuItem>
+                                <MenuItem value="Regular">Regular</MenuItem>
+                                <MenuItem value="Risco">Risco</MenuItem>
+                                <MenuItem value="Perdido">Perdido</MenuItem>
+                                <MenuItem value="Novo">Novo</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip label={`${filteredClientes.length} clientes na carteira`} sx={{ bgcolor: '#e2e8f0', fontWeight: 700 }} />
+                        <Chip
+                            label={fiadoFilter ? 'Somente com fiado' : 'Todos os perfis'}
+                            onClick={() => setFiadoFilter((current) => !current)}
+                            color={fiadoFilter ? 'warning' : 'default'}
+                            icon={<HandshakeIcon />}
+                        />
+                        {segmentFilter !== 'todos' && (
+                            <Chip label={`Segmento ${segmentFilter}`} onDelete={() => setSegmentFilter('todos')} color="primary" variant="outlined" />
+                        )}
+                    </Box>
+
+                    <CustomerTable
+                        clientes={filteredClientes}
+                        loading={loading}
+                        onRowClick={handleRowClick}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        selectedClienteId={selectedCliente?.id}
+                        onReceberFiado={handleAbrirModalFiado}
+                        rfmData={rfmData}
+                    />
+                </div>
+            )}
+
+            <Menu anchorEl={exportMenuAnchor} open={Boolean(exportMenuAnchor)} onClose={handleExportClose}>
+                <MenuItem onClick={exportarCSV}>Exportar CSV</MenuItem>
+                <MenuItem onClick={exportarExcel}>Exportar Excel</MenuItem>
+                <MenuItem onClick={exportarPDF}>Exportar PDF</MenuItem>
+            </Menu>
+
+            <CustomerForm
+                open={formOpen}
+                onClose={() => {
+                    setFormOpen(false);
+                    setEditData(undefined);
+                }}
+                onSave={handleSave}
+                initialData={editData}
+                loading={saving}
             />
-            <CustomerForm open={formOpen} onClose={() => setFormOpen(false)} onSave={handleSave} initialData={editData} loading={saving} />
+
             <CustomerDetailsModal
                 open={!!selectedCliente}
                 cliente={clienteDetalhado}
                 loading={detalheLoading}
-                onClose={() => { setSelectedCliente(null); setClienteDetalhado(null); }}
+                onClose={() => {
+                    setSelectedCliente(null);
+                    setClienteDetalhado(null);
+                }}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 rfmData={rfmData}
             />
 
-            {/* ===== MODAL DE RECEBIMENTO DE FIADO ===== */}
             <Dialog open={fiadoModal.open} onClose={() => setFiadoModal({ open: false, cliente: null })} maxWidth="xs" fullWidth>
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#e65100', fontWeight: 700 }}>
-                    <AttachMoneyIcon /> Receber Fiado
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#b45309', fontWeight: 800 }}>
+                    <AttachMoneyIcon /> Receber fiado
                 </DialogTitle>
                 <DialogContent>
                     {fiadoModal.cliente && (
                         <Box>
-                            <Box sx={{ mb: 2, p: 1.5, bgcolor: '#fff8f0', borderRadius: 1, border: '1px solid #ffe0b2' }}>
-                                <Typography variant="subtitle2" sx={{ color: '#e65100', fontWeight: 700 }}>
+                            <Box sx={{ mb: 2, p: 1.5, bgcolor: '#fff7ed', borderRadius: 2, border: '1px solid #fed7aa' }}>
+                                <Typography variant="subtitle2" sx={{ color: '#b45309', fontWeight: 700 }}>
                                     {fiadoModal.cliente.nome}
                                 </Typography>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                                    <WarningAmberIcon sx={{ color: '#f57c00', fontSize: 16 }} />
-                                    <Typography variant="body2" sx={{ color: '#bf360c', fontWeight: 600 }}>
-                                        Saldo Devedor: {(fiadoModal.cliente.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    <WarningAmberIcon sx={{ color: '#f59e0b', fontSize: 16 }} />
+                                    <Typography variant="body2" sx={{ color: '#9a3412', fontWeight: 600 }}>
+                                        Saldo devedor: {formatCurrency(Number(fiadoModal.cliente.saldo_devedor || 0))}
                                     </Typography>
                                 </Box>
                             </Box>
 
                             <TextField
-                                label="Valor a Pagar (R$)"
+                                label="Valor a pagar (R$)"
                                 value={fiadoValor}
-                                onChange={e => setFiadoValor(e.target.value)}
+                                onChange={(e) => setFiadoValor(e.target.value)}
                                 fullWidth
                                 type="number"
                                 inputProps={{ min: 0, step: '0.01', max: fiadoModal.cliente.saldo_devedor ?? 0 }}
                                 sx={{ mb: 2, mt: 1 }}
-                                helperText={`Máximo: ${(fiadoModal.cliente.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+                                helperText={`Máximo: ${formatCurrency(Number(fiadoModal.cliente.saldo_devedor || 0))}`}
                             />
 
                             <FormControl fullWidth sx={{ mb: 1 }}>
-                                <InputLabel>Forma de Pagamento</InputLabel>
-                                <Select value={fiadoForma} label="Forma de Pagamento" onChange={e => setFiadoForma(e.target.value)}>
-                                    <MenuItem value="Dinheiro">💵 Dinheiro</MenuItem>
-                                    <MenuItem value="PIX">📱 PIX</MenuItem>
-                                    <MenuItem value="Cartão de Débito">💳 Cartão de Débito</MenuItem>
-                                    <MenuItem value="Cartão de Crédito">💳 Cartão de Crédito</MenuItem>
+                                <InputLabel>Forma de pagamento</InputLabel>
+                                <Select value={fiadoForma} label="Forma de pagamento" onChange={(e) => setFiadoForma(e.target.value)}>
+                                    <MenuItem value="Dinheiro">Dinheiro</MenuItem>
+                                    <MenuItem value="PIX">PIX</MenuItem>
+                                    <MenuItem value="Cartão de Débito">Cartão de Débito</MenuItem>
+                                    <MenuItem value="Cartão de Crédito">Cartão de Crédito</MenuItem>
                                 </Select>
                             </FormControl>
 
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                ⓘ O valor será registrado como entrada no Caixa aberto.
+                                O valor será registrado como recebimento da carteira e refletido no caixa.
                             </Typography>
                         </Box>
                     )}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setFiadoModal({ open: false, cliente: null })} color="inherit">Cancelar</Button>
-                    <Button
-                        variant="contained"
-                        onClick={handlePagarFiado}
-                        disabled={fiadoLoading || !fiadoValor}
-                        sx={{ bgcolor: '#f57c00', '&:hover': { bgcolor: '#e65100' } }}
-                    >
-                        {fiadoLoading ? 'Registrando...' : 'Confirmar Recebimento'}
+                    <Button onClick={() => setFiadoModal({ open: false, cliente: null })} color="inherit">
+                        Cancelar
+                    </Button>
+                    <Button variant="contained" onClick={handlePagarFiado} disabled={fiadoLoading || !fiadoValor} sx={{ bgcolor: '#f59e0b', '&:hover': { bgcolor: '#d97706' } }}>
+                        {fiadoLoading ? 'Registrando...' : 'Confirmar recebimento'}
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            <Box sx={{ mt: 4, p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2, textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
-                    💡 <strong>Dicas:</strong> Pressione <kbd style={{ padding: '2px 6px', backgroundColor: '#f1f5f9', color: '#0f172a', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}>N</kbd> para novo cliente • <kbd style={{ padding: '2px 6px', backgroundColor: '#f1f5f9', color: '#0f172a', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}>Esc</kbd> para fechar modais • Clique na linha para ver detalhes
-                    {clientesComFiado.length > 0 && <> • <HandshakeIcon sx={{ fontSize: 14, verticalAlign: 'middle', color: '#f57c00' }} /> {clientesComFiado.length} clientes com fiado em aberto</>}
-                </Typography>
-            </Box>
-            {loading && <div className="flex justify-center mt-4"><CircularProgress /></div>}
+            {loading && (
+                <div className="flex justify-center py-6">
+                    <CircularProgress />
+                </div>
+            )}
         </div>
     );
 };

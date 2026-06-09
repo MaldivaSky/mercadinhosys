@@ -1891,14 +1891,11 @@ def atualizar_saldo_devedor(cliente_id, valor, tipo="adicionar"):
 @funcionario_required
 def obter_rfm():
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
-        from app.models import Cliente
         estabelecimento_id = get_authorized_establishment_id()
         dias = request.args.get("dias", 180, type=int)
         
         rfm_data = Cliente.calcular_rfm(estabelecimento_id, days=dias)
         return jsonify({"success": True, "rfm": rfm_data})
     except Exception as e:
-        from flask import current_app, jsonify
         current_app.logger.error(f"Erro ao calcular RFM: {str(e)}")
         return jsonify({"success": False, "message": "Erro ao calcular RFM"}), 500

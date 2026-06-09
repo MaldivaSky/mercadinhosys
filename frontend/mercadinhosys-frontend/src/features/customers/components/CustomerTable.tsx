@@ -50,6 +50,8 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ clientes, loading, onRowC
           ) : (
             clientes.map((cliente) => {
               const temFiado = (cliente.saldo_devedor ?? 0) > 0;
+              const rfmCliente = rfmData?.customers?.find((c: any) => c.cliente_id === cliente.id);
+              const segmento = rfmCliente?.segment;
               return (
                 <tr
                   key={cliente.id}
@@ -108,25 +110,25 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ clientes, loading, onRowC
                     )}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                     {rfmData && rfmData.customers && rfmData.customers.find((c: any) => c.cliente_id === cliente.id) ? (
+                     {segmento ? (
                         <Chip
-                           label={rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment}
+                           label={segmento}
                            size="small"
                            sx={{
                              fontWeight: 700,
                              fontSize: '0.7rem',
                              letterSpacing: 0.5,
                              textTransform: 'uppercase',
-                             bgcolor: rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Campeão' ? '#e8f5e9' : 
-                                      rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Fiel' ? '#e3f2fd' : 
-                                      rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Perdido' ? '#ffebee' : '#f3e5f5',
-                             color: rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Campeão' ? '#2e7d32' : 
-                                      rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Fiel' ? '#1565c0' : 
-                                      rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Perdido' ? '#c62828' : '#7b1fa2',
+                             bgcolor: segmento === 'Campeão' ? '#e8f5e9' : 
+                                      segmento === 'Fiel' ? '#e3f2fd' : 
+                                      segmento === 'Perdido' ? '#ffebee' : '#f3e5f5',
+                             color: segmento === 'Campeão' ? '#2e7d32' : 
+                                      segmento === 'Fiel' ? '#1565c0' : 
+                                      segmento === 'Perdido' ? '#c62828' : '#7b1fa2',
                              border: '1px solid',
-                             borderColor: rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Campeão' ? '#c8e6c9' : 
-                                      rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Fiel' ? '#bbdefb' : 
-                                      rfmData.customers.find((c: any) => c.cliente_id === cliente.id).segment === 'Perdido' ? '#ffcdd2' : '#e1bee7',
+                             borderColor: segmento === 'Campeão' ? '#c8e6c9' : 
+                                      segmento === 'Fiel' ? '#bbdefb' : 
+                                      segmento === 'Perdido' ? '#ffcdd2' : '#e1bee7',
                            }}
                         />
                      ) : <span className="text-xs text-gray-400">—</span>}

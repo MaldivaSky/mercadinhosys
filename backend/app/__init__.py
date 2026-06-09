@@ -217,6 +217,42 @@ def create_app(config_name=None):
             # Logger silencioso para não poluir em rotas realmente públicas
             pass
 
+    @app.after_request
+    def report_server_errors(response):
+        if request.path.startswith("/api/") and response.status_code >= 500:
+            # #region debug-point D:backend-5xx-response
+            try:
+                import json as _json
+                import urllib.request as _urllib_request
+
+                _payload = {
+                    "sessionId": "api-500-error",
+                    "runId": "pre-fix",
+                    "hypothesisId": "D",
+                    "location": "backend/app/__init__.py:after_request",
+                    "msg": "[DEBUG] backend respondeu com 5xx",
+                    "data": {
+                        "path": request.path,
+                        "method": request.method,
+                        "status_code": response.status_code,
+                        "args": request.args.to_dict(),
+                        "json_keys": list((request.get_json(silent=True) or {}).keys())[:15] if request.is_json else [],
+                        "response_preview": response.get_data(as_text=True)[:500],
+                    },
+                }
+                _urllib_request.urlopen(
+                    _urllib_request.Request(
+                        "http://127.0.0.1:7777/event",
+                        data=_json.dumps(_payload).encode(),
+                        headers={"Content-Type": "application/json"},
+                    ),
+                    timeout=1,
+                ).read()
+            except Exception:
+                pass
+            # #endregion
+        return response
+
 
     @app.errorhandler(404)
     def handle_404_error(e):
