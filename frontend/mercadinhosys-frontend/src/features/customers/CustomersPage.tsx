@@ -61,6 +61,7 @@ const CustomersPage: React.FC = () => {
     const [fiadoForma, setFiadoForma] = useState('Dinheiro');
     const [fiadoLoading, setFiadoLoading] = useState(false);
     const [recalcLoading, setRecalcLoading] = useState(false);
+    const [rfmData, setRfmData] = useState<any>(null);
 
     const handleRecalcularMetricas = async () => {
         setRecalcLoading(true);
@@ -96,6 +97,11 @@ const CustomersPage: React.FC = () => {
                     maior_devedor_nome: res.data.estatisticas.maior_devedor_nome || "Nenhum",
                     maior_devedor_valor: res.data.estatisticas.maior_devedor_valor || 0,
                 });
+            }
+            // Fetch RFM
+            const rfmRes = await apiClient.get('/clientes/rfm');
+            if (rfmRes.data && rfmRes.data.rfm) {
+                setRfmData(rfmRes.data.rfm);
             }
         } catch {
             showToast.error('Erro ao carregar métricas do dashboard');
@@ -678,6 +684,7 @@ const CustomersPage: React.FC = () => {
                 onClose={() => { setSelectedCliente(null); setClienteDetalhado(null); }}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                rfmData={rfmData}
             />
 
             {/* ===== MODAL DE RECEBIMENTO DE FIADO ===== */}
@@ -740,9 +747,9 @@ const CustomersPage: React.FC = () => {
                 </DialogActions>
             </Dialog>
 
-            <Box sx={{ mt: 4, p: 2, bgcolor: 'grey.50', borderRadius: 1, textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                    💡 <strong>Dicas:</strong> Pressione <kbd>N</kbd> para novo cliente • <kbd>Esc</kbd> para fechar modais • Clique na linha para ver detalhes
+            <Box sx={{ mt: 4, p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2, textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
+                    💡 <strong>Dicas:</strong> Pressione <kbd style={{ padding: '2px 6px', backgroundColor: '#f1f5f9', color: '#0f172a', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}>N</kbd> para novo cliente • <kbd style={{ padding: '2px 6px', backgroundColor: '#f1f5f9', color: '#0f172a', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}>Esc</kbd> para fechar modais • Clique na linha para ver detalhes
                     {clientesComFiado.length > 0 && <> • <HandshakeIcon sx={{ fontSize: 14, verticalAlign: 'middle', color: '#f57c00' }} /> {clientesComFiado.length} clientes com fiado em aberto</>}
                 </Typography>
             </Box>

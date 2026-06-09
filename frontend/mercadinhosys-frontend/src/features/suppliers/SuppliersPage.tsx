@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { Fornecedor } from '../../types';
 import { apiClient } from '../../api/apiClient';
@@ -27,6 +28,7 @@ interface SupplierFormData {
 }
 
 const SuppliersPage: React.FC = () => {
+    const navigate = useNavigate();
     const [suppliers, setSuppliers] = useState<Fornecedor[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingCep, setLoadingCep] = useState(false);
@@ -1049,7 +1051,11 @@ const SuppliersPage: React.FC = () => {
                                     {produtosFornecedor.map((produto) => (
                                         <div
                                             key={produto.id}
-                                            className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
+                                            onClick={() => {
+                                                setShowProdutosModal(false);
+                                                navigate(`/products/${produto.id}/hub`);
+                                            }}
+                                            className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"
                                         >
                                             <div className="flex items-start justify-between mb-2">
                                                 <div className="flex-1">

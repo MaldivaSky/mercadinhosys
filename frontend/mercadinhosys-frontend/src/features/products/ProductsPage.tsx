@@ -1,15 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Download,
-  Plus,
-  ShoppingCart,
+import { useNavigate } from 'react-router-dom';
+import { 
   Calculator,
-  Search,
-  Filter,
-  ChevronDown,
-  RefreshCw,
   X,
-  Upload,
   PackageX
 } from 'lucide-react';
 import { Fornecedor, Produto, ProdutoFiltros } from '../../types';
@@ -23,7 +16,7 @@ import QuickFiltersPanel from './components/QuickFiltersPanel';
 import ProductHistoryModal from './components/ProductHistoryModal';
 import PurchaseOrdersPanel from './components/PurchaseOrdersPanel';
 import PurchaseOrderModal from './components/PurchaseOrderModal';
-
+import CommandToolbar from './components/CommandToolbar';
 
 import ProductFormModal from './components/ProductFormModal';
 import { ProductsTable } from './components/ProductsTable';
@@ -37,6 +30,7 @@ type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
 type LinhaProdutoLote = { produto: ProdutoComLotes; lote: LoteNoPeriodo | null };
 
 const ProductsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   // todosProdutos removed in favor of server-side stats
   const [loading, setLoading] = useState(true);
@@ -265,8 +259,7 @@ const ProductsPage: React.FC = () => {
   };
 
   const openDetailModal = (produto: Produto) => {
-    setSelectedProduct(produto);
-    setShowDetailModal(true);
+    navigate(`/products/${produto.id}`);
   };
 
   const calcularMarkup = () => {
@@ -414,68 +407,43 @@ const ProductsPage: React.FC = () => {
   return (
     <div className="space-y-6 p-6">
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Gestao de Produtos</h1>
-          <p className="text-gray-600 dark:text-gray-400">Controle de estoque e catalogo</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowPurchaseOrders(true)} className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5" />Pedidos de Compra
-          </button>
-          <button onClick={() => setShowMarkupCalculator(true)} className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2">
-            <Calculator className="w-5 h-5" />Markup
-          </button>
-          <button onClick={() => setShowImportModal(true)} className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 flex items-center gap-2">
-            <Upload className="w-5 h-5" />Importar
-          </button>
-          <button onClick={handleExportCSV} className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
-            <Download className="w-5 h-5" />CSV
-          </button>
-          <button onClick={() => { setEditMode(false); setSelectedProduct(null); setShowProductModal(true); }} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2">
-            <Plus className="w-5 h-5" />Novo
-          </button>
-        </div>
-      </div>
-
-      <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
+      <CommandToolbar 
+        onNew={() => { setEditMode(false); setSelectedProduct(null); setShowProductModal(true); }}
+        onRefresh={loadProdutos}
+        onPurchaseOrders={() => setShowPurchaseOrders(true)}
+        onMarkup={() => setShowMarkupCalculator(true)}
+        onImport={() => setShowImportModal(true)}
+        onExport={handleExportCSV}
+        search={buscaLocal}
+        onSearchChange={setBuscaLocal}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+        showFilters={showFilters}
+      />
 
       <ProductAnalyticsDashboard produtos={produtos} stats={stats} onCardClick={handleCardClick} />
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input type="text" value={buscaLocal} onChange={(e) => setBuscaLocal(e.target.value)} placeholder="Buscar produto..." className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" />
-          </div>
-          <button onClick={() => setShowFilters(!showFilters)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg flex items-center gap-2">
-            <Filter className="w-5 h-5" />Filtros<ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-          </button>
-          <button onClick={loadProdutos} className="px-4 py-2 bg-blue-500 text-white rounded-lg flex items-center gap-2">
-            <RefreshCw className="w-5 h-5" />Atualizar
-          </button>
-        </div>
+      <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
         {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 border-b border-slate-800 bg-slate-900/50">
             <div>
-              <label className="block text-sm font-medium mb-1">Categoria</label>
-              <select value={filtros.categoria || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, categoria: e.target.value || undefined })); setPage(1); }} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+              <label className="block text-xs font-medium mb-1 text-slate-400">Categoria</label>
+              <select value={filtros.categoria || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, categoria: e.target.value || undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
                 <option value="">Todas</option>
                 {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Fornecedor</label>
-              <select value={filtros.fornecedor_id || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, fornecedor_id: e.target.value ? parseInt(e.target.value) : undefined })); setPage(1); }} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+              <label className="block text-xs font-medium mb-1 text-slate-400">Fornecedor</label>
+              <select value={filtros.fornecedor_id || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, fornecedor_id: e.target.value ? parseInt(e.target.value) : undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
                 <option value="">Todos</option>
                 {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Status Estoque</label>
-              <select value={filtros.estoque_status || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, estoque_status: (e.target.value || undefined) as 'baixo' | 'esgotado' | 'normal' | undefined })); setPage(1); }} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+              <label className="block text-xs font-medium mb-1 text-slate-400">Status Estoque</label>
+              <select value={filtros.estoque_status || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, estoque_status: (e.target.value || undefined) as 'baixo' | 'esgotado' | 'normal' | undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
                 <option value="">Todos</option>
                 <option value="normal">Normal</option>
                 <option value="baixo">Baixo</option>
@@ -483,8 +451,8 @@ const ProductsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Tipo</label>
-              <select value={filtros.tipo || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, tipo: e.target.value || undefined })); setPage(1); }} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+              <label className="block text-xs font-medium mb-1 text-slate-400">Tipo</label>
+              <select value={filtros.tipo || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, tipo: e.target.value || undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
                 <option value="">Todos</option>
                 <option value="Higiene">Higiene</option>
                 <option value="Limpeza">Limpeza</option>
@@ -494,7 +462,7 @@ const ProductsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Validade</label>
+              <label className="block text-xs font-medium mb-1 text-slate-400">Validade</label>
               <select value={filtros.vencidos ? 'vencidos' : (filtros.validade_proxima ? `proxima_${filtros.dias_validade || 30}` : '')}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -508,7 +476,7 @@ const ProductsPage: React.FC = () => {
                   setFiltros(nf);
                   setPage(1);
                 }}
-                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm"
               >
                 <option value="">Qualquer</option>
                 <option value="vencidos">Já Vencidos</option>
@@ -518,8 +486,8 @@ const ProductsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Ordenar por</label>
-              <select value={filtros.ordenar_por || 'nome'} onChange={(e) => setFiltros(prev => ({ ...prev, ordenar_por: e.target.value }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+              <label className="block text-xs font-medium mb-1 text-slate-400">Ordenar por</label>
+              <select value={filtros.ordenar_por || 'nome'} onChange={(e) => setFiltros(prev => ({ ...prev, ordenar_por: e.target.value }))} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
                 <option value="nome">Nome</option>
                 <option value="quantidade">Quantidade</option>
                 <option value="preco_venda">Preco</option>
@@ -528,8 +496,8 @@ const ProductsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Direcao</label>
-              <select value={filtros.direcao || 'asc'} onChange={(e) => setFiltros(prev => ({ ...prev, direcao: e.target.value as 'asc' | 'desc' }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+              <label className="block text-xs font-medium mb-1 text-slate-400">Direcao</label>
+              <select value={filtros.direcao || 'asc'} onChange={(e) => setFiltros(prev => ({ ...prev, direcao: e.target.value as 'asc' | 'desc' }))} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
                 <option value="asc">Crescente</option>
                 <option value="desc">Decrescente</option>
               </select>

@@ -228,85 +228,100 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 {/* Total de Produtos */}
                 <div
                     onClick={() => onCardClick('all')}
-                    className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
-                        <Package className="w-8 h-8 opacity-80" />
-                        <TrendingUp className="w-5 h-5" />
+                        <Package className="w-8 h-8 text-blue-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <TrendingUp className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-sm opacity-90 mb-1">Total Produtos</p>
-                    <p className="text-3xl font-bold">{stats.total_produtos}</p>
-                    <p className="text-xs opacity-75 mt-2">📦 Clique para ver todos</p>
+                    <p className="text-sm text-slate-400 mb-1">Total Produtos</p>
+                    <p className="text-3xl font-black text-white">{stats.total_produtos}</p>
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Catálogo completo
+                    </p>
                 </div>
 
                 {/* Produtos Normais */}
                 <div
                     onClick={() => onCardClick('normal')}
-                    className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
-                        <Target className="w-8 h-8 opacity-80" />
-                        <BarChart3 className="w-5 h-5" />
+                        <Target className="w-8 h-8 text-emerald-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <BarChart3 className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-sm opacity-90 mb-1">Estoque Normal</p>
-                    <p className="text-3xl font-bold">{stats.produtos_normal}</p>
-                    <p className="text-xs opacity-75 mt-2">✅ {stats.total_produtos > 0 ? ((stats.produtos_normal / stats.total_produtos) * 100).toFixed(0) : '0'}% do total</p>
+                    <p className="text-sm text-slate-400 mb-1">Estoque Normal</p>
+                    <p className="text-3xl font-black text-white">{stats.produtos_normal}</p>
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
+                        {stats.total_produtos > 0 ? ((stats.produtos_normal / stats.total_produtos) * 100).toFixed(0) : '0'}% do total
+                    </p>
                 </div>
 
                 {/* Baixo Estoque */}
                 <div
                     onClick={() => onCardClick('baixo')}
-                    className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
+                    className="bg-slate-900 border border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.1)] p-6 text-slate-200 cursor-pointer hover:border-amber-500/60 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
-                        <AlertTriangle className="w-8 h-8 opacity-80" />
-                        <TrendingDown className="w-5 h-5" />
+                        <AlertTriangle className="w-8 h-8 text-amber-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <TrendingDown className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-sm opacity-90 mb-1">Baixo Estoque</p>
-                    <p className="text-3xl font-bold">{stats.produtos_baixo_estoque}</p>
-                    <p className="text-xs opacity-75 mt-2">⚠️ Requer atenção</p>
+                    <p className="text-sm text-slate-400 mb-1">Baixo Estoque</p>
+                    <p className="text-3xl font-black text-amber-400">{stats.produtos_baixo_estoque}</p>
+                    <p className="text-xs text-amber-500/70 mt-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Requer atenção
+                    </p>
                 </div>
 
                 {/* Esgotados */}
                 <div
                     onClick={() => onCardClick('esgotado')}
-                    className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200 animate-pulse"
+                    className="bg-slate-900 border border-rose-500/40 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.15)] p-6 text-slate-200 cursor-pointer hover:border-rose-500/70 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
-                        <Activity className="w-8 h-8 opacity-80" />
-                        <AlertTriangle className="w-5 h-5" />
+                        <Activity className="w-8 h-8 text-rose-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <AlertTriangle className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-sm opacity-90 mb-1">Esgotados</p>
-                    <p className="text-3xl font-bold">{stats.produtos_esgotados}</p>
-                    <p className="text-xs opacity-75 mt-2">🚨 URGENTE</p>
+                    <p className="text-sm text-slate-400 mb-1">Esgotados</p>
+                    <p className="text-3xl font-black text-rose-500">{stats.produtos_esgotados}</p>
+                    <p className="text-xs text-rose-500/80 mt-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> Crítico
+                    </p>
                 </div>
 
                 {/* Valor Total */}
                 <div
                     onClick={() => onCardClick('valor')}
-                    className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-purple-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
-                        <DollarSign className="w-8 h-8 opacity-80" />
-                        <TrendingUp className="w-5 h-5" />
+                        <DollarSign className="w-8 h-8 text-purple-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <TrendingUp className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-sm opacity-90 mb-1">Valor Estoque</p>
-                    <p className="text-2xl font-bold">{formatCurrency(stats.valor_total_estoque)}</p>
-                    <p className="text-xs opacity-75 mt-2">💰 Capital investido</p>
+                    <p className="text-sm text-slate-400 mb-1">Valor Estoque</p>
+                    <p className="text-xl sm:text-2xl font-black text-white truncate" title={formatCurrency(stats.valor_total_estoque)}>
+                        {formatCurrency(stats.valor_total_estoque)}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Capital investido
+                    </p>
                 </div>
 
                 {/* Margem Média */}
                 <div
                     onClick={() => onCardClick('margem')}
-                    className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:shadow-2xl hover:scale-105 transition-all duration-200"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
-                        <PieChart className="w-8 h-8 opacity-80" />
-                        <BarChart3 className="w-5 h-5" />
+                        <PieChart className="w-8 h-8 text-indigo-500 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <BarChart3 className="w-5 h-5 text-slate-500" />
                     </div>
-                    <p className="text-sm opacity-90 mb-1">Margem Média</p>
-                    <p className="text-3xl font-bold">{stats.margem_media.toFixed(1)}%</p>
-                    <p className="text-xs opacity-75 mt-2">📊 Rentabilidade</p>
+                    <p className="text-sm text-slate-400 mb-1">Margem Média</p>
+                    <p className="text-3xl font-black text-white">{stats.margem_media.toFixed(1)}%</p>
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Rentabilidade
+                    </p>
                 </div>
             </div>
 

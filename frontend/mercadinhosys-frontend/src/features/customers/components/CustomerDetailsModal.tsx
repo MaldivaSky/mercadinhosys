@@ -1,6 +1,7 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Divider, Card, CardContent, CircularProgress } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Divider, Card, CardContent, CircularProgress, Chip } from '@mui/material';
 import Box from '@mui/material/Box';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 
 interface CustomerDetailsModalProps {
   open: boolean;
@@ -9,9 +10,10 @@ interface CustomerDetailsModalProps {
   onClose: () => void;
   onEdit: (cliente: any) => void;
   onDelete: (cliente: any) => void;
+  rfmData?: any;
 }
 
-const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, cliente, loading, onClose, onEdit, onDelete }) => {
+const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, cliente, loading, onClose, onEdit, onDelete, rfmData }) => {
 
   const labelStyle = {
     fontWeight: 600,
@@ -32,9 +34,38 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
     </Box>
   );
 
+  const getRfmCustomer = () => {
+    if (!cliente || !rfmData || !rfmData.customers) return null;
+    return rfmData.customers.find((c: any) => c.cliente_id === cliente.id);
+  };
+
+  const renderSegmentChip = () => {
+    const rfmC = getRfmCustomer();
+    if (!rfmC) return null;
+    return (
+      <Chip
+        label={`Segmento: ${rfmC.segment}`}
+        size="small"
+        sx={{
+          fontWeight: 600,
+          ml: 2,
+          bgcolor: rfmC.segment === 'Campeão' ? '#e8f5e9' : 
+                   rfmC.segment === 'Fiel' ? '#e3f2fd' : 
+                   rfmC.segment === 'Perdido' ? '#ffebee' : '#f3e5f5',
+          color: rfmC.segment === 'Campeão' ? '#2e7d32' : 
+                   rfmC.segment === 'Fiel' ? '#1976d2' : 
+                   rfmC.segment === 'Perdido' ? '#c62828' : '#7b1fa2',
+        }}
+      />
+    );
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Detalhes do Cliente</DialogTitle>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
+        Detalhes do Cliente
+        {renderSegmentChip()}
+      </DialogTitle>
       <DialogContent dividers>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -43,9 +74,22 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
         ) : cliente ? (
           <Box>
             {/* Dados Pessoais */}
-            <Typography variant="subtitle2" sx={{ color: '#1976d2', fontWeight: 700, mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Dados Pessoais
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ color: '#1976d2', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Dados Pessoais
+                </Typography>
+                {cliente.celular && (
+                    <Button
+                        variant="outlined"
+                        color="success"
+                        size="small"
+                        startIcon={<WhatsAppIcon />}
+                        onClick={() => window.open(`https://wa.me/55${cliente.celular.replace(/\D/g, '')}`, '_blank')}
+                    >
+                        Conversar
+                    </Button>
+                )}
+            </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.5, mb: 2 }}>
               <InfoRow label="Nome:" value={cliente.nome || '-'} />
               <InfoRow label="CPF:" value={cliente.cpf || '-'} />
@@ -80,17 +124,17 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
               <InfoRow label="Total Compras:" value={cliente.total_compras ?? '-'} />
               <InfoRow
                 label="Valor Total Gasto:"
-                value={`R$ ${cliente.valor_total_gasto ? cliente.valor_total_gasto.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
+                value={`R$ ${cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
                 valueColor="#2e7d32"
               />
               <InfoRow
                 label="Limite Crédito:"
-                value={`R$ ${cliente.limite_credito ? cliente.limite_credito.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
+                value={`R$ ${cliente.limite_credito ? Number(cliente.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
                 valueColor="#2e7d32"
               />
               <InfoRow
                 label="Saldo Devedor:"
-                value={`R$ ${cliente.saldo_devedor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '0,00'}`}
+                value={`R$ ${cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
                 valueColor={(cliente.saldo_devedor ?? 0) > 0 ? '#d32f2f' : '#2e7d32'}
               />
             </Box>
@@ -111,7 +155,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
                 <Card sx={{ bgcolor: '#fff3e0', border: '1px solid #ff9800' }}>
                   <CardContent sx={{ textAlign: 'center', py: '12px !important' }}>
                     <Typography variant="h5" sx={{ color: '#e65100', fontWeight: 'bold' }}>
-                      R$ {cliente.valor_total_gasto?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '0,00'}
+                      R$ {cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#424242' }}>Valor Total Gasto</Typography>
                   </CardContent>
@@ -127,7 +171,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
                       color: (cliente.saldo_devedor ?? 0) > 0 ? '#c62828' : '#2e7d32',
                       fontWeight: 'bold'
                     }}>
-                      R$ {cliente.saldo_devedor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '0,00'}
+                      R$ {cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
                     </Typography>
                     <Typography variant="body2" sx={{ color: '#424242' }}>
                       {(cliente.saldo_devedor ?? 0) > 0 ? 'Saldo Devedor' : 'Sem Débitos'}

@@ -804,6 +804,25 @@ def obter_produto(id):
             valor_total_vendido / total_vendido if total_vendido > 0 else 0
         )
 
+        # Histórico de Preços
+        historico_precos_db = HistoricoPrecos.query.filter_by(
+            produto_id=id, estabelecimento_id=estabelecimento_id
+        ).order_by(HistoricoPrecos.data_alteracao.desc()).limit(30).all()
+        
+        historico_precos_lista = []
+        for hp in historico_precos_db:
+            historico_precos_lista.append({
+                "id": hp.id,
+                "preco_custo_anterior": float(hp.preco_custo_anterior or 0),
+                "preco_venda_anterior": float(hp.preco_venda_anterior or 0),
+                "preco_custo_novo": float(hp.preco_custo_novo or 0),
+                "preco_venda_novo": float(hp.preco_venda_novo or 0),
+                "margem_nova": float(hp.margem_nova or 0),
+                "motivo": hp.motivo,
+                "data_alteracao": hp.data_alteracao.isoformat() if hp.data_alteracao else None,
+                "funcionario": hp.funcionario.nome if hp.funcionario else None
+            })
+
         return jsonify(
             {
                 "success": True,
@@ -811,6 +830,7 @@ def obter_produto(id):
                 "movimentacoes": movimentacoes_lista,
                 "historico_vendas": vendas_lista,
                 "pedidos_pendentes": pedidos_lista,
+                "historico_precos": historico_precos_lista,
                 "estatisticas": {
                     "total_vendido": total_vendido,
                     "valor_total_vendido": valor_total_vendido,
@@ -2111,8 +2131,22 @@ def obter_estatisticas_produtos():
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
-        # Obter filtros (mesmos da listagem)
         ativos = request.args.get("ativos", None, type=str)
+
+        # CALCULAR ESTATÍSTICAS GLOBAIS ABSOLUTAS DA LOJA
+        q_global = Produto.query
+        if estabelecimento_id != 'all':
+            q_global = q_global.filter_by(estabelecimento_id=estabelecimento_id)
+        if ativos is not None:
+            q_global = q_global.filter_by(ativo=ativos.lower() == "true")
+            
+        prods_globais = q_global.all()
+        total_produtos_global = len(prods_globais)
+        esgotados_global = sum(1 for p in prods_globais if (p.quantidade or 0) <= 0)
+        baixo_estoque_global = sum(1 for p in prods_globais if 0 < (p.quantidade or 0) <= (p.quantidade_minima or 0))
+        normal_global = total_produtos_global - esgotados_global - baixo_estoque_global
+
+        # Obter filtros (mesmos da listagem)
         categoria = request.args.get("categoria", None, type=str)
         estoque_status = request.args.get("estoque_status", None, type=str)
         tipo = request.args.get("tipo", None, type=str)
@@ -2141,10 +2175,11 @@ def obter_estatisticas_produtos():
                 return jsonify({
                     "success": True,
                     "estatisticas": {
-                        "total_produtos": 0,
-                        "produtos_baixo_estoque": 0,
-                        "produtos_esgotados": 0,
-                        "produtos_normal": 0,
+                        "total_produtos": total_produtos_global,
+                        "produtos_baixo_estoque": baixo_estoque_global,
+                        "produtos_esgotados": esgotados_global,
+                        "produtos_normal": normal_global,
+                        "total_filtrado": 0,
                         "valor_total_estoque": 0.0,
                         "margem_media": 0.0,
                         "margem_alta": 0,
@@ -2478,10 +2513,11 @@ def obter_estatisticas_produtos():
 
         # Preparar resposta
         estatisticas = {
-            "total_produtos": total_produtos,
-            "produtos_baixo_estoque": produtos_baixo_estoque,
-            "produtos_esgotados": produtos_esgotados,
-            "produtos_normal": produtos_normal,
+            "total_produtos": total_produtos_global,
+            "produtos_baixo_estoque": baixo_estoque_global,
+            "produtos_esgotados": esgotados_global,
+            "produtos_normal": normal_global,
+            "total_filtrado": total_produtos,
             "valor_total_estoque": float(valor_total_estoque.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
             "margem_media": float(margem_media.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
             "margem_alta": margem_alta_count,
@@ -3420,6 +3456,16 @@ def obter_historico_precos(id):
                 "id": produto.id,
                 "nome": produto.nome,
                 "codigo_interno": produto.codigo_interno,
+                "quantidade": float(produto.quantidade),
+                "preco_custo": float(produto.preco_custo),
+                "preco_venda": float(produto.preco_venda),
+                "quantidade_vendida": float(produto.quantidade_vendida or 0),
+                "total_vendido": float(produto.total_vendido or 0),
+                "fornecedor_id": produto.fornecedor_id,
+                "fornecedor": {
+                    "nome_fantasia": produto.fornecedor.nome_fantasia if produto.fornecedor else "",
+                    "razao_social": produto.fornecedor.razao_social if produto.fornecedor else ""
+                } if produto.fornecedor_id else None
             },
             "historico": historico_lista,
             "estatisticas": estatisticas,
