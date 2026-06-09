@@ -12,6 +12,7 @@ import PlanoGuard from '../components/routes/PlanoGuard';
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
 const PDVPage = lazy(() => import('../features/pdv/PDVPage'));
 const ProductsPage = lazy(() => import('../features/products/ProductsPage'));
+const ProductHubPage = lazy(() => import('../features/products/ProductHubPage'));
 const SuppliersPage = lazy(() => import('../features/suppliers/SuppliersPage'));
 const CustomersPage = lazy(() => import('../features/customers/CustomersPage'));
 const SalesPage = lazy(() => import('../features/sales/SalesPage'));
@@ -56,6 +57,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="dashboard" element={<PlanoGuard planoRequerido="gratuito"><DashboardPage /></PlanoGuard>} />
                     <Route path="pdv" element={<PlanoGuard planoRequerido="gratuito"><PDVPage /></PlanoGuard>} />
                     <Route path="products" element={<PlanoGuard planoRequerido="gratuito"><ProductsPage /></PlanoGuard>} />
+                    <Route path="products/:id" element={<PlanoGuard planoRequerido="gratuito"><ProductHubPage /></PlanoGuard>} />
                     <Route path="suppliers" element={<PlanoGuard planoRequerido="gratuito"><SuppliersPage /></PlanoGuard>} />
                     <Route path="customers" element={<PlanoGuard planoRequerido="gratuito"><CustomersPage /></PlanoGuard>} />
                     <Route path="settings" element={<PlanoGuard planoRequerido="gratuito"><SettingsPage /></PlanoGuard>} />

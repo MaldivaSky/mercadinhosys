@@ -1551,8 +1551,16 @@ class DataLayer:
             count = q_count.scalar() or 0
 
             # 3. CMV (Cost of Goods Sold)
-            q_cogs = db.session.query(func.sum(VendaItem.custo_unitario * VendaItem.quantidade)).join(
+            # Use COALESCE to fall back to produtos.preco_custo when custo_unitario is NULL
+            from app.models import Produto
+            from sqlalchemy import case as sa_case
+            custo_efetivo = func.coalesce(VendaItem.custo_unitario, Produto.preco_custo, 0)
+            q_cogs = db.session.query(
+                func.sum(custo_efetivo * VendaItem.quantidade)
+            ).join(
                 Venda, Venda.id == VendaItem.venda_id
+            ).outerjoin(
+                Produto, Produto.id == VendaItem.produto_id
             ).filter(
                 Venda.data_venda >= start_dt,
                 Venda.data_venda <= end_dt,

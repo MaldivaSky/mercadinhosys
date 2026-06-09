@@ -458,14 +458,21 @@ const DashboardPage: React.FC = () => {
         Number(backendData?.faturamento) || 0;
 
       const cogs = Number(financials.cogs) || 0;
-      const totalDespesas = Number(backendData?.total_despesas) || Number(backendData?.expenses) || Number(backendData?.summary?.expenses?.value) || 0;
+      const despesasOperacionais = Number(backendData?.total_despesas) || Number(backendData?.expenses) || Number(backendData?.summary?.expenses?.value) || 0;
+      
+      const custoFolhaMensal = backendData?.rh?.custo_folha_estimado || 0;
+      const periodDays = backendData?.period_days || periodoDias || 30;
+      const folhaProporcional = (custoFolhaMensal / 30) * periodDays;
+      
+      const totalDespesas = cogs + despesasOperacionais + folhaProporcional; // Representa Total de Saídas
+
       const lucroBruto = Number(financials.gross_profit) || Number(backendData?.summary?.gross_profit?.value) || (totalVendas - cogs);
-      const lucroLiquido = Number(financials.net_profit) || Number(backendData?.summary?.net_profit?.value) || (lucroBruto - totalDespesas);
+      const lucroLiquido = totalVendas - totalDespesas; // Lucro Real (Sem duplo desconto de CMV)
       const margemLucro = totalVendas > 0 ? (lucroLiquido / totalVendas) * 100 : 0;
       const roiMensal = Number(financials.roi) || Number(backendData?.summary?.roi?.value) || 0;
 
       // Valor do estoque (Ativo) - Diferente de COGS (Despesa)
-      const valorEstoqueAtivo = backendData?.inventory?.custo_total || 0;
+      const valorEstoqueAtivo = backendData?.summary?.inventory_value || backendData?.inventory?.valor_total || backendData?.inventory?.custo_total || 0;
       const custoEstoque = valorEstoqueAtivo; // Alias para compatibilidade com restante do código
 
       // Mapear produtos da curva ABC para produtos_estrela
@@ -660,7 +667,8 @@ const DashboardPage: React.FC = () => {
         if (!mostrarValidade && (acao.includes('validade') || acao.includes('vencimento') || area.includes('validade'))) return false;
         return true;
       }).map((rec: any) => ({
-        area: rec.tipo || rec.area || 'Geral',
+        ...rec, // 🔥 Preservar campos originais do backend para banners e lógica avançada
+        area: rec.tipo || rec.alvo || rec.area || 'Geral',
         acao: rec.mensagem || rec.acao || '',
         impacto_esperado: rec.impacto_estimado || rec.impacto_esperado || 0, // 🔥 Priorizar valor monetário do backend
         complexidade: rec.complexidade || 'media'
@@ -693,7 +701,7 @@ const DashboardPage: React.FC = () => {
           hoje: {
             data: new Date().toISOString(),
             total_vendas: totalVendas,
-            quantidade_vendas: backendData?.summary?.revenue?.sample_size || 0,
+            quantidade_vendas: backendData?.summary?.sales_current?.sample_size || backendData?.summary?.revenue?.sample_size || 0,
             ticket_medio: backendData?.summary?.avg_ticket?.value || 0,
             clientes_atendidos: backendData?.summary?.unique_customers || 0,
             crescimento_vs_ontem: backendData?.summary?.growth_period?.value ?? backendData?.summary?.growth?.value ?? 0,
@@ -705,13 +713,14 @@ const DashboardPage: React.FC = () => {
           },
           mes: {
             total_vendas: totalVendas,
-            total_despesas: totalDespesas,
+            total_despesas: totalDespesas, // Repassa Total Saídas para a UI geral
+            despesas_operacionais: despesasOperacionais + folhaProporcional, // Apenas OPEX + Folha para uso no DRE
             lucro_bruto: lucroBruto,
             lucro_liquido: lucroLiquido,
             margem_lucro: margemLucro,
             crescimento_mensal: backendData?.summary?.growth_period?.value ?? backendData?.summary?.growth?.value ?? 0,
             despesas_por_tipo: {},
-            custo_produtos_vendidos: cogs, // 🔥 CORRIGIDO: Usar CMV
+            custo_produtos_vendidos: cogs, // CMV
             investimentos: valorEstoqueAtivo, // 🔥 Manter valor do estoque como investimento (Ativo)
             roi_mensal: roiMensal
           },
@@ -920,11 +929,11 @@ const DashboardPage: React.FC = () => {
   const analise_financeira = data.data?.analise_financeira || {};
   const rh = data.data?.rh || {};
   const analise_produtos = data.data?.analise_produtos || {};
-  const insights_cientificos = {
-    correlações: data.data?.correlations || [],
-    anomalias: data.data?.anomalies || [],
-    previsoes: data.data?.previsoes || [],
-    recomendacoes_otimizacao: data.data?.recomendacoes || []
+  const insights_cientificos = data.data?.insights_cientificos || {
+    correlações: [],
+    anomalias: [],
+    previsoes: [],
+    recomendacoes_otimizacao: []
   };
   const { analise_temporal = {
     tendencia_vendas: [],
@@ -957,7 +966,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* 🔥 DIAGNÓSTICO FINANCEIRO INTELIGENTE (CFO VIRTUAL) */}
-      {data?.data?.recomendacoes?.filter((rec: any) => rec.prioridade === 1).map((rec: any, idx: number) => (
+      {insights_cientificos?.recomendacoes_otimizacao?.filter((rec: any) => rec.prioridade === 1).map((rec: any, idx: number) => (
         <div key={idx} className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800 border-l-4 border-l-red-500 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-6 animate-fadeIn">
           <div className="bg-red-50 dark:bg-red-500/10 p-4 rounded-full border border-red-100 dark:border-red-500/20">
             <TrendingUpFill className="w-8 h-8 text-red-600 dark:text-red-400" />
@@ -976,7 +985,10 @@ const DashboardPage: React.FC = () => {
                 {rec.cta}
               </button>
               <button
-                onClick={() => document.getElementById('detalhes-financeiros')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => {
+                  setViewMode('geral');
+                  setTimeout(() => document.getElementById('detalhes-financeiros')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                }}
                 className="px-6 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:-translate-y-1 transition-all duration-300"
               >
                 Ver Detalhes do DRE
@@ -1168,7 +1180,7 @@ const DashboardPage: React.FC = () => {
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
-              <BarChartIcon className="w-8 h-8 text-green-600 dark:text-green-500" />
+              <LucideBarChart className="w-8 h-8 text-green-600 dark:text-green-500" />
               📊 Análise Detalhada - Curva ABC & RFM
             </h2>
 
@@ -1618,7 +1630,7 @@ const DashboardPage: React.FC = () => {
             change: mes?.crescimento_mensal || 0,
             icon: DollarIcon,
             color: 'from-green-500 to-emerald-600',
-            subtitle: `${mes?.margem_lucro?.toFixed(1) || 0}% de margem`,
+            subtitle: `Média: R$ ${periodoDias > 0 ? ((mes?.total_vendas || 0) / periodoDias).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) : 0}/dia`,
             key: `faturamento-final-v10-${periodoDias}`
           },
           {
@@ -1628,39 +1640,37 @@ const DashboardPage: React.FC = () => {
             change: mes?.crescimento_mensal || 0,
             icon: TrendingUpFill,
             color: 'from-blue-500 to-cyan-600',
-            subtitle: `ROI: ${(mes?.roi_mensal || 0).toFixed(1)}%`,
-            key: `lucro-${periodoDias}` // 🔥 Key única para forçar re-render
+            subtitle: `${(mes?.total_vendas || 0) > 0 ? (((mes?.lucro_liquido || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1) : 0}% margem líquida`,
+            key: `lucro-${periodoDias}`
           },
           {
-            title: 'Lucro Bruto',
+            title: 'Margem Bruta',
             periodo: `Últimos ${periodoDias} dias`,
-            value: `R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            value: `${(mes?.total_vendas || 0) > 0 ? ((((mes?.lucro_bruto || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)) : 0}%`,
             change: mes?.crescimento_mensal || 0,
             icon: TrendingUp,
             color: 'from-purple-500 to-pink-600',
-            subtitle: `${(((mes?.lucro_bruto || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% de margem bruta`,
-            key: `bruto-${periodoDias}` // 🔥 Key única para forçar re-render
+            subtitle: `Lucro Bruto: R$ ${(mes?.lucro_bruto || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`,
+            key: `bruto-${periodoDias}`
           },
           {
-            title: 'Despesas',
+            title: 'Saídas Totais (Custos + RH + Despesas)',
             periodo: `Últimos ${periodoDias} dias`,
             value: `R$ ${(mes?.total_despesas || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             change: mes?.crescimento_mensal || 0,
             icon: AlertCircle,
             color: 'from-orange-500 to-red-600',
-            subtitle: `${(((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)}% do faturamento`,
-            key: `despesas-${periodoDias}` // 🔥 Key única para forçar re-render
+            subtitle: `${(mes?.total_vendas || 0) > 0 ? ((((mes?.total_despesas || 0) / (mes?.total_vendas || 1)) * 100).toFixed(1)) : 0}% do faturamento total`,
+            key: `despesas-${periodoDias}`
           }
         ].map((kpi, idx) => (
           <div
-            key={kpi.key} // 🔥 Usar key única baseada no período
-            onClick={() => setKpiModalAberto(kpi.title)} // 🔥 Abrir modal ao clicar
+            key={kpi.key}
+            onClick={() => setKpiModalAberto(kpi.title)}
             className={`relative overflow-hidden bg-gradient-to-br ${kpi.color} rounded-2xl shadow-lg hover:shadow-2xl border border-white/10 dark:border-white/5 p-6 text-white transform transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] cursor-pointer group`}
             title="Clique para ver histórico detalhado"
           >
-            {/* Efeito de brilho no hover */}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl pointer-events-none" />
-
             <div className="flex justify-between items-start mb-4 relative z-10">
               <div className="p-3 bg-white/30 rounded-xl backdrop-blur-md border border-white/40 shadow-inner">
                 <kpi.icon className="w-6 h-6 text-white" />
@@ -1670,7 +1680,6 @@ const DashboardPage: React.FC = () => {
                 {Math.abs(kpi.change).toFixed(1)}%
               </div>
             </div>
-
             <div className="relative z-10 mt-2">
               <p className="text-[10px] sm:text-xs text-white mb-1 font-black uppercase tracking-widest flex items-center gap-1 drop-shadow-sm">
                 <Calendar className="w-3.5 h-3.5" /> {kpi.periodo}
@@ -1682,6 +1691,143 @@ const DashboardPage: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* 🚦 SEMÁFORO DE SAÚDE - 4 cards inteligentes para gestores sem experiência */}
+      {(() => {
+        const fat = mes?.total_vendas || 0;
+        const lucroLiq = mes?.lucro_liquido || 0;
+        const margemLiq = fat > 0 ? (lucroLiq / fat) * 100 : 0;
+        const valorEstoque = (data?.data as any)?.inventory?.valor_total || analise_financeira?.investimentos?.estoque || 0;
+        const mediaDia = periodoDias > 0 ? fat / periodoDias : 0;
+        const ratioEst = fat > 0 ? valorEstoque / fat : 0;
+        const smColor = (v: string) => ({
+          green: { bg: 'from-emerald-50 to-green-50 dark:from-emerald-900/10 dark:to-green-900/10', border: 'border-emerald-200 dark:border-emerald-500/30', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300', bar: 'bg-emerald-500', emoji: '🟢', label: 'Saudável' },
+          yellow: { bg: 'from-amber-50 to-yellow-50 dark:from-amber-900/10 dark:to-yellow-900/10', border: 'border-amber-200 dark:border-amber-500/30', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300', bar: 'bg-amber-500', emoji: '🟡', label: 'Atenção' },
+          red: { bg: 'from-rose-50 to-red-50 dark:from-rose-900/10 dark:to-red-900/10', border: 'border-rose-200 dark:border-rose-500/30', badge: 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300', bar: 'bg-rose-500', emoji: '🔴', label: 'Crítico' },
+        }[v]);
+        const smM = smColor(margemLiq >= 25 ? 'green' : margemLiq >= 10 ? 'yellow' : 'red');
+        const smE = smColor(ratioEst <= 4 ? 'green' : ratioEst <= 8 ? 'yellow' : 'red');
+        const crescimento = mes?.crescimento_mensal || 0;
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Card A: Saúde da Margem */}
+            <div className={`bg-gradient-to-br ${smM?.bg} rounded-2xl p-6 border ${smM?.border} shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">📈</div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm">Saúde do Lucro</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Margem líquida do negócio</p>
+                  </div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-black ${smM?.badge}`}>{smM?.emoji} {smM?.label}</span>
+              </div>
+              <p className="text-3xl font-black text-slate-900 dark:text-white">{margemLiq.toFixed(1)}%</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-3">De cada R$100 vendidos, sobram <strong className="text-slate-900 dark:text-white">R${margemLiq.toFixed(0)}</strong> de lucro</p>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-1">
+                <div className={`h-2 rounded-full transition-all duration-700 ${smM?.bar}`} style={{ width: `${Math.min(margemLiq * 2, 100)}%` }} />
+              </div>
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-3"><span>0%</span><span>Meta min: 10%</span><span>50%+</span></div>
+              <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-3 border border-white/50 dark:border-slate-700/50">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  💡 {margemLiq >= 25 ? `Excelente! Margem de ${margemLiq.toFixed(1)}% acima da média do varejo (25%).` : margemLiq >= 10 ? 'Margem ok, mas pode melhorar. Revise custos com fornecedores.' : 'Margem baixa! Analise os maiores custos e renegocie com fornecedores.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Card B: Capital em Estoque */}
+            <div className={`bg-gradient-to-br ${smE?.bg} rounded-2xl p-6 border ${smE?.border} shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">🏭</div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm">Capital em Estoque</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Dinheiro parado nos produtos</p>
+                  </div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-black ${smE?.badge}`}>{smE?.emoji} {smE?.label}</span>
+              </div>
+              <p className="text-3xl font-black text-slate-900 dark:text-white">R$ {valorEstoque.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-3">Equivalente a <strong className="text-slate-900 dark:text-white">{ratioEst.toFixed(1)}x</strong> o faturamento do período</p>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-1">
+                <div className={`h-2 rounded-full transition-all duration-700 ${smE?.bar}`} style={{ width: `${Math.min((ratioEst / 12) * 100, 100)}%` }} />
+              </div>
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-3"><span>Ideal (&lt;4x)</span><span>Atenção (4-8x)</span><span>Crítico (&gt;8x)</span></div>
+              <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-3 border border-white/50 dark:border-slate-700/50">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  💡 {ratioEst <= 4 ? 'Estoque bem dimensionado para o seu volume de vendas.' : ratioEst <= 8 ? 'Revise produtos com baixo giro e promova liquidações.' : 'Estoque alto! Faça promoções para liberar capital e melhorar o caixa.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Card C: Velocidade de Vendas */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-2xl p-6 border border-blue-200 dark:border-blue-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">⚡</div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm">Velocidade de Vendas</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Estatísticas do período</p>
+                  </div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-black ${crescimento >= 0 ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300'}`}>
+                  {crescimento >= 0 ? '📈' : '📉'} {Math.abs(crescimento).toFixed(1)}%
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {[
+                  { label: 'Média/dia', val: `R$ ${mediaDia.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` },
+                  { label: 'Ticket médio', val: `R$ ${(data?.data?.hoje?.ticket_medio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` },
+                  { label: 'Total vendas', val: (data?.data?.hoje?.quantidade_vendas || 0).toLocaleString('pt-BR') },
+                  { label: 'Clientes únicos', val: (data?.data?.hoje?.clientes_atendidos || 0).toLocaleString('pt-BR') },
+                ].map(item => (
+                  <div key={item.label}>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wide">{item.label}</p>
+                    <p className="text-xl font-black text-slate-900 dark:text-white">{item.val}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-3 border border-white/50 dark:border-slate-700/50">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  💡 {crescimento >= 0 ? `Crescimento positivo! Vendas diárias em R$ ${mediaDia.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}.` : `Queda de ${Math.abs(crescimento).toFixed(1)}% nas vendas. Avalie promoções.`}
+                </p>
+              </div>
+            </div>
+
+            {/* Card D: DRE Simplificado */}
+            <div id="detalhes-financeiros" className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/10 dark:to-purple-900/10 rounded-2xl p-6 border border-violet-200 dark:border-violet-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">📊</div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-white text-sm">Resultado do Período</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Demonstrativo simplificado</p>
+                </div>
+              </div>
+              <div className="space-y-2 mb-4">
+                {[
+                  { label: '(+) Faturamento', val: fat, color: 'text-emerald-700 dark:text-emerald-400' },
+                  { label: '(-) Custo dos Mercadorias (CMV)', val: mes?.custo_produtos_vendidos || 0, color: 'text-rose-700 dark:text-rose-400' },
+                  { label: '(-) RH e Operacional', val: (mes as any)?.despesas_operacionais || 0, color: 'text-orange-700 dark:text-orange-400' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between bg-white/50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-semibold">{item.label}</span>
+                    <span className={`text-sm font-black ${item.color}`}>R$ {item.val.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between bg-gradient-to-r from-violet-100 to-purple-100 dark:from-violet-800/40 dark:to-purple-800/40 rounded-lg px-3 py-2.5 border border-violet-200 dark:border-violet-500/30">
+                  <span className="text-sm text-slate-700 dark:text-white font-black uppercase">= LUCRO LÍQUIDO</span>
+                  <span className={`text-lg font-black ${lucroLiq >= 0 ? 'text-violet-700 dark:text-violet-400' : 'text-rose-700 dark:text-rose-400'}`}>R$ {lucroLiq.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                </div>
+              </div>
+              <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-3 border border-white/50 dark:border-slate-700/50">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  💡 {lucroLiq > 0 ? `Negócio lucrativo! Você lucrou R$ ${lucroLiq.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} neste período.` : 'Prejuízo no período. Analise os custos com urgência.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 🔥 NOVO: RESUMO EXECUTIVO - VISÃO GERAL */}
       {viewMode === 'visao-geral' && (

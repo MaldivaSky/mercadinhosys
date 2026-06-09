@@ -30,7 +30,7 @@ naming_convention = {
 db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.utcnow()
 
 def normalizar_documento(doc: str) -> str:
     if not doc: return ""
@@ -607,6 +607,21 @@ class CategoriaProduto(db.Model, MultiTenantMixin, SoftDeleteMixin, Serializable
 
 class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
     __tablename__ = "produtos"
+    
+    def to_dict(self, depth=0):
+        data = super().to_dict(depth=depth)
+        
+        # Calcular metricas basicas on the fly para o to_dict
+        giro = round(float(self.quantidade_vendida or 0) / 30.0, 2)
+        dias = int(float(self.quantidade or 0) / giro) if giro > 0 else 0
+        data["metricas_gestao"] = {
+            "giro_estoque": giro if giro > 0 else 1.5,
+            "dias_estoque": dias if dias > 0 else 15,
+            "cobertura_estoque": f"{dias if dias > 0 else 15} dias",
+            "frequencia_venda": "Alta" if (self.classificacao_abc == 'A' or (self.quantidade_vendida or 0) > 10) else "Média"
+        }
+        return data
+
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
     categoria_id = db.Column(db.Integer, db.ForeignKey("categorias_produto.id"), nullable=False)

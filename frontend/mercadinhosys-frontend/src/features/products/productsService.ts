@@ -57,6 +57,11 @@ export const productsService = {
         return response.data.produto;
     },
 
+    getProductHubData: async (id: number): Promise<any> => {
+        const response = await apiClient.get<any>(`/produtos/${id}/historico-precos`);
+        return response.data;
+    },
+
     create: async (data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
         const response = await apiClient.post<any>('/produtos/', data);
         return response.data;
