@@ -513,6 +513,131 @@ def list_tenants():
             'error': 'Erro ao listar tenants'
         }), 500
 
+@auth_bp.route("/demo", methods=["POST"])
+def guest_demo():
+    """Access the system in demo mode with a single click (Multi-tenant compatible)"""
+    try:
+        from datetime import date
+        from werkzeug.security import generate_password_hash
+        import traceback
+        
+        # 1. Encontrar ou criar o estabelecimento demo
+        demo_est = Estabelecimento.query.filter_by(cnpj="00000000000191").first()
+        if not demo_est:
+            demo_est = Estabelecimento(
+                nome_fantasia="Supermercado Fictício (Demo)",
+                razao_social="Demo Mercadinho Sys LTDA",
+                cnpj="00000000000191",
+                telefone="(11) 99999-9999",
+                email="demo@mercadinhosys.com",
+                data_abertura=date(2020, 1, 1),
+                cep="01001-000",
+                logradouro="Praça da Sé",
+                numero="1",
+                bairro="Sé",
+                cidade="São Paulo",
+                estado="SP",
+                plano="Advanced",
+                plano_status="active"
+            )
+            db.session.add(demo_est)
+            db.session.flush() # Pegar ID
+
+        # 2. Encontrar ou criar o admin demo
+        demo_admin = Funcionario.query.filter_by(estabelecimento_id=demo_est.id, username="demo").first()
+        if not demo_admin:
+            demo_admin = Funcionario(
+                estabelecimento_id=demo_est.id,
+                nome="Administrador Demo",
+                cpf="123.456.789-09",
+                data_nascimento=date(1990, 1, 1),
+                celular="(11) 99999-9999",
+                email="demo@mercadinhosys.com",
+                cargo="admin",
+                data_admissao=date(2020, 1, 1),
+                username="demo",
+                senha=generate_password_hash("demo123"),
+                ativo=True,
+                role="ADMIN",
+                is_super_admin=False
+            )
+            db.session.add(demo_admin)
+            db.session.commit()
+
+        # 3. Claims adicionais (Multi-Tenant)
+        additional_claims = {
+            'role': "ADMIN",
+            'status': "ativo",
+            'is_super_admin': False,
+            'estabelecimento_id': demo_est.id,
+            'estabelecimento_nome': demo_est.nome_fantasia,
+            'database_name': 'local',
+            'user_id': demo_admin.id,
+            'plano': 'Pro',
+            'plano_status': 'ativo',
+            'is_demo': True
+        }
+
+        access_token = create_access_token(
+            identity=str(demo_admin.id),
+            additional_claims=additional_claims,
+            expires_delta=timedelta(hours=8)
+        )
+        refresh_token = create_refresh_token(
+            identity=str(demo_admin.id),
+            additional_claims=additional_claims,
+            expires_delta=timedelta(days=7)
+        )
+
+        # 5. Resposta Unificada
+        return jsonify({
+            "success": True,
+            "message": "Login demo realizado com sucesso",
+            "data": {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "user": {
+                    "id": demo_admin.id,
+                    "nome": demo_admin.nome,
+                    "username": demo_admin.username,
+                    "email": demo_admin.email,
+                    "cargo": "admin",
+                    "role": "ADMIN",
+                    "status": "ativo",
+                    "estabelecimento_id": demo_est.id,
+                    "estabelecimento_nome": demo_est.nome_fantasia,
+                },
+                "session": {
+                    "login_time": datetime.now(timezone.utc).isoformat(),
+                    "expires_in": 28800,
+                    "refresh_expires_in": 604800,
+                    "token_type": "bearer",
+                },
+                "estabelecimento": {
+                    "id": demo_est.id,
+                    "nome": demo_est.nome_fantasia,
+                    "cnpj": demo_est.cnpj,
+                    "telefone": demo_est.telefone,
+                    "email": demo_est.email,
+                    "endereco": "Praça da Sé, 1 - Sé, São Paulo - SP",
+                    "cidade": demo_est.cidade,
+                    "estado": demo_est.estado,
+                    "plano": "Advanced",
+                    "plano_status": "active",
+                },
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        current_app.logger.error(f"Erro no Login Demo: {traceback.format_exc()}")
+        return jsonify({
+            "error": "Falha ao acessar modo demo",
+            "details": str(e),
+            "code": "DEMO_ACCESS_ERROR"
+        }), 500
+
 @auth_bp.route("/doctor", methods=["GET"])
 @jwt_required()
 def auth_doctor():

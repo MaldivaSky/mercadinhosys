@@ -318,7 +318,7 @@ export const pdvService = {
         // Redireciona para o endpoint HTML que renderiza a nota Masterclass
         // O baseURL do apiClient já contém o prefixo /api
         const baseUrl = apiClient.defaults.baseURL || '';
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token');
 
         // Como o window.open não envia headers customizados facilmente, 
         // passamos o token via query param ou usamos uma rota que o frontend autentica

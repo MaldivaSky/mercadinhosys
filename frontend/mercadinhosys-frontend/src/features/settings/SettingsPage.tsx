@@ -885,12 +885,25 @@ const SettingsPage: React.FC = () => {
                             <SectionTitle title="Segurança" icon={Shield} />
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InputField
-                                    label="Tempo de Sessão (minutos)"
-                                    type="number"
-                                    value={config.tempo_sessao_minutos}
-                                    onChange={(e) => setConfig({ ...config, tempo_sessao_minutos: parseInt(e.target.value) })}
-                                />
+                                <div className="flex flex-col space-y-1">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tempo de Sessão (Logout por Inatividade)</label>
+                                    <select
+                                        value={config.tempo_sessao_minutos || 30}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            setConfig({ ...config, tempo_sessao_minutos: val });
+                                            // Also save to localStorage for the hook to read if it's not using ConfigContext
+                                            localStorage.setItem('mercadinhosys_inactivity_timeout_min', val.toString());
+                                            window.dispatchEvent(new Event('inactivity-settings-changed'));
+                                        }}
+                                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors"
+                                    >
+                                        <option value={10}>10 minutos</option>
+                                        <option value={20}>20 minutos</option>
+                                        <option value={30}>30 minutos</option>
+                                        <option value={40}>40 minutos</option>
+                                    </select>
+                                </div>
                                 <InputField
                                     label="Tentativas de Senha antes do Bloqueio"
                                     type="number"

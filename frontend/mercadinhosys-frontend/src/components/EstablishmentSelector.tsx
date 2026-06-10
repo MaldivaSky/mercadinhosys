@@ -27,7 +27,7 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [internalSelectedId, setInternalSelectedId] = useState<number | string | null>(() => {
-    const stored = localStorage.getItem('selected_establishment_id');
+    const stored = sessionStorage.getItem('selected_establishment_id');
     if (stored === 'all') return 'all';
     return stored ? parseInt(stored) : null;
   });
@@ -67,7 +67,7 @@ const EstablishmentSelector: React.FC<EstablishmentSelectorProps> = ({
       onEstablishmentChange(id);
     } else {
       setInternalSelectedId(id);
-      localStorage.setItem('selected_establishment_id', stringId);
+      sessionStorage.setItem('selected_establishment_id', stringId);
       toast.success(id === 'all' ? 'Contexto alterado para Visão Global' : 'Contexto de auditoria alterado');
 
       // Forçar recarregamento apenas para modo não-controlado

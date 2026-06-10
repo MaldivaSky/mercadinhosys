@@ -46,19 +46,19 @@ class AuthService {
 
             // ✅ Salva tokens com Blindagem contra "undefined"
             if (data.access_token && String(data.access_token) !== 'undefined' && String(data.access_token) !== 'null') {
-                localStorage.setItem('access_token', data.access_token);
+                sessionStorage.setItem('access_token', data.access_token);
                 console.log('🗝️ Access Token persistido');
             } else {
                 console.error('⚠️ Tentativa de salvar Access Token inválido detectada!');
             }
 
             if (data.refresh_token && String(data.refresh_token) !== 'undefined' && String(data.refresh_token) !== 'null') {
-                localStorage.setItem('refresh_token', data.refresh_token);
+                sessionStorage.setItem('refresh_token', data.refresh_token);
                 console.log('🔐 Refresh Token persistido');
             }
 
             if (data.data?.user) {
-                localStorage.setItem('user_data', JSON.stringify(data.data.user));
+                sessionStorage.setItem('user_data', JSON.stringify(data.data.user));
             }
 
             if (data.data?.estabelecimento) {
@@ -223,7 +223,10 @@ class AuthService {
             'preferencias_usuario'
         ];
 
-        keysToRemove.forEach(key => localStorage.removeItem(key));
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        });
 
         // Dispara evento para atualizar estado de autenticação
         window.dispatchEvent(new Event('auth-change'));
@@ -232,11 +235,11 @@ class AuthService {
     }
 
     getToken(): string | null {
-        return localStorage.getItem('access_token');
+        return sessionStorage.getItem('access_token');
     }
 
     getCurrentUser(): { nome: string; role: string; is_super_admin?: boolean } | null {
-        const userStr = localStorage.getItem('user_data');
+        const userStr = sessionStorage.getItem('user_data');
         try {
             return userStr ? JSON.parse(userStr) : null;
         } catch {
@@ -255,7 +258,7 @@ class AuthService {
 
             if (response.data.success) {
                 const userData = response.data.data;
-                localStorage.setItem('user_data', JSON.stringify(userData));
+                sessionStorage.setItem('user_data', JSON.stringify(userData));
 
                 // Dispara evento para o usePlanGate e outros hooks
                 window.dispatchEvent(new Event('auth-change'));
