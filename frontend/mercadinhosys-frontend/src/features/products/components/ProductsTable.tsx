@@ -234,7 +234,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                         <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: (produto.margem_lucro || 0) >= 30 ? '#10b981' : '#f59e0b' }}></div>
                                     </div>
                                 </td>
-                                <td className="px-5 py-3 text-right actions-container">
+                                <td className="px-5 py-3 text-right actions-container relative">
                                     <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                         <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700 shadow-xl">
                                             <button onClick={() => onMakeOrder(produto)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors" title="Fazer Pedido">

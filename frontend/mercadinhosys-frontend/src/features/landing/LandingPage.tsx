@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../auth/authService';
 import {
     ShoppingCart,
     Zap,
@@ -41,6 +42,14 @@ const LandingPage: React.FC = () => {
     const [onboardingWhatsApp, setOnboardingWhatsApp] = useState('');
     const [onboardingStoreName, setOnboardingStoreName] = useState('');
     const [loadingCheckout, setLoadingCheckout] = useState(false);
+
+    useEffect(() => {
+        // Force logout if the user returns to the Landing Page
+        const token = sessionStorage.getItem('access_token');
+        if (token) {
+            authService.logout();
+        }
+    }, []);
 
     const handleLeadSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -136,9 +145,9 @@ const LandingPage: React.FC = () => {
 
             if (response.ok && result.success && result.data) {
                 const { access_token, refresh_token, user, estabelecimento } = result.data;
-                localStorage.setItem('access_token', access_token);
-                if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
-                localStorage.setItem('user_data', JSON.stringify(user));
+                sessionStorage.setItem('access_token', access_token);
+                if (refresh_token) sessionStorage.setItem('refresh_token', refresh_token);
+                sessionStorage.setItem('user_data', JSON.stringify(user));
                 localStorage.setItem('estabelecimento_data', JSON.stringify(estabelecimento));
                 window.dispatchEvent(new Event('auth-change'));
 

@@ -25,7 +25,7 @@ const SubscriptionSettings: React.FC = () => {
         } catch (error) {
             console.error("Erro ao carregar assinatura:", error);
             // Fallback para dados locais se o endpoint de SaaS estiver offline
-            const userData = localStorage.getItem('user_data');
+            const userData = sessionStorage.getItem('user_data');
             if (userData) {
                 const user = JSON.parse(userData);
                 setStatus({

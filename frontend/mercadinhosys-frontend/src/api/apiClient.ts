@@ -56,7 +56,7 @@ apiClient.interceptors.request.use(
         config.baseURL = sanitize(config.baseURL);
         config.url = sanitize(config.url);
 
-        const token = localStorage.getItem('access_token');
+        const token = sessionStorage.getItem('access_token');
         if (token && token !== 'undefined' && token !== 'null') {
             config.headers.Authorization = `Bearer ${token}`;
         } else if (import.meta.env.DEV) {
@@ -73,12 +73,12 @@ apiClient.interceptors.request.use(
         }
 
         // Injeção de Contexto Super-Admin (Impersonation)
-        const selectedEstabId = localStorage.getItem('selected_establishment_id');
+        const selectedEstabId = sessionStorage.getItem('selected_establishment_id');
         if (selectedEstabId) {
             config.headers['X-Establishment-ID'] = selectedEstabId;
         }
 
-        const superAdminTenantId = localStorage.getItem('mercadinhosys_superadmin_tenant');
+        const superAdminTenantId = sessionStorage.getItem('mercadinhosys_superadmin_tenant');
         if (superAdminTenantId) {
             config.headers['X-Impersonate-Tenant-Id'] = superAdminTenantId;
         }
@@ -127,7 +127,7 @@ apiClient.interceptors.response.use(
             isRefreshing = true;
 
             try {
-                const refreshToken = localStorage.getItem('refresh_token');
+                const refreshToken = sessionStorage.getItem('refresh_token');
 
                 if (!refreshToken || refreshToken === 'undefined' || refreshToken === 'null') {
                     throw new Error('No refresh token available');
@@ -147,7 +147,7 @@ apiClient.interceptors.response.use(
                     throw new Error('No access token returned');
                 }
 
-                localStorage.setItem('access_token', access_token);
+                sessionStorage.setItem('access_token', access_token);
                 apiClient.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
                 originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
 
@@ -172,9 +172,9 @@ apiClient.interceptors.response.use(
                 console.error('❌ Refresh token falhou!', errorInfo);
 
                 // Remover tokens inválidos
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                localStorage.removeItem('user_data');
+                sessionStorage.removeItem('access_token');
+                sessionStorage.removeItem('refresh_token');
+                sessionStorage.removeItem('user_data');
 
                 // Redirecionar para login automaticamente após pequeno delay
                 setTimeout(() => {
@@ -188,8 +188,8 @@ apiClient.interceptors.response.use(
         } else if (error.response?.status === 401 && originalRequest._retry) {
             // Falha após tentativa de refresh: limpa sessão e redireciona para login
             console.error('❌ Falha após refresh; redirecionando para login');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            sessionStorage.removeItem('access_token');
+            sessionStorage.removeItem('refresh_token');
 
             if (import.meta.env.DEV) {
                 // debugger;
@@ -258,10 +258,10 @@ apiClient.interceptors.response.use(
                 msg.toLowerCase().includes('jwt') ||
                 msg.toLowerCase().includes('segments') ||
                 msg.toLowerCase().includes('authorization');
-            const token = localStorage.getItem('access_token');
+            const token = sessionStorage.getItem('access_token');
             if (looksLikeJwt || token === 'undefined' || token === 'null') {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
+                sessionStorage.removeItem('access_token');
+                sessionStorage.removeItem('refresh_token');
                 window.location.href = '/login';
             }
         }

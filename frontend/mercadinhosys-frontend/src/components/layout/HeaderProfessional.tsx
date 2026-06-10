@@ -137,7 +137,7 @@ const HeaderProfessional = () => {
             if (editFotoUrl !== user?.foto_url) payload.foto_url = editFotoUrl.trim();
             const result = await authService.updateProfile(payload);
             const updated = { ...user, ...result.data };
-            localStorage.setItem('user_data', JSON.stringify(updated));
+            sessionStorage.setItem('user_data', JSON.stringify(updated));
             window.dispatchEvent(new Event('auth-change'));
             setProfileSuccess(result.message || 'Perfil atualizado');
             setShowEditProfile(false);

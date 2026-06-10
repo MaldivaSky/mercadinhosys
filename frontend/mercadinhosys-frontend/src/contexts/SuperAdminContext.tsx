@@ -14,7 +14,7 @@ const SuperAdminContext = createContext<SuperAdminContextType | undefined>(undef
 
 export const SuperAdminProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [selectedTenantId, setSelectedTenantId] = useState<string>(() => {
-        return localStorage.getItem('mercadinhosys_superadmin_tenant') || 'all';
+        return sessionStorage.getItem('mercadinhosys_superadmin_tenant') || 'all';
     });
 
     const [syncStatus, setSyncStatus] = useState<SuperAdminContextType['syncStatus']>({
@@ -23,7 +23,7 @@ export const SuperAdminProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     useEffect(() => {
-        localStorage.setItem('mercadinhosys_superadmin_tenant', selectedTenantId);
+        sessionStorage.setItem('mercadinhosys_superadmin_tenant', selectedTenantId);
     }, [selectedTenantId]);
 
     return (

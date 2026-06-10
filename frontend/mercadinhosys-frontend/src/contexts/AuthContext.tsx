@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService } from '../features/auth/authService';
+import { useInactivityTimeout } from '../hooks/useInactivityTimeout';
 
 interface User {
     id: number;
@@ -40,8 +41,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     useEffect(() => {
         const checkAuth = () => {
-            const token = localStorage.getItem('access_token');
-            const userData = localStorage.getItem('user_data');
+            const token = sessionStorage.getItem('access_token');
+            const userData = sessionStorage.getItem('user_data');
 
             if (token && userData) {
                 try {
@@ -98,11 +99,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const updateUser = (updatedUser: User) => {
         setUser(updatedUser);
-        localStorage.setItem('user_data', JSON.stringify(updatedUser));
+        sessionStorage.setItem('user_data', JSON.stringify(updatedUser));
     };
 
     // A autenticação é verdadeira se tivermos um usuário populado
     const isAuthenticated = !!user;
+
+    // Inicia o rastreamento de inatividade
+    useInactivityTimeout({ isAuthenticated, logout });
 
     return (
         <AuthContext.Provider

@@ -113,8 +113,8 @@ export const testConnection = async () => {
         TIMEOUT: API_CONFIG.TIMEOUT,
         CURRENT_URL: window.location.href,
         TOKENS: {
-            access_token: localStorage.getItem('access_token') ? '✅ Presente' : '❌ Ausente',
-            refresh_token: localStorage.getItem('refresh_token') ? '✅ Presente' : '❌ Ausente',
+            access_token: sessionStorage.getItem('access_token') ? '✅ Presente' : '❌ Ausente',
+            refresh_token: sessionStorage.getItem('refresh_token') ? '✅ Presente' : '❌ Ausente',
         }
     };
     console.log('✅ Configuração:', results.config);
@@ -140,7 +140,7 @@ export const testConnection = async () => {
     }
 
     // 3. Testar autenticação (se tiver token)
-    if (localStorage.getItem('access_token')) {
+    if (sessionStorage.getItem('access_token')) {
         console.log('\n3️⃣ Testando autenticação...');
         try {
             const response = await apiClient.get('/auth/me');
