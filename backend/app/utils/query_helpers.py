@@ -394,23 +394,33 @@ def get_venda_safe(venda_id):
         if not venda_id: return None
         db = _get_db()
         row = db.session.execute(
-            text("SELECT id, codigo, total, subtotal, desconto, forma_pagamento, cliente_id, funcionario_id, estabelecimento_id, data_venda, valor_recebido, troco FROM vendas WHERE id = :vid"),
+            text("SELECT id, codigo, total, subtotal, desconto, cliente_id, funcionario_id, estabelecimento_id, data_venda, valor_recebido, troco FROM vendas WHERE id = :vid"),
             {"vid": venda_id}
         ).fetchone()
         if not row: return None
+        
+        # Obter forma(s) de pagamento
+        pagamentos = db.session.execute(
+            text("SELECT forma_pagamento FROM pagamentos WHERE venda_id = :vid AND status = 'aprovado'"),
+            {"vid": venda_id}
+        ).fetchall()
+        
+        formas = [p[0] for p in pagamentos]
+        forma_pagamento = "/".join(formas) if formas else "Não informado"
+        
         return {
             "id": row[0],
             "codigo": row[1],
             "total": row[2],
             "subtotal": row[3],
             "desconto": row[4],
-            "forma_pagamento": row[5],
-            "cliente_id": row[6],
-            "funcionario_id": row[7],
-            "estabelecimento_id": row[8],
-            "data_venda": row[9],
-            "valor_recebido": row[10],
-            "troco": row[11]
+            "forma_pagamento": forma_pagamento,
+            "cliente_id": row[5],
+            "funcionario_id": row[6],
+            "estabelecimento_id": row[7],
+            "data_venda": row[8],
+            "valor_recebido": row[9],
+            "troco": row[10]
         }
     except Exception as e:
         logger.error(f"Erro em get_venda_safe: {e}")

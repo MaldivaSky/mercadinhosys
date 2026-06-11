@@ -212,7 +212,7 @@ const LandingPage: React.FC = () => {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 text-gray-900 font-sans selection:bg-blue-200 selection:text-blue-900 overflow-x-hidden">
+        <div className="h-screen overflow-y-auto bg-slate-50 text-gray-900 font-sans selection:bg-blue-200 selection:text-blue-900 overflow-x-hidden custom-scrollbar">
 
             {/* WhatsApp Floating Button */}
             <a
