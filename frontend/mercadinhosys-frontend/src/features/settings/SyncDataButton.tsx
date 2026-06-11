@@ -10,12 +10,12 @@ export const SyncDataButton: React.FC = () => {
     const handleSync = async () => {
         setSyncing(true);
         try {
-            const res = await apiClient.post('/sync_hybrid/upload');
+            const res = await apiClient.post('/sync/replicar');
             if (res.data.success) {
-                showToast.success('Dados Master sincronizados com Vercel!');
+                showToast.success('Dados Master sincronizados com sucesso!');
                 setLastSync(new Date().toLocaleTimeString());
             } else {
-                showToast.error('Falha na sincronização: ' + res.data.error);
+                showToast.error('Falha na sincronização: ' + res.data.message);
             }
         } catch (err: any) {
             showToast.error('Erro de conexão com o servidor de sincronização.');

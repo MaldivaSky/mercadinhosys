@@ -1263,7 +1263,7 @@ def enviar_cupom_email():
         itens_venda = get_venda_itens_safe(venda_id)
         
         # Preparar dados estruturados para o email_service
-        from app.utils.email_service import enviar_cupom_fiscal
+        from app.services.email_service import enviar_cupom_fiscal
         
         # Melhoria na extração e formatação da data (Extreme Precision)
         data_venda = venda_data.get("data_venda")
@@ -1353,10 +1353,10 @@ def enviar_cupom_email():
             return jsonify({"success": True, "message": f"Cupom enviado para {email_final}!"}), 200
         else:
             return jsonify({
-                "error": "Erro no servidor de e-mail", 
+                "error": "Erro de configuração de e-mail", 
                 "details": erro_email,
-                "hint": "Verifique se a 'Senha de App' do Gmail está configurada em mail.env"
-            }), 500
+                "hint": "Configure sua 'Senha de App' do Gmail em mail.env para enviar e-mails."
+            }), 400
             
     except Exception as e:
         import traceback
@@ -1488,17 +1488,17 @@ def imprimir_venda_html(venda_id):
         nome_cliente = cliente_data.get("nome") if cliente_data else "Consumidor Final"
 
         # Formatação de Moeda e Data (Padrão Elite)
-        from app.utils.email_service import _format_moeda, render_template_string
+        from app.services.email_service import _format_moeda, render_template_string
         
         data_venda = venda_data.get("data_venda")
         data_str = data_venda.strftime("%d/%m/%Y %H:%M:%S") if hasattr(data_venda, "strftime") else str(data_venda)
 
         # Usar o mesmo template Masterclass do email_service para garantir branding perfeito
-        from app.utils.email_service import EmailService
+        from app.services.email_service import EmailService
         # Aqui podemos importar o template ou simplesmente reutilizar a lógica
         # Para ser ultra-profissional, vamos garantir que o CSS seja otimizado para PRINT
         
-        from app.utils.email_service import _format_moeda
+        from app.services.email_service import _format_moeda
         
         dados_formatados = {
             "venda": {"codigo": venda_data.get("codigo"), "data": data_str, "total": float(venda_data.get("total") or 0)},

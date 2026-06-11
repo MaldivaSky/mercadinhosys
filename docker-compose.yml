@@ -34,12 +34,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Comando sobrescrito para forçar o auto-reload (hot-reload) durante o desenvolvimento local
+    command: ["gunicorn", "--reload", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "run:app"]
+    
     environment:
       # Flask
       FLASK_APP: run.py
-      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_ENV: ${FLASK_ENV:-development}
+      FLASK_DEBUG: 1
       PORT: 5000
-
+      
       # Database
       DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
       AIVEN_DATABASE_URL: ${AIVEN_DATABASE_URL:-}
