@@ -134,15 +134,11 @@ const LandingPage: React.FC = () => {
     const handleDemoAccess = async () => {
         try {
             showToast.loading('Preparando ambiente de demonstração...');
-            const response = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
+            const response = await fetch(`${API_CONFIG.BASE_URL}/auth/demo`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    identifier: 'admin1',
-                    senha: 'admin123'
-                })
+                }
             });
 
             const result = await response.json();

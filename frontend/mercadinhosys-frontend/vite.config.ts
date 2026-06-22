@@ -23,10 +23,6 @@ export default defineConfig(() => {
       port: 5173,
       host: true,
       strictPort: true, // Força usar porta 5173
-      watch: {
-        usePolling: true,
-        interval: 100, // Intervalo de checagem para Windows/WSL
-      },
       proxy: {
         '/api': {
           target: apiTarget,
