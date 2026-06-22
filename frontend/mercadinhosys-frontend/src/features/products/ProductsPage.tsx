@@ -24,6 +24,7 @@ import LotesDisponiveisModal from './components/LotesDisponiveisModal';
 import ExpiringProductsModal from './components/ExpiringProductsModal';
 import ProductImportModal from './components/ProductImportModal';
 import ProdutoDetalhesModal from './components/ProdutoDetalhesModal';
+import AdvancedAnalyticsModal from './components/AdvancedAnalyticsModal';
 
 type LoteNoPeriodo = { id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number };
 type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
@@ -78,6 +79,8 @@ const ProductsPage: React.FC = () => {
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [expiryTimeframe, setExpiryTimeframe] = useState<'vencidos' | '15' | '30' | '90'>('30');
+  const [showAdvancedAnalyticsModal, setShowAdvancedAnalyticsModal] = useState(false);
+  const [advancedAnalyticsType, setAdvancedAnalyticsType] = useState<string>('');
 
   const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
   const [selectedProductForOrder, setSelectedProductForOrder] = useState<Produto | null>(null);
@@ -420,7 +423,16 @@ const ProductsPage: React.FC = () => {
         showFilters={showFilters}
       />
 
-      <ProductAnalyticsDashboard produtos={produtos} stats={stats} onCardClick={handleCardClick} />
+      <ProductAnalyticsDashboard 
+        produtos={produtos} 
+        stats={stats} 
+        onCardClick={handleCardClick} 
+        onAdvancedAnalyticsClick={(type) => {
+          setAdvancedAnalyticsType(type);
+          setShowAdvancedAnalyticsModal(true);
+        }}
+        onProductClick={openDetailModal}
+      />
 
       <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
@@ -734,6 +746,12 @@ const ProductsPage: React.FC = () => {
           loadProdutos();
         }}
         timeframe={expiryTimeframe}
+      />
+
+      <AdvancedAnalyticsModal
+        isOpen={showAdvancedAnalyticsModal}
+        onClose={() => setShowAdvancedAnalyticsModal(false)}
+        type={advancedAnalyticsType}
       />
 
       <ProductImportModal

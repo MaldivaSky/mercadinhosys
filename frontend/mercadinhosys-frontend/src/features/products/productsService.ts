@@ -58,7 +58,7 @@ export const productsService = {
     },
 
     getProductHubData: async (id: number): Promise<any> => {
-        const response = await apiClient.get<any>(`/produtos/${id}/historico-precos`);
+        const response = await apiClient.get<any>(`/produtos/${id}/hub`);
         return response.data;
     },
 

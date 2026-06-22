@@ -155,23 +155,28 @@ export default function ProductHubPage() {
                     </div>
                     <h1 className="product-title">{produto.nome}</h1>
                     <div className="product-subtitle">
-                        Código: {produto.codigo_interno} | Barras: {produto.codigo_barras || 'N/A'}
+                        Código: {produto.codigo_interno} | Barras: {produto.codigo_barras || 'N/A'} | Curva ABC: <strong style={{color: '#3b82f6'}}>Classe {produto.classificacao_abc || 'C'}</strong>
                     </div>
+                    {produto.descricao && (
+                        <div style={{ marginTop: '8px', fontSize: '0.9rem', color: '#64748b', fontStyle: 'italic' }}>
+                            Descrição: {produto.descricao}
+                        </div>
+                    )}
                 </div>
 
                 {/* Status Rápido */}
                 <div className="quick-status">
-                    <div className="status-item">
+                    <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span className="status-label">Estoque Atual</span>
-                        <span className="status-value" style={{ color: produto.quantidade <= (produto.quantidade_minima || 0) ? '#ef4444' : '#1e293b' }}>
+                        <span className="status-value" style={{ color: produto.quantidade <= (produto.quantidade_minima || 0) ? '#ef4444' : 'var(--text-color, inherit)' }}>
                             {produto.quantidade} {produto.unidade_medida}
                         </span>
                     </div>
-                    <div className="status-item">
+                    <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span className="status-label">Preço de Venda</span>
                         <span className="status-value highlight">{formatCurrency(produto.preco_venda)}</span>
                     </div>
-                    <div className="status-item">
+                    <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span className="status-label">Margem Base</span>
                         <span className="status-value highlight-green">{margemReal.toFixed(2)}%</span>
                     </div>
@@ -295,6 +300,52 @@ export default function ProductHubPage() {
                                         <span>{ped.quantidade_solicitada} un @ {formatCurrency(ped.preco_unitario)}</span>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Tabela de Lotes */}
+                <div className="content-panel" style={{ gridColumn: '1 / -1' }}>
+                    <div className="panel-header">
+                        <h3 className="panel-title"><Clock size={20} color="#8b5cf6" /> Controle de Lotes e Validade</h3>
+                    </div>
+                    <div style={{ marginTop: '16px', overflowX: 'auto' }}>
+                        {lotes && lotes.length > 0 ? (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
+                                        <th style={{ padding: '12px' }}>Nº Lote</th>
+                                        <th style={{ padding: '12px' }}>Data Entrada (Compra)</th>
+                                        <th style={{ padding: '12px' }}>Fabricação</th>
+                                        <th style={{ padding: '12px' }}>Validade</th>
+                                        <th style={{ padding: '12px', textAlign: 'right' }}>Qtd Atual</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {lotes.map((lote: any) => {
+                                        const diasValidade = Math.ceil((new Date(lote.data_validade).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+                                        const isVencido = diasValidade < 0;
+                                        const isProximo = diasValidade >= 0 && diasValidade <= 30;
+                                        return (
+                                            <tr key={lote.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                <td style={{ padding: '12px', fontWeight: '500' }}>{lote.numero_lote}</td>
+                                                <td style={{ padding: '12px' }}>{new Date(lote.data_entrada).toLocaleDateString('pt-BR')}</td>
+                                                <td style={{ padding: '12px' }}>{lote.data_fabricacao ? new Date(lote.data_fabricacao).toLocaleDateString('pt-BR') : '---'}</td>
+                                                <td style={{ padding: '12px', color: isVencido ? '#ef4444' : (isProximo ? '#f59e0b' : '#10b981'), fontWeight: isVencido || isProximo ? 'bold' : 'normal' }}>
+                                                    {new Date(lote.data_validade).toLocaleDateString('pt-BR')}
+                                                    {isVencido && ' (Vencido)'}
+                                                    {isProximo && ` (${diasValidade} dias)`}
+                                                </td>
+                                                <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>{lote.quantidade}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
+                                Não há lotes registrados ou em estoque para este produto.
                             </div>
                         )}
                     </div>
