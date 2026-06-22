@@ -35,6 +35,7 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import StarIcon from '@mui/icons-material/Star';
 import InsightsIcon from '@mui/icons-material/Insights';
+import CakeIcon from '@mui/icons-material/Cake';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -462,7 +463,14 @@ const CustomersPage: React.FC = () => {
         const inRisk = crmClientes.filter((cliente) => cliente.lifecycle === 'em_risco').length;
         const inactive = crmClientes.filter((cliente) => cliente.lifecycle === 'inativo').length;
         const debt = clientesComFiado.length;
-        return { vip, inRisk, inactive, debt };
+        const mesAtual = new Date().getMonth();
+        const aniversariantes = crmClientes.filter((cliente) => {
+            const dn = (cliente as any).data_nascimento;
+            if (!dn) return false;
+            const d = new Date(String(dn).includes('T') ? dn : `${dn}T00:00:00`);
+            return !isNaN(d.getTime()) && d.getMonth() === mesAtual;
+        }).length;
+        return { vip, inRisk, inactive, debt, aniversariantes };
     }, [crmClientes, clientesVip, clientesComFiado]);
 
     const handleRecalcularMetricas = async () => {
@@ -770,16 +778,10 @@ const CustomersPage: React.FC = () => {
         <div className="mx-auto max-w-7xl space-y-6 p-4">
             <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-950 via-blue-950 to-slate-900 p-6 text-white shadow-xl">
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ maxWidth: 760 }}>
-                        <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1.4 }}>
-                            CRM comercial e relacionamento
-                        </Typography>
-                        <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 1 }}>
-                            CustomersPage evoluída para CRM de crescimento
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.82)', maxWidth: 720 }}>
-                            Organize carteira, recupere clientes, priorize cobrança, opere campanhas segmentadas e acione
-                            WhatsApp com mensagens inteligentes baseadas no momento de compra e no valor do cliente.
+                    <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 800 }}>Clientes</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>
+                            Carteira, relacionamento e cobrança
                         </Typography>
                     </Box>
 
@@ -807,8 +809,9 @@ const CustomersPage: React.FC = () => {
                 </Box>
             </section>
 
-            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(5, minmax(0, 1fr))' } }}>
+            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(6, minmax(0, 1fr))' } }}>
                 <KpiCard title="Base Ativa" value={dashboard.total} subtitle="Clientes gerenciados no CRM" color="#2563eb" icon={<AutoGraphIcon />} />
+                <KpiCard title="Aniversariantes" value={crmStats.aniversariantes} subtitle="Neste mês — envie um WhatsApp" color="#db2777" icon={<CakeIcon />} />
                 <KpiCard title="Clientes Em Risco" value={crmStats.inRisk} subtitle="Exigem contato de retencao" color="#ea580c" icon={<AutorenewIcon />} />
                 <KpiCard title="Clientes Inativos" value={crmStats.inactive} subtitle="Fila de reativacao comercial" color="#dc2626" icon={<WarningAmberIcon />} />
                 <KpiCard title="VIP & Fidelidade" value={crmStats.vip} subtitle="Carteira de alto valor" color="#7c3aed" icon={<StarIcon />} />
