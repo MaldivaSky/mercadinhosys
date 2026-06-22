@@ -593,7 +593,20 @@ def login():
 
         refresh_token = create_refresh_token(identity=identity, additional_claims=additional_claims, expires_delta=timedelta(days=7))
 
-
+        # Auditoria de login bem-sucedido
+        try:
+            if funcionario.estabelecimento_id:
+                from app.models import Auditoria
+                Auditoria.registrar(
+                    estabelecimento_id=funcionario.estabelecimento_id,
+                    tipo_evento="login",
+                    descricao=f"Login de {funcionario.username} ({funcionario.role})",
+                    usuario_id=funcionario.id,
+                )
+                db.session.commit()
+        except Exception as _audit_err:
+            current_app.logger.warning(f"[AUDIT] Falha ao registrar login: {_audit_err}")
+            db.session.rollback()
 
         return jsonify({
 
