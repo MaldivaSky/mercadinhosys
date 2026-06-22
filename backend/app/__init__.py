@@ -654,6 +654,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar monitor: {e}")
 
+    # Dashboard do Product Owner (Super Admin): churn, MRR, auditoria, sync
+    try:
+        from app.routes.super_admin_dashboard import super_admin_dashboard_bp
+        app.register_blueprint(super_admin_dashboard_bp, url_prefix="/api/super-admin")
+        logger.info("✅ Blueprint Super Admin Dashboard registrado em /api/super-admin")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar super_admin_dashboard: {e}")
+
     # Sincronização Híbrida
     try:
         from app.routes.sync_hybrid import sync_hybrid_bp

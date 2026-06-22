@@ -6,20 +6,41 @@ Permite ao Super Admin gerenciar todos os clientes de forma organizada
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.models import (
-    db, 
-    Estabelecimento, 
-    Venda, 
-    Funcionario, 
+    db,
+    Estabelecimento,
+    Venda,
+    Funcionario,
     Produto,
-    DashboardMetrica
+    DashboardMetrica,
+    Auditoria,
+    LoginHistory,
 )
 from app.decorators.rbac import super_admin_required
 from datetime import datetime, timedelta
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 import logging
 
 logger = logging.getLogger(__name__)
 super_admin_dashboard_bp = Blueprint("super_admin_dashboard", __name__)
+
+# Preço mensal de referência por plano (R$). Ajuste conforme a tabela comercial.
+PLAN_PRICES = {
+    "gratuito": 0.0,
+    "bronze": 0.0,
+    "premium": 99.90,
+    "pro": 99.90,
+    "advanced": 149.90,
+    "enterprise": 249.90,
+    "premium master": 0.0,  # HQ interno
+}
+
+
+def _preco_plano(plano: str) -> float:
+    return PLAN_PRICES.get((plano or "gratuito").strip().lower(), 0.0)
+
+
+def _is_pago(plano: str) -> bool:
+    return _preco_plano(plano) > 0
 
 @super_admin_dashboard_bp.route("/estabelecimentos-ativos", methods=["GET"])
 @super_admin_required
@@ -269,27 +290,172 @@ def resumo_completo_sistema():
             "error": f"Erro interno: {str(e)}"
         }), 500
 
+@super_admin_dashboard_bp.route("/saas-metrics", methods=["GET"])
+@super_admin_required
+def saas_metrics():
+    """
+    Dashboard do Product Owner: saúde do negócio SaaS.
+    Churn, MRR/ARPU, distribuição de planos, trials, tenants em risco.
+    """
+    try:
+        agora = datetime.now()
+        ha_30 = agora - timedelta(days=30)
+        inativo_dias = int(request.args.get("inativo_dias", 14))
+        limite_inatividade = agora - timedelta(days=inativo_dias)
+
+        ests = Estabelecimento.query.all()
+        ativos = [e for e in ests if e.ativo]
+
+        # Distribuição de planos e status
+        por_plano, por_status = {}, {}
+        mrr = 0.0
+        pagantes = 0
+        for e in ativos:
+            plano = (e.plano or "gratuito")
+            status = (e.plano_status or "experimental")
+            por_plano[plano] = por_plano.get(plano, 0) + 1
+            por_status[status] = por_status.get(status, 0) + 1
+            if _is_pago(plano) and status not in ("cancelado", "suspenso"):
+                mrr += _preco_plano(plano)
+                pagantes += 1
+
+        # Churn: cancelados/suspensos vs base que já foi paga
+        cancelados = sum(1 for e in ests if (e.plano_status or "") in ("cancelado", "suspenso"))
+        base_paga = pagantes + cancelados
+        churn_rate = round((cancelados / base_paga) * 100, 2) if base_paga else 0.0
+
+        # Novos tenants (30 dias)
+        novos_30 = sum(1 for e in ests if e.data_cadastro and e.data_cadastro >= ha_30)
+
+        # Trials expirando em 7 dias
+        em_7 = agora + timedelta(days=7)
+        trials_expirando = [
+            {"id": e.id, "nome": e.nome_fantasia,
+             "vencimento": e.vencimento_assinatura.isoformat() if e.vencimento_assinatura else None}
+            for e in ativos
+            if (e.plano_status or "") == "experimental" and e.vencimento_assinatura
+            and agora <= e.vencimento_assinatura <= em_7
+        ]
+
+        # Tenants EM RISCO (anti-churn): sem vendas recentes
+        ultimas_vendas = dict(
+            db.session.query(Venda.estabelecimento_id, func.max(Venda.data_venda))
+            .group_by(Venda.estabelecimento_id).all()
+        )
+        em_risco = []
+        for e in ativos:
+            if _preco_plano(e.plano) == 0 and (e.plano_status or "") != "experimental":
+                continue  # foca em pagantes e trials
+            ult = ultimas_vendas.get(e.id)
+            if ult is None or ult < limite_inatividade:
+                dias = (agora - ult).days if ult else None
+                em_risco.append({
+                    "id": e.id, "nome": e.nome_fantasia, "plano": e.plano,
+                    "plano_status": e.plano_status,
+                    "ultima_venda": ult.isoformat() if ult else None,
+                    "dias_sem_vender": dias,
+                })
+        em_risco.sort(key=lambda x: (x["dias_sem_vender"] is not None, x["dias_sem_vender"] or 0), reverse=True)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "resumo": {
+                    "total_tenants": len(ests),
+                    "tenants_ativos": len(ativos),
+                    "tenants_pagantes": pagantes,
+                    "novos_30_dias": novos_30,
+                    "mrr": round(mrr, 2),
+                    "arr": round(mrr * 12, 2),
+                    "arpu": round(mrr / pagantes, 2) if pagantes else 0.0,
+                    "churn_rate_pct": churn_rate,
+                    "tenants_em_risco": len(em_risco),
+                },
+                "distribuicao_planos": por_plano,
+                "distribuicao_status": por_status,
+                "trials_expirando_7d": trials_expirando,
+                "tenants_em_risco": em_risco[:20],
+                "parametros": {"inatividade_dias": inativo_dias},
+                "data_geracao": agora.isoformat(),
+            }
+        })
+    except Exception as e:
+        logger.error(f"Erro em saas_metrics: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@super_admin_dashboard_bp.route("/logs-auditoria", methods=["GET"])
+@super_admin_required
+def logs_auditoria():
+    """Visualizador de logs de auditoria do sistema (todos os tenants)."""
+    try:
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = min(request.args.get("por_pagina", 50, type=int), 200)
+        tipo = request.args.get("tipo_evento")
+        est_id = request.args.get("estabelecimento_id", type=int)
+
+        q = Auditoria.query
+        # Auditoria é MultiTenant; super admin precisa ver todos → bypass do filtro de g
+        q = db.session.query(Auditoria)
+        if tipo:
+            q = q.filter(Auditoria.tipo_evento == tipo)
+        if est_id:
+            q = q.filter(Auditoria.estabelecimento_id == est_id)
+        q = q.order_by(Auditoria.data_evento.desc())
+        total = q.count()
+        itens = q.limit(por_pagina).offset((pagina - 1) * por_pagina).all()
+
+        return jsonify({
+            "success": True,
+            "data": [a.to_dict() for a in itens],
+            "total": total, "pagina": pagina, "por_pagina": por_pagina,
+        })
+    except Exception as e:
+        logger.error(f"Erro em logs_auditoria: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@super_admin_dashboard_bp.route("/logs-acesso", methods=["GET"])
+@super_admin_required
+def logs_acesso():
+    """Histórico de logins (sucesso/falha) para monitoramento de segurança."""
+    try:
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = min(request.args.get("por_pagina", 50, type=int), 200)
+        q = db.session.query(LoginHistory).order_by(LoginHistory.data_cadastro.desc())
+        total = q.count()
+        itens = q.limit(por_pagina).offset((pagina - 1) * por_pagina).all()
+        return jsonify({
+            "success": True,
+            "data": [l.to_dict() for l in itens],
+            "total": total, "pagina": pagina, "por_pagina": por_pagina,
+        })
+    except Exception as e:
+        logger.error(f"Erro em logs_acesso: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @super_admin_dashboard_bp.route("/sincronizar-dados", methods=["POST"])
 @super_admin_required
 def forcar_sincronizacao():
-    """Força sincronização de dados para nuvem"""
+    """Força sincronização REAL dos dados locais para o Aiven (bulk upsert idempotente)."""
     try:
-        # Aqui você implementaria a lógica de sincronização
-        # Por enquanto, apenas simula sucesso
-        
-        return jsonify({
-            "success": True,
-            "message": "Sincronização iniciada com sucesso",
-            "timestamp": datetime.now().isoformat(),
-            "status": "em_andamento"
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Erro ao sincronizar dados: {e}")
+        from scripts.force_sync_to_aiven import force_sync
+        resultado = force_sync(app=current_app._get_current_object(), silent=True)
+        if resultado.get("success"):
+            return jsonify({
+                "success": True,
+                "message": f"Sincronização concluída: {resultado.get('total_registros', 0)} registros enviados ao Aiven.",
+                "total_registros": resultado.get("total_registros", 0),
+                "timestamp": datetime.now().isoformat(),
+            })
         return jsonify({
             "success": False,
-            "error": f"Erro na sincronização: {str(e)}"
+            "error": resultado.get("erro", "Falha na sincronização"),
         }), 500
+    except Exception as e:
+        logger.error(f"Erro ao sincronizar dados: {e}")
+        return jsonify({"success": False, "error": f"Erro na sincronização: {str(e)}"}), 500
 
 @super_admin_dashboard_bp.route("/health", methods=["GET"])
 def health_check():

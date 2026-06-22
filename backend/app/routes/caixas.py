@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.decorators.plan_guards import permission_required
 from app import db
-from app.models import Caixa, MovimentacaoCaixa, Estabelecimento, Funcionario
+from app.models import Caixa, MovimentacaoCaixa, Estabelecimento, Funcionario, Auditoria
 
 caixas_bp = Blueprint("caixas", __name__)
 
@@ -84,12 +84,18 @@ def abrir_caixa():
                 observacoes="Lançamento automático de abertura"
             )
             db.session.add(mov)
-            
+
+        Auditoria.registrar(
+            estabelecimento_id=novo_caixa.estabelecimento_id,
+            tipo_evento="caixa_aberto",
+            descricao=f"Caixa {numero_caixa} aberto com saldo inicial R$ {saldo_inicial:.2f}",
+            usuario_id=user_id, valor=saldo_inicial,
+        )
         db.session.commit()
 
         return jsonify({
-            "success": True, 
-            "message": "Caixa aberto com sucesso", 
+            "success": True,
+            "message": "Caixa aberto com sucesso",
             "data": novo_caixa.to_dict()
         }), 201
 
@@ -169,11 +175,20 @@ def fechar_caixa():
         )
         db.session.add(mov)
 
+        Auditoria.registrar(
+            estabelecimento_id=caixa.estabelecimento_id,
+            tipo_evento="caixa_fechado",
+            descricao=f"Caixa {caixa.numero_caixa} fechado. Calculado R$ {saldo_calculado:.2f} | Gaveta R$ {valor_informado:.2f} | Diferença R$ {diferenca_gaveta:.2f}",
+            usuario_id=user_id, valor=valor_informado,
+            detalhes={"saldo_calculado": round(saldo_calculado, 2),
+                      "valor_informado": valor_informado,
+                      "diferenca": round(diferenca_gaveta, 2)},
+        )
         db.session.commit()
 
         return jsonify({
-            "success": True, 
-            "message": "Caixa fechado com sucesso", 
+            "success": True,
+            "message": "Caixa fechado com sucesso",
             "data": {
                 "id": caixa.id,
                 "status": caixa.status,
