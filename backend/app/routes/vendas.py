@@ -1053,8 +1053,32 @@ def cancelar_venda(venda_id):
         venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).options(db.joinedload(Venda.itens)).first_or_404()
         if venda.status == "cancelada":
             return jsonify({"error": "Esta venda já está cancelada"}), 400
-        if (datetime.now() - venda.created_at).days > 0:
-            return jsonify({"error": "Vendas com mais de 24 horas não podem ser canceladas automaticamente"}), 400
+
+        # Verificar senha do admin se fornecida
+        senha_admin = data.get("senha_admin")
+        if senha_admin:
+            from app.models import Funcionario
+            from werkzeug.security import check_password_hash
+            claims = get_jwt()
+            admin_id = claims.get("sub")
+            admin = Funcionario.query.filter_by(id=admin_id, estabelecimento_id=estabelecimento_id).first()
+            if not admin or not check_password_hash(admin.senha or "", senha_admin):
+                # Tentar pelo username fornecido
+                admin_usuario = data.get("admin_usuario")
+                if admin_usuario:
+                    admin = Funcionario.query.filter_by(username=admin_usuario, estabelecimento_id=estabelecimento_id).first()
+                    if not admin or not check_password_hash(admin.senha or "", senha_admin):
+                        return jsonify({"error": "Senha do administrador incorreta"}), 403
+                else:
+                    return jsonify({"error": "Senha do administrador incorreta"}), 403
+            nivel = (admin.nivel_acesso or 0) if admin else 0
+            if nivel > 2:  # Apenas admin (1) e gerente (2) podem cancelar
+                return jsonify({"error": "Usuário sem permissão para cancelar vendas"}), 403
+
+        # Permitir cancelamento de vendas até 7 dias atrás
+        dias_venda = (datetime.now() - venda.created_at.replace(tzinfo=None)).days if venda.created_at else 0
+        if dias_venda > 7:
+            return jsonify({"error": f"Vendas com mais de 7 dias não podem ser canceladas. Esta venda tem {dias_venda} dias."}), 400
 
         db.session.begin_nested()
         try:

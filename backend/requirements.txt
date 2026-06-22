@@ -84,3 +84,4 @@ plotly==6.5.1
 stripe==11.4.0
 pytest-cov==4.1.0
 sentry-sdk[flask]==1.39.1
+psutil==6.1.0
