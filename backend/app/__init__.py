@@ -708,7 +708,10 @@ def create_app(config_name=None):
     @app.route("/api/health", methods=["GET"])
     def health_check():
         from sqlalchemy import text
-        import psutil
+        try:
+            import psutil
+        except ModuleNotFoundError:
+            psutil = None
 
         health = {
             "status": "healthy",

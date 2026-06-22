@@ -82,27 +82,25 @@ services:
     networks:
       - mercadinhosys-network
 
-  # Frontend
+  # Frontend (Vite dev com hot-reload)
   frontend:
-    build:
-      context: ./frontend/mercadinhosys-frontend
-      dockerfile: Dockerfile
+    image: node:20-alpine
     container_name: mercadinhosys-frontend
     restart: unless-stopped
+    working_dir: /app
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "80:80"
+      - "80:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    volumes:
+      - ./frontend/mercadinhosys-frontend:/app
+      - /app/node_modules
     environment:
-      - VITE_API_URL=http://mercadinhosys-backend:5000/api
       - VITE_API_TARGET=http://mercadinhosys-backend:5000
-    healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health" ]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+      - VITE_HMR_CLIENT_PORT=80
+      - CHOKIDAR_USEPOLLING=true
     networks:
       - mercadinhosys-network
 
