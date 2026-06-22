@@ -5,7 +5,7 @@ import {
   TrendingUp, Package, AlertTriangle, Star, Calendar, Target,
   ArrowUpRight, ArrowDownRight, ChevronDown, Cpu, Brain, Database,
   DollarSign as DollarIcon, Target as TargetIcon, AlertCircle, Shield, CheckCircle, UsbProxy, Pickaxe, BookText, Fingerprint, Focus, Ghost, GlassWater, Hammer, HeartPulse, HeartHandshake, Home, Locate, Lock, LogOut, FileText,
-  TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart, BarChart,
+  TrendingUp as TrendingUpFill, GitMerge, ChartBar, BarChart as LucideBarChart,
   LineChart as LineChartIcon, TrendingDown, RefreshCw, X, Clock, Lightbulb, Users, ArrowRight
 } from 'lucide-react';
 import {
