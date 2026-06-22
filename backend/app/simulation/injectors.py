@@ -130,13 +130,21 @@ class RealisticInjector:
                      "Adriana", "Marcos", "Luiza", "Pedro", "Sandra", "Lucas", "Juliana", "Rafael"]
         sobren = ["Silva", "Santos", "Oliveira", "Souza", "Lima", "Pereira", "Costa", "Almeida",
                   "Ferreira", "Rodrigues", "Gomes", "Martins", "Araújo", "Barbosa"]
-        for _ in range(count):
+        hoje = date.today()
+        for i in range(count):
             nome = f"{random.choice(primeiros)} {random.choice(sobren)}"
             limite = Decimal(str(random.choice([0, 0, 100, 200, 300, 500])))
+            # Data de nascimento: idade 18-75. ~12% aniversariam neste mês (alguns hoje)
+            ano = random.randint(hoje.year - 75, hoje.year - 18)
+            if i % 8 == 0:           # aniversariantes do mês (CRM/WhatsApp)
+                mes, dia = hoje.month, (hoje.day if i % 24 == 0 else random.randint(1, 28))
+            else:
+                mes, dia = random.randint(1, 12), random.randint(1, 28)
             cli = Cliente(
                 estabelecimento_id=est_id, nome=nome, cpf=cls.generate_cpf(),
                 celular=f"(92) 9{random.randint(8000,9999)}-{random.randint(1000,9999)}",
                 email=f"{nome.lower().replace(' ', '.')}@email.com",
+                data_nascimento=date(ano, mes, dia),
                 limite_credito=limite, ativo=True,
                 **cls.get_endereco_random()
             )
