@@ -100,9 +100,9 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
         'abc_a': 'Produtos Classe A (80% Faturamento)',
         'abc_b': 'Produtos Classe B (15% Faturamento)',
         'abc_c': 'Produtos Classe C (5% Faturamento)',
-        'giro_rapido': 'Giro Rápido (Vendidos últimos 7 dias)',
-        'giro_normal': 'Giro Normal (Vendidos entre 8-30 dias)',
-        'giro_lento': 'Giro Lento (Sem venda há mais de 30 dias)'
+        'giro_rapido': 'Giro Rápido (Cobertura de até 15 dias)',
+        'giro_normal': 'Giro Normal (Cobertura de 16 a 60 dias)',
+        'giro_lento': 'Giro Lento (Cobertura acima de 60 dias)'
     };
 
     const isABC = type.startsWith('abc_');
@@ -195,7 +195,7 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
                 {/* Footer */}
                 <div className="p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
                     <p className="text-xs text-gray-500 italic">
-                        {isABC ? '* A Classificação ABC é baseada no faturamento (preço x vendas).' : '* O Giro de Estoque é baseado na data da última venda registrada.'}
+                        {isABC ? '* A Classificação ABC é baseada no faturamento (preço x vendas).' : '* O Giro de Estoque é baseado na cobertura em dias considerando a Venda Média Diária.'}
                     </p>
                     <button onClick={onClose} className="px-6 py-2 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-all">
                         Fechar

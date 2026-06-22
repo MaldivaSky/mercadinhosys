@@ -491,10 +491,10 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
 
                     <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800">
                         <p className="text-xs text-purple-800 dark:text-purple-200">
-                            <strong>Nota:</strong> Mede há quanto tempo o produto não é vendido.
-                            <br />• <strong>Rápido:</strong> Venda nos últimos 7 dias.
-                            <br />• <strong>Normal:</strong> Venda entre 8 e 30 dias.
-                            <br />• <strong>Lento:</strong> Sem vendas há mais de 30 dias.
+                            <strong>Nota:</strong> Mede a cobertura de dias do estoque atual baseado nas vendas (VMD).
+                            <br />• <strong>Rápido:</strong> Cobertura de até 15 dias.
+                            <br />• <strong>Normal:</strong> Cobertura entre 16 e 60 dias.
+                            <br />• <strong>Lento:</strong> Cobertura maior que 60 dias.
                         </p>
                     </div>
 
@@ -519,7 +519,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 />
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Vendido nos últimos 7 dias
+                                Cobertura de até 15 dias
                             </p>
                         </div>
 
@@ -543,7 +543,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 />
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Vendido entre 8-30 dias
+                                Cobertura entre 16-60 dias
                             </p>
                         </div>
 
@@ -567,7 +567,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 />
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Mais de 30 dias sem venda
+                                Cobertura maior que 60 dias
                             </p>
                         </div>
                     </div>
@@ -745,15 +745,32 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                     <div className="space-y-3">
                         {produtosCriticos.length === 0 ? (
                             <div className="text-center py-8">
-                                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full mb-3">
-                                    <Target className="w-8 h-8 text-green-600 dark:text-green-300" />
-                                </div>
-                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                    Tudo sob controle!
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    Nenhum produto crítico no momento
-                                </p>
+                                {(stats?.produtos_esgotados || 0) > 0 || (stats?.produtos_baixo_estoque || 0) > 0 ? (
+                                    <>
+                                        <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full mb-3">
+                                            <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-300" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                                            Atenção necessária!
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            Existem {(stats?.produtos_esgotados || 0) + (stats?.produtos_baixo_estoque || 0)} produtos críticos no estoque global.
+                                            <br />(Use os filtros da tabela para listá-los)
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full mb-3">
+                                            <Target className="w-8 h-8 text-green-600 dark:text-green-300" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                            Tudo sob controle!
+                                        </p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            Nenhum produto crítico no momento
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             produtosCriticos.map((produto) => (
