@@ -2420,19 +2420,16 @@ def obter_estatisticas_produtos():
                 )
                 
             elif filtro_rapido == "giro_rapido":
-                # Vendido nos últimos 7 dias
-                data_limite = hoje - timedelta(days=7)
-                query = query.filter(Produto.ultima_venda >= data_limite)
+                # Filtrado em Python usando a lógica de Cobertura VMD
+                pass
+                
+            elif filtro_rapido == "giro_normal":
+                # Filtrado em Python usando a lógica de Cobertura VMD
+                pass
                 
             elif filtro_rapido == "giro_lento":
-                # Mais de 30 dias sem venda ou nunca vendeu
-                data_limite = hoje - timedelta(days=30)
-                query = query.filter(
-                    or_(
-                        Produto.ultima_venda == None,
-                        Produto.ultima_venda < data_limite
-                    )
-                )
+                # Filtrado em Python usando a lógica de Cobertura VMD
+                pass
                 
             elif filtro_rapido == "margem_alta":
                 # Filtrar em Python: margem > 50%
@@ -2463,6 +2460,31 @@ def obter_estatisticas_produtos():
             produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) >= 50]
         elif filtro_rapido == "margem_baixa":
             produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) < 30]
+
+        # Aplicar filtros de giro em Python usando Cobertura
+        if filtro_rapido in ["giro_rapido", "giro_normal", "giro_lento"]:
+            filtered_produtos = []
+            hoje_date = datetime.now(timezone.utc).date()
+            for p in produtos:
+                try:
+                    data_cadastro = p.created_at.date() if p.created_at else (hoje_date - timedelta(days=365))
+                    dias_vida = max(1, (hoje_date - data_cadastro).days)
+                    qtd_vendida = float(p.quantidade_vendida or 0)
+                    giro_status = "lento"
+                    if qtd_vendida > 0:
+                        vmd = qtd_vendida / dias_vida
+                        if vmd > 0:
+                            cobertura = float(p.quantidade or 0) / vmd
+                            if cobertura <= 15:
+                                giro_status = "rapido"
+                            elif cobertura <= 60:
+                                giro_status = "normal"
+                    if filtro_rapido == f"giro_{giro_status}":
+                        filtered_produtos.append(p)
+                except Exception:
+                    if filtro_rapido == "giro_lento":
+                        filtered_produtos.append(p)
+            produtos = filtered_produtos
 
         # CALCULAR ESTATÍSTICAS COM DECIMAL PARA PRECISÃO
         total_produtos = len(produtos)
@@ -2615,24 +2637,27 @@ def obter_estatisticas_produtos():
                 else:
                     abc_counts["C"] += 1
                 
-                # Giro de estoque
-                ultima_venda_efetiva = getattr(produto, '_ultima_venda_real', None)
-                if ultima_venda_efetiva:
-                    try:
-                        data_venda = ultima_venda_efetiva.date() if hasattr(ultima_venda_efetiva, 'date') else ultima_venda_efetiva
-                        if isinstance(data_venda, date):
-                            dias_desde_venda = (hoje_date - data_venda).days
-                            if dias_desde_venda <= 7:
+                # Giro de estoque (Baseado em Cobertura / VMD)
+                try:
+                    data_cadastro = produto.created_at.date() if produto.created_at else (hoje_date - timedelta(days=365))
+                    dias_vida = max(1, (hoje_date - data_cadastro).days)
+                    qtd_vendida = float(produto.quantidade_vendida or 0)
+                    
+                    if qtd_vendida > 0:
+                        vmd = qtd_vendida / dias_vida
+                        if vmd > 0:
+                            cobertura = float(produto.quantidade or 0) / vmd
+                            if cobertura <= 15:
                                 giro_counts["rapido"] += 1
-                            elif dias_desde_venda <= 30:
+                            elif cobertura <= 60:
                                 giro_counts["normal"] += 1
                             else:
                                 giro_counts["lento"] += 1
                         else:
                             giro_counts["lento"] += 1
-                    except Exception:
+                    else:
                         giro_counts["lento"] += 1
-                else:
+                except Exception:
                     giro_counts["lento"] += 1
             except Exception as e_prod:
                 current_app.logger.warning(f"Erro ao processar produto {produto.id}: {e_prod}")
@@ -3625,7 +3650,10 @@ def obter_historico_precos(id):
                 "fornecedor_id": produto.fornecedor_id,
                 "fornecedor": {
                     "nome_fantasia": produto.fornecedor.nome_fantasia if produto.fornecedor else "",
-                    "razao_social": produto.fornecedor.razao_social if produto.fornecedor else ""
+                    "razao_social": produto.fornecedor.razao_social if produto.fornecedor else "",
+                    "telefone": produto.fornecedor.telefone if produto.fornecedor else "",
+                    "contato_nome": produto.fornecedor.contato_nome if produto.fornecedor else "",
+                    "contato_telefone": produto.fornecedor.contato_telefone if produto.fornecedor else ""
                 } if produto.fornecedor_id else None
             },
             "historico": historico_lista,
@@ -3681,27 +3709,67 @@ def obter_produto_hub(id):
         # Pedidos pendentes (placeholder se o modelo existir, mas por segurança evito joins não confirmados)
         pedidos_pendentes = []
         
-        # Estatísticas complementares
+        # Estatísticas complementares e Filtro de Período
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import func
+        from app.models import Venda, VendaItem
+        
         hoje = datetime.now(timezone.utc)
         dias_sem_venda = None
         if produto.ultima_venda:
             delta = hoje.date() - produto.ultima_venda.date()
             dias_sem_venda = delta.days
 
+        periodo = request.args.get('periodo', 'all')
+        
+        qtd_vendida = float(produto.quantidade_vendida or 0)
+        total_vendido = float(produto.total_vendido or 0)
+        
+        if periodo != 'all':
+            dias_filtro = 30
+            if periodo == '7d': dias_filtro = 7
+            elif periodo == '30d': dias_filtro = 30
+            elif periodo == '90d': dias_filtro = 90
+            elif periodo == '1y': dias_filtro = 365
+            
+            data_limite = hoje - timedelta(days=dias_filtro)
+            
+            # Query the sums for the specific period
+            vendas_agregadas = db.session.query(
+                func.sum(VendaItem.quantidade).label('qtd'),
+                func.sum(VendaItem.total_item).label('total')
+            ).join(Venda, Venda.id == VendaItem.venda_id).filter(
+                VendaItem.produto_id == id,
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.data_venda >= data_limite
+            ).first()
+            
+            if vendas_agregadas and vendas_agregadas.qtd:
+                qtd_vendida = float(vendas_agregadas.qtd or 0)
+                total_vendido = float(vendas_agregadas.total or 0)
+            else:
+                qtd_vendida = 0.0
+                total_vendido = 0.0
+
         lucro_estimado = 0
         if produto.preco_venda and produto.preco_custo:
-            lucro_unitario = produto.preco_venda - produto.preco_custo
-            lucro_estimado = lucro_unitario * (produto.quantidade_vendida or 0)
+            lucro_unitario = float(produto.preco_venda - produto.preco_custo)
+            lucro_estimado = lucro_unitario * qtd_vendida
+            
+        produto_dict = produto.to_dict(include_metrics=True, include_relationships=True)
+        # Override the metrics in the dict so the UI uses the filtered ones
+        produto_dict['quantidade_vendida'] = qtd_vendida
+        produto_dict['total_vendido'] = total_vendido
         
         estatisticas = {
-            "valor_total_vendido": float(produto.total_vendido or 0),
-            "lucro_total_estimado": float(lucro_estimado),
+            "valor_total_vendido": total_vendido,
+            "lucro_total_estimado": lucro_estimado,
             "dias_sem_venda": dias_sem_venda
         }
         
         return jsonify({
             "success": True,
-            "produto": produto.to_dict(include_metrics=True, include_relationships=True),
+            "produto": produto_dict,
             "historico_precos": [h.to_dict() for h in historico_precos],
             "lotes": lotes,
             "pedidos_pendentes": pedidos_pendentes,

@@ -39,14 +39,19 @@ export const calcularClassificacaoABC = (
  * Calcula status de giro do produto baseado na última venda
  */
 export const calcularStatusGiro = (produto: Produto): 'rapido' | 'normal' | 'lento' => {
-    if (!produto.ultima_venda) return 'lento';
+    if (!produto.ultima_venda || !produto.quantidade_vendida || produto.quantidade_vendida === 0) return 'lento';
     
-    const hoje = new Date();
-    const dataUltimaVenda = new Date(produto.ultima_venda);
-    const diasDesdeVenda = Math.floor((hoje.getTime() - dataUltimaVenda.getTime()) / (1000 * 60 * 60 * 24));
+    const dataCadastro = new Date(produto.created_at || new Date().getTime() - (365*24*60*60*1000));
+    const diasDeVida = Math.max(1, Math.ceil((new Date().getTime() - dataCadastro.getTime()) / (1000 * 3600 * 24)));
     
-    if (diasDesdeVenda <= 7) return 'rapido';
-    if (diasDesdeVenda <= 30) return 'normal';
+    const vmd = produto.quantidade_vendida / diasDeVida;
+    if (vmd === 0) return 'lento';
+    
+    const cobertura = Math.round(produto.quantidade / vmd);
+    
+    // Cobertura realística para varejo
+    if (cobertura <= 15) return 'rapido';
+    if (cobertura <= 60) return 'normal';
     return 'lento';
 };
 
@@ -69,8 +74,9 @@ export const calcularDiasParado = (produto: Produto): number | null => {
 export const calcularCategoriaMargem = (produto: Produto): 'alta' | 'media' | 'baixa' => {
     const margem = produto.margem_lucro || 0;
     
-    if (margem >= 50) return 'alta';
-    if (margem >= 30) return 'media';
+    // Margens realísticas para supermercados/varejo alimentar
+    if (margem >= 30) return 'alta';
+    if (margem >= 15) return 'media';
     return 'baixa';
 };
 
@@ -91,7 +97,7 @@ export const determinarAcaoNecessaria = (produto: Produto): 'repor_urgente' | 'p
     
     // Prioridade 3: Ajustar preço (margem muito baixa)
     const margem = produto.margem_lucro || 0;
-    if (margem < 20) {
+    if (margem < 15) {
         return 'ajustar_preco';
     }
     

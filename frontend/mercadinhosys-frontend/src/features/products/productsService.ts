@@ -57,8 +57,10 @@ export const productsService = {
         return response.data.produto;
     },
 
-    getProductHubData: async (id: number): Promise<any> => {
-        const response = await apiClient.get<any>(`/produtos/${id}/hub`);
+    getProductHubData: async (id: number, periodo: string = 'all'): Promise<any> => {
+        const response = await apiClient.get<any>(`/produtos/${id}/hub`, {
+            params: { periodo }
+        });
         return response.data;
     },
 

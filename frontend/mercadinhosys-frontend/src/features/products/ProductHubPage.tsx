@@ -15,11 +15,13 @@ export default function ProductHubPage() {
     const [loading, setLoading] = useState(true);
     const [hubData, setHubData] = useState<any>(null);
     const [error, setError] = useState('');
+    const [periodo, setPeriodo] = useState('all');
 
     useEffect(() => {
         if (!id) return;
         
-        productsService.getProductHubData(parseInt(id))
+        setLoading(true);
+        productsService.getProductHubData(parseInt(id), periodo)
             .then(data => {
                 if (data.success) {
                     setHubData(data);
@@ -34,7 +36,7 @@ export default function ProductHubPage() {
             .finally(() => {
                 setLoading(false);
             });
-    }, [id]);
+    }, [id, periodo]);
 
     if (loading) {
         return (
@@ -64,7 +66,18 @@ export default function ProductHubPage() {
         ? ((produto.preco_venda - produto.preco_custo) / produto.preco_custo) * 100
         : (produto.margem_lucro || 0);
 
-    const vmd = (produto?.quantidade_vendida || 0) / 30; // Simplificação: vendas médias mensais
+    let diasPeriodo = 30;
+    if (periodo === '7d') diasPeriodo = 7;
+    else if (periodo === '30d') diasPeriodo = 30;
+    else if (periodo === '90d') diasPeriodo = 90;
+    else if (periodo === '1y') diasPeriodo = 365;
+    else if (periodo === 'all') {
+        const dataCadastro = new Date(produto?.data_cadastro || produto?.created_at || new Date().getTime() - (365*24*60*60*1000));
+        const diasDesdeCadastro = Math.max(1, Math.ceil((new Date().getTime() - dataCadastro.getTime()) / (1000 * 3600 * 24)));
+        diasPeriodo = diasDesdeCadastro;
+    }
+
+    const vmd = (produto?.quantidade_vendida || 0) / diasPeriodo;
     const coberturaDias = vmd > 0 ? Math.round(produto.quantidade / vmd) : 0;
 
     // Preparar dados do gráfico (Histórico de Preços cruzado com Lotes)
@@ -183,7 +196,21 @@ export default function ProductHubPage() {
                 </div>
             </header>
 
-            {/* KPIs Principais */}
+            {/* Filtros e KPIs Principais */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px', padding: '0 24px' }}>
+                <select 
+                    value={periodo} 
+                    onChange={(e) => setPeriodo(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#1e293b', fontWeight: '500', cursor: 'pointer' }}
+                >
+                    <option value="all">Faturamento Histórico (Todo o Período)</option>
+                    <option value="7d">Últimos 7 dias</option>
+                    <option value="30d">Últimos 30 dias</option>
+                    <option value="90d">Últimos 90 dias</option>
+                    <option value="1y">Este Ano</option>
+                </select>
+            </div>
+            
             <section className="kpi-grid">
                 <div className="kpi-card">
                     <div className="kpi-icon-wrapper blue">
@@ -275,14 +302,25 @@ export default function ProductHubPage() {
                     <div className="supplier-list">
                         {/* Como não temos uma lista cruzada profunda pronta, renderizamos o fornecedor atual como "O Melhor" se ele existir */}
                         {produto.fornecedor_id ? (
-                            <div className="supplier-item best-price">
+                            <div 
+                                className="supplier-item best-price" 
+                                style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid transparent' }}
+                                onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                                onClick={() => navigate(`/suppliers/${produto.fornecedor_id}`)}
+                                title="Clique para abrir o cadastro do fornecedor"
+                            >
                                 <div className="supplier-info">
                                     <span className="supplier-name">{produto.fornecedor?.nome_fantasia || produto.fornecedor?.razao_social || 'Fornecedor Principal'}</span>
-                                    <span className="supplier-badge">Melhor Preço Histórico</span>
+                                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
+                                        {(produto.fornecedor as any)?.telefone && <span>📞 {(produto.fornecedor as any).telefone}</span>}
+                                        {(produto.fornecedor as any)?.contato_nome && <span>👤 {(produto.fornecedor as any).contato_nome} {(produto.fornecedor as any)?.contato_telefone ? `(${(produto.fornecedor as any).contato_telefone})` : ''}</span>}
+                                    </div>
+                                    <span className="supplier-badge" style={{ marginTop: '8px', display: 'inline-block' }}>Melhor Preço Histórico</span>
                                 </div>
-                                <div className="supplier-metrics">
+                                <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
                                     <span className="supplier-price">{formatCurrency(produto.preco_custo)}</span>
-                                    <span className="supplier-lead-time">Lead Time: 3 dias</span>
+                                    <span className="supplier-lead-time" style={{ color: '#3b82f6', fontWeight: 'bold' }}>Abrir Fornecedor ➔</span>
                                 </div>
                             </div>
                         ) : (
