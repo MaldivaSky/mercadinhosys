@@ -862,6 +862,43 @@ class ProdutoLote(db.Model, MultiTenantMixin):
                 "data_validade": self.data_validade.isoformat() if self.data_validade else None,
                 "dias_para_vencer": self.dias_para_vencer, "esta_vencido": self.esta_vencido, "ativo": self.ativo}
 
+class CatalogoMestre(db.Model):
+    """
+    Catálogo GLOBAL de produtos com EAN real (não pertence a nenhum tenant).
+    Alimentado diariamente pelo harvester da API Cosmos (24/dia).
+    Serve de base para o cadastro rápido por EAN e importação em massa.
+    """
+    __tablename__ = "catalogo_mestre"
+    id = db.Column(db.Integer, primary_key=True)
+    ean = db.Column(db.String(14), nullable=False, unique=True, index=True)
+    nome = db.Column(db.String(200))
+    marca = db.Column(db.String(100))
+    fabricante = db.Column(db.String(150))
+    ncm = db.Column(db.String(8))
+    categoria = db.Column(db.String(60))
+    unidade = db.Column(db.String(20), default="UN")
+    preco_referencia = db.Column(db.Numeric(19, 4))
+    imagem_url = db.Column(db.String(500))
+    fonte = db.Column(db.String(20), default="cosmos")
+    # status: 'encontrado' (Cosmos retornou dados) | 'nao_encontrado' (404, não reconsultar)
+    status = db.Column(db.String(20), default="encontrado", index=True)
+    payload_json = db.Column(db.Text)
+    consultado_em = db.Column(db.DateTime, default=utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (db.Index("ix_catalogo_status", "status"), db.Index("ix_catalogo_categoria", "categoria"))
+
+    def to_dict(self):
+        return {
+            "id": self.id, "ean": self.ean, "nome": self.nome, "marca": self.marca,
+            "fabricante": self.fabricante, "ncm": self.ncm, "categoria": self.categoria,
+            "unidade": self.unidade,
+            "preco_referencia": float(self.preco_referencia) if self.preco_referencia else None,
+            "imagem_url": self.imagem_url, "fonte": self.fonte, "status": self.status,
+            "consultado_em": self.consultado_em.isoformat() if self.consultado_em else None,
+        }
+
+
 # ------------------------------------------------------------------------------
 # Venda e Pagamentos Flexíveis
 # ------------------------------------------------------------------------------
