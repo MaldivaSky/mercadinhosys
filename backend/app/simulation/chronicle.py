@@ -344,6 +344,10 @@ class ChronicleSimulator:
                 quantidade=round_qty(qty), preco_unitario=p.preco_venda, total_item=item_total,
                 custo_unitario=custo_unit, margem_lucro_real=margem_real
             ))
+            # Atualiza os agregados do PRODUTO -> alimenta Giro de Estoque / ABC / "última venda"
+            p.quantidade_vendida = (Decimal(str(p.quantidade_vendida or 0)) + qty)
+            p.total_vendido = (Decimal(str(p.total_vendido or 0)) + item_total)
+            p.ultima_venda = ts
             total += item_total
             
         venda.subtotal = total
