@@ -30,38 +30,38 @@ COSMOS_MAX_CALLS = 24
 # ---------------------------------------------------------------------------
 REAL_SKUS = [
     # ── Bebidas (Distribuidora de Bebidas) ──
-    {"ean": "7894900011517", "n": "Coca-Cola Original 2L",            "cat": "Bebidas",    "un": "UN", "p": 12.90, "ncm": "22021000", "forn": "bebidas"},
-    {"ean": "7894900700044", "n": "Coca-Cola Zero 2L",               "cat": "Bebidas",    "un": "UN", "p": 12.90, "ncm": "22021000", "forn": "bebidas"},
-    {"ean": "7891991010917", "n": "Guaraná Antarctica 2L",          "cat": "Bebidas",    "un": "UN", "p": 10.50, "ncm": "22021000", "forn": "bebidas"},
-    {"ean": "7891149102129", "n": "Cerveja Skol Lata 350ml",        "cat": "Bebidas",    "un": "UN", "p": 3.80,  "ncm": "22030000", "forn": "bebidas"},
-    {"ean": "7896045104314", "n": "Água Mineral Indaiá 500ml",      "cat": "Bebidas",    "un": "UN", "p": 2.50,  "ncm": "22011000", "forn": "bebidas"},
+    {"ean": "7894900011517", "n": "Coca-Cola Original 2L",            "marca": "Coca-Cola",  "cat": "Bebidas",    "un": "UN", "p": 12.90, "ncm": "22021000", "forn": "bebidas"},
+    {"ean": "7894900700044", "n": "Coca-Cola Zero 2L",               "marca": "Coca-Cola",  "cat": "Bebidas",    "un": "UN", "p": 12.90, "ncm": "22021000", "forn": "bebidas"},
+    {"ean": "7891991010917", "n": "Guaraná Antarctica 2L",          "marca": "Antarctica", "cat": "Bebidas",    "un": "UN", "p": 10.50, "ncm": "22021000", "forn": "bebidas"},
+    {"ean": "7891149102129", "n": "Cerveja Skol Lata 350ml",        "marca": "Skol",       "cat": "Bebidas",    "un": "UN", "p": 3.80,  "ncm": "22030000", "forn": "bebidas"},
+    {"ean": "7896045104314", "n": "Água Mineral Indaiá 500ml",      "marca": "Indaiá",     "cat": "Bebidas",    "un": "UN", "p": 2.50,  "ncm": "22011000", "forn": "bebidas"},
 
     # ── Mercearia (Distribuidora de Secos e Molhados) ──
-    {"ean": "7896006711152", "n": "Arroz Tio João Tipo 1 5kg",      "cat": "Mercearia",  "un": "PC", "p": 28.90, "ncm": "10063011", "forn": "mercearia"},
-    {"ean": "7896006733105", "n": "Feijão Carioca Camil 1kg",       "cat": "Mercearia",  "un": "UN", "p": 8.45,  "ncm": "07133399", "forn": "mercearia"},
-    {"ean": "7891910000197", "n": "Açúcar União Refinado 1kg",      "cat": "Mercearia",  "un": "UN", "p": 4.80,  "ncm": "17019900", "forn": "mercearia"},
-    {"ean": "7891107101621", "n": "Óleo de Soja Liza 900ml",        "cat": "Mercearia",  "un": "UN", "p": 6.90,  "ncm": "15079011", "forn": "mercearia"},
-    {"ean": "7896089012736", "n": "Café Pilão Tradicional 500g",    "cat": "Mercearia",  "un": "UN", "p": 19.90, "ncm": "09012100", "forn": "mercearia"},
-    {"ean": "7896036090244", "n": "Macarrão Espaguete Renata 500g", "cat": "Mercearia",  "un": "UN", "p": 4.50,  "ncm": "19021900", "forn": "mercearia"},
-    {"ean": "7896102501445", "n": "Molho de Tomate Pomarola 340g",  "cat": "Mercearia",  "un": "UN", "p": 3.90,  "ncm": "21032010", "forn": "mercearia"},
-    {"ean": "7891150015005", "n": "Maionese Hellmann's 500g",       "cat": "Mercearia",  "un": "UN", "p": 14.50, "ncm": "21039011", "forn": "mercearia"},
+    {"ean": "7896006711152", "n": "Arroz Tio João Tipo 1 5kg",      "marca": "Tio João",   "cat": "Mercearia",  "un": "PC", "p": 28.90, "ncm": "10063011", "forn": "mercearia"},
+    {"ean": "7896006733105", "n": "Feijão Carioca Camil 1kg",       "marca": "Camil",      "cat": "Mercearia",  "un": "UN", "p": 8.45,  "ncm": "07133399", "forn": "mercearia"},
+    {"ean": "7891910000197", "n": "Açúcar União Refinado 1kg",      "marca": "União",      "cat": "Mercearia",  "un": "UN", "p": 4.80,  "ncm": "17019900", "forn": "mercearia"},
+    {"ean": "7891107101621", "n": "Óleo de Soja Liza 900ml",        "marca": "Liza",       "cat": "Mercearia",  "un": "UN", "p": 6.90,  "ncm": "15079011", "forn": "mercearia"},
+    {"ean": "7896089012736", "n": "Café Pilão Tradicional 500g",    "marca": "Pilão",      "cat": "Mercearia",  "un": "UN", "p": 19.90, "ncm": "09012100", "forn": "mercearia"},
+    {"ean": "7896036090244", "n": "Macarrão Espaguete Renata 500g", "marca": "Renata",     "cat": "Mercearia",  "un": "UN", "p": 4.50,  "ncm": "19021900", "forn": "mercearia"},
+    {"ean": "7896102501445", "n": "Molho de Tomate Pomarola 340g",  "marca": "Pomarola",   "cat": "Mercearia",  "un": "UN", "p": 3.90,  "ncm": "21032010", "forn": "mercearia"},
+    {"ean": "7891150015005", "n": "Maionese Hellmann's 500g",       "marca": "Hellmann's", "cat": "Mercearia",  "un": "UN", "p": 14.50, "ncm": "21039011", "forn": "mercearia"},
 
     # ── Laticínios (Distribuidora de Frios e Laticínios) ──
-    {"ean": "7891000000427", "n": "Leite Condensado Moça 395g",     "cat": "Laticínios", "un": "UN", "p": 8.90,  "ncm": "04029900", "forn": "laticinios"},
-    {"ean": "7891000053508", "n": "Leite em Pó Ninho 380g",         "cat": "Laticínios", "un": "UN", "p": 22.90, "ncm": "04022110", "forn": "laticinios"},
-    {"ean": "7898215152330", "n": "Leite UHT Integral Italac 1L",   "cat": "Laticínios", "un": "UN", "p": 5.45,  "ncm": "04012010", "forn": "laticinios"},
-    {"ean": "7891097002007", "n": "Manteiga Aviação com Sal 200g",  "cat": "Laticínios", "un": "UN", "p": 16.90, "ncm": "04051000", "forn": "laticinios"},
+    {"ean": "7891000000427", "n": "Leite Condensado Moça 395g",     "marca": "Moça",       "cat": "Laticínios", "un": "UN", "p": 8.90,  "ncm": "04029900", "forn": "laticinios"},
+    {"ean": "7891000053508", "n": "Leite em Pó Ninho 380g",         "marca": "Ninho",      "cat": "Laticínios", "un": "UN", "p": 22.90, "ncm": "04022110", "forn": "laticinios"},
+    {"ean": "7898215152330", "n": "Leite UHT Integral Italac 1L",   "marca": "Italac",     "cat": "Laticínios", "un": "UN", "p": 5.45,  "ncm": "04012010", "forn": "laticinios"},
+    {"ean": "7891097002007", "n": "Manteiga Aviação com Sal 200g",  "marca": "Aviação",    "cat": "Laticínios", "un": "UN", "p": 16.90, "ncm": "04051000", "forn": "laticinios"},
 
     # ── Limpeza / Higiene (Distribuidora de Limpeza) ──
-    {"ean": "7891150064393", "n": "Sabão em Pó OMO Lavagem 1.6kg",  "cat": "Limpeza",    "un": "PC", "p": 26.90, "ncm": "34022000", "forn": "limpeza"},
-    {"ean": "7896098900116", "n": "Detergente Ypê Neutro 500ml",    "cat": "Limpeza",    "un": "UN", "p": 2.59,  "ncm": "34022000", "forn": "limpeza"},
-    {"ean": "7891022100014", "n": "Esponja de Aço Bombril 8un",     "cat": "Limpeza",    "un": "PC", "p": 3.90,  "ncm": "73239900", "forn": "limpeza"},
-    {"ean": "7891024134925", "n": "Creme Dental Colgate Total 90g", "cat": "Higiene",    "un": "UN", "p": 9.90,  "ncm": "33061000", "forn": "limpeza"},
-    {"ean": "7891150080929", "n": "Sabonete Dove Original 90g",     "cat": "Higiene",    "un": "UN", "p": 4.50,  "ncm": "34011190", "forn": "limpeza"},
+    {"ean": "7891150064393", "n": "Sabão em Pó OMO Lavagem 1.6kg",  "marca": "OMO",        "cat": "Limpeza",    "un": "PC", "p": 26.90, "ncm": "34022000", "forn": "limpeza"},
+    {"ean": "7896098900116", "n": "Detergente Ypê Neutro 500ml",    "marca": "Ypê",        "cat": "Limpeza",    "un": "UN", "p": 2.59,  "ncm": "34022000", "forn": "limpeza"},
+    {"ean": "7891022100014", "n": "Esponja de Aço Bombril 8un",     "marca": "Bombril",    "cat": "Limpeza",    "un": "PC", "p": 3.90,  "ncm": "73239900", "forn": "limpeza"},
+    {"ean": "7891024134925", "n": "Creme Dental Colgate Total 90g", "marca": "Colgate",    "cat": "Higiene",    "un": "UN", "p": 9.90,  "ncm": "33061000", "forn": "limpeza"},
+    {"ean": "7891150080929", "n": "Sabonete Dove Original 90g",     "marca": "Dove",       "cat": "Higiene",    "un": "UN", "p": 4.50,  "ncm": "34011190", "forn": "limpeza"},
 
     # ── Snacks / Biscoitos (Distribuidora de Doces) ──
-    {"ean": "7622300989750", "n": "Biscoito Recheado Oreo 90g",     "cat": "Snacks",     "un": "UN", "p": 3.90,  "ncm": "19053100", "forn": "doces"},
-    {"ean": "7892840222949", "n": "Chocolate Bis Lacta 126g",       "cat": "Snacks",     "un": "UN", "p": 6.50,  "ncm": "18063220", "forn": "doces"},
+    {"ean": "7622300989750", "n": "Biscoito Recheado Oreo 90g",     "marca": "Oreo",       "cat": "Snacks",     "un": "UN", "p": 3.90,  "ncm": "19053100", "forn": "doces"},
+    {"ean": "7892840222949", "n": "Chocolate Bis Lacta 126g",       "marca": "Lacta",      "cat": "Snacks",     "un": "UN", "p": 6.50,  "ncm": "18063220", "forn": "doces"},
 ]
 
 
@@ -208,7 +208,7 @@ class CosmosCatalog:
             item["ean"] = normalize_ean(s["ean"])
             item["fonte"] = "local"
             item["imagem"] = ""
-            item["marca"] = ""
+            item["marca"] = s.get("marca", "")  # mantém a marca real curada (Cosmos pode sobrescrever no fetch)
             out.append(item)
         return out
 

@@ -335,10 +335,14 @@ class ChronicleSimulator:
         for p in random.sample(products, min(len(products), items_count)):
             qty = Decimal(str(random.uniform(1, 3)))
             item_total = p.preco_venda * qty
+            custo_unit = Decimal(str(p.preco_custo or 0))
+            # Lucro real por item = (preço de venda - custo) * quantidade — alma do BI
+            margem_real = (Decimal(str(p.preco_venda)) - custo_unit) * qty
             db.session.add(VendaItem(
                 venda_id=venda.id, produto_id=p.id, produto_nome=p.nome,
                 estabelecimento_id=est.id,
-                quantidade=round_qty(qty), preco_unitario=p.preco_venda, total_item=item_total
+                quantidade=round_qty(qty), preco_unitario=p.preco_venda, total_item=item_total,
+                custo_unitario=custo_unit, margem_lucro_real=margem_real
             ))
             total += item_total
             
