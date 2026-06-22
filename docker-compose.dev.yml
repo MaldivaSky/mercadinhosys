@@ -70,7 +70,8 @@ services:
     command: sh -c "npm install && npm run dev -- --host"
     environment:
       - VITE_API_TARGET=http://backend:5000
-      - CHOKIDAR_USEPOLLING=true # Garante hot-reload no Docker (Windows/WSL)
+      - CHOKIDAR_USEPOLLING=true # Garante deteccao de mudancas no Docker (Windows/WSL)
+      - VITE_HMR_CLIENT_PORT=80  # navegador acessa na porta 80 -> WebSocket HMR usa a mesma
     depends_on:
       - backend
     networks:
