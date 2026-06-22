@@ -873,9 +873,16 @@ def create_app(config_name=None):
             if os.getenv("SYNC_ENABLED", "false").lower() == "true":
                 from app.services.sync_worker import start_sync_worker
                 start_sync_worker(app)
-                
+
         except Exception as e:
             app.logger.error(f"Erro ao configurar listeners ou worker: {e}")
+
+    # Agendador de push automático local -> Aiven (a cada 30 min)
+    try:
+        from app.services.cloud_push_scheduler import start_cloud_push_scheduler
+        start_cloud_push_scheduler(app)
+    except Exception as e:
+        app.logger.error(f"Erro ao iniciar Cloud Push Scheduler: {e}")
 
     # ==================== CLI COMMANDS ====================
     # Registra comandos de gestão: flask push-to-aiven, flask sync-status

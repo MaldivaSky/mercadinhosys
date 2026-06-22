@@ -599,6 +599,29 @@ def listar_produtos():
         elif filtro_rapido == "margem_baixa":
             query = query.filter(Produto.margem_lucro < 30)
 
+        # Filtro por Classificação ABC (drill-down do dashboard)
+        classificacao_abc = request.args.get("classificacao_abc")
+        if classificacao_abc:
+            query = query.filter(func.upper(Produto.classificacao_abc) == classificacao_abc.upper())
+
+        # Filtro por Giro de Estoque (drill-down do dashboard)
+        # rapido/estrela: alto volume vendido | lento: vende pouco | parado: não vende
+        giro = request.args.get("giro")
+        if giro:
+            g = giro.lower()
+            if g in ("rapido", "estrela", "alto"):
+                query = query.filter(Produto.quantidade_vendida >= 30)
+            elif g in ("lento", "baixo"):
+                query = query.filter(
+                    Produto.quantidade_vendida > 0,
+                    Produto.quantidade_vendida < 30,
+                )
+            elif g in ("parado", "encalhado"):
+                query = query.filter(
+                    or_(Produto.quantidade_vendida == 0, Produto.quantidade_vendida.is_(None)),
+                    Produto.quantidade > 0,
+                )
+
         # 8. Ordenação
         # 4. Ordenação Robusta
         # Whitelist de colunas permitidas para evitar UndefinedColumn no Postgres
