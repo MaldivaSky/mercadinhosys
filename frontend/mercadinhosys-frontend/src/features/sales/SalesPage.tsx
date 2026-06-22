@@ -49,6 +49,20 @@ const statusChip = (s = "") => { const k = s.toLowerCase(); if (k === "finalizad
 const statusLabel = (s = "") => ({ finalizada: "Finalizada", cancelada: "Cancelada", em_andamento: "Em andamento" }[s.toLowerCase()] || s || "—");
 const formaLabel = (f = "") => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// Normaliza variantes ("cartao_debito", "cartão de débito", "debito"...) num rótulo único
+const canonicalForma = (f = "") => {
+    const s = f.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[_\s]+/g, " ").trim();
+    if (s.includes("debito")) return "Cartão Débito";
+    if (s.includes("credito")) return "Cartão Crédito";
+    if (s.includes("dinheiro") || s === "cash" || s === "especie") return "Dinheiro";
+    if (s.includes("pix")) return "PIX";
+    if (s.includes("fiado") || s.includes("crediario") || s.includes("a prazo")) return "Fiado";
+    if (s.includes("voucher") || s.includes("vale") || s.includes("ticket")) return "Voucher";
+    if (s.includes("transfer")) return "Transferência";
+    if (s.includes("boleto")) return "Boleto";
+    return f ? formaLabel(f) : "Outros";
+};
+
 function Kpi({ titulo, valor, sub, Icon, cor }: { titulo: string; valor: string; sub?: string; Icon: React.ElementType; cor: string }) {
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
@@ -174,7 +188,11 @@ export default function SalesPage() {
 
     const chartFormas = useMemo(() => {
         const fp = analytics?.formas_pagamento || [];
-        return { labels: fp.map((f) => formaLabel(f.forma)), datasets: [{ label: "Total", data: fp.map((f) => Number(f.total || 0)), backgroundColor: ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"], borderRadius: 8, borderWidth: 0 }] };
+        // Mescla variantes do mesmo método (ex: "cartao_debito" + "Cartão de Débito") somando os totais
+        const merged = new Map<string, number>();
+        for (const f of fp) merged.set(canonicalForma(f.forma), (merged.get(canonicalForma(f.forma)) || 0) + Number(f.total || 0));
+        const ordenado = [...merged.entries()].sort((a, b) => b[1] - a[1]);
+        return { labels: ordenado.map(([k]) => k), datasets: [{ label: "Total", data: ordenado.map(([, v]) => v), backgroundColor: ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"], borderRadius: 8, borderWidth: 0 }] };
     }, [analytics]);
 
     const chartHoras = useMemo(() => {
@@ -225,7 +243,7 @@ export default function SalesPage() {
     const exportarCSV = () => {
         if (!vendas.length) return showToast.error("Nada para exportar");
         const head = ["Código", "Data", "Cliente", "Operador", "Itens", "Total", "Pagamento", "Status"];
-        const rows = vendas.map((v) => [v.codigo, fmtDateTime(v.data || v.created_at), v.cliente?.nome || "Avulso", v.funcionario?.nome || "—", v.quantidade_itens || 0, Number(v.total || 0).toFixed(2), formaLabel(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "")), statusLabel(v.status)]);
+        const rows = vendas.map((v) => [v.codigo, fmtDateTime(v.data || v.created_at), v.cliente?.nome || "Avulso", v.funcionario?.nome || "—", v.quantidade_itens || 0, Number(v.total || 0).toFixed(2), canonicalForma(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "")), statusLabel(v.status)]);
         const csv = [head, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
         const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" })); a.download = `vendas-${isoDate()}.csv`; a.click();
         showToast.success("CSV exportado");
@@ -354,7 +372,7 @@ export default function SalesPage() {
                                             <td className="px-4 py-3 font-mono font-semibold text-slate-700 dark:text-slate-200">{v.codigo}</td>
                                             <td className="px-4 py-3 text-slate-500">{fmtDateTime(v.data || v.created_at)}</td>
                                             <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{v.cliente?.nome || "Avulso"}</td>
-                                            <td className="px-4 py-3 hidden md:table-cell text-slate-500">{formaLabel(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "—"))}</td>
+                                            <td className="px-4 py-3 hidden md:table-cell text-slate-500">{canonicalForma(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "—"))}</td>
                                             <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-white tabular-nums">{brl(v.total)}</td>
                                             <td className="px-4 py-3 text-center"><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${statusChip(v.status)}`}>{statusLabel(v.status)}</span></td>
                                             <td className="px-4 py-3">
