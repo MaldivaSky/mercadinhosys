@@ -82,6 +82,16 @@ class MasterSeeder:
             {"id": "admin5", "caixa": "caixa5", "nome": "Mini-Mercado Sucata", "meses": 1, "dna": "PESSIMO"}
         ]
 
+        # Modo LIGHT (SEED_LIGHT=1): volume reduzido para Aiven/rede e teste de sincronização.
+        # 2 lojas, 1 mês cada -> seed conclui pela internet e o sync do settings fica viável.
+        import os as _os
+        if _os.environ.get("SEED_LIGHT") == "1":
+            tenants_config = [
+                {"id": "admin1", "caixa": "caixa1", "nome": "Mercado Maldivas Elite", "meses": 1, "dna": "BOM"},
+                {"id": "admin2", "caixa": "caixa2", "nome": "Supermercado Estrela", "meses": 1, "dna": "RAZOAVEL"},
+            ]
+            print("[MASTER] Modo LIGHT ativo: 2 lojas x 1 mes (volume reduzido).")
+
         simulator = ChronicleSimulator(app)
 
         for config in tenants_config:
