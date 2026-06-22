@@ -79,6 +79,43 @@ const PDVPage: React.FC = () => {
         }
     }, [location.search, navigate]);
 
+    // ── Scanner USB global (wedge): detecta leitor de código de barras pela
+    //    velocidade de digitação + Enter e adiciona o produto em qualquer foco.
+    //    Distingue do operador digitando manualmente (humano é mais lento).
+    useEffect(() => {
+        let buffer = '';
+        let lastTime = 0;
+        const onKeyDown = async (e: KeyboardEvent) => {
+            const ativo = document.activeElement as HTMLElement | null;
+            // No campo de busca o ProdutoSearch já cuida do EAN — evita leitura dupla
+            if (ativo?.id === 'produto-search-input') return;
+
+            const agora = Date.now();
+            const delta = agora - lastTime;
+            lastTime = agora;
+
+            if (e.key === 'Enter') {
+                const code = buffer.trim();
+                buffer = '';
+                if (code.length >= 8 && /^\d+$/.test(code)) {
+                    e.preventDefault();
+                    try {
+                        const p = await pdvService.buscarPorCodigoBarras(code);
+                        if (p) { adicionarProduto(p as any); showToast.success(`Lido: ${p.nome}`); }
+                        else showToast.error(`Código ${code} não encontrado`);
+                    } catch { showToast.error('Erro ao ler código de barras'); }
+                }
+                return;
+            }
+            if (e.key.length === 1) {
+                // delta curto (<50ms) = leitor; senão reinicia (digitação humana)
+                buffer = delta > 50 ? e.key : buffer + e.key;
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [adicionarProduto]);
+
     const handleFinalizarVenda = async () => {
         if (carrinho.length === 0) return showToast.error('Carrinho vazio');
         if (pagamentos.length === 0) {
