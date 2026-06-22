@@ -221,19 +221,13 @@ class RealisticInjector:
 
         forn_keys = list(forns.keys())
 
-        # 3 variações de marca por SKU real -> volume para BI, var.0 = EAN real
-        for variacao in range(3):
+        # Um produto REAL por SKU: nome, EAN, marca e NCM verdadeiros (sem variantes falsas)
+        for variacao in [0]:
             for item in catalog:
-                if variacao == 0:
-                    nome = item["n"]
-                    ean = item["ean"]
-                    marca = item.get("marca") or "Líder"
-                    imagem = item.get("imagem") or ""
-                else:
-                    marca = f"Alternativa {variacao}"
-                    nome = f"{item['n']} ({marca})"
-                    ean = normalize_ean(f"200{est_id:03d}{variacao}{abs(hash(item['n'])) % 100000:05d}")
-                    imagem = ""
+                nome = item["n"]
+                ean = item["ean"]
+                marca = item.get("marca") or "Genérico"
+                imagem = item.get("imagem") or ""
 
                 # Fornecedor pela especialidade do produto
                 forn = forns.get(item.get("forn")) or forns.get(random.choice(forn_keys))
