@@ -11,8 +11,7 @@ import {
     Zap,
     Clock,
     Target,
-    X,
-    Filter
+    X
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -36,6 +35,8 @@ interface ProductAnalyticsDashboardProps {
         produtos_criticos?: any[];
     };
     onCardClick: (filterType: string) => void;
+    onAdvancedAnalyticsClick: (type: string) => void;
+    onProductClick: (produto: Produto) => void;
 }
 
 interface ClassificacaoABC {
@@ -53,7 +54,9 @@ interface StatusGiro {
 const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
     produtos,
     stats,
-    onCardClick
+    onCardClick,
+    onAdvancedAnalyticsClick,
+    onProductClick
 }) => {
     const [classificacaoABC, setClassificacaoABC] = useState<ClassificacaoABC>({ A: 0, B: 0, C: 0 });
     const [statusGiro, setStatusGiro] = useState<StatusGiro>({ rapido: 0, normal: 0, lento: 0 });
@@ -406,9 +409,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
 
                     <div className="space-y-4">
                         {/* Classe A */}
-                        <div>
+                        <div onClick={() => onAdvancedAnalyticsClick('abc_a')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
                                     Classe A - Alta Prioridade
                                 </span>
                                 <span className="text-sm font-bold text-green-600 dark:text-green-400">
@@ -427,9 +430,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
 
                         {/* Classe B */}
-                        <div>
+                        <div onClick={() => onAdvancedAnalyticsClick('abc_b')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
                                     Classe B - Média Prioridade
                                 </span>
                                 <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
@@ -448,9 +451,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
 
                         {/* Classe C */}
-                        <div>
+                        <div onClick={() => onAdvancedAnalyticsClick('abc_c')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
                                     Classe C - Baixa Prioridade
                                 </span>
                                 <span className="text-sm font-bold text-red-600 dark:text-red-400">
@@ -497,11 +500,11 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
 
                     <div className="space-y-4">
                         {/* Giro Rápido */}
-                        <div>
+                        <div onClick={() => onAdvancedAnalyticsClick('giro_rapido')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-green-600" />
-                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                    <Zap className="w-4 h-4 text-green-600 group-hover:scale-110 transition-transform" />
+                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
                                         Giro Rápido
                                     </span>
                                 </div>
@@ -521,11 +524,11 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
 
                         {/* Giro Normal */}
-                        <div>
+                        <div onClick={() => onAdvancedAnalyticsClick('giro_normal')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-yellow-600" />
-                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                    <Clock className="w-4 h-4 text-yellow-600 group-hover:scale-110 transition-transform" />
+                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
                                         Giro Normal
                                     </span>
                                 </div>
@@ -545,11 +548,11 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         </div>
 
                         {/* Giro Lento */}
-                        <div>
+                        <div onClick={() => onAdvancedAnalyticsClick('giro_lento')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">
                                 <div className="flex items-center gap-2">
-                                    <TrendingDown className="w-4 h-4 text-red-600" />
-                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                    <TrendingDown className="w-4 h-4 text-red-600 group-hover:scale-110 transition-transform" />
+                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 group-hover:underline">
                                         Giro Lento
                                     </span>
                                 </div>
@@ -696,7 +699,8 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             topProdutos.map((produto, index) => (
                                 <div
                                     key={produto.id}
-                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                    onClick={() => onProductClick(produto)}
+                                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
                                 >
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                         <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
@@ -755,7 +759,8 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             produtosCriticos.map((produto) => (
                                 <div
                                     key={produto.id}
-                                    className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                                    onClick={() => onProductClick(produto)}
+                                    className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                                 >
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                         <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -809,16 +814,6 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                         {activeMetricModal.formattedValue}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        onCardClick(activeMetricModal.id);
-                                        setActiveMetricModal(null);
-                                    }}
-                                    className={`px-6 py-3 ${activeMetricModal.theme.button} text-white rounded-xl font-bold flex items-center gap-2 transition-colors shadow-lg ${activeMetricModal.theme.shadow}`}
-                                >
-                                    <Filter className="w-5 h-5" />
-                                    Filtrar Tabela
-                                </button>
                             </div>
 
                             <div className="h-[300px] w-full">

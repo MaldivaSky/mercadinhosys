@@ -108,9 +108,20 @@ class SerializableMixin:
         if include_relationships and depth < 1:
             for rel in self.__mapper__.relationships:
                 if not rel.uselist:
-                    related = getattr(self, rel.key)
-                    if related and hasattr(related, "to_dict"):
-                        result[rel.key] = related.to_dict(depth=depth+1)
+                    rel_obj = getattr(self, rel.key)
+                    if rel_obj:
+                        try:
+                            result[rel.key] = rel_obj.to_dict(depth=depth+1)
+                        except TypeError:
+                            result[rel.key] = rel_obj.to_dict()
+                else:
+                    rel_list = []
+                    for o in getattr(self, rel.key):
+                        try:
+                            rel_list.append(o.to_dict(depth=depth+1))
+                        except TypeError:
+                            rel_list.append(o.to_dict())
+                    result[rel.key] = rel_list
         return result
 
 class EnderecoMixin:
@@ -610,19 +621,7 @@ class CategoriaProduto(db.Model, MultiTenantMixin, SoftDeleteMixin, Serializable
 class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
     __tablename__ = "produtos"
     
-    def to_dict(self, depth=0):
-        data = super().to_dict(depth=depth)
-        
-        # Calcular metricas basicas on the fly para o to_dict
-        giro = round(float(self.quantidade_vendida or 0) / 30.0, 2)
-        dias = int(float(self.quantidade or 0) / giro) if giro > 0 else 0
-        data["metricas_gestao"] = {
-            "giro_estoque": giro if giro > 0 else 1.5,
-            "dias_estoque": dias if dias > 0 else 15,
-            "cobertura_estoque": f"{dias if dias > 0 else 15} dias",
-            "frequencia_venda": "Alta" if (self.classificacao_abc == 'A' or (self.quantidade_vendida or 0) > 10) else "Média"
-        }
-        return data
+
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
@@ -817,9 +816,29 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
         self.quantidade -= quantidade
         return consumidos
 
-    def to_dict(self, include_metrics=False, depth=0):
-        data = super().to_dict(depth=depth)
-        if include_metrics: data["estoque_status"] = self.estoque_status
+    def to_dict(self, depth=0, include_metrics=False, include_relationships=False):
+        data = super().to_dict(include_relationships=include_relationships, depth=depth)
+        
+        # Injetar categoria para o Frontend (que espera a string do nome)
+        if hasattr(self, 'categoria') and getattr(self, 'categoria'):
+            data["categoria"] = self.categoria.nome
+        else:
+            data["categoria"] = "Sem Categoria"
+            
+        # Garantir retorno correto de ativo
+        data["ativo"] = bool(self.ativo)
+
+        if include_metrics:
+            giro = round(float(self.quantidade_vendida or 0) / 30.0, 2)
+            dias = int(float(self.quantidade or 0) / giro) if giro > 0 else 0
+            data["metricas_gestao"] = {
+                "giro_estoque": giro if giro > 0 else 1.5,
+                "dias_estoque": dias if dias > 0 else 15,
+                "cobertura_estoque": f"{dias if dias > 0 else 15} dias",
+                "frequencia_venda": "Alta" if (self.classificacao_abc == 'A' or (self.quantidade_vendida or 0) > 10) else "Média"
+            }
+            data["estoque_status"] = self.estoque_status
+            
         return data
 
 

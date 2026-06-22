@@ -1053,7 +1053,7 @@ const SuppliersPage: React.FC = () => {
                                             key={produto.id}
                                             onClick={() => {
                                                 setShowProdutosModal(false);
-                                                navigate(`/products/${produto.id}/hub`);
+                                                navigate(`/products/${produto.id}`);
                                             }}
                                             className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300"
                                         >

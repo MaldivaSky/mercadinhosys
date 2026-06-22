@@ -3640,6 +3640,83 @@ def obter_historico_precos(id):
         )
 
 
+@produtos_bp.route("/<int:id>/hub", methods=["GET"])
+@funcionario_required
+def obter_produto_hub(id):
+    """
+    Obtém todos os dados agregados de um produto para a tela de Hub (Raio-X).
+    """
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        from datetime import datetime, timezone
+        estabelecimento_id = get_authorized_establishment_id()
+        
+        produto = Produto.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+        
+        # Histórico de preços
+        historico_precos = (
+            HistoricoPrecos.query
+            .filter_by(produto_id=id, estabelecimento_id=estabelecimento_id)
+            .order_by(HistoricoPrecos.data_alteracao.desc())
+            .limit(15)
+            .all()
+        )
+        
+        # Lotes
+        lotes = []
+        from app.models import ProdutoLote
+        lotes_obj = ProdutoLote.query.filter_by(produto_id=id).order_by(ProdutoLote.data_validade.desc()).all()
+        for l in lotes_obj:
+            lotes.append({
+                "id": l.id,
+                "numero_lote": l.numero_lote,
+                "quantidade": float(l.quantidade) if l.quantidade else 0,
+                "data_fabricacao": l.data_fabricacao.isoformat() if l.data_fabricacao else None,
+                "data_validade": l.data_validade.isoformat() if l.data_validade else None,
+                "data_entrada": l.data_entrada.isoformat() if l.data_entrada else None,
+            })
+            
+        # Pedidos pendentes (placeholder se o modelo existir, mas por segurança evito joins não confirmados)
+        pedidos_pendentes = []
+        
+        # Estatísticas complementares
+        hoje = datetime.now(timezone.utc)
+        dias_sem_venda = None
+        if produto.ultima_venda:
+            delta = hoje.date() - produto.ultima_venda.date()
+            dias_sem_venda = delta.days
+
+        lucro_estimado = 0
+        if produto.preco_venda and produto.preco_custo:
+            lucro_unitario = produto.preco_venda - produto.preco_custo
+            lucro_estimado = lucro_unitario * (produto.quantidade_vendida or 0)
+        
+        estatisticas = {
+            "valor_total_vendido": float(produto.total_vendido or 0),
+            "lucro_total_estimado": float(lucro_estimado),
+            "dias_sem_venda": dias_sem_venda
+        }
+        
+        return jsonify({
+            "success": True,
+            "produto": produto.to_dict(include_metrics=True, include_relationships=True),
+            "historico_precos": [h.to_dict() for h in historico_precos],
+            "lotes": lotes,
+            "pedidos_pendentes": pedidos_pendentes,
+            "estatisticas": estatisticas,
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao obter hub do produto {id}: {str(e)}")
+        return (
+            jsonify({"success": False, "message": "Erro interno ao obter hub do produto"}),
+            500,
+        )
+
+
+
 @produtos_bp.route("/<int:id>/vendas-historico", methods=["GET"])
 @funcionario_required
 def obter_vendas_historico(id):
