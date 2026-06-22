@@ -1,21 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Search,
-    Filter,
-    MoreVertical,
-    ExternalLink,
-    User,
-    Calendar,
-    MapPin,
-    Hash
+    Search, User, Clock, MapPin, Hash, Truck, CheckCircle2, XCircle,
+    Package, Loader2, Receipt, DollarSign,
 } from 'lucide-react';
 import { deliveryService, Entrega } from './deliveryService';
 import toast from 'react-hot-toast';
+
+// Configuração visual e de fluxo por status (paleta oficial do app)
+const STATUS_CONFIG: Record<string, { label: string; classe: string; dot: string }> = {
+    pendente:    { label: 'Pendente',   classe: 'bg-warning-100 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
+    em_preparo:  { label: 'Em preparo', classe: 'bg-warning-100 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
+    em_rota:     { label: 'Em rota',    classe: 'bg-primary-100 text-primary-700 border-primary-200', dot: 'bg-primary-500' },
+    entregue:    { label: 'Entregue',   classe: 'bg-success-100 text-success-700 border-success-200', dot: 'bg-success-500' },
+    cancelada:   { label: 'Cancelada',  classe: 'bg-error-100 text-error-700 border-error-200',       dot: 'bg-error-500' },
+};
+
+const FILTROS: Array<{ key: string; label: string }> = [
+    { key: 'todos', label: 'Todas' },
+    { key: 'pendente', label: 'Pendentes' },
+    { key: 'em_rota', label: 'Em rota' },
+    { key: 'entregue', label: 'Entregues' },
+    { key: 'cancelada', label: 'Canceladas' },
+];
+
+const formatCurrency = (v: number) =>
+    (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const DeliveryList: React.FC = () => {
     const [entregas, setEntregas] = useState<Entrega[]>([]);
     const [loading, setLoading] = useState(true);
     const [filtroStatus, setFiltroStatus] = useState('todos');
+    const [busca, setBusca] = useState('');
+    const [acaoId, setAcaoId] = useState<number | null>(null);
 
     useEffect(() => {
         carregarEntregas();
@@ -26,126 +42,215 @@ const DeliveryList: React.FC = () => {
             setLoading(true);
             const res = await deliveryService.getEntregas(filtroStatus);
             if (res.success) setEntregas(res.entregas);
-        } catch (error) {
+        } catch {
             toast.error('Erro ao listar entregas');
         } finally {
             setLoading(false);
         }
     };
 
-    const getStatusStyle = (status: string) => {
-        switch (status) {
-            case 'entregue': return 'bg-green-100 text-green-700 border-green-200';
-            case 'em_rota': return 'bg-blue-100 text-blue-700 border-blue-200';
-            case 'cancelada': return 'bg-red-100 text-red-700 border-red-200';
-            default: return 'bg-amber-100 text-amber-700 border-amber-200';
+    // Próximo passo do fluxo operacional
+    const proximoPasso = (status: string): { novo: string; label: string; icon: React.ElementType } | null => {
+        if (status === 'pendente' || status === 'em_preparo') return { novo: 'em_rota', label: 'Despachar', icon: Truck };
+        if (status === 'em_rota') return { novo: 'entregue', label: 'Confirmar entrega', icon: CheckCircle2 };
+        return null;
+    };
+
+    const avancarStatus = async (entrega: Entrega, novoStatus: string) => {
+        setAcaoId(entrega.id);
+        try {
+            const payload: Record<string, unknown> = {};
+            if (novoStatus === 'em_rota') payload.motorista_id = (entrega as any).motorista_id ?? null;
+            const res = await deliveryService.atualizarStatus(entrega.id, novoStatus, payload);
+            if (res.success) {
+                toast.success(`Entrega ${entrega.codigo_rastreamento}: ${STATUS_CONFIG[novoStatus]?.label || novoStatus}`);
+                await carregarEntregas();
+            } else {
+                toast.error(res.error || 'Não foi possível atualizar a entrega');
+            }
+        } catch {
+            toast.error('Erro ao atualizar status da entrega');
+        } finally {
+            setAcaoId(null);
         }
     };
 
+    const cancelarEntrega = async (entrega: Entrega) => {
+        if (!window.confirm(`Cancelar a entrega ${entrega.codigo_rastreamento}?`)) return;
+        await avancarStatus(entrega, 'cancelada');
+    };
+
+    const entregasFiltradas = useMemo(() => {
+        const termo = busca.trim().toLowerCase();
+        if (!termo) return entregas;
+        return entregas.filter((e) =>
+            e.codigo_rastreamento?.toLowerCase().includes(termo) ||
+            e.cliente_nome?.toLowerCase().includes(termo) ||
+            e.endereco_bairro?.toLowerCase().includes(termo) ||
+            String((e as any).venda_id || '').includes(termo),
+        );
+    }, [entregas, busca]);
+
     return (
-        <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+        <div className="p-4 sm:p-6 space-y-6 max-w-[1600px] mx-auto">
             {/* Toolbar */}
             <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row gap-4 items-center justify-between">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Buscar por código ou cliente..."
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                        value={busca}
+                        onChange={(e) => setBusca(e.target.value)}
+                        placeholder="Buscar por código, cliente, venda ou bairro..."
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-transparent rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
                     />
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl">
-                        {['todos', 'pendente', 'em_rota', 'entregue'].map((s) => (
-                            <button
-                                key={s}
-                                onClick={() => setFiltroStatus(s)}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${filtroStatus === s
-                                    ? 'bg-white dark:bg-gray-800 shadow-sm text-blue-600'
+                <div className="flex bg-gray-50 dark:bg-gray-900 p-1 rounded-xl overflow-x-auto">
+                    {FILTROS.map((f) => (
+                        <button
+                            key={f.key}
+                            onClick={() => setFiltroStatus(f.key)}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                                filtroStatus === f.key
+                                    ? 'bg-white dark:bg-gray-800 shadow-sm text-primary-600'
                                     : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                    }`}
-                            >
-                                {s}
-                            </button>
-                        ))}
-                    </div>
-                    <button className="p-2 bg-gray-50 dark:bg-gray-900 rounded-xl hover:bg-gray-100 transition-colors">
-                        <Filter className="w-5 h-5 text-gray-600" />
-                    </button>
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Grid */}
+            {/* Grid de cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {loading ? (
                     Array(6).fill(0).map((_, i) => (
-                        <div key={i} className="h-64 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-3xl" />
+                        <div key={i} className="h-72 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-3xl" />
                     ))
-                ) : entregas.map((entrega) => (
-                    <div
-                        key={entrega.id}
-                        className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 transition-all group"
-                    >
-                        <div className="flex justify-between items-start mb-6">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusStyle(entrega.status)}`}>
-                                {entrega.status.replace('_', ' ')}
-                            </span>
-                            <button className="p-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                                <MoreVertical className="w-5 h-5 text-gray-400" />
-                            </button>
+                ) : entregasFiltradas.map((entrega) => {
+                    const cfg = STATUS_CONFIG[entrega.status] || STATUS_CONFIG.pendente;
+                    const passo = proximoPasso(entrega.status);
+                    const Icon = passo?.icon || Package;
+                    const ocupado = acaoId === entrega.id;
+                    const vendaId = (entrega as any).venda_id;
+
+                    return (
+                        <div
+                            key={entrega.id}
+                            className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all flex flex-col"
+                        >
+                            {/* Topo: status + venda vinculada */}
+                            <div className="flex justify-between items-start mb-4">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${cfg.classe}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                                    {cfg.label}
+                                </span>
+                                {vendaId && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-400">
+                                        <Receipt className="w-3.5 h-3.5" /> Venda #{vendaId}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Cliente em destaque (corrige a confusão de classificação) */}
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center text-primary-600 shrink-0">
+                                    <User className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="font-bold text-gray-900 dark:text-white text-base truncate">
+                                        {entrega.cliente_nome || 'Cliente não identificado'}
+                                    </h3>
+                                    <p className="text-xs text-gray-400 font-mono flex items-center gap-1">
+                                        <Hash className="w-3 h-3" /> {entrega.codigo_rastreamento}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Infos */}
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Truck className="w-3 h-3" /> Motorista
+                                    </p>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200 truncate">
+                                        {entrega.motorista_nome || 'A despachar'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> Previsão
+                                    </p>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">
+                                        {entrega.data_prevista
+                                            ? new Date(entrega.data_prevista).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                            : '--:--'}
+                                    </p>
+                                </div>
+                                <div className="col-span-2">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                        <MapPin className="w-3 h-3" /> Endereço
+                                    </p>
+                                    <p className="font-medium text-gray-600 dark:text-gray-300 text-xs truncate">
+                                        {(entrega as any).endereco_completo || entrega.endereco_bairro || 'Endereço não informado'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Taxa */}
+                            <div className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 dark:bg-gray-900/40 px-3 py-2">
+                                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                    <DollarSign className="w-3.5 h-3.5" /> Taxa de entrega
+                                </span>
+                                <span className="font-black text-gray-800 dark:text-white">
+                                    {formatCurrency(Number(entrega.taxa_entrega || 0))}
+                                </span>
+                            </div>
+
+                            {/* Ações que FUNCIONAM */}
+                            <div className="pt-4 mt-auto flex items-center gap-2">
+                                {passo ? (
+                                    <button
+                                        onClick={() => avancarStatus(entrega, passo.novo)}
+                                        disabled={ocupado}
+                                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-700 disabled:opacity-50"
+                                    >
+                                        {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+                                        {passo.label}
+                                    </button>
+                                ) : (
+                                    <div className="flex-1 text-center text-xs font-semibold text-gray-400 py-2.5">
+                                        {entrega.status === 'entregue' ? 'Entrega concluída' : 'Entrega encerrada'}
+                                    </div>
+                                )}
+
+                                {entrega.status !== 'entregue' && entrega.status !== 'cancelada' && (
+                                    <button
+                                        onClick={() => cancelarEntrega(entrega)}
+                                        disabled={ocupado}
+                                        title="Cancelar entrega"
+                                        className="inline-flex items-center justify-center rounded-xl border border-error-200 bg-error-50 px-3 py-2.5 text-error-600 transition hover:bg-error-100 disabled:opacity-50 dark:bg-error-900/20 dark:border-error-800"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600">
-                                    <Hash className="w-5 h-5" />
-                                </div>
-                                <h3 className="font-bold text-gray-900 dark:text-white text-lg">
-                                    {entrega.codigo_rastreamento}
-                                </h3>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 pt-2">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center">
-                                        <User className="w-3 h-3 mr-1" /> Motorista
-                                    </p>
-                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">
-                                        {entrega.motorista_nome || 'Não atribuído'}
-                                    </p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center">
-                                        <Calendar className="w-3 h-3 mr-1" /> Previsão
-                                    </p>
-                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                        {new Date(entrega.data_prevista).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                <div className="flex items-center text-xs text-gray-500">
-                                    <MapPin className="w-3.5 h-3.5 mr-1 text-gray-400" />
-                                    {entrega.endereco_bairro}
-                                </div>
-                                <button className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors group-hover:translate-x-1 duration-300">
-                                    DETALHES <ExternalLink className="w-3 h-3" />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
-            {!loading && entregas.length === 0 && (
+            {!loading && entregasFiltradas.length === 0 && (
                 <div className="py-24 text-center">
                     <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Search className="w-10 h-10 text-gray-300" />
+                        <Package className="w-10 h-10 text-gray-300" />
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">Nenhuma entrega encontrada</h3>
-                    <p className="text-gray-500">Tente mudar os filtros ou realizar uma nova busca.</p>
+                    <p className="text-gray-500">
+                        {busca ? 'Nenhum resultado para a busca.' : 'Crie uma nova entrega ou ajuste os filtros.'}
+                    </p>
                 </div>
             )}
         </div>
