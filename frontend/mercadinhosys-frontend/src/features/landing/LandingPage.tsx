@@ -133,26 +133,34 @@ const LandingPage: React.FC = () => {
 
     const handleDemoAccess = async () => {
         try {
-            showToast.loading('Preparando ambiente de demonstração de elite...');
-            const response = await fetch(`${API_CONFIG.BASE_URL}/auth/demo`, {
+            showToast.loading('Preparando ambiente de demonstração...');
+            const response = await fetch(`${API_CONFIG.BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                body: JSON.stringify({
+                    identifier: 'admin1',
+                    senha: 'admin123'
+                })
             });
 
             const result = await response.json();
 
-            if (response.ok && result.success && result.data) {
-                const { access_token, refresh_token, user, estabelecimento } = result.data;
-                sessionStorage.setItem('access_token', access_token);
+            if (response.ok && result.success) {
+                const { access_token, refresh_token, data } = result;
+                const user = data?.user;
+                const estabelecimento = data?.estabelecimento;
+
+                if (access_token) sessionStorage.setItem('access_token', access_token);
                 if (refresh_token) sessionStorage.setItem('refresh_token', refresh_token);
-                sessionStorage.setItem('user_data', JSON.stringify(user));
-                localStorage.setItem('estabelecimento_data', JSON.stringify(estabelecimento));
+                if (user) sessionStorage.setItem('user_data', JSON.stringify(user));
+                if (estabelecimento) localStorage.setItem('estabelecimento_data', JSON.stringify(estabelecimento));
+                
                 window.dispatchEvent(new Event('auth-change'));
 
                 showToast.dismiss();
-                showToast.info('Entrando como Convidado Específico...', { icon: '✨' });
+                showToast.info('Entrando no ambiente de demonstração...', { icon: '✨' });
 
                 // Redirecionar para o dashboard após breve delay
                 setTimeout(() => {
