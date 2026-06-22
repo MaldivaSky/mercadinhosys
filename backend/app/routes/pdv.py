@@ -687,7 +687,7 @@ def finalizar_venda():
             }
 
         data = request.get_json()
-        print(f"🔥 FINALIZAR PAYLOAD FRONTEND: {data}", flush=True)
+        current_app.logger.debug(f"[PDV] FINALIZAR payload: {list(data.keys()) if data else None}")
         if not data:
             return jsonify({"error": "Dados não fornecidos"}), 400
 
@@ -891,19 +891,32 @@ def finalizar_venda():
                 forma = (pagamento_info.get("forma") or pagamento_info.get("forma_pagamento") or "dinheiro")
                 valor = to_decimal(pagamento_info.get("valor", 0))
                 
-                if forma.lower() != "fiado":
+                forma_norm = forma.lower()
+                if forma_norm != "fiado":
                     mov_caixa = MovimentacaoCaixa(
                         caixa_id=caixa_aberto.id if caixa_aberto else None,
                         estabelecimento_id=funcionario_data.get("estabelecimento_id"),
                         tipo="venda",
                         valor=valor,
-                        forma_pagamento=forma,
+                        forma_pagamento=forma_norm,
                         venda_id=nova_venda.id,
-                        descricao=f"Venda PDV {codigo_venda} - {forma}"
+                        descricao=f"Venda PDV {codigo_venda} - {forma_norm}"
                     )
                     db.session.add(mov_caixa)
-                    
-                    if forma.lower() == "dinheiro" and caixa_aberto:
+                else:
+                    # Fiado: registra na auditoria do caixa sem afetar saldo em dinheiro
+                    mov_fiado = MovimentacaoCaixa(
+                        caixa_id=caixa_aberto.id if caixa_aberto else None,
+                        estabelecimento_id=funcionario_data.get("estabelecimento_id"),
+                        tipo="fiado",
+                        valor=valor,
+                        forma_pagamento="fiado",
+                        venda_id=nova_venda.id,
+                        descricao=f"Venda PDV {codigo_venda} - fiado (a receber)"
+                    )
+                    db.session.add(mov_fiado)
+
+                if forma_norm == "dinheiro" and caixa_aberto:
                         # LÓGICA DE TROCO: O troco é subtraído prioritariamente da entrada em dinheiro
                         entrada_dinheiro = float(valor)
                         if troco_calculado > 0:
@@ -1343,9 +1356,9 @@ def enviar_cupom_email():
             }
         }
         
-        current_app.logger.info(f"🚀 [EMAIL DEBUG] Destino: {email_final}")
-        current_app.logger.info(f"🚀 [EMAIL DEBUG] Endereço Final: {endereco_completo}")
-        current_app.logger.info(f"🚀 [EMAIL DEBUG] Has Logo? {'Sim' if logo_base64 else 'Não'} (Size: {len(logo_base64) if logo_base64 else 0})")
+        current_app.logger.info(f"[EMAIL] Destino: {email_final}")
+        current_app.logger.info(f"[EMAIL] Endereco: {endereco_completo}")
+        current_app.logger.info(f"[EMAIL] Logo: {'sim' if logo_base64 else 'nao'} ({len(logo_base64) if logo_base64 else 0} bytes)")
         
         sucesso, erro_email = enviar_cupom_fiscal(dados_formatados, email_final)
         

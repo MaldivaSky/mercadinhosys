@@ -75,15 +75,78 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
         } finally { setLoading(false); }
     };
 
+    const imprimirRelatorioCaixa = (resumo: any, caixa: any, valorContado: number) => {
+        const fmt = (v: number) => `R$ ${Number(v || 0).toFixed(2).replace('.', ',')}`;
+        const agora = new Date().toLocaleString('pt-BR');
+        const formas: Record<string, string> = {
+            dinheiro: 'Dinheiro', cartao_debito: 'Cartao Debito', cartao_credito: 'Cartao Credito',
+            pix: 'PIX', fiado: 'Fiado', outros: 'Outros',
+        };
+        const linhasForma = Object.entries(resumo?.por_forma_pagamento || {})
+            .map(([f, d]: any) => `<tr><td>${formas[f] || f}</td><td>${d.quantidade}</td><td style="text-align:right">${fmt(d.total)}</td></tr>`)
+            .join('');
+
+        const diferenca = valorContado - (resumo?.saldo_esperado_gaveta || 0);
+        const difCor = diferenca >= 0 ? '#16a34a' : '#dc2626';
+
+        const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatorio de Caixa</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:13px}
+  h1{font-size:16px;font-weight:900;margin:0 0 4px}
+  h2{font-size:13px;color:#475569;font-weight:600;margin:0 0 16px}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px}
+  th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;font-size:11px}
+  td{padding:5px 8px;border-bottom:1px solid #e2e8f0}
+  .total-row td{font-weight:900;background:#f8fafc;border-top:2px solid #1e293b}
+  .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kv{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9}
+  .kv:last-child{border-bottom:none}
+  .label{color:#64748b}
+  .value{font-weight:700}
+  .dif{color:${difCor};font-size:16px;font-weight:900;text-align:center;padding:8px;background:#f8fafc;border:2px solid ${difCor};border-radius:8px;margin-top:12px}
+  @media print{body{padding:0}button{display:none}}
+</style></head><body>
+<h1>Relatorio de Fechamento de Caixa</h1>
+<h2>Emitido em: ${agora}</h2>
+<div class="box">
+  <div class="kv"><span class="label">Operador</span><span class="value">${caixa?.funcionario_nome || 'N/D'}</span></div>
+  <div class="kv"><span class="label">Caixa Nro</span><span class="value">${caixa?.numero_caixa || caixa?.id || 'N/D'}</span></div>
+  <div class="kv"><span class="label">Abertura</span><span class="value">${caixa?.data_abertura ? new Date(caixa.data_abertura).toLocaleString('pt-BR') : 'N/D'}</span></div>
+  <div class="kv"><span class="label">Fechamento</span><span class="value">${agora}</span></div>
+</div>
+<table><thead><tr><th>Forma</th><th>Qtd</th><th style="text-align:right">Total</th></tr></thead>
+<tbody>${linhasForma}</tbody>
+<tfoot><tr class="total-row"><td>TOTAL VENDAS</td><td></td><td style="text-align:right">${fmt(resumo?.total_vendas)}</td></tr></tfoot>
+</table>
+<div class="box">
+  <div class="kv"><span class="label">Troco inicial (abertura)</span><span class="value">${fmt(resumo?.saldo_inicial)}</span></div>
+  <div class="kv"><span class="label">Suprimentos</span><span class="value">+ ${fmt(resumo?.total_suprimentos)}</span></div>
+  <div class="kv"><span class="label">Sangrias</span><span class="value">- ${fmt(resumo?.total_sangrias)}</span></div>
+  <div class="kv"><span class="label">Esperado na gaveta</span><span class="value">${fmt(resumo?.saldo_esperado_gaveta)}</span></div>
+  <div class="kv"><span class="label">Contado pelo operador</span><span class="value">${fmt(valorContado)}</span></div>
+</div>
+<div class="dif">Diferenca: ${diferenca >= 0 ? '+' : ''}${fmt(diferenca)}</div>
+<script>window.onload=()=>window.print()</script>
+</body></html>`;
+
+        const win = window.open('', '_blank', 'width=700,height=900');
+        if (win) { win.document.write(html); win.document.close(); }
+    };
+
     const handleFechamento = async (e: React.FormEvent) => {
         e.preventDefault();
         const val = parseFloat(valorFechamento.replace(',', '.'));
         if (isNaN(val) || valorFechamento.trim() === '') return showToast.error('Informe o valor em dinheiro no caixa.');
         try {
             setLoading(true);
-            await pdvService.fecharCaixa(val);
+            const resp = await pdvService.fecharCaixa(val);
+            // Imprimir relatório com os dados retornados pelo backend
+            const resumoFinal = resp?.resumo_fechamento || resumoCaixa;
+            imprimirRelatorioCaixa(resumoFinal, caixaAtual, val);
             setCaixaAtual(null);
-            showToast.success('Caixa fechado com sucesso!');
+            showToast.success('Caixa fechado! Relatório enviado para impressão.');
             onClose();
         } catch (err: any) {
             showToast.error(err.response?.data?.error || 'Erro ao fechar caixa');

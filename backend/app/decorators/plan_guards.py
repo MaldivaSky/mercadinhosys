@@ -135,64 +135,49 @@ def quota_required(model_name):
 
 def permission_required(resource):
     """
-    Decorator para validar permissão de acesso ao recurso baseada no cargo e plano.
-    Garante que o 'Caixa' tenha acessos diferentes no Gratuito vs Pro.
+    Decorator para validar permissão de acesso ao recurso.
+    Usa a RBAC_MATRIX de rbac.py para verificar o nível do usuário.
+    Super Admin e Admin (nível 1) sempre têm acesso.
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            from flask_jwt_extended import verify_jwt_in_request
+            from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
             verify_jwt_in_request()
             claims = get_jwt()
-            
-            # 1. Admin/Super Admin Bypass (Total e Insensível a Maiúsculas)
-            role = (claims.get('role') or '').upper()
-            is_admin_role = role in ['ADMIN', 'ADMINISTRADOR', 'PROPRIETARIO', 'GERENTE', 'DONO', 'MASTER']
-            if claims.get('is_super_admin') or is_admin_role:
+
+            # Super Admin bypass total
+            if claims.get('is_super_admin'):
                 return f(*args, **kwargs)
 
-            # 2. Obter Plano Atual (Tempo Real)
-            try:
-                from app.models import Estabelecimento
-                est_id = claims.get('estabelecimento_id')
-                est = Estabelecimento.query.get(est_id)
-                plano = (est.plano or 'Gratuito').title()
-                
-                # Normalização Premium
-                if plano in ['Pro', 'Enterprise', 'Premium', 'Advanced']:
-                    plano = 'Premium'
-                else:
-                    plano = 'Gratuito'
-            except:
-                plano = claims.get('plano', 'Gratuito').title()
+            # Admin/Gerente bypass via claims (evita query desnecessária em rotas quentes)
+            role = (claims.get('role') or '').upper()
+            is_admin_role = role in ['ADMIN', 'ADMINISTRADOR', 'PROPRIETARIO', 'DONO', 'MASTER', 'GERENTE', 'SUPERVISOR']
+            if is_admin_role:
+                return f(*args, **kwargs)
 
-            role = (claims.get('role') or '').lower()
-            
-            # 3. REGRAS POR CARGO (Mapeamento solicitado pelo usuário)
-            if role == 'caixa':
-                # No Gratuito: PDV, Clientes, Vendas
-                # No Premium: PDV, Clientes, Vendas + Ponto
-                allowed_gratuito = ['pdv', 'clientes', 'vendas', 'gestao_caixa']
-                allowed_premium = ['pdv', 'clientes', 'vendas', 'gestao_caixa', 'ponto']
-                
-                allowed_list = allowed_premium if plano == 'Premium' else allowed_gratuito
-                
-                if resource not in allowed_list:
+            # Verificação via RBAC_MATRIX com nível do usuário
+            try:
+                from app.models import Funcionario
+                from app.decorators.rbac import ROLE_TO_NIVEL, RBAC_MATRIX, NIVEL_LABELS
+                user_id = get_jwt_identity()
+                user = Funcionario.query.get(int(user_id))
+                if not user:
+                    return jsonify({"success": False, "error": "Usuário não encontrado"}), 401
+
+                nivel = ROLE_TO_NIVEL.get((user.role or 'FUNCIONARIO').upper(), 3)
+                allowed = RBAC_MATRIX.get(resource, set())
+
+                if nivel not in allowed and 0 not in allowed:
+                    label = NIVEL_LABELS.get(nivel, str(nivel))
                     return jsonify({
                         "success": False,
-                        "error": f"Acesso Negado: O cargo 'Caixa' no Plano {plano} não tem permissão para acessar '{resource}'."
+                        "error": f"Acesso negado. O cargo '{label}' não tem permissão para '{resource}'."
                     }), 403
-            
-            # 4. Outros cargos no Plano Premium (Estoque, Gerente) liberados
-            if plano == 'Premium':
-                return f(*args, **kwargs)
-            
-            # 5. No Plano Gratuito, recursos avançados (Ponto) negados para todos
-            if resource == 'ponto' and plano == 'Gratuito':
-                return jsonify({
-                    "success": False,
-                    "error": "O Controle de Ponto está disponível apenas no Plano Premium."
-                }), 403
+            except Exception as e:
+                from flask import current_app
+                current_app.logger.error(f"[permission_required] Erro: {e}")
+                return jsonify({"success": False, "error": "Erro de autorização"}), 500
 
             return f(*args, **kwargs)
         return decorated_function
