@@ -65,110 +65,60 @@ def _upsert(session, model, data, pk_field="id"):
 @sync_bp.route("/api/sync/replicar", methods=["POST"])
 @gerente_ou_admin_required
 def replicar_para_neon():
+    """
+    Sincroniza local -> Aiven usando o motor BULK (force_sync): execute_values
+    em lotes de 1000 com upsert idempotente e guard de updated_at.
+    Substitui o antigo upsert linha-a-linha que estourava timeout em bases grandes.
+    """
     try:
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        funcionario_id = int(get_jwt_identity())
 
         db_url = _resolve_remote_db_url()
         if not db_url:
             return jsonify({"success": False, "message": "Banco cloud nao configurado"}), 400
 
-        engine = create_engine(db_url)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-
-        RemoteSession = sessionmaker(bind=engine)
-        remote_session = RemoteSession()
-
-        db.metadata.create_all(engine)
-
-        models = [
-            Estabelecimento,
-            Funcionario,
-            Cliente,
-            Fornecedor,
-            CategoriaProduto,
-            Produto,
-            Venda,
-            VendaItem,
-            Pagamento,
-            MovimentacaoEstoque,
-            Despesa,
-        ]
-
-        since = request.args.get("since")
         sync_log = SyncQueue(
-            estabelecimento_id=estabelecimento_id,
+            estabelecimento_id=estabelecimento_id or 0,
             tabela="sync_replicar",
             registro_id=0,
             operacao="replicar_para_neon",
-            payload_json=json.dumps({"since": since}),
+            payload_json=json.dumps({"engine": "force_sync_bulk"}),
             status="sincronizando",
             created_at=datetime.now(timezone.utc),
         )
         db.session.add(sync_log)
         db.session.commit()
 
-        resultado = {}
         try:
-            since_dt = None
-            if since:
-                try:
-                    since_dt = datetime.fromisoformat(since)
-                except Exception:
-                    sync_log.status = "erro"
-                    sync_log.mensagem_erro = "Parâmetro 'since' inválido"
-                    sync_log.synced_at = datetime.now(timezone.utc)
-                    db.session.commit()
-                    return jsonify({"success": False, "message": "Parâmetro 'since' inválido"}), 400
-
-            with remote_session.begin():
-                for model in models:
-                    query = db.session.query(model)
-                    if since_dt:
-                        ts_field = None
-                        if hasattr(model, "updated_at"):
-                            ts_field = getattr(model, "updated_at")
-                        elif hasattr(model, "created_at"):
-                            ts_field = getattr(model, "created_at")
-                        if ts_field is not None:
-                            query = query.filter(ts_field >= since_dt)
-                    rows = query.all()
-
-                    inseridos = 0
-                    atualizados = 0
-                    for r in rows:
-                        data = _clone_data(r)
-                        updated = _upsert(remote_session, model, data)
-                        if updated:
-                            atualizados += 1
-                        else:
-                            inseridos += 1
-
-                    resultado[model.__tablename__] = {
-                        "inseridos": inseridos,
-                        "atualizados": atualizados,
-                        "total_local": len(rows),
-                    }
-
-            sync_log.status = "sincronizado"
-            sync_log.payload_json = json.dumps(resultado, ensure_ascii=False)
-            sync_log.synced_at = datetime.now(timezone.utc)
-            db.session.commit()
-
-            return jsonify({"success": True, "resultado": resultado, "sync_log_id": sync_log.id}), 200
+            from scripts.force_sync_to_aiven import force_sync
+            resultado = force_sync(app=current_app._get_current_object(), silent=True)
         except Exception as e:
-            remote_session.rollback()
             sync_log.status = "erro"
             sync_log.mensagem_erro = str(e)[:2000]
             sync_log.synced_at = datetime.now(timezone.utc)
             db.session.commit()
-            raise
+            return jsonify({"success": False, "message": f"Erro ao replicar: {str(e)}"}), 500
+
+        if not resultado.get("success"):
+            sync_log.status = "erro"
+            sync_log.mensagem_erro = str(resultado.get("erro", "falha"))[:2000]
+            sync_log.synced_at = datetime.now(timezone.utc)
+            db.session.commit()
+            return jsonify({"success": False, "message": resultado.get("erro", "Falha na sincronização")}), 500
+
+        sync_log.status = "sincronizado"
+        sync_log.payload_json = json.dumps(resultado, ensure_ascii=False)
+        sync_log.synced_at = datetime.now(timezone.utc)
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": f"{resultado.get('total_registros', 0)} registros sincronizados com o Aiven.",
+            "total_registros": resultado.get("total_registros", 0),
+            "sync_log_id": sync_log.id,
+        }), 200
 
     except SQLAlchemyError as e:
-        if 'remote_session' in locals():
-            remote_session.rollback()
         return jsonify({"success": False, "message": f"Erro SQLAlchemy: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao replicar: {str(e)}"}), 500
