@@ -20,9 +20,22 @@ export default defineConfig(() => {
       },
     },
     server: {
-      port: 5173,
-      host: true,
-      strictPort: true, // Força usar porta 5173
+      port: 5173,           // porta INTERNA do container
+      host: true,           // escuta em 0.0.0.0 (necessário no Docker)
+      strictPort: true,
+      // Detecta mudanças de arquivo dentro do Docker (Windows/WSL precisa de polling)
+      watch: {
+        usePolling: true,
+        interval: 100,
+      },
+      // HMR (hot reload) através do Docker:
+      // o navegador acessa pela porta do HOST (ex.: 80), então o cliente HMR
+      // precisa abrir o WebSocket nessa mesma porta — não na porta interna 5173.
+      hmr: {
+        host: 'localhost',
+        clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) || 80,
+        protocol: 'ws',
+      },
       proxy: {
         '/api': {
           target: apiTarget,
