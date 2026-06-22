@@ -397,11 +397,12 @@ export const pdvService = {
 
     abrirCaixa: async (saldo_inicial: number, observacoes?: string): Promise<CaixaPDV> => {
         const response = await apiClient.post<any>('/caixas/abrir', { saldo_inicial, observacoes });
-        return response.data.caixa;
+        return response.data.data;
     },
 
     fecharCaixa: async (valor_informado: number, observacoes?: string): Promise<any> => {
         const response = await apiClient.post<any>('/caixas/fechar', { valor_informado, observacoes });
+        // Retorna o objeto completo: { success, message, data, resumo_fechamento }
         return response.data;
     },
 

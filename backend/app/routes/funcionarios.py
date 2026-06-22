@@ -959,8 +959,22 @@ def detalhes_funcionario(id):
         )
 
 
-# Os endpoints POST, PUT, DELETE, login e verificar-pin permanecem os mesmos
-# (mantendo o código original para esses métodos)
+@funcionarios_bp.route("/niveis", methods=["GET"])
+@jwt_required()
+def listar_niveis_acesso():
+    """Retorna a hierarquia de níveis de acesso disponível no sistema."""
+    from app.decorators.rbac import NIVEL_LABELS, RBAC_MATRIX, ROLE_TO_NIVEL
+
+    niveis = [
+        {
+            "nivel": n,
+            "label": label,
+            "role": next((r for r, v in ROLE_TO_NIVEL.items() if v == n), ""),
+            "recursos": sorted([rec for rec, lvls in RBAC_MATRIX.items() if n in lvls]),
+        }
+        for n, label in NIVEL_LABELS.items()
+    ]
+    return jsonify({"success": True, "data": niveis}), 200
 
 
 @funcionarios_bp.route("/", methods=["POST"], strict_slashes=False)
@@ -1082,9 +1096,14 @@ def criar_funcionario():
             ),
             # data_demissao removido do modelo
             username=usuario,
-            role=data.get("nivel_acesso") or data.get("role", "FUNCIONARIO"),
+            role=data.get("role") or data.get("nivel_acesso", "FUNCIONARIO"),
             ativo=data.get("ativo", True),
         )
+
+        # Sincronizar nivel_acesso inteiro com o role
+        from app.decorators.rbac import ROLE_TO_NIVEL
+        role_upper = (novo_funcionario.role or "FUNCIONARIO").upper()
+        novo_funcionario.nivel_acesso = ROLE_TO_NIVEL.get(role_upper, 3)
 
         # Definir senha
         novo_funcionario.set_senha(data["senha"])

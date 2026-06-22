@@ -357,6 +357,8 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
     senha = db.Column(db.String(255), nullable=False)
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
+    # nivel_acesso: 1=Admin, 2=Gerente, 3=Caixa, 4=Estoque, 5=RH, 6=Entregador
+    nivel_acesso = db.Column(db.Integer, default=3)
     status = db.Column(db.String(20), default="ativo")
     is_super_admin = db.Column(db.Boolean, default=False)
     permissoes = db.Column(db.JSON, default=lambda: {"pdv": True, "estoque": True, "compras": False, "financeiro": False, "configuracoes": False})
@@ -648,8 +650,10 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     classificacao_abc = db.Column(db.String(1))
     data_fabricacao = db.Column(db.Date)
     data_validade = db.Column(db.Date)
+    data_compra = db.Column(db.Date)        # data do pedido de compra ao fornecedor
+    data_recebimento = db.Column(db.Date)   # data em que a mercadoria chegou ao estoque
     lote = db.Column(db.String(50))
-    imagem_url = db.Column(db.String(255))
+    imagem_url = db.Column(db.String(500))  # ampliado de 255 para suportar URLs longas
     controlar_validade = db.Column(db.Boolean, default=True)
     ativo = db.Column(db.Boolean, default=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
