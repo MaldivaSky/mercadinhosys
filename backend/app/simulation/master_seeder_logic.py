@@ -8,9 +8,10 @@ from flask import g
 
 class MasterSeeder:
     @staticmethod
-    def run_master_generation(app, months=6):
+    def run_master_generation(app, months=6, fetch_cosmos=False):
         """
         Orquestração Master: HQ, Super Admin e Povoamento Industrial de Cenários.
+        fetch_cosmos=True consulta a API Cosmos (1x) para enriquecer os EANs reais.
         """
         print("[MASTER SEEDER] - INICIANDO ENGENHARIA DE DADOS INDUSTRIAL")
         
@@ -45,6 +46,7 @@ class MasterSeeder:
                 username="maldivas",
                 cargo="SUPER ADMIN",
                 role="ADMIN",
+                nivel_acesso=1,
                 is_super_admin=True,  # FIX: campo obrigatório para acesso superadmin
                 status="ativo",
                 cpf="00000000000",
@@ -111,8 +113,9 @@ class MasterSeeder:
                     estabelecimento_id=est.id,
                     nome=f"Dono {config['id'].upper()}",
                     username=config['id'],
-                    cargo="Gerente Geral",
+                    cargo="Proprietário",
                     role="ADMIN",
+                    nivel_acesso=1,
                     cpf=RealisticInjector.generate_cpf(),
                     email=f"{config['id']}@negocio.com",
                     celular="(92) 98888-0000",
@@ -132,7 +135,10 @@ class MasterSeeder:
                     nome=f"Operador {config['caixa'].upper()}",
                     username=config['caixa'],
                     cargo="Caixa PDV",
-                    role="FUNCIONARIO",
+                    role="CAIXA",
+                    nivel_acesso=3,
+                    salario_base=1600,
+                    salario=1600,
                     cpf=RealisticInjector.generate_cpf(),
                     email=f"{config['caixa']}@negocio.com",
                     celular="(92) 97777-0000",
@@ -150,10 +156,10 @@ class MasterSeeder:
             g.estabelecimento_id = est.id
             
             # Base Operacional
-            RealisticInjector.inject_all_modules(est.id)
+            RealisticInjector.inject_all_modules(est.id, fetch_cosmos=fetch_cosmos)
             
             # Motor de História
-            print(f"📈 Rodando motor de simulação por {config['meses']} meses...")
+            print(f"[MOTOR] Rodando motor de simulação por {config['meses']} meses...")
             simulator.simulate_history(est, dna, config['meses'], dono.id)
             
-        print("\n🏆 [MAGNITUDE SÊNIOR] SEED CONCLUÍDA COM SUCESSO!")
+        print("\n[SEED] [MAGNITUDE SÊNIOR] SEED CONCLUÍDA COM SUCESSO!")

@@ -25,7 +25,8 @@ from app.models import (
     PedidoCompraItem,
     HistoricoPrecos,
     Despesa,
-    Auditoria
+    Auditoria,
+    CatalogoMestre,
 )
 from app.utils import calcular_margem_lucro, formatar_codigo_barras
 from app.decorators.decorator_jwt import funcionario_required
@@ -216,6 +217,143 @@ def buscar_cosmos_gtin(gtin):
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"Erro ao conectar com API Cosmos: {str(e)}")
         return jsonify({"success": False, "message": "Erro de conexão com o serviço Cosmos"}), 502
+
+
+# ============================================
+# CATÁLOGO MESTRE (alimentado pelo harvester Cosmos)
+# ============================================
+
+@produtos_bp.route("/catalogo/buscar/<ean>", methods=["GET"])
+@funcionario_required
+def catalogo_buscar_ean(ean):
+    """
+    Busca um produto no catálogo mestre por EAN — SEM consumir quota Cosmos.
+    Usado no cadastro rápido: preenche nome, marca, NCM, categoria e imagem.
+    """
+    ean_limpo = "".join(c for c in str(ean) if c.isdigit())
+    item = CatalogoMestre.query.filter_by(ean=ean_limpo, status="encontrado").first()
+    if not item:
+        return jsonify({"success": False, "message": "EAN não encontrado no catálogo mestre"}), 404
+    return jsonify({"success": True, "data": item.to_dict()}), 200
+
+
+@produtos_bp.route("/catalogo", methods=["GET"])
+@funcionario_required
+def catalogo_listar():
+    """Lista/pesquisa o catálogo mestre (para importação em massa)."""
+    busca = (request.args.get("busca") or "").strip()
+    categoria = request.args.get("categoria")
+    pagina = request.args.get("pagina", 1, type=int)
+    por_pagina = min(request.args.get("por_pagina", 50, type=int), 200)
+
+    query = CatalogoMestre.query.filter_by(status="encontrado")
+    if busca:
+        like = f"%{busca}%"
+        query = query.filter(or_(CatalogoMestre.nome.ilike(like),
+                                 CatalogoMestre.marca.ilike(like),
+                                 CatalogoMestre.ean.ilike(like)))
+    if categoria:
+        query = query.filter(CatalogoMestre.categoria == categoria)
+
+    pag = query.order_by(CatalogoMestre.nome.asc()).paginate(page=pagina, per_page=por_pagina, error_out=False)
+    return jsonify({
+        "success": True,
+        "data": [i.to_dict() for i in pag.items],
+        "total": pag.total, "pagina": pagina, "por_pagina": por_pagina,
+    }), 200
+
+
+@produtos_bp.route("/catalogo/importar", methods=["POST"])
+@funcionario_required
+@permission_required("produtos")
+def catalogo_importar():
+    """
+    Importa em massa produtos do catálogo mestre para o estoque da loja.
+    Body: { "eans": [...], "fornecedor_id": int (opcional), "margem": float (opcional) }
+    Não consome quota Cosmos. Pula EANs já cadastrados na loja.
+    """
+    estabelecimento_id = get_authorized_establishment_id()
+    if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
+        return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
+
+    data = request.get_json() or {}
+    eans = data.get("eans") or []
+    fornecedor_id = data.get("fornecedor_id")
+    margem = Decimal(str(data.get("margem", 35)))
+    if not eans:
+        return jsonify({"success": False, "error": "Nenhum EAN informado"}), 400
+
+    # Categoria default da loja (garante categoria_id obrigatório)
+    cat_padrao = CategoriaProduto.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+    if not cat_padrao:
+        cat_padrao = CategoriaProduto(estabelecimento_id=estabelecimento_id, nome="Geral")
+        db.session.add(cat_padrao)
+        db.session.flush()
+
+    cat_cache = {}
+    def resolver_categoria(nome):
+        if not nome:
+            return cat_padrao
+        if nome not in cat_cache:
+            c = CategoriaProduto.query.filter_by(estabelecimento_id=estabelecimento_id, nome=nome).first()
+            if not c:
+                c = CategoriaProduto(estabelecimento_id=estabelecimento_id, nome=nome)
+                db.session.add(c)
+                db.session.flush()
+            cat_cache[nome] = c
+        return cat_cache[nome]
+
+    importados, pulados = 0, 0
+    for ean in eans:
+        ean_limpo = "".join(c for c in str(ean) if c.isdigit())
+        item = CatalogoMestre.query.filter_by(ean=ean_limpo, status="encontrado").first()
+        if not item:
+            pulados += 1
+            continue
+        # Não duplicar produto já existente na loja
+        existe = Produto.query.filter_by(estabelecimento_id=estabelecimento_id, codigo_barras=ean_limpo).first()
+        if existe:
+            pulados += 1
+            continue
+
+        preco_ref = item.preco_referencia or Decimal("0")
+        if preco_ref and preco_ref > 0:
+            preco_venda = preco_ref
+            preco_custo = (preco_ref / (1 + margem / 100)).quantize(Decimal("0.01"))
+        else:
+            preco_custo = Decimal("0.01")
+            preco_venda = Decimal("0.01")
+
+        novo = Produto(
+            estabelecimento_id=estabelecimento_id,
+            categoria_id=resolver_categoria(item.categoria).id,
+            fornecedor_id=fornecedor_id,
+            nome=item.nome or f"Produto {ean_limpo}",
+            descricao=f"Importado do catálogo mestre ({item.marca or 'sem marca'}).",
+            marca=item.marca or "",
+            fabricante=item.fabricante or item.marca or "",
+            unidade_medida=item.unidade or "UN",
+            codigo_barras=ean_limpo,
+            codigo_interno=f"CAT-{ean_limpo[-6:]}",
+            preco_custo=preco_custo,
+            preco_venda=preco_venda,
+            margem_lucro=margem,
+            quantidade=0,
+            quantidade_minima=Decimal("10"),
+            ncm=item.ncm or "00000000",
+            controlar_validade=True,
+            ativo=True,
+            imagem_url=item.imagem_url or "",
+        )
+        db.session.add(novo)
+        importados += 1
+
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "message": f"{importados} produto(s) importado(s), {pulados} ignorado(s).",
+        "importados": importados, "pulados": pulados,
+    }), 200
 
 
 @produtos_bp.route("/bulk-update-prices", methods=["POST"], strict_slashes=False)

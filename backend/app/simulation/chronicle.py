@@ -24,13 +24,13 @@ class ChronicleSimulator:
         self.app = app
 
     def run_full_simulation(self, months=6):
-        print(f"🚀 [GEMEO DIGITAL] Iniciando Simulação Master de {months} meses...")
+        print(f"[SIM] [GEMEO DIGITAL] Iniciando Simulação Master de {months} meses...")
         DNAFactory.create_simulation_tenants()
         all_ests = DNAFactory.get_all_tenants()
         
         for est in all_ests:
             dna = self._identify_dna(est)
-            print(f"\n🏢 {est.nome_fantasia} (ID: {est.id}) | DNA: {dna.nome}")
+            print(f"\n[TENANT] {est.nome_fantasia} (ID: {est.id}) | DNA: {dna.nome}")
             RealisticInjector.inject_all_modules(est.id)
             
             admin = Funcionario.query.filter_by(estabelecimento_id=est.id, role="ADMIN").first()
@@ -38,7 +38,7 @@ class ChronicleSimulator:
             
             self.simulate_history(est, dna, months, admin.id)
         
-        print("\n🎉 [GEMEO DIGITAL] Simulação Master Concluída!")
+        print("\n[OK] [GEMEO DIGITAL] Simulação Master Concluída!")
 
     def _identify_dna(self, est):
         for key, d in DNAFactory.SCENARIOS.items():
@@ -49,7 +49,7 @@ class ChronicleSimulator:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=months * 30)
         
-        print(f"   ⏳ Gerando {months*30} dias de transações...")
+        print(f"   [...] Gerando {months*30} dias de transações...")
         
         batch_size = 30
         days_to_simulate = months * 30
@@ -64,7 +64,7 @@ class ChronicleSimulator:
                     self._liquidate_financeiro(est, curr_dt)
             
             db.session.commit()
-            print(f"   📅 {curr_dt.strftime('%d/%m/%Y')} concluído...")
+            print(f"   [DIA] {curr_dt.strftime('%d/%m/%Y')} concluído...")
 
     def _liquidate_financeiro(self, est, curr_dt):
         """Simula o recebimento de fiados e pagamento de fornecedores."""
@@ -104,6 +104,13 @@ class ChronicleSimulator:
         db.session.add(caixa)
         db.session.flush()
 
+        # 1.1 Movimentação de abertura (saldo inicial / troco)
+        db.session.add(MovimentacaoCaixa(
+            caixa_id=caixa.id, estabelecimento_id=est.id, tipo="abertura",
+            valor=caixa.saldo_inicial, forma_pagamento="dinheiro",
+            descricao="Abertura de Caixa (troco inicial)", created_at=abertura_ts
+        ))
+
         # 2. RH: Ponto
         if wd < 6:
             funcs = Funcionario.query.filter_by(estabelecimento_id=est.id, ativo=True).all()
@@ -117,18 +124,12 @@ class ChronicleSimulator:
                     hora=time(18, random.randint(0,15)), tipo_registro="saida", status="normal"
                 ))
 
-        # 3. FINANCEIRO: Despesas Fixas (Dia 1)
+        # 3. FINANCEIRO: Despesas mensais (Dia 1)
         if day == 1:
-            db.session.add(Despesa(
-                estabelecimento_id=est.id, descricao="Aluguel Mensal", categoria="Fixo", 
-                valor=Decimal("2500.00"), data_despesa=dt.date()
-            ))
-            # Despesas Desnecessárias (Magnitude Sênior)
-            if random.random() < 0.3:
-                db.session.add(Despesa(
-                    estabelecimento_id=est.id, descricao="Assinatura Software Gourmet", 
-                    categoria="Variavel", valor=Decimal("450.00"), data_despesa=dt.date()
-                ))
+            self._gerar_despesas_mensais(est, dt)
+
+        # 3.1 Despesas variáveis esporádicas (manutenção, marketing, desnecessárias)
+        self._gerar_despesas_esporadicas(est, dt)
 
         # 4. REABASTECIMENTO (Se o estoque estiver baixo)
         if day % 7 == 0: # Checagem semanal
@@ -174,6 +175,95 @@ class ChronicleSimulator:
             created_at=fechamento_ts
         ))
 
+    def _gerar_despesas_mensais(self, est, dt):
+        """Despesas FIXAS mensais: aluguel, folha de pagamento, benefícios, contador."""
+        d = dt.date()
+
+        # Aluguel
+        db.session.add(Despesa(
+            estabelecimento_id=est.id, descricao="Aluguel do ponto comercial",
+            categoria="Aluguel", tipo="fixa", valor=Decimal("2500.00"),
+            data_despesa=d, recorrente=True, forma_pagamento="boleto"
+        ))
+
+        # Folha de pagamento (soma dos salários do time)
+        funcs = Funcionario.query.filter_by(estabelecimento_id=est.id, ativo=True).all()
+        total_folha = sum((Decimal(str(f.salario_base or 0)) for f in funcs), Decimal("0"))
+        if total_folha > 0:
+            db.session.add(Despesa(
+                estabelecimento_id=est.id, descricao=f"Folha de pagamento ({len(funcs)} funcionários)",
+                categoria="Folha de Pagamento", tipo="fixa", valor=total_folha,
+                data_despesa=d, recorrente=True, forma_pagamento="transferencia"
+            ))
+
+        # Benefícios (VT + VA + plano de saúde) por funcionário
+        total_beneficios = Decimal("0")
+        for f in funcs:
+            for fb in FuncionarioBeneficio.query.filter_by(estabelecimento_id=est.id, funcionario_id=f.id, ativo=True).all():
+                total_beneficios += Decimal(str(fb.valor or 0))
+        if total_beneficios > 0:
+            db.session.add(Despesa(
+                estabelecimento_id=est.id, descricao="Benefícios (VT, VA, Plano de Saúde)",
+                categoria="Benefícios", tipo="fixa", valor=total_beneficios,
+                data_despesa=d, recorrente=True, forma_pagamento="boleto"
+            ))
+
+        # Contador / contabilidade
+        db.session.add(Despesa(
+            estabelecimento_id=est.id, descricao="Honorários contábeis",
+            categoria="Administrativa", tipo="fixa", valor=Decimal("600.00"),
+            data_despesa=d, recorrente=True, forma_pagamento="boleto"
+        ))
+
+        # Energia e água (consumo do mês)
+        db.session.add(Despesa(
+            estabelecimento_id=est.id, descricao="Energia elétrica e água",
+            categoria="Utilidades", tipo="variavel",
+            valor=Decimal(str(round(random.uniform(800, 1800), 2))),
+            data_despesa=d, recorrente=True, forma_pagamento="boleto"
+        ))
+
+    def _gerar_despesas_esporadicas(self, est, dt):
+        """Despesas VARIÁVEIS esporádicas — incluindo gastos desnecessários para o BI sinalizar."""
+        d = dt.date()
+
+        # Manutenção (2% dos dias)
+        if random.random() < 0.02:
+            db.session.add(Despesa(
+                estabelecimento_id=est.id,
+                descricao=random.choice(["Conserto de freezer", "Manutenção de balança", "Troca de lâmpadas", "Reparo no ar-condicionado"]),
+                categoria="Manutenção", tipo="variavel",
+                valor=Decimal(str(round(random.uniform(150, 900), 2))),
+                data_despesa=d, forma_pagamento="pix"
+            ))
+
+        # Marketing (1.5% dos dias)
+        if random.random() < 0.015:
+            db.session.add(Despesa(
+                estabelecimento_id=est.id,
+                descricao=random.choice(["Panfletos promocionais", "Impulsionamento Instagram", "Banner de fachada"]),
+                categoria="Marketing", tipo="variavel",
+                valor=Decimal(str(round(random.uniform(100, 600), 2))),
+                data_despesa=d, forma_pagamento="cartao_credito"
+            ))
+
+        # DESPESAS DESNECESSÁRIAS — para o sistema apontar o erro de gestão (3% dos dias)
+        if random.random() < 0.03:
+            desc, val = random.choice([
+                ("Assinatura de streaming na TV da loja", 89.90),
+                ("Cafeteira gourmet importada", 1200.00),
+                ("Decoração sofisticada não essencial", 850.00),
+                ("Almoço executivo do sócio (pessoal)", 320.00),
+                ("Aplicativo pago sem uso real", 199.00),
+                ("Brindes caros para poucos clientes", 680.00),
+            ])
+            db.session.add(Despesa(
+                estabelecimento_id=est.id, descricao=desc,
+                categoria="Despesa Desnecessária", tipo="variavel",
+                valor=Decimal(str(val)), data_despesa=d, forma_pagamento="cartao_credito",
+                observacoes="Gasto sem retorno para o negócio — revisar"
+            ))
+
     def _handle_replenishment(self, est, dt, admin_id):
         """Simula a recompra de mercadorias quando o estoque baixa."""
         low_stock_prods = Produto.query.filter(
@@ -186,7 +276,7 @@ class ChronicleSimulator:
         forn = Fornecedor.query.filter_by(estabelecimento_id=est.id).first()
         if not forn: return
 
-        print(f"      🛒 Reabastecendo {len(low_stock_prods)} produtos para {est.nome_fantasia}...")
+        print(f"      [COMPRA] Reabastecendo {len(low_stock_prods)} produtos para {est.nome_fantasia}...")
         
         total_pedido = Decimal("0.00")
         pedido = PedidoCompra(
@@ -224,7 +314,7 @@ class ChronicleSimulator:
     def _create_sale(self, est, ts, caixa, admin_id, products, clients):
         client = random.choice(clients) if clients else None
         
-        # 🔥 NOVO: 30% de chance de múltiplos pagamentos
+        # [*] NOVO: 30% de chance de múltiplos pagamentos
         usar_multiplos_pagamentos = random.random() < 0.30
         
         # Diversidade de Pagamento baseada em DNA
@@ -256,7 +346,7 @@ class ChronicleSimulator:
         venda.total = total
         venda.quantidade_itens = items_count
         
-        # 🔥 NOVO: Lógica de múltiplos pagamentos
+        # [*] NOVO: Lógica de múltiplos pagamentos
         if usar_multiplos_pagamentos and not is_fiado:
             # Criar 2-3 formas de pagamento
             formas_disponiveis = ["dinheiro", "cartao_debito", "cartao_credito", "pix"]
@@ -275,17 +365,18 @@ class ChronicleSimulator:
                     total_restante -= valor_pagamento
                 
                 db.session.add(Pagamento(
-                    venda_id=venda.id, estabelecimento_id=est.id, valor=valor_pagamento, 
+                    venda_id=venda.id, estabelecimento_id=est.id, valor=valor_pagamento,
                     forma_pagamento=forma, status="aprovado", data_pagamento=ts
                 ))
-                
-                # Movimentação de Caixa (Apenas se for Dinheiro ou PIX)
-                if forma in ["dinheiro", "pix"]:
-                    db.session.add(MovimentacaoCaixa(
-                        caixa_id=caixa.id, estabelecimento_id=est.id, tipo="entrada",
-                        valor=valor_pagamento, venda_id=venda.id, descricao=f"Venda {venda.codigo} - {forma}",
-                        created_at=ts
-                    ))
+
+                # MovimentacaoCaixa tipo="venda" + forma_pagamento (reconcilia com o fechamento)
+                db.session.add(MovimentacaoCaixa(
+                    caixa_id=caixa.id, estabelecimento_id=est.id, tipo="venda",
+                    valor=valor_pagamento, forma_pagamento=forma, venda_id=venda.id,
+                    descricao=f"Venda {venda.codigo} - {forma}", created_at=ts
+                ))
+                # Apenas dinheiro entra fisicamente na gaveta
+                if forma == "dinheiro":
                     caixa.saldo_atual += valor_pagamento
         
         elif is_fiado:
@@ -298,8 +389,14 @@ class ChronicleSimulator:
             ))
             # Criar pagamento fiado
             db.session.add(Pagamento(
-                venda_id=venda.id, estabelecimento_id=est.id, valor=total, 
+                venda_id=venda.id, estabelecimento_id=est.id, valor=total,
                 forma_pagamento="fiado", status="aprovado", data_pagamento=ts
+            ))
+            # Registra na auditoria do caixa sem afetar o saldo em dinheiro
+            db.session.add(MovimentacaoCaixa(
+                caixa_id=caixa.id, estabelecimento_id=est.id, tipo="fiado",
+                valor=total, forma_pagamento="fiado", venda_id=venda.id,
+                descricao=f"Venda {venda.codigo} - fiado (a receber)", created_at=ts
             ))
         else:
             # Pagamento Único (forma antiga)
@@ -309,13 +406,14 @@ class ChronicleSimulator:
                 forma_pagamento=forma_pgto, status="aprovado", data_pagamento=ts
             ))
             
-            # Movimentação de Caixa (Apenas se for Dinheiro ou PIX entra no saldo imediato)
-            if forma_pgto in ["dinheiro", "pix"]:
-                db.session.add(MovimentacaoCaixa(
-                    caixa_id=caixa.id, estabelecimento_id=est.id, tipo="entrada",
-                    valor=total, venda_id=venda.id, descricao=f"Venda {venda.codigo}",
-                    created_at=ts
-                ))
+            # MovimentacaoCaixa tipo="venda" + forma_pagamento (reconcilia com o fechamento)
+            db.session.add(MovimentacaoCaixa(
+                caixa_id=caixa.id, estabelecimento_id=est.id, tipo="venda",
+                valor=total, forma_pagamento=forma_pgto, venda_id=venda.id,
+                descricao=f"Venda {venda.codigo} - {forma_pgto}", created_at=ts
+            ))
+            # Apenas dinheiro entra fisicamente na gaveta
+            if forma_pgto == "dinheiro":
                 caixa.saldo_atual += total
         return venda
 
