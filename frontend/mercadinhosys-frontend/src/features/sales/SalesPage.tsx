@@ -996,7 +996,7 @@ export default function SalesPage() {
                             {analisesData.vendas_por_dia && analisesData.vendas_por_dia.length > 0 && (
                                 <div className="bg-white p-6 rounded-lg border border-gray-200">
                                     <h3 className="text-lg font-semibold text-gray-900 mb-4">📈 Histórico e Previsão de Vendas</h3>
-                                    <div className="h-80">
+                                    <div className="relative h-80 w-full overflow-hidden">
                                         <Line
                                             data={{
                                                 labels: analisesData.vendas_por_dia.map((v: any) => {
@@ -1046,7 +1046,7 @@ export default function SalesPage() {
                                 {analisesData.formas_pagamento && analisesData.formas_pagamento.length > 0 && (
                                     <div className="bg-white p-6 rounded-lg border border-gray-200">
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">💳 Formas de Pagamento</h3>
-                                        <div className="h-64 flex items-center justify-center">
+                                        <div className="relative h-64 w-full overflow-hidden flex items-center justify-center">
                                             <Doughnut
                                                 data={{
                                                     labels: analisesData.formas_pagamento.map((f: any) => f.forma.replace(/_/g, " ").toUpperCase()),
@@ -1078,7 +1078,7 @@ export default function SalesPage() {
                                 {analisesData.vendas_por_hora && analisesData.vendas_por_hora.length > 0 && (
                                     <div className="bg-white p-6 rounded-lg border border-gray-200">
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">🕐 Vendas por Horário</h3>
-                                        <div className="h-64">
+                                        <div className="relative h-64 w-full overflow-hidden">
                                             <Bar
                                                 data={{
                                                     labels: analisesData.vendas_por_hora.map((v: any) => `${v.hora}h`),
@@ -1107,7 +1107,7 @@ export default function SalesPage() {
                             {analisesData.produtos_mais_vendidos && analisesData.produtos_mais_vendidos.length > 0 && (
                                 <div className="bg-white p-6 rounded-lg border border-gray-200">
                                     <h3 className="text-lg font-semibold text-gray-900 mb-4">🛍️ Top 10 Produtos Mais Vendidos</h3>
-                                    <div className="h-64">
+                                    <div className="relative h-64 w-full overflow-hidden">
                                         <Bar
                                             data={{
                                                 labels: analisesData.produtos_mais_vendidos.slice(0, 10).map((p: any) => p.nome.substring(0, 20)),
