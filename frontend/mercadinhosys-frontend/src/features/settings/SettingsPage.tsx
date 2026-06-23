@@ -402,6 +402,7 @@ const SettingsPage: React.FC = () => {
     const tabs = [
         { id: 'geral', label: 'Geral', icon: Settings },
         { id: 'estabelecimento', label: 'Estabelecimento', icon: Building2 },
+        { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: Printer },
         { id: 'vendas', label: 'Vendas & PDV', icon: ShoppingCart },
         { id: 'estoque', label: 'Estoque', icon: Package },
         { id: 'ponto', label: 'Ponto & RH', icon: Clock },
@@ -615,6 +616,43 @@ const SettingsPage: React.FC = () => {
                     )}
 
                     {/* ABA VENDAS */}
+                    {activeTab === 'fiscal' && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
+                            <SectionTitle title="Emissão Fiscal (NFC-e / NF-e)" icon={Printer} />
+                            <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
+                                Em <strong>homologação</strong> a emissão é de teste (sem valor fiscal) e gratuita. Para produção, informe o token do gateway e o CSC obtido na SEFAZ. A correção tributária (NCM, CSOSN, CFOP) deve ser validada pelo seu contador.
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Regime Tributário</label>
+                                    <select value={estab.regime_tributario || 'SIMPLES NACIONAL'} onChange={(e) => setEstab({ ...estab, regime_tributario: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:text-white">
+                                        <option value="SIMPLES NACIONAL">Simples Nacional</option>
+                                        <option value="LUCRO PRESUMIDO">Lucro Presumido</option>
+                                        <option value="LUCRO REAL">Lucro Real</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Ambiente</label>
+                                    <select value={estab.fiscal_ambiente || 'homologacao'} onChange={(e) => setEstab({ ...estab, fiscal_ambiente: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:text-white">
+                                        <option value="homologacao">Homologação (teste, sem valor fiscal)</option>
+                                        <option value="producao">Produção (valor fiscal real)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Gateway de emissão</label>
+                                    <select value={estab.fiscal_gateway || 'simulado'} onChange={(e) => setEstab({ ...estab, fiscal_gateway: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:text-white">
+                                        <option value="simulado">Simulado (desenvolvimento)</option>
+                                        <option value="focusnfe">Focus NFe</option>
+                                    </select>
+                                </div>
+                                <InputField label="Série NFC-e" type="number" value={estab.serie_nfce ?? 1} onChange={(e) => setEstab({ ...estab, serie_nfce: parseInt(e.target.value) || 1 })} />
+                                <InputField label="Token do Gateway" value={estab.fiscal_token || ''} onChange={(e) => setEstab({ ...estab, fiscal_token: e.target.value })} placeholder="Token da API (Focus NFe)" />
+                                <InputField label="CSC (Código de Segurança)" value={estab.fiscal_csc || ''} onChange={(e) => setEstab({ ...estab, fiscal_csc: e.target.value })} placeholder="Obtido na SEFAZ (NFC-e)" />
+                                <InputField label="ID do CSC (idToken)" value={estab.fiscal_csc_id || ''} onChange={(e) => setEstab({ ...estab, fiscal_csc_id: e.target.value })} placeholder="Ex: 000001" />
+                            </div>
+                        </div>
+                    )}
+
                     {activeTab === 'vendas' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Ponto de Venda (PDV)" icon={ShoppingCart} />

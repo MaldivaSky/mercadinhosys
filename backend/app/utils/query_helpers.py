@@ -487,9 +487,10 @@ def get_estabelecimento_full_safe(estabelecimento_id):
         # Busca dinâmica de colunas para evitar erros de schema e garantir todos os campos
         # Incluímos um LEFT JOIN com configuracoes para pegar a logo_base64 oficial
         sql = """
-            SELECT e.id, e.nome_fantasia, e.razao_social, e.cnpj, e.telefone, e.email, 
+            SELECT e.id, e.nome_fantasia, e.razao_social, e.cnpj, e.telefone, e.email,
                    e.logradouro, e.numero, e.bairro, e.cidade, e.estado, e.cep, e.complemento, e.inscricao_estadual,
-                   c.logo_base64
+                   c.logo_base64, e.regime_tributario, e.fiscal_ambiente, e.fiscal_gateway,
+                   e.fiscal_token, e.fiscal_csc, e.fiscal_csc_id, e.serie_nfce
             FROM estabelecimentos e
             LEFT JOIN configuracoes c ON c.estabelecimento_id = e.id
             WHERE e.id = :eid LIMIT 1
@@ -515,7 +516,14 @@ def get_estabelecimento_full_safe(estabelecimento_id):
             "cep": row[11],
             "complemento": row[12],
             "inscricao_estadual": row[13],
-            "logo_base64": row[14]
+            "logo_base64": row[14],
+            "regime_tributario": row[15],
+            "fiscal_ambiente": row[16],
+            "fiscal_gateway": row[17],
+            "fiscal_token": row[18],
+            "fiscal_csc": row[19],
+            "fiscal_csc_id": row[20],
+            "serie_nfce": row[21],
         }
     except Exception as e:
         # Fallback de emergência caso alguma coluna (ex: cep) ainda não esteja no banco

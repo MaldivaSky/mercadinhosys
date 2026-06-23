@@ -1,0 +1,162 @@
+"""
+Serviço de emissão de NFC-e (modelo 65) — Simples Nacional (CSOSN).
+
+Monta o payload a partir da Venda e emite via gateway (factory get_gateway).
+Persiste o DocumentoFiscal e controla a numeração por estabelecimento.
+
+Observação de responsabilidade: os defaults tributários (CSOSN 102, CFOP 5102,
+PIS/COFINS 49) cobrem o caso típico de mercadinho no Simples revendendo
+mercadoria, mas a correção fiscal final é do contador do lojista.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Any, Dict
+
+from app.models import db, Venda, DocumentoFiscal, Estabelecimento, utcnow
+from app.services.fiscal.gateways import get_gateway
+
+# Mapa forma de pagamento (interno → código Focus NFe / SEFAZ)
+FORMA_PGTO_COD = {
+    "dinheiro": "01", "cheque": "02", "cartao de credito": "03", "cartão de crédito": "03",
+    "cartao de debito": "04", "cartão de débito": "04", "credito loja": "05",
+    "vale": "10", "voucher": "10", "pix": "17", "boleto": "15", "fiado": "99", "outros": "99",
+}
+
+
+def _forma_cod(forma: str) -> str:
+    return FORMA_PGTO_COD.get((forma or "").strip().lower(), "99")
+
+
+def _build_payload(venda: Venda, estab: Estabelecimento, numero: int, serie: int) -> Dict[str, Any]:
+    itens = []
+    for i, item in enumerate(venda.itens, start=1):
+        prod = item.produto
+        cfop = (getattr(prod, "cfop_padrao", None) or "5102")
+        csosn = (getattr(prod, "csosn", None) or "102")
+        unidade = (item.produto_unidade or getattr(prod, "unidade_medida", None) or "UN")
+        qtd = float(item.quantidade or 0)
+        v_unit = float(item.preco_unitario or 0)
+        v_bruto = round(float(item.total_item or (qtd * v_unit)), 2)
+        itens.append({
+            "numero_item": i,
+            "codigo_produto": str(item.produto_codigo or (prod.id if prod else i)),
+            "descricao": (item.produto_nome or "Item")[:120],
+            "cfop": cfop,
+            "unidade_comercial": unidade[:6],
+            "quantidade_comercial": qtd,
+            "valor_unitario_comercial": v_unit,
+            "valor_bruto": v_bruto,
+            "unidade_tributavel": unidade[:6],
+            "quantidade_tributavel": qtd,
+            "valor_unitario_tributavel": v_unit,
+            "codigo_ncm": (getattr(prod, "ncm", None) or "22021000"),
+            "icms_origem": str(getattr(prod, "origem", 0) or 0),
+            "icms_situacao_tributaria": csosn,
+            "pis_situacao_tributaria": "49",
+            "cofins_situacao_tributaria": "49",
+        })
+
+    pagamentos = []
+    if venda.pagamentos:
+        for p in venda.pagamentos:
+            pagamentos.append({
+                "forma_pagamento": _forma_cod(p.forma_pagamento),
+                "valor_pagamento": round(float(p.valor or 0), 2),
+            })
+    if not pagamentos:
+        pagamentos.append({"forma_pagamento": "01", "valor_pagamento": round(float(venda.total or 0), 2)})
+
+    return {
+        "modelo": "65",
+        "serie": serie,
+        "numero": numero,
+        "cnpj_emitente": estab.cnpj,
+        "natureza_operacao": "Venda ao consumidor",
+        "data_emissao": (venda.data_venda or utcnow()).strftime("%Y-%m-%dT%H:%M:%S-03:00"),
+        "presenca_comprador": "1",
+        "modalidade_frete": "9",
+        "items": itens,
+        "formas_pagamento": pagamentos,
+        # Metadados usados pelo gateway simulado (prefixo _ é removido no envio real)
+        "_emitente": {"cnpj": estab.cnpj, "uf": estab.estado, "nome": estab.razao_social},
+    }
+
+
+class EmissaoError(ValueError):
+    pass
+
+
+def emitir_nfce(venda: Venda, estab: Estabelecimento, funcionario_id: int) -> DocumentoFiscal:
+    if venda.status != "finalizada":
+        raise EmissaoError("Só é possível emitir NFC-e de vendas finalizadas.")
+
+    referencia = f"nfce-{estab.id}-{venda.id}"
+    existente = DocumentoFiscal.query.filter_by(
+        estabelecimento_id=estab.id, referencia=referencia
+    ).first()
+    if existente and existente.status in ("autorizado", "processando"):
+        return existente  # idempotente: já emitido/em processamento
+
+    serie = int(getattr(estab, "serie_nfce", 1) or 1)
+    numero = int(getattr(estab, "proximo_numero_nfce", 1) or 1)
+    ambiente = getattr(estab, "fiscal_ambiente", None) or "homologacao"
+    gateway = get_gateway(estab)
+    gw_nome = (getattr(estab, "fiscal_gateway", None) or "simulado").lower()
+
+    payload = _build_payload(venda, estab, numero, serie)
+
+    doc = existente or DocumentoFiscal(
+        estabelecimento_id=estab.id, venda_id=venda.id, funcionario_id=funcionario_id,
+        tipo="nfce", modelo="65", ambiente=ambiente, gateway=gw_nome,
+        referencia=referencia, serie=str(serie), numero=str(numero),
+        valor_total=venda.total, status="processando",
+    )
+    if not existente:
+        db.session.add(doc)
+
+    try:
+        resp = gateway.emitir(payload, referencia)
+    except Exception as e:
+        doc.status = "erro"
+        doc.motivo_rejeicao = f"Falha de comunicação com o gateway: {e}"
+        db.session.commit()
+        return doc
+
+    doc.status = resp.get("status", "processando")
+    doc.chave_acesso = resp.get("chave")
+    doc.protocolo = resp.get("protocolo")
+    doc.danfe_url = resp.get("danfe_url")
+    doc.xml_url = resp.get("xml_url")
+    doc.xml_content = resp.get("xml")
+    doc.qr_code = resp.get("qr_code")
+    if doc.status == "rejeitado" or doc.status == "erro":
+        msg = resp.get("mensagem")
+        doc.motivo_rejeicao = str(msg) if msg else "Rejeitado pela SEFAZ"
+    if doc.status == "autorizado":
+        doc.autorizado_em = utcnow()
+        if resp.get("numero"):
+            doc.numero = str(resp["numero"])
+        # Avança a numeração do estabelecimento somente quando autoriza
+        estab.proximo_numero_nfce = numero + 1
+
+    db.session.commit()
+    return doc
+
+
+def cancelar_nfce(doc: DocumentoFiscal, estab: Estabelecimento, justificativa: str) -> DocumentoFiscal:
+    if doc.status != "autorizado":
+        raise EmissaoError("Só é possível cancelar uma NFC-e autorizada.")
+    if not justificativa or len(justificativa.strip()) < 15:
+        raise EmissaoError("Justificativa de cancelamento deve ter ao menos 15 caracteres (exigência SEFAZ).")
+    gateway = get_gateway(estab)
+    resp = gateway.cancelar(doc.referencia, justificativa.strip())
+    if resp.get("status") == "cancelado":
+        doc.status = "cancelado"
+        doc.cancelado_em = utcnow()
+        doc.justificativa_cancelamento = justificativa.strip()[:255]
+    else:
+        doc.motivo_rejeicao = str(resp.get("mensagem") or "Falha ao cancelar")
+    db.session.commit()
+    return doc

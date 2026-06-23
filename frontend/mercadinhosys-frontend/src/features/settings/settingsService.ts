@@ -16,6 +16,13 @@ export interface Estabelecimento {
     cidade: string;
     estado: string;
     regime_tributario?: string;
+    // Configuração fiscal (NFC-e/NF-e)
+    fiscal_ambiente?: string;
+    fiscal_gateway?: string;
+    fiscal_token?: string;
+    fiscal_csc?: string;
+    fiscal_csc_id?: string;
+    serie_nfce?: number;
 }
 
 export interface Configuracao {

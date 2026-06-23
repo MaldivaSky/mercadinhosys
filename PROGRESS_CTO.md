@@ -27,9 +27,22 @@
 - B2 motivos de estorno em Settings + dropdown no cancelamento — ✅ TESTADO (GET→PUT→GET persiste; migration `d4e5f6a7b8c9`)
 - B3 pressão de caixa (7d) + comprometimento c/ despesas a vencer — ✅ TESTADO (despesa venc+3d → pressão 0→2.04%, obrig_7d=1500)
 
-### Fiscal
-- F0 fundações: campos fiscais Estabelecimento + Produto — ✅ migration `e5f6a7b8c9d0` aplicada (login voltou a 200)
-  - FALTA: serviço `app/services/fiscal/` (adapter gateway), rota `fiscal.py`, modelo `DocumentoFiscal`/`CertificadoDigital`, emissão NFC-e em modo simulado, teste e2e.
+### Fiscal — decisões: Simples Nacional (CSOSN), entrada+NFC-e em paralelo, gateway Focus NFe (adapter trocável)
+- F0 fundações: campos fiscais Estabelecimento + Produto — ✅ migration `e5f6a7b8c9d0`
+- F1 IMPORTAR XML de entrada (compra) — ✅ COMPLETO+TESTADO e2e
+  - `app/services/fiscal/xml_parser.py` (stdlib, testado), `entrada_service.py`, rota `app/routes/fiscal.py` (`/api/fiscal/entrada/preview|importar|<id>/xml`), modelo `NotaFiscalEntrada`, migration `f6a7b8c9d0e1`.
+  - Faz: upsert fornecedor, cria/atualiza produto, entrada estoque + custo médio ponderado, gera conta a pagar (duplicatas), idempotência por chave, guarda XML.
+  - Testado: importar 201 (produto+estoque+conta criados), reimportar 400, listar ok.
+  - FALTA (frontend): tela em Despesas/Compras para upload do XML (drag-drop) + preview.
+- F2 EMISSÃO NFC-e (Simples/CSOSN) via gateway — ✅ COMPLETO+TESTADO e2e (modo simulado)
+  - Modelo `DocumentoFiscal` (migration `a7b8c9d0e1f2`); adapters `gateways.py` (Simulado + FocusNFe + factory); `emissao_service.py` (payload CSOSN da Venda, numeração por estab, idempotência); rotas `/api/fiscal/vendas/<id>/nfce`, `/documentos`, `/documentos/<id>/cancelar`.
+  - Testado: emitir 201 autorizado (chave 44 díg c/ DV válido, QR), reemitir idempotente, cancelar valida justificativa ≥15 e cancela.
+  - PRONTO p/ produção: trocar `estabelecimentos.fiscal_gateway='focusnfe'` + `fiscal_token` (homologação grátis). `requests` já no requirements.
+  - FALTA (frontend): botão "Emitir NFC-e" no PDV/Vendas, tela de Documentos Fiscais, Settings fiscais (ambiente/gateway/token/CSC). Integração real Focus NFe (precisa token+certificado A1 no go-live).
+
+## Resumo p/ deploy (revisar antes de subir)
+- Migrations backend: head único `a7b8c9d0e1f2`. Cadeia linear. Railway: `flask db upgrade`.
+- Frontend Vercel: corrigi 4 erros TS6133 (unused) que quebravam `npm run build`. **Rodar `npm run build` 1x p/ confirmar** antes do deploy.
 
 ### Settings por Tenant (bug crítico encontrado em uso)
 - PUT /configuracao/estabelecimento — ✅ CORRIGIDO+TESTADO (era `claims` indefinido → 500)

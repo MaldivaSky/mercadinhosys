@@ -551,6 +551,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar vendas: {e}")
 
+    # Fiscal (entrada XML / emissão)
+    try:
+        from app.routes.fiscal import fiscal_bp
+        app.register_blueprint(fiscal_bp, url_prefix="/api/fiscal")
+        logger.info("✅ Blueprint fiscal registrado em /api/fiscal")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar fiscal: {e}")
+
     # PDV
     try:
         from app.routes.pdv import pdv_bp

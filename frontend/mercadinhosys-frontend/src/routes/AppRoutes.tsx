@@ -30,6 +30,7 @@ const SystemMonitorPage = lazy(() => import('../features/saas/SystemMonitorPage'
 const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
 const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
+const FiscalPage = lazy(() => import('../features/fiscal/FiscalPage'));
 
 
 
@@ -66,6 +67,7 @@ const AppRoutes: React.FC = () => {
                     {/* USANDO PRO EM VEZ DE ENTERPRISE PARA CONSISTÊNCIA */}
                     <Route path="sales" element={<PlanoGuard planoRequerido="pro"><SalesPage /></PlanoGuard>} />
                     <Route path="expenses" element={<PlanoGuard planoRequerido="pro"><ExpensesPage /></PlanoGuard>} />
+                    <Route path="fiscal" element={<PlanoGuard planoRequerido="gratuito"><FiscalPage /></PlanoGuard>} />
                     <Route path="employees" element={<PlanoGuard planoRequerido="gratuito"><EmployeesPage /></PlanoGuard>} />
                     <Route path="rh" element={<PlanoGuard planoRequerido="pro"><RHPage /></PlanoGuard>} />
                     <Route path="ponto" element={<PlanoGuard planoRequerido="pro"><PontoPage /></PlanoGuard>} />
