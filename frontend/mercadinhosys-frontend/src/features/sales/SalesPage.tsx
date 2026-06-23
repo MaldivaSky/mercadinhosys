@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "../../api/apiClient";
 import { showToast } from "../../utils/toast";
+import { fiscalService } from "../fiscal/fiscalService";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -103,6 +104,27 @@ export default function SalesPage() {
     const [motivo, setMotivo] = useState("");
     const [cancelando, setCancelando] = useState(false);
     const [motivosEstorno, setMotivosEstorno] = useState<string[]>([]);
+    const [emitindoNFCe, setEmitindoNFCe] = useState(false);
+
+    const emitirNFCe = async (vendaId: number) => {
+        setEmitindoNFCe(true);
+        try {
+            const r = await fiscalService.emitirNFCe(vendaId);
+            const doc = r.documento;
+            if (doc?.status === "autorizado") {
+                const aviso = (doc.ambiente === "homologacao" || doc.gateway === "simulado") ? " (homologação/sem valor fiscal)" : "";
+                showToast.success(`NFC-e autorizada${aviso}. Nº ${doc.numero}.`);
+            } else if (doc?.status === "rejeitado") {
+                showToast.error(`Rejeitada: ${doc.motivo_rejeicao || "verifique os dados fiscais"}`);
+            } else {
+                showToast.update(r.message || "NFC-e em processamento");
+            }
+        } catch (e: any) {
+            showToast.error(e?.response?.data?.error || "Falha ao emitir NFC-e");
+        } finally {
+            setEmitindoNFCe(false);
+        }
+    };
 
     useEffect(() => {
         let ativo = true;
@@ -438,6 +460,13 @@ export default function SalesPage() {
                             </div>
                             <div className="flex items-center justify-between rounded-xl bg-primary-50 dark:bg-primary-900/20 px-4 py-3"><span className="flex items-center gap-2 font-bold text-primary-700 dark:text-primary-300"><CreditCard className="w-4 h-4" /> Total</span><span className="text-xl font-black text-primary-700 dark:text-primary-300">{brl(detalhe.total)}</span></div>
                         </div>
+                        {detalhe.status === "finalizada" && (
+                            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+                                <button onClick={() => emitirNFCe(detalhe.id)} disabled={emitindoNFCe} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-60">
+                                    {emitindoNFCe ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />} Emitir NFC-e
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

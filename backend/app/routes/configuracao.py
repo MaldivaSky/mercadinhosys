@@ -266,7 +266,9 @@ def update_estabelecimento():
         # Filtro de segurança: campos cadastrais e endereço completo
         campos_update = [
             "nome_fantasia", "razao_social", "telefone", "email", "inscricao_estadual",
-            "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado"
+            "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado",
+            "regime_tributario", "fiscal_ambiente", "fiscal_gateway", "fiscal_token",
+            "fiscal_csc", "fiscal_csc_id", "serie_nfce"
         ]
         
         from sqlalchemy import text

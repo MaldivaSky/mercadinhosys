@@ -1216,6 +1216,102 @@ class Despesa(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     fornecedor = db.relationship("Fornecedor", backref=db.backref("despesas", lazy=True))
     __table_args__ = (db.Index("ix_despesa_data", "data_despesa"), db.Index("ix_despesa_categoria", "categoria"))
 
+class NotaFiscalEntrada(db.Model, MultiTenantMixin, SerializableMixin):
+    """NF-e de compra (entrada) importada via XML do fornecedor.
+
+    Guarda o XML original (obrigação legal de 5 anos) e garante idempotência
+    pela chave de acesso (não importa a mesma nota duas vezes).
+    """
+    __tablename__ = "notas_fiscais_entrada"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+    chave_acesso = db.Column(db.String(44), nullable=False)
+    modelo = db.Column(db.String(2), default="55")
+    numero = db.Column(db.String(15))
+    serie = db.Column(db.String(5))
+    natureza_operacao = db.Column(db.String(120))
+    emitente_cnpj = db.Column(db.String(14))
+    emitente_nome = db.Column(db.String(150))
+    data_emissao = db.Column(db.DateTime)
+    valor_total = db.Column(db.Numeric(19, 4), default=0)
+    qtd_itens = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(20), default="importada")  # importada | cancelada
+    xml_content = db.Column(db.Text)
+    itens_json = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    fornecedor = db.relationship("Fornecedor", backref=db.backref("notas_entrada", lazy=True))
+    __table_args__ = (
+        db.Index("ix_nfe_entrada_chave", "chave_acesso"),
+        db.Index("ix_nfe_entrada_data", "data_emissao"),
+        db.UniqueConstraint("estabelecimento_id", "chave_acesso", name="uq_nfe_entrada_estab_chave"),
+    )
+
+    def to_dict(self, depth=0):
+        return {
+            "id": self.id, "chave_acesso": self.chave_acesso, "numero": self.numero, "serie": self.serie,
+            "modelo": self.modelo, "natureza_operacao": self.natureza_operacao,
+            "emitente_cnpj": self.emitente_cnpj, "emitente_nome": self.emitente_nome,
+            "fornecedor_id": self.fornecedor_id,
+            "fornecedor_nome": self.fornecedor.nome_fantasia if self.fornecedor else self.emitente_nome,
+            "data_emissao": self.data_emissao.isoformat() if self.data_emissao else None,
+            "valor_total": float(self.valor_total or 0), "qtd_itens": self.qtd_itens,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+class DocumentoFiscal(db.Model, MultiTenantMixin, SerializableMixin):
+    """Documento fiscal de SAÍDA emitido (NFC-e mod 65 / NF-e mod 55).
+
+    Registra o ciclo de vida: processando → autorizado/rejeitado → cancelado.
+    Guarda chave de acesso, protocolo, XML e URLs de DANFE para auditoria.
+    """
+    __tablename__ = "documentos_fiscais"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+    tipo = db.Column(db.String(10), default="nfce")        # nfce | nfe
+    modelo = db.Column(db.String(2), default="65")          # 65 | 55
+    ambiente = db.Column(db.String(15), default="homologacao")
+    gateway = db.Column(db.String(30), default="simulado")
+    referencia = db.Column(db.String(60), nullable=False)   # ref idempotente enviada ao gateway
+    numero = db.Column(db.String(15))
+    serie = db.Column(db.String(5))
+    chave_acesso = db.Column(db.String(44))
+    protocolo = db.Column(db.String(30))
+    status = db.Column(db.String(20), default="processando")  # processando|autorizado|rejeitado|cancelado|erro|contingencia
+    motivo_rejeicao = db.Column(db.Text)
+    valor_total = db.Column(db.Numeric(19, 4), default=0)
+    danfe_url = db.Column(db.String(500))
+    xml_url = db.Column(db.String(500))
+    xml_content = db.Column(db.Text)
+    qr_code = db.Column(db.Text)
+    justificativa_cancelamento = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=utcnow)
+    autorizado_em = db.Column(db.DateTime)
+    cancelado_em = db.Column(db.DateTime)
+    venda = db.relationship("Venda", backref=db.backref("documentos_fiscais", lazy=True))
+    __table_args__ = (
+        db.Index("ix_docfiscal_venda", "venda_id"),
+        db.Index("ix_docfiscal_status", "status"),
+        db.Index("ix_docfiscal_chave", "chave_acesso"),
+        db.UniqueConstraint("estabelecimento_id", "referencia", name="uq_docfiscal_estab_ref"),
+    )
+
+    def to_dict(self, depth=0):
+        return {
+            "id": self.id, "venda_id": self.venda_id, "tipo": self.tipo, "modelo": self.modelo,
+            "ambiente": self.ambiente, "gateway": self.gateway, "referencia": self.referencia,
+            "numero": self.numero, "serie": self.serie, "chave_acesso": self.chave_acesso,
+            "protocolo": self.protocolo, "status": self.status, "motivo_rejeicao": self.motivo_rejeicao,
+            "valor_total": float(self.valor_total or 0), "danfe_url": self.danfe_url,
+            "xml_url": self.xml_url, "qr_code": self.qr_code,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "autorizado_em": self.autorizado_em.isoformat() if self.autorizado_em else None,
+        }
+
 class LoginHistory(db.Model):
     __tablename__ = "login_history"
     id = db.Column(db.Integer, primary_key=True)

@@ -19,7 +19,8 @@ import {
     Building2,
     Target,
     Activity,
-    Navigation
+    Navigation,
+    Receipt
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 
@@ -33,6 +34,7 @@ const menuItems = [
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
+    { to: '/fiscal', icon: Receipt, label: 'Fiscal' },
     { to: '/employees', icon: UserCog, label: 'Funcionários' },
     { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
