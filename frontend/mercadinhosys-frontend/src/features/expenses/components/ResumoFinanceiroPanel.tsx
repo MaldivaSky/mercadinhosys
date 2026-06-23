@@ -295,13 +295,13 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
 
                 <div className="bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
                   <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                    Para cada R$ 100,00 que você vende, <strong className="text-blue-400">{formatCurrency(resumo.indicadores_gestao.indice_comprometimento)}</strong> já estão comprometidos com boletos.
+                    Para cada R$&nbsp;100,00 que você vende, <strong className="text-blue-400">{resumo.indicadores_gestao.indice_comprometimento.toFixed(1).replace(".", ",")}</strong> estão comprometidos com boletos e despesas.
                   </p>
                 </div>
               </div>
 
               {/* Insight: Pressão de Caixa */}
-              <div className="group relative p-8 rounded-[2.5rem] bg-white border border-slate-200 overflow-hidden shadow-2xl">
+              <div className="group relative p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-2xl">
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 blur-[80px] rounded-full" />
 
                 <div className="flex items-center justify-between mb-8 relative">

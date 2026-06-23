@@ -923,3 +923,337 @@ def resumo_financeiro():
     except Exception as e:
         current_app.logger.error(f"Erro ao gerar resumo financeiro: {str(e)}")
         return jsonify({"error": "Erro interno do servidor", "message": str(e)}), 500
+
+
+@despesas_bp.route("/historico-comparativo", methods=["GET"], strict_slashes=False)
+@despesas_bp.route("/historico-comparativo/", methods=["GET"], strict_slashes=False)
+@funcionario_required
+@plan_required('Pro')
+def historico_comparativo():
+    """
+    Retorna histórico comparativo de despesas dos últimos 12 meses,
+    agrupado por mês × categoria, com variação percentual mês a mês,
+    identificação de categorias com maior crescimento e insights inteligentes.
+    """
+    try:
+        from sqlalchemy import func, extract
+        from datetime import date, timedelta
+        from collections import defaultdict
+
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
+
+        hoje = date.today()
+        # Calcula os últimos 12 meses
+        meses = []
+        for i in range(11, -1, -1):
+            m = hoje.replace(day=1)
+            # Retrocede i meses
+            for _ in range(i):
+                if m.month == 1:
+                    m = m.replace(year=m.year - 1, month=12)
+                else:
+                    m = m.replace(month=m.month - 1)
+            if m.month == 12:
+                fim_m = m.replace(year=m.year + 1, month=1, day=1)
+            else:
+                fim_m = m.replace(month=m.month + 1, day=1)
+            fim_m = fim_m - timedelta(days=1)
+            if fim_m > hoje:
+                fim_m = hoje
+            meses.append((m, fim_m))
+
+        # Query: soma por mês e categoria
+        inicio_periodo = meses[0][0]
+
+        query = db.session.query(
+            Despesa.categoria,
+            func.strftime('%Y-%m', Despesa.data_despesa).label('mes'),
+            func.sum(Despesa.valor).label('total'),
+            func.count(Despesa.id).label('qtd'),
+        ).filter(
+            Despesa.data_despesa >= inicio_periodo,
+            Despesa.data_despesa <= hoje,
+        )
+        if estabelecimento_id != 'all':
+            query = query.filter(Despesa.estabelecimento_id == estabelecimento_id)
+
+        rows = query.group_by(Despesa.categoria, func.strftime('%Y-%m', Despesa.data_despesa)).all()
+
+        # Indexa os dados: {mes: {categoria: {total, qtd}}}
+        dados_mes_cat = defaultdict(lambda: defaultdict(lambda: {"total": 0.0, "qtd": 0}))
+        todas_categorias = set()
+        for cat, mes, total, qtd in rows:
+            categoria = cat or "outros"
+            dados_mes_cat[mes][categoria]["total"] += float(total or 0)
+            dados_mes_cat[mes][categoria]["qtd"] += int(qtd or 0)
+            todas_categorias.add(categoria)
+
+        # Totais por mês
+        totais_mes = {}
+        for m_inicio, m_fim in meses:
+            chave = m_inicio.strftime('%Y-%m')
+            totais_mes[chave] = sum(
+                v["total"] for v in dados_mes_cat.get(chave, {}).values()
+            )
+
+        # Calcula variação mês a mês por categoria
+        evolucao_por_categoria = {}
+        for cat in sorted(todas_categorias):
+            serie = []
+            for m_inicio, _ in meses:
+                chave = m_inicio.strftime('%Y-%m')
+                total_cat = dados_mes_cat.get(chave, {}).get(cat, {}).get("total", 0.0)
+                serie.append({
+                    "mes": chave,
+                    "mes_nome": m_inicio.strftime("%b/%Y"),
+                    "total": round(total_cat, 2),
+                })
+            evolucao_por_categoria[cat] = serie
+
+        # Variação categoria: mês atual vs anterior
+        mes_atual_chave = hoje.replace(day=1).strftime('%Y-%m')
+        mes_ant = hoje.replace(day=1)
+        if mes_ant.month == 1:
+            mes_ant = mes_ant.replace(year=mes_ant.year - 1, month=12)
+        else:
+            mes_ant = mes_ant.replace(month=mes_ant.month - 1)
+        mes_anterior_chave = mes_ant.strftime('%Y-%m')
+
+        variacoes = []
+        for cat in sorted(todas_categorias):
+            atual = dados_mes_cat.get(mes_atual_chave, {}).get(cat, {}).get("total", 0.0)
+            anterior = dados_mes_cat.get(mes_anterior_chave, {}).get(cat, {}).get("total", 0.0)
+            if anterior > 0:
+                delta = ((atual - anterior) / anterior) * 100
+            elif atual > 0:
+                delta = 100.0
+            else:
+                delta = 0.0
+            variacoes.append({
+                "categoria": cat,
+                "atual": round(atual, 2),
+                "anterior": round(anterior, 2),
+                "delta_percentual": round(delta, 1),
+                "cresceu": delta > 0,
+            })
+        # Ordena pelo maior impacto absoluto
+        variacoes.sort(key=lambda x: abs(x["delta_percentual"]), reverse=True)
+
+        # Insights inteligentes automáticos
+        insights = []
+
+        # Insight 1: Categoria com maior crescimento
+        cat_cresce = [v for v in variacoes if v["cresceu"] and v["anterior"] > 0]
+        if cat_cresce:
+            top = cat_cresce[0]
+            insights.append({
+                "tipo": "crescimento",
+                "severidade": "alta" if top["delta_percentual"] > 30 else "media",
+                "titulo": f"'{top['categoria'].title()}' subiu {top['delta_percentual']:.0f}%",
+                "descricao": f"Em {mes_atual_chave}, a categoria '{top['categoria']}' custou R$\u00a0{top['atual']:,.2f} vs R$\u00a0{top['anterior']:,.2f} no mês anterior.",
+                "acao": "Analise se houve compra pontual ou aumento estrutural de custos.",
+            })
+
+        # Insight 2: Total atual vs anterior
+        total_atual = totais_mes.get(mes_atual_chave, 0.0)
+        total_anterior = totais_mes.get(mes_anterior_chave, 0.0)
+        if total_anterior > 0:
+            delta_total = ((total_atual - total_anterior) / total_anterior) * 100
+            if abs(delta_total) > 5:
+                insights.append({
+                    "tipo": "total_mes",
+                    "severidade": "alta" if delta_total > 20 else "baixa",
+                    "titulo": f"Despesas {'subiram' if delta_total > 0 else 'caíram'} {abs(delta_total):.0f}% este mês",
+                    "descricao": f"Total deste mês: R$\u00a0{total_atual:,.2f} vs R$\u00a0{total_anterior:,.2f} no mês anterior.",
+                    "acao": "Revise os lançamentos do período para identificar gastos não recorrentes.",
+                })
+
+        # Insight 3: Categoria que domina as despesas
+        cat_atual = sorted(
+            [(cat, dados_mes_cat.get(mes_atual_chave, {}).get(cat, {}).get("total", 0.0))
+             for cat in todas_categorias],
+            key=lambda x: x[1], reverse=True
+        )
+        if cat_atual and total_atual > 0:
+            top_cat, top_val = cat_atual[0]
+            pct = (top_val / total_atual) * 100
+            if pct > 30:
+                insights.append({
+                    "tipo": "concentracao",
+                    "severidade": "media",
+                    "titulo": f"'{top_cat.title()}' representa {pct:.0f}% das despesas",
+                    "descricao": f"Categoria '{top_cat}' é responsável por R$\u00a0{top_val:,.2f} do total de R$\u00a0{total_atual:,.2f} este mês.",
+                    "acao": "Diversifique ou renegocie para reduzir concentração em uma categoria.",
+                })
+
+        # Projeção dos próximos 3 meses com base na média dos últimos 3
+        ultimos_3 = [totais_mes.get(meses[-1-i][0].strftime('%Y-%m'), 0.0) for i in range(3)]
+        media_3m = sum(ultimos_3) / 3 if any(ultimos_3) else 0.0
+
+        # Meses para os dados do gráfico de barras empilhadas
+        meses_labels = [m[0].strftime('%Y-%m') for m in meses]
+        meses_nomes = [m[0].strftime('%b/%Y') for m in meses]
+
+        return jsonify({
+            "success": True,
+            "periodo": {
+                "inicio": meses[0][0].isoformat(),
+                "fim": hoje.isoformat(),
+                "meses": [
+                    {"chave": m[0].strftime('%Y-%m'), "nome": m[0].strftime('%b/%Y'), "total": round(totais_mes.get(m[0].strftime('%Y-%m'), 0.0), 2)}
+                    for m in meses
+                ]
+            },
+            "categorias": sorted(list(todas_categorias)),
+            "evolucao_por_categoria": evolucao_por_categoria,
+            "variacoes_mes_atual": variacoes,
+            "totais_por_mes": {chave: round(v, 2) for chave, v in totais_mes.items()},
+            "meses_labels": meses_labels,
+            "meses_nomes": meses_nomes,
+            "projecao_proximos_meses": round(media_3m, 2),
+            "insights": insights,
+            "resumo_periodo": {
+                "total_geral": round(sum(totais_mes.values()), 2),
+                "media_mensal": round(sum(totais_mes.values()) / len(meses) if meses else 0, 2),
+                "mes_mais_caro": max(totais_mes.items(), key=lambda x: x[1])[0] if totais_mes else None,
+                "mes_mais_barato": min((k, v) for k, v in totais_mes.items() if v > 0)[0] if any(totais_mes.values()) else None,
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar histórico comparativo: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"error": "Erro interno do servidor", "message": str(e)}), 500
+
+
+@despesas_bp.route("/boletos-status", methods=["GET"], strict_slashes=False)
+@despesas_bp.route("/boletos-status/", methods=["GET"], strict_slashes=False)
+@funcionario_required
+@plan_required('Pro')
+def boletos_por_status():
+    """
+    Retorna boletos (ContaPagar) separados por status:
+    - vencidos: status=aberto e data_vencimento < hoje
+    - a_vencer: status=aberto e data_vencimento >= hoje e <= hoje+30d
+    - pagos: status=pago, filtro por período
+    """
+    try:
+        from app.models import ContaPagar, Fornecedor
+        from datetime import date, timedelta
+
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"error": "Estabelecimento não identificado"}), 400
+
+        hoje = date.today()
+        dias = int(request.args.get('dias', 30))
+        limite_vencer = hoje + timedelta(days=dias)
+
+        # Query base
+        def base_query():
+            q = db.session.query(ContaPagar)
+            if estabelecimento_id != 'all':
+                q = q.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+            return q
+
+        def serialize_boleto(b):
+            tem_pedido = b.pedido_compra_id is not None
+            descricao = b.observacoes or "Despesa"
+            if tem_pedido and b.pedido_compra:
+                descricao = f"Pedido {b.pedido_compra.numero_pedido}"
+            dias_venc = (b.data_vencimento - hoje).days if b.data_vencimento else None
+            return {
+                "id": b.id,
+                "numero_documento": b.numero_documento,
+                "descricao": descricao,
+                "fornecedor_nome": b.fornecedor.nome_fantasia if b.fornecedor else "—",
+                "fornecedor_id": b.fornecedor_id,
+                "valor_original": float(b.valor_original),
+                "valor_atual": float(b.valor_atual),
+                "data_emissao": b.data_emissao.isoformat() if b.data_emissao else None,
+                "data_vencimento": b.data_vencimento.isoformat() if b.data_vencimento else None,
+                "data_pagamento": b.data_pagamento.isoformat() if hasattr(b, 'data_pagamento') and b.data_pagamento else None,
+                "dias_vencimento": dias_venc,
+                "status": b.status,
+                "observacoes": b.observacoes,
+            }
+
+        # Vencidos
+        vencidos_q = base_query().filter(
+            ContaPagar.status == 'aberto',
+            ContaPagar.data_vencimento < hoje,
+        ).order_by(ContaPagar.data_vencimento.asc())
+        vencidos = [serialize_boleto(b) for b in vencidos_q.all()]
+
+        # A vencer
+        a_vencer_q = base_query().filter(
+            ContaPagar.status == 'aberto',
+            ContaPagar.data_vencimento >= hoje,
+            ContaPagar.data_vencimento <= limite_vencer,
+        ).order_by(ContaPagar.data_vencimento.asc())
+        a_vencer = [serialize_boleto(b) for b in a_vencer_q.all()]
+
+        # Pagos no período (últimos 30 dias por padrão)
+        inicio_pagos_str = request.args.get('inicio_pagos')
+        if inicio_pagos_str:
+            try:
+                inicio_pagos = datetime.strptime(inicio_pagos_str, '%Y-%m-%d').date()
+            except ValueError:
+                inicio_pagos = hoje - timedelta(days=30)
+        else:
+            inicio_pagos = hoje - timedelta(days=30)
+
+        pagos_q = base_query().filter(
+            ContaPagar.status == 'pago',
+        )
+        # Filtra por data de pagamento se disponível, senão por vencimento
+        try:
+            pagos_q = pagos_q.filter(ContaPagar.data_pagamento >= inicio_pagos)
+        except Exception:
+            pagos_q = pagos_q.filter(ContaPagar.data_vencimento >= inicio_pagos)
+
+        pagos_q = pagos_q.order_by(ContaPagar.data_vencimento.desc())
+        pagos = [serialize_boleto(b) for b in pagos_q.all()]
+
+        def total(lst):
+            return round(sum(b['valor_atual'] for b in lst), 2)
+
+        return jsonify({
+            "success": True,
+            "vencidos": {
+                "items": vencidos,
+                "quantidade": len(vencidos),
+                "total": total(vencidos),
+            },
+            "a_vencer": {
+                "items": a_vencer,
+                "quantidade": len(a_vencer),
+                "total": total(a_vencer),
+                "dias_antecedencia": dias,
+            },
+            "pagos": {
+                "items": pagos,
+                "quantidade": len(pagos),
+                "total": total(pagos),
+                "inicio_periodo": inicio_pagos.isoformat(),
+            },
+            "resumo": {
+                "total_vencidos": total(vencidos),
+                "total_a_vencer": total(a_vencer),
+                "total_pago_periodo": total(pagos),
+                "qtd_vencidos": len(vencidos),
+                "qtd_a_vencer": len(a_vencer),
+                "qtd_pagos": len(pagos),
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao buscar boletos por status: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"error": "Erro interno do servidor", "message": str(e)}), 500

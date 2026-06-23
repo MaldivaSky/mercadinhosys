@@ -354,7 +354,7 @@ def criar_venda_entrega_unificada():
                 venda_id=venda.id,
                 forma_pagamento=p_data["forma_pagamento"],
                 valor=valor_p,
-                status="aprovado",
+                status="pendente" if p_data["forma_pagamento"] == "entrega" else "aprovado",
                 data_pagamento=datetime.now()
             )
             db.session.add(pagamento)

@@ -150,7 +150,7 @@ const ExpenseAnalyticsModal: React.FC<ExpenseAnalyticsModalProps> = ({ isOpen, o
                                     : " Sua dinâmica entre recebimentos e pagamentos (PMR vs PMP) encontra-se num platô saudável, provendo liquidez passiva ótima para reinvestimentos."}
                             </p>
                             <p className="text-indigo-100/90 leading-relaxed font-medium">
-                                Operacionalmente, a rigidez do negócio (despesas fixas sobre variáveis) está em {ind.alavancagem_operacional.toFixed(1)}%. O Ponto de Equilíbrio exato calibrado pela IA exige que a loja fature <strong className="text-white bg-indigo-500/30 px-2 py-0.5 rounded">{formatCurrency(ind.ponto_equilibrio)}</strong> neste mês para não ativar destruição de capital de giro.
+                                Operacionalmente, a rigidez do negócio (despesas fixas sobre variáveis) está em {(ind.alavancagem_operacional ?? 0).toFixed(1)}%. O Ponto de Equilíbrio exato calibrado pela IA exige que a loja fature <strong className="text-white bg-indigo-500/30 px-2 py-0.5 rounded">{formatCurrency(ind.ponto_equilibrio ?? 0)}</strong> neste mês para não ativar destruição de capital de giro.
                             </p>
                         </div>
                     </div>

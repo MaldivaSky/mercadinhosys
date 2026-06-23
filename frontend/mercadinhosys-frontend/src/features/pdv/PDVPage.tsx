@@ -8,8 +8,10 @@ import {
     Plus,
     X,
     User,
+    Truck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import UnifiedDeliverySaleModal from '../delivery/UnifiedDeliverySaleModal';
 import ProdutoSearch from './components/ProdutoSearch';
 import CarrinhoItem from './components/CarrinhoItem';
 import ClienteSelect from './components/ClienteSelect';
@@ -64,6 +66,7 @@ const PDVPage: React.FC = () => {
     const [cupomModalAberto, setCupomModalAberto] = useState(false);
     const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
     const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
+    const [deliveryModalAberto, setDeliveryModalAberto] = useState(false);
 
     const isFiado = pagamentos.some(p => p.forma === 'fiado');
 
@@ -199,6 +202,19 @@ const PDVPage: React.FC = () => {
 
     return (
         <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100">
+            <UnifiedDeliverySaleModal
+                isOpen={deliveryModalAberto}
+                onClose={() => setDeliveryModalAberto(false)}
+                onCreated={() => {
+                    setDeliveryModalAberto(false);
+                    limparCarrinho();
+                    setFormaPagamentoAberta(false);
+                }}
+                initialCart={carrinho}
+                initialCustomer={cliente}
+                initialPagamentos={pagamentos}
+            />
+
             <CaixaManager
                 caixaAtual={caixaAberto}
                 setCaixaAtual={setCaixaAberto}
@@ -479,6 +495,15 @@ const PDVPage: React.FC = () => {
                                         <Check className="w-7 h-7" />
                                     )}
                                     <span>Concluir Venda</span>
+                                </button>
+                                
+                                <button
+                                    onClick={() => setDeliveryModalAberto(true)}
+                                    disabled={carrinho.length === 0}
+                                    className={`w-full h-14 rounded-2xl flex items-center justify-center gap-3 text-sm font-black uppercase tracking-widest transition-all mt-3 ${carrinho.length === 0 ? 'bg-slate-100 text-slate-300' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 shadow-sm'}`}
+                                >
+                                    <Truck className="w-5 h-5" />
+                                    <span>Enviar p/ Entrega</span>
                                 </button>
                             </div>
                         </motion.div>
