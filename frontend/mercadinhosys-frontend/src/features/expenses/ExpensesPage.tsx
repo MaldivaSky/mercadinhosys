@@ -78,6 +78,7 @@ const CATEGORIAS = [
     { value: "manutencao", label: "🔧 Manutenção", cor: "#78716c", tipo: "variavel", grupo: "Operacional & Excepcionais" },
     { value: "fiado", label: "📋 Fiado (Dívida Clientes)", cor: "#fb7185", tipo: "variavel", grupo: "Operacional & Excepcionais" },
     { value: "impostos", label: "🏛️ Impostos / Taxas", cor: "#64748b", tipo: "fixa", grupo: "Infraestrutura & Imóvel" },
+    { value: "descarte_perda", label: "🗑️ Descarte / Perda Mercadoria", cor: "#dc2626", tipo: "variavel", grupo: "Fornecedores & Compras" },
     { value: "outros", label: "📌 Outros", cor: "#94a3b8", tipo: "variavel", grupo: "Operacional & Excepcionais" },
 ];
 

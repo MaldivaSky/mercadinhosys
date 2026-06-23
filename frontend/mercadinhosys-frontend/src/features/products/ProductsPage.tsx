@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Calculator,
   X,
@@ -32,6 +32,7 @@ type LinhaProdutoLote = { produto: ProdutoComLotes; lote: LoteNoPeriodo | null }
 
 const ProductsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   // todosProdutos removed in favor of server-side stats
   const [loading, setLoading] = useState(true);
@@ -166,6 +167,34 @@ const ProductsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [loadStats]);
   useEffect(() => { loadCategorias(); loadFornecedores(); }, [loadCategorias, loadFornecedores]);
+
+  // Handle location state for opening modals from Hub
+  useEffect(() => {
+    if (location.state && produtos.length > 0) {
+      const state = location.state as any;
+      if (state.openHistoryFor) {
+        const prod = produtos.find(p => p.id === state.openHistoryFor);
+        if (prod) {
+          setSelectedProduct(prod);
+          setShowProductHistory(true);
+        }
+      } else if (state.openAdjustFor) {
+        const prod = produtos.find(p => p.id === state.openAdjustFor);
+        if (prod) {
+          setSelectedProduct(prod);
+          setShowStockModal(true);
+        }
+      } else if (state.openDiscardFor) {
+        const prod = produtos.find(p => p.id === state.openDiscardFor);
+        if (prod) {
+          setSelectedProduct(prod);
+          setShowDiscardModal(true);
+        }
+      }
+      // Clear state so it doesn't reopen on reload
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, produtos]);
 
   // Handlers
   const handleDelete = async (id: number) => {
@@ -325,18 +354,15 @@ const ProductsPage: React.FC = () => {
       novosFiltros.ordenar_por = 'data_validade';
       novosFiltros.direcao = 'asc';
     } else if (filter === 'classe_a') {
-      // Backend precisa suportar filtro por classe ABC ou ordenamos
-      // Como o backend calculate ABC dinamicamente, talvez não tenha filtro direto na query SQL simples.
-      // Vamos focar no que funciona: ordenação ou filtro se houver.
-      // O backend NÃO tem filtro ABC na query SQL reformulada. 
-      // Solução paliativa: Ordenar por valor total vendido (proxy para ABC)
+      novosFiltros.filtro_rapido = 'classe_a';
       novosFiltros.ordenar_por = 'total_vendido';
       novosFiltros.direcao = 'desc';
     } else if (filter === 'classe_c') {
+      novosFiltros.filtro_rapido = 'classe_c';
       novosFiltros.ordenar_por = 'total_vendido';
       novosFiltros.direcao = 'asc';
     } else if (filter === 'repor_urgente') {
-      novosFiltros.estoque_status = 'baixo'; // Backend trata 'baixo' (<= min)
+      novosFiltros.filtro_rapido = 'repor_urgente';
       novosFiltros.ordenar_por = 'quantidade';
       novosFiltros.direcao = 'asc';
     } else if (filter === 'margem_alta') {
@@ -348,10 +374,11 @@ const ProductsPage: React.FC = () => {
       novosFiltros.ordenar_por = 'margem_lucro';
       novosFiltros.direcao = 'asc';
     } else if (filter === 'giro_rapido') {
-      // Assumindo suporte a ordenação por ultima_venda ou similar
+      novosFiltros.filtro_rapido = 'giro_rapido';
       novosFiltros.ordenar_por = 'ultima_venda';
       novosFiltros.direcao = 'desc';
     } else if (filter === 'giro_lento') {
+      novosFiltros.filtro_rapido = 'giro_lento';
       novosFiltros.ordenar_por = 'ultima_venda';
       novosFiltros.direcao = 'asc';
     }
@@ -746,6 +773,10 @@ const ProductsPage: React.FC = () => {
           loadProdutos();
         }}
         timeframe={expiryTimeframe}
+        onDiscard={(produto) => {
+          setSelectedProduct(produto);
+          setShowDiscardModal(true);
+        }}
       />
 
       <AdvancedAnalyticsModal

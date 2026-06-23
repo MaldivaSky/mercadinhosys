@@ -5,7 +5,7 @@ import { formatCurrency } from '../../utils/formatters';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { ArrowLeft, TrendingUp, DollarSign, Activity, Truck, AlertTriangle, Percent, Clock } from 'lucide-react';
+import { ArrowLeft, TrendingUp, DollarSign, Activity, Truck, AlertTriangle, Percent, Clock, Package } from 'lucide-react';
 import './ProductHubPage.css';
 
 export default function ProductHubPage() {
@@ -72,7 +72,7 @@ export default function ProductHubPage() {
     else if (periodo === '90d') diasPeriodo = 90;
     else if (periodo === '1y') diasPeriodo = 365;
     else if (periodo === 'all') {
-        const dataCadastro = new Date(produto?.data_cadastro || produto?.created_at || new Date().getTime() - (365*24*60*60*1000));
+        const dataCadastro = new Date(estatisticas?.primeira_venda || produto?.data_cadastro || produto?.created_at || new Date().getTime() - (365*24*60*60*1000));
         const diasDesdeCadastro = Math.max(1, Math.ceil((new Date().getTime() - dataCadastro.getTime()) / (1000 * 3600 * 24)));
         diasPeriodo = diasDesdeCadastro;
     }
@@ -81,7 +81,21 @@ export default function ProductHubPage() {
     const coberturaDias = vmd > 0 ? Math.round(produto.quantidade / vmd) : 0;
 
     // Preparar dados do gráfico (Histórico de Preços cruzado com Lotes)
-    const chartData = (historico_precos || []).slice(0, 15).reverse().map((hp: any) => {
+    const chartData: any[] = [];
+    const reversedHistory = (historico_precos || []).slice(0, 15).reverse();
+
+    if (reversedHistory.length > 0) {
+        const firstHp = reversedHistory[0];
+        chartData.push({
+            data: 'Inicial',
+            Custo: firstHp.preco_custo_anterior || produto.preco_custo,
+            Venda: firstHp.preco_venda_anterior || produto.preco_venda,
+            Margem: margemReal,
+            Fornecedor: 'Cadastro Inicial'
+        });
+    }
+
+    reversedHistory.forEach((hp: any) => {
         // Encontrar lote que tenha a data de entrada próxima ou custo correspondente
         const dataAlteracao = new Date(hp.data_alteracao || hp.created_at);
         const dataStr = dataAlteracao.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
@@ -101,13 +115,13 @@ export default function ProductHubPage() {
             fornecedorNome = produto.fornecedor.nome_fantasia;
         }
 
-        return {
+        chartData.push({
             data: dataStr,
             Custo: hp.preco_custo_novo,
             Venda: hp.preco_venda_novo,
             Margem: hp.margem_nova,
             Fornecedor: fornecedorNome
-        };
+        });
     });
 
     // Se não houver histórico de preços, cria um ponto inicial falso para o gráfico não ficar vazio
@@ -196,6 +210,34 @@ export default function ProductHubPage() {
                 </div>
             </header>
 
+            {/* Ações Rápidas Integradas */}
+            <div style={{ display: 'flex', gap: '12px', padding: '0 24px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                <button 
+                    onClick={() => navigate('/products', { state: { openHistoryFor: produto.id } })}
+                    className="btn-primary" 
+                    style={{ background: '#4f46e5', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold' }}
+                >
+                    <Clock size={18} />
+                    Histórico & Movimentações
+                </button>
+                <button 
+                    onClick={() => navigate('/products', { state: { openAdjustFor: produto.id } })}
+                    className="btn-secondary" 
+                    style={{ background: '#f1f5f9', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #cbd5e1' }}
+                >
+                    <Package size={18} />
+                    Ajustar Estoque
+                </button>
+                <button 
+                    onClick={() => navigate('/products', { state: { openDiscardFor: produto.id } })}
+                    className="btn-secondary" 
+                    style={{ background: '#fef2f2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #fecaca' }}
+                >
+                    <AlertTriangle size={18} />
+                    Descartar Perda/Vencido
+                </button>
+            </div>
+
             {/* Filtros e KPIs Principais */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px', padding: '0 24px' }}>
                 <select 
@@ -280,7 +322,7 @@ export default function ProductHubPage() {
                                     </linearGradient>
                                 </defs>
                                 <XAxis dataKey="data" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} />
+                                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} domain={['auto', 'auto']} />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <Tooltip content={<CustomTooltip />} />
                                 <Area type="monotone" dataKey="Venda" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorVenda)" />

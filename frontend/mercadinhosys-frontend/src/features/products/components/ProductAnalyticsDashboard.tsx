@@ -499,6 +499,23 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                     </div>
 
                     <div className="space-y-4">
+                        {/* ALERTA CRÍTICO DE COBERTURA (< 10 DIAS) */}
+                        <div onClick={() => onAdvancedAnalyticsClick('alerta_cobertura')} className="cursor-pointer group hover:bg-red-50 dark:hover:bg-red-900/20 p-3 -mx-2 rounded-lg transition-all border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10">
+                            <div className="flex justify-between items-center mb-1">
+                                <div className="flex items-center gap-2">
+                                    <AlertTriangle className="w-5 h-5 text-red-600 animate-pulse group-hover:scale-110 transition-transform" />
+                                    <span className="text-sm font-bold text-red-700 dark:text-red-400 group-hover:underline">
+                                        Alerta: Cobertura Crítica
+                                    </span>
+                                </div>
+                                <span className="text-xs font-bold px-2 py-1 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400 rounded-full">
+                                    Ação Necessária
+                                </span>
+                            </div>
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                Produtos com menos de 11 dias de estoque.
+                            </p>
+                        </div>
                         {/* Giro Rápido */}
                         <div onClick={() => onAdvancedAnalyticsClick('giro_rapido')} className="cursor-pointer group hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition-colors">
                             <div className="flex justify-between items-center mb-2">

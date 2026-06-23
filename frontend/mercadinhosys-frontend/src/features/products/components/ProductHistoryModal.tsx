@@ -53,11 +53,13 @@ interface FornecedorInfo {
 
 const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => {
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'vendas' | 'precos' | 'fornecedor'>('vendas');
+    const [activeTab, setActiveTab] = useState<'vendas' | 'precos' | 'estoque' | 'fornecedor'>('vendas');
     const [historicoPrecos, setHistoricoPrecos] = useState<HistoricoPreco[]>([]);
     const [vendasHistorico, setVendasHistorico] = useState<VendaHistoricoDetailed[]>([]);
     const [estatisticasVendas, setEstatisticasVendas] = useState<EstatisticasVendas | null>(null);
     const [fornecedorInfo, setFornecedorInfo] = useState<FornecedorInfo | null>(null);
+    const [ultimaCompra, setUltimaCompra] = useState<any | null>(null);
+    const [movimentacoesEstoque, setMovimentacoesEstoque] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
@@ -87,7 +89,18 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                 setEstatisticasVendas(null);
             }
 
-            // Carregar informações do fornecedor
+            // Carregar dados principais do produto (movimentações, fornecedor fallback)
+            let prodData: any = null;
+            try {
+                const prodRes = await apiClient.get(`/produtos/${produto.id}`);
+                prodData = prodRes.data;
+                setMovimentacoesEstoque(prodData.movimentacoes || []);
+            } catch (error) {
+                console.error('Erro ao carregar movimentações:', error);
+                setMovimentacoesEstoque([]);
+            }
+
+            // Carregar informações do fornecedor e última compra
             if (produto.fornecedor_id) {
                 try {
                     const fornecedorRes = await apiClient.get(`/fornecedores/${produto.fornecedor_id}`);
@@ -96,8 +109,24 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                     console.error('Erro ao carregar fornecedor:', error);
                     setFornecedorInfo(null);
                 }
+
+                try {
+                    const pedidosRes = await apiClient.get('/pedidos-compra/', {
+                        params: { fornecedor_id: produto.fornecedor_id, per_page: 1 }
+                    });
+                    setUltimaCompra(pedidosRes.data.pedidos?.[0] || null);
+                } catch (error) {
+                    console.error('Erro ao carregar última compra:', error);
+                    setUltimaCompra(null);
+                }
             } else {
-                setFornecedorInfo(null);
+                // Tenta usar o fornecedor mapeado via pedidos_compra pelo backend
+                if (prodData && prodData.produto && prodData.produto.fornecedor) {
+                    setFornecedorInfo(prodData.produto.fornecedor);
+                } else {
+                    setFornecedorInfo(null);
+                }
+                setUltimaCompra(null);
             }
         } catch (error) {
             console.error('Erro ao carregar dados:', error);
@@ -154,6 +183,16 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                     >
                         <DollarSign className="w-4 h-4" />
                         Preços
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('estoque')}
+                        className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'estoque'
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                            : 'bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 hover:bg-gray-100'
+                            }`}
+                    >
+                        <Package className="w-4 h-4" />
+                        Estoque
                     </button>
                     <button
                         onClick={() => setActiveTab('fornecedor')}
@@ -385,6 +424,60 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                                 </div>
                             )}
 
+                            {activeTab === 'estoque' && (
+                                <div className="space-y-6">
+                                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden shadow-sm">
+                                        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                                <Package className="w-5 h-5 text-indigo-500" />
+                                                Movimentações de Estoque
+                                            </h3>
+                                        </div>
+                                        <div className="p-0">
+                                            {movimentacoesEstoque.length > 0 ? (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left">
+                                                        <thead className="bg-gray-50 dark:bg-gray-900/50">
+                                                            <tr>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Data</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Tipo</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Quantidade</th>
+                                                                <th className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Motivo / Estoque Atual</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                            {movimentacoesEstoque.map((mov, idx) => (
+                                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                                                    <td className="px-6 py-4 text-xs font-bold text-gray-500">{formatDate(mov.created_at)}</td>
+                                                                    <td className="px-6 py-4">
+                                                                        <span className={`px-2 py-1 rounded text-xs font-bold ${mov.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                            {mov.tipo.toUpperCase()}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 font-black text-gray-800 dark:text-white">
+                                                                        {mov.tipo === 'entrada' ? '+' : '-'}{mov.quantidade}
+                                                                    </td>
+                                                                    <td className="px-6 py-4">
+                                                                        <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">{mov.motivo || '---'}</p>
+                                                                        <p className="text-xs text-gray-400 mt-1">
+                                                                            Ficou: <span className="font-bold">{mov.quantidade_atual}</span> un. · Resp: {mov.funcionario || 'Sistema'}
+                                                                        </p>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="py-16 flex flex-col items-center justify-center opacity-30">
+                                                    <Package className="w-12 h-12 mb-3" />
+                                                    <p className="font-bold text-sm">Nenhuma movimentação registrada</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             {activeTab === 'fornecedor' && (
                                 <div className="space-y-6">
                                     {fornecedorInfo ? (
@@ -419,8 +512,24 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                                             <div className="space-y-4">
                                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                                                     <p className="text-[10px] text-gray-500 font-black uppercase mb-4">Última Compra</p>
-                                                    <p className="text-lg font-black text-gray-800 dark:text-white">---</p>
-                                                    <p className="text-xs text-gray-400 italic mt-1 font-medium">Data do último pedido</p>
+                                                    {ultimaCompra ? (
+                                                        <>
+                                                            <p className="text-lg font-black text-gray-800 dark:text-white">
+                                                                {formatDate(ultimaCompra.data_pedido || ultimaCompra.created_at)}
+                                                            </p>
+                                                            <p className="text-xs text-indigo-500 font-bold mt-1">
+                                                                #{ultimaCompra.numero_pedido} · {formatCurrency(ultimaCompra.total || 0)}
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-400 italic mt-1 font-semibold uppercase">
+                                                                Status: {ultimaCompra.status}
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <p className="text-lg font-black text-gray-800 dark:text-white">Nenhuma compra</p>
+                                                            <p className="text-xs text-gray-400 italic mt-1 font-medium">Sem pedidos registrados</p>
+                                                        </>
+                                                    )}
                                                 </div>
                                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                                                     <p className="text-[10px] text-gray-500 font-black uppercase mb-4">Ranking</p>

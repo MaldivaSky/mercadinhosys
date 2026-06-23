@@ -61,28 +61,50 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
                 if (type === 'abc_b') filtered = classB;
                 if (type === 'abc_c') filtered = classC;
 
-            } else if (type.startsWith('giro_')) {
+            } else if (type.startsWith('giro_') || type === 'alerta_cobertura') {
                 const hoje = new Date();
                 const rapido: Produto[] = [];
                 const normal: Produto[] = [];
                 const lento: Produto[] = [];
+                const coberturaBaixa: Produto[] = [];
 
                 allProducts.forEach(p => {
-                    if (!p.ultima_venda) {
-                        lento.push(p);
-                    } else {
-                        const dataUltimaVenda = new Date(p.ultima_venda);
-                        const diasDesdeVenda = Math.floor((hoje.getTime() - dataUltimaVenda.getTime()) / (1000 * 60 * 60 * 24));
+                    const dataCadastro = p.created_at ? new Date(p.created_at) : new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    let diasVida = Math.max(1, Math.floor((hoje.getTime() - dataCadastro.getTime()) / (1000 * 60 * 60 * 24)));
+                    
+                    // Suavizar dias_vida se for muito baixo mas tiver muita venda (simulação)
+                    if (diasVida < 7 && (p.quantidade_vendida || 0) > 10) {
+                        diasVida = 30;
+                    }
 
-                        if (diasDesdeVenda <= 7) rapido.push(p);
-                        else if (diasDesdeVenda <= 30) normal.push(p);
+                    const vmd = (p.quantidade_vendida || 0) / diasVida;
+                    
+                    if (vmd > 0) {
+                        const cobertura = (p.quantidade || 0) / vmd;
+                        
+                        // Guardar esses valores no objeto para mostrar na UI depois
+                        (p as any)._vmd_calc = vmd;
+                        (p as any)._cobertura_calc = cobertura;
+
+                        if (cobertura <= 15) rapido.push(p);
+                        else if (cobertura <= 60) normal.push(p);
                         else lento.push(p);
+
+                        // Alerta Cobertura Crítica (<= 10 dias)
+                        if (cobertura <= 10) {
+                            coberturaBaixa.push(p);
+                        }
+                    } else {
+                        (p as any)._vmd_calc = 0;
+                        (p as any)._cobertura_calc = 999; // infinito
+                        lento.push(p);
                     }
                 });
 
-                if (type === 'giro_rapido') filtered = rapido;
-                if (type === 'giro_normal') filtered = normal;
-                if (type === 'giro_lento') filtered = lento;
+                if (type === 'giro_rapido') filtered = rapido.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
+                if (type === 'giro_normal') filtered = normal.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
+                if (type === 'giro_lento') filtered = lento.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
+                if (type === 'alerta_cobertura') filtered = coberturaBaixa.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
             }
 
             setProdutosFiltrados(filtered);
@@ -102,12 +124,14 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
         'abc_c': 'Produtos Classe C (5% Faturamento)',
         'giro_rapido': 'Giro Rápido (Cobertura de até 15 dias)',
         'giro_normal': 'Giro Normal (Cobertura de 16 a 60 dias)',
-        'giro_lento': 'Giro Lento (Cobertura acima de 60 dias)'
+        'giro_lento': 'Giro Lento (Cobertura acima de 60 dias)',
+        'alerta_cobertura': 'Estoque Crítico (Menos de 11 dias de cobertura)'
     };
 
     const isABC = type.startsWith('abc_');
-    const headerColor = isABC ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600';
-    const Icon = isABC ? BarChart3 : (type === 'giro_rapido' ? Zap : (type === 'giro_normal' ? Clock : TrendingDown));
+    const isGiro = type.startsWith('giro_');
+    const headerColor = isABC ? 'bg-blue-100 text-blue-600' : (type === 'alerta_cobertura' ? 'bg-red-100 text-red-600' : 'bg-purple-100 text-purple-600');
+    const Icon = isABC ? BarChart3 : (type === 'alerta_cobertura' ? TrendingDown : (type === 'giro_rapido' ? Zap : (type === 'giro_normal' ? Clock : TrendingDown)));
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
@@ -176,6 +200,15 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
                                             {isABC ? (
                                                 <div className="flex flex-col items-end">
                                                     <span className="text-sm font-bold text-blue-600">Fat: {formatCurrency(p.total_vendido || 0)}</span>
+                                                </div>
+                                            ) : (isGiro || type === 'alerta_cobertura') ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span className={`text-sm font-bold ${(p as any)._cobertura_calc <= 10 ? 'text-red-600' : 'text-purple-600'}`}>
+                                                        Cob: {(p as any)._cobertura_calc === 999 ? 'Infinito' : `${Math.ceil((p as any)._cobertura_calc)} dias`}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">
+                                                        VMD: {((p as any)._vmd_calc || 0).toFixed(1)}/dia
+                                                    </span>
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-end">

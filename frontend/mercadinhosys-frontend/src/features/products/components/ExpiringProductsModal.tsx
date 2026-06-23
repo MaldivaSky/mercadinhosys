@@ -27,9 +27,10 @@ interface ExpiringProductsModalProps {
     isOpen: boolean;
     onClose: () => void;
     timeframe: 'vencidos' | '15' | '30' | '90';
+    onDiscard?: (produto: Produto, loteId?: number) => void;
 }
 
-const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, onClose, timeframe }) => {
+const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, onClose, timeframe, onDiscard }) => {
     const [loading, setLoading] = useState(false);
     const [produtos, setProdutos] = useState<ProdutoComLotes[]>([]);
 
@@ -230,9 +231,18 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                                             )}
                                         </div>
                                         <div className="col-span-2 text-right">
-                                            <span className={`text-xs font-bold px-2 py-1 rounded-full bg-white dark:bg-gray-800 shadow-sm border ${sugestao.cor} border-current opacity-80 uppercase tracking-tighter`}>
-                                                {sugestao.acao}
-                                            </span>
+                                            {sugestao.acao === 'Descarte' ? (
+                                                <button 
+                                                    onClick={() => onDiscard?.(p, lote?.id)}
+                                                    className={`text-xs font-bold px-3 py-1.5 rounded-full shadow-sm border opacity-90 hover:opacity-100 uppercase tracking-tighter transition-all bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800`}
+                                                >
+                                                    {sugestao.acao}
+                                                </button>
+                                            ) : (
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-full bg-white dark:bg-gray-800 shadow-sm border ${sugestao.cor} border-current opacity-80 uppercase tracking-tighter`}>
+                                                    {sugestao.acao}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 );

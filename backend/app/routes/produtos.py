@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
 import os
+import math
 from sqlalchemy.orm import joinedload
 from app.models import (
     db,
@@ -569,6 +570,7 @@ def listar_produtos():
                 query = query.filter(or_(cond_produto, Produto.id.in_(subq_lotes)))
             if vencidos and vencidos.lower() == "true":
                 cond_produto = and_(
+                    Produto.quantidade > 0,
                     Produto.data_validade.isnot(None),
                     Produto.data_validade < hoje,
                 )
@@ -586,10 +588,13 @@ def listar_produtos():
         except Exception:
             # Fallback: filtrar só por data_validade do produto (sem lotes)
             if validade_proxima and validade_proxima.lower() == "true":
-                limite = hoje + timedelta(days=dias_validade)
+                dias = request.args.get("dias_validade", 30, type=int)
+                limite = hoje + timedelta(days=dias)
+                query = query.filter(Produto.quantidade > 0)
                 query = query.filter(Produto.data_validade.isnot(None))
                 query = query.filter(Produto.data_validade >= hoje, Produto.data_validade <= limite)
             if vencidos and vencidos.lower() == "true":
+                query = query.filter(Produto.quantidade > 0)
                 query = query.filter(Produto.data_validade.isnot(None))
                 query = query.filter(Produto.data_validade < hoje)
 
@@ -598,6 +603,25 @@ def listar_produtos():
             query = query.filter(Produto.margem_lucro >= 50)
         elif filtro_rapido == "margem_baixa":
             query = query.filter(Produto.margem_lucro < 30)
+        elif filtro_rapido == "classe_a":
+            # Usar a classificação ABC gravada no banco
+            query = query.filter(func.upper(Produto.classificacao_abc) == "A")
+        elif filtro_rapido == "classe_c":
+            query = query.filter(func.upper(Produto.classificacao_abc) == "C")
+        elif filtro_rapido == "repor_urgente":
+            query = query.filter(
+                or_(
+                    Produto.quantidade == 0,
+                    Produto.quantidade <= Produto.quantidade_minima
+                )
+            )
+        elif filtro_rapido == "giro_rapido":
+            query = query.filter(Produto.quantidade_vendida >= 30)
+        elif filtro_rapido == "giro_lento":
+            query = query.filter(
+                Produto.quantidade_vendida > 0,
+                Produto.quantidade_vendida < 30,
+            )
 
         # Filtro por Classificação ABC (drill-down do dashboard)
         classificacao_abc = request.args.get("classificacao_abc")
@@ -881,6 +905,39 @@ def obter_produto(id):
         except Exception as e:
             current_app.logger.warning("obter_produto: preco_venda_efetivo por lote ignorado: %s", e)
 
+        # Se não tiver fornecedor vinculado diretamente, tenta buscar o do último lote ou pedido de compra
+        if not dados_produto.get("fornecedor") and not dados_produto.get("fornecedor_id"):
+            try:
+                ultimo_pedido = PedidoCompraItem.query.filter_by(produto_id=id).order_by(PedidoCompraItem.id.desc()).first()
+                if ultimo_pedido and ultimo_pedido.pedido and ultimo_pedido.pedido.fornecedor:
+                    fornecedor = ultimo_pedido.pedido.fornecedor
+                    dados_produto["fornecedor"] = {
+                        "id": fornecedor.id,
+                        "nome_fantasia": fornecedor.nome_fantasia,
+                        "razao_social": fornecedor.razao_social,
+                        "cnpj": fornecedor.cnpj,
+                        "telefone": fornecedor.telefone,
+                        "email": fornecedor.email,
+                        "cidade": fornecedor.cidade,
+                        "estado": fornecedor.estado
+                    }
+                else:
+                    ultimo_lote = ProdutoLote.query.filter_by(produto_id=id).order_by(ProdutoLote.data_entrada.desc()).first()
+                    if ultimo_lote and hasattr(ultimo_lote, 'fornecedor') and ultimo_lote.fornecedor:
+                        fornecedor = ultimo_lote.fornecedor
+                        dados_produto["fornecedor"] = {
+                            "id": fornecedor.id,
+                            "nome_fantasia": fornecedor.nome_fantasia,
+                            "razao_social": fornecedor.razao_social,
+                            "cnpj": fornecedor.cnpj,
+                            "telefone": fornecedor.telefone,
+                            "email": fornecedor.email,
+                            "cidade": fornecedor.cidade,
+                            "estado": fornecedor.estado
+                        }
+            except Exception as e:
+                current_app.logger.warning(f"Erro ao buscar fornecedor alternativo para produto {id}: {e}")
+
         # Histórico de movimentações (últimas 20)
         movimentacoes = (
             MovimentacaoEstoque.query.filter_by(
@@ -957,9 +1014,9 @@ def obter_produto(id):
             )
 
         # Estatísticas de vendas
-        total_vendido = produto.quantidade_vendida or 0
+        total_vendido = float(produto.quantidade_vendida or 0)
         valor_total_vendido = float(
-            produto.preco_venda * (produto.quantidade_vendida or 0)
+            (produto.preco_venda or 0) * (produto.quantidade_vendida or 0)
         )
         ticket_medio_produto = (
             valor_total_vendido / total_vendido if total_vendido > 0 else 0
@@ -1761,16 +1818,18 @@ def descartar_produto(id):
             }), 400
 
         quantidade_anterior = produto.quantidade
-        produto.quantidade -= quantidade
         
         # 1. Registrar Movimentação e Baixar Estoque (FIFO ou Direto por Lote)
         movimentacao = None
+        lotes_consumidos = None
+        lote = None
         if lote_id:
             lote = ProdutoLote.query.filter_by(id=lote_id, produto_id=id).first()
             if not lote or lote.quantidade < quantidade:
                 return jsonify({"success": False, "message": "Lote inválido ou quantidade insuficiente no lote"}), 400
             
             lote.quantidade -= quantidade
+            produto.quantidade -= quantidade
             movimentacao = MovimentacaoEstoque(
                 estabelecimento_id=estabelecimento_id,
                 produto_id=produto.id,
@@ -1813,11 +1872,17 @@ def descartar_produto(id):
         db.session.add(movimentacao)
 
         # 2. Gerar Despesa Automática (Prejuízo)
-        valor_prejuizo = float(quantidade * produto.preco_custo)
+        if lote_id and lote:
+            valor_prejuizo = float(quantidade * lote.preco_custo_unitario)
+        elif lotes_consumidos:
+            valor_prejuizo = float(sum(item['quantidade_consumida'] * item['lote'].preco_custo_unitario for item in lotes_consumidos))
+        else:
+            valor_prejuizo = float(quantidade * produto.preco_custo)
+
         nova_despesa = Despesa(
             estabelecimento_id=estabelecimento_id,
             descricao=f"Prejuízo Mercadoria: {produto.nome} ({quantidade} {produto.unidade_medida}) - {motivo_especifico}",
-            categoria="Prejuízo Produtos",
+            categoria="descarte_perda",
             tipo="variavel",
             valor=valor_prejuizo,
             data_despesa=datetime.now().date(),
@@ -2396,41 +2461,23 @@ def obter_estatisticas_produtos():
             hoje = datetime.now(timezone.utc)
             
             if filtro_rapido == "classe_a":
-                # Para classe A, precisamos calcular baseado no faturamento
-                # Por simplicidade, vamos usar produtos com maior total_vendido
-                query = query.filter(Produto.total_vendido > 0).order_by(Produto.total_vendido.desc())
-                total_produtos = query.count()
-                limite_a = int(total_produtos * 0.2)  # Top 20%
-                if limite_a > 0:
-                    produtos_classe_a = query.limit(limite_a).all()
-                    ids_classe_a = [p.id for p in produtos_classe_a]
-                    query = query.filter(Produto.id.in_(ids_classe_a))
-                else:
-                    query = query.filter(Produto.id == -1)  # Nenhum resultado
-                    
+                query = query.filter(func.upper(Produto.classificacao_abc) == "A")
             elif filtro_rapido == "classe_c":
-                # Classe C: produtos com menor faturamento ou sem vendas
+                query = query.filter(func.upper(Produto.classificacao_abc) == "C")
+            elif filtro_rapido == "repor_urgente":
                 query = query.filter(
                     or_(
-                        Produto.total_vendido == None,
-                        Produto.total_vendido == 0,
-                        Produto.quantidade_vendida == None,
-                        Produto.quantidade_vendida == 0
+                        Produto.quantidade == 0,
+                        Produto.quantidade <= Produto.quantidade_minima
                     )
                 )
-                
             elif filtro_rapido == "giro_rapido":
-                # Filtrado em Python usando a lógica de Cobertura VMD
-                pass
-                
-            elif filtro_rapido == "giro_normal":
-                # Filtrado em Python usando a lógica de Cobertura VMD
-                pass
-                
+                query = query.filter(Produto.quantidade_vendida >= 30)
             elif filtro_rapido == "giro_lento":
-                # Filtrado em Python usando a lógica de Cobertura VMD
-                pass
-                
+                query = query.filter(
+                    Produto.quantidade_vendida > 0,
+                    Produto.quantidade_vendida < 30,
+                )
             elif filtro_rapido == "margem_alta":
                 # Filtrar em Python: margem > 50%
                 # Será aplicado após buscar todos os produtos
@@ -2579,12 +2626,49 @@ def obter_estatisticas_produtos():
             faturamento = item['faturamento']
             
             try:
-                # Status do estoque
+                # Calcular VMD e Cobertura (Inteligência de Estoque)
+                data_cadastro = produto.created_at.date() if produto.created_at else (hoje_date - timedelta(days=30))
+                # Se houver uma data de última venda e for anterior ao cadastro (ex: seed retroativo), ajusta os dias de vida
+                dias_vida = max(1, (hoje_date - data_cadastro).days)
+                if hasattr(produto, '_ultima_venda_real') and produto._ultima_venda_real:
+                    dt_venda = produto._ultima_venda_real
+                    if isinstance(dt_venda, str):
+                        try:
+                            # Tenta converter string ISO para date
+                            dt_venda = datetime.fromisoformat(dt_venda.replace('Z', '+00:00')).date()
+                        except ValueError:
+                            # Fallback rudimentar se falhar
+                            dt_venda = hoje_date
+                    elif hasattr(dt_venda, 'date'):
+                        dt_venda = dt_venda.date()
+                        
+                    if isinstance(dt_venda, date):
+                        dias_desde_venda = (hoje_date - dt_venda).days
+                        if dias_desde_venda > dias_vida:
+                            dias_vida = max(1, dias_desde_venda)
+                
+                # Se dias_vida for muito curto e houver muita venda (simulação), vamos suavizar para evitar VMD infinito
+                if dias_vida < 7 and (produto.quantidade_vendida or 0) > 10:
+                    dias_vida = 30 # Suaviza a média para produtos recém cadastrados com alto volume (ex: importação/seed)
+
+                qtd_vendida = float(produto.quantidade_vendida or 0)
+                vmd = qtd_vendida / dias_vida if qtd_vendida > 0 else 0
+                cobertura = float(produto.quantidade or 0) / vmd if vmd > 0 else 999
+                
+                # Armazenar VMD e Cobertura no objeto para usar depois no Giro
+                produto._vmd_calc = vmd
+                produto._cobertura_calc = cobertura
+
+                # Status do estoque com Inteligência
                 qtd = produto.quantidade or 0
                 qtd_min = produto.quantidade_minima or 0
+                
+                # Inteligência: Considera baixo estoque se a quantidade < quantidade_minima OU se a cobertura for < 10 dias (mínimo inteligente de 10 dias de VMD)
+                estoque_minimo_inteligente = max(qtd_min, math.ceil(vmd * 10))
+
                 if qtd <= 0:
                     produtos_esgotados += 1
-                elif qtd <= qtd_min:
+                elif qtd <= estoque_minimo_inteligente:
                     produtos_baixo_estoque += 1
                 else:
                     produtos_normal += 1
@@ -2606,7 +2690,7 @@ def obter_estatisticas_produtos():
 
                 # Validade
                 dt_val_efetiva = getattr(produto, '_data_validade_real', None)
-                if dt_val_efetiva:
+                if dt_val_efetiva and produto.quantidade > 0:
                     try:
                         dt_val = dt_val_efetiva.date() if hasattr(dt_val_efetiva, 'date') else dt_val_efetiva
                         if isinstance(dt_val, date):
@@ -2637,22 +2721,14 @@ def obter_estatisticas_produtos():
                 else:
                     abc_counts["C"] += 1
                 
-                # Giro de estoque (Baseado em Cobertura / VMD)
+                # Giro de estoque (Baseado na Inteligência de Cobertura / VMD)
                 try:
-                    data_cadastro = produto.created_at.date() if produto.created_at else (hoje_date - timedelta(days=365))
-                    dias_vida = max(1, (hoje_date - data_cadastro).days)
-                    qtd_vendida = float(produto.quantidade_vendida or 0)
-                    
-                    if qtd_vendida > 0:
-                        vmd = qtd_vendida / dias_vida
-                        if vmd > 0:
-                            cobertura = float(produto.quantidade or 0) / vmd
-                            if cobertura <= 15:
-                                giro_counts["rapido"] += 1
-                            elif cobertura <= 60:
-                                giro_counts["normal"] += 1
-                            else:
-                                giro_counts["lento"] += 1
+                    if hasattr(produto, '_cobertura_calc') and hasattr(produto, '_vmd_calc') and produto._vmd_calc > 0:
+                        cobertura = produto._cobertura_calc
+                        if cobertura <= 15:
+                            giro_counts["rapido"] += 1
+                        elif cobertura <= 60:
+                            giro_counts["normal"] += 1
                         else:
                             giro_counts["lento"] += 1
                     else:
@@ -2674,11 +2750,20 @@ def obter_estatisticas_produtos():
             except Exception as e_dict:
                 current_app.logger.error(f"Erro em to_dict do produto {p.id}: {e_dict}")
         
-        # Top 10 Críticos
+        # Top 10 Críticos (Agora com Inteligência de Cobertura)
+        criticos_candidatos = []
+        for p in produtos:
+            qtd = p.quantidade or 0
+            qtd_min = p.quantidade_minima or 0
+            cobertura = getattr(p, '_cobertura_calc', 999)
+            if qtd <= qtd_min or cobertura <= 10:
+                criticos_candidatos.append(p)
+                
         criticos = sorted(
-            [p for p in produtos if (p.quantidade or 0) <= (p.quantidade_minima or 0)],
+            criticos_candidatos,
             key=lambda x: (x.quantidade or 0)
         )[:10]
+        
         criticos_lista = []
         for p in criticos:
             try:
@@ -2700,9 +2785,9 @@ def obter_estatisticas_produtos():
         # Preparar resposta
         estatisticas = {
             "total_produtos": total_produtos_global,
-            "produtos_baixo_estoque": baixo_estoque_global,
-            "produtos_esgotados": esgotados_global,
-            "produtos_normal": normal_global,
+            "produtos_baixo_estoque": produtos_baixo_estoque, # Usar a variável do loop com inteligência
+            "produtos_esgotados": produtos_esgotados, # Usar a variável do loop
+            "produtos_normal": produtos_normal, # Usar a variável do loop
             "total_filtrado": total_produtos,
             "valor_total_estoque": float(valor_total_estoque.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
             "margem_media": float(margem_media.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
@@ -3761,10 +3846,21 @@ def obter_produto_hub(id):
         produto_dict['quantidade_vendida'] = qtd_vendida
         produto_dict['total_vendido'] = total_vendido
         
+        # Find primeira venda for accurate VMD calculation
+        primeira_venda_query = db.session.query(func.min(Venda.data_venda)).join(VendaItem, VendaItem.venda_id == Venda.id).filter(
+            VendaItem.produto_id == id,
+            Venda.estabelecimento_id == estabelecimento_id
+        ).first()
+        
+        primeira_venda_str = None
+        if primeira_venda_query and primeira_venda_query[0]:
+            primeira_venda_str = primeira_venda_query[0].isoformat()
+
         estatisticas = {
             "valor_total_vendido": total_vendido,
             "lucro_total_estimado": lucro_estimado,
-            "dias_sem_venda": dias_sem_venda
+            "dias_sem_venda": dias_sem_venda,
+            "primeira_venda": primeira_venda_str
         }
         
         return jsonify({
@@ -3815,7 +3911,7 @@ def obter_vendas_historico(id):
         
         vendas_por_dia = (
             db.session.query(
-                func.date(VendaItem.created_at).label('data'),
+                func.date(Venda.data_venda).label('data'),
                 func.sum(VendaItem.quantidade).label('quantidade_total'),
                 func.sum(VendaItem.total_item).label('valor_total'),
                 func.count(VendaItem.id).label('numero_vendas')
@@ -3825,10 +3921,10 @@ def obter_vendas_historico(id):
                 VendaItem.produto_id == id,
                 Venda.estabelecimento_id == estabelecimento_id,
                 Venda.status == 'finalizada',
-                VendaItem.created_at >= data_inicio
+                Venda.data_venda >= data_inicio
             )
-            .group_by(func.date(VendaItem.created_at))
-            .order_by(func.date(VendaItem.created_at).asc())
+            .group_by(func.date(Venda.data_venda))
+            .order_by(func.date(Venda.data_venda).asc())
             .all()
         )
         

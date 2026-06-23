@@ -107,7 +107,7 @@ export default function SalesPage() {
         data_inicio: isoDate(new Date(Date.now() - 30 * 86400000)), data_fim: isoDate(),
         search: "", status: "", page: 1,
     });
-    const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+    const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     const carregarVendas = useCallback(async (f = filtros) => {
         setLoading(true);
