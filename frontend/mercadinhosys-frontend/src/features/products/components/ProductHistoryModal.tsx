@@ -59,6 +59,7 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
     const [estatisticasVendas, setEstatisticasVendas] = useState<EstatisticasVendas | null>(null);
     const [fornecedorInfo, setFornecedorInfo] = useState<FornecedorInfo | null>(null);
     const [ultimaCompra, setUltimaCompra] = useState<any | null>(null);
+    const [historicoCompras, setHistoricoCompras] = useState<any[]>([]);
     const [movimentacoesEstoque, setMovimentacoesEstoque] = useState<any[]>([]);
 
     useEffect(() => {
@@ -112,12 +113,14 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
 
                 try {
                     const pedidosRes = await apiClient.get('/pedidos-compra/', {
-                        params: { fornecedor_id: produto.fornecedor_id, per_page: 1 }
+                        params: { fornecedor_id: produto.fornecedor_id, per_page: 5 }
                     });
                     setUltimaCompra(pedidosRes.data.pedidos?.[0] || null);
+                    setHistoricoCompras(pedidosRes.data.pedidos || []);
                 } catch (error) {
                     console.error('Erro ao carregar última compra:', error);
                     setUltimaCompra(null);
+                    setHistoricoCompras([]);
                 }
             } else {
                 // Tenta usar o fornecedor mapeado via pedidos_compra pelo backend
@@ -510,37 +513,36 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                                             </div>
 
                                             <div className="space-y-4">
-                                                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-4">Última Compra</p>
-                                                    {ultimaCompra ? (
-                                                        <>
-                                                            <p className="text-lg font-black text-gray-800 dark:text-white">
-                                                                {formatDate(ultimaCompra.data_pedido || ultimaCompra.created_at)}
-                                                            </p>
-                                                            <p className="text-xs text-indigo-500 font-bold mt-1">
-                                                                #{ultimaCompra.numero_pedido} · {formatCurrency(ultimaCompra.total || 0)}
-                                                            </p>
-                                                            <p className="text-[10px] text-gray-400 italic mt-1 font-semibold uppercase">
-                                                                Status: {ultimaCompra.status}
-                                                            </p>
-                                                        </>
+                                                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm h-full">
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-4 flex items-center justify-between">
+                                                        <span>Últimos Pedidos</span>
+                                                        <span className="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-2 py-0.5 rounded-full">{historicoCompras.length}</span>
+                                                    </p>
+                                                    {historicoCompras.length > 0 ? (
+                                                        <div className="space-y-4">
+                                                            {historicoCompras.map((compra, i) => (
+                                                                <div key={compra.id} className="relative pl-4 border-l-2 border-indigo-100 dark:border-gray-700">
+                                                                    <div className="absolute w-2 h-2 bg-indigo-500 rounded-full -left-[5px] top-1.5 ring-4 ring-white dark:ring-gray-800"></div>
+                                                                    <p className="text-sm font-black text-gray-800 dark:text-white">
+                                                                        {formatDate(compra.data_pedido || compra.created_at)}
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500 mt-0.5">
+                                                                        Pedido <span className="font-bold text-indigo-500">#{compra.numero_pedido}</span>
+                                                                    </p>
+                                                                    <div className="flex items-center justify-between mt-1.5">
+                                                                        <span className="font-bold text-gray-800 dark:text-gray-300 text-xs">{formatCurrency(compra.total || 0)}</span>
+                                                                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${compra.status === 'Entregue' || compra.status === 'Concluído' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                                                                            {compra.status}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     ) : (
-                                                        <>
-                                                            <p className="text-lg font-black text-gray-800 dark:text-white">Nenhuma compra</p>
-                                                            <p className="text-xs text-gray-400 italic mt-1 font-medium">Sem pedidos registrados</p>
-                                                        </>
+                                                        <div className="py-8 text-center">
+                                                            <p className="text-xs text-gray-400 italic font-medium">Nenhum pedido de compra encontrado para este fornecedor.</p>
+                                                        </div>
                                                     )}
-                                                </div>
-                                                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-4">Ranking</p>
-                                                    <div className="flex gap-1 text-amber-500">
-                                                        <TrendingUp className="w-5 h-5 fill-current" />
-                                                        <TrendingUp className="w-5 h-5 fill-current" />
-                                                        <TrendingUp className="w-5 h-5 fill-current" />
-                                                        <TrendingUp className="w-5 h-5" />
-                                                        <TrendingUp className="w-5 h-5" />
-                                                    </div>
-                                                    <p className="text-xs text-gray-400 italic mt-2 font-medium">Baseado na pontualidade</p>
                                                 </div>
                                             </div>
                                         </div>

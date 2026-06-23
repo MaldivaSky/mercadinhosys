@@ -233,7 +233,7 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                                         <div className="col-span-2 text-right">
                                             {sugestao.acao === 'Descarte' ? (
                                                 <button 
-                                                    onClick={() => onDiscard?.(p, lote?.id)}
+                                                    onClick={() => onDiscard?.(p, lote?.id ?? undefined)}
                                                     className={`text-xs font-bold px-3 py-1.5 rounded-full shadow-sm border opacity-90 hover:opacity-100 uppercase tracking-tighter transition-all bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800`}
                                                 >
                                                     {sugestao.acao}

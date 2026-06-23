@@ -22,7 +22,7 @@ interface Venda {
     cliente?: { nome: string } | null;
     funcionario?: { nome: string } | null;
     total: number; desconto: number;
-    forma_pagamento?: string; data?: string; created_at?: string;
+    forma_pagamento?: string; data?: string; data_venda?: string; created_at?: string;
     status: string; quantidade_itens?: number;
     itens?: Array<{ produto_nome: string; quantidade: number; preco_unitario: number; total_item: number }>;
     pagamentos?: Array<{ forma_pagamento: string; valor: number }>;
@@ -102,6 +102,17 @@ export default function SalesPage() {
     const [cancelar, setCancelar] = useState<Venda | null>(null);
     const [motivo, setMotivo] = useState("");
     const [cancelando, setCancelando] = useState(false);
+    const [motivosEstorno, setMotivosEstorno] = useState<string[]>([]);
+
+    useEffect(() => {
+        let ativo = true;
+        apiClient.get("/configuracao/")
+            .then(({ data }) => {
+                if (ativo) setMotivosEstorno(data?.config?.motivos_estorno || []);
+            })
+            .catch(() => { /* mantém lista vazia; usuário ainda pode digitar */ });
+        return () => { ativo = false; };
+    }, []);
 
     const [filtros, setFiltros] = useState({
         data_inicio: isoDate(new Date(Date.now() - 30 * 86400000)), data_fim: isoDate(),
@@ -112,7 +123,7 @@ export default function SalesPage() {
     const carregarVendas = useCallback(async (f = filtros) => {
         setLoading(true);
         try {
-            const params: Record<string, unknown> = { page: f.page, per_page: 15 };
+            const params: Record<string, unknown> = { page: f.page, per_page: 50 };
             if (f.search) params.search = f.search;
             if (f.data_inicio) params.data_inicio = f.data_inicio;
             if (f.data_fim) params.data_fim = f.data_fim;
@@ -146,14 +157,20 @@ export default function SalesPage() {
     };
     const irPara = (page: number) => { const novo = { ...filtros, page }; setFiltros(novo); carregarVendas(novo); };
 
+    const [pinCancelamento, setPinCancelamento] = useState("");
+    
     const confirmarCancelamento = async () => {
         if (!cancelar) return;
         setCancelando(true);
         try {
-            const { data } = await apiClient.post(`/vendas/${cancelar.id}/cancelar`, { motivo: motivo || "Cancelamento via painel de vendas" });
+            const payload = { 
+                motivo: motivo || "Cancelamento via painel de vendas",
+                pin_cancelamento: pinCancelamento || undefined
+            };
+            const { data } = await apiClient.post(`/vendas/${cancelar.id}/cancelar`, payload);
             if (data.success !== false) {
                 showToast.success("Venda cancelada e produtos estornados ao estoque");
-                setCancelar(null); setMotivo("");
+                setCancelar(null); setMotivo(""); setPinCancelamento("");
                 carregarVendas(); carregarAnalytics();
             } else { showToast.error(data.error || "Não foi possível cancelar"); }
         } catch (e: any) {
@@ -243,9 +260,9 @@ export default function SalesPage() {
     const exportarCSV = () => {
         if (!vendas.length) return showToast.error("Nada para exportar");
         const head = ["Código", "Data", "Cliente", "Operador", "Itens", "Total", "Pagamento", "Status"];
-        const rows = vendas.map((v) => [v.codigo, fmtDateTime(v.data || v.created_at), v.cliente?.nome || "Avulso", v.funcionario?.nome || "—", v.quantidade_itens || 0, Number(v.total || 0).toFixed(2), canonicalForma(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "")), statusLabel(v.status)]);
+        const rows = vendas.map((v) => [v.codigo, fmtDateTime(v.data_venda || v.created_at), v.cliente?.nome || "Avulso", v.funcionario?.nome || "—", v.quantidade_itens || 0, Number(v.total || 0).toFixed(2), canonicalForma(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "")), statusLabel(v.status)]);
         const csv = [head, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" })); a.download = `vendas-${isoDate()}.csv`; a.click();
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })); a.download = `vendas-${isoDate()}.csv`; a.click();
         showToast.success("CSV exportado");
     };
 
@@ -258,7 +275,7 @@ export default function SalesPage() {
                     <p className="text-sm text-slate-500">Faturamento, previsões e decisões baseadas em dados</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => { carregarVendas(); carregarAnalytics(); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-sm hover:bg-slate-50 transition">
+                    <button onClick={() => { carregarVendas(); carregarAnalytics(); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                         <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
                     </button>
                     <button onClick={exportarCSV} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white font-semibold text-sm hover:bg-primary-700 shadow-sm transition">
@@ -370,7 +387,7 @@ export default function SalesPage() {
                                     : vendas.map((v) => (
                                         <tr key={v.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
                                             <td className="px-4 py-3 font-mono font-semibold text-slate-700 dark:text-slate-200">{v.codigo}</td>
-                                            <td className="px-4 py-3 text-slate-500">{fmtDateTime(v.data || v.created_at)}</td>
+                                            <td className="px-4 py-3 text-slate-500">{fmtDateTime(v.data_venda || v.created_at)}</td>
                                             <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{v.cliente?.nome || "Avulso"}</td>
                                             <td className="px-4 py-3 hidden md:table-cell text-slate-500">{canonicalForma(v.forma_pagamento || (v.pagamentos?.[0]?.forma_pagamento ?? "—"))}</td>
                                             <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-white tabular-nums">{brl(v.total)}</td>
@@ -404,7 +421,7 @@ export default function SalesPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && setDetalhe(null)}>
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
                         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-                            <div><h3 className="font-black text-slate-900 dark:text-white">Venda {detalhe.codigo}</h3><p className="text-xs text-slate-500 flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateTime(detalhe.data || detalhe.created_at)}</p></div>
+                            <div><h3 className="font-black text-slate-900 dark:text-white">Venda {detalhe.codigo}</h3><p className="text-xs text-slate-500 flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateTime(detalhe.data_venda || detalhe.created_at)}</p></div>
                             <button onClick={() => setDetalhe(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -436,13 +453,27 @@ export default function SalesPage() {
                                 <p className="text-sm text-slate-500 mt-0.5">Os produtos serão <strong>estornados ao estoque</strong> automaticamente. Esta ação não pode ser desfeita.</p>
                             </div>
                         </div>
-                        <div className="px-6 py-4">
-                            <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Motivo (opcional)</label>
-                            <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} placeholder="Ex: cliente desistiu, erro de digitação..." className="mt-1 w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-error-500 resize-none" />
+                        <div className="px-6 py-4 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Motivo do estorno</label>
+                                {motivosEstorno.length > 0 ? (
+                                    <select value={motivo} onChange={(e) => setMotivo(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-error-500">
+                                        <option value="">Selecione um motivo...</option>
+                                        {motivosEstorno.map((m) => <option key={m} value={m}>{m}</option>)}
+                                        <option value="Outro">Outro (especificar abaixo)</option>
+                                    </select>
+                                ) : (
+                                    <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} placeholder="Ex: cliente desistiu, erro de digitação..." className="mt-1 w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-error-500 resize-none" />
+                                )}
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">PIN de Cancelamento (Obrigatório)</label>
+                                <input type="password" inputMode="numeric" autoComplete="off" value={pinCancelamento} onChange={(e) => setPinCancelamento(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="Digite seu PIN..." className="mt-1 w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-error-500" maxLength={6} />
+                            </div>
                         </div>
                         <div className="flex gap-2 px-6 pb-6">
                             <button onClick={() => setCancelar(null)} disabled={cancelando} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50">Voltar</button>
-                            <button onClick={confirmarCancelamento} disabled={cancelando} className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-error-600 text-white font-bold text-sm hover:bg-error-700 disabled:opacity-60">
+                            <button onClick={confirmarCancelamento} disabled={cancelando || pinCancelamento.length < 4} className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-error-600 text-white font-bold text-sm hover:bg-error-700 disabled:opacity-60 disabled:cursor-not-allowed">
                                 {cancelando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />} Cancelar e estornar
                             </button>
                         </div>

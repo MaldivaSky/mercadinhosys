@@ -84,6 +84,7 @@ const defaultConfig: Configuracao = {
     emitir_nfe: false, emitir_nfce: true, impressao_automatica: false, tipo_impressora: 'termica_80mm',
     exibir_preco_tela: true, permitir_venda_sem_estoque: false, desconto_maximo_percentual: 10,
     desconto_maximo_funcionario: 10, arredondamento_valores: true, formas_pagamento: [],
+    motivos_estorno: ["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"],
     controlar_validade: true, alerta_estoque_minimo: true, dias_alerta_validade: 30, estoque_minimo_padrao: 10,
     tempo_sessao_minutos: 30, tentativas_senha_bloqueio: 3, alertas_email: false, alertas_whatsapp: false
 };
@@ -228,6 +229,7 @@ const EstabelecimentosPanel: React.FC = () => {
 
 const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState('geral');
+    const [novoMotivo, setNovoMotivo] = useState('');
     const [loadingEstab, setLoadingEstab] = useState(true);
     const [saving, setSaving] = useState(false);
     const [loadingCep, setLoadingCep] = useState(false);
@@ -688,6 +690,63 @@ const SettingsPage: React.FC = () => {
                                     value={config.desconto_maximo_funcionario}
                                     onChange={(e) => setConfig({ ...config, desconto_maximo_funcionario: parseFloat(e.target.value) })}
                                 />
+                            </div>
+
+                            <SectionTitle title="Motivos de Estorno / Cancelamento" icon={ShoppingCart} />
+                            <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
+                                Lista pré-definida exibida ao cancelar uma venda. O operador escolhe um motivo (exige PIN de admin).
+                            </p>
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {(config.motivos_estorno || []).map((motivo, idx) => (
+                                        <span key={`${motivo}-${idx}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-sm font-medium">
+                                            {motivo}
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfig({ ...config, motivos_estorno: config.motivos_estorno.filter((_, i) => i !== idx) })}
+                                                className="text-blue-400 hover:text-red-500 font-bold"
+                                                title="Remover"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                    {(!config.motivos_estorno || config.motivos_estorno.length === 0) && (
+                                        <span className="text-sm text-gray-400 italic">Nenhum motivo cadastrado.</span>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={novoMotivo}
+                                        onChange={(e) => setNovoMotivo(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const v = novoMotivo.trim();
+                                                if (v && !(config.motivos_estorno || []).includes(v)) {
+                                                    setConfig({ ...config, motivos_estorno: [...(config.motivos_estorno || []), v] });
+                                                }
+                                                setNovoMotivo('');
+                                            }
+                                        }}
+                                        placeholder="Novo motivo (Enter para adicionar)"
+                                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:text-white text-sm"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const v = novoMotivo.trim();
+                                            if (v && !(config.motivos_estorno || []).includes(v)) {
+                                                setConfig({ ...config, motivos_estorno: [...(config.motivos_estorno || []), v] });
+                                            }
+                                            setNovoMotivo('');
+                                        }}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold"
+                                    >
+                                        Adicionar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

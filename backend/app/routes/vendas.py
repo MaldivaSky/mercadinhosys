@@ -94,7 +94,7 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
                     except ValueError:
                         pass
                 if data_dt:
-                    campo = Venda.data_venda
+                    campo = func.coalesce(Venda.data_venda, Venda.created_at)
                     if filtro_data == "data_inicio":
                         if len(data_str) <= 10:
                             data_dt = data_dt.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -500,8 +500,8 @@ def relatorio_diario():
 
         query = Venda.query.filter(
             Venda.status == "finalizada",
-            Venda.data_venda >= inicio_dia,
-            Venda.data_venda <= fim_dia
+            func.coalesce(Venda.data_venda, Venda.created_at) >= inicio_dia,
+            func.coalesce(Venda.data_venda, Venda.created_at) <= fim_dia
         )
         if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
             query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
@@ -1054,26 +1054,39 @@ def cancelar_venda(venda_id):
         if venda.status == "cancelada":
             return jsonify({"error": "Esta venda já está cancelada"}), 400
 
-        # Verificar senha do admin se fornecida
+        # ===== Autorização OBRIGATÓRIA (PIN de 4-6 dígitos OU senha de admin) =====
+        # Apenas admin (nível 1) e gerente (nível 2) podem autorizar cancelamentos.
+        from app.models import Funcionario
+        from werkzeug.security import check_password_hash
+
+        pin_cancelamento = (data.get("pin_cancelamento") or "").strip()
         senha_admin = data.get("senha_admin")
-        if senha_admin:
-            from app.models import Funcionario
-            from werkzeug.security import check_password_hash
-            claims = get_jwt()
-            admin_id = claims.get("sub")
-            admin = Funcionario.query.filter_by(id=admin_id, estabelecimento_id=estabelecimento_id).first()
-            if not admin or not check_password_hash(admin.senha or "", senha_admin):
-                # Tentar pelo username fornecido
-                admin_usuario = data.get("admin_usuario")
-                if admin_usuario:
-                    admin = Funcionario.query.filter_by(username=admin_usuario, estabelecimento_id=estabelecimento_id).first()
-                    if not admin or not check_password_hash(admin.senha or "", senha_admin):
-                        return jsonify({"error": "Senha do administrador incorreta"}), 403
-                else:
-                    return jsonify({"error": "Senha do administrador incorreta"}), 403
-            nivel = (admin.nivel_acesso or 0) if admin else 0
-            if nivel > 2:  # Apenas admin (1) e gerente (2) podem cancelar
+
+        autorizador = None
+        if pin_cancelamento:
+            # Localiza o admin/gerente do tenant cujo PIN confere (comparação por hash)
+            candidatos = Funcionario.query.filter(
+                Funcionario.estabelecimento_id == estabelecimento_id,
+                Funcionario.pin_cancelamento.isnot(None),
+                Funcionario.nivel_acesso <= 2,
+            ).all()
+            autorizador = next((f for f in candidatos if f.check_pin(pin_cancelamento)), None)
+            if not autorizador:
+                return jsonify({"error": "PIN inválido ou sem permissão para cancelar"}), 403
+        elif senha_admin:
+            admin_usuario = data.get("admin_usuario")
+            if admin_usuario:
+                autorizador = Funcionario.query.filter_by(username=admin_usuario, estabelecimento_id=estabelecimento_id).first()
+            else:
+                claims = get_jwt()
+                autorizador = Funcionario.query.filter_by(id=claims.get("sub"), estabelecimento_id=estabelecimento_id).first()
+            if not autorizador or not check_password_hash(autorizador.senha or "", senha_admin):
+                return jsonify({"error": "Senha do administrador incorreta"}), 403
+            if (autorizador.nivel_acesso or 99) > 2:
                 return jsonify({"error": "Usuário sem permissão para cancelar vendas"}), 403
+        else:
+            # Sem credencial válida o cancelamento é bloqueado (fecha o furo de segurança).
+            return jsonify({"error": "Autorização obrigatória: informe o PIN de cancelamento"}), 403
 
         # Permitir cancelamento de vendas até 7 dias atrás
         dias_venda = (datetime.now() - venda.created_at.replace(tzinfo=None)).days if venda.created_at else 0
@@ -1102,8 +1115,12 @@ def cancelar_venda(venda_id):
                     db.session.add(mov)
 
             venda.status = "cancelada"
-            venda.observacoes = f"{venda.observacoes or ''}\n[Cancelada em {datetime.now().strftime('%d/%m/%Y %H:%M')}] Motivo: {motivo}".strip()
-            venda.updated_at = datetime.now()
+            agora = datetime.now()
+            venda.data_cancelamento = agora
+            venda.motivo_cancelamento = (motivo or "")[:255]
+            autorizado_por = f" | Autorizado por: {autorizador.nome}" if autorizador else ""
+            venda.observacoes = f"{venda.observacoes or ''}\n[Cancelada em {agora.strftime('%d/%m/%Y %H:%M')}] Motivo: {motivo}{autorizado_por}".strip()
+            venda.updated_at = agora
             db.session.commit()
             return jsonify({"success": True, "message": "Venda cancelada com sucesso"}), 200
         except Exception as e:

@@ -144,6 +144,15 @@ def listar_despesas():
     if descricao:
         query = query.filter(Despesa.descricao.ilike(f"%{descricao}%"))
 
+    # Filtro por fornecedor
+    fornecedor_id = request.args.get("fornecedor_id")
+    if fornecedor_id:
+        try:
+            fornecedor_id_int = int(fornecedor_id)
+            query = query.filter(Despesa.fornecedor_id == fornecedor_id_int)
+        except ValueError:
+            return jsonify({"success": False, "error": "fornecedor_id deve ser um número inteiro"}), 400
+
     # ========== ORDENAÇÃO ==========
 
     # Parâmetros de ordenação
@@ -808,14 +817,29 @@ def resumo_financeiro():
         # --- Lógica Exata para Mercadinho ---
         receita_bruta = vendas.get("revenue", 0.0)
         total_pagar_aberto = cp['total_aberto']
-        
-        # 1. Índice de Comprometimento (Dívida total vs Faturamento do período)
-        indice_comprometimento = (total_pagar_aberto / receita_bruta * 100) if receita_bruta > 0 else 0
-        
-        # 2. Pressão de Caixa Diária (Vence Hoje vs Média de Venda Diária)
+        dav = financial_data.get('despesas_a_vencer', {"vence_hoje": 0.0, "vence_7d": 0.0, "vence_30d": 0.0, "vencidas": 0.0})
+
         dias_periodo = (dt_fim - dt_inicio).days + 1
         venda_media_diaria = receita_bruta / dias_periodo if dias_periodo > 0 else 0
-        pressao_caixa = (cp['vence_hoje_valor'] / venda_media_diaria * 100) if venda_media_diaria > 0 else 0
+
+        # Obrigações de curtíssimo/curto prazo = Contas a Pagar (boletos) + Despesas com vencimento
+        obrigacoes_hoje = cp['vence_hoje_valor'] + dav['vence_hoje']
+        obrigacoes_7d = cp['vence_7d'] + dav['vence_7d']
+        obrigacoes_30d = cp['vence_30d'] + dav['vence_30d']
+
+        # 1. Índice de Comprometimento: dívida em aberto + obrigações a vencer (30d) vs faturamento do período.
+        total_obrigacoes = total_pagar_aberto + dav['vence_30d'] + dav['vencidas']
+        if receita_bruta > 0:
+            indice_comprometimento = total_obrigacoes / receita_bruta * 100
+        else:
+            indice_comprometimento = 100.0 if total_obrigacoes > 0 else 0.0
+
+        # 2. Pressão de Caixa (7 dias): obrigações dos próximos 7 dias vs entrada esperada no mesmo horizonte.
+        entrada_esperada_7d = venda_media_diaria * 7
+        if entrada_esperada_7d > 0:
+            pressao_caixa = obrigacoes_7d / entrada_esperada_7d * 100
+        else:
+            pressao_caixa = 100.0 if obrigacoes_7d > 0 else 0.0
 
         # Alertas simplificados e precisos (Foco em Saídas)
         alertas = []
@@ -857,9 +881,15 @@ def resumo_financeiro():
             },
             "indicadores_gestao": {
                 "indice_comprometimento": indice_comprometimento,
-                "pressao_caixa_diaria": pressao_caixa,
+                "pressao_caixa_diaria": pressao_caixa,  # compat: agora horizonte de 7 dias
+                "pressao_caixa_7d": pressao_caixa,
                 "venda_media_diaria": venda_media_diaria,
-                "vence_hoje_valor": cp['vence_hoje_valor']
+                "entrada_esperada_7d": entrada_esperada_7d,
+                "vence_hoje_valor": cp['vence_hoje_valor'],
+                "obrigacoes_hoje": obrigacoes_hoje,
+                "obrigacoes_7d": obrigacoes_7d,
+                "obrigacoes_30d": obrigacoes_30d,
+                "despesas_a_vencer": dav
             },
             "contas_pagar": {
                 "total_aberto": cp['total_aberto'],

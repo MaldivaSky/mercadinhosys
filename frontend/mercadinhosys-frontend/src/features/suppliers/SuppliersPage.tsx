@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
+import { Truck, Plus, Search, Edit, Trash2, Phone, Mail, MapPin, Package, TrendingUp, AlertCircle, ChevronDown, FileSpreadsheet, FileText, ShoppingCart, MessageCircle, FileBarChart } from 'lucide-react';
 import { Fornecedor } from '../../types';
 import { apiClient } from '../../api/apiClient';
 import { showToast } from '../../utils/toast';
+import PurchaseOrderModal from '../products/components/PurchaseOrderModal';
+import SupplierHistoryModal from './components/SupplierHistoryModal';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -44,6 +46,11 @@ const SuppliersPage: React.FC = () => {
     const [produtosFornecedor, setProdutosFornecedor] = useState<any[]>([]);
     const [fornecedorSelecionado, setFornecedorSelecionado] = useState<Fornecedor | null>(null);
     const [loadingProdutos, setLoadingProdutos] = useState(false);
+    const [showPurchaseOrderModal, setShowPurchaseOrderModal] = useState(false);
+    const [selectedForPedido, setSelectedForPedido] = useState<number | null>(null);
+
+    const [showDossieModal, setShowDossieModal] = useState(false);
+    const [selectedForDossie, setSelectedForDossie] = useState<Fornecedor | null>(null);
 
     const [formData, setFormData] = useState<SupplierFormData>({
         nome: '',
@@ -770,7 +777,7 @@ const SuppliersPage: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                                 <button
                                     onClick={() => handleEdit(supplier)}
                                     className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
@@ -778,13 +785,35 @@ const SuppliersPage: React.FC = () => {
                                     <Edit className="w-4 h-4" />
                                     Editar
                                 </button>
+                                <button
+                                    onClick={() => {
+                                        setSelectedForPedido(supplier.id);
+                                        setShowPurchaseOrderModal(true);
+                                    }}
+                                    className="flex-1 px-3 py-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+                                >
+                                    <ShoppingCart className="w-4 h-4" />
+                                    Fazer Pedido
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setSelectedForDossie(supplier);
+                                        setShowDossieModal(true);
+                                    }}
+                                    className="flex-[0.5] px-3 py-2 bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+                                    title="Dossiê do Fornecedor"
+                                >
+                                    <FileBarChart className="w-4 h-4" />
+                                </button>
                                 {supplier.telefone && (
                                     <a
-                                        href={`tel:${supplier.telefone}`}
+                                        href={`https://wa.me/55${supplier.telefone.replace(/\D/g, '')}?text=Olá%20${encodeURIComponent(supplier.nome)},%20falo%20da%20loja.%20Gostaria%20de%20falar%20sobre%20pedidos`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="px-3 py-2 bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors flex items-center justify-center"
-                                        title="Ligar"
+                                        title="WhatsApp"
                                     >
-                                        <Phone className="w-4 h-4" />
+                                        <MessageCircle className="w-4 h-4" />
                                     </a>
                                 )}
                                 {supplier.email && (
@@ -1122,6 +1151,25 @@ const SuppliersPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Modal de Pedido de Compra */}
+            <PurchaseOrderModal
+                isOpen={showPurchaseOrderModal}
+                onClose={() => setShowPurchaseOrderModal(false)}
+                onSuccess={() => {
+                    loadSuppliers();
+                }}
+                fornecedores={suppliers}
+                initialSupplierId={selectedForPedido || undefined}
+            />
+
+            {/* Dossiê do Fornecedor */}
+            {showDossieModal && selectedForDossie && (
+                <SupplierHistoryModal
+                    fornecedor={selectedForDossie}
+                    onClose={() => setShowDossieModal(false)}
+                />
             )}
         </div>
     );

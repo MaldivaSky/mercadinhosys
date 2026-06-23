@@ -67,8 +67,14 @@ export interface ResumoFinanceiro {
     indicadores_gestao: {
         indice_comprometimento: number;
         pressao_caixa_diaria: number;
+        pressao_caixa_7d?: number;
         venda_media_diaria: number;
+        entrada_esperada_7d?: number;
         vence_hoje_valor: number;
+        obrigacoes_hoje?: number;
+        obrigacoes_7d?: number;
+        obrigacoes_30d?: number;
+        despesas_a_vencer?: { vence_hoje: number; vence_7d: number; vence_30d: number; vencidas: number };
         alavancagem_operacional: number;
         ponto_equilibrio: number;
     };

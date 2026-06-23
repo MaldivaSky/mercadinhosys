@@ -1,10 +1,9 @@
 // @ts-nocheck
 import React from 'react';
-import { Card, CardContent, Grid, Typography, Box, Divider } from '@mui/material';
+import { Card, CardContent, Typography, Box, Grid } from '@mui/material';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import StarIcon from '@mui/icons-material/Star';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 interface CustomerDashboardProps {
   total: number;
@@ -15,20 +14,15 @@ interface CustomerDashboardProps {
   maior_devedor_nome: string;
   maior_devedor_valor: number;
   rfmData?: any;
+  onSegmentClick?: (segment: string) => void;
 }
 
-const metricColors = [
-  '#1976d2', // azul
-  '#2e7d32', // verde
-  '#f57f17', // dourado
-];
-
 const segmentColors: Record<string, string> = {
-  'Campeão': '#2e7d32',
-  'Fiel': '#1976d2',
-  'Regular': '#7b1fa2',
-  'Risco': '#ed6c02',
-  'Perdido': '#d32f2f'
+  'Campeão': '#22c55e',
+  'Fiel': '#3b82f6',
+  'Regular': '#8b5cf6',
+  'Risco': '#f97316',
+  'Perdido': '#ef4444'
 };
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
@@ -36,7 +30,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   total_gasto,
   melhor_cliente_nome,
   melhor_cliente_valor,
-  rfmData
+  rfmData,
+  onSegmentClick
 }) => {
   const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -44,25 +39,25 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   const metrics = [
     {
-      label: 'Total de Clientes',
+      label: 'TOTAL DE CLIENTES',
       value: total,
       subtext: 'Cadastrados na loja',
-      color: metricColors[0],
-      icon: <PeopleAltIcon fontSize="large" sx={{ opacity: 0.8 }} />
+      color: '#2563eb', // blue-600
+      icon: <PeopleAltIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
     {
-      label: 'Faturamento Total',
+      label: 'FATURAMENTO TOTAL',
       value: formatCurrency(total_gasto),
       subtext: 'Soma de todas as compras',
-      color: metricColors[1],
-      icon: <AttachMoneyIcon fontSize="large" sx={{ opacity: 0.8 }} />
+      color: '#16a34a', // green-600
+      icon: <AttachMoneyIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
     {
-      label: 'Melhor Cliente',
+      label: 'MELHOR CLIENTE',
       value: melhor_cliente_nome,
       subtext: `Gasto: ${formatCurrency(melhor_cliente_valor)}`,
-      color: metricColors[2],
-      icon: <StarIcon fontSize="large" sx={{ opacity: 0.8 }} />
+      color: '#ea580c', // orange-600
+      icon: <StarIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     }
   ];
 
@@ -70,26 +65,43 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     if (!rfmData || !rfmData.segments) return null;
     const segments = rfmData.segments;
     return (
-      <Box mt={3} p={3} sx={{ bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
-        <Typography variant="h6" fontWeight={700} sx={{ color: '#334155', mb: 2 }}>
+      <Box sx={{ mt: 3, p: 3, bgcolor: 'background.paper', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, mb: 2, color: 'text.primary' }}>
           Segmentação de Clientes (RFM)
         </Typography>
-        <Grid container spacing={2}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(5, 1fr)' }, gap: 2 }}>
           {Object.entries(segments).map(([segment, count]) => {
              const color = segmentColors[segment] || '#94a3b8';
              return (
-              <Grid item xs={12} sm={6} md={2.4} key={segment}>
-                <Card sx={{ borderLeft: `4px solid ${color}`, boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-                  <CardContent sx={{ p: '12px !important' }}>
-                    <Typography variant="subtitle2" sx={{ color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>{segment}</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 800, color: '#0f172a' }}>{count as number}</Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
+               <Card 
+                 key={segment}
+                 onClick={() => onSegmentClick && onSegmentClick(segment)}
+                 sx={{ 
+                   cursor: onSegmentClick ? 'pointer' : 'default',
+                   border: '1px solid',
+                   borderColor: 'divider',
+                   borderBottom: `4px solid ${color}`, 
+                   bgcolor: 'background.default',
+                   transition: 'all 0.2s',
+                   '&:hover': onSegmentClick ? { 
+                     transform: 'translateY(-2px)',
+                     boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                   } : {}
+                 }}
+               >
+                 <CardContent sx={{ p: '16px !important' }}>
+                   <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1, display: 'block', mb: 1 }}>
+                     {segment}
+                   </Typography>
+                   <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary' }}>
+                     {count as number}
+                   </Typography>
+                 </CardContent>
+               </Card>
              );
           })}
-        </Grid>
-        <Typography variant="caption" sx={{ mt: 2, display: 'block', color: '#94a3b8' }}>
+        </Box>
+        <Typography variant="caption" sx={{ mt: 3, display: 'block', color: 'text.secondary' }}>
           * Baseado no histórico dos últimos {rfmData.window_days} dias. (Recência, Frequência, Monetário).
         </Typography>
       </Box>
@@ -97,40 +109,38 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   };
 
   return (
-    <Box mb={4}>
-      <Grid container spacing={2}>
+    <Box sx={{ mb: 4 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
         {metrics.map((m, index) => (
-          <Grid item key={index} xs={12} md={4}>
-            <Card
-              sx={{
-                background: `linear-gradient(135deg, ${m.color} 0%, ${m.color}dd 100%)`,
-                color: '#fff',
-                minHeight: 110,
-                boxShadow: 2,
-                position: 'relative',
-                overflow: 'hidden',
-                '&:hover': { transform: 'translateY(-2px)' },
-                transition: 'transform 0.2s'
-              }}
-            >
-              <Box sx={{ position: 'absolute', right: -15, top: -15, opacity: 0.2, transform: 'scale(2.5)' }}>
-                {m.icon}
-              </Box>
-              <CardContent sx={{ position: 'relative', zIndex: 1, p: 2, pb: '16px !important' }}>
-                <Typography variant="caption" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: 1, opacity: 0.9 }}>
-                  {m.label}
-                </Typography>
-                <Typography fontWeight={800} sx={{ mt: 1, mb: 0.5, lineHeight: 1.1, fontSize: { xs: '1.2rem', sm: '1.4rem', md: '1.6rem' }, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                  {m.value}
-                </Typography>
-                <Typography variant="body2" sx={{ opacity: 0.8, fontSize: '0.75rem', fontWeight: 500 }}>
-                  {m.subtext}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+          <Card
+            key={index}
+            sx={{
+              bgcolor: m.color,
+              color: '#fff',
+              minHeight: 120,
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 3,
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+            }}
+          >
+            <Box sx={{ position: 'absolute', right: -10, top: '50%', transform: 'translateY(-50%)' }}>
+              {m.icon}
+            </Box>
+            <CardContent sx={{ position: 'relative', zIndex: 1, p: 3, pb: '24px !important' }}>
+              <Typography variant="overline" sx={{ fontWeight: 800, letterSpacing: 1, opacity: 0.9 }}>
+                {m.label}
+              </Typography>
+              <Typography variant="h4" sx={{ mt: 1, mb: 0.5, fontWeight: 900, wordBreak: 'break-word' }}>
+                {m.value}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8, fontWeight: 500 }}>
+                {m.subtext}
+              </Typography>
+            </CardContent>
+          </Card>
         ))}
-      </Grid>
+      </Box>
       
       {renderSegmentCards()}
     </Box>

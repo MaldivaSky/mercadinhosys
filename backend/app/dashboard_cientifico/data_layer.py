@@ -1724,6 +1724,30 @@ class DataLayer:
             except Exception as e:
                 logger.error(f"Erro processando CONTAS A PAGAR em get_consolidated_financial_summary: {e}")
 
+            # 4. DESPESAS A VENCER (obrigações futuras cadastradas com data_vencimento)
+            try:
+                hoje = datetime.now(timezone.utc).date()
+                date_7d = hoje + timedelta(days=7)
+                date_30d = hoje + timedelta(days=30)
+                q_dv = db.session.query(
+                    func.coalesce(func.sum(case((and_(Despesa.data_vencimento >= hoje, Despesa.data_vencimento <= hoje), Despesa.valor), else_=0)), 0).label('vence_hoje'),
+                    func.coalesce(func.sum(case((and_(Despesa.data_vencimento >= hoje, Despesa.data_vencimento <= date_7d), Despesa.valor), else_=0)), 0).label('vence_7d'),
+                    func.coalesce(func.sum(case((and_(Despesa.data_vencimento >= hoje, Despesa.data_vencimento <= date_30d), Despesa.valor), else_=0)), 0).label('vence_30d'),
+                    func.coalesce(func.sum(case((Despesa.data_vencimento < hoje, Despesa.valor), else_=0)), 0).label('vencidas'),
+                ).filter(Despesa.data_vencimento.isnot(None))
+                if estabelecimento_id != 'all':
+                    q_dv = q_dv.filter(Despesa.estabelecimento_id == estabelecimento_id)
+                dv = q_dv.first()
+                result["despesas_a_vencer"] = {
+                    "vence_hoje": float(dv.vence_hoje or 0),
+                    "vence_7d": float(dv.vence_7d or 0),
+                    "vence_30d": float(dv.vence_30d or 0),
+                    "vencidas": float(dv.vencidas or 0),
+                }
+            except Exception as e:
+                logger.error(f"Erro processando DESPESAS A VENCER em get_consolidated_financial_summary: {e}")
+                result["despesas_a_vencer"] = {"vence_hoje": 0.0, "vence_7d": 0.0, "vence_30d": 0.0, "vencidas": 0.0}
+
             return result
 
         except Exception as e:

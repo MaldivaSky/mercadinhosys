@@ -306,8 +306,8 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
 
                 <div className="flex items-center justify-between mb-8 relative">
                   <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-600 mb-1">Pressão de Caixa (Hoje)</h3>
-                    <p className="text-slate-500 text-[10px]">Capacidade de pagamento vs Vencimentos</p>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-600 mb-1">Pressão de Caixa (7 dias)</h3>
+                    <p className="text-slate-500 text-[10px]">Obrigações dos próximos 7 dias vs entrada esperada</p>
                   </div>
                   <div className={`text-4xl font-black italic ${resumo.indicadores_gestao.pressao_caixa_diaria > 100 ? 'text-rose-700' : 'text-emerald-700'}`}>
                     {resumo.indicadores_gestao.pressao_caixa_diaria.toFixed(0)}<span className="text-xl">%</span>
@@ -316,11 +316,11 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
 
                 <div className="flex items-end gap-3 mb-8">
                   <div className="text-5xl font-black text-slate-900 tracking-tighter">
-                    {formatCurrency(resumo.indicadores_gestao.vence_hoje_valor)}
+                    {formatCurrency(resumo.indicadores_gestao.obrigacoes_7d ?? resumo.indicadores_gestao.vence_hoje_valor)}
                   </div>
                   <div className="pb-1">
-                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest leading-none block">Vence</span>
-                    <span className="text-[10px] font-black uppercase text-slate-900 tracking-widest leading-none block">Hoje</span>
+                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest leading-none block">Vence em</span>
+                    <span className="text-[10px] font-black uppercase text-slate-900 tracking-widest leading-none block">7 dias</span>
                   </div>
                 </div>
 
@@ -330,8 +330,8 @@ const ResumoFinanceiroPanel: React.FC<ResumoFinanceiroPanelProps> = ({ className
                   </div>
                   <p className="text-xs text-slate-600 leading-tight font-medium">
                     {resumo.indicadores_gestao.pressao_caixa_diaria > 100
-                      ? "Escalabilidade de risco: venda média não cobre os boletos de hoje."
-                      : `Consistência ideal: venda média de ${formatCurrency(resumo.indicadores_gestao.venda_media_diaria)} absorve os compromissos.`}
+                      ? "Risco: a venda esperada dos próximos 7 dias não cobre os compromissos do período."
+                      : `Saudável: a entrada esperada de ${formatCurrency(resumo.indicadores_gestao.entrada_esperada_7d ?? 0)} absorve os compromissos.`}
                   </p>
                 </div>
               </div>
