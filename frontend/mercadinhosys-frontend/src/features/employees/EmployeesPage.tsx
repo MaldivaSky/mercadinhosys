@@ -119,6 +119,7 @@ export default function EmployeesPage() {
         senha: "",
         nivel_acesso: "atendente",
         ativo: true,
+        pin_cancelamento: "",
     });
 
     const location = useLocation();
@@ -284,6 +285,7 @@ export default function EmployeesPage() {
             senha: "",
             nivel_acesso: "atendente",
             ativo: true,
+            pin_cancelamento: "",
         });
         setModalAberto(true);
     }
@@ -313,6 +315,7 @@ export default function EmployeesPage() {
             senha: "",
             nivel_acesso: funcionario.nivel_acesso,
             ativo: funcionario.ativo,
+            pin_cancelamento: "", // nunca expomos o hash; em branco mantém o PIN atual
         });
         setModalAberto(true);
     }
@@ -1386,6 +1389,25 @@ export default function EmployeesPage() {
                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
                                         required={!modoEdicao}
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                        PIN Estorno {modoEdicao && (funcionarioSelecionado?.tem_pin ? "(deixe em branco p/ manter)" : "(opcional)")}
+                                    </label>
+                                    <input
+                                        type="password"
+                                        inputMode="numeric"
+                                        autoComplete="new-password"
+                                        value={formData.pin_cancelamento}
+                                        onChange={(e) => setFormData({ ...formData, pin_cancelamento: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white text-gray-900 dark:bg-gray-700 dark:text-white"
+                                        maxLength={6}
+                                        placeholder="Numérico (4 a 6 dígitos)"
+                                    />
+                                    {formData.pin_cancelamento && formData.pin_cancelamento.length < 4 && (
+                                        <p className="mt-1 text-xs text-red-500">O PIN deve ter de 4 a 6 dígitos.</p>
+                                    )}
                                 </div>
 
                                 <div>

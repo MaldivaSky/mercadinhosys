@@ -191,6 +191,17 @@ class Estabelecimento(db.Model, EnderecoMixin, SerializableMixin, AuditMixin):
     pagarme_id = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime, nullable=True)
 
+    # ---- Configuração Fiscal (NFC-e / NF-e via gateway SEFAZ) ----
+    fiscal_ambiente = db.Column(db.String(15), default="homologacao")  # homologacao | producao
+    fiscal_gateway = db.Column(db.String(30), default="simulado")      # focusnfe | plugnotas | nfeio | simulado
+    fiscal_token = db.Column(db.String(255))                            # token/credencial do gateway
+    fiscal_csc = db.Column(db.String(64))                               # Código de Segurança do Contribuinte (NFC-e)
+    fiscal_csc_id = db.Column(db.String(10))                            # Identificador do CSC (idToken)
+    serie_nfce = db.Column(db.Integer, default=1)
+    serie_nfe = db.Column(db.Integer, default=1)
+    proximo_numero_nfce = db.Column(db.Integer, default=1)
+    proximo_numero_nfe = db.Column(db.Integer, default=1)
+
     __table_args__ = (
         db.Index("ix_estabelecimento_cnpj", "cnpj"),
         db.UniqueConstraint("cnpj", name="uq_estabelecimento_cnpj"),
@@ -327,6 +338,7 @@ class Configuracao(db.Model, MultiTenantMixin, SerializableMixin):
     desconto_maximo_funcionario = db.Column(db.Numeric(5, 2), default=10.00)
     arredondamento_valores = db.Column(db.Boolean, default=True)
     formas_pagamento = db.Column(db.Text, default='["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Voucher", "Fiado"]')
+    motivos_estorno = db.Column(db.Text, default='["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"]')
     controlar_validade = db.Column(db.Boolean, default=True)
     alerta_estoque_minimo = db.Column(db.Boolean, default=True)
     dias_alerta_validade = db.Column(db.Integer, default=30)
@@ -344,6 +356,8 @@ class Configuracao(db.Model, MultiTenantMixin, SerializableMixin):
         data = super().to_dict(depth=depth)
         try: data["formas_pagamento"] = json.loads(self.formas_pagamento or "[]")
         except: data["formas_pagamento"] = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Voucher", "Fiado"]
+        try: data["motivos_estorno"] = json.loads(self.motivos_estorno or "[]")
+        except: data["motivos_estorno"] = ["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"]
         return data
 
 class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
@@ -366,6 +380,7 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
     permissoes_json = db.Column(db.Text)
     username = db.Column(db.String(50), nullable=False)
     senha = db.Column(db.String(255), nullable=False)
+    pin_cancelamento = db.Column(db.String(255))  # Hash do PIN numérico (4 a 6 dígitos) para cancelamentos/estornos
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
     # nivel_acesso: 1=Admin, 2=Gerente, 3=Caixa, 4=Estoque, 5=RH, 6=Entregador
@@ -403,6 +418,26 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
     set_senha = set_password
     check_senha = check_password
 
+    def set_pin(self, pin):
+        """Define o PIN de cancelamento/estorno (4 a 6 dígitos numéricos), armazenado com hash."""
+        pin = str(pin or "").strip()
+        if not pin:
+            self.pin_cancelamento = None
+            return
+        if not (pin.isdigit() and 4 <= len(pin) <= 6):
+            raise ValueError("PIN deve conter de 4 a 6 dígitos numéricos")
+        self.pin_cancelamento = generate_password_hash(pin)
+
+    def check_pin(self, pin):
+        """Valida o PIN informado contra o hash armazenado."""
+        if not self.pin_cancelamento or not pin:
+            return False
+        return check_password_hash(self.pin_cancelamento, str(pin).strip())
+
+    @property
+    def tem_pin(self):
+        return bool(self.pin_cancelamento)
+
     def to_dict(self, depth=0):
         data = super().to_dict(depth=depth)
         # Security: Never expose password fields in API responses
@@ -410,6 +445,9 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
         data.pop("senha", None)
         data.pop("password", None)
         data.pop("password_hash", None)
+        # Nunca expor o hash do PIN; expor apenas se está configurado
+        data.pop("pin_cancelamento", None)
+        data["tem_pin"] = self.tem_pin
         data["usuario"] = self.username
         data["nivel_acesso"] = self.role
         data["salario"] = float(self.salario) if self.salario else (float(self.salario_base) if self.salario_base else 0.0)
@@ -643,6 +681,15 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     margem_lucro = db.Column(db.Numeric(19, 4), nullable=True)
     ncm = db.Column(db.String(8))
     origem = db.Column(db.Integer, default=0)
+    # ---- Campos fiscais (NFC-e / NF-e) ----
+    cest = db.Column(db.String(7))
+    cfop_padrao = db.Column(db.String(4), default="5102")
+    cst_icms = db.Column(db.String(3))          # usado no regime normal
+    csosn = db.Column(db.String(3), default="102")  # usado no Simples Nacional
+    unidade_tributavel = db.Column(db.String(6))
+    icms_aliquota = db.Column(db.Numeric(5, 2), default=0)
+    pis_aliquota = db.Column(db.Numeric(5, 2), default=0)
+    cofins_aliquota = db.Column(db.Numeric(5, 2), default=0)
     total_vendido = db.Column(db.Numeric(19, 4), default=0.0)
     quantidade_vendida = db.Column(db.Numeric(10, 3), default=0.0)
     ultima_venda = db.Column(db.DateTime)
@@ -682,7 +729,8 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
         qtd_anterior = self.quantidade
         if tipo == 'entrada': self.quantidade += quantidade
         elif tipo == 'saida':
-            self.quantidade -= quantidade
+            novo_saldo = Decimal(str(self.quantidade or 0)) - Decimal(str(quantidade))
+            self.quantidade = novo_saldo if novo_saldo > 0 else Decimal("0")
             self.quantidade_vendida += quantidade
             self.total_vendido += (self.preco_venda * quantidade)
             self.ultima_venda = utcnow()
@@ -804,16 +852,20 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     def get_lotes_disponiveis(self):
         return ProdutoLote.query.filter_by(produto_id=self.id, ativo=True).filter(ProdutoLote.quantidade > 0).order_by(ProdutoLote.data_validade.asc()).all()
 
-    def consumir_estoque_fifo(self, quantidade: int) -> List[Dict]:
+    def consumir_estoque_fifo(self, quantidade) -> List[Dict]:
         consumidos = []
-        restante = quantidade
+        qtd_solicitada = Decimal(str(quantidade or 0))
+        restante = qtd_solicitada
         for lote in self.get_lotes_disponiveis():
             if restante <= 0: break
-            qtd = min(restante, lote.quantidade)
-            lote.quantidade -= qtd
+            disponivel = Decimal(str(lote.quantidade or 0))
+            qtd = min(restante, disponivel)
+            lote.quantidade = disponivel - qtd
             restante -= qtd
             consumidos.append({'lote_id': lote.id, 'quantidade_consumida': qtd, 'lote': lote})
-        self.quantidade -= quantidade
+        # Nunca deixa o estoque agregado ficar negativo (piso em 0)
+        novo_saldo = Decimal(str(self.quantidade or 0)) - qtd_solicitada
+        self.quantidade = novo_saldo if novo_saldo > 0 else Decimal("0")
         return consumidos
 
     def to_dict(self, depth=0, include_metrics=False, include_relationships=False):

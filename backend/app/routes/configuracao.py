@@ -87,7 +87,8 @@ def atualizar_configuracoes():
             "controlar_validade", "alerta_estoque_minimo", "dias_alerta_validade",
             "estoque_minimo_padrao", "exibir_preco_tela", "permitir_venda_sem_estoque",
             "desconto_maximo_percentual", "desconto_maximo_funcionario", "arredondamento_valores",
-            "tempo_sessao_minutos", "tentativas_senha_bloqueio", "alertas_email", "alertas_whatsapp"
+            "tempo_sessao_minutos", "tentativas_senha_bloqueio", "alertas_email", "alertas_whatsapp",
+            "motivos_estorno"
         ]
 
         # 1. Verifica se já existe configuração para este estabelecimento
@@ -102,7 +103,7 @@ def atualizar_configuracoes():
         for field in allowed_fields:
             if field in data:
                 val = data[field]
-                if field == "formas_pagamento" and isinstance(val, list):
+                if field in ("formas_pagamento", "motivos_estorno") and isinstance(val, list):
                     val = json.dumps(val, ensure_ascii=False)
                 
                 params[field] = val

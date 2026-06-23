@@ -192,16 +192,23 @@ const lifecyclePriority = (lifecycle: string, debt: number) => {
 
 const buildCampaignMessage = (campaign: CampaignKey, cliente: CRMCustomer) => {
     const name = firstName(cliente.nome);
+    const debt = Number(cliente.saldo_devedor || 0);
+    const spent = Number(cliente.valor_total_gasto || 0);
+    const days = cliente.lastPurchaseDays;
+
     switch (campaign) {
         case 'reactivation':
-            return `Olá, ${name}! Sentimos sua falta aqui no MercadinhoSys. Preparamos uma condição especial para incentivar sua próxima compra. Se quiser, me responde aqui que eu separo as melhores ofertas para o seu perfil.`;
+            const timeMsg = days && days > 15 ? `Já faz ${days} dias desde sua última visita.` : 'Sentimos sua falta aqui.';
+            return `Olá, ${name}! ${timeMsg} Preparamos um cupom de R$ 15 de desconto exclusivo para você voltar a comprar conosco. Me responde aqui para ativar o seu cupom!`;
         case 'vip':
-            return `Olá, ${name}! Você faz parte do nosso grupo de clientes mais importantes. Queremos te avisar em primeira mão sobre vantagens exclusivas, promoções premium e novidades pensadas para o seu perfil de compra.`;
+            const discount = Math.max(10, Math.floor(spent * 0.05)); // 5% of total spent as bonus, min 10
+            return `Olá, ${name}! Como um de nossos melhores clientes (já economizou comprando mais de ${formatCurrency(spent)} conosco), liberamos um cashback especial de ${formatCurrency(discount)} para sua próxima compra! Aproveite as novidades exclusivas.`;
         case 'debt':
-            return `Olá, ${name}! Passando para te apoiar na regularização do seu saldo em aberto conosco. Se preferir, podemos alinhar a melhor forma de pagamento por aqui mesmo com rapidez e segurança.`;
+            return `Olá, ${name}! Passando para te ajudar a regularizar o seu saldo em aberto de ${formatCurrency(debt)} conosco. Podemos gerar um PIX ou parcelar no cartão para você continuar aproveitando nossas ofertas. Como fica melhor para você?`;
         case 'promotion':
         default:
-            return `Olá, ${name}! Temos uma promoção selecionada para clientes com o seu perfil. Se quiser, eu te envio agora mesmo as ofertas mais interessantes e separo os produtos com melhor custo-benefício para sua próxima compra.`;
+            const promoValue = Math.max(5, Math.floor((spent > 0 ? spent : 100) * 0.03));
+            return `Olá, ${name}! Separamos ofertas imbatíveis para você hoje! E para melhorar, te dou ${formatCurrency(promoValue)} de desconto imediato em qualquer pedido acima de R$ 50. Quer ver o catálogo?`;
     }
 };
 
@@ -223,24 +230,38 @@ const KpiCard = ({
     subtitle,
     color,
     icon,
+    onClick,
 }: {
     title: string;
     value: string | number;
     subtitle: string;
     color: string;
     icon: React.ReactNode;
+    onClick?: () => void;
 }) => (
-    <Card sx={{ height: '100%', border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
+    <Card 
+        onClick={onClick}
+        sx={{ 
+            height: '100%', 
+            border: '1px solid', 
+            borderColor: 'divider', 
+            bgcolor: 'background.paper',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            cursor: onClick ? 'pointer' : 'default',
+            transition: 'all 0.2s',
+            '&:hover': onClick ? { transform: 'translateY(-2px)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' } : {}
+        }}
+    >
         <CardContent sx={{ p: 2.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>
+                    <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1 }}>
                         {title}
                     </Typography>
                     <Typography variant="h4" sx={{ color, fontWeight: 800, mt: 1 }}>
                         {value}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
                         {subtitle}
                     </Typography>
                 </Box>
@@ -811,14 +832,35 @@ const CustomersPage: React.FC = () => {
 
             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(6, minmax(0, 1fr))' } }}>
                 <KpiCard title="Base Ativa" value={dashboard.total} subtitle="Clientes gerenciados no CRM" color="#2563eb" icon={<AutoGraphIcon />} />
-                <KpiCard title="Aniversariantes" value={crmStats.aniversariantes} subtitle="Neste mês — envie um WhatsApp" color="#db2777" icon={<CakeIcon />} />
-                <KpiCard title="Clientes Em Risco" value={crmStats.inRisk} subtitle="Exigem contato de retencao" color="#ea580c" icon={<AutorenewIcon />} />
+                <KpiCard 
+                    title="Aniversariantes" 
+                    value={crmStats.aniversariantes} 
+                    subtitle="Neste mês — envie um WhatsApp" 
+                    color="#db2777" 
+                    icon={<CakeIcon />} 
+                    onClick={() => {
+                        // TODO: Implement actual birthday filtering logic in filteredClientes
+                        // For now we just go to portfolio
+                        setActiveTab('portfolio');
+                    }}
+                />
+                <KpiCard 
+                    title="Clientes Em Risco" 
+                    value={crmStats.inRisk} 
+                    subtitle="Exigem contato de retencao" 
+                    color="#ea580c" 
+                    icon={<AutorenewIcon />} 
+                    onClick={() => {
+                        setSegmentFilter('Risco');
+                        setActiveTab('portfolio');
+                    }}
+                />
                 <KpiCard title="Clientes Inativos" value={crmStats.inactive} subtitle="Fila de reativacao comercial" color="#dc2626" icon={<WarningAmberIcon />} />
                 <KpiCard title="VIP & Fidelidade" value={crmStats.vip} subtitle="Carteira de alto valor" color="#7c3aed" icon={<StarIcon />} />
-                <KpiCard title="Fiado Em Aberto" value={formatCurrency(totalFiadoAberto)} subtitle={`${crmStats.debt} clientes com saldo`} color="#d97706" icon={<AttachMoneyIcon />} />
+                <KpiCard title="Fiado Em Aberto" value={formatCurrency(totalFiadoAberto)} subtitle={`${crmStats.debt} clientes com saldo`} color="#d97706" icon={<AttachMoneyIcon />} onClick={() => { setFiadoFilter(true); setActiveTab('portfolio'); }} />
             </Box>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+            <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
                 <div className="grid gap-3 lg:grid-cols-4">
                     {tabs.map((tab) => {
                         const active = activeTab === tab.id;
@@ -828,13 +870,13 @@ const CustomersPage: React.FC = () => {
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`rounded-2xl border px-4 py-4 text-left transition ${
                                     active
-                                        ? 'border-blue-500 bg-blue-50 shadow-sm'
-                                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                 }`}
                             >
                                 <div className="space-y-1">
-                                    <p className={`text-sm font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>{tab.label}</p>
-                                    <p className="text-xs text-slate-500">{tab.description}</p>
+                                    <p className={`text-sm font-semibold ${active ? 'text-blue-700 dark:text-blue-400' : 'text-slate-900 dark:text-white'}`}>{tab.label}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{tab.description}</p>
                                 </div>
                             </button>
                         );
@@ -844,7 +886,14 @@ const CustomersPage: React.FC = () => {
 
             {activeTab === 'overview' && (
                 <div className="space-y-6">
-                    <CustomerDashboard {...dashboard} rfmData={rfmData} />
+                    <CustomerDashboard 
+                        {...dashboard} 
+                        rfmData={rfmData} 
+                        onSegmentClick={(segment) => {
+                            setSegmentFilter(segment as SegmentFilter);
+                            setActiveTab('portfolio');
+                        }}
+                    />
 
                     <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1.4fr 1fr' } }}>
                         <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>

@@ -129,9 +129,10 @@ def get_configuracao_safe(estab_id):
                     controlar_validade, alerta_estoque_minimo, dias_alerta_validade, estoque_minimo_padrao,
                     exibir_preco_tela, permitir_venda_sem_estoque, desconto_maximo_percentual,
                     desconto_maximo_funcionario, arredondamento_valores, tempo_sessao_minutos,
-                    tentativas_senha_bloqueio, alertas_email, alertas_whatsapp
-                FROM configuracoes 
-                WHERE estabelecimento_id = :eid 
+                    tentativas_senha_bloqueio, alertas_email, alertas_whatsapp,
+                    motivos_estorno
+                FROM configuracoes
+                WHERE estabelecimento_id = :eid
                 LIMIT 1
             """
             db = _get_db()
@@ -144,6 +145,13 @@ def get_configuracao_safe(estab_id):
                 if isinstance(formas_pagamento, str):
                     try: formas_pagamento = json.loads(formas_pagamento)
                     except: pass
+
+                motivos_estorno = row[22]
+                if isinstance(motivos_estorno, str):
+                    try: motivos_estorno = json.loads(motivos_estorno)
+                    except: pass
+                if not motivos_estorno:
+                    motivos_estorno = ["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"]
 
                 return {
                     "id": row[0],
@@ -167,7 +175,8 @@ def get_configuracao_safe(estab_id):
                     "tempo_sessao_minutos": row[18],
                     "tentativas_senha_bloqueio": row[19],
                     "alertas_email": bool(row[20]),
-                    "alertas_whatsapp": bool(row[21])
+                    "alertas_whatsapp": bool(row[21]),
+                    "motivos_estorno": motivos_estorno
                 }
         except Exception as e_fast:
             # logger.debug(f"Fast path config falhou (provável schema drift): {e_fast}")
@@ -226,11 +235,20 @@ def get_configuracao_safe(estab_id):
         res["alertas_email"] = _fetch_col("alertas_email", False)
         res["alertas_whatsapp"] = _fetch_col("alertas_whatsapp", False)
         
+        res["motivos_estorno"] = _fetch_col("motivos_estorno")
+
         if isinstance(res["formas_pagamento"], str):
             import json
             try: res["formas_pagamento"] = json.loads(res["formas_pagamento"])
             except: pass
-        
+
+        import json as _json_me
+        if isinstance(res.get("motivos_estorno"), str):
+            try: res["motivos_estorno"] = _json_me.loads(res["motivos_estorno"])
+            except: pass
+        if not res.get("motivos_estorno"):
+            res["motivos_estorno"] = ["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"]
+
         return res
 
     except Exception as e:

@@ -1108,12 +1108,12 @@ def criar_funcionario():
         # Definir senha
         novo_funcionario.set_senha(data["senha"])
 
-        # Definir PIN se fornecido (assumindo que existe método set_pin ou similar, mas não vi no model)
-        # O código original tinha set_pin, mas o model mostrado não tem. 
-        # Vou comentar por segurança ou verificar se perdi algo no model.
-        # Revisitando o model: Não tem set_pin nem campo pin.
-        # if data.get("pin"):
-        #     novo_funcionario.set_pin(data["pin"])
+        # Definir PIN de cancelamento se fornecido (4 a 6 dígitos, armazenado com hash)
+        if data.get("pin_cancelamento"):
+            try:
+                novo_funcionario.set_pin(data["pin_cancelamento"])
+            except ValueError as ve:
+                return jsonify({"success": False, "error": str(ve)}), 400
 
         db.session.add(novo_funcionario)
         db.session.commit()
@@ -1265,9 +1265,12 @@ def atualizar_funcionario(id):
         if "senha" in data and data["senha"]:
             funcionario.set_senha(data["senha"])
 
-        # Atualizar PIN se fornecido (removido pois model não suporta)
-        # if "pin" in data and data["pin"]:
-        #     funcionario.set_pin(data["pin"])
+        # Atualizar PIN de cancelamento se fornecido (4 a 6 dígitos, armazenado com hash)
+        if "pin_cancelamento" in data and data["pin_cancelamento"]:
+            try:
+                funcionario.set_pin(data["pin_cancelamento"])
+            except ValueError as ve:
+                return jsonify({"success": False, "error": str(ve)}), 400
 
         db.session.commit()
 

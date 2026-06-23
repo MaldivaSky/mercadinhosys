@@ -16,6 +16,8 @@ export interface Funcionario {
     usuario: string;
     nivel_acesso: string;
     ativo: boolean;
+    pin_cancelamento?: string;
+    tem_pin?: boolean;
     created_at?: string;
     updated_at?: string;
 

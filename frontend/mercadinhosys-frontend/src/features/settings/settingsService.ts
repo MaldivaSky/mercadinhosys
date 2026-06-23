@@ -37,6 +37,7 @@ export interface Configuracao {
     desconto_maximo_funcionario: number;
     arredondamento_valores: boolean;
     formas_pagamento: string[];
+    motivos_estorno: string[];
 
     // Estoque
     controlar_validade: boolean;

@@ -603,11 +603,27 @@ def listar_produtos():
             query = query.filter(Produto.margem_lucro >= 50)
         elif filtro_rapido == "margem_baixa":
             query = query.filter(Produto.margem_lucro < 30)
-        elif filtro_rapido == "classe_a":
-            # Usar a classificação ABC gravada no banco
-            query = query.filter(func.upper(Produto.classificacao_abc) == "A")
-        elif filtro_rapido == "classe_c":
-            query = query.filter(func.upper(Produto.classificacao_abc) == "C")
+        elif filtro_rapido in ("classe_a", "classe_c"):
+            # Classificação ABC DINÂMICA (por faturamento real), consistente com os
+            # contadores do dashboard. Evita depender da coluna gravada (que pode estar
+            # desatualizada/NULL e fazia o filtro voltar vazio).
+            if str(estabelecimento_id).lower() != "all":
+                # Janela ampla (~10 anos) para aproximar "todo o histórico", igual às estatísticas.
+                classificacoes = Produto.calcular_classificacao_abc_dinamica(estabelecimento_id, periodo_dias=3650)
+                ids_com_venda = list(classificacoes.keys())
+                if filtro_rapido == "classe_a":
+                    ids_a = [pid for pid, c in classificacoes.items() if c == "A"]
+                    query = query.filter(Produto.id.in_(ids_a if ids_a else [-1]))
+                else:
+                    # Encalhados = classe C por faturamento + produtos sem nenhuma venda no período.
+                    ids_c = [pid for pid, c in classificacoes.items() if c == "C"]
+                    if ids_com_venda:
+                        query = query.filter(or_(Produto.id.in_(ids_c if ids_c else [-1]),
+                                                 ~Produto.id.in_(ids_com_venda)))
+                    # Sem nenhuma venda no tenant: todos são encalhados → não aplica filtro extra.
+            else:
+                alvo = "A" if filtro_rapido == "classe_a" else "C"
+                query = query.filter(func.upper(Produto.classificacao_abc) == alvo)
         elif filtro_rapido == "repor_urgente":
             query = query.filter(
                 or_(
@@ -1846,7 +1862,7 @@ def descartar_produto(id):
             )
         else:
             # Lógica FIFO para descarte se lote não for especificado
-            lotes_consumidos = produto.consumir_estoque_fifo(int(quantidade))
+            lotes_consumidos = produto.consumir_estoque_fifo(quantidade)
             # Para descarte via endpoint legado ou simplificado, pegamos o custo do primeiro lote ou do produto
             custo_base = produto.preco_custo
             lote_id_mov = None
@@ -1891,6 +1907,22 @@ def descartar_produto(id):
             observacoes=f"Gerado automaticamente via descarte de produto ID {produto.id}. Obs: {observacoes}"
         )
         db.session.add(nova_despesa)
+
+        # 3. Registrar Historico do Descarte
+        historico_descarte = HistoricoPrecos(
+            estabelecimento_id=estabelecimento_id,
+            produto_id=produto.id,
+            funcionario_id=funcionario_id,
+            preco_custo_anterior=produto.preco_custo,
+            preco_venda_anterior=produto.preco_venda,
+            margem_anterior=produto.margem_lucro,
+            preco_custo_novo=produto.preco_custo,
+            preco_venda_novo=produto.preco_venda,
+            margem_nova=produto.margem_lucro,
+            motivo=f"Descarte / Perda",
+            observacoes=f"Descarte de {quantidade} {produto.unidade_medida}. Motivo: {motivo_especifico}. Prejuízo gerado: R$ {valor_prejuizo}"
+        )
+        db.session.add(historico_descarte)
 
         db.session.commit()
 
