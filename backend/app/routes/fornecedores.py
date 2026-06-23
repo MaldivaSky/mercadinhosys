@@ -302,6 +302,10 @@ def obter_fornecedor(id):
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
+        fornecedor = Fornecedor.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+
         # Dados básicos
         dados_fornecedor = fornecedor.to_dict()
 
@@ -341,7 +345,7 @@ def obter_fornecedor(id):
                     ),
                     "status": pedido.status,
                     "total": float(pedido.total),
-                    "quantidade_itens": pedido.itens.count(),
+                    "quantidade_itens": len(pedido.itens),
                 }
             )
 
