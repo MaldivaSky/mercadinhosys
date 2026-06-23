@@ -12,9 +12,12 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     onCreated: () => void;
+    initialCart?: any[];
+    initialCustomer?: any;
+    initialPagamentos?: PagamentoItem[];
 }
 
-const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated }) => {
+const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated, initialCart = [], initialCustomer = null, initialPagamentos = [] }) => {
     console.log("UnifiedDeliverySaleModal: Renderizado! isOpen=", isOpen);
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -30,22 +33,24 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
     const [custSearch, setCustSearch] = useState('');
 
     // Form state
-    const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-    const [cart, setCart] = useState<any[]>([]);
+    const [selectedCustomer, setSelectedCustomer] = useState<any>(initialCustomer);
+    const [cart, setCart] = useState<any[]>(initialCart);
     const [logistics, setLogistics] = useState({
         motorista_id: '',
         veiculo_id: '',
         taxa_entrega: 0,
         distancia_km: 5,
-        endereco_cep: '',
-        endereco_logradouro: '',
-        endereco_numero: '',
-        endereco_bairro: '',
+        endereco_cep: initialCustomer?.cep || '',
+        endereco_logradouro: initialCustomer?.endereco || '',
+        endereco_numero: initialCustomer?.numero || '',
+        endereco_bairro: initialCustomer?.bairro || '',
         endereco_referencia: '',
         observacoes: ''
     });
 
-    const [pagamentosDelivery, setPagamentosDelivery] = useState<PagamentoItem[]>([]);
+    const [pagamentosDelivery, setPagamentosDelivery] = useState<PagamentoItem[]>(initialPagamentos);
+    const [cobrarTaxa, setCobrarTaxa] = useState(false);
+    const [pagamentoNaEntrega, setPagamentoNaEntrega] = useState(initialPagamentos.length === 0);
     const formasDisponiveis: FormaPagamentoPDV[] = [
         { tipo: 'dinheiro', label: 'Dinheiro', taxa: 0, permite_troco: true },
         { tipo: 'pix', label: 'PIX', taxa: 0, permite_troco: false },
@@ -63,13 +68,11 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
 
     const loadInitialData = async () => {
         try {
-            const [prods, custs, mots, veics] = await Promise.all([
-                productsService.search(''),
+            const [custs, mots, veics] = await Promise.all([
                 customerService.list(),
                 deliveryService.getMotoristas(),
                 deliveryService.getVeiculos()
             ]);
-            setAllProducts(prods || []);
             setAllCustomers(custs || []);
             setMotoristas(mots.motoristas || []);
             setVeiculos(veics.veiculos || []);
@@ -80,15 +83,20 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
 
     const resetForm = () => {
         setStep(1);
-        setSelectedCustomer(null);
-        setCart([]);
+        setSelectedCustomer(initialCustomer);
+        setCart(initialCart);
         setLogistics({
             motorista_id: '', veiculo_id: '', taxa_entrega: 0,
             distancia_km: 5,
-            endereco_cep: '', endereco_logradouro: '', endereco_numero: '',
-            endereco_bairro: '', endereco_referencia: '', observacoes: ''
+            endereco_cep: initialCustomer?.cep || '', 
+            endereco_logradouro: initialCustomer?.endereco || '', 
+            endereco_numero: initialCustomer?.numero || '',
+            endereco_bairro: initialCustomer?.bairro || '', 
+            endereco_referencia: '', observacoes: ''
         });
-        setPagamentosDelivery([]);
+        setPagamentosDelivery(initialPagamentos);
+        setPagamentoNaEntrega(initialPagamentos.length === 0);
+        setCobrarTaxa(false);
     };
 
     const addToCart = (product: any) => {
@@ -119,7 +127,7 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         }));
     };
 
-    const calculateTotal = () => cart.reduce((acc, curr) => acc + curr.total_item, 0) + logistics.taxa_entrega;
+    const calculateTotal = () => cart.reduce((acc, curr) => acc + curr.total_item, 0) + (cobrarTaxa ? logistics.taxa_entrega : 0);
 
     const handleSubmit = async () => {
         if (cart.length === 0) return toast.error("Adicione itens ao carrinho");
@@ -128,23 +136,27 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         const totalVenda = calculateTotal();
         const totalPago = pagamentosDelivery.reduce((sum, p) => sum + p.valor, 0);
 
-        if (totalPago < (totalVenda - 0.01)) {
+        if (!pagamentoNaEntrega && totalPago < (totalVenda - 0.01)) {
             return toast.error(`Valor pago insuficiente (R$ ${totalPago.toFixed(2)}). Faltam R$ ${(totalVenda - totalPago).toFixed(2)}`);
         }
 
         try {
             setLoading(true);
+            const taxa = cobrarTaxa ? logistics.taxa_entrega : 0;
             const payload = {
                 cliente_id: selectedCustomer?.id,
                 itens: cart,
-                subtotal: calculateTotal() - logistics.taxa_entrega,
-                total: calculateTotal(),
-                pagamentos: pagamentosDelivery.map(p => ({
-                    forma_pagamento: p.forma,
-                    valor: p.valor,
-                    bandeira: p.bandeira
-                })),
-                ...logistics
+                subtotal: totalVenda - taxa,
+                total: totalVenda,
+                pagamentos: pagamentoNaEntrega 
+                    ? [{ forma_pagamento: "entrega", valor: totalVenda }]
+                    : pagamentosDelivery.map(p => ({
+                        forma_pagamento: p.forma,
+                        valor: p.valor,
+                        bandeira: p.bandeira
+                    })),
+                ...logistics,
+                taxa_entrega: taxa
             };
             const res = await deliveryService.criarVendaEntrega(payload);
             if (res.success) {
@@ -159,9 +171,53 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
         }
     };
 
+    useEffect(() => {
+        const fetchCep = async () => {
+            const cep = logistics.endereco_cep.replace(/\D/g, '');
+            if (cep.length === 8) {
+                try {
+                    const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                    const data = await response.json();
+                    if (!data.erro) {
+                        setLogistics(prev => ({
+                            ...prev,
+                            endereco_logradouro: data.logradouro,
+                            endereco_bairro: data.bairro,
+                        }));
+                        toast.success("Endereço preenchido automaticamente!");
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar CEP", error);
+                }
+            }
+        };
+        fetchCep();
+    }, [logistics.endereco_cep]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const delayDebounceFn = setTimeout(async () => {
+            if (prodSearch.trim().length >= 2) {
+                try {
+                    const prods = await productsService.search(prodSearch.trim());
+                    setAllProducts(prods || []);
+                } catch (error) {
+                    console.error("Erro na busca de produtos:", error);
+                }
+            } else {
+                setAllProducts([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [prodSearch, isOpen]);
+
     if (!isOpen) return null;
 
-    const filteredProds = allProducts.filter(p => p.nome?.toLowerCase().includes(prodSearch?.toLowerCase() || ''));
+    const filteredProds = allProducts.filter(p => 
+        p.nome?.toLowerCase().includes(prodSearch?.toLowerCase() || '') ||
+        p.codigo_barras?.toLowerCase().includes(prodSearch?.toLowerCase() || '')
+    );
     const filteredCusts = allCustomers.filter(c => c.nome?.toLowerCase().includes(custSearch?.toLowerCase() || ''));
 
     return (
@@ -301,21 +357,43 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
                                 </section>
 
                                 <section>
-                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <DollarSign className="w-4 h-4" /> Pagamento Delivery
-                                    </h3>
-                                    <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700">
-                                        <MultiPaymentManager
-                                            totalVenda={calculateTotal()}
-                                            formasDisponiveis={formasDisponiveis}
-                                            pagamentosatuais={pagamentosDelivery}
-                                            onAdicionar={(forma, valor, bandeira) => {
-                                                const novo = { id: Date.now().toString(), forma, valor, bandeira };
-                                                setPagamentosDelivery([...pagamentosDelivery, novo]);
-                                            }}
-                                            onRemover={(id) => setPagamentosDelivery(pagamentosDelivery.filter(p => p.id !== id))}
-                                        />
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <DollarSign className="w-4 h-4" /> Pagamento Delivery
+                                        </h3>
+                                        
+                                        <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={pagamentoNaEntrega}
+                                                onChange={(e) => setPagamentoNaEntrega(e.target.checked)}
+                                                className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                                            />
+                                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                                Pagar na Entrega
+                                            </span>
+                                        </label>
                                     </div>
+                                    {!pagamentoNaEntrega ? (
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700">
+                                            <MultiPaymentManager
+                                                totalVenda={calculateTotal()}
+                                                formasDisponiveis={formasDisponiveis}
+                                                pagamentosatuais={pagamentosDelivery}
+                                                onAdicionar={(forma, valor, bandeira) => {
+                                                    const novo = { id: Date.now().toString(), forma, valor, bandeira };
+                                                    setPagamentosDelivery([...pagamentosDelivery, novo]);
+                                                }}
+                                                onRemover={(id) => setPagamentosDelivery(pagamentosDelivery.filter(p => p.id !== id))}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="bg-orange-50 dark:bg-orange-900/10 p-6 rounded-[2rem] border border-orange-200 dark:border-orange-800/30 flex items-center justify-center">
+                                            <p className="text-sm font-bold text-orange-600 dark:text-orange-400 text-center">
+                                                O motorista fará a cobrança no momento da entrega.
+                                            </p>
+                                        </div>
+                                    )}
                                 </section>
 
                                 <section>
@@ -347,14 +425,25 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated 
                                             value={logistics.endereco_bairro}
                                             onChange={(e) => setLogistics({ ...logistics, endereco_bairro: e.target.value })}
                                         />
-                                        <div className="md:col-span-3">
-                                            <input
-                                                placeholder="Taxa (R$)"
-                                                type="number"
-                                                className="w-full p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 text-blue-600 font-black rounded-2xl outline-none"
-                                                value={logistics.taxa_entrega}
-                                                onChange={(e) => setLogistics({ ...logistics, taxa_entrega: parseFloat(e.target.value) })}
-                                            />
+                                        <div className="md:col-span-3 flex flex-col justify-end">
+                                            <label className="flex items-center gap-2 cursor-pointer mb-2 ml-1">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={cobrarTaxa}
+                                                    onChange={(e) => setCobrarTaxa(e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                                                />
+                                                <span className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Cobrar Taxa?</span>
+                                            </label>
+                                            {cobrarTaxa && (
+                                                <input
+                                                    placeholder="Taxa (R$)"
+                                                    type="number"
+                                                    className="w-full p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 text-blue-600 font-black rounded-2xl outline-none"
+                                                    value={logistics.taxa_entrega}
+                                                    onChange={(e) => setLogistics({ ...logistics, taxa_entrega: parseFloat(e.target.value) || 0 })}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                 </section>
