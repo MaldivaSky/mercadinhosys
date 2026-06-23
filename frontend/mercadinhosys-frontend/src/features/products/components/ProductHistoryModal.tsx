@@ -58,7 +58,7 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
     const [vendasHistorico, setVendasHistorico] = useState<VendaHistoricoDetailed[]>([]);
     const [estatisticasVendas, setEstatisticasVendas] = useState<EstatisticasVendas | null>(null);
     const [fornecedorInfo, setFornecedorInfo] = useState<FornecedorInfo | null>(null);
-    const [ultimaCompra, setUltimaCompra] = useState<any | null>(null);
+    const [, setUltimaCompra] = useState<any | null>(null);
     const [historicoCompras, setHistoricoCompras] = useState<any[]>([]);
     const [movimentacoesEstoque, setMovimentacoesEstoque] = useState<any[]>([]);
 
@@ -520,7 +520,7 @@ const ProductHistoryModal = ({ produto, onClose }: ProductHistoryModalProps) => 
                                                     </p>
                                                     {historicoCompras.length > 0 ? (
                                                         <div className="space-y-4">
-                                                            {historicoCompras.map((compra, i) => (
+                                                            {historicoCompras.map((compra) => (
                                                                 <div key={compra.id} className="relative pl-4 border-l-2 border-indigo-100 dark:border-gray-700">
                                                                     <div className="absolute w-2 h-2 bg-indigo-500 rounded-full -left-[5px] top-1.5 ring-4 ring-white dark:ring-gray-800"></div>
                                                                     <p className="text-sm font-black text-gray-800 dark:text-white">

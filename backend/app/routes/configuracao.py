@@ -254,7 +254,8 @@ def update_estabelecimento():
     try:
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        role = claims.get("role")
+        claims = get_jwt()
+        role = (claims.get("role") or "").lower()
         is_super = claims.get("is_super_admin", False)
         
         if role not in ["admin", "dono", "ADMIN"] and not is_super:
@@ -313,6 +314,7 @@ def preferencias_usuario():
     Gerencia preferências pessoais do usuário (tema, notificações, etc) via ORM (Blindado)
     """
     try:
+        claims = get_jwt()
         user_id_raw = claims.get("sub") or get_jwt_identity()
         try:
             user_id = int(user_id_raw)
@@ -346,7 +348,9 @@ def preferencias_usuario():
             current_app.logger.info(f"💾 [PREFS] Atualizando preferências para usuário {user_id}: {data}")
             
             if not prefs:
-                prefs = FuncionarioPreferencias(funcionario_id=user_id)
+                from app.utils.query_helpers import get_authorized_establishment_id
+                est_id = get_authorized_establishment_id()
+                prefs = FuncionarioPreferencias(funcionario_id=user_id, estabelecimento_id=est_id)
                 db.session.add(prefs)
             
             # Atualiza apenas os campos enviados
@@ -391,7 +395,8 @@ def upload_logo():
     try:
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        user_role = claims.get("role", "").lower()
+        claims = get_jwt()
+        user_role = (claims.get("role") or "").lower()
         
         # Verificação de permissão - apenas ADMIN e GERENTE podem fazer upload
         if user_role not in ["admin", "gerente"]:
@@ -432,11 +437,13 @@ def upload_logo():
         check_sql = "SELECT id FROM configuracoes WHERE estabelecimento_id = :eid LIMIT 1"
         existing = db.session.execute(text(check_sql), {"eid": estabelecimento_id}).fetchone()
 
+        # IMPORTANTE: o base64 vai SOMENTE em logo_base64 (coluna Text).
+        # logo_url é VARCHAR(500) e estouraria com o data URI (causa do erro 500).
         if existing:
-            sql = "UPDATE configuracoes SET logo_base64 = :img, logo_url = :img WHERE estabelecimento_id = :eid"
+            sql = "UPDATE configuracoes SET logo_base64 = :img, logo_url = NULL WHERE estabelecimento_id = :eid"
             db.session.execute(text(sql), {"img": base64_data, "eid": estabelecimento_id})
         else:
-            sql = "INSERT INTO configuracoes (estabelecimento_id, logo_base64, logo_url) VALUES (:eid, :img, :img)"
+            sql = "INSERT INTO configuracoes (estabelecimento_id, logo_base64) VALUES (:eid, :img)"
             db.session.execute(text(sql), {"eid": estabelecimento_id, "img": base64_data})
 
         db.session.commit()
