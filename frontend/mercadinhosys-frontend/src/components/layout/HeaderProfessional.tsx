@@ -72,8 +72,8 @@ const HeaderProfessional = () => {
         return user?.nome ? user.nome.charAt(0).toUpperCase() : 'U';
     }, [user?.nome]);
 
-    // Calcular logo URL dinamicamente baseado no config
-    const logoUrl = config?.logo_url || '/assets/logo.png';
+    // Logo: prioriza o base64 salvo (coluna Text). logo_url é VARCHAR(500) e fica nulo após salvar config.
+    const logoUrl = config?.logo_base64 || config?.logo_url || '/assets/logo.png';
 
     // toggleTheme agora vem diretamente do useTheme()
 

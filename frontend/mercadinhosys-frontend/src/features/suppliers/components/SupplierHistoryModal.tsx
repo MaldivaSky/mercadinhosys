@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Clock, Package, DollarSign, TrendingUp, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Clock, Package, DollarSign, Calendar } from 'lucide-react';
 import { Fornecedor } from '../../../types';
 import { apiClient } from '../../../api/apiClient';
 import { formatCurrency, formatDate } from '../../../utils/formatters';

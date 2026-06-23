@@ -31,6 +31,18 @@
 - F0 fundações: campos fiscais Estabelecimento + Produto — ✅ migration `e5f6a7b8c9d0` aplicada (login voltou a 200)
   - FALTA: serviço `app/services/fiscal/` (adapter gateway), rota `fiscal.py`, modelo `DocumentoFiscal`/`CertificadoDigital`, emissão NFC-e em modo simulado, teste e2e.
 
+### Settings por Tenant (bug crítico encontrado em uso)
+- PUT /configuracao/estabelecimento — ✅ CORRIGIDO+TESTADO (era `claims` indefinido → 500)
+- PUT/GET /configuracao/preferencias — ✅ CORRIGIDO+TESTADO (faltava estabelecimento_id → persiste agora)
+- POST /configuracao/logo — ✅ CORRIGIDO+TESTADO. 2 bugs: (1) `claims` indefinido; (2) base64 gravado em `logo_url` VARCHAR(500) → truncava (erro em imagens reais). Agora grava só em `logo_base64` (Text). Testado: img 4KB→200, persiste.
+- Header não exibia a logo: lia `config.logo_url` (fica null após salvar config). ✅ CORRIGIDO: `HeaderProfessional` lê `logo_base64` primeiro. tsc ok.
+- Build Vercel: 4 erros TS6133 (unused) no código commitado do Gemini ✅ CORRIGIDOS (ProductHistoryModal, SupplierHistoryModal). Falta rodar `npm run build` final.
+- Causa: bugs pré-existentes. Cada tenant agora grava e mantém info/preferências.
+
+### Deploy
+- Migrations: head único `e5f6a7b8c9d0` (Railway OK). Cadeia: c3d4e5f6a7b8 → d4e5f6a7b8c9 → e5f6a7b8c9d0.
+- Frontend build (Vercel): a validar com `npm run build`.
+
 ### Super Admin / SaaS
 - Seletor de perfil no header (ver loja como tenant, read-only) — ⬜
 - Painel super admin legível — ⬜
