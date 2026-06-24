@@ -2043,3 +2043,77 @@ class DataLayer:
                 "titulos_vencidos": 0,
                 "ranking_atraso": []
             }
+
+    @staticmethod
+    @provide_session
+    def get_sellers_performance(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
+        """
+        Analítica de Força de Vendas (SFA):
+        Calcula faturamento do período atual vs período passado, tendência e meta (projetada +10%).
+        """
+        now = datetime.utcnow()
+        start_current = now - timedelta(days=days)
+        start_previous = start_current - timedelta(days=days)
+
+        # 1. Query Current Period
+        current_query = db.session.query(
+            Venda.funcionario_id,
+            func.sum(Venda.total).label('total_atual'),
+            func.count(Venda.id).label('qtd_atual')
+        ).filter(
+            Venda.estabelecimento_id == estabelecimento_id,
+            Venda.status == 'finalizada',
+            Venda.data_venda >= start_current,
+            Venda.data_venda <= now
+        ).group_by(Venda.funcionario_id).all()
+
+        current_map = {row.funcionario_id: {"total": float(row.total_atual or 0), "qtd": row.qtd_atual} for row in current_query}
+
+        # 2. Query Previous Period
+        previous_query = db.session.query(
+            Venda.funcionario_id,
+            func.sum(Venda.total).label('total_passado')
+        ).filter(
+            Venda.estabelecimento_id == estabelecimento_id,
+            Venda.status == 'finalizada',
+            Venda.data_venda >= start_previous,
+            Venda.data_venda < start_current
+        ).group_by(Venda.funcionario_id).all()
+
+        previous_map = {row.funcionario_id: float(row.total_passado or 0) for row in previous_query}
+
+        # 3. Retrieve Vendedores info
+        seller_ids = list(set(list(current_map.keys()) + list(previous_map.keys())))
+        if not seller_ids:
+            return []
+
+        funcionarios = db.session.query(Funcionario.id, Funcionario.nome).filter(
+            Funcionario.estabelecimento_id == estabelecimento_id,
+            Funcionario.id.in_(seller_ids)
+        ).all()
+
+        vendedores = []
+        for f_id, f_nome in funcionarios:
+            atual = current_map.get(f_id, {"total": 0.0, "qtd": 0})
+            passado = previous_map.get(f_id, 0.0)
+            
+            # Meta projetada = Faturamento passado * 1.10 (10% de crescimento desejado)
+            meta = passado * 1.10
+            if meta == 0:
+                meta = atual["total"] * 1.20 if atual["total"] > 0 else 5000.0 # Valor arbitrário para quem não tem histórico
+
+            tendencia = 0.0
+            if passado > 0:
+                tendencia = ((atual["total"] - passado) / passado) * 100.0
+
+            vendedores.append({
+                "id": f_id,
+                "nome": f_nome,
+                "alcancado": atual["total"],
+                "meta": round(meta, 2),
+                "tendencia": round(tendencia, 1),
+                "vendas_count": atual["qtd"]
+            })
+
+        return sorted(vendedores, key=lambda x: x["alcancado"], reverse=True)
+
