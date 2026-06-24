@@ -1127,34 +1127,32 @@ const CustomersPage: React.FC = () => {
                                 })}
                             </Box>
 
-                            <Box sx={{ display: 'grid', gap: 1.5 }}>
+                            <Box className="grid gap-4">
                                 {campaignTargets.slice(0, 12).map((cliente) => (
                                     <Box
                                         key={cliente.id}
-                                        sx={{
-                                            border: cliente.id === selectedCampaignCustomer?.id ? '1px solid #3b82f6' : '1px solid #e2e8f0',
-                                            bgcolor: cliente.id === selectedCampaignCustomer?.id ? '#eff6ff' : '#fff',
-                                            borderRadius: 2,
-                                            p: 2,
-                                            cursor: 'pointer',
-                                        }}
+                                        className={`p-4 rounded-2xl border cursor-pointer transition-colors ${
+                                            cliente.id === selectedCampaignCustomer?.id
+                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500'
+                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                        }`}
                                         onClick={() => setCampaignCustomerId(cliente.id)}
                                     >
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
+                                        <Box className="flex justify-between items-center gap-4">
                                             <Box>
-                                                <Typography sx={{ fontWeight: 700 }}>{cliente.nome}</Typography>
-                                                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                                <Typography className="font-bold text-slate-900 dark:text-white">{cliente.nome}</Typography>
+                                                <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mt-1">
                                                     {lifecycleLabel(cliente.lifecycle)} • Segmento {cliente.crmSegment}
                                                 </Typography>
                                             </Box>
-                                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                            <Box className="flex items-center gap-2 flex-wrap justify-end">
                                                 {cliente.whatsappNumber && (
                                                     <Chip size="small" icon={<WhatsAppIcon />} label="WhatsApp" color="success" variant="outlined" />
                                                 )}
                                                 <Chip
                                                     size="small"
                                                     label={cliente.hasDebt ? formatCurrency(Number(cliente.saldo_devedor || 0)) : formatCurrency(Number(cliente.valor_total_gasto || 0))}
-                                                    sx={{ bgcolor: '#f8fafc', color: '#0f172a', fontWeight: 700 }}
+                                                    className="bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-100 font-bold"
                                                 />
                                             </Box>
                                         </Box>
