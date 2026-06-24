@@ -50,6 +50,11 @@ services:
       MULTI_TENANT_MODE: "true"
       HYBRID_MODE: "online"
 
+      # Sincronização Local → Aiven (a cada 5 minutos)
+      SYNC_AUTO_PUSH: "true"
+      SYNC_PUSH_INTERVAL_SEC: "300"
+      SYNC_ENABLED: "true"
+
       # Security
       SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-jwt-secret-key-change-in-production}
