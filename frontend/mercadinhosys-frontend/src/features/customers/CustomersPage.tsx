@@ -896,38 +896,29 @@ const CustomersPage: React.FC = () => {
                     />
 
                     <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1.4fr 1fr' } }}>
-                        <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
-                            <CardContent sx={{ p: 3 }}>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl dark:shadow-none">
+                            <CardContent className="p-6">
+                                <Box className="flex justify-between items-center mb-4">
                                     <div>
-                                        <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                        <Typography variant="h6" className="font-extrabold text-slate-900 dark:text-white">
                                             Fila de prioridade comercial
                                         </Typography>
-                                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                        <Typography variant="body2" className="text-slate-500 dark:text-slate-400">
                                             Clientes que devem entrar na cadencia de contato agora.
                                         </Typography>
                                     </div>
-                                    <Chip label="Top 6" sx={{ bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 700 }} />
+                                    <Chip label="Top 6" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold" />
                                 </Box>
 
                                 <Box sx={{ display: 'grid', gap: 1.5 }}>
                                     {crmClientes.slice(0, 6).map((cliente) => (
                                         <Box
                                             key={cliente.id}
-                                            sx={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                gap: 2,
-                                                p: 2,
-                                                borderRadius: 2,
-                                                border: '1px solid #e2e8f0',
-                                                bgcolor: '#f8fafc',
-                                            }}
+                                            className="flex justify-between items-center gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50"
                                         >
                                             <Box>
-                                                <Typography sx={{ fontWeight: 700, color: '#0f172a' }}>{cliente.nome}</Typography>
-                                                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                                <Typography className="font-bold text-slate-900 dark:text-white">{cliente.nome}</Typography>
+                                                <Typography variant="body2" className="text-slate-500 dark:text-slate-400">
                                                     {lifecycleLabel(cliente.lifecycle)} • Segmento {cliente.crmSegment}
                                                 </Typography>
                                             </Box>
@@ -951,11 +942,11 @@ const CustomersPage: React.FC = () => {
                             </CardContent>
                         </Card>
 
-                        <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
-                            <CardContent sx={{ p: 3 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                                    <CampaignIcon sx={{ color: '#2563eb' }} />
-                                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                        <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl dark:shadow-none">
+                            <CardContent className="p-6">
+                                <Box className="flex items-center gap-2 mb-4">
+                                    <CampaignIcon className="text-blue-600 dark:text-blue-400" />
+                                    <Typography variant="h6" className="font-extrabold text-slate-900 dark:text-white">
                                         Centro de acao CRM
                                     </Typography>
                                 </Box>
@@ -980,13 +971,13 @@ const CustomersPage: React.FC = () => {
                                                     setActiveTab('campaigns');
                                                 }}
                                                 className={`rounded-2xl border p-4 text-left transition ${
-                                                    isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                                                    isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
                                                 }`}
                                             >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div>
-                                                        <p className="text-sm font-semibold text-slate-900">{campaign.title}</p>
-                                                        <p className="mt-1 text-xs text-slate-500">{campaign.subtitle}</p>
+                                                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{campaign.title}</p>
+                                                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{campaign.subtitle}</p>
                                                     </div>
                                                     <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                                                         {targetCount}
@@ -1030,34 +1021,29 @@ const CustomersPage: React.FC = () => {
                             color: '#b45309',
                         },
                     ].map((panel) => (
-                        <Card key={panel.title} sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                        <Card key={panel.title} className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl dark:shadow-none">
+                            <CardContent className="p-6">
+                                <Typography variant="h6" className="font-extrabold text-slate-900 dark:text-white">
                                     {panel.title}
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
+                                <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mb-4">
                                     {panel.description}
                                 </Typography>
 
-                                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                                <Box className="grid gap-4">
                                     {panel.customers.length === 0 && (
-                                        <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', color: '#64748b' }}>{panel.empty}</Box>
+                                        <Box className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">{panel.empty}</Box>
                                     )}
 
                                     {panel.customers.map((cliente) => (
                                         <Box
                                             key={cliente.id}
-                                            sx={{
-                                                p: 2,
-                                                borderRadius: 2,
-                                                border: '1px solid #e2e8f0',
-                                                bgcolor: '#fff',
-                                            }}
+                                            className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
                                         >
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                                            <Box className="flex justify-between gap-4">
                                                 <Box>
-                                                    <Typography sx={{ fontWeight: 700 }}>{cliente.nome}</Typography>
-                                                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                                    <Typography className="font-bold text-slate-900 dark:text-white">{cliente.nome}</Typography>
+                                                    <Typography variant="body2" className="text-slate-500 dark:text-slate-400">
                                                         {cliente.lastPurchaseDays !== null
                                                             ? `${cliente.lastPurchaseDays} dias sem compra`
                                                             : 'Sem historico recente'}
@@ -1188,18 +1174,18 @@ const CustomersPage: React.FC = () => {
                             </Box>
 
                             {!selectedCampaignCustomer ? (
-                                <Box sx={{ p: 3, borderRadius: 2, bgcolor: '#f8fafc', color: '#64748b' }}>
+                                <Box className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                                     Nenhum cliente elegivel para esta campanha neste momento.
                                 </Box>
                             ) : (
-                                <Box sx={{ display: 'grid', gap: 2 }}>
-                                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                        <Typography sx={{ fontWeight: 700 }}>{selectedCampaignCustomer.nome}</Typography>
-                                        <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
+                                <Box className="grid gap-4">
+                                    <Box className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                                        <Typography className="font-bold text-slate-900 dark:text-white">{selectedCampaignCustomer.nome}</Typography>
+                                        <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mt-1">
                                             {selectedCampaignCustomer.email || 'Sem e-mail'} •{' '}
                                             {selectedCampaignCustomer.celular || selectedCampaignCustomer.telefone || 'Sem telefone'}
                                         </Typography>
-                                        <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                                        <Box className="flex gap-2 mt-2 flex-wrap">
                                             <Chip
                                                 size="small"
                                                 label={`Segmento ${selectedCampaignCustomer.crmSegment}`}
@@ -1209,20 +1195,20 @@ const CustomersPage: React.FC = () => {
                                                     fontWeight: 700,
                                                 }}
                                             />
-                                            <Chip size="small" label={lifecycleLabel(selectedCampaignCustomer.lifecycle)} sx={{ bgcolor: '#e2e8f0', color: '#0f172a', fontWeight: 700 }} />
+                                            <Chip size="small" label={lifecycleLabel(selectedCampaignCustomer.lifecycle)} className="bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-200 font-bold" />
                                         </Box>
                                     </Box>
 
-                                    <Box sx={{ p: 2.5, borderRadius: 3, bgcolor: '#0f172a', color: '#fff' }}>
-                                        <Typography variant="overline" sx={{ opacity: 0.8, letterSpacing: 1 }}>
+                                    <Box className="p-5 rounded-3xl bg-slate-900 dark:bg-slate-950 text-white border border-slate-800">
+                                        <Typography variant="overline" className="opacity-80 tracking-widest">
                                             Mensagem sugerida
                                         </Typography>
-                                        <Typography sx={{ mt: 1.5, whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+                                        <Typography className="mt-3 whitespace-pre-wrap leading-relaxed text-slate-200">
                                             {buildCampaignMessage(selectedCampaign, selectedCampaignCustomer)}
                                         </Typography>
                                     </Box>
 
-                                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                    <Box className="flex gap-2 flex-wrap mt-2">
                                         <Button
                                             variant="contained"
                                             color="success"
@@ -1231,19 +1217,19 @@ const CustomersPage: React.FC = () => {
                                         >
                                             Abrir WhatsApp
                                         </Button>
-                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy')}>
+                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy')} className="dark:border-slate-600 dark:text-slate-300">
                                             Copiar mensagem
                                         </Button>
-                                        <Button variant="outlined" onClick={() => handleRowClick(selectedCampaignCustomer)}>
+                                        <Button variant="outlined" onClick={() => handleRowClick(selectedCampaignCustomer)} className="dark:border-slate-600 dark:text-slate-300">
                                             Ver cliente
                                         </Button>
                                     </Box>
 
-                                    <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#eff6ff', border: '1px solid #bfdbfe' }}>
-                                        <Typography variant="subtitle2" sx={{ color: '#1d4ed8', fontWeight: 700 }}>
+                                    <Box className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 mt-4">
+                                        <Typography variant="subtitle2" className="text-blue-700 dark:text-blue-400 font-bold">
                                             Operacao recomendada
                                         </Typography>
-                                        <Typography variant="body2" sx={{ color: '#334155', mt: 0.5 }}>
+                                        <Typography variant="body2" className="text-slate-700 dark:text-slate-300 mt-1">
                                             Use esta area como cadencia comercial. A automacao assistida por WhatsApp ja prepara a
                                             mensagem com base no momento do cliente. Para disparo automatico massivo sem interacao do
                                             operador, o proximo passo tecnico e integrar API oficial de WhatsApp Business.

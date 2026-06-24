@@ -6,18 +6,20 @@ from efipay import EfiPay
 
 class BillingService:
     def __init__(self):
-        client_id = os.getenv('EFI_CLIENT_ID')
-        client_secret = os.getenv('EFI_CLIENT_SECRET')
-        cert_path = os.getenv('EFI_CERT_PROD') if os.getenv('EFI_ENV') != 'sandbox' else os.getenv('EFI_CERT_HOMOL')
+        is_sandbox = os.getenv('EFI_ENV', 'sandbox') == 'sandbox'
+        
+        client_id = os.getenv('EFI_CLIENT_ID_HOMOL') if is_sandbox else os.getenv('EFI_CLIENT_ID_PROD')
+        client_secret = os.getenv('EFI_CLIENT_SECRET_HOMOL') if is_sandbox else os.getenv('EFI_CLIENT_SECRET_PROD')
+        cert_path = os.getenv('EFI_CERT_HOMOL') if is_sandbox else os.getenv('EFI_CERT_PROD')
         
         if not client_id or not client_secret:
-            raise RuntimeError("EFI_CLIENT_ID ou EFI_CLIENT_SECRET não estão configurados no .env")
+            raise RuntimeError("As chaves da Efí (EFI_CLIENT_ID / EFI_CLIENT_SECRET) não estão configuradas no .env para este ambiente.")
 
         self.options = {
             'client_id': client_id,
             'client_secret': client_secret,
-            'sandbox': os.getenv('EFI_ENV', 'sandbox') == 'sandbox',
-            'certificate': os.path.abspath(cert_path) if cert_path and os.path.exists(cert_path) else None
+            'sandbox': is_sandbox,
+            # 'certificate': os.path.abspath(cert_path) if cert_path and os.path.exists(cert_path) else None
         }
 
         self.efi = EfiPay(self.options)
@@ -36,7 +38,7 @@ class BillingService:
             if not estab:
                 raise Exception("Estabelecimento não encontrado")
 
-            # 1. Create a charge
+            # 1. Create a charge and link in one step
             body = {
                 "items": [
                     {
@@ -45,40 +47,30 @@ class BillingService:
                         "amount": 1
                     }
                 ],
+                "settings": {
+                    "message": f"Assinatura MercadinhoSys - {plan_name}",
+                    "expire_at": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
+                    "request_delivery_address": False,
+                    "payment_method": "pix,credit_card"
+                },
                 "metadata": {
                     "custom_id": str(estabelecimento_id),
                     "notification_url": os.getenv('BACKEND_URL', 'https://mercadinhosys.herokuapp.com') + '/api/billing/webhook'
                 }
             }
 
-            charge = self.efi.create_charge(body=body)
-            if charge.get('code') != 200:
-                raise Exception(f"Erro ao criar cobrança Efí: {charge}")
+            charge = self.efi.create_one_step_link(body=body)
+            if isinstance(charge, str) or charge.get('code') != 200:
+                raise Exception(f"Erro ao gerar link de pagamento Efí (Verifique suas Credenciais): {charge}")
 
             charge_id = charge['data']['charge_id']
             
-            # Update gateway info on estab (we use the charge_id as subscription id for simplicity)
+            # Update gateway info on estab
             estab.gateway_subscription_id = str(charge_id)
             estab.plano = plan_name
             db.session.commit()
 
-            # 2. Generate Payment Link
-            link_body = {
-                "billet_discount": 0,
-                "card_discount": 0,
-                "message": f"Assinatura MercadinhoSys - {plan_name}",
-                "expire_at": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
-                "request_delivery_address": False,
-                "payment_method": "all"
-            }
-
-            params = { "id": charge_id }
-            link = self.efi.update_charge_link(params=params, body=link_body)
-            
-            if link.get('code') != 200:
-                raise Exception(f"Erro ao gerar link de pagamento Efí: {link}")
-
-            return link['data']['payment_url']
+            return charge['data']['payment_url']
 
         except Exception as e:
             current_app.logger.error(f"Erro no BillingService: {str(e)}")
