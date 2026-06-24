@@ -970,7 +970,8 @@ def historico_comparativo():
 
         query = db.session.query(
             Despesa.categoria,
-            func.strftime('%Y-%m', Despesa.data_despesa).label('mes'),
+            extract('year', Despesa.data_despesa).label('ano'),
+            extract('month', Despesa.data_despesa).label('mes_num'),
             func.sum(Despesa.valor).label('total'),
             func.count(Despesa.id).label('qtd'),
         ).filter(
@@ -980,15 +981,16 @@ def historico_comparativo():
         if estabelecimento_id != 'all':
             query = query.filter(Despesa.estabelecimento_id == estabelecimento_id)
 
-        rows = query.group_by(Despesa.categoria, func.strftime('%Y-%m', Despesa.data_despesa)).all()
+        rows = query.group_by(Despesa.categoria, extract('year', Despesa.data_despesa), extract('month', Despesa.data_despesa)).all()
 
         # Indexa os dados: {mes: {categoria: {total, qtd}}}
         dados_mes_cat = defaultdict(lambda: defaultdict(lambda: {"total": 0.0, "qtd": 0}))
         todas_categorias = set()
-        for cat, mes, total, qtd in rows:
+        for cat, ano, mes_num, total, qtd in rows:
             categoria = cat or "outros"
-            dados_mes_cat[mes][categoria]["total"] += float(total or 0)
-            dados_mes_cat[mes][categoria]["qtd"] += int(qtd or 0)
+            mes_str = f"{int(ano):04d}-{int(mes_num):02d}"
+            dados_mes_cat[mes_str][categoria]["total"] += float(total or 0)
+            dados_mes_cat[mes_str][categoria]["qtd"] += int(qtd or 0)
             todas_categorias.add(categoria)
 
         # Totais por mês
@@ -1118,8 +1120,8 @@ def historico_comparativo():
             "resumo_periodo": {
                 "total_geral": round(sum(totais_mes.values()), 2),
                 "media_mensal": round(sum(totais_mes.values()) / len(meses) if meses else 0, 2),
-                "mes_mais_caro": max(totais_mes.items(), key=lambda x: x[1])[0] if totais_mes else None,
-                "mes_mais_barato": min((k, v) for k, v in totais_mes.items() if v > 0)[0] if any(totais_mes.values()) else None,
+                "mes_mais_caro": max(totais_mes.items(), key=lambda x: x[1])[0] if totais_mes and sum(totais_mes.values()) > 0 else None,
+                "mes_mais_barato": min([(k, v) for k, v in totais_mes.items() if v > 0], key=lambda x: x[1])[0] if any(v > 0 for v in totais_mes.values()) else None,
             }
         })
 

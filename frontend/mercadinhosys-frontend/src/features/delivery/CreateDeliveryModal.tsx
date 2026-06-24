@@ -66,6 +66,29 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
         setStep(2);
     };
 
+    const handleCepBlur = async () => {
+        const cep = form.endereco_cep.replace(/\D/g, '');
+        if (cep.length === 8) {
+            try {
+                const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                const data = await response.json();
+                if (!data.erro) {
+                    setForm(prev => ({
+                        ...prev,
+                        endereco_logradouro: data.logradouro || prev.endereco_logradouro,
+                        endereco_bairro: data.bairro || prev.endereco_bairro,
+                        endereco_cidade: data.localidade || prev.endereco_cidade,
+                        endereco_estado: data.uf || prev.endereco_estado
+                    }));
+                    toast.success("Endereço preenchido automaticamente!");
+                }
+            } catch (error) {
+                console.error("Erro ao buscar CEP", error);
+            }
+        }
+    };
+
+
     const handleSubmit = async () => {
         try {
             setLoading(true);
@@ -196,6 +219,7 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
                                             type="text"
                                             value={form.endereco_cep}
                                             onChange={(e) => setForm({ ...form, endereco_cep: e.target.value })}
+                                            onBlur={handleCepBlur}
                                             placeholder="00000-000"
                                             className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                         />
