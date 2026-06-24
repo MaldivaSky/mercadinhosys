@@ -91,14 +91,18 @@ services:
     networks:
       - mercadinhosys-network
 
-  # Sync Daemon — replicação local → Aiven em processo DEDICADO e isolado
-  # (sobrevive a reloads do backend; runner único, sem corrida entre workers).
+  # Sync Daemon — DESLIGADO por decisão de arquitetura (2026-06).
+  # A fonte da verdade é a NUVEM (Aiven); o local é sandbox de DEV isolado.
+  # O push local→Aiven saturava as 20 conexões do Aiven (causou apagão) e
+  # sobrescrevia produção com dados de teste. O offline real é via PWA (fila
+  # por-aparelho, sincroniza pela API). Para reativar pontualmente: SYNC_AUTO_PUSH=true.
   sync:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: mercadinhosys-sync
-    restart: unless-stopped
+    restart: "no"
+    profiles: ["sync"]   # não sobe no `docker compose up` padrão
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,8 +110,8 @@ services:
     environment:
       DATABASE_URL: postgresql://mercadinho_user:${DB_PASSWORD:-mercadinho_secure_pass_2024}@postgres:5432/mercadinhosys
       AIVEN_DATABASE_URL: ${AIVEN_DATABASE_URL:-}
-      SYNC_AUTO_PUSH: "true"
-      SYNC_PUSH_INTERVAL_SEC: "300"
+      SYNC_AUTO_PUSH: "false"
+      SYNC_PUSH_INTERVAL_SEC: "1800"
     volumes:
       - ./backend:/app
     dns:
