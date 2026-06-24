@@ -1637,6 +1637,25 @@ class Auditoria(db.Model, MultiTenantMixin):
                 "detalhes": self.detalhes_json if self.detalhes_json else {}}
 
     @classmethod
+    def registrar_direto(cls, connection, estabelecimento_id, tipo_evento, descricao, usuario_id=None, valor=None, detalhes=None):
+        import json
+        from datetime import datetime
+        try:
+            connection.execute(
+                cls.__table__.insert().values(
+                    estabelecimento_id=estabelecimento_id,
+                    tipo_evento=tipo_evento,
+                    descricao=descricao,
+                    usuario_id=usuario_id,
+                    valor=valor,
+                    detalhes_json=detalhes, # SQLAlchemy Core handles dict to JSON
+                    data_evento=datetime.now()
+                )
+            )
+        except Exception as e:
+            pass
+
+    @classmethod
     def registrar(cls, estabelecimento_id, tipo_evento, descricao, usuario_id=None, valor=None, detalhes=None):
         if not estabelecimento_id:
             if current_app: current_app.logger.warning(f"Auditoria rejeitada: estabelecimento_id nulo para evento {tipo_evento}")
