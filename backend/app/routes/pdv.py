@@ -567,6 +567,38 @@ def calcular_venda():
         return jsonify({"error": f"Erro ao calcular: {str(e)}"}), 500
 
 
+@pdv_bp.route("/catalogo-offline", methods=["GET"])
+@funcionario_required
+def catalogo_offline():
+    """
+    Catálogo COMPLETO e leve para cache offline do PWA (vender sem sinal).
+    Só as colunas necessárias para montar o carrinho: nome, códigos, preço,
+    estoque atual e unidade. Sem N+1 (select direto de colunas).
+    """
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        from datetime import datetime, timezone
+        estabelecimento_id = get_authorized_establishment_id()
+        q = db.session.query(
+            Produto.id, Produto.nome, Produto.codigo_barras, Produto.codigo_interno,
+            Produto.preco_venda, Produto.quantidade, Produto.unidade_medida,
+        ).filter(Produto.ativo == True, Produto.deleted_at.is_(None))
+        if str(estabelecimento_id).lower() != "all":
+            q = q.filter(Produto.estabelecimento_id == estabelecimento_id)
+        produtos = [{
+            "id": r[0], "nome": r[1], "codigo_barras": r[2], "codigo_interno": r[3],
+            "preco_venda": float(r[4] or 0), "quantidade": float(r[5] or 0),
+            "unidade_medida": r[6] or "UN",
+        } for r in q.all()]
+        return jsonify({
+            "success": True, "produtos": produtos, "total": len(produtos),
+            "gerado_em": datetime.now(timezone.utc).isoformat(),
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Erro em catalogo_offline: {e}")
+        return jsonify({"success": False, "error": "Falha ao montar catálogo offline"}), 500
+
+
 @pdv_bp.route("/buscar-produtos", methods=["GET"])
 @funcionario_required
 def buscar_produtos_pdv():

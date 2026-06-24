@@ -559,6 +559,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar fiscal: {e}")
 
+    # Auditoria do tenant (cada loja vê os próprios logs)
+    try:
+        from app.routes.auditoria import auditoria_bp
+        app.register_blueprint(auditoria_bp, url_prefix="/api/auditoria")
+        logger.info("✅ Blueprint auditoria registrado em /api/auditoria")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar auditoria: {e}")
+
     # PDV
     try:
         from app.routes.pdv import pdv_bp

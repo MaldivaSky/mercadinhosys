@@ -1,6 +1,7 @@
 import { apiClient } from '../../api/apiClient';
 import { ApiResponse, Produto, Cliente } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
+import { salvarCatalogo, ProdutoCatalogo } from './offlineCatalog';
 
 // Gera um UUID (usa o nativo do browser quando disponível; senão, a lib uuid)
 const genUuid = (): string =>
@@ -198,6 +199,19 @@ export const pdvService = {
         }
 
         return [];
+    },
+
+    /**
+     * Baixa o catálogo completo (leve) e grava no IndexedDB para venda offline.
+     * Retorna a quantidade de produtos cacheados. Chamar quando online.
+     */
+    sincronizarCatalogoOffline: async (): Promise<number> => {
+        const { data } = await apiClient.get<any>('/pdv/catalogo-offline');
+        if (data?.success && Array.isArray(data.produtos)) {
+            await salvarCatalogo(data.produtos as ProdutoCatalogo[]);
+            return data.produtos.length;
+        }
+        return 0;
     },
 
     /**

@@ -60,6 +60,28 @@ const PDVPage: React.FC = () => {
     // Fila offline — vendas salvas localmente quando sem internet
     const { pendingCount, isSyncing, isOnline, enqueue, processQueue } = useOfflineQueue();
 
+    // Catálogo offline — baixa quando online para permitir vender sem sinal
+    const [catalogoCount, setCatalogoCount] = useState(0);
+    useEffect(() => {
+        let ativo = true;
+        const sincronizar = async () => {
+            try {
+                const n = await pdvService.sincronizarCatalogoOffline();
+                if (ativo) setCatalogoCount(n);
+            } catch {
+                // offline ou falha → usa o catálogo já cacheado (se houver)
+                try {
+                    const { contarCatalogo } = await import('./offlineCatalog');
+                    if (ativo) setCatalogoCount(await contarCatalogo());
+                } catch { /* sem catálogo ainda */ }
+            }
+        };
+        if (isOnline) sincronizar();
+        const onOnline = () => sincronizar();
+        window.addEventListener('online', onOnline);
+        return () => { ativo = false; window.removeEventListener('online', onOnline); };
+    }, [isOnline]);
+
     const [formaPagamentoAberta, setFormaPagamentoAberta] = useState(false);
     const [activeSection, setActiveSection] = useState<'cliente' | 'pagamento'>('pagamento');
     const [enviandoEmail, setEnviandoEmail] = useState(false);
@@ -220,7 +242,7 @@ const PDVPage: React.FC = () => {
                     >
                         <div className="flex items-center gap-2">
                             <WifiOff className="w-3.5 h-3.5" />
-                            <span>{!isOnline ? '📡 Sem conexão — vendendo em modo offline' : `📦 ${pendingCount} venda(s) aguardando sincronização`}</span>
+                            <span>{!isOnline ? `📡 Sem conexão — vendendo offline (${catalogoCount} produtos no catálogo)` : `📦 ${pendingCount} venda(s) aguardando sincronização`}</span>
                         </div>
                         {pendingCount > 0 && isOnline && (
                             <button

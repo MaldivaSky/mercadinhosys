@@ -86,11 +86,15 @@ class Config:
     USING_POSTGRES = _using_postgres
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # POOL ENXUTO: o Aiven (free) só tem 20 conexões e os processos internos dele
+    # já consomem ~8. Com 2 workers gunicorn, cada um pode usar no máx pool_size+
+    # max_overflow = 5 → 10 no total, com folga sob os ~12 disponíveis. Configurável
+    # por env (DB_POOL_SIZE/DB_MAX_OVERFLOW) para ajustar conforme o plano do Aiven.
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_recycle": 300,
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_recycle": 280,
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", "3")),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "2")),
         "pool_timeout": 30,
         "connect_args": {
             "keepalives": 1,

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Package, Barcode, Camera, AlertCircle } from 'lucide-react';
 import { Produto } from '../../../types';
 import { pdvService } from '../pdvService';
+import { buscarOffline } from '../offlineCatalog';
 import { useConfig } from '../../../contexts/ConfigContext';
 import BarcodeScanner from './BarcodeScanner';
 
@@ -56,14 +57,34 @@ const ProdutoSearch: React.FC<ProdutoSearchProps> = ({ onProdutoSelecionado }) =
                     }
                 }
             } catch (error: any) {
-                if (error.code === 'ERR_NETWORK') {
-                    setErro('⚠️ Servidor offline. Verifique o backend.');
+                const semRede = error.code === 'ERR_NETWORK' || !error.response;
+                if (semRede) {
+                    // FALLBACK OFFLINE: busca no catálogo cacheado no aparelho
+                    try {
+                        const offline = await buscarOffline(query.trim());
+                        if (offline.length > 0) {
+                            const mapped = offline.map((p) => ({
+                                id: p.id, nome: p.nome, codigo_barras: p.codigo_barras,
+                                codigo_interno: p.codigo_interno, preco_venda: p.preco_venda,
+                                quantidade: p.quantidade, unidade_medida: p.unidade_medida,
+                            })) as unknown as Produto[];
+                            setResultados(mapped.slice(0, 20));
+                            setErro('📴 Offline — usando catálogo salvo no aparelho');
+                        } else {
+                            setResultados([]);
+                            setErro('📴 Offline — produto não está no catálogo salvo');
+                        }
+                    } catch {
+                        setResultados([]);
+                        setErro('⚠️ Sem catálogo offline. Conecte uma vez para baixá-lo.');
+                    }
                 } else if (error.response?.status === 401) {
                     setErro('🔒 Sessão expirada. Faça login novamente.');
+                    setResultados([]);
                 } else {
                     setErro(error.response?.data?.error || error.message || 'Erro ao buscar produtos');
+                    setResultados([]);
                 }
-                setResultados([]);
             } finally {
                 setLoading(false);
             }

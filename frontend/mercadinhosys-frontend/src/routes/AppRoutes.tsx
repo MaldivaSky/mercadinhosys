@@ -31,6 +31,7 @@ const LandingPage = lazy(() => import('../features/landing/LandingPage'));
 const EstabelecimentosPage = lazy(() => import('../features/estabelecimentos/EstabelecimentosPage'));
 const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
 const FiscalPage = lazy(() => import('../features/fiscal/FiscalPage'));
+const MonitorPage = lazy(() => import('../features/monitor/MonitorPage'));
 
 
 
@@ -68,6 +69,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="sales" element={<PlanoGuard planoRequerido="pro"><SalesPage /></PlanoGuard>} />
                     <Route path="expenses" element={<PlanoGuard planoRequerido="pro"><ExpensesPage /></PlanoGuard>} />
                     <Route path="fiscal" element={<PlanoGuard planoRequerido="gratuito"><FiscalPage /></PlanoGuard>} />
+                    <Route path="auditoria" element={<PlanoGuard planoRequerido="gratuito"><MonitorPage /></PlanoGuard>} />
                     <Route path="employees" element={<PlanoGuard planoRequerido="gratuito"><EmployeesPage /></PlanoGuard>} />
                     <Route path="rh" element={<PlanoGuard planoRequerido="pro"><RHPage /></PlanoGuard>} />
                     <Route path="ponto" element={<PlanoGuard planoRequerido="pro"><PontoPage /></PlanoGuard>} />

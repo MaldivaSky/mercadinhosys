@@ -35,6 +35,7 @@ const menuItems = [
     { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/fiscal', icon: Receipt, label: 'Fiscal' },
+    { to: '/auditoria', icon: Activity, label: 'Auditoria' },
     { to: '/employees', icon: UserCog, label: 'Funcionários' },
     { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
     { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },

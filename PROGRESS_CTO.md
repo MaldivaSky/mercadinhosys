@@ -69,8 +69,31 @@ Correção robusta:
 
 ## PDV Offline-First (diferencial — distribuidora/vendedor de rua)
 - O1 Idempotência — ✅ COMPLETO+TESTADO. Coluna `vendas.offline_uuid` + unique(estab,offline_uuid) (migration `d0e1f2a3b4c5`). `/pdv/finalizar` deduplica: 2º envio do mesmo uuid retorna a venda existente (idempotente=true), SEM duplicar nem baixar estoque 2× (testado: estoque 359→357 e ficou 357). Frontend gera offline_uuid ANTES da 1ª tentativa (fecha janela "resposta perdida"); flui consistente POST online → fila IndexedDB → sync.
-- O2 Catálogo offline — ⬜ PRÓXIMO (showstopper): cachear produtos+preços em IndexedDB no login/sync; ProdutoSearch ler do cache sem sinal; Service Worker runtime caching. Sem isso o vendedor não monta o carrinho offline.
+- O2 Catálogo offline — ✅ COMPLETO (backend testado). Endpoint leve `GET /pdv/catalogo-offline` (id,nome,EAN,código,preço,estoque,unidade; sem N+1; testado 24 produtos). Frontend: `offlineCatalog.ts` (IndexedDB `mercadinhosys_catalog`), `pdvService.sincronizarCatalogoOffline`, fallback offline no `ProdutoSearch`, PDVPage baixa no mount/online + mostra contagem. Typecheck OK.
+- PENDENTE offline: dead-letter na fila (máx tentativas); modelo Carga/Romaneio (estoque alocado ao vendedor); teste e2e no browser real.
 - PENDENTE: dead-letter (máx. tentativas) na fila; modelo de Carga/Romaneio (estoque alocado ao vendedor); data_venda do PDV grava em fuso Manaus (inconsistente com UTC) — revisar.
+
+## P0 ESTABILIDADE (incidentes de apagão) — causa raiz e correção
+DECISÃO DE ARQUITETURA (sem clientes ainda): fonte da verdade = NUVEM (Aiven). Local = sandbox DEV isolado. Sync local→Aiven REMOVIDO (offline real é via PWA, fila por-aparelho pela API).
+- CAUSA RAIZ dos 2 apagões: `SQLALCHEMY_ENGINE_OPTIONS` tinha pool_size=10 + max_overflow=20 = **30 conexões/worker** → com 2 workers, até **60** contra Aiven de **20**. "Estourou ao puxar produtos/vendas" = pool crescia e batia no limite → too many connections → cascata.
+- FIX: pool_size=3 + max_overflow=2 = 5/worker (10 total), configurável por DB_POOL_SIZE/DB_MAX_OVERFLOW. + pool_pre_ping/recycle. (config.py)
+- Sync daemon: container parado+removido; no compose vira `profiles:[sync]` + `restart:no` + SYNC_AUTO_PUSH=false (não sobe no up padrão).
+- ⚠️ PRECISA DEPLOY no Render p/ valer em produção. Garantir Render rodando ≤2-3 workers (senão ajustar DB_POOL_SIZE).
+- PENDENTE: otimizar queries pesadas de produtos/vendas (paginação/limite) — com pool limitado o crash some, mas vale enxugar.
+
+## P1 — Monitor/Auditoria (tenant) — ✅ ENTREGUE (core)
+- Já existia: modelo `Auditoria` + Muralha Forense (listeners CRUD) + escrita manual + leitura superadmin `/api/saas/monitor/logs` + SystemMonitorPage.
+- CONSTRUÍDO: endpoint tenant `/api/auditoria/` + `/resumo` (cada loja vê SÓ o seu, via TenantQuery+filtro; testado: admin1→9 logs do estab 2). Frontend `features/monitor/` (MonitorPage com ícones por tipo, filtro por chips, busca, paginação) + rota `/auditoria` + nav "Auditoria". Typecheck OK.
+- PENDENTE (cobertura): hoje só `venda_finalizada`+`caixa_aberto` são logados. A Muralha automática não está pegando cliente/produto/ponto (TABELAS_SINCRONIZAVEIS/MONITOR_MASTER ou g.user_id). Próximo: adicionar `Auditoria.registrar()` nominal em cadastro/edição de cliente, alteração de preço de produto, marcação de ponto.
+- AINDA P1: Superadmin selecionar tenant e ver espelho read-only.
+
+## ÉPICO FUTURO — SFA / Força de Vendas (foco: DISTRIBUIDORAS) — só DEPOIS da base
+Decisões travadas (2026-06):
+- Modelo: suporta PRÉ-VENDA **e** PRONTA-ENTREGA, configurável por vendedor/rota.
+- Precificação B2B: TABELAS de preço (Atacado/Varejo/Especial) + desconto por cliente. (Hoje preço é único por produto.)
+- Fluxo: cliente-cêntrico → selecionar cliente → painel 360° (histórico, crédito/saldo, meta, sugestão de pedido via RFM que já temos) → pedido com preço do cliente → pré-venda (Pedido) ou pronta-entrega (Carga). Offline-first (reusa O1 idempotência + O2 catálogo).
+- Falta criar: tabela de preços, Pedido de Venda (pré-venda), motor de sugestão, meta/positivação, rota/roteiro, Carga/Romaneio.
+- MVP afiado: cliente 360 + pedido + tabela de preço, offline.
 
 ## Resumo p/ deploy (revisar antes de subir)
 - Migrations backend: head único `a7b8c9d0e1f2`. Cadeia linear. Railway: `flask db upgrade`.
