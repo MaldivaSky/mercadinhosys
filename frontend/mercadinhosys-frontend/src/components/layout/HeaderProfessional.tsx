@@ -10,8 +10,7 @@ import { useTheme } from '../../theme/useTheme';
 import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
 import EstablishmentSelector from '../EstablishmentSelector';
-
-
+import { InstallButton } from '../pwa/InstallButton';
 // Removed mobileMenuItems since they were moved to BottomNavigation
 
 const HeaderProfessional = () => {
@@ -159,6 +158,8 @@ const HeaderProfessional = () => {
                             {isSuperAdmin && (
                                 <EstablishmentSelector />
                             )}
+                            
+                            <InstallButton />
 
                             {/* Theme Toggle */}
                             <button
@@ -253,20 +254,23 @@ const HeaderProfessional = () => {
                                     </>
                                 )}
                             </div>
-                        </div>
-
-                        {/* Mobile Theme Toggle */}
-                        <button
-                            onClick={toggleTheme}
-                            className="md:hidden p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors shadow-sm"
-                            title="Alternar tema"
-                        >
+                        {/* Mobile Actions */}
+                        <div className="flex items-center gap-2">
+                            <InstallButton className="md:hidden" />
+                            
+                            {/* Mobile Theme Toggle */}
+                            <button
+                                onClick={toggleTheme}
+                                className="md:hidden p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                                title="Alternar tema"
+                            >
                             {isDark ? (
                                 <Sun className="w-5 h-5 text-amber-500" />
                             ) : (
                                 <Moon className="w-5 h-5 text-blue-600" />
                             )}
-                        </button>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Mobile Menu is now replaced by BottomNavigation */}
