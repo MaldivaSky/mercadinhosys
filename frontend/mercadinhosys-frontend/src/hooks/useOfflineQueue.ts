@@ -92,7 +92,9 @@ export function useOfflineQueue() {
 
   // Enfileira venda offline
   const enqueue = useCallback(async (payload: any): Promise<string> => {
-    const uuid = uuidv4();
+    // Usa o offline_uuid já presente no payload (gerado no pdvService) como chave,
+    // garantindo que a venda tenha UM único uuid em toda a cadeia (idempotência).
+    const uuid = payload?.offline_uuid || uuidv4();
     const item: VendaOffline = {
       uuid,
       payload,

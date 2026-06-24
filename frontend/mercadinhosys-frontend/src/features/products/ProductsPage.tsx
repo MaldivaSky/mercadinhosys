@@ -764,7 +764,7 @@ const ProductsPage: React.FC = () => {
       )}
 
       {showProductHistory && selectedProduct && (
-        <ProductHistoryModal produto={selectedProduct} onClose={() => { handleCloseModal(setShowProductHistory); setSelectedProduct(null); }} />
+        <ProductHistoryModal produto={selectedProduct as any} onClose={() => { handleCloseModal(setShowProductHistory); setSelectedProduct(null); }} />
       )}
 
       <PurchaseOrdersPanel isOpen={showPurchaseOrders} onClose={() => setShowPurchaseOrders(false)} fornecedores={fornecedores} />

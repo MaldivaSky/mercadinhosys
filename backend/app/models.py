@@ -997,6 +997,7 @@ class Venda(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Audi
     quantidade_itens = db.Column(db.Integer, default=0)
     observacoes = db.Column(db.Text)
     tipo_venda = db.Column(db.String(20), default="balcao")
+    offline_uuid = db.Column(db.String(36))  # idempotência de venda offline (PDV móvel)
     data_venda = db.Column(db.DateTime, default=utcnow)
     data_cancelamento = db.Column(db.DateTime)
     motivo_cancelamento = db.Column(db.String(255))
@@ -1008,7 +1009,8 @@ class Venda(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Audi
     itens = db.relationship("VendaItem", back_populates="venda", lazy=True, cascade="all, delete-orphan")
     pagamentos = db.relationship("Pagamento", back_populates="venda", lazy=True, cascade="all, delete-orphan")
     __table_args__ = (db.Index("ix_venda_codigo", "codigo"), db.Index("ix_venda_data", "data_venda"),
-                      db.Index("ix_venda_tipo", "tipo_venda"), db.UniqueConstraint("estabelecimento_id", "codigo", name="uq_venda_estab_codigo"))
+                      db.Index("ix_venda_tipo", "tipo_venda"), db.UniqueConstraint("estabelecimento_id", "codigo", name="uq_venda_estab_codigo"),
+                      db.UniqueConstraint("estabelecimento_id", "offline_uuid", name="uq_venda_estab_offline_uuid"))
 
     def atualizar_totais(self):
         self.subtotal = sum(item.total_item for item in self.itens) if self.itens else Decimal("0")
