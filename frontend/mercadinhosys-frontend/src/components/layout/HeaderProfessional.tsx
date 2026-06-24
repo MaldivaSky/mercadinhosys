@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, NavLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
     User, LogOut, Settings, Moon, Sun, ChevronDown,
     Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3,
@@ -13,21 +13,7 @@ import { authService } from '../../features/auth/authService';
 import EstablishmentSelector from '../EstablishmentSelector';
 
 
-const mobileMenuItems = [
-    { to: '/dashboard', icon: Home, label: 'Dashboard' },
-    { to: '/pdv', icon: ShoppingCart, label: 'PDV' },
-    { to: '/products', icon: Package, label: 'Produtos' },
-    { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
-    { to: '/customers', icon: Users, label: 'Clientes' },
-    { to: '/sales', icon: CreditCard, label: 'Vendas' },
-    { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
-    { to: '/expenses', icon: FileText, label: 'Despesas' },
-    { to: '/employees', icon: UserCog, label: 'Funcionários' },
-    { to: '/rh', icon: Briefcase, label: 'RH & Ponto' },
-    { to: '/ponto', icon: Clock, label: 'Controle de Ponto' },
-    { to: '/reports', icon: BarChart3, label: 'Relatórios' },
-    { to: '/settings', icon: Settings, label: 'Configurações' },
-];
+// Removed mobileMenuItems since they were moved to BottomNavigation
 
 const HeaderProfessional = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -270,10 +256,10 @@ const HeaderProfessional = () => {
                             </div>
                         </div>
 
-                        {/* Mobile Menu Button */}
+                        {/* Mobile Menu Button - Hidden now in favor of Bottom Navigation */}
                         <button
                             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                            className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                            className="hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                         >
                             {mobileMenuOpen ? (
                                 <X className="w-6 h-6 text-gray-600 dark:text-gray-300" />
@@ -283,102 +269,7 @@ const HeaderProfessional = () => {
                         </button>
                     </div>
 
-                    {/* Mobile Menu */}
-                    {mobileMenuOpen && (
-                        <div className="md:hidden border-t border-gray-200 dark:border-gray-800 py-4 max-h-[calc(100vh-5rem)] overflow-y-auto">
-                            {/* Navegação principal - igual ao Sidebar */}
-                            <nav className="px-2 py-2">
-                                <p className="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Menu</p>
-                                <ul className="space-y-0.5">
-                                    {mobileMenuItems.filter(item => {
-                                        const role = user?.role?.toLowerCase();
-                                        if (role === 'caixa' && !['/pdv', '/settings', '/delivery', '/dashboard'].includes(item.to)) return false;
-                                        return true;
-                                    }).map((item) => (
-                                        <li key={item.to}>
-                                            <NavLink
-                                                to={item.to}
-                                                onClick={() => setMobileMenuOpen(false)}
-                                                className={({ isActive }) =>
-                                                    `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                                    }`
-                                                }
-                                            >
-                                                <item.icon className="w-5 h-5 shrink-0" />
-                                                <span className="font-medium">{item.label}</span>
-                                            </NavLink>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </nav>
-                            <div className="border-t border-gray-200 dark:border-gray-800 my-2" />
-                            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                                {user?.foto_url ? (
-                                    <img
-                                        src={user.foto_url}
-                                        alt={user.nome || 'Usuário'}
-                                        className="w-10 h-10 rounded-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-semibold">
-                                        {userInitial}
-                                    </div>
-                                )}
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {user?.nome || 'Usuário'}
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {user?.cargo || user?.role || 'Cargo não definido'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="py-2">
-                                <button
-                                    onClick={toggleTheme}
-                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                    {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                                    {isDark ? 'Tema Claro' : 'Tema Escuro'}
-                                </button>
-
-                                <button
-                                    onClick={() => {
-                                        setMobileMenuOpen(false);
-                                        navigate('/settings');
-                                    }}
-                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                    <Settings className="w-5 h-5" />
-                                    Configurações
-                                </button>
-
-
-
-                                <button
-                                    onClick={() => {
-                                        setMobileMenuOpen(false);
-                                        setProfileModalOpen(true);
-                                    }}
-                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                    <User className="w-5 h-5" />
-                                    Meu Perfil
-                                </button>
-
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                >
-                                    <LogOut className="w-5 h-5" />
-                                    Sair
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                    {/* Mobile Menu is now replaced by BottomNavigation */}
                 </div>
             </header>
             {/* Modal de Perfil */}
