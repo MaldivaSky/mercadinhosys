@@ -1082,41 +1082,46 @@ const CustomersPage: React.FC = () => {
             )}
 
             {activeTab === 'campaigns' && (
-                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1.15fr 0.85fr' } }}>
-                    <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
-                        <CardContent sx={{ p: 3 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                <Box className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                    <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl dark:shadow-none">
+                        <CardContent className="p-6">
+                            <Box className="flex justify-between items-center gap-4 mb-4 flex-wrap">
                                 <Box>
-                                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                                    <Typography variant="h6" className="font-extrabold text-slate-900 dark:text-white">
                                         Campanhas inteligentes por WhatsApp
                                     </Typography>
-                                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                                    <Typography variant="body2" className="text-slate-500 dark:text-slate-400">
                                         Selecione um playbook e acione a carteira certa com discurso comercial adequado.
                                     </Typography>
                                 </Box>
-                                <Button variant="outlined" startIcon={<CampaignIcon />} onClick={handleCopyCampaignBatch}>
-                                    Copiar roteiro da campanha
+                                <Button variant="outlined" startIcon={<CampaignIcon />} onClick={handleCopyCampaignBatch} className="dark:border-slate-600 dark:text-slate-300">
+                                    Copiar roteiro
                                 </Button>
                             </Box>
 
-                            <Box sx={{ display: 'grid', gap: 1.5, mb: 3, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' } }}>
+                            <Box className="grid gap-4 mb-6 md:grid-cols-2">
                                 {campaignConfigs.map((campaign) => {
                                     const active = selectedCampaign === campaign.key;
                                     return (
                                         <button
                                             key={campaign.key}
                                             onClick={() => setSelectedCampaign(campaign.key)}
-                                            className={`rounded-2xl border p-4 text-left transition ${
-                                                active ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                                            className={`group relative rounded-3xl border-2 p-5 text-left transition-all duration-300 ease-out overflow-hidden ${
+                                                active 
+                                                    ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-900/30 dark:to-blue-900/10 dark:border-blue-500 shadow-lg shadow-blue-500/20 scale-[1.02]' 
+                                                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md hover:-translate-y-0.5'
                                             }`}
                                         >
-                                            <div className="flex items-center justify-between gap-3">
+                                            {active && <div className="absolute inset-0 bg-blue-500/5 dark:bg-blue-400/10 animate-pulse" />}
+                                            <div className="relative flex items-center justify-between gap-3">
                                                 <div>
-                                                    <p className="text-sm font-semibold text-slate-900">{campaign.title}</p>
-                                                    <p className="mt-1 text-xs text-slate-500">{campaign.description}</p>
+                                                    <p className={`text-sm font-bold transition-colors ${active ? 'text-blue-700 dark:text-blue-400' : 'text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300'}`}>
+                                                        {campaign.title}
+                                                    </p>
+                                                    <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{campaign.description}</p>
                                                 </div>
                                                 <span
-                                                    className="rounded-full px-2 py-1 text-xs font-semibold text-white"
+                                                    className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-wider font-extrabold text-white shadow-sm transition-transform ${active ? 'scale-110' : 'group-hover:scale-105'}`}
                                                     style={{ backgroundColor: campaign.color }}
                                                 >
                                                     {campaign.badge}
@@ -1127,32 +1132,42 @@ const CustomersPage: React.FC = () => {
                                 })}
                             </Box>
 
-                            <Box className="grid gap-4">
+                            <Box className="grid gap-3">
                                 {campaignTargets.slice(0, 12).map((cliente) => (
                                     <Box
                                         key={cliente.id}
-                                        className={`p-4 rounded-2xl border cursor-pointer transition-colors ${
+                                        className={`group relative p-4 rounded-2xl border cursor-pointer transition-all duration-300 ${
                                             cliente.id === selectedCampaignCustomer?.id
-                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500'
-                                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500 shadow-md ring-4 ring-blue-500/10 dark:ring-blue-500/20'
+                                                : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300 dark:hover:border-slate-600 hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:-translate-y-0.5'
                                         }`}
                                         onClick={() => setCampaignCustomerId(cliente.id)}
                                     >
-                                        <Box className="flex justify-between items-center gap-4">
+                                        {cliente.id === selectedCampaignCustomer?.id && (
+                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-8 bg-blue-500 rounded-r-full" />
+                                        )}
+                                        <Box className="flex justify-between items-center gap-4 pl-2">
                                             <Box>
-                                                <Typography className="font-bold text-slate-900 dark:text-white">{cliente.nome}</Typography>
-                                                <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mt-1">
+                                                <Typography className={`font-bold transition-colors ${cliente.id === selectedCampaignCustomer?.id ? 'text-blue-700 dark:text-blue-400' : 'text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300'}`}>
+                                                    {cliente.nome}
+                                                </Typography>
+                                                <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                                                     {lifecycleLabel(cliente.lifecycle)} • Segmento {cliente.crmSegment}
                                                 </Typography>
                                             </Box>
                                             <Box className="flex items-center gap-2 flex-wrap justify-end">
                                                 {cliente.whatsappNumber && (
-                                                    <Chip size="small" icon={<WhatsAppIcon />} label="WhatsApp" color="success" variant="outlined" />
+                                                    <Chip size="small" icon={<WhatsAppIcon sx={{ fontSize: '1rem' }} />} label="WhatsApp" color="success" variant="outlined" className="bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" />
                                                 )}
                                                 <Chip
                                                     size="small"
                                                     label={cliente.hasDebt ? formatCurrency(Number(cliente.saldo_devedor || 0)) : formatCurrency(Number(cliente.valor_total_gasto || 0))}
-                                                    className="bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-slate-100 font-bold"
+                                                    className={`font-extrabold border shadow-sm ${
+                                                        cliente.hasDebt 
+                                                            ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800/50' 
+                                                            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/50'
+                                                    }`}
                                                 />
                                             </Box>
                                         </Box>
@@ -1162,76 +1177,99 @@ const CustomersPage: React.FC = () => {
                         </CardContent>
                     </Card>
 
-                    <Card sx={{ borderRadius: 3, border: '1px solid #e2e8f0', boxShadow: '0 12px 28px rgba(15,23,42,0.06)' }}>
-                        <CardContent sx={{ p: 3 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                                <InsightsIcon sx={{ color: '#2563eb' }} />
-                                <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
+                    <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-200/50 dark:shadow-none overflow-hidden relative">
+                        {/* Decorative background gradient */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                        
+                        <CardContent className="p-8 relative">
+                            <Box className="flex items-center gap-3 mb-6">
+                                <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl">
+                                    <InsightsIcon className="text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <Typography variant="h6" className="font-extrabold text-slate-900 dark:text-white tracking-tight">
                                     Preview da abordagem
                                 </Typography>
                             </Box>
 
                             {!selectedCampaignCustomer ? (
-                                <Box className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                    Nenhum cliente elegivel para esta campanha neste momento.
+                                <Box className="p-8 rounded-3xl bg-slate-50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50 text-center flex flex-col items-center justify-center min-h-[300px] border-dashed">
+                                    <div className="w-16 h-16 mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                        <WhatsAppIcon className="text-slate-300 dark:text-slate-600" fontSize="large" />
+                                    </div>
+                                    <Typography className="font-medium text-lg">Nenhum cliente selecionado</Typography>
+                                    <Typography variant="body2" className="mt-1 opacity-70">Escolha um playbook e clique em um cliente da fila ao lado.</Typography>
                                 </Box>
                             ) : (
-                                <Box className="grid gap-4">
-                                    <Box className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                                        <Typography className="font-bold text-slate-900 dark:text-white">{selectedCampaignCustomer.nome}</Typography>
-                                        <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mt-1">
-                                            {selectedCampaignCustomer.email || 'Sem e-mail'} •{' '}
-                                            {selectedCampaignCustomer.celular || selectedCampaignCustomer.telefone || 'Sem telefone'}
-                                        </Typography>
-                                        <Box className="flex gap-2 mt-2 flex-wrap">
+                                <Box className="grid gap-5">
+                                    {/* Info Header */}
+                                    <Box className="p-5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <Typography className="font-extrabold text-lg text-slate-900 dark:text-white">{selectedCampaignCustomer.nome}</Typography>
+                                                <Typography variant="body2" className="text-slate-500 dark:text-slate-400 mt-0.5">
+                                                    {selectedCampaignCustomer.email || 'Sem e-mail'} •{' '}
+                                                    {selectedCampaignCustomer.celular || selectedCampaignCustomer.telefone || 'Sem telefone'}
+                                                </Typography>
+                                            </div>
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-blue-500/20">
+                                                {selectedCampaignCustomer.nome.charAt(0).toUpperCase()}
+                                            </div>
+                                        </div>
+                                        <Box className="flex gap-2 flex-wrap mt-1">
                                             <Chip
                                                 size="small"
                                                 label={`Segmento ${selectedCampaignCustomer.crmSegment}`}
                                                 sx={{
-                                                    bgcolor: `${segmentColors[selectedCampaignCustomer.crmSegment] || '#64748b'}15`,
+                                                    bgcolor: `${segmentColors[selectedCampaignCustomer.crmSegment] || '#64748b'}20`,
                                                     color: segmentColors[selectedCampaignCustomer.crmSegment] || '#64748b',
-                                                    fontWeight: 700,
+                                                    fontWeight: 800,
                                                 }}
                                             />
-                                            <Chip size="small" label={lifecycleLabel(selectedCampaignCustomer.lifecycle)} className="bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-200 font-bold" />
+                                            <Chip size="small" label={lifecycleLabel(selectedCampaignCustomer.lifecycle)} className="bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 font-bold border-0" />
                                         </Box>
                                     </Box>
 
-                                    <Box className="p-5 rounded-3xl bg-slate-900 dark:bg-slate-950 text-white border border-slate-800">
-                                        <Typography variant="overline" className="opacity-80 tracking-widest">
+                                    {/* Message Bubble */}
+                                    <Box className="relative p-6 rounded-3xl rounded-tl-sm bg-slate-900 dark:bg-slate-950 text-white border border-slate-800 shadow-xl">
+                                        <Typography variant="overline" className="opacity-80 tracking-widest font-bold flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                             Mensagem sugerida
                                         </Typography>
-                                        <Typography className="mt-3 whitespace-pre-wrap leading-relaxed text-slate-200">
+                                        <Typography className="mt-4 whitespace-pre-wrap leading-relaxed text-slate-100 text-[15px]">
                                             {buildCampaignMessage(selectedCampaign, selectedCampaignCustomer)}
                                         </Typography>
                                     </Box>
 
-                                    <Box className="flex gap-2 flex-wrap mt-2">
+                                    {/* Action Buttons */}
+                                    <Box className="flex gap-3 flex-wrap mt-2">
                                         <Button
                                             variant="contained"
-                                            color="success"
+                                            className="bg-green-500 hover:bg-green-600 shadow-lg shadow-green-500/30 text-white rounded-xl px-6 py-2.5 font-bold transition-all hover:-translate-y-0.5 active:scale-95"
                                             startIcon={<WhatsAppIcon />}
                                             onClick={() => handleCampaignAction(selectedCampaignCustomer, 'open')}
                                         >
                                             Abrir WhatsApp
                                         </Button>
-                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy')} className="dark:border-slate-600 dark:text-slate-300">
+                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy')} className="rounded-xl px-6 py-2.5 font-bold border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">
                                             Copiar mensagem
                                         </Button>
-                                        <Button variant="outlined" onClick={() => handleRowClick(selectedCampaignCustomer)} className="dark:border-slate-600 dark:text-slate-300">
-                                            Ver cliente
+                                        <Button variant="text" onClick={() => handleRowClick(selectedCampaignCustomer)} className="rounded-xl px-6 py-2.5 font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">
+                                            Ver Perfil Completo
                                         </Button>
                                     </Box>
 
-                                    <Box className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 mt-4">
-                                        <Typography variant="subtitle2" className="text-blue-700 dark:text-blue-400 font-bold">
-                                            Operacao recomendada
-                                        </Typography>
-                                        <Typography variant="body2" className="text-slate-700 dark:text-slate-300 mt-1">
-                                            Use esta area como cadencia comercial. A automacao assistida por WhatsApp ja prepara a
-                                            mensagem com base no momento do cliente. Para disparo automatico massivo sem interacao do
-                                            operador, o proximo passo tecnico e integrar API oficial de WhatsApp Business.
-                                        </Typography>
+                                    {/* Helper Tip */}
+                                    <Box className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-100 dark:border-blue-800/30 mt-2 flex items-start gap-3">
+                                        <div className="mt-0.5"><InsightsIcon className="text-blue-500" fontSize="small" /></div>
+                                        <div>
+                                            <Typography variant="subtitle2" className="text-blue-800 dark:text-blue-300 font-bold">
+                                                Operacao recomendada
+                                            </Typography>
+                                            <Typography variant="body2" className="text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                                                Use esta area como cadencia comercial. A automacao assistida por WhatsApp ja prepara a
+                                                mensagem com base no momento do cliente.
+                                            </Typography>
+                                        </div>
                                     </Box>
                                 </Box>
                             )}
@@ -1287,7 +1325,7 @@ const CustomersPage: React.FC = () => {
                     </Box>
 
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                        <Chip label={`${filteredClientes.length} clientes na carteira`} sx={{ bgcolor: '#e2e8f0', fontWeight: 700 }} />
+                        <Chip label={`${filteredClientes.length} clientes na carteira`} className="bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-200 font-bold" />
                         <Chip
                             label={fiadoFilter ? 'Somente com fiado' : 'Todos os perfis'}
                             onClick={() => setFiadoFilter((current) => !current)}
