@@ -149,7 +149,7 @@ const HeaderProfessional = () => {
                                     e.currentTarget.src = logo;
                                 }}
                             />
-                            <span className="hidden md:block text-xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
                                 MercadinhoSys
                             </span>
                         </div>
@@ -255,15 +255,16 @@ const HeaderProfessional = () => {
                             </div>
                         </div>
 
-                        {/* Mobile Menu Button - Hidden now in favor of Bottom Navigation */}
+                        {/* Mobile Theme Toggle */}
                         <button
-                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                            className="hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                            onClick={toggleTheme}
+                            className="md:hidden p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                            title="Alternar tema"
                         >
-                            {mobileMenuOpen ? (
-                                <X className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                            {isDark ? (
+                                <Sun className="w-5 h-5 text-amber-500" />
                             ) : (
-                                <MenuIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                                <Moon className="w-5 h-5 text-blue-600" />
                             )}
                         </button>
                     </div>
