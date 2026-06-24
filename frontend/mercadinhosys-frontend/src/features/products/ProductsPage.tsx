@@ -775,7 +775,7 @@ const ProductsPage: React.FC = () => {
           onClose={() => setSelectedProductForOrder(null)}
           onSuccess={() => { setSelectedProductForOrder(null); loadProdutos(); }}
           fornecedores={fornecedores}
-          initialProduct={selectedProductForOrder}
+          initialProduct={selectedProductForOrder as Produto}
           initialSupplierId={selectedProductForOrder?.fornecedor_id}
         />
       )}

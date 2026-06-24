@@ -363,7 +363,7 @@ export const usePDV = () => {
         });
     }, [updateSessao]);
 
-    const finalizarVenda = async (extraData?: { data_vencimento_fiado?: string }) => {
+    const finalizarVenda = async (extraData?: { data_vencimento_fiado?: string }, enqueueFn?: (payload: any) => Promise<string>) => {
         if (carrinho.length === 0) {
             throw new Error('Adicione produtos ao carrinho');
         }
@@ -404,7 +404,22 @@ export const usePDV = () => {
                 ...(extraData || {}),
             };
 
-            const venda = await pdvService.finalizarVenda(vendaData);
+            let venda;
+
+            if (!navigator.onLine && enqueueFn) {
+                const uuid = await enqueueFn(vendaData);
+                return { offline: true, codigo: uuid };
+            }
+
+            try {
+                venda = await pdvService.finalizarVenda(vendaData);
+            } catch (error: any) {
+                if (enqueueFn && (!error.response || error.code === 'ERR_NETWORK')) {
+                    const uuid = await enqueueFn(vendaData);
+                    return { offline: true, codigo: uuid };
+                }
+                throw error;
+            }
 
             // ── Alerta de Sangria ──────────────────────────────────────────
             const totalDinheiro = pagamentos.filter(p => p.forma === 'dinheiro').reduce((sum, p) => sum + p.valor, 0);

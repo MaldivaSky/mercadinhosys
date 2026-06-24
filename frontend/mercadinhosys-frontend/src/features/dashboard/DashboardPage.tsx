@@ -911,7 +911,7 @@ const DashboardPage: React.FC = () => {
   );
 
   if (error || !data) return (
-    <div className="p-8 bg-red-50 rounded-xl">
+    <div className="p-5 sm:p-8 bg-red-50 rounded-xl">
       <div className="flex items-center gap-3 text-red-700 mb-4">
         <AlertTriangle className="w-8 h-8" />
         <h2 className="text-2xl font-bold">Erro na Análise Científica</h2>
@@ -943,12 +943,12 @@ const DashboardPage: React.FC = () => {
   } } = data.data;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300 p-4 sm:p-6 lg:p-8 pb-24">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300 p-4 sm:p-4 sm:p-6 lg:p-5 sm:p-8 pb-24">
       {/* HEADER CIENTÍFICO */}
       <div className="mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight transition-colors">Dashboard Executivo</h1>
+            <h1 className="text-2xl md:text-2xl md:text-3xl lg:text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight transition-colors">Dashboard Executivo</h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base mt-2 font-medium transition-colors">
               Análise completa do seu negócio • {new Date().toLocaleDateString('pt-BR')}
             </p>
@@ -967,7 +967,7 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 DIAGNÓSTICO FINANCEIRO INTELIGENTE (CFO VIRTUAL) */}
       {insights_cientificos?.recomendacoes_otimizacao?.filter((rec: any) => rec.prioridade === 1).map((rec: any, idx: number) => (
-        <div key={idx} className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800 border-l-4 border-l-red-500 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-6 animate-fadeIn">
+        <div key={idx} className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800 border-l-4 border-l-red-500 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 p-4 sm:p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-4 sm:p-6 animate-fadeIn">
           <div className="bg-red-50 dark:bg-red-500/10 p-4 rounded-full border border-red-100 dark:border-red-500/20">
             <TrendingUpFill className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
@@ -1003,7 +1003,7 @@ const DashboardPage: React.FC = () => {
         const recoExp = data?.data?.recomendacoes?.find((r: any) => r.tipo === 'vencimento_critico');
         if (recoExp) {
           return (
-            <div className="bg-gradient-to-r from-rose-500 to-red-600 dark:from-rose-900/60 dark:to-red-900/60 backdrop-blur-xl border border-rose-400 dark:border-rose-500/30 rounded-2xl shadow-xl hover:shadow-2xl hover:shadow-red-500/20 transition-all duration-300 hover:-translate-y-1 p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-6 animate-fadeIn">
+            <div className="bg-gradient-to-r from-rose-500 to-red-600 dark:from-rose-900/60 dark:to-red-900/60 backdrop-blur-xl border border-rose-400 dark:border-rose-500/30 rounded-2xl shadow-xl hover:shadow-2xl hover:shadow-red-500/20 transition-all duration-300 hover:-translate-y-1 p-4 sm:p-6 mb-6 flex flex-col md:flex-row items-start md:items-center gap-4 sm:p-6 animate-fadeIn">
               <div className="bg-white/20 p-4 rounded-full border border-white/30 backdrop-blur-md">
                 <AlertCircle className="w-8 h-8 text-white animate-pulse" />
               </div>
@@ -1037,8 +1037,8 @@ const DashboardPage: React.FC = () => {
       })()}
 
       {/* 🔥 NOVO: FILTROS DE PERÍODO E VISUALIZAÇÃO - ACIMA DAS ANÁLISES */}
-      <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800/60 p-6 mb-6 transition-all duration-300">
-        <div className="flex flex-col gap-6">
+      <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800/60 p-4 sm:p-6 mb-6 transition-all duration-300">
+        <div className="flex flex-col gap-4 sm:p-6">
           {/* SELETOR DE MODO DE FILTRO */}
           <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
             <button
@@ -1178,7 +1178,7 @@ const DashboardPage: React.FC = () => {
       {/* 🔥 NOVO: SEÇÃO 2 - ANÁLISE DETALHADA (Curva ABC, RFM) */}
       {viewMode === 'detalhado' && (
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <LucideBarChart className="w-8 h-8 text-green-600 dark:text-green-500" />
               📊 Análise Detalhada - Curva ABC & RFM
@@ -1243,7 +1243,7 @@ const DashboardPage: React.FC = () => {
                   <Clock className="w-5 h-5 text-blue-600" />
                   <h4 className="font-bold text-blue-900 dark:text-blue-400">Recência (R)</h4>
                 </div>
-                <p className="text-3xl font-black text-blue-700 dark:text-blue-300 mb-1">
+                <p className="text-2xl md:text-3xl font-black text-blue-700 dark:text-blue-300 mb-1">
                   {data?.data?.rfm?.recencia_media?.toFixed(0) || 0} dias
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400">Média de dias desde última compra</p>
@@ -1253,7 +1253,7 @@ const DashboardPage: React.FC = () => {
                   <TargetIcon className="w-5 h-5 text-purple-600" />
                   <h4 className="font-bold text-purple-900 dark:text-purple-400">Frequência (F)</h4>
                 </div>
-                <p className="text-3xl font-black text-purple-700 dark:text-purple-300 mb-1">
+                <p className="text-2xl md:text-3xl font-black text-purple-700 dark:text-purple-300 mb-1">
                   {data?.data?.rfm?.frequencia_media?.toFixed(1) || 0}x
                 </p>
                 <p className="text-xs text-purple-600 dark:text-purple-400">Número médio de compras</p>
@@ -1263,7 +1263,7 @@ const DashboardPage: React.FC = () => {
                   <DollarIcon className="w-5 h-5 text-emerald-600" />
                   <h4 className="font-bold text-emerald-900 dark:text-emerald-400">Monetário (M)</h4>
                 </div>
-                <p className="text-3xl font-black text-emerald-700 dark:text-emerald-300 mb-1">
+                <p className="text-2xl md:text-3xl font-black text-emerald-700 dark:text-emerald-300 mb-1">
                   R$ {(data?.data?.rfm?.valor_medio_compra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                 </p>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400">Valor médio por compra</p>
@@ -1277,7 +1277,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'detalhado' && (
         <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl mb-8 overflow-hidden border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
           <div
-            className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={() => toggleCard('analise-temporal')}
           >
             <div className="flex items-center gap-3">
@@ -1291,10 +1291,10 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {expandedCards['analise-temporal'] && (
-            <div className="p-6 animate-fadeIn">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="p-4 sm:p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:p-8">
                 {/* LineChart para Tendência de Vendas */}
-                <div className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-900/50 p-6 rounded-2xl border border-purple-200 dark:border-purple-500/20 lg:col-span-2">
+                <div className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-900/50 p-4 sm:p-6 rounded-2xl border border-purple-200 dark:border-purple-500/20 lg:col-span-2">
                   <h3 className="font-bold text-slate-900 dark:text-white mb-6 text-lg flex items-center gap-2">
                     <LineChartIcon className="w-5 h-5 text-purple-600 dark:text-purple-500" />
                     Evolução das Vendas (30 dias)
@@ -1363,7 +1363,7 @@ const DashboardPage: React.FC = () => {
       {/* 🔥 NOVO: SEÇÃO 4 - INSIGHTS (Anomalias, Recomendações) */}
       {viewMode === 'avancado' && (
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <Brain className="w-8 h-8 text-amber-600 dark:text-amber-500" />
               🔍 Insights Científicos - Anomalias & Recomendações
@@ -1400,7 +1400,7 @@ const DashboardPage: React.FC = () => {
                   </div>
                 ))}
                 {insights_cientificos?.anomalias?.length === 0 && (
-                  <div className="col-span-3 bg-green-50 dark:bg-green-900/10 p-6 rounded-xl border border-green-200 dark:border-green-500/20 text-center">
+                  <div className="col-span-3 bg-green-50 dark:bg-green-900/10 p-4 sm:p-6 rounded-xl border border-green-200 dark:border-green-500/20 text-center">
                     <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
                     <p className="text-green-700 dark:text-green-400 font-bold">Nenhuma anomalia detectada no período</p>
                   </div>
@@ -1439,7 +1439,7 @@ const DashboardPage: React.FC = () => {
                   </div>
                 ))}
                 {insights_cientificos?.recomendacoes_otimizacao?.length === 0 && (
-                  <div className="col-span-3 bg-amber-50 dark:bg-amber-900/10 p-6 rounded-xl border border-amber-200 dark:border-amber-500/20 text-center">
+                  <div className="col-span-3 bg-amber-50 dark:bg-amber-900/10 p-4 sm:p-6 rounded-xl border border-amber-200 dark:border-amber-500/20 text-center">
                     <Lightbulb className="w-12 h-12 text-amber-600 mx-auto mb-2" />
                     <p className="text-amber-700 dark:text-amber-400 font-bold">Nenhuma recomendação disponível no momento</p>
                   </div>
@@ -1453,7 +1453,7 @@ const DashboardPage: React.FC = () => {
       {/* 🔥 NOVO: SEÇÃO 5 - RH (Funcionários, Horas, Folha) */}
       {viewMode === 'rh' && (
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <Users className="w-8 h-8 text-purple-600 dark:text-purple-500" />
               👥 Análise de Recursos Humanos
@@ -1466,7 +1466,7 @@ const DashboardPage: React.FC = () => {
                   <Users className="w-5 h-5 text-purple-600" />
                   <h4 className="font-bold text-purple-900 dark:text-purple-400">Funcionários Ativos</h4>
                 </div>
-                <p className="text-3xl font-black text-purple-700 dark:text-purple-300">
+                <p className="text-2xl md:text-3xl font-black text-purple-700 dark:text-purple-300">
                   {data?.data?.rh?.funcionarios_ativos || 0}
                 </p>
                 <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Colaboradores registrados</p>
@@ -1476,7 +1476,7 @@ const DashboardPage: React.FC = () => {
                   <Clock className="w-5 h-5 text-orange-600" />
                   <h4 className="font-bold text-orange-900 dark:text-orange-400">Custo Folha Mensal</h4>
                 </div>
-                <p className="text-3xl font-black text-orange-700 dark:text-orange-300">
+                <p className="text-2xl md:text-3xl font-black text-orange-700 dark:text-orange-300">
                   R$ {data?.data?.rh?.custo_folha_estimado?.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) || 0}
                 </p>
                 <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">Salários + Benefícios + Extras</p>
@@ -1486,7 +1486,7 @@ const DashboardPage: React.FC = () => {
                   <TargetIcon className="w-5 h-5 text-green-600" />
                   <h4 className="font-bold text-green-900 dark:text-green-400">Taxa de Pontualidade</h4>
                 </div>
-                <p className="text-3xl font-black text-green-700 dark:text-green-300">
+                <p className="text-2xl md:text-3xl font-black text-green-700 dark:text-green-300">
                   {data?.data?.rh?.taxa_pontualidade?.toFixed(1) || 0}%
                 </p>
                 <p className="text-xs text-green-600 dark:text-green-400 mt-1">Atrasos registrados no mês</p>
@@ -1538,7 +1538,7 @@ const DashboardPage: React.FC = () => {
       {/* 🔥 NOVO: SEÇÃO 6 - Fiados (Total, Vencidas, Clientes) */}
       {viewMode === 'financeiro' && (
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <DollarIcon className="w-8 h-8 text-amber-600 dark:text-amber-500" />
               💰 Análise de Fiados e Crédito
@@ -1551,7 +1551,7 @@ const DashboardPage: React.FC = () => {
                   <DollarIcon className="w-5 h-5 text-amber-600" />
                   <h4 className="font-bold text-amber-900 dark:text-amber-400">Total Fiado</h4>
                 </div>
-                <p className="text-3xl font-black text-amber-700 dark:text-amber-300">
+                <p className="text-2xl md:text-3xl font-black text-amber-700 dark:text-amber-300">
                   R$ {data?.data?.fiado_summary?.total_fiado?.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) || 0}
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Dívida ativa em aberto</p>
@@ -1561,7 +1561,7 @@ const DashboardPage: React.FC = () => {
                   <AlertTriangle className="w-5 h-5 text-red-600" />
                   <h4 className="font-bold text-red-900 dark:text-red-400">Vencidas (Risco)</h4>
                 </div>
-                <p className="text-3xl font-black text-red-700 dark:text-red-300">
+                <p className="text-2xl md:text-3xl font-black text-red-700 dark:text-red-300">
                   R$ {data?.data?.fiado_summary?.vencido?.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) || 0}
                 </p>
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1">Dívidas atrasadas</p>
@@ -1571,7 +1571,7 @@ const DashboardPage: React.FC = () => {
                   <Users className="w-5 h-5 text-blue-600" />
                   <h4 className="font-bold text-blue-900 dark:text-blue-400">Clientes com Fiado</h4>
                 </div>
-                <p className="text-3xl font-black text-blue-700 dark:text-blue-300">
+                <p className="text-2xl md:text-3xl font-black text-blue-700 dark:text-blue-300">
                   {data?.data?.fiado_summary?.quantidade_clientes || 0}
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Clientes com débitos ativos</p>
@@ -1667,7 +1667,7 @@ const DashboardPage: React.FC = () => {
           <div
             key={kpi.key}
             onClick={() => setKpiModalAberto(kpi.title)}
-            className={`relative overflow-hidden bg-gradient-to-br ${kpi.color} rounded-2xl shadow-lg hover:shadow-2xl border border-white/10 dark:border-white/5 p-6 text-white transform transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] cursor-pointer group`}
+            className={`relative overflow-hidden bg-gradient-to-br ${kpi.color} rounded-2xl shadow-lg hover:shadow-2xl border border-white/10 dark:border-white/5 p-4 sm:p-6 text-white transform transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] cursor-pointer group`}
             title="Clique para ver histórico detalhado"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-1000 rounded-2xl pointer-events-none" />
@@ -1685,7 +1685,7 @@ const DashboardPage: React.FC = () => {
                 <Calendar className="w-3.5 h-3.5" /> {kpi.periodo}
               </p>
               <h3 className="text-sm font-bold text-white mb-1 drop-shadow-sm">{kpi.title}</h3>
-              <p className="text-2xl sm:text-4xl font-black mb-1 tracking-tighter drop-shadow-md">{kpi.value}</p>
+              <p className="text-2xl sm:text-3xl md:text-4xl font-black mb-1 tracking-tighter drop-shadow-md">{kpi.value}</p>
               <p className="text-xs sm:text-sm font-bold text-white/95 drop-shadow-sm">{kpi.subtitle}</p>
             </div>
           </div>
@@ -1711,7 +1711,7 @@ const DashboardPage: React.FC = () => {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {/* Card A: Saúde da Margem */}
-            <div className={`bg-gradient-to-br ${smM?.bg} rounded-2xl p-6 border ${smM?.border} shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}>
+            <div className={`bg-gradient-to-br ${smM?.bg} rounded-2xl p-4 sm:p-6 border ${smM?.border} shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">📈</div>
@@ -1722,7 +1722,7 @@ const DashboardPage: React.FC = () => {
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-black ${smM?.badge}`}>{smM?.emoji} {smM?.label}</span>
               </div>
-              <p className="text-3xl font-black text-slate-900 dark:text-white">{margemLiq.toFixed(1)}%</p>
+              <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">{margemLiq.toFixed(1)}%</p>
               <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-3">De cada R$100 vendidos, sobram <strong className="text-slate-900 dark:text-white">R${margemLiq.toFixed(0)}</strong> de lucro</p>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-1">
                 <div className={`h-2 rounded-full transition-all duration-700 ${smM?.bar}`} style={{ width: `${Math.min(margemLiq * 2, 100)}%` }} />
@@ -1736,7 +1736,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Card B: Capital em Estoque */}
-            <div className={`bg-gradient-to-br ${smE?.bg} rounded-2xl p-6 border ${smE?.border} shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}>
+            <div className={`bg-gradient-to-br ${smE?.bg} rounded-2xl p-4 sm:p-6 border ${smE?.border} shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">🏭</div>
@@ -1747,7 +1747,7 @@ const DashboardPage: React.FC = () => {
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-black ${smE?.badge}`}>{smE?.emoji} {smE?.label}</span>
               </div>
-              <p className="text-3xl font-black text-slate-900 dark:text-white">R$ {valorEstoque.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+              <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">R$ {valorEstoque.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
               <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-3">Equivalente a <strong className="text-slate-900 dark:text-white">{ratioEst.toFixed(1)}x</strong> o faturamento do período</p>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-1">
                 <div className={`h-2 rounded-full transition-all duration-700 ${smE?.bar}`} style={{ width: `${Math.min((ratioEst / 12) * 100, 100)}%` }} />
@@ -1761,7 +1761,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Card C: Velocidade de Vendas */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-2xl p-6 border border-blue-200 dark:border-blue-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-2xl p-4 sm:p-6 border border-blue-200 dark:border-blue-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">⚡</div>
@@ -1795,7 +1795,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Card D: DRE Simplificado */}
-            <div id="detalhes-financeiros" className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/10 dark:to-purple-900/10 rounded-2xl p-6 border border-violet-200 dark:border-violet-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+            <div id="detalhes-financeiros" className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/10 dark:to-purple-900/10 rounded-2xl p-4 sm:p-6 border border-violet-200 dark:border-violet-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-md flex items-center justify-center text-xl">📊</div>
                 <div>
@@ -1851,16 +1851,16 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
+          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl p-5 sm:p-8 border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
               <TargetIcon className="w-8 h-8 text-blue-600 dark:text-blue-500" />
               📊 Resumo Executivo - Últimos {periodoDias} dias
               <span className="ml-4 px-2 py-1 bg-red-600 text-white text-[10px] rounded animate-pulse">V2-BYPASS-PRO-ACTIVE</span>
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:p-6">
               {/* Desempenho Financeiro */}
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-2xl p-6 border border-green-200 dark:border-green-500/20">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-2xl p-4 sm:p-6 border border-green-200 dark:border-green-500/20">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                   <DollarIcon className="w-5 h-5 text-green-600 dark:text-green-500" />
                   Desempenho Financeiro
@@ -1894,7 +1894,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Produtos e Estoque */}
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/10 dark:to-cyan-900/10 rounded-2xl p-6 border border-blue-200 dark:border-blue-500/20">
+              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/10 dark:to-cyan-900/10 rounded-2xl p-4 sm:p-6 border border-blue-200 dark:border-blue-500/20">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                   <Package className="w-5 h-5 text-blue-600 dark:text-blue-500" />
                   Produtos e Estoque
@@ -1924,7 +1924,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Insights Rápidos */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-2xl p-6 border border-purple-200 dark:border-purple-500/20 md:col-span-2">
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-2xl p-4 sm:p-6 border border-purple-200 dark:border-purple-500/20 md:col-span-2">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                   <Brain className="w-5 h-5 text-purple-600 dark:text-purple-500" />
                   💡 Insights Rápidos
@@ -2014,7 +2014,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'detalhado' && (
         <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl mb-8 overflow-hidden border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
           <div
-            className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={() => toggleCard('curva-abc')}
           >
             <div className="flex items-center gap-3">
@@ -2056,9 +2056,9 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {expandedCards['curva-abc'] && analise_produtos?.curva_abc && (
-            <div className="p-6 animate-fadeIn">
+            <div className="p-4 sm:p-6 animate-fadeIn">
               {produtosFiltrados.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:p-8">
                   {/* GRÁFICO DE PARETO */}
                   <div className="lg:col-span-2">
                     <div className="h-[400px]">
@@ -2090,7 +2090,7 @@ const DashboardPage: React.FC = () => {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="flex justify-center gap-6 mt-6">
+                    <div className="flex justify-center gap-4 sm:p-6 mt-6">
                       {Object.entries(analise_produtos?.curva_abc?.resumo || {}).map(([classe, dados]) => (
                         <div key={classe} className="text-center">
                           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 ${classe === 'A' ? 'bg-green-100 dark:bg-green-500/20' : classe === 'B' ? 'bg-yellow-100 dark:bg-yellow-500/20' : 'bg-red-100 dark:bg-red-500/20'}`}>
@@ -2107,7 +2107,7 @@ const DashboardPage: React.FC = () => {
 
                   {/* LEGENDA E DETALHES */}
                   <div className="space-y-6">
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-6 rounded-2xl border border-blue-200 dark:border-blue-500/20">
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 p-4 sm:p-6 rounded-2xl border border-blue-200 dark:border-blue-500/20">
                       <h3 className="font-bold text-slate-900 dark:text-white mb-4">📊 Interpretação da Curva ABC</h3>
                       <div className="space-y-3">
                         <div className="flex items-center gap-3">
@@ -2206,7 +2206,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'detalhado' && (
         <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-xl mb-8 overflow-hidden border border-slate-200 dark:border-slate-800/60 transition-all duration-300">
           <div
-            className="p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800/60 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={() => toggleCard('analise-temporal')}
           >
             <div className="flex items-center gap-3">
@@ -2220,10 +2220,10 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {expandedCards['analise-temporal'] && (
-            <div className="p-6 animate-fadeIn">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="p-4 sm:p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:p-8">
                 {/* GRÁFICO DE LINHA: EVOLUÇÃO DAS VENDAS */}
-                <div className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-900/50 p-6 rounded-2xl border border-purple-200 dark:border-purple-500/20 lg:col-span-2">
+                <div className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/10 dark:to-slate-900/50 p-4 sm:p-6 rounded-2xl border border-purple-200 dark:border-purple-500/20 lg:col-span-2">
                   <h3 className="font-bold text-slate-900 dark:text-white mb-6 text-lg flex items-center gap-2">
                     <LineChartIcon className="w-5 h-5 text-purple-600 dark:text-purple-500" />
                     Evolução das Vendas (30 dias)
@@ -2305,7 +2305,7 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 {/* 🔥 MOVIDO: COMPARAÇÃO MENSAL - AGORA ABAIXO DO GRÁFICO */}
-                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/10 dark:to-red-900/10 p-6 rounded-2xl border border-orange-200 dark:border-orange-500/20 lg:col-span-2">
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/10 dark:to-red-900/10 p-4 sm:p-6 rounded-2xl border border-orange-200 dark:border-orange-500/20 lg:col-span-2">
                   <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                     <LucideBarChart className="w-5 h-5 text-orange-600 dark:text-orange-500" />
                     Comparação Mensal
@@ -2327,7 +2327,7 @@ const DashboardPage: React.FC = () => {
                         </div>
                       ))
                     ) : (
-                      <div className="bg-white/70 p-6 rounded-lg text-center">
+                      <div className="bg-white/70 p-4 sm:p-6 rounded-lg text-center">
                         <LucideBarChart className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                         <p className="text-gray-500">Comparação mensal não disponível</p>
                         <p className="text-sm text-gray-400 mt-1">Necessário pelo menos 2 meses de dados</p>
@@ -2344,7 +2344,7 @@ const DashboardPage: React.FC = () => {
       {/* 🔥 NOVO: SEÇÃO DE ANÁLISE DE VENDAS POR HORÁRIO */}
       {viewMode === 'detalhado' && (
         <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
-          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+          <div className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
             <div className="flex items-center gap-3">
               <Clock className="w-8 h-8 text-indigo-600" />
               <div>
@@ -2354,11 +2354,11 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {analise_temporal?.vendas_por_hora && analise_temporal.vendas_por_hora.length > 0 ? (
               <div className="space-y-6">
                 {/* Gráfico de Barras - Vendas por Hora */}
-                <div className="bg-gradient-to-br from-gray-50 to-indigo-50 rounded-xl p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-indigo-50 rounded-xl p-4 sm:p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 Volume de Vendas por Horário</h3>
                   <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -2450,7 +2450,7 @@ const DashboardPage: React.FC = () => {
                     return (
                       <>
                         {/* Melhor Horário */}
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 sm:p-6 border border-green-200">
                           <div className="flex items-center gap-3 mb-3">
                             <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
                               <TrendingUp className="w-6 h-6 text-white" />
@@ -2473,7 +2473,7 @@ const DashboardPage: React.FC = () => {
                         </div>
 
                         {/* Horário Crítico */}
-                        <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
+                        <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-xl p-4 sm:p-6 border border-red-200">
                           <div className="flex items-center gap-3 mb-3">
                             <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
                               <AlertTriangle className="w-6 h-6 text-white" />
@@ -2496,7 +2496,7 @@ const DashboardPage: React.FC = () => {
                         </div>
 
                         {/* Horários de Pico */}
-                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 border border-blue-200">
                           <div className="flex items-center gap-3 mb-3">
                             <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
                               <TargetIcon className="w-6 h-6 text-white" />
@@ -2526,7 +2526,7 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 {/* Recomendações Estratégicas */}
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 sm:p-6 border border-purple-200">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <Lightbulb className="w-5 h-5 text-purple-600" />
                     💡 Recomendações Estratégicas
@@ -2553,7 +2553,7 @@ const DashboardPage: React.FC = () => {
 
                 {/* 🔥 NOVO: Produtos Mais Vendidos por Horário */}
                 {analise_temporal?.produtos_por_hora && Object.keys(analise_temporal.produtos_por_hora).length > 0 && (
-                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-6 border border-cyan-200">
+                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-4 sm:p-6 border border-cyan-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <Package className="w-5 h-5 text-cyan-600" />
                       🏆 Top Produtos por Horário
@@ -2664,7 +2664,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'detalhado' && (
         <div className="bg-white rounded-2xl shadow-xl mb-8 overflow-hidden border border-gray-200">
           <div
-            className="p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
+            className="p-4 sm:p-6 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-50"
             onClick={() => toggleCard('analise-financeira')}
           >
             <div className="flex items-center gap-3">
@@ -2678,10 +2678,10 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {expandedCards['analise-financeira'] && (
-            <div className="p-6 animate-fadeIn">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="p-4 sm:p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:p-8">
                 {/* GRÁFICO DE COLUNAS: DISTRIBUIÇÃO DE DESPESAS */}
-                <div className="bg-gradient-to-br from-gray-50 to-white p-6 rounded-xl border border-gray-200">
+                <div className="bg-gradient-to-br from-gray-50 to-white p-4 sm:p-6 rounded-xl border border-gray-200">
                   <h3 className="font-bold text-gray-900 mb-6 text-lg">📊 Distribuição de Despesas</h3>
                   <div className="h-[300px]">
                     {analise_financeira?.despesas_detalhadas && analise_financeira?.despesas_detalhadas.length > 0 ? (
@@ -2759,7 +2759,7 @@ const DashboardPage: React.FC = () => {
                             nome === 'operacional' ? 'Margem Operacional' :
                               nome === 'liquida' ? 'Margem Líquida' : 'Margem Contribuição'}
                         </p>
-                        <p className={`text-3xl font-bold ${valor >= 20 ? 'text-green-600' : valor >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        <p className={`text-2xl md:text-3xl font-bold ${valor >= 20 ? 'text-green-600' : valor >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
                           {valor.toFixed(1)}%
                         </p>
                         <div className="mt-2">
@@ -2775,7 +2775,7 @@ const DashboardPage: React.FC = () => {
                   </div>
 
                   {/* INDICADORES AVANÇADOS */}
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 sm:p-6 rounded-xl border border-blue-200">
                     <h4 className="font-bold text-gray-900 mb-4">📈 Indicadores Financeiros</h4>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
@@ -2807,7 +2807,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'avancado' && (
         <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-2xl overflow-hidden mb-8">
           <div
-            className="p-6 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-800/50"
+            className="p-4 sm:p-6 border-b border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-800/50"
             onClick={() => toggleCard('insights')}
           >
             <div className="flex items-center gap-3">
@@ -2821,10 +2821,10 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {expandedCards['insights'] && (
-            <div className="p-6 animate-fadeIn">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="p-4 sm:p-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:p-8">
                 {/* CORRELAÇÕES */}
-                <div className="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm">
+                <div className="bg-gray-800/50 rounded-xl p-4 sm:p-6 backdrop-blur-sm">
                   <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                     <GitMerge className="w-5 h-5" />
                     Correlações Estatísticas
@@ -2863,7 +2863,7 @@ const DashboardPage: React.FC = () => {
 
                 {/* PREVISÕES E RECOMENDAÇÕES */}
                 <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-xl p-6">
+                  <div className="bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-xl p-4 sm:p-6">
                     <h3 className="text-xl font-bold text-white mb-6">🔮 Previsões (Próximos 30 dias)</h3>
                     <div className="space-y-4">
                       {(insights_cientificos?.previsoes || []).map((prev, idx) => (
@@ -2894,7 +2894,7 @@ const DashboardPage: React.FC = () => {
                   </div>
 
                   {/* RECOMENDAÇÕES DE OTIMIZAÇÃO */}
-                  <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-xl p-6">
+                  <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-xl p-4 sm:p-6">
                     <h3 className="text-xl font-bold text-white mb-6">🚀 Recomendações de Otimização</h3>
                     <div className="space-y-4">
                       {(insights_cientificos?.recomendacoes_otimizacao || []).map((rec, idx) => (
@@ -2936,9 +2936,9 @@ const DashboardPage: React.FC = () => {
 
       {/* SEÇÃO: PRODUTOS ESTRATÉGICOS */}
       {viewMode === 'avancado' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:p-8 mb-8">
           {/* PRODUTOS ESTRELA */}
-          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-6 border border-yellow-200">
+          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl shadow-xl p-4 sm:p-6 border border-yellow-200">
             <div className="flex items-center gap-3 mb-6">
               <Star className="w-8 h-8 text-yellow-600" />
               <div>
@@ -2988,7 +2988,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* PRODUTOS LENTOS */}
-          <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl shadow-xl p-6 border border-red-200">
+          <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl shadow-xl p-4 sm:p-6 border border-red-200">
             <div className="flex items-center gap-3 mb-6">
               <AlertTriangle className="w-8 h-8 text-red-600" />
               <div>
@@ -3063,7 +3063,7 @@ const DashboardPage: React.FC = () => {
                   </div>
                 ))
               ) : (
-                <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 text-center border border-red-100">
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl p-5 sm:p-8 text-center border border-red-100">
                   <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 font-medium">Nenhum produto lento identificado</p>
                   <p className="text-gray-500 text-sm">Todos os produtos estão com bom desempenho!</p>
@@ -3076,12 +3076,12 @@ const DashboardPage: React.FC = () => {
 
       {/* SEÇÃO: PREVISÃO DE DEMANDA */}
       {viewMode === 'avancado' && (
-        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl shadow-xl p-6 mb-8 border border-purple-200">
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl shadow-xl p-4 sm:p-6 mb-8 border border-purple-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
             <Target className="w-8 h-8 text-purple-600" />
             📊 Previsão de Demanda Inteligente
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:p-6">
             {analise_produtos?.previsao_demanda?.map((previsao, idx) => {
               // Calcular dias até acabar o estoque
               const estoqueAtual = previsao.estoque_atual || 0;
@@ -3090,7 +3090,7 @@ const DashboardPage: React.FC = () => {
               const riscoRuptura = diasAteAcabar < 7;
 
               return (
-                <div key={idx} className={`bg-white/80 backdrop-blur-sm rounded-xl p-6 border ${riscoRuptura ? 'border-red-300 bg-red-50/50' : 'border-purple-100'}`}>
+                <div key={idx} className={`bg-white/80 backdrop-blur-sm rounded-xl p-4 sm:p-6 border ${riscoRuptura ? 'border-red-300 bg-red-50/50' : 'border-purple-100'}`}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-900">{previsao.nome || previsao.produto_nome || previsao.variavel}</h3>
                     <div className="flex items-center gap-2">
@@ -3170,13 +3170,13 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 NOVO: ANÁLISE CIENTÍFICA DE PADRÕES TEMPORAIS */}
       {viewMode === 'avancado' && analise_temporal?.padroes_temporais_clientes && Object.keys(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).length > 0 && (
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-indigo-200">
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-4 sm:p-6 mb-8 border border-indigo-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
             <Clock className="w-8 h-8 text-indigo-600" />
             🕐 Análise Científica: Padrões Temporais de Clientes
           </h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:p-6">
             {/* Perfis Temporais */}
             {Object.entries(analise_temporal.padroes_temporais_clientes.perfis_temporais || {}).map(([perfil, clientes]: [string, any[]]) => {
               // 🔥 DEFENSIVE: Garantir que clientes é um array
@@ -3191,7 +3191,7 @@ const DashboardPage: React.FC = () => {
               }[perfil] || { icon: '⏰', color: 'from-gray-50 to-gray-100', border: 'border-gray-200', text: 'text-gray-900', badge: 'bg-gray-100 text-gray-800' };
 
               return (
-                <div key={perfil} className={`bg-gradient-to-br ${perfilConfig.color} rounded-xl p-6 border ${perfilConfig.border}`}>
+                <div key={perfil} className={`bg-gradient-to-br ${perfilConfig.color} rounded-xl p-4 sm:p-6 border ${perfilConfig.border}`}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className={`text-lg font-bold ${perfilConfig.text} flex items-center gap-2`}>
                       <span className="text-2xl">{perfilConfig.icon}</span>
@@ -3238,7 +3238,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Insights Científicos */}
-          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-indigo-200">
+          <div className="mt-6 bg-white/80 rounded-xl p-4 sm:p-6 border border-indigo-200">
             <h3 className="font-bold text-indigo-900 mb-4 flex items-center gap-2">
               <Brain className="w-5 h-5" />
               🧠 Insights Científicos sobre Comportamento Temporal
@@ -3275,7 +3275,7 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 NOVO: MATRIZ DE CORRELAÇÃO PRODUTO × HORÁRIO */}
       {viewMode === 'avancado' && analise_temporal?.matriz_produto_horario && analise_temporal.matriz_produto_horario.matrix && analise_temporal.matriz_produto_horario.matrix.length > 0 && (
-        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl shadow-xl p-6 mb-8 border border-teal-200">
+        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl shadow-xl p-4 sm:p-6 mb-8 border border-teal-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
             <GitMerge className="w-8 h-8 text-teal-600" />
             🔬 Matriz de Correlação: Produto × Horário
@@ -3286,7 +3286,7 @@ const DashboardPage: React.FC = () => {
           </p>
 
           {/* Heatmap */}
-          <div className="bg-white rounded-xl p-6 border border-teal-200 overflow-x-auto">
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-teal-200 overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -3371,7 +3371,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Insights */}
-          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-teal-200">
+          <div className="mt-6 bg-white/80 rounded-xl p-4 sm:p-6 border border-teal-200">
             <h3 className="font-bold text-teal-900 mb-4 flex items-center gap-2">
               <Lightbulb className="w-5 h-5" />
               💡 Como Usar Esta Análise
@@ -3408,7 +3408,7 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 NOVO: AFINIDADE CLIENTE × PRODUTO */}
       {viewMode === 'avancado' && analise_temporal?.afinidade_cliente_produto && analise_temporal.afinidade_cliente_produto.length > 0 && (
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl shadow-xl p-6 mb-8 border border-amber-200">
+        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl shadow-xl p-4 sm:p-6 mb-8 border border-amber-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
             <Star className="w-8 h-8 text-amber-600" />
             ⭐ Análise de Afinidade: Cliente × Produto
@@ -3419,7 +3419,7 @@ const DashboardPage: React.FC = () => {
           </p>
 
           {/* Top 20 Afinidades */}
-          <div className="bg-white rounded-xl p-6 border border-amber-200">
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-amber-200">
             <h3 className="font-bold text-amber-900 mb-4">🎯 Top 20 Afinidades Cliente-Produto</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto">
               {analise_temporal.afinidade_cliente_produto.slice(0, 20).map((afinidade: any, idx: number) => (
@@ -3467,7 +3467,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Insights */}
-          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-amber-200">
+          <div className="mt-6 bg-white/80 rounded-xl p-4 sm:p-6 border border-amber-200">
             <h3 className="font-bold text-amber-900 mb-4 flex items-center gap-2">
               <Lightbulb className="w-5 h-5" />
               💡 Estratégias de Marketing Baseadas em Afinidade
@@ -3504,7 +3504,7 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 NOVO: COMPORTAMENTO DE CLIENTES POR HORÁRIO */}
       {viewMode === 'avancado' && analise_temporal?.comportamento_clientes_horario && analise_temporal.comportamento_clientes_horario.comportamento_por_hora && analise_temporal.comportamento_clientes_horario.comportamento_por_hora.length > 0 && (
-        <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl shadow-xl p-6 mb-8 border border-violet-200">
+        <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl shadow-xl p-4 sm:p-6 mb-8 border border-violet-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
             <Clock className="w-8 h-8 text-violet-600" />
             👥 Comportamento de Clientes por Horário
@@ -3515,7 +3515,7 @@ const DashboardPage: React.FC = () => {
           </p>
 
           {/* Gráfico de Comportamento */}
-          <div className="bg-white rounded-xl p-6 border border-violet-200 mb-6">
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-violet-200 mb-6">
             <h3 className="font-bold text-violet-900 mb-4">📊 Métricas por Horário</h3>
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -3586,7 +3586,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Tabela Detalhada */}
-          <div className="bg-white rounded-xl p-6 border border-violet-200 overflow-x-auto">
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-violet-200 overflow-x-auto">
             <h3 className="font-bold text-violet-900 mb-4">📋 Detalhamento por Horário</h3>
             <table className="w-full text-sm">
               <thead className="bg-violet-50">
@@ -3615,7 +3615,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Insights */}
-          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-violet-200">
+          <div className="mt-6 bg-white/80 rounded-xl p-4 sm:p-6 border border-violet-200">
             <h3 className="font-bold text-violet-900 mb-4 flex items-center gap-2">
               <Lightbulb className="w-5 h-5" />
               💡 Insights de Comportamento do Cliente
@@ -3652,15 +3652,15 @@ const DashboardPage: React.FC = () => {
 
       {/* 🔥 NOVO: ANÁLISE DE CONCENTRAÇÃO DE FATURAMENTO */}
       {viewMode === 'avancado' && analise_temporal?.concentracao_horaria && (
-        <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl shadow-xl p-6 mb-8 border border-rose-200">
+        <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-2xl shadow-xl p-4 sm:p-6 mb-8 border border-rose-200">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
             <TrendingUp className="w-8 h-8 text-rose-600" />
             📊 Análise de Concentração: Índice de Gini & Diversificação
           </h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:p-6 mb-6">
             {/* Índice de Gini */}
-            <div className="bg-white rounded-xl p-6 border border-rose-200">
+            <div className="bg-white rounded-xl p-4 sm:p-6 border border-rose-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-rose-900">Índice de Gini</h3>
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center ${(analise_temporal.concentracao_horaria.gini_index || 0) > 0.7 ? 'bg-red-100' :
@@ -3691,7 +3691,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Taxa de Concentração */}
-            <div className="bg-white rounded-xl p-6 border border-orange-200">
+            <div className="bg-white rounded-xl p-4 sm:p-6 border border-orange-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-orange-900">Concentração Top 3</h3>
                 <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
@@ -3714,7 +3714,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Score de Diversificação */}
-            <div className="bg-white rounded-xl p-6 border border-green-200">
+            <div className="bg-white rounded-xl p-4 sm:p-6 border border-green-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-green-900">Diversificação</h3>
                 <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
@@ -3738,7 +3738,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Top Horários */}
-          <div className="bg-white rounded-xl p-6 border border-rose-200">
+          <div className="bg-white rounded-xl p-4 sm:p-6 border border-rose-200">
             <h3 className="font-bold text-rose-900 mb-4">🏆 Top 5 Horários por Faturamento</h3>
             <div className="space-y-3">
               {(analise_temporal.concentracao_horaria.top_hours || []).map((hora, idx) => (
@@ -3766,7 +3766,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Recomendações Estratégicas */}
-          <div className="mt-6 bg-white/80 rounded-xl p-6 border border-rose-200">
+          <div className="mt-6 bg-white/80 rounded-xl p-4 sm:p-6 border border-rose-200">
             <h3 className="font-bold text-rose-900 mb-4 flex items-center gap-2">
               <Lightbulb className="w-5 h-5" />
               💡 Recomendações Estratégicas Baseadas em Dados
@@ -3806,14 +3806,14 @@ const DashboardPage: React.FC = () => {
         <div className="space-y-8 mb-8">
           {/* SEÇÃO 1: FATURAMENTO POR PERÍODO DO DIA */}
           {data.data.period_analysis && Object.keys(data.data.period_analysis).length > 0 && (
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl shadow-xl p-6 border border-blue-200">
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl shadow-xl p-4 sm:p-6 border border-blue-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <Clock className="w-8 h-8 text-blue-600" />
                 ⏰ Análise por Período do Dia (Manhã/Tarde/Noite)
               </h2>
               <p className="text-gray-600 mb-6">Como varia o faturamento ao longo do dia? Qual período é mais lucrativo?</p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:p-6">
                 {Object.entries(data.data.period_analysis).map(([periodo, dados]: [string, any]) => {
                   const periodoNome = periodo === 'manha' ? '🌅 Manhã (6h-12h)' :
                     periodo === 'tarde' ? '☀️ Tarde (12h-18h)' :
@@ -3821,7 +3821,7 @@ const DashboardPage: React.FC = () => {
                   const percentualTotal = (dados.faturamento / Object.values(data.data.period_analysis as any).reduce((sum: number, p: any) => sum + p.faturamento, 0)) * 100;
 
                   return (
-                    <div key={periodo} className="bg-white rounded-xl p-6 border border-blue-100 hover:shadow-lg transition-shadow">
+                    <div key={periodo} className="bg-white rounded-xl p-4 sm:p-6 border border-blue-100 hover:shadow-lg transition-shadow">
                       <h3 className="text-lg font-bold text-gray-900 mb-4">{periodoNome}</h3>
 
                       <div className="space-y-3">
@@ -3868,7 +3868,7 @@ const DashboardPage: React.FC = () => {
 
           {/* SEÇÃO 2: ANÁLISE POR DIA DA SEMANA */}
           {data.data.weekday_analysis && Object.keys(data.data.weekday_analysis).length > 0 && (
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-6 border border-green-200">
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-4 sm:p-6 border border-green-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <Calendar className="w-8 h-8 text-green-600" />
                 📅 Análise por Dia da Semana
@@ -3917,7 +3917,7 @@ const DashboardPage: React.FC = () => {
 
           {/* SEÇÃO 3: RECOMENDAÇÕES DE ESTOQUE POR HORA */}
           {data.data.product_hourly_recommendations && data.data.product_hourly_recommendations.length > 0 && (
-            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-xl p-6 border border-orange-200">
+            <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl shadow-xl p-4 sm:p-6 border border-orange-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <Package className="w-8 h-8 text-orange-600" />
                 📦 Recomendações de Estoque por Hora
@@ -3968,14 +3968,14 @@ const DashboardPage: React.FC = () => {
           {/* SEÇÃO 4: CORRELAÇÕES & INSIGHTS DE MERCADO */}
           {/* SEÇÃO 4: CORRELAÇÕES & INSIGHTS DE MERCADO */}
           {data.data.insights_cientificos?.correlações && data.data.insights_cientificos.correlações.length > 0 && (
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-6 border border-indigo-200">
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl shadow-xl p-4 sm:p-6 border border-indigo-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <GitMerge className="w-8 h-8 text-indigo-600" />
                 🔗 Correlações & Insights de Mercado
               </h2>
               <p className="text-gray-600 mb-6">Padrões ocultos descobertos nos seus dados (Correlação de Pearson).</p>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:p-6">
                 {data.data.insights_cientificos.correlações.map((corr: any, idx: number) => {
                   const strength = Math.abs(corr.correlacao);
                   const isPositive = corr.correlacao > 0;
@@ -4016,7 +4016,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'financeiro' && (
         <div className="space-y-6">
           {/* Cabeçalho Financeiro */}
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-800 rounded-xl shadow-lg p-6 text-white flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-800 rounded-xl shadow-lg p-4 sm:p-6 text-white flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md border border-white/20">
                 <DollarIcon className="w-8 h-8 text-white" />
@@ -4027,7 +4027,7 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
             {/* Quick Stats - Recebíveis Gerais */}
-            <div className="flex gap-6 bg-black/20 p-4 rounded-xl border border-white/10 w-full md:w-auto">
+            <div className="flex gap-4 sm:p-6 bg-black/20 p-4 rounded-xl border border-white/10 w-full md:w-auto">
               <div>
                 <p className="text-sm text-emerald-100 font-medium">A Receber</p>
                 <p className="text-xl font-bold">R$ {(data?.data?.receivables?.total_recebivel || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -4046,11 +4046,11 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Grid Principal do Financeiro */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:p-6">
 
             {/* COLUNA ESQUERDA: Exposição de Risco (Fiado Geral) */}
             <div className="lg:col-span-4 space-y-6">
-              <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+              <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
                   <Shield className="w-5 h-5 text-indigo-500" />
                   Risco Exposto: Fiados
@@ -4059,7 +4059,7 @@ const DashboardPage: React.FC = () => {
                 <div className="space-y-6">
                   <div>
                     <p className="text-sm text-gray-500 font-medium mb-1">Total em Aberto na Praça</p>
-                    <p className="text-4xl font-black text-rose-600">
+                    <p className="text-3xl md:text-4xl font-black text-rose-600">
                       R$ {(data?.data?.fiado?.total_aberto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
@@ -4103,7 +4103,7 @@ const DashboardPage: React.FC = () => {
             {/* COLUNA DIREITA: Tendências, Previsões e Top Clientes */}
             <div className="lg:col-span-8 space-y-6">
               {/* Trends AI Card */}
-              <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-xl shadow-md p-6 border border-indigo-800 relative overflow-hidden">
+              <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-xl shadow-md p-4 sm:p-6 border border-indigo-800 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Brain className="w-32 h-32 text-indigo-300" />
                 </div>
@@ -4112,7 +4112,7 @@ const DashboardPage: React.FC = () => {
                   Gêmeo Digital: Comportamento da Dívida (30 Dias)
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:p-6 relative z-10">
                   <div className="bg-white/10 backdrop-blur-md rounded-lg p-5 border border-white/10">
                     <p className="text-indigo-200 text-sm mb-2 flex items-center gap-1"><TrendingUpFill className="w-4 h-4" /> Novos Créditos Tomados</p>
                     <p className="text-2xl font-bold text-white">R$ {(data?.data?.fiado?.tendencias?.novos_fiados_30d || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -4125,7 +4125,7 @@ const DashboardPage: React.FC = () => {
                     (data?.data?.fiado?.tendencias?.taxa_recuperacao_percentual || 0) >= 80 ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-amber-500/20 border-amber-500/30'
                     }`}>
                     <p className="text-white text-sm mb-2 opacity-90">Taxa de Recuperação (Saúde)</p>
-                    <p className="text-3xl font-black text-white">
+                    <p className="text-2xl md:text-3xl font-black text-white">
                       {(data?.data?.fiado?.tendencias?.taxa_recuperacao_percentual || 0).toFixed(1)}%
                     </p>
                     <p className="text-xs text-white/70 mt-1">Acima de 80% indica carteira saudável.</p>
@@ -4134,10 +4134,10 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Grid Secundário: Bons Pagadores vs Produtos Mais Fiados */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:p-6">
 
                 {/* Bons Pagadores */}
-                <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
                   <h3 className="text-[14px] font-bold text-gray-800 mb-4 flex items-center justify-between">
                     <span className="flex items-center gap-2"><TargetIcon className="w-4 h-4 text-emerald-500" /> Melhores Pagadores</span>
                     <span className="text-xs font-normal bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">Saldo Quitado + Alto Volume</span>
@@ -4168,7 +4168,7 @@ const DashboardPage: React.FC = () => {
                 </div>
 
                 {/* Produtos Top no Fiado */}
-                <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
                   <h3 className="text-[14px] font-bold text-gray-800 mb-4 flex items-center justify-between">
                     <span className="flex items-center gap-2"><Package className="w-4 h-4 text-amber-500" /> Top Produtos na Caderneta</span>
                     <span className="text-xs font-normal bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Itens mais fiados</span>
@@ -4203,8 +4203,8 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Ranking General de Devedores e Atrasos em Larga Escala (Tabelão) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <div className="bg-white rounded-xl shadow-md p-6 border border-red-100">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6 mt-6">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-red-100">
               <h3 className="text-[15px] font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-red-500" />
                 Top Devedores (Maior Risco Absoluto)
@@ -4240,7 +4240,7 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border border-orange-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-orange-100">
               <h3 className="text-[15px] font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-orange-500" />
                 Títulos Atrasados (Contas a Receber)
@@ -4285,7 +4285,7 @@ const DashboardPage: React.FC = () => {
       {viewMode === 'rh' && rh && (
         <div className="space-y-6">
           {/* Cabeçalho RH */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-purple-200">
+          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-purple-200">
             <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-3">
               <Users className="w-8 h-8 text-purple-600" />
               Recursos Humanos & Departamento Pessoal
@@ -4296,9 +4296,9 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Cards de KPI */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:p-6">
             {/* Custo Total Estimado */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-purple-100 rounded-lg">
                   <DollarIcon className="w-6 h-6 text-purple-600" />
@@ -4313,7 +4313,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Funcionários Ativos */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <Users className="w-6 h-6 text-blue-600" />
@@ -4328,7 +4328,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Pontualidade */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-green-100 rounded-lg">
                   <Clock className="w-6 h-6 text-green-600" />
@@ -4346,7 +4346,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Horas Extras */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-orange-100 rounded-lg">
                   <AlertCircle className="w-6 h-6 text-orange-600" />
@@ -4361,7 +4361,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Rotatividade (Turnover) */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-red-100 rounded-lg">
                   <TrendingUp className="w-6 h-6 text-red-600" />
@@ -4381,7 +4381,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
               <ChartBar className="w-5 h-5 text-gray-500" />
               Resumo Mensal (RH)
@@ -4412,8 +4412,8 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:p-6">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-red-500" />
                 Atrasos por Funcionário (Mês)
@@ -4452,7 +4452,7 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-orange-500" />
                 Horas Extras por Funcionário (Mês)
@@ -4488,8 +4488,8 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:p-6">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-yellow-600" />
                 Faltas por Funcionário (Mês)
@@ -4524,7 +4524,7 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <GitMerge className="w-5 h-5 text-blue-600" />
                 Banco de Horas (Mês)
@@ -4564,7 +4564,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
               <DollarIcon className="w-5 h-5 text-purple-600" />
               Espelho de Pagamento (Estimado - Mês)
@@ -4609,9 +4609,9 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Detalhamento Avançado RH */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6">
             {/* Gráfico de Evolução de Turnover */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-gray-500" />
                 Histórico de Admissões, Demissões, Ausências, Atrasos e Horas Extras
@@ -4643,7 +4643,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Top Funcionários com Horas Extras */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-orange-500" />
                 Top Horas Extras (Custo Estimado)
@@ -4682,9 +4682,9 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Gráficos de Composição Financeira RH */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:p-6">
             {/* Composição de Custos */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 lg:col-span-1">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <DollarIcon className="w-5 h-5 text-gray-500" />
                 Composição de Custos
@@ -4710,7 +4710,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Distribuição de Benefícios */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100 lg:col-span-2">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Target className="w-5 h-5 text-gray-500" />
                 Distribuição de Benefícios
@@ -4739,8 +4739,8 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <LineChartIcon className="w-5 h-5 text-gray-500" />
                 Tendência de Horas Extras (14 dias)
@@ -4769,7 +4769,7 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-gray-500" />
                 Resumo Diário de Ponto (7 dias)
@@ -4821,9 +4821,9 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6">
             {/* Indicadores de Assiduidade */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-gray-500" />
                 Assiduidade e Pontualidade
@@ -4869,7 +4869,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Status da Equipe (Hoje) */}
-            <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Users className="w-5 h-5 text-blue-500" />
                 Status da Equipe (Hoje)
@@ -4919,7 +4919,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Últimos Registros de Ponto */}
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Clock className="w-5 h-5 text-gray-500" />
               Últimos Registros de Ponto (Listagem)
@@ -4973,7 +4973,7 @@ const DashboardPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center">
                   <Star className="w-6 h-6 text-white" />
@@ -4991,7 +4991,7 @@ const DashboardPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Métricas Principais */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
@@ -5021,7 +5021,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Análise Financeira */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 sm:p-6 border border-green-200">
                 <h3 className="font-bold text-green-900 mb-4 flex items-center gap-2">
                   <DollarIcon className="w-5 h-5" />
                   💵 Análise Financeira Detalhada
@@ -5047,7 +5047,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Plano de Ação */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 border border-blue-200">
                 <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2">
                   <Target className="w-5 h-5" />
                   🎯 Plano de Ação Estratégico
@@ -5108,7 +5108,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Projeções */}
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 sm:p-6 border border-purple-200">
                 <h3 className="font-bold text-purple-900 mb-4 flex items-center gap-2">
                   <TrendingUp className="w-5 h-5" />
                   📊 Projeções e Metas
@@ -5136,7 +5136,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Alertas */}
-              <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-6 border border-yellow-200">
+              <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-4 sm:p-6 border border-yellow-200">
                 <h3 className="font-bold text-yellow-900 mb-4 flex items-center gap-2">
                   <AlertCircle className="w-5 h-5" />
                   ⚠️ Alertas e Cuidados
@@ -5151,7 +5151,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+            <div className="flex justify-end gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={() => setModalProdutoEstrela(null)}
                 className="px-6 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium border border-gray-300"
@@ -5176,7 +5176,7 @@ const DashboardPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-pink-50">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-pink-50">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
                   <AlertTriangle className="w-6 h-6 text-white" />
@@ -5194,9 +5194,9 @@ const DashboardPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Diagnóstico do Problema */}
-              <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
+              <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-4 sm:p-6 border border-red-200">
                 <h3 className="font-bold text-red-900 mb-4 flex items-center gap-2">
                   <AlertCircle className="w-5 h-5" />
                   🔍 Diagnóstico do Problema
@@ -5228,7 +5228,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Estratégias de Liquidação */}
-              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-6 border border-orange-200">
+              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4 sm:p-6 border border-orange-200">
                 <h3 className="font-bold text-orange-900 mb-4 flex items-center gap-2">
                   <Target className="w-5 h-5" />
                   🎯 Estratégias de Liquidação (Prioridade Alta)
@@ -5289,7 +5289,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Análise Financeira da Liquidação */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 border border-blue-200">
                 <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2">
                   <DollarIcon className="w-5 h-5" />
                   💰 Análise Financeira da Liquidação
@@ -5320,7 +5320,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Plano de Ação Passo a Passo */}
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-200">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 sm:p-6 border border-purple-200">
                 <h3 className="font-bold text-purple-900 mb-4 flex items-center gap-2">
                   <ChartBar className="w-5 h-5" />
                   📋 Plano de Ação - Próximos 7 Dias
@@ -5351,7 +5351,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Decisão Final */}
-              <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl p-6 border border-gray-300">
+              <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl p-4 sm:p-6 border border-gray-300">
                 <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5" />
                   ⚖️ Decisão Final (Se Não Vender)
@@ -5365,7 +5365,7 @@ const DashboardPage: React.FC = () => {
               </div>
 
               {/* Lições Aprendidas */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 sm:p-6 border border-green-200">
                 <h3 className="font-bold text-green-900 mb-4 flex items-center gap-2">
                   <Lightbulb className="w-5 h-5" />
                   💡 Lições para Evitar no Futuro
@@ -5380,7 +5380,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+            <div className="flex justify-end gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={() => setModalProdutoLento(null)}
                 className="px-6 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium border border-gray-300"
@@ -5540,7 +5540,7 @@ const DashboardPage: React.FC = () => {
           </div>
 
           {/* Gráfico */}
-          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-inner">
+          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-4 sm:p-6 border border-gray-100 dark:border-gray-800 shadow-inner">
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
               {visualizacaoModal === 'dias' ? '📈 Evolução Preditiva (Daily)' : '🏛️ Consolidado Histórico (Monthly)'}
             </h3>

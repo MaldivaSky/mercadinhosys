@@ -128,6 +128,24 @@ def replicar_para_neon():
 @gerente_ou_admin_required
 def sync_health():
     try:
+        # ── Heartbeat do sync (sinal leve de "sync vivo / parado") ──
+        from app.models import SyncHeartbeat
+        from datetime import datetime as _dt
+        interval = int(os.environ.get("SYNC_PUSH_INTERVAL_SEC", "300"))
+        hb = None
+        try:
+            hb = SyncHeartbeat.query.get(1)
+        except Exception:
+            db.session.rollback()
+        heartbeat = hb.to_dict() if hb else None
+        idade_min = None
+        sync_saudavel = False
+        if hb and hb.last_run_at:
+            idade = (_dt.utcnow() - hb.last_run_at).total_seconds()
+            idade_min = round(idade / 60, 1)
+            # saudável se o último ciclo foi OK e ocorreu há menos de ~3 intervalos
+            sync_saudavel = (hb.status == "ok") and (idade < interval * 3 + 600)
+
         db_url = _resolve_remote_db_url() or current_app.config.get("SQLALCHEMY_DATABASE_URI") or ""
         local_counts = {}
         for model in [Estabelecimento, Funcionario, Cliente, Fornecedor, CategoriaProduto, Produto, Venda, VendaItem, Pagamento, MovimentacaoEstoque, Despesa]:
@@ -155,7 +173,13 @@ def sync_health():
                             remote_counts[model.__tablename__] = None
             except Exception as e:
                 neon_status = f"offline: {str(e)[:80]}"
-        return jsonify({"success": True, "neon": neon_status, "local_counts": local_counts, "remote_counts": remote_counts}), 200
+        return jsonify({
+            "success": True, "neon": neon_status,
+            "sync_saudavel": sync_saudavel,
+            "sync_idade_minutos": idade_min,
+            "sync_heartbeat": heartbeat,
+            "local_counts": local_counts, "remote_counts": remote_counts,
+        }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:120]}), 500
 

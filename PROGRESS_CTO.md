@@ -55,6 +55,13 @@ Correção robusta:
   - PENDENTE: contas_pagar falha por FK pedido_compra_id (incluir pedidos_compra no PLAN). Perf futura: watermark incremental por updated_at (hoje varre tudo).
 - BUG SEPARADO reportado pelo user: data_venda exibida sem fuso de Brasília (armazenada em UTC). É display no frontend, não sync.
 
+## Hardening de produção (em andamento)
+- H1 Paridade de schema local↔Aiven — ✅ VERIFICADO: Aiven já tem fiscal_ambiente, csosn, pin_cancelamento, motivos_estorno, operacao. Só falta `alembic_version` (controle de migration; deploy migra o Aiven). OK.
+- H2 Segredos — `config.py` JÁ recusa boot em produção sem SECRET_KEY/JWT (linhas 78-80). ✅ `.env.example` atualizado com AIVEN_DATABASE_URL + vars de sync. PENDENTE (baixo risco): compose usa senha de DB hardcoded em DATABASE_URL (dev) em vez de ${DB_PASSWORD}.
+- H3 Observabilidade do sync — ✅ TESTADO: tabela `sync_heartbeat` (migration `c9d0e1f2a3b4`), daemon grava status/total/duração a cada ciclo, `GET /api/sync/health` reporta {sync_saudavel, sync_idade_minutos, heartbeat}. Detecta sync parado (era falha silenciosa).
+  - PENDENTE: Sentry init guardado por DSN; disparar alerta (email/webhook) quando sync_saudavel=false.
+- PENDENTE hardening: JWT refresh/token longo p/ vendedor offline; rate-limiting (Flask-Limiter já no requirements); backups automáticos.
+
 ## Resumo p/ deploy (revisar antes de subir)
 - Migrations backend: head único `a7b8c9d0e1f2`. Cadeia linear. Railway: `flask db upgrade`.
 - Frontend Vercel: corrigi 4 erros TS6133 (unused) que quebravam `npm run build`. **Rodar `npm run build` 1x p/ confirmar** antes do deploy.
