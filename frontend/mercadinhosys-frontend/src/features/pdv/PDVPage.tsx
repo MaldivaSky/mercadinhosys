@@ -538,7 +538,7 @@ const PDVPage: React.FC = () => {
             />
 
             {/* MOBILE BAR */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 flex items-center justify-between z-50">
+            <div className="lg:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 flex items-center justify-between z-50">
                 <div className="flex flex-col pl-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Total Geral</span>
                     <span className="text-3xl font-black text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(total)}</span>

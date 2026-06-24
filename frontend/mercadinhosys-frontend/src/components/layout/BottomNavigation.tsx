@@ -37,7 +37,7 @@ const BottomNavigation: React.FC = () => {
             {/* Espaçador para não cobrir o conteúdo (pb-20 é adicionado no MainLayout) */}
             
             {/* Bottom Nav Bar */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]">
+            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]">
                 <div className="flex justify-around items-center h-16">
                     {mainTabs.map((tab) => (
                         <NavLink
@@ -77,7 +77,7 @@ const BottomNavigation: React.FC = () => {
             {menuOpen && (
                 <>
                     <div 
-                        className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity"
+                        className="md:hidden fixed inset-0 bg-black/60 z-[35] backdrop-blur-sm transition-opacity"
                         onClick={() => setMenuOpen(false)}
                     />
                     <div className="md:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl z-40 p-5 shadow-2xl max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom-full duration-300 ease-out">
