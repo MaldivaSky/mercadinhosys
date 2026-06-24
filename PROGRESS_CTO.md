@@ -60,7 +60,12 @@ Correção robusta:
 - H2 Segredos — `config.py` JÁ recusa boot em produção sem SECRET_KEY/JWT (linhas 78-80). ✅ `.env.example` atualizado com AIVEN_DATABASE_URL + vars de sync. PENDENTE (baixo risco): compose usa senha de DB hardcoded em DATABASE_URL (dev) em vez de ${DB_PASSWORD}.
 - H3 Observabilidade do sync — ✅ TESTADO: tabela `sync_heartbeat` (migration `c9d0e1f2a3b4`), daemon grava status/total/duração a cada ciclo, `GET /api/sync/health` reporta {sync_saudavel, sync_idade_minutos, heartbeat}. Detecta sync parado (era falha silenciosa).
   - PENDENTE: Sentry init guardado por DSN; disparar alerta (email/webhook) quando sync_saudavel=false.
-- PENDENTE hardening: JWT refresh/token longo p/ vendedor offline; rate-limiting (Flask-Limiter já no requirements); backups automáticos.
+- H4 senha do DB no compose via ${DB_PASSWORD} — ✅ (backend+sync; `docker compose config` valida).
+- H5 JWT refresh/token longo — ✅ JÁ EXISTIA e TESTADO: login emite access 24h + refresh 7d; `/auth/refresh` funciona; interceptor 401 no frontend renova sozinho. Cobre 12h offline.
+- H6 rate-limit + backup:
+  - Backup Aiven — ✅ TESTADO: `scripts/backup_aiven.py` (pg_dump+gzip+rotação). Rodou: 7.95 MB. Aiven também tem backup gerenciado nativo.
+  - Rate-limit login — ✅ TESTADO E FUNCIONANDO (429 comprovado: #1-5=401, #6+=429). 2 causas corrigidas: (1) decorei a função ERRADA — `/api/auth/login` é servido por `auth_multi_tenant.login`, não `auth.py` (movi o decorator pro certo, revertendo auth.py); (2) storage memory:// (per-worker) → Redis via `RATELIMIT_STORAGE_URI` no compose. Limite 5/min por IP.
+  - Nota: 5/min por IP. Se uma loja tiver muitos caixas atrás do mesmo IP, considerar afrouxar ou key por IP+usuário.
 
 ## Resumo p/ deploy (revisar antes de subir)
 - Migrations backend: head único `a7b8c9d0e1f2`. Cadeia linear. Railway: `flask db upgrade`.

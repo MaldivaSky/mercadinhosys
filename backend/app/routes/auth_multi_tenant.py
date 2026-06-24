@@ -15,6 +15,7 @@ from datetime import datetime
 from app.middleware.multi_tenant import tenant_manager
 from app import db
 from app.models import Funcionario, Estabelecimento
+from app.middleware.rate_limit import limiter
 
 auth_bp = Blueprint('auth_multi_tenant', __name__)
 
@@ -116,6 +117,7 @@ def bootstrap_admin():
         }), 500
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per minute", error_message="Muitas tentativas de login. Aguarde um minuto.")
 def login():
     """Login multi-tenant - autentica global e redireciona para tenant"""
     try:

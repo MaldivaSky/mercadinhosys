@@ -1685,7 +1685,7 @@ const DashboardPage: React.FC = () => {
                 <Calendar className="w-3.5 h-3.5" /> {kpi.periodo}
               </p>
               <h3 className="text-sm font-bold text-white mb-1 drop-shadow-sm">{kpi.title}</h3>
-              <p className="text-2xl sm:text-3xl md:text-4xl font-black mb-1 tracking-tighter drop-shadow-md">{kpi.value}</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-black mb-2 tracking-tighter drop-shadow-md break-words leading-tight">{kpi.value}</p>
               <p className="text-xs sm:text-sm font-bold text-white/95 drop-shadow-sm">{kpi.subtitle}</p>
             </div>
           </div>
@@ -1722,7 +1722,7 @@ const DashboardPage: React.FC = () => {
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-black ${smM?.badge}`}>{smM?.emoji} {smM?.label}</span>
               </div>
-              <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">{margemLiq.toFixed(1)}%</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white break-words leading-tight">{margemLiq.toFixed(1)}%</p>
               <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-3">De cada R$100 vendidos, sobram <strong className="text-slate-900 dark:text-white">R${margemLiq.toFixed(0)}</strong> de lucro</p>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-1">
                 <div className={`h-2 rounded-full transition-all duration-700 ${smM?.bar}`} style={{ width: `${Math.min(margemLiq * 2, 100)}%` }} />
@@ -1747,7 +1747,7 @@ const DashboardPage: React.FC = () => {
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-black ${smE?.badge}`}>{smE?.emoji} {smE?.label}</span>
               </div>
-              <p className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">R$ {valorEstoque.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white break-words leading-tight">R$ {valorEstoque.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
               <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-3">Equivalente a <strong className="text-slate-900 dark:text-white">{ratioEst.toFixed(1)}x</strong> o faturamento do período</p>
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-1">
                 <div className={`h-2 rounded-full transition-all duration-700 ${smE?.bar}`} style={{ width: `${Math.min((ratioEst / 12) * 100, 100)}%` }} />
