@@ -705,15 +705,16 @@ def criar_venda():
 
         pagamentos_data = data.get("pagamentos", [])
         if not pagamentos_data:
-            forma = data.get("paymentMethod", "dinheiro").lower()
+            payment_method = data.get("paymentMethod") or "dinheiro"
+            forma = payment_method.lower()
             valor_recebido = float(data.get("cashReceived", total))
-            pagamentos_data = [{"forma_pagamento": forma, "valor": valor_recebido}]
+            pagamentos_data = [{"forma": forma, "valor": valor_recebido}]
 
         total_pago = sum(float(p.get("valor", 0)) for p in pagamentos_data)
         if total_pago < total:
             return jsonify({"error": f"Valor total pago (R$ {total_pago:.2f}) é menor que o total da venda (R$ {total:.2f})"}), 400
 
-        tem_restrito = any(p.get("forma_pagamento") in ["fiado", "voucher"] for p in pagamentos_data)
+        tem_restrito = any((p.get("forma_pagamento") or p.get("forma")) in ["fiado", "voucher"] for p in pagamentos_data)
         if tem_restrito:
             plano_atual = (estabelecimento.plano or "Basic").upper()
             if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
@@ -725,7 +726,7 @@ def criar_venda():
             if not cliente_obj:
                 return jsonify({"error": "CLIENTE_NAO_ENCONTRADO", "message": "Cliente informado não foi encontrado."}), 404
 
-            valor_restrito = sum(float(p.get("valor", 0)) for p in pagamentos_data if p.get("forma_pagamento") in ["fiado", "voucher"])
+            valor_restrito = sum(float(p.get("valor") or 0) for p in pagamentos_data if (p.get("forma_pagamento") or p.get("forma")) in ["fiado", "voucher"])
             limite = float(cliente_obj.limite_credito or 0)
             saldo_atual = float(cliente_obj.saldo_devedor or 0)
 
@@ -758,6 +759,7 @@ def criar_venda():
                 troco=max(0, total_pago - total),
                 status="finalizada",
                 observacoes=data.get("observacoes", ""),
+                offline_uuid=data.get("offline_uuid"),
             )
             db.session.add(nova_venda)
             db.session.flush()
@@ -820,8 +822,8 @@ def criar_venda():
 
             # 3. Processar Pagamentos (Multi-Tender)
             for pgto in pagamentos_data:
-                forma = pgto.get("forma_pagamento", "dinheiro").lower()
-                valor_p = float(pgto.get("valor", 0))
+                forma = (pgto.get("forma_pagamento") or pgto.get("forma") or "dinheiro").lower()
+                valor_p = float(pgto.get("valor") or 0)
                 
                 pagamento = Pagamento(
                     venda_id=nova_venda.id,
@@ -854,7 +856,13 @@ def criar_venda():
 
                 # Lógica de Fiado (Contas a Receber)
                 if forma == "fiado" and nova_venda.cliente_id:
-                    vencimento = datetime.now(timezone.utc).date() + timedelta(days=pgto.get("prazo_dias", 30))
+                    # Verifica se o frontend mandou data_vencimento_fiado
+                    data_vencimento_fiado = data.get("data_vencimento_fiado")
+                    if data_vencimento_fiado:
+                        vencimento = datetime.strptime(data_vencimento_fiado, "%Y-%m-%d").date()
+                    else:
+                        vencimento = datetime.now(timezone.utc).date() + timedelta(days=pgto.get("prazo_dias", 30))
+
                     conta = ContaReceber(
                         estabelecimento_id=nova_venda.estabelecimento_id,
                         cliente_id=nova_venda.cliente_id,

@@ -12,6 +12,7 @@ import {
 import { apiClient } from "../../api/apiClient";
 import { showToast } from "../../utils/toast";
 import { fiscalService } from "../fiscal/fiscalService";
+import SFAPedidosTab from "./SFAPedidosTab";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -111,6 +112,7 @@ export default function SalesPage() {
     const [cancelando, setCancelando] = useState(false);
     const [motivosEstorno, setMotivosEstorno] = useState<string[]>([]);
     const [emitindoNFCe, setEmitindoNFCe] = useState(false);
+    const [activeTab, setActiveTab] = useState<'vendas' | 'sfa'>('vendas');
 
     const emitirNFCe = async (vendaId: number) => {
         setEmitindoNFCe(true);
@@ -297,12 +299,32 @@ export default function SalesPage() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-4 sm:p-6 space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">Vendas & Inteligência</h1>
-                    <p className="text-sm text-slate-500">Faturamento, previsões e decisões baseadas em dados</p>
+                    <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">Gestão de Vendas</h1>
+                    <p className="text-sm text-slate-500">Faturamento, aprovações e decisões baseadas em dados</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                    <button 
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'vendas' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        onClick={() => setActiveTab('vendas')}
+                    >
+                        Vendas & Inteligência
+                    </button>
+                    <button 
+                        className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'sfa' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        onClick={() => setActiveTab('sfa')}
+                    >
+                        Pedidos SFA <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">Novo</span>
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'sfa' ? (
+                <SFAPedidosTab />
+            ) : (
+                <>
+                <div className="flex items-center justify-end gap-2">
                     <button onClick={() => { carregarVendas(); carregarAnalytics(); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                         <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Atualizar
                     </button>
@@ -310,7 +332,6 @@ export default function SalesPage() {
                         <Download className="w-4 h-4" /> Exportar
                     </button>
                 </div>
-            </div>
 
             {/* KPIs */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -443,6 +464,9 @@ export default function SalesPage() {
                     </div>
                 )}
             </div>
+
+                </>
+            )}
 
             {/* Modal detalhe */}
             {detalhe && (

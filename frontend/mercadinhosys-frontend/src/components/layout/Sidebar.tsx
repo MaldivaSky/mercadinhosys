@@ -20,7 +20,8 @@ import {
     Target,
     Activity,
     Navigation,
-    Receipt
+    Receipt,
+    MapPin
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
 
@@ -32,6 +33,7 @@ const menuItems = [
     { to: '/suppliers', icon: Truck, label: 'Fornecedores' },
     { to: '/customers', icon: Users, label: 'Clientes' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
+    { to: '/sfa', icon: MapPin, label: 'Força de Vendas' },
     { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/fiscal', icon: Receipt, label: 'Fiscal' },
@@ -86,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                         }
 
                         if (role === 'estoquista') {
-                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings', '/delivery'];
+                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings', '/delivery', '/sfa'];
                             return permitidos.includes(item.to);
                         }
 

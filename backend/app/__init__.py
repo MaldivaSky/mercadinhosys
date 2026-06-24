@@ -715,6 +715,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar onboarding: {e}")
 
+    # SFA (Sales Force Automation)
+    try:
+        from app.routes.sfa import bp as sfa_bp
+        app.register_blueprint(sfa_bp, url_prefix="/api")
+        logger.info("✅ Blueprint SFA registrado em /api/sfa")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar SFA: {e}")
+
     # Dashboard Científico já é tratado via dashboard_bp centralizado
     pass
 
