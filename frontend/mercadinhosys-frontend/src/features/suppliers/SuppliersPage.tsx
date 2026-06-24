@@ -1141,7 +1141,7 @@ const SuppliersPage: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="sticky bottom-0 bg-gray-50 dark:bg-gray-700 px-6 py-4 border-t border-gray-200 dark:border-gray-600">
+                        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] md:bottom-0 bg-gray-50 dark:bg-gray-700 px-6 py-4 border-t border-gray-200 dark:border-gray-600">
                             <button
                                 onClick={() => setShowProdutosModal(false)}
                                 className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
