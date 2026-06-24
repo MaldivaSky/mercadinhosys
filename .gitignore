@@ -97,3 +97,5 @@ backend/verify_*.py
 backend/current_out.txt
 backend/test_out.txt
 
+# Documents
+documents/

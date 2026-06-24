@@ -213,7 +213,15 @@ export default function ProductHubPage() {
             {/* Ações Rápidas Integradas */}
             <div style={{ display: 'flex', gap: '12px', padding: '0 24px', marginBottom: '24px', flexWrap: 'wrap' }}>
                 <button 
-                    onClick={() => navigate('/products', { state: { openHistoryFor: produto.id } })}
+                    onClick={() => navigate('/products', { state: { openEditFor: produto.id, returnTo: `/products/${produto.id}` } })}
+                    className="btn-primary" 
+                    style={{ background: '#0284c7', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold' }}
+                >
+                    <Package size={18} />
+                    Editar Produto
+                </button>
+                <button 
+                    onClick={() => navigate('/products', { state: { openHistoryFor: produto.id, returnTo: `/products/${produto.id}` } })}
                     className="btn-primary" 
                     style={{ background: '#4f46e5', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold' }}
                 >

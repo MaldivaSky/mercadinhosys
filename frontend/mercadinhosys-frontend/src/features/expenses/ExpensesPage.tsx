@@ -386,8 +386,8 @@ export default function ExpensesPage() {
         if (activeTab === "boletos" && !boletos) carregarBoletos();
     }, [activeTab]);
     useEffect(() => {
-        if (activeTab === "historico" && !historico) carregarHistorico();
-    }, [activeTab]);
+        if (!historico) carregarHistorico();
+    }, []);
 
     // ─── Período preset ───────────────────────────────────────────────────────
     function aplicarPeriodo(pre: string) {
@@ -500,7 +500,7 @@ export default function ExpensesPage() {
             labels: top.map(c => c.categoria),
             datasets: [{
                 data: top.map(c => c.total),
-                backgroundColor: top.map(c => COR_POR_CATEGORIA[c.categoria] || "#94a3b8"),
+                backgroundColor: top.map(c => getCor(c.categoria)),
                 borderWidth: 2,
                 borderColor: "transparent",
             }],
@@ -516,7 +516,7 @@ export default function ExpensesPage() {
             datasets: cats.map(cat => ({
                 label: cat,
                 data: (historico.evolucao_por_categoria[cat] || []).slice(-6).map(e => e.total),
-                backgroundColor: COR_POR_CATEGORIA[cat] || "#94a3b8",
+                backgroundColor: getCor(cat),
                 stack: "a",
                 borderRadius: 3,
             })),
@@ -611,6 +611,19 @@ export default function ExpensesPage() {
                 ════════════════════════════════════════════════════════════ */}
                 {activeTab === "visao_geral" && (
                     <div className="space-y-6">
+                        {/* Insights inteligentes no topo da Visão Geral */}
+                        {historico && historico.insights && historico.insights.length > 0 && (
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/50">
+                                <h3 className="font-bold text-blue-900 dark:text-blue-100 flex items-center gap-2 mb-4">
+                                    <Lightbulb className="w-5 h-5 text-yellow-500" />
+                                    Insights Inteligentes do seu Negócio
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {historico.insights.map((ins: any, i: number) => <InsightCard key={i} insight={ins} />)}
+                                </div>
+                            </div>
+                        )}
+
                         {/* KPIs */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             <KpiCard
@@ -690,7 +703,7 @@ export default function ExpensesPage() {
                                             <div className="flex-1 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                                 <div
                                                     className="h-full rounded-full transition-all duration-700"
-                                                    style={{ width: `${cat.percentual}%`, backgroundColor: COR_POR_CATEGORIA[cat.categoria] || "#94a3b8" }}
+                                                    style={{ width: `${cat.percentual}%`, backgroundColor: getCor(cat.categoria) || "#94a3b8" }}
                                                 />
                                             </div>
                                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-24 text-right shrink-0">{fmt(cat.total)}</span>
@@ -1076,7 +1089,7 @@ export default function ExpensesPage() {
                                                         <tr key={v.categoria} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                                             <td className="px-4 py-3">
                                                                 <div className="flex items-center gap-2">
-                                                                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COR_POR_CATEGORIA[v.categoria] || "#94a3b8" }} />
+                                                                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getCor(v.categoria) || "#94a3b8" }} />
                                                                     <span className="font-medium text-slate-800 dark:text-slate-200">{v.categoria}</span>
                                                                 </div>
                                                             </td>

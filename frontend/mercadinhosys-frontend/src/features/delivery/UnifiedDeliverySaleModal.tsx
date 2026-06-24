@@ -171,28 +171,25 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated,
         }
     };
 
-    useEffect(() => {
-        const fetchCep = async () => {
-            const cep = logistics.endereco_cep.replace(/\D/g, '');
-            if (cep.length === 8) {
-                try {
-                    const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                    const data = await response.json();
-                    if (!data.erro) {
-                        setLogistics(prev => ({
-                            ...prev,
-                            endereco_logradouro: data.logradouro,
-                            endereco_bairro: data.bairro,
-                        }));
-                        toast.success("Endereço preenchido automaticamente!");
-                    }
-                } catch (error) {
-                    console.error("Erro ao buscar CEP", error);
+    const handleCepBlur = async () => {
+        const cep = logistics.endereco_cep.replace(/\D/g, '');
+        if (cep.length === 8) {
+            try {
+                const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                const data = await response.json();
+                if (!data.erro) {
+                    setLogistics(prev => ({
+                        ...prev,
+                        endereco_logradouro: data.logradouro || prev.endereco_logradouro,
+                        endereco_bairro: data.bairro || prev.endereco_bairro,
+                    }));
+                    toast.success("Endereço preenchido automaticamente!");
                 }
+            } catch (error) {
+                console.error("Erro ao buscar CEP", error);
             }
-        };
-        fetchCep();
-    }, [logistics.endereco_cep]);
+        }
+    };
 
     useEffect(() => {
         if (!isOpen) return;
@@ -406,6 +403,7 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated,
                                             className="md:col-span-2 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl outline-none"
                                             value={logistics.endereco_cep}
                                             onChange={(e) => setLogistics({ ...logistics, endereco_cep: e.target.value })}
+                                            onBlur={handleCepBlur}
                                         />
                                         <input
                                             placeholder="Logradouro"

@@ -86,6 +86,7 @@ const ProductsPage: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
   const [selectedProductForOrder, setSelectedProductForOrder] = useState<Produto | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [returnToRoute, setReturnToRoute] = useState<string | null>(null);
 
   const [stockAdjust, setStockAdjust] = useState({
     quantidade: 0,
@@ -172,6 +173,8 @@ const ProductsPage: React.FC = () => {
   useEffect(() => {
     if (location.state && produtos.length > 0) {
       const state = location.state as any;
+      if (state.returnTo) setReturnToRoute(state.returnTo);
+      
       if (state.openHistoryFor) {
         const prod = produtos.find(p => p.id === state.openHistoryFor);
         if (prod) {
@@ -190,11 +193,27 @@ const ProductsPage: React.FC = () => {
           setSelectedProduct(prod);
           setShowDiscardModal(true);
         }
+      } else if (state.openEditFor) {
+        const prod = produtos.find(p => p.id === state.openEditFor);
+        if (prod) {
+          setSelectedProduct(prod);
+          setEditMode(true);
+          setShowProductModal(true);
+        }
       }
       // Clear state so it doesn't reopen on reload
       window.history.replaceState({}, document.title);
     }
   }, [location.state, produtos]);
+
+  const handleCloseModal = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    setter(false);
+    if (returnToRoute) {
+      const route = returnToRoute;
+      setReturnToRoute(null);
+      navigate(route);
+    }
+  };
 
   // Handlers
   const handleDelete = async (id: number) => {
@@ -571,8 +590,8 @@ const ProductsPage: React.FC = () => {
         produto={selectedProduct}
         categorias={categorias}
         fornecedores={fornecedores}
-        onClose={() => { setShowProductModal(false); setSelectedProduct(null); setEditMode(false); }}
-        onSuccess={() => { setShowProductModal(false); loadProdutos(); loadStats(); }}
+        onClose={() => { handleCloseModal(setShowProductModal); setSelectedProduct(null); setEditMode(false); }}
+        onSuccess={() => { handleCloseModal(setShowProductModal); loadProdutos(); loadStats(); }}
       />
 
       {showStockModal && selectedProduct && (
@@ -740,8 +759,8 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {showProductHistory && selectedProduct && (
-        <ProductHistoryModal produto={selectedProduct} onClose={() => { setShowProductHistory(false); setSelectedProduct(null); }} />
+      {showProductHistory && (
+        <ProductHistoryModal produto={selectedProduct} onClose={() => { handleCloseModal(setShowProductHistory); setSelectedProduct(null); }} />
       )}
 
       <PurchaseOrdersPanel isOpen={showPurchaseOrders} onClose={() => setShowPurchaseOrders(false)} fornecedores={fornecedores} />
