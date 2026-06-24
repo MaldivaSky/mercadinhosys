@@ -36,10 +36,9 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [showBootstrap, setShowBootstrap] = useState(false);
 
-  // Detectar sucesso vindo do Stripe
-  const queryParams = new URLSearchParams(window.location.search);
-  const isStripeSuccess = queryParams.get('status') === 'success';
-  const [stripeSuccess, setStripeSuccess] = useState(isStripeSuccess);
+  // Detectar sucesso vindo do Gateway de Pagamento
+  const isPaymentSuccess = queryParams.get('status') === 'success';
+  const [paymentSuccess, setPaymentSuccess] = useState(isPaymentSuccess);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,11 +144,11 @@ export function LoginPage() {
               </Typography>
             </Box>
 
-            {stripeSuccess && (
+            {paymentSuccess && (
               <Alert
                 severity="success"
                 sx={{ mb: 3, borderRadius: 2 }}
-                onClose={() => setStripeSuccess(false)}
+                onClose={() => setPaymentSuccess(false)}
               >
                 <strong>Assinatura realizada com sucesso!</strong><br />
                 Faça login com seu usuário para começar. <br />

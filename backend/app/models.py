@@ -186,8 +186,8 @@ class Estabelecimento(db.Model, EnderecoMixin, SerializableMixin, AuditMixin):
     plano_status = db.Column(db.String(20), default="experimental")
     vencimento_plano = db.Column(db.Date)
     vencimento_assinatura = db.Column(db.DateTime)
-    stripe_customer_id = db.Column(db.String(100))
-    stripe_subscription_id = db.Column(db.String(100))
+    gateway_customer_id = db.Column(db.String(100))
+    gateway_subscription_id = db.Column(db.String(100))
     pagarme_id = db.Column(db.String(100))
     deleted_at = db.Column(db.DateTime, nullable=True)
 

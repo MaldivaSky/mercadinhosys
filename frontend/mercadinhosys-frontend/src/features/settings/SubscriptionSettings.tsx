@@ -251,13 +251,13 @@ const SubscriptionSettings: React.FC = () => {
                 </div>
             </div>
 
-            {/* STRIPE SECURITY NOTE */}
+            {/* EFI SECURITY NOTE */}
             <div className="pt-20 border-t border-gray-100 dark:border-gray-800 text-center space-y-8 relative">
 
                 <div className="flex flex-col items-center gap-4 opacity-40 grayscale filter hover:grayscale-0 transition-all duration-700">
-                    <img src="https://stripe.com/img/v3/home/social-card.png" className="h-10 w-auto rounded-lg hidden dark:block" alt="Stripe" />
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" className="h-6 w-auto dark:hidden" alt="Stripe" />
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">Powered by Stripe Silicon Valley</p>
+                    <img src="https://sejaefi.com.br/wp-content/uploads/2023/02/efi-bank.png" className="h-10 w-auto rounded-lg hidden dark:block" alt="Efí Bank" />
+                    <img src="https://sejaefi.com.br/wp-content/uploads/2023/02/efi-bank.png" className="h-6 w-auto dark:hidden" alt="Efí Bank" />
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">Powered by Efí Bank</p>
                 </div>
                 <div className="flex justify-center gap-12 text-gray-400">
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
