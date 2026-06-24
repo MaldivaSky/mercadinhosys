@@ -1,7 +1,7 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Divider, Card, CardContent, CircularProgress, Chip } from '@mui/material';
-import Box from '@mui/material/Box';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, CircularProgress, IconButton } from '@mui/material';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import CloseIcon from '@mui/icons-material/Close';
 
 interface CustomerDetailsModalProps {
   open: boolean;
@@ -15,23 +15,11 @@ interface CustomerDetailsModalProps {
 
 const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, cliente, loading, onClose, onEdit, onDelete, rfmData }) => {
 
-  const labelStyle = {
-    fontWeight: 600,
-    color: '#1976d2',
-    minWidth: 140,
-    flexShrink: 0,
-  };
-
-  const valueStyle = {
-    color: '#212121',
-    fontWeight: 400,
-  };
-
-  const InfoRow = ({ label, value, valueColor }: { label: string; value: React.ReactNode; valueColor?: string }) => (
-    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, py: 0.5 }}>
-      <Typography sx={labelStyle}>{label}</Typography>
-      <Typography sx={{ ...valueStyle, color: valueColor || valueStyle.color }}>{value}</Typography>
-    </Box>
+  const InfoRow = ({ label, value, valueClassName = '' }: { label: string; value: React.ReactNode; valueClassName?: string }) => (
+    <div className="flex flex-col sm:flex-row sm:items-center py-2.5 border-b border-slate-100 dark:border-slate-800/60 last:border-0 gap-1 sm:gap-4">
+      <span className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-40 shrink-0">{label}</span>
+      <span className={`text-sm font-medium text-slate-900 dark:text-slate-100 ${valueClassName}`}>{value}</span>
+    </div>
   );
 
   const getRfmCustomer = () => {
@@ -42,159 +30,170 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
   const renderSegmentChip = () => {
     const rfmC = getRfmCustomer();
     if (!rfmC) return null;
+    
+    let styles = "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+    if (rfmC.segment === 'Campeão') styles = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+    if (rfmC.segment === 'Fiel') styles = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+    if (rfmC.segment === 'Perdido') styles = "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400";
+
     return (
-      <Chip
-        label={`Segmento: ${rfmC.segment}`}
-        size="small"
-        sx={{
-          fontWeight: 600,
-          ml: 2,
-          bgcolor: rfmC.segment === 'Campeão' ? '#e8f5e9' : 
-                   rfmC.segment === 'Fiel' ? '#e3f2fd' : 
-                   rfmC.segment === 'Perdido' ? '#ffebee' : '#f3e5f5',
-          color: rfmC.segment === 'Campeão' ? '#2e7d32' : 
-                   rfmC.segment === 'Fiel' ? '#1976d2' : 
-                   rfmC.segment === 'Perdido' ? '#c62828' : '#7b1fa2',
-        }}
-      />
+      <span className={`px-3 py-1 text-xs font-bold rounded-full ml-3 ${styles}`}>
+        Segmento: {rfmC.segment}
+      </span>
     );
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
-        Detalhes do Cliente
-        {renderSegmentChip()}
+    <Dialog 
+        open={open} 
+        onClose={onClose} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+            className: "bg-white dark:bg-slate-900 shadow-2xl dark:border dark:border-slate-800 overflow-hidden",
+            style: { borderRadius: '24px' }
+        }}
+    >
+      <DialogTitle className="flex items-center justify-between p-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center">
+            <span className="text-xl font-extrabold text-slate-900 dark:text-white">Detalhes do Cliente</span>
+            {renderSegmentChip()}
+        </div>
+        <IconButton onClick={onClose} size="small" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <CloseIcon />
+        </IconButton>
       </DialogTitle>
-      <DialogContent dividers>
+      
+      <DialogContent className="p-0 bg-slate-50/50 dark:bg-slate-900/50">
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <div className="flex justify-center items-center p-12">
             <CircularProgress />
-          </Box>
+          </div>
         ) : cliente ? (
-          <Box>
+          <div className="p-6 space-y-8">
             {/* Dados Pessoais */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="subtitle2" sx={{ color: '#1976d2', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Dados Pessoais
-                </Typography>
-                {cliente.celular && (
-                    <Button
-                        variant="outlined"
-                        color="success"
-                        size="small"
-                        startIcon={<WhatsAppIcon />}
-                        onClick={() => window.open(`https://wa.me/55${cliente.celular.replace(/\D/g, '')}`, '_blank')}
-                    >
-                        Conversar
-                    </Button>
-                )}
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.5, mb: 2 }}>
-              <InfoRow label="Nome:" value={cliente.nome || '-'} />
-              <InfoRow label="CPF:" value={cliente.cpf || '-'} />
-              <InfoRow label="Telefone:" value={cliente.celular || cliente.telefone || '-'} />
-              <InfoRow label="Email:" value={cliente.email || '-'} />
-              <InfoRow label="Data Cadastro:" value={cliente.data_cadastro ? new Date(cliente.data_cadastro).toLocaleDateString('pt-BR') : '-'} />
-              <InfoRow label="Última Compra:" value={cliente.ultima_compra ? new Date(cliente.ultima_compra).toLocaleDateString('pt-BR') : '-'} />
-            </Box>
+            <section className="bg-white dark:bg-slate-800/40 rounded-2xl p-5 md:p-6 border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-sm font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" /> Dados Pessoais
+                    </h3>
+                    {cliente.celular && (
+                        <Button
+                            variant="contained"
+                            size="small"
+                            className="bg-green-500 hover:bg-green-600 shadow-lg shadow-green-500/30 text-white rounded-xl font-bold px-4 py-1.5 transition-all active:scale-95 hover:-translate-y-0.5"
+                            startIcon={<WhatsAppIcon />}
+                            onClick={() => window.open(`https://wa.me/55${cliente.celular.replace(/\D/g, '')}`, '_blank')}
+                        >
+                            Conversar
+                        </Button>
+                    )}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
+                    <InfoRow label="Nome" value={cliente.nome || '-'} />
+                    <InfoRow label="CPF" value={cliente.cpf || '-'} />
+                    <InfoRow label="Telefone" value={cliente.celular || cliente.telefone || '-'} />
+                    <InfoRow label="Email" value={cliente.email || '-'} />
+                    <InfoRow label="Data Cadastro" value={cliente.data_cadastro ? new Date(cliente.data_cadastro).toLocaleDateString('pt-BR') : '-'} />
+                    <InfoRow label="Última Compra" value={cliente.ultima_compra ? new Date(cliente.ultima_compra).toLocaleDateString('pt-BR') : '-'} />
+                </div>
+            </section>
 
-            {/* Endereço (se informado) */}
+            {/* Endereço */}
             {(cliente.logradouro || cliente.cidade) && (
-              <>
-                <Divider sx={{ my: 1.5 }} />
-                <Typography variant="subtitle2" sx={{ color: '#1976d2', fontWeight: 700, mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Endereço
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.5, mb: 2 }}>
-                  <InfoRow label="Endereço:" value={cliente.endereco_completo || `${cliente.logradouro || ''} ${cliente.numero || ''}`.trim() || '-'} />
-                  <InfoRow label="Bairro:" value={cliente.bairro || '-'} />
-                  <InfoRow label="Cidade/UF:" value={cliente.cidade ? `${cliente.cidade}${cliente.estado ? `/${cliente.estado}` : ''}` : '-'} />
-                  <InfoRow label="CEP:" value={cliente.cep || '-'} />
-                </Box>
-              </>
+              <section className="bg-white dark:bg-slate-800/40 rounded-2xl p-5 md:p-6 border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2 mb-6">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" /> Endereço
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
+                  <InfoRow label="Endereço" value={cliente.endereco_completo || `${cliente.logradouro || ''} ${cliente.numero || ''}`.trim() || '-'} />
+                  <InfoRow label="Bairro" value={cliente.bairro || '-'} />
+                  <InfoRow label="Cidade/UF" value={cliente.cidade ? `${cliente.cidade}${cliente.estado ? `/${cliente.estado}` : ''}` : '-'} />
+                  <InfoRow label="CEP" value={cliente.cep || '-'} />
+                </div>
+              </section>
             )}
 
             {/* Financeiro */}
-            <Divider sx={{ my: 1.5 }} />
-            <Typography variant="subtitle2" sx={{ color: '#1976d2', fontWeight: 700, mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Financeiro
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.5, mb: 2 }}>
-              <InfoRow label="Total Compras:" value={cliente.total_compras ?? '-'} />
-              <InfoRow
-                label="Valor Total Gasto:"
-                value={`R$ ${cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
-                valueColor="#2e7d32"
-              />
-              <InfoRow
-                label="Limite Crédito:"
-                value={`R$ ${cliente.limite_credito ? Number(cliente.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
-                valueColor="#2e7d32"
-              />
-              <InfoRow
-                label="Saldo Devedor:"
-                value={`R$ ${cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
-                valueColor={(cliente.saldo_devedor ?? 0) > 0 ? '#d32f2f' : '#2e7d32'}
-              />
-            </Box>
+            <section className="bg-white dark:bg-slate-800/40 rounded-2xl p-5 md:p-6 border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-2 mb-6">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Financeiro
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-1">
+                  <InfoRow label="Total Compras" value={cliente.total_compras ?? '-'} />
+                  <InfoRow
+                    label="Valor Total Gasto"
+                    value={`R$ ${cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
+                    valueClassName="text-emerald-600 dark:text-emerald-400 font-black"
+                  />
+                  <InfoRow
+                    label="Limite Crédito"
+                    value={`R$ ${cliente.limite_credito ? Number(cliente.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
+                    valueClassName="text-blue-600 dark:text-blue-400 font-bold"
+                  />
+                  <InfoRow
+                    label="Saldo Devedor"
+                    value={`R$ ${cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}`}
+                    valueClassName={(cliente.saldo_devedor ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400 font-black' : 'text-emerald-600 dark:text-emerald-400 font-bold'}
+                  />
+                </div>
+            </section>
 
             {/* Cards de resumo */}
-            <Divider sx={{ my: 1.5 }} />
-            <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>Resumo Estatístico</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-              <Box sx={{ flex: '1 1 180px', minWidth: '160px' }}>
-                <Card sx={{ bgcolor: '#e8f5e8', border: '1px solid #4caf50' }}>
-                  <CardContent sx={{ textAlign: 'center', py: '12px !important' }}>
-                    <Typography variant="h4" sx={{ color: '#2e7d32', fontWeight: 'bold' }}>{cliente.total_compras ?? 0}</Typography>
-                    <Typography variant="body2" sx={{ color: '#424242' }}>Total de Compras</Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-              <Box sx={{ flex: '1 1 180px', minWidth: '160px' }}>
-                <Card sx={{ bgcolor: '#fff3e0', border: '1px solid #ff9800' }}>
-                  <CardContent sx={{ textAlign: 'center', py: '12px !important' }}>
-                    <Typography variant="h5" sx={{ color: '#e65100', fontWeight: 'bold' }}>
-                      R$ {cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#424242' }}>Valor Total Gasto</Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-              <Box sx={{ flex: '1 1 180px', minWidth: '160px' }}>
-                <Card sx={{
-                  bgcolor: (cliente.saldo_devedor ?? 0) > 0 ? '#ffebee' : '#e8f5e8',
-                  border: `1px solid ${(cliente.saldo_devedor ?? 0) > 0 ? '#f44336' : '#4caf50'}`
-                }}>
-                  <CardContent sx={{ textAlign: 'center', py: '12px !important' }}>
-                    <Typography variant="h5" sx={{
-                      color: (cliente.saldo_devedor ?? 0) > 0 ? '#c62828' : '#2e7d32',
-                      fontWeight: 'bold'
-                    }}>
-                      R$ {cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: '#424242' }}>
-                      {(cliente.saldo_devedor ?? 0) > 0 ? 'Saldo Devedor' : 'Sem Débitos'}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-            </Box>
-          </Box>
+            <section>
+                <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-widest mb-4">Resumo Estatístico</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                
+                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm">
+                        <span className="text-4xl font-black text-indigo-600 dark:text-indigo-400 mb-2">{cliente.total_compras ?? 0}</span>
+                        <span className="text-xs font-bold text-indigo-900/60 dark:text-indigo-200/60 uppercase tracking-widest">Total Compras</span>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm">
+                        <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-2 truncate">
+                            R$ {cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
+                        </span>
+                        <span className="text-xs font-bold text-emerald-900/60 dark:text-emerald-200/60 uppercase tracking-widest">Valor Gasto</span>
+                    </div>
+
+                    <div className={`bg-gradient-to-br border rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm ${
+                        (cliente.saldo_devedor ?? 0) > 0 
+                            ? 'from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/20 border-rose-200 dark:border-rose-800/50' 
+                            : 'from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-emerald-200 dark:border-emerald-800/50'
+                    }`}>
+                        <span className={`text-3xl font-black mb-2 truncate ${
+                            (cliente.saldo_devedor ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                            R$ {cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
+                        </span>
+                        <span className={`text-xs font-bold uppercase tracking-widest ${
+                            (cliente.saldo_devedor ?? 0) > 0 ? 'text-rose-900/60 dark:text-rose-200/60' : 'text-emerald-900/60 dark:text-emerald-200/60'
+                        }`}>
+                            {(cliente.saldo_devedor ?? 0) > 0 ? 'Saldo Devedor' : 'Sem Débitos'}
+                        </span>
+                    </div>
+
+                </div>
+            </section>
+          </div>
         ) : (
-          <Typography>Cliente não encontrado.</Typography>
+          <div className="p-16 text-center text-slate-500 dark:text-slate-400 font-medium">Cliente não encontrado.</div>
         )}
       </DialogContent>
-      <Divider />
-      <DialogActions>
-        {/* Botões de ação só renderizam quando cliente está carregado — evita onEdit(null) */}
+      
+      <DialogActions className="p-5 px-6 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
         {!loading && cliente && (
-          <>
-            <Button onClick={() => onEdit(cliente)} color="primary" variant="contained">Editar</Button>
-            <Button onClick={() => onDelete(cliente)} color="error" variant="outlined">Excluir</Button>
-          </>
+          <div className="flex w-full justify-between items-center">
+            <div className="flex gap-3">
+                <Button onClick={() => onEdit(cliente)} variant="contained" className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20 text-white rounded-xl font-bold px-6 py-2 transition-all active:scale-95">Editar Perfil</Button>
+                <Button onClick={() => onDelete(cliente)} variant="outlined" color="error" className="rounded-xl font-bold px-6 py-2 dark:border-red-800 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-95">Excluir</Button>
+            </div>
+            <Button onClick={onClose} variant="text" className="text-slate-500 dark:text-slate-400 font-bold rounded-xl px-6 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95">Fechar</Button>
+          </div>
         )}
-        <Button onClick={onClose} color="inherit">Fechar</Button>
+        {(loading || !cliente) && (
+            <Button onClick={onClose} variant="text" className="text-slate-500 dark:text-slate-400 font-bold rounded-xl px-6 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95">Fechar</Button>
+        )}
       </DialogActions>
     </Dialog>
   );
