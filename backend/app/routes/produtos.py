@@ -480,11 +480,18 @@ def listar_produtos():
         include_metrics = request.args.get("metrics", "false").lower() == "true"
         filtro_alerta = request.args.get("alerta")
 
-        query = db.session.query(Produto).options(
-            joinedload(Produto.categoria),
-            joinedload(Produto.fornecedor),
-            joinedload(Produto.lotes)
+        # Carregar lotes via joinedload apenas quando filtros de validade/lote estiverem ativos
+        # Evita buscar todos os lotes de todos os produtos em cada listagem padrão
+        _precisa_lotes = (
+            request.args.get("validade_proxima") == "true"
+            or request.args.get("vencidos") == "true"
+            or request.args.get("expandir_por_lote", "").lower() == "true"
         )
+        opts = [joinedload(Produto.categoria), joinedload(Produto.fornecedor)]
+        if _precisa_lotes:
+            opts.append(joinedload(Produto.lotes))
+
+        query = db.session.query(Produto).options(*opts)
         
         # Filtro de Tenant OBRIGATÓRIO (Zero Leak)
         if str(estabelecimento_id).lower() != 'all':

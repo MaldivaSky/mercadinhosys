@@ -162,12 +162,16 @@ const ProductsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [buscaLocal]);
 
-  useEffect(() => { loadProdutos(); }, [loadProdutos]);
+  // Carrega produtos, categorias e fornecedores em paralelo — muito mais rápido
   useEffect(() => {
-    const timer = setTimeout(() => { loadStats(); }, 350);
+    Promise.all([loadProdutos(), loadCategorias(), loadFornecedores()]);
+  }, [loadProdutos, loadCategorias, loadFornecedores]);
+
+  // Stats carregam depois, sem bloquear a listagem
+  useEffect(() => {
+    const timer = setTimeout(() => { loadStats(); }, 600);
     return () => clearTimeout(timer);
   }, [loadStats]);
-  useEffect(() => { loadCategorias(); loadFornecedores(); }, [loadCategorias, loadFornecedores]);
 
   // Handle location state for opening modals from Hub
   useEffect(() => {
