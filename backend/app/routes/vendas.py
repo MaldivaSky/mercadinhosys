@@ -313,7 +313,7 @@ def listar_vendas():
                 "valor_recebido": float(v.valor_recebido),
                 "troco": float(v.troco),
                 "status": v.status,
-                "data_venda": v.data_venda.isoformat() if v.data_venda else v.created_at.isoformat(),
+                "data_venda": ((v.data_venda or v.created_at).isoformat() + "Z") if (v.data_venda or v.created_at) else None,
                 "data_formatada": (v.data_venda if v.data_venda else v.created_at).strftime("%d/%m/%Y %H:%M"),
                 "quantidade_itens": len(v.itens),
                 "observacoes": v.observacoes or "",

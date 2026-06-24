@@ -70,7 +70,7 @@ function Kpi({ titulo, valor, sub, Icon, cor }: { titulo: string; valor: string;
             <div className="flex items-start justify-between">
                 <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{titulo}</p>
-                    <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white tabular-nums truncate">{valor}</p>
+                    <p className="mt-2 text-xl md:text-2xl font-black text-slate-900 dark:text-white tabular-nums truncate">{valor}</p>
                     {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
                 </div>
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${cor}`}><Icon className="w-5 h-5" /></div>
@@ -289,11 +289,11 @@ export default function SalesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-4 sm:p-6 space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900 dark:text-white">Vendas & Inteligência</h1>
+                    <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">Vendas & Inteligência</h1>
                     <p className="text-sm text-slate-500">Faturamento, previsões e decisões baseadas em dados</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function SalesPage() {
             {/* Tabela */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm whitespace-nowrap min-w-[800px]">
                         <thead>
                             <tr className="text-left text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
                                 <th className="px-4 py-3">Código</th><th className="px-4 py-3">Data</th><th className="px-4 py-3">Cliente</th>
@@ -416,9 +416,9 @@ export default function SalesPage() {
                                             <td className="px-4 py-3 text-center"><span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${statusChip(v.status)}`}>{statusLabel(v.status)}</span></td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    <button onClick={() => abrirDetalhe(v)} title="Ver detalhes" className="p-2 rounded-lg text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20"><Eye className="w-4 h-4" /></button>
+                                                    <button onClick={() => abrirDetalhe(v)} title="Ver detalhes" className="p-3 md:p-2 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20"><Eye className="w-4 h-4" /></button>
                                                     {v.status !== "cancelada" && (
-                                                        <button onClick={() => { setCancelar(v); setMotivo(""); }} title="Cancelar e estornar" className="p-2 rounded-lg text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20"><Ban className="w-4 h-4" /></button>
+                                                        <button onClick={() => { setCancelar(v); setMotivo(""); }} title="Cancelar e estornar" className="p-3 md:p-2 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center rounded-lg text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20"><Ban className="w-4 h-4" /></button>
                                                     )}
                                                 </div>
                                             </td>
@@ -446,7 +446,7 @@ export default function SalesPage() {
                             <div><h3 className="font-black text-slate-900 dark:text-white">Venda {detalhe.codigo}</h3><p className="text-xs text-slate-500 flex items-center gap-1"><Calendar className="w-3 h-3" />{fmtDateTime(detalhe.data_venda || detalhe.created_at)}</p></div>
                             <button onClick={() => setDetalhe(null)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><X className="w-5 h-5" /></button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3"><p className="text-[10px] font-bold uppercase text-slate-400">Cliente</p><p className="font-semibold text-slate-800 dark:text-slate-100">{detalhe.cliente?.nome || "Avulso"}</p></div>
                                 <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3"><p className="text-[10px] font-bold uppercase text-slate-400">Operador</p><p className="font-semibold text-slate-800 dark:text-slate-100">{detalhe.funcionario?.nome || "—"}</p></div>

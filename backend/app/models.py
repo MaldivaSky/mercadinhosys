@@ -1319,6 +1319,25 @@ class DocumentoFiscal(db.Model, MultiTenantMixin, SerializableMixin):
             "autorizado_em": self.autorizado_em.isoformat() if self.autorizado_em else None,
         }
 
+class SyncHeartbeat(db.Model):
+    """Batimento do sync local→Aiven (linha única id=1). Permite detectar sync parado."""
+    __tablename__ = "sync_heartbeat"
+    id = db.Column(db.Integer, primary_key=True)  # sempre 1
+    last_run_at = db.Column(db.DateTime)
+    status = db.Column(db.String(20))  # ok | erro
+    total_registros = db.Column(db.Integer, default=0)
+    duracao_segundos = db.Column(db.Numeric(10, 2))
+    erro = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self):
+        return {
+            "last_run_at": self.last_run_at.replace(tzinfo=timezone.utc).isoformat() if self.last_run_at else None,
+            "status": self.status, "total_registros": self.total_registros,
+            "duracao_segundos": float(self.duracao_segundos) if self.duracao_segundos is not None else None,
+            "erro": self.erro,
+        }
+
 class LoginHistory(db.Model):
     __tablename__ = "login_history"
     id = db.Column(db.Integer, primary_key=True)

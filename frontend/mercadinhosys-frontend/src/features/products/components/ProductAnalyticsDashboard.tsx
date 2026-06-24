@@ -268,14 +268,14 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'all', title: 'Total Produtos', value: stats.total_produtos, formattedValue: stats.total_produtos.toString(), isCurrency: false, icon: Package, 
                         theme: { header: 'bg-blue-600', text: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700', stroke: '#3b82f6', shadow: 'shadow-blue-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <Package className="w-8 h-8 text-blue-500 opacity-80 group-hover:opacity-100 transition-opacity" />
                         <TrendingUp className="w-5 h-5 text-slate-500" />
                     </div>
                     <p className="text-sm text-slate-400 mb-1">Total Produtos</p>
-                    <p className="text-3xl font-black text-white">{stats.total_produtos}</p>
+                    <p className="text-2xl md:text-3xl font-black text-white">{stats.total_produtos}</p>
                     <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Catálogo completo
                     </p>
@@ -287,14 +287,14 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'normal', title: 'Estoque Normal', value: stats.produtos_normal, formattedValue: stats.produtos_normal.toString(), isCurrency: false, icon: Target, 
                         theme: { header: 'bg-emerald-600', text: 'text-emerald-600 dark:text-emerald-400', button: 'bg-emerald-600 hover:bg-emerald-700', stroke: '#10b981', shadow: 'shadow-emerald-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <Target className="w-8 h-8 text-emerald-500 opacity-80 group-hover:opacity-100 transition-opacity" />
                         <BarChart3 className="w-5 h-5 text-slate-500" />
                     </div>
                     <p className="text-sm text-slate-400 mb-1">Estoque Normal</p>
-                    <p className="text-3xl font-black text-white">{stats.produtos_normal}</p>
+                    <p className="text-2xl md:text-3xl font-black text-white">{stats.produtos_normal}</p>
                     <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
                         {stats.total_produtos > 0 ? ((stats.produtos_normal / stats.total_produtos) * 100).toFixed(0) : '0'}% do total
@@ -307,14 +307,14 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'baixo', title: 'Baixo Estoque', value: stats.produtos_baixo_estoque, formattedValue: stats.produtos_baixo_estoque.toString(), isCurrency: false, icon: AlertTriangle, 
                         theme: { header: 'bg-amber-500', text: 'text-amber-500 dark:text-amber-400', button: 'bg-amber-500 hover:bg-amber-600', stroke: '#f59e0b', shadow: 'shadow-amber-500/30' } 
                     })}
-                    className="bg-slate-900 border border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.1)] p-6 text-slate-200 cursor-pointer hover:border-amber-500/60 hover:bg-slate-800 transition-all duration-200 group"
+                    className="bg-slate-900 border border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.1)] p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-amber-500/60 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <AlertTriangle className="w-8 h-8 text-amber-500 opacity-80 group-hover:opacity-100 transition-opacity" />
                         <TrendingDown className="w-5 h-5 text-slate-500" />
                     </div>
                     <p className="text-sm text-slate-400 mb-1">Baixo Estoque</p>
-                    <p className="text-3xl font-black text-amber-400">{stats.produtos_baixo_estoque}</p>
+                    <p className="text-2xl md:text-3xl font-black text-amber-400">{stats.produtos_baixo_estoque}</p>
                     <p className="text-xs text-amber-500/70 mt-2 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Requer atenção
                     </p>
@@ -326,14 +326,14 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'esgotado', title: 'Esgotados', value: stats.produtos_esgotados, formattedValue: stats.produtos_esgotados.toString(), isCurrency: false, icon: Activity, 
                         theme: { header: 'bg-rose-600', text: 'text-rose-600 dark:text-rose-400', button: 'bg-rose-600 hover:bg-rose-700', stroke: '#e11d48', shadow: 'shadow-rose-600/30' } 
                     })}
-                    className="bg-slate-900 border border-rose-500/40 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.15)] p-6 text-slate-200 cursor-pointer hover:border-rose-500/70 hover:bg-slate-800 transition-all duration-200 group"
+                    className="bg-slate-900 border border-rose-500/40 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.15)] p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-rose-500/70 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <Activity className="w-8 h-8 text-rose-500 opacity-80 group-hover:opacity-100 transition-opacity" />
                         <AlertTriangle className="w-5 h-5 text-slate-500" />
                     </div>
                     <p className="text-sm text-slate-400 mb-1">Esgotados</p>
-                    <p className="text-3xl font-black text-rose-500">{stats.produtos_esgotados}</p>
+                    <p className="text-2xl md:text-3xl font-black text-rose-500">{stats.produtos_esgotados}</p>
                     <p className="text-xs text-rose-500/80 mt-2 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> Crítico
                     </p>
@@ -345,7 +345,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'valor', title: 'Valor Estoque', value: stats.valor_total_estoque, formattedValue: formatCurrency(stats.valor_total_estoque), isCurrency: true, icon: DollarSign, 
                         theme: { header: 'bg-purple-600', text: 'text-purple-600 dark:text-purple-400', button: 'bg-purple-600 hover:bg-purple-700', stroke: '#9333ea', shadow: 'shadow-purple-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-purple-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-purple-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <DollarSign className="w-8 h-8 text-purple-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -366,14 +366,14 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'margem', title: 'Margem Média', value: stats.margem_media, formattedValue: stats.margem_media.toFixed(1) + '%', isCurrency: false, icon: PieChart, 
                         theme: { header: 'bg-indigo-600', text: 'text-indigo-600 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700', stroke: '#4f46e5', shadow: 'shadow-indigo-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-6 text-slate-200 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-all duration-200 group"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <PieChart className="w-8 h-8 text-indigo-500 opacity-80 group-hover:opacity-100 transition-opacity" />
                         <BarChart3 className="w-5 h-5 text-slate-500" />
                     </div>
                     <p className="text-sm text-slate-400 mb-1">Margem Média</p>
-                    <p className="text-3xl font-black text-white">{stats.margem_media.toFixed(1)}%</p>
+                    <p className="text-2xl md:text-3xl font-black text-white">{stats.margem_media.toFixed(1)}%</p>
                     <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Rentabilidade
                     </p>
@@ -381,9 +381,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             </div>
 
             {/* Análises Avançadas - Grid 3 Colunas */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:p-6">
                 {/* Classificação ABC */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
                             <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-300" />
@@ -474,7 +474,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Status de Giro */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
                             <Zap className="w-6 h-6 text-purple-600 dark:text-purple-300" />
@@ -591,7 +591,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Monitor de Validade */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
                             <Clock className="w-6 h-6 text-orange-600 dark:text-orange-300" />
@@ -690,9 +690,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             </div>
 
             {/* Top Produtos e Produtos Críticos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6">
                 {/* Top 5 Produtos por Margem */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
                             <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-300" />
@@ -744,7 +744,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Produtos Críticos */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
                             <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-300" />
@@ -826,7 +826,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
             {activeMetricModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
-                        <div className={`p-6 ${activeMetricModal.theme.header} text-white flex justify-between items-center`}>
+                        <div className={`p-4 sm:p-6 ${activeMetricModal.theme.header} text-white flex justify-between items-center`}>
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-white/20 rounded-xl backdrop-blur-md">
                                     <activeMetricModal.icon className="w-8 h-8" />
@@ -841,7 +841,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                             </button>
                         </div>
                         <div className="p-8">
-                            <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-6">
+                            <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4 sm:p-6">
                                 <div className="text-center md:text-left">
                                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">Valor Atual</p>
                                     <p className={`text-5xl font-black ${activeMetricModal.theme.text}`}>

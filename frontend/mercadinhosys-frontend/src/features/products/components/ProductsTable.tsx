@@ -87,7 +87,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
     return (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse whitespace-nowrap min-w-[1000px]">
                     <thead className="bg-slate-900/90 backdrop-blur-sm sticky top-0 z-10 border-b border-slate-800">
                         <tr>
                             <th 
@@ -235,15 +235,15 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                     </div>
                                 </td>
                                 <td className="px-5 py-3 text-right actions-container relative">
-                                    <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <div className="flex justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                                         <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700 shadow-xl">
-                                            <button onClick={() => onMakeOrder(produto)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors" title="Fazer Pedido">
+                                            <button onClick={() => onMakeOrder(produto)} className="p-2 md:p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Fazer Pedido">
                                                 <ShoppingCart className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => onStockAdjust(produto)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors" title="Ajustar Estoque">
+                                            <button onClick={() => onStockAdjust(produto)} className="p-2 md:p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Ajustar Estoque">
                                                 <Archive className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => onEdit(produto)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors" title="Editar">
+                                            <button onClick={() => onEdit(produto)} className="p-2 md:p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Editar">
                                                 <Edit className="w-4 h-4" />
                                             </button>
                                             
@@ -251,23 +251,23 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                             <div className="w-px h-4 bg-slate-700 mx-1"></div>
                                             
                                             {onViewLotes && (
-                                                <button onClick={() => onViewLotes(produto)} className="p-1.5 text-slate-400 hover:text-purple-400 hover:bg-slate-700 rounded-md transition-colors" title="Ver Lotes (FIFO)">
+                                                <button onClick={() => onViewLotes(produto)} className="p-2 md:p-1.5 text-slate-400 hover:text-purple-400 hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Ver Lotes (FIFO)">
                                                     <Layers className="w-4 h-4" />
                                                 </button>
                                             )}
-                                            <button onClick={() => onHistory(produto)} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded-md transition-colors" title="Histórico">
+                                            <button onClick={() => onHistory(produto)} className="p-2 md:p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Histórico">
                                                 <FileText className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => onDiscard(produto)} className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700 rounded-md transition-colors" title="Descartar (Prejuízo)">
+                                            <button onClick={() => onDiscard(produto)} className="p-2 md:p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Descartar (Prejuízo)">
                                                 <PackageX className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => onDelete(produto.id)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-slate-700 rounded-md transition-colors" title="Excluir">
+                                            <button onClick={() => onDelete(produto.id)} className="p-2 md:p-1.5 text-slate-400 hover:text-rose-500 hover:bg-slate-700 rounded-md transition-colors min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center" title="Excluir">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
                                     {/* Small dots icon when not hovered to indicate actions exist */}
-                                    <div className="flex justify-end opacity-100 group-hover:opacity-0 transition-opacity duration-200 absolute right-8 mt-[-10px]">
+                                    <div className="hidden md:flex justify-end opacity-100 group-hover:opacity-0 transition-opacity duration-200 absolute right-8 mt-[-10px]">
                                         <MoreHorizontal className="w-5 h-5 text-slate-600" />
                                     </div>
                                 </td>

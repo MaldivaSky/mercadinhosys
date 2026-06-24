@@ -44,8 +44,8 @@ services:
       FLASK_DEBUG: 1
       PORT: 5000
       
-      # Database
-      DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
+      # Database (senha vem de ${DB_PASSWORD} — fonte única, igual ao serviço postgres)
+      DATABASE_URL: postgresql://mercadinho_user:${DB_PASSWORD:-mercadinho_secure_pass_2024}@postgres:5432/mercadinhosys
       AIVEN_DATABASE_URL: ${AIVEN_DATABASE_URL:-}
       MULTI_TENANT_MODE: "true"
       HYBRID_MODE: "online"
@@ -101,7 +101,7 @@ services:
         condition: service_healthy
     command: ["python", "-m", "scripts.sync_daemon"]
     environment:
-      DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
+      DATABASE_URL: postgresql://mercadinho_user:${DB_PASSWORD:-mercadinho_secure_pass_2024}@postgres:5432/mercadinhosys
       AIVEN_DATABASE_URL: ${AIVEN_DATABASE_URL:-}
       SYNC_AUTO_PUSH: "true"
       SYNC_PUSH_INTERVAL_SEC: "300"

@@ -22,6 +22,7 @@ from decimal import Decimal
 from app import db
 
 from app.models import Funcionario, Estabelecimento, LoginHistory
+from app.middleware.rate_limit import limiter
 
 from app.utils.response_utils import sanitize_response
 
@@ -479,7 +480,7 @@ def db_schema_check():
 
 
 @auth_bp.route("/login", methods=["POST"])
-
+@limiter.limit("5 per minute", error_message="Muitas tentativas de login. Aguarde um minuto.")
 def login():
 
     """
