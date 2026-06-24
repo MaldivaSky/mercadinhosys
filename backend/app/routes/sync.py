@@ -91,8 +91,8 @@ def replicar_para_neon():
         db.session.commit()
 
         try:
-            from scripts.force_sync_to_aiven import force_sync
-            resultado = force_sync(app=current_app._get_current_object(), silent=True)
+            from scripts.robust_sync import robust_sync
+            resultado = robust_sync(silent=True)
         except Exception as e:
             sync_log.status = "erro"
             sync_log.mensagem_erro = str(e)[:2000]

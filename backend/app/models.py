@@ -101,7 +101,14 @@ class SerializableMixin:
         result = {}
         for col in self.__table__.columns:
             value = getattr(self, col.name)
-            if isinstance(value, (datetime, date, time)): value = value.isoformat() if value else None
+            if isinstance(value, datetime):
+                # Datas são gravadas em UTC (naive). Marca o fuso como UTC para o
+                # cliente converter corretamente ao horário local (ex.: Brasília -03).
+                if value is not None and value.tzinfo is None:
+                    value = value.replace(tzinfo=timezone.utc).isoformat()
+                else:
+                    value = value.isoformat() if value else None
+            elif isinstance(value, (date, time)): value = value.isoformat() if value else None
             elif isinstance(value, Decimal): value = float(value)
             elif isinstance(value, uuid_module.UUID): value = str(value)
             result[col.name] = value
@@ -237,7 +244,7 @@ class SyncQueue(db.Model, MultiTenantMixin):
     estabelecimento_id = TenantID()
     tabela = db.Column(db.String(50), nullable=False)
     registro_id = db.Column(db.Integer, nullable=False)
-    operacao = db.Column(db.String(10), nullable=False)  # insert, update, delete
+    operacao = db.Column(db.String(50), nullable=False)  # insert, update, delete, replicar_para_neon, etc.
     payload_json = db.Column(db.Text)
     status = db.Column(db.String(20), default="pendente")
     tentativas = db.Column(db.Integer, default=0)

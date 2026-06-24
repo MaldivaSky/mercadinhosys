@@ -7,7 +7,9 @@ import {
     CreditCard,
     Plus,
     X,
-    User
+    User,
+    WifiOff,
+    CloudUpload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -23,6 +25,7 @@ import { pdvService } from './pdvService';
 import PDVSkeleton from './components/PDVSkeleton';
 import CaixaManager from './components/CaixaManager';
 import MultiPaymentManager from './components/MultiPaymentManager';
+import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 
 const PDVPage: React.FC = () => {
 
@@ -54,11 +57,14 @@ const PDVPage: React.FC = () => {
         setCaixaAberto,
     } = usePDV();
 
+    // Fila offline — vendas salvas localmente quando sem internet
+    const { pendingCount, isSyncing, isOnline, enqueue, processQueue } = useOfflineQueue();
+
     const [formaPagamentoAberta, setFormaPagamentoAberta] = useState(false);
     const [activeSection, setActiveSection] = useState<'cliente' | 'pagamento'>('pagamento');
     const [enviandoEmail, setEnviandoEmail] = useState(false);
     const [mostrarModalNotaFiscal, setMostrarModalNotaFiscal] = useState(false);
-    const [vendaFinalizada, setVendaFinalizada] = useState<{ id: number; codigo: string } | null>(null);
+    const [vendaFinalizada, setVendaFinalizada] = useState<{ id: number; codigo: string; offline?: boolean } | null>(null);
     const [managerCaixaAberto, setManagerCaixaAberto] = useState(false);
     const [dataVencimentoFiado, setDataVencimentoFiado] = useState('');  // data prevista pagamento do fiado
     const [cupomModalAberto, setCupomModalAberto] = useState(false);
@@ -141,10 +147,10 @@ const PDVPage: React.FC = () => {
 
         try {
             const venda = await showToast.promise(
-                finalizarVenda({ data_vencimento_fiado: isFiado && dataVencimentoFiado ? dataVencimentoFiado : undefined }),
+                finalizarVenda({ data_vencimento_fiado: isFiado && dataVencimentoFiado ? dataVencimentoFiado : undefined }, enqueue),
                 {
-                    loading: 'Finalizando venda...',
-                    success: 'Venda concluída com sucesso!',
+                    loading: isOnline ? 'Finalizando venda...' : '📦 Salvando venda offline...',
+                    success: (v: any) => v?.offline ? `📱 Venda salva offline! Código: ${v.codigo}` : '✅ Venda concluída!',
                     error: (err: any) => err.message || 'Erro ao finalizar venda'
                 }
             );
@@ -152,8 +158,12 @@ const PDVPage: React.FC = () => {
             if (venda) {
                 setVendaFinalizada(venda);
                 setFormaPagamentoAberta(false);
+                // Offline: mostra comprovante simplificado sem tentar buscar do servidor
                 setMostrarModalNotaFiscal(true);
                 setDataVencimentoFiado('');
+                if (venda.offline) {
+                    showToast.warning(`📡 ${pendingCount + 1} venda(s) aguardando sync. Serão enviadas automaticamente quando o sinal voltar.`, { duration: 6000 });
+                }
             }
         } catch (error: any) {
             // 403 com CAIXA_FECHADO → avisar e abrir o gestor de caixa
@@ -199,6 +209,32 @@ const PDVPage: React.FC = () => {
 
     return (
         <div className="h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-900 dark:text-slate-100">
+            {/* Barra de status: offline + vendas pendentes */}
+            <AnimatePresence>
+                {(!isOnline || pendingCount > 0) && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        className={`flex items-center justify-between px-4 py-2 text-xs font-bold ${
+                            !isOnline ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
+                        }`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <WifiOff className="w-3.5 h-3.5" />
+                            <span>{!isOnline ? '📡 Sem conexão — vendendo em modo offline' : `📦 ${pendingCount} venda(s) aguardando sincronização`}</span>
+                        </div>
+                        {pendingCount > 0 && isOnline && (
+                            <button
+                                onClick={() => processQueue().then(r => showToast.success(`${r.synced} venda(s) sincronizada(s)!`))}
+                                disabled={isSyncing}
+                                className="flex items-center gap-1 bg-white/20 hover:bg-white/30 rounded-lg px-3 py-1 transition-all"
+                            >
+                                <CloudUpload className="w-3.5 h-3.5" />
+                                <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar agora'}</span>
+                            </button>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
             <CaixaManager
                 caixaAtual={caixaAberto}
                 setCaixaAtual={setCaixaAberto}

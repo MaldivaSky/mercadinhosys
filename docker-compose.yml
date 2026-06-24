@@ -50,8 +50,9 @@ services:
       MULTI_TENANT_MODE: "true"
       HYBRID_MODE: "online"
 
-      # Sincronização Local → Aiven (a cada 5 minutos)
-      SYNC_AUTO_PUSH: "true"
+      # Sincronização Local → Aiven roda no serviço dedicado "sync" (abaixo).
+      # Desligado aqui para não rodar dentro do worker do gunicorn (frágil/corre entre workers).
+      SYNC_AUTO_PUSH: "false"
       SYNC_PUSH_INTERVAL_SEC: "300"
       SYNC_ENABLED: "true"
 
@@ -84,6 +85,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - mercadinhosys-network
+
+  # Sync Daemon — replicação local → Aiven em processo DEDICADO e isolado
+  # (sobrevive a reloads do backend; runner único, sem corrida entre workers).
+  sync:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mercadinhosys-sync
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "scripts.sync_daemon"]
+    environment:
+      DATABASE_URL: postgresql://mercadinho_user:mercadinho_secure_pass_2024@postgres:5432/mercadinhosys
+      AIVEN_DATABASE_URL: ${AIVEN_DATABASE_URL:-}
+      SYNC_AUTO_PUSH: "true"
+      SYNC_PUSH_INTERVAL_SEC: "300"
+    volumes:
+      - ./backend:/app
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - mercadinhosys-network
 
