@@ -12,6 +12,8 @@ from app.models import (
 )
 from app.simulation.dna_factory import DNAFactory, ScenarioDNA
 from app.simulation.injectors import RealisticInjector
+from app.simulation.enterprise_injector import EnterpriseInjector
+from app.simulation.fiscal_simulator import FiscalSimulator
 from flask import g
 
 def round_qty(val):
@@ -46,6 +48,9 @@ class ChronicleSimulator:
         return random.choice(list(DNAFactory.SCENARIOS.values()))
 
     def simulate_history(self, est, dna, months, admin_id):
+        # Injetar Vendedores, Atacado/Varejo
+        vendedores_ativos = EnterpriseInjector.inject_sfa_structure(est.id)
+        
         end_date = datetime.now()
         start_date = end_date - timedelta(days=months * 30)
         
@@ -314,37 +319,47 @@ class ChronicleSimulator:
     def _create_sale(self, est, ts, caixa, admin_id, products, clients):
         client = random.choice(clients) if clients else None
         
-        # [*] NOVO: 30% de chance de múltiplos pagamentos
-        usar_multiplos_pagamentos = random.random() < 0.30
+        is_b2b = False
+        vendedor_id = admin_id
         
-        # Diversidade de Pagamento baseada em DNA
-        # 10% de chance de Fiado (ContaReceber) se for ELITE/BOM
-        is_fiado = random.random() < 0.10 and client is not None
+        if client and client.observacoes and client.observacoes.startswith('B2B|'):
+            is_b2b = True
+            vendedor_id = int(client.observacoes.split('|')[1])
+        
+        tipo_venda = "atacado" if is_b2b else "balcao"
         
         venda = Venda(
             estabelecimento_id=est.id, cliente_id=client.id if client else None, 
-            funcionario_id=admin_id, caixa_id=caixa.id, data_venda=ts, 
-            status="finalizada", tipo_venda="balcao",
+            funcionario_id=vendedor_id, caixa_id=caixa.id, data_venda=ts, 
+            status="finalizada", tipo_venda=tipo_venda,
             codigo=f"V-{uuid.uuid4().hex[:8].upper()}", subtotal=0, total=0
         )
         db.session.add(venda)
         db.session.flush()
         
         total = Decimal("0.00")
-        items_count = random.randint(1, 5)
+        items_count = random.randint(10, 50) if is_b2b else random.randint(1, 5)
         for p in random.sample(products, min(len(products), items_count)):
-            qty = Decimal(str(random.uniform(1, 3)))
-            item_total = p.preco_venda * qty
+            qty = Decimal(str(random.uniform(10, 100))) if is_b2b else Decimal(str(random.uniform(1, 3)))
+            
+            # Negociação SFA: Vendedor dá desconto em atacado até o preco_minimo
+            preco_aplicado = p.preco_venda
+            if is_b2b:
+                desconto_maximo = float(p.preco_venda - p.preco_minimo)
+                desconto_aplicado = random.uniform(0, desconto_maximo)
+                preco_aplicado = p.preco_venda - Decimal(str(desconto_aplicado))
+                
+            item_total = preco_aplicado * qty
             custo_unit = Decimal(str(p.preco_custo or 0))
-            # Lucro real por item = (preço de venda - custo) * quantidade — alma do BI
-            margem_real = (Decimal(str(p.preco_venda)) - custo_unit) * qty
+            margem_real = (preco_aplicado - custo_unit) * qty
+            
             db.session.add(VendaItem(
                 venda_id=venda.id, produto_id=p.id, produto_nome=p.nome,
                 estabelecimento_id=est.id,
-                quantidade=round_qty(qty), preco_unitario=p.preco_venda, total_item=item_total,
+                quantidade=round_qty(qty), preco_unitario=preco_aplicado, total_item=item_total,
                 custo_unitario=custo_unit, margem_lucro_real=margem_real
             ))
-            # Atualiza os agregados do PRODUTO -> alimenta Giro de Estoque / ABC / "última venda"
+            
             p.quantidade_vendida = (Decimal(str(p.quantidade_vendida or 0)) + qty)
             p.total_vendido = (Decimal(str(p.total_vendido or 0)) + item_total)
             p.ultima_venda = ts
@@ -354,75 +369,9 @@ class ChronicleSimulator:
         venda.total = total
         venda.quantidade_itens = items_count
         
-        # [*] NOVO: Lógica de múltiplos pagamentos
-        if usar_multiplos_pagamentos and not is_fiado:
-            # Criar 2-3 formas de pagamento
-            formas_disponiveis = ["dinheiro", "cartao_debito", "cartao_credito", "pix"]
-            num_formas = random.randint(2, 3)
-            formas_selecionadas = random.sample(formas_disponiveis, num_formas)
-            
-            total_restante = total
-            for i, forma in enumerate(formas_selecionadas):
-                if i == len(formas_selecionadas) - 1:
-                    # Última forma pega o restante
-                    valor_pagamento = total_restante
-                else:
-                    # Divide proporcionalmente
-                    percentual = Decimal(str(random.uniform(0.3, 0.6)))
-                    valor_pagamento = round(total_restante * percentual, 2)
-                    total_restante -= valor_pagamento
-                
-                db.session.add(Pagamento(
-                    venda_id=venda.id, estabelecimento_id=est.id, valor=valor_pagamento,
-                    forma_pagamento=forma, status="aprovado", data_pagamento=ts
-                ))
-
-                # MovimentacaoCaixa tipo="venda" + forma_pagamento (reconcilia com o fechamento)
-                db.session.add(MovimentacaoCaixa(
-                    caixa_id=caixa.id, estabelecimento_id=est.id, tipo="venda",
-                    valor=valor_pagamento, forma_pagamento=forma, venda_id=venda.id,
-                    descricao=f"Venda {venda.codigo} - {forma}", created_at=ts
-                ))
-                # Apenas dinheiro entra fisicamente na gaveta
-                if forma == "dinheiro":
-                    caixa.saldo_atual += valor_pagamento
+        # Processamento Fiscal e Financeiro Enterprise
+        FiscalSimulator.processar_venda_fiscal_financeira(est.id, venda, ts, tipo_venda, caixa)
         
-        elif is_fiado:
-            # Gerar Conta a Receber
-            db.session.add(ContaReceber(
-                estabelecimento_id=est.id, cliente_id=client.id, venda_id=venda.id,
-                numero_documento=f"DUP-{venda.codigo}", valor_original=total, valor_atual=total,
-                data_emissao=ts.date(), data_vencimento=ts.date() + timedelta(days=30),
-                status="aberto"
-            ))
-            # Criar pagamento fiado
-            db.session.add(Pagamento(
-                venda_id=venda.id, estabelecimento_id=est.id, valor=total,
-                forma_pagamento="fiado", status="aprovado", data_pagamento=ts
-            ))
-            # Registra na auditoria do caixa sem afetar o saldo em dinheiro
-            db.session.add(MovimentacaoCaixa(
-                caixa_id=caixa.id, estabelecimento_id=est.id, tipo="fiado",
-                valor=total, forma_pagamento="fiado", venda_id=venda.id,
-                descricao=f"Venda {venda.codigo} - fiado (a receber)", created_at=ts
-            ))
-        else:
-            # Pagamento Único (forma antiga)
-            forma_pgto = random.choice(["dinheiro", "cartao_debito", "cartao_credito", "pix"])
-            db.session.add(Pagamento(
-                venda_id=venda.id, estabelecimento_id=est.id, valor=total, 
-                forma_pagamento=forma_pgto, status="aprovado", data_pagamento=ts
-            ))
-            
-            # MovimentacaoCaixa tipo="venda" + forma_pagamento (reconcilia com o fechamento)
-            db.session.add(MovimentacaoCaixa(
-                caixa_id=caixa.id, estabelecimento_id=est.id, tipo="venda",
-                valor=total, forma_pagamento=forma_pgto, venda_id=venda.id,
-                descricao=f"Venda {venda.codigo} - {forma_pgto}", created_at=ts
-            ))
-            # Apenas dinheiro entra fisicamente na gaveta
-            if forma_pgto == "dinheiro":
-                caixa.saldo_atual += total
         return venda
 
     def _create_delivery(self, est, venda, ts, motoristas, veiculos, taxas):
