@@ -40,6 +40,21 @@
   - PRONTO p/ produção: trocar `estabelecimentos.fiscal_gateway='focusnfe'` + `fiscal_token` (homologação grátis). `requests` já no requirements.
   - FALTA (frontend): botão "Emitir NFC-e" no PDV/Vendas, tela de Documentos Fiscais, Settings fiscais (ambiente/gateway/token/CSC). Integração real Focus NFe (precisa token+certificado A1 no go-live).
 
+## Sync local → Aiven (auditoria + correção)
+Problema: gap LOCAL 45.425 vs AIVEN 32.103 vendas — auto-sync nunca funcionou. 3 caminhos, 3 furos:
+- CLI `flask push-to-aiven` processava SyncQueue (no-op: MERCADINHO_OFFLINE off). ✅ Corrigido → agora chama `force_sync`.
+- Scheduler in-worker (`CloudPushScheduler`) usava `force_sync` (motor certo) mas morria no `gunicorn --reload` e corria entre 2 workers → nunca completou ciclo. ✅ Desligado (SYNC_AUTO_PUSH=false no backend).
+- Botão `/sync/replicar` quebrado por `sync_queue.operacao varchar(10)` (não cabia "replicar_para_neon"). ✅ migration `b8c9d0e1f2a3` → varchar(50).
+Correção robusta:
+- NOVO serviço dedicado `sync` no docker-compose (`python -m scripts.sync_daemon`) — runner único, isolado, sobrevive a reloads. Roda `force_sync` a cada SYNC_PUSH_INTERVAL_SEC (300s).
+- `flask sync-status` mostra gap local vs Aiven por tabela.
+- Para aplicar: `docker compose up -d backend sync` (recria backend com scheduler off + sobe o daemon).
+- MOTOR NOVO `scripts/robust_sync.py`: ordena por FK, filtra órfãos (filho sem pai no Aiven), wrap JSON (Json), upsert em lote SEM fallback linha-a-linha, cursor server-side. CLI/daemon/endpoint apontam pra ele.
+  - Resultado: estab 2 (admin1) 100% no Aiven — vendas 32.109, venda_itens 96.362, pagamentos 48.5k. Antes venda_itens/pagamentos = 0 no Aiven (dashboard Vercel zerado) → AGORA preenchido.
+  - DIVERGÊNCIA DE SEED (não é bug do sync): Aiven estabelecimentos.id=2 tem o CNPJ que localmente é do id=3 (PKs trocadas entre os dois bancos). Não sobrescrever Aiven sem decisão do dono. Gera órfãos (~10k vendas de estabs divergentes).
+  - PENDENTE: contas_pagar falha por FK pedido_compra_id (incluir pedidos_compra no PLAN). Perf futura: watermark incremental por updated_at (hoje varre tudo).
+- BUG SEPARADO reportado pelo user: data_venda exibida sem fuso de Brasília (armazenada em UTC). É display no frontend, não sync.
+
 ## Resumo p/ deploy (revisar antes de subir)
 - Migrations backend: head único `a7b8c9d0e1f2`. Cadeia linear. Railway: `flask db upgrade`.
 - Frontend Vercel: corrigi 4 erros TS6133 (unused) que quebravam `npm run build`. **Rodar `npm run build` 1x p/ confirmar** antes do deploy.

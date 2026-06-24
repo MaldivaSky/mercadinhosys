@@ -222,15 +222,37 @@ export const pdvService = {
         return response.data;
     },
 
-    // ==================== FINALIZAÇÃO DE VENDA ====================
-
     /**
-     * Finaliza venda de forma ATÔMICA
-     * Atualiza estoque e registra movimentações
+     * Finaliza venda de forma ATÔMICA.
+     * - Online: POST /pdv/finalizar → backend → Aiven
+     * - Offline: enfileira em IndexedDB → sincroniza quando voltar o sinal
+     *
+     * Retorna { venda, offline: true } quando enfileirado offline.
      */
-    finalizarVenda: async (data: FinalizarVendaRequest): Promise<any> => {
-        const response = await apiClient.post<any>('/pdv/finalizar', data);
-        return response.data.venda;
+    finalizarVenda: async (data: FinalizarVendaRequest, offlineEnqueue?: (payload: any) => Promise<string>): Promise<any> => {
+        try {
+            const response = await apiClient.post<any>('/pdv/finalizar', data);
+            return response.data.venda;
+        } catch (err: any) {
+            // Erro de rede (sem internet) → enfileira offline
+            const isNetworkError = !err?.response;
+            if (isNetworkError && offlineEnqueue) {
+                const uuid = await offlineEnqueue(data);
+                console.log('📦 Venda salva offline:', uuid);
+                // Retorna objeto fake para o PDV continuar normalmente
+                return {
+                    id: uuid,
+                    offline: true,
+                    offline_uuid: uuid,
+                    codigo: `OFF-${uuid.slice(0, 8).toUpperCase()}`,
+                    total: data.total,
+                    forma_pagamento: data.pagamentos?.[0]?.forma || 'dinheiro',
+                    data: new Date().toISOString(),
+                };
+            }
+            // Outro tipo de erro (500, 401, etc.) — propaga normalmente
+            throw err;
+        }
     },
 
     // ==================== ESTATÍSTICAS E RESUMOS ====================
