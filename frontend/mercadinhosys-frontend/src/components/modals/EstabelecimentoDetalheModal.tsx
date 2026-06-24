@@ -333,15 +333,15 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                 </span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <span className="text-sm text-gray-600 dark:text-gray-400">Stripe Customer ID</span>
-                                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {estabelecimento.stripe_customer_id || 'Não configurado'}
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Gateway Customer ID</span>
+                                <span className="font-medium text-gray-900 dark:text-white break-all">
+                                    {estabelecimento.gateway_customer_id || 'Não configurado'}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                                <span className="text-sm text-gray-600 dark:text-gray-400">Stripe Subscription ID</span>
-                                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {estabelecimento.stripe_subscription_id || 'Não configurado'}
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Gateway Subscription ID</span>
+                                <span className="font-medium text-gray-900 dark:text-white break-all">
+                                    {estabelecimento.gateway_subscription_id || 'Não configurado'}
                                 </span>
                             </div>
                         </div>

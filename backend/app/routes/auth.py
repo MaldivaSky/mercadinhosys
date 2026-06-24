@@ -165,9 +165,8 @@ def setup_db():
 
                 ("plano_status", "VARCHAR(20) DEFAULT 'experimental'"),
 
-                ("stripe_customer_id", "VARCHAR(100)"),
-
-                ("stripe_subscription_id", "VARCHAR(100)"),
+                ("gateway_customer_id", "VARCHAR(100)"),
+                ("gateway_subscription_id", "VARCHAR(100)"),
 
                 ("vencimento_assinatura", "TIMESTAMP"),
 

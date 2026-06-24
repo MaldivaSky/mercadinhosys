@@ -389,8 +389,8 @@ def create_app(config_name=None):
                     # Estabelecimento - SaaS
                     ("estabelecimentos", "plano",                   "VARCHAR(20)  DEFAULT 'Basic'"),
                     ("estabelecimentos", "plano_status",            "VARCHAR(20)  DEFAULT 'experimental'"),
-                    ("estabelecimentos", "stripe_customer_id",      "VARCHAR(100)"),
-                    ("estabelecimentos", "stripe_subscription_id",  "VARCHAR(100)"),
+                    ("estabelecimentos", "gateway_customer_id",      "VARCHAR(100)"),
+                    ("estabelecimentos", "gateway_subscription_id",  "VARCHAR(100)"),
                     ("estabelecimentos", "vencimento_assinatura",   "TIMESTAMP"),
                     # Estabelecimento - Endereço completo
                     ("estabelecimentos", "cep",                     "VARCHAR(9)   DEFAULT '00000-000'"),
@@ -683,13 +683,13 @@ def create_app(config_name=None):
         logger.error(f"❌ Erro ao registrar sync_hybrid ou sync_cloud: {e}")
 
 
-    # Stripe
+    # Billing (Efí Bank)
     try:
-        from app.routes.stripe_routes import stripe_bp
-        app.register_blueprint(stripe_bp)
-        logger.info("✅ Blueprint Stripe registrado")
+        from app.routes.billing_routes import billing_bp
+        app.register_blueprint(billing_bp)
+        logger.info("✅ Blueprint Billing (Efí) registrado")
     except Exception as e:
-        logger.error(f"❌ Erro ao registrar stripe: {e}")
+        logger.error(f"❌ Erro ao registrar billing: {e}")
 
     # Delivery & Logística
     try:

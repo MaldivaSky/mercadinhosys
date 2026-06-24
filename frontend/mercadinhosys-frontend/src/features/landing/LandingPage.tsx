@@ -102,7 +102,7 @@ const LandingPage: React.FC = () => {
         setLoadingCheckout(true);
 
         try {
-            const response = await fetch(`${API_CONFIG.BASE_URL}/stripe/public-checkout`, {
+            const response = await fetch(`${API_CONFIG.BASE_URL}/billing/public-checkout`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1145,7 +1145,7 @@ const LandingPage: React.FC = () => {
                         </form>
 
                         <p className="text-center mt-8 text-xs text-gray-400 font-bold">
-                            Ambiente de checkout seguro processado pela <strong>Stripe</strong>.
+                            Ambiente de checkout seguro processado pela <strong>Efí Bank</strong>.
                         </p>
                     </div>
                 </div>
