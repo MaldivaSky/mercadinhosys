@@ -7,8 +7,7 @@ import {
     CreditCard,
     Plus,
     X,
-    User,
-    Truck
+    User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -65,7 +64,6 @@ const PDVPage: React.FC = () => {
     const [cupomModalAberto, setCupomModalAberto] = useState(false);
     const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
     const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
-    const [deliveryModalAberto, setDeliveryModalAberto] = useState(false);
 
     const isFiado = pagamentos.some(p => p.forma === 'fiado');
 

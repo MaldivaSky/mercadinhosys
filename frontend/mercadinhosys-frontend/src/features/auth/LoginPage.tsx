@@ -37,6 +37,7 @@ export function LoginPage() {
   const [showBootstrap, setShowBootstrap] = useState(false);
 
   // Detectar sucesso vindo do Gateway de Pagamento
+  const queryParams = new URLSearchParams(window.location.search);
   const isPaymentSuccess = queryParams.get('status') === 'success';
   const [paymentSuccess, setPaymentSuccess] = useState(isPaymentSuccess);
 

@@ -759,7 +759,7 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {showProductHistory && (
+      {showProductHistory && selectedProduct && (
         <ProductHistoryModal produto={selectedProduct} onClose={() => { handleCloseModal(setShowProductHistory); setSelectedProduct(null); }} />
       )}
 
