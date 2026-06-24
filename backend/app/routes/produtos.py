@@ -610,7 +610,7 @@ def listar_produtos():
             query = query.filter(Produto.margem_lucro >= 50)
         elif filtro_rapido == "margem_baixa":
             query = query.filter(Produto.margem_lucro < 30)
-        elif filtro_rapido in ("classe_a", "classe_c"):
+        elif filtro_rapido in ("classe_a", "classe_b", "classe_c"):
             # Classificação ABC DINÂMICA (por faturamento real), consistente com os
             # contadores do dashboard. Evita depender da coluna gravada (que pode estar
             # desatualizada/NULL e fazia o filtro voltar vazio).
@@ -621,6 +621,9 @@ def listar_produtos():
                 if filtro_rapido == "classe_a":
                     ids_a = [pid for pid, c in classificacoes.items() if c == "A"]
                     query = query.filter(Produto.id.in_(ids_a if ids_a else [-1]))
+                elif filtro_rapido == "classe_b":
+                    ids_b = [pid for pid, c in classificacoes.items() if c == "B"]
+                    query = query.filter(Produto.id.in_(ids_b if ids_b else [-1]))
                 else:
                     # Encalhados = classe C por faturamento + produtos sem nenhuma venda no período.
                     ids_c = [pid for pid, c in classificacoes.items() if c == "C"]
@@ -629,7 +632,7 @@ def listar_produtos():
                                                  ~Produto.id.in_(ids_com_venda)))
                     # Sem nenhuma venda no tenant: todos são encalhados → não aplica filtro extra.
             else:
-                alvo = "A" if filtro_rapido == "classe_a" else "C"
+                alvo = "A" if filtro_rapido == "classe_a" else ("B" if filtro_rapido == "classe_b" else "C")
                 query = query.filter(func.upper(Produto.classificacao_abc) == alvo)
         elif filtro_rapido == "repor_urgente":
             query = query.filter(
@@ -640,10 +643,15 @@ def listar_produtos():
             )
         elif filtro_rapido == "giro_rapido":
             query = query.filter(Produto.quantidade_vendida >= 30)
+        elif filtro_rapido == "giro_normal":
+            query = query.filter(
+                Produto.quantidade_vendida >= 10,
+                Produto.quantidade_vendida < 30
+            )
         elif filtro_rapido == "giro_lento":
             query = query.filter(
                 Produto.quantidade_vendida > 0,
-                Produto.quantidade_vendida < 30,
+                Produto.quantidade_vendida < 10,
             )
 
         # Filtro por Classificação ABC (drill-down do dashboard)
@@ -711,7 +719,16 @@ def listar_produtos():
             produto_dict["classificacao_abc"] = calcular_classificacao_abc(produto)
             
             try:
-                produto_dict["status_giro"] = produto.calcular_status_giro()
+                # Otimização: Evitar N+1 queries chamando calcular_status_giro (que faz query no banco)
+                dmd = float(produto.quantidade_vendida or 0) / 30.0
+                if dmd <= 0:
+                    produto_dict["status_giro"] = "Sem Vendas"
+                elif dmd < 1:
+                    produto_dict["status_giro"] = "Baixo Giro"
+                elif dmd < 5:
+                    produto_dict["status_giro"] = "Médio Giro"
+                else:
+                    produto_dict["status_giro"] = "Alto Giro"
             except Exception:
                 produto_dict["status_giro"] = "Sem Vendas"
             

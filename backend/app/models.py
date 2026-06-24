@@ -561,6 +561,8 @@ class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     total_compras = db.Column(db.Integer, default=0)
     valor_total_gasto = db.Column(db.Numeric(19, 4), default=0)
     ativo = db.Column(db.Boolean, default=True)
+    tabela_preco_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id"), nullable=True)
+    rota_id = db.Column(db.Integer, db.ForeignKey("rotas.id"), nullable=True)
     observacoes = db.Column(db.Text)
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     data_atualizacao = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
@@ -975,6 +977,78 @@ class CatalogoMestre(db.Model):
             "imagem_url": self.imagem_url, "fonte": self.fonte, "status": self.status,
             "consultado_em": self.consultado_em.isoformat() if self.consultado_em else None,
         }
+
+
+# ------------------------------------------------------------------------------
+# SFA (Sales Force Automation) e Distribuidora
+# ------------------------------------------------------------------------------
+class TabelaPreco(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
+    __tablename__ = "tabelas_preco"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    nome = db.Column(db.String(100), nullable=False)
+    ativa = db.Column(db.Boolean, default=True)
+    
+    itens = db.relationship("TabelaPrecoItem", backref="tabela", cascade="all, delete-orphan", lazy=True)
+    clientes = db.relationship("Cliente", backref="tabela_preco", lazy=True)
+
+class TabelaPrecoItem(db.Model, MultiTenantMixin, SerializableMixin):
+    __tablename__ = "tabela_preco_itens"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    tabela_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id", ondelete="CASCADE"), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False)
+    preco_venda = db.Column(db.Numeric(19, 4), nullable=False)
+    preco_minimo = db.Column(db.Numeric(19, 4), nullable=False) # Para range de negociação do vendedor
+    
+    __table_args__ = (
+        db.UniqueConstraint("tabela_id", "produto_id", name="uq_tabela_produto"),
+    )
+
+class Rota(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
+    __tablename__ = "rotas"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    nome = db.Column(db.String(100), nullable=False) # ex: Rota Segunda-feira
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
+    dia_semana = db.Column(db.Integer, nullable=True) # 0=Segunda, 6=Domingo
+    ativa = db.Column(db.Boolean, default=True)
+    
+    clientes = db.relationship("Cliente", backref="rota", lazy=True)
+
+class PedidoVenda(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
+    __tablename__ = "pedidos_venda"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), nullable=False)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    
+    codigo = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), default="pendente") # pendente, aprovado, faturado, cancelado
+    subtotal = db.Column(db.Numeric(19, 4), nullable=False, default=0)
+    desconto = db.Column(db.Numeric(19, 4), default=0)
+    total = db.Column(db.Numeric(19, 4), nullable=False, default=0)
+    
+    condicao_pagamento = db.Column(db.String(50)) # ex: 30 dias, a vista
+    observacoes = db.Column(db.Text)
+    data_emissao = db.Column(db.DateTime, default=utcnow)
+    data_entrega_prevista = db.Column(db.Date)
+    
+    offline_uuid = db.Column(db.String(36)) # idempotencia
+    
+    itens = db.relationship("PedidoVendaItem", backref="pedido", cascade="all, delete-orphan", lazy=True)
+
+class PedidoVendaItem(db.Model, MultiTenantMixin, SerializableMixin):
+    __tablename__ = "pedido_venda_itens"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos_venda.id", ondelete="CASCADE"), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
+    
+    quantidade = db.Column(db.Numeric(10, 3), nullable=False)
+    preco_unitario = db.Column(db.Numeric(19, 4), nullable=False)
+    desconto = db.Column(db.Numeric(19, 4), default=0)
+    total_item = db.Column(db.Numeric(19, 4), nullable=False)
 
 
 # ------------------------------------------------------------------------------

@@ -380,6 +380,10 @@ const ProductsPage: React.FC = () => {
       novosFiltros.filtro_rapido = 'classe_a';
       novosFiltros.ordenar_por = 'total_vendido';
       novosFiltros.direcao = 'desc';
+    } else if (filter === 'classe_b') {
+      novosFiltros.filtro_rapido = 'classe_b';
+      novosFiltros.ordenar_por = 'total_vendido';
+      novosFiltros.direcao = 'desc';
     } else if (filter === 'classe_c') {
       novosFiltros.filtro_rapido = 'classe_c';
       novosFiltros.ordenar_por = 'total_vendido';
@@ -398,6 +402,10 @@ const ProductsPage: React.FC = () => {
       novosFiltros.direcao = 'asc';
     } else if (filter === 'giro_rapido') {
       novosFiltros.filtro_rapido = 'giro_rapido';
+      novosFiltros.ordenar_por = 'ultima_venda';
+      novosFiltros.direcao = 'desc';
+    } else if (filter === 'giro_normal') {
+      novosFiltros.filtro_rapido = 'giro_normal';
       novosFiltros.ordenar_por = 'ultima_venda';
       novosFiltros.direcao = 'desc';
     } else if (filter === 'giro_lento') {
@@ -478,8 +486,27 @@ const ProductsPage: React.FC = () => {
         stats={stats} 
         onCardClick={handleCardClick} 
         onAdvancedAnalyticsClick={(type) => {
-          setAdvancedAnalyticsType(type);
-          setShowAdvancedAnalyticsModal(true);
+          let targetFilter = '';
+          if (type === 'abc_a') targetFilter = 'classe_a';
+          else if (type === 'abc_b') targetFilter = 'classe_b';
+          else if (type === 'abc_c') targetFilter = 'classe_c';
+          else if (type === 'giro_rapido') targetFilter = 'giro_rapido';
+          else if (type === 'giro_normal') targetFilter = 'giro_normal';
+          else if (type === 'giro_lento') targetFilter = 'giro_lento';
+          
+          if (targetFilter) {
+            handleQuickFilterChange(targetFilter);
+            // Scroll to the table softly
+            setTimeout(() => {
+              window.scrollTo({
+                top: document.querySelector('.products-table-wrapper')?.getBoundingClientRect().top! + window.scrollY - 100,
+                behavior: 'smooth'
+              });
+            }, 100);
+          } else {
+            setAdvancedAnalyticsType(type);
+            setShowAdvancedAnalyticsModal(true);
+          }
         }}
         onProductClick={openDetailModal}
       />
@@ -568,8 +595,9 @@ const ProductsPage: React.FC = () => {
         )}
       </div>
 
-      <ProductsTable
-        produtos={currentTableData.produtos}
+      <div className="products-table-wrapper">
+        <ProductsTable
+          produtos={currentTableData.produtos}
         linhasPorLote={currentTableData.linhasPorLote}
         loading={loading}
         totalItems={currentTableData.totalItems}
@@ -587,6 +615,7 @@ const ProductsPage: React.FC = () => {
         onSort={handleSort}
         sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
       />
+      </div>
 
       <ProductFormModal
         show={showProductModal}

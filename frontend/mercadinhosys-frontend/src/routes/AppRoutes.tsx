@@ -33,6 +33,10 @@ const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
 const FiscalPage = lazy(() => import('../features/fiscal/FiscalPage'));
 const MonitorPage = lazy(() => import('../features/monitor/MonitorPage'));
 
+// SFA (Sales Force Automation)
+const SFADashboard = lazy(() => import('../features/sfa/SFADashboard'));
+const SFAPedido = lazy(() => import('../features/sfa/SFAPedido'));
+
 
 
 
@@ -61,6 +65,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="products" element={<PlanoGuard planoRequerido="gratuito"><ProductsPage /></PlanoGuard>} />
                     <Route path="products/:id" element={<PlanoGuard planoRequerido="gratuito"><ProductHubPage /></PlanoGuard>} />
                     <Route path="suppliers" element={<PlanoGuard planoRequerido="gratuito"><SuppliersPage /></PlanoGuard>} />
+                    <Route path="suppliers/:id" element={<PlanoGuard planoRequerido="gratuito"><SuppliersPage /></PlanoGuard>} />
                     <Route path="customers" element={<PlanoGuard planoRequerido="gratuito"><CustomersPage /></PlanoGuard>} />
                     <Route path="settings" element={<PlanoGuard planoRequerido="gratuito"><SettingsPage /></PlanoGuard>} />
                     <Route path="delivery" element={<PlanoGuard planoRequerido="gratuito"><DeliveryPage /></PlanoGuard>} />
@@ -70,6 +75,9 @@ const AppRoutes: React.FC = () => {
                     <Route path="expenses" element={<PlanoGuard planoRequerido="pro"><ExpensesPage /></PlanoGuard>} />
                     <Route path="fiscal" element={<PlanoGuard planoRequerido="gratuito"><FiscalPage /></PlanoGuard>} />
                     <Route path="auditoria" element={<PlanoGuard planoRequerido="gratuito"><MonitorPage /></PlanoGuard>} />
+                    <Route path="sfa" element={<PlanoGuard planoRequerido="pro"><SFADashboard /></PlanoGuard>} />
+                    <Route path="sfa/pedido" element={<PlanoGuard planoRequerido="pro"><SFAPedido /></PlanoGuard>} />
+                    <Route path="sfa/pedido/:id" element={<PlanoGuard planoRequerido="pro"><SFAPedido /></PlanoGuard>} />
                     <Route path="employees" element={<PlanoGuard planoRequerido="gratuito"><EmployeesPage /></PlanoGuard>} />
                     <Route path="rh" element={<PlanoGuard planoRequerido="pro"><RHPage /></PlanoGuard>} />
                     <Route path="ponto" element={<PlanoGuard planoRequerido="pro"><PontoPage /></PlanoGuard>} />
