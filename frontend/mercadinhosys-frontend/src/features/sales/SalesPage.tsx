@@ -66,14 +66,16 @@ const canonicalForma = (f = "") => {
 
 function Kpi({ titulo, valor, sub, Icon, cor }: { titulo: string; valor: string; sub?: string; Icon: React.ElementType; cor: string }) {
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-            <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{titulo}</p>
-                    <p className="mt-2 text-xl md:text-2xl font-black text-slate-900 dark:text-white tabular-nums truncate">{valor}</p>
-                    {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center gap-3 mb-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cor}`}>
+                    <Icon className="w-5 h-5" />
                 </div>
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${cor}`}><Icon className="w-5 h-5" /></div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 leading-tight">{titulo}</p>
+            </div>
+            <div>
+                <p className="text-xl lg:text-xl xl:text-3xl font-black text-slate-900 dark:text-white tabular-nums break-words leading-none">{valor}</p>
+                {sub && <p className="mt-2 text-xs font-medium text-slate-500">{sub}</p>}
             </div>
         </div>
     );
@@ -81,12 +83,16 @@ function Kpi({ titulo, valor, sub, Icon, cor }: { titulo: string; valor: string;
 
 function InsightCard({ Icon, cor, titulo, valor, desc }: { Icon: React.ElementType; cor: string; titulo: string; valor: string; desc: string }) {
     return (
-        <div className="flex gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cor}`}><Icon className="w-5 h-5" /></div>
-            <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{titulo}</p>
-                <p className="font-black text-slate-900 dark:text-white truncate">{valor}</p>
-                <p className="text-xs text-slate-500 leading-snug">{desc}</p>
+        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5">
+            <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cor}`}>
+                    <Icon className="w-5 h-5" />
+                </div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-tight">{titulo}</p>
+            </div>
+            <div>
+                <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white break-words leading-tight">{valor}</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">{desc}</p>
             </div>
         </div>
     );

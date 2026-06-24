@@ -56,6 +56,9 @@ services:
       SYNC_PUSH_INTERVAL_SEC: "300"
       SYNC_ENABLED: "true"
 
+      # Rate-limiting com storage compartilhado (Redis) — vale entre todos os workers
+      RATELIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:-redis_secure_pass}@redis:6379/1
+
       # Security
       SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-jwt-secret-key-change-in-production}
