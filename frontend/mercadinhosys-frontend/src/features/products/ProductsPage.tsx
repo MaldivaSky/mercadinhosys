@@ -631,8 +631,8 @@ const ProductsPage: React.FC = () => {
       )}
 
       {showDiscardModal && selectedProduct && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between p-6 border-b dark:border-slate-800 bg-rose-50/50 dark:bg-rose-900/10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-rose-500/20">
@@ -648,8 +648,8 @@ const ProductsPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-8 space-y-6">
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center">
+            <div className="p-6 md:p-8 space-y-6 overflow-y-auto flex-1">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center shrink-0">
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Produto para Descarte</p>
                 <p className="text-xl font-black text-slate-900 dark:text-white">{selectedProduct.nome}</p>
                 <div className="mt-2 flex items-center justify-center gap-2">
@@ -711,7 +711,7 @@ const ProductsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+            <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3 shrink-0">
               <button
                 onClick={() => setShowDiscardModal(false)}
                 className="flex-1 py-4 px-6 rounded-2xl font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-all uppercase text-xs tracking-widest"
