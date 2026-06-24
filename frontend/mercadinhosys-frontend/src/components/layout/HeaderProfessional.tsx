@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     User, LogOut, Settings, Moon, Sun, ChevronDown,
-    Menu as MenuIcon, X, Home, Package, Users, ShoppingCart, BarChart3,
-    CreditCard, FileText, UserCog, Briefcase, Clock, Truck, Navigation
+    Menu as MenuIcon, X
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useAuth } from '../../contexts/AuthContext';
