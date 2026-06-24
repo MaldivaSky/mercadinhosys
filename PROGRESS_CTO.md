@@ -67,6 +67,11 @@ Correção robusta:
   - Rate-limit login — ✅ TESTADO E FUNCIONANDO (429 comprovado: #1-5=401, #6+=429). 2 causas corrigidas: (1) decorei a função ERRADA — `/api/auth/login` é servido por `auth_multi_tenant.login`, não `auth.py` (movi o decorator pro certo, revertendo auth.py); (2) storage memory:// (per-worker) → Redis via `RATELIMIT_STORAGE_URI` no compose. Limite 5/min por IP.
   - Nota: 5/min por IP. Se uma loja tiver muitos caixas atrás do mesmo IP, considerar afrouxar ou key por IP+usuário.
 
+## PDV Offline-First (diferencial — distribuidora/vendedor de rua)
+- O1 Idempotência — ✅ COMPLETO+TESTADO. Coluna `vendas.offline_uuid` + unique(estab,offline_uuid) (migration `d0e1f2a3b4c5`). `/pdv/finalizar` deduplica: 2º envio do mesmo uuid retorna a venda existente (idempotente=true), SEM duplicar nem baixar estoque 2× (testado: estoque 359→357 e ficou 357). Frontend gera offline_uuid ANTES da 1ª tentativa (fecha janela "resposta perdida"); flui consistente POST online → fila IndexedDB → sync.
+- O2 Catálogo offline — ⬜ PRÓXIMO (showstopper): cachear produtos+preços em IndexedDB no login/sync; ProdutoSearch ler do cache sem sinal; Service Worker runtime caching. Sem isso o vendedor não monta o carrinho offline.
+- PENDENTE: dead-letter (máx. tentativas) na fila; modelo de Carga/Romaneio (estoque alocado ao vendedor); data_venda do PDV grava em fuso Manaus (inconsistente com UTC) — revisar.
+
 ## Resumo p/ deploy (revisar antes de subir)
 - Migrations backend: head único `a7b8c9d0e1f2`. Cadeia linear. Railway: `flask db upgrade`.
 - Frontend Vercel: corrigi 4 erros TS6133 (unused) que quebravam `npm run build`. **Rodar `npm run build` 1x p/ confirmar** antes do deploy.

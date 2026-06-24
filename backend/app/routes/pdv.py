@@ -701,6 +701,18 @@ def finalizar_venda():
         if not items:
             return jsonify({"error": "Nenhum produto na venda"}), 400
 
+        # IDEMPOTÊNCIA (PDV offline): se esta venda já subiu antes (mesmo offline_uuid),
+        # devolve a existente em vez de duplicar estoque/financeiro.
+        offline_uuid = data.get("offline_uuid")
+        if offline_uuid:
+            ja_existe = Venda.query.filter_by(estabelecimento_id=estab_id, offline_uuid=offline_uuid).first()
+            if ja_existe:
+                return jsonify({
+                    "success": True, "idempotente": True,
+                    "message": "Venda já registrada (offline)",
+                    "venda": ja_existe.to_dict(),
+                }), 200
+
         cliente_id = data.get("cliente_id")
         subtotal = to_decimal(data.get("subtotal", 0))
         desconto = to_decimal(data.get("desconto", 0))
@@ -790,7 +802,9 @@ def finalizar_venda():
                 status="finalizada",
                 data_venda=data_venda,
                 quantidade_itens=len(items),
-                observacoes=data.get("observacoes")
+                observacoes=data.get("observacoes"),
+                offline_uuid=offline_uuid,
+                tipo_venda=data.get("tipo_venda", "balcao"),
             )
             db.session.add(nova_venda)
             db.session.flush()

@@ -304,7 +304,7 @@ const PDVPage: React.FC = () => {
                         {carrinho.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none">
                                 <ShoppingCart className="w-24 h-24 mb-4 text-slate-400" />
-                                <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Aguardando Produtos</h3>
+                                <h3 className="text-xl lg:text-xl xl:text-3xl font-black uppercase tracking-tighter">Aguardando Produtos</h3>
                             </div>
                         ) : (
                             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -331,7 +331,7 @@ const PDVPage: React.FC = () => {
                     <div className="flex-1 p-4 sm:p-6 flex flex-col justify-end gap-4 sm:p-6">
                         <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none text-center">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total a Pagar</span>
-                            <span className="text-2xl md:text-3xl font-black text-red-600 dark:text-red-400 tabular-nums block truncate">
+                            <span className="text-xl lg:text-xl xl:text-3xl font-black text-red-600 dark:text-red-400 tabular-nums block break-words leading-none">
                                 {formatCurrency(total)}
                             </span>
                         </div>
@@ -477,7 +477,7 @@ const PDVPage: React.FC = () => {
                                                 )}                                                {troco > 0 && (
                                                     <div className="mt-6 p-4 sm:p-6 bg-white dark:bg-slate-900 rounded-3xl border border-green-500/10 shadow-2xl flex justify-between items-center">
                                                         <span className="text-xs font-black text-slate-400 uppercase">Troco Calculado</span>
-                                                        <span className="text-2xl md:text-3xl font-black text-green-500 tabular-nums">
+                                                        <span className="text-xl lg:text-xl xl:text-3xl font-black text-green-500 tabular-nums">
                                                             {formatCurrency(troco)}
                                                         </span>
                                                     </div>
@@ -498,7 +498,7 @@ const PDVPage: React.FC = () => {
                                     </div>
                                     <div className="text-right">
                                         <span className="text-[10px] font-black text-red-600 uppercase tracking-widest block mb-1">Total a Pagar</span>
-                                        <span className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tabular-nums tracking-tighter leading-none">
+                                        <span className="text-2xl lg:text-2xl xl:text-4xl font-black text-slate-900 dark:text-white tabular-nums tracking-tighter leading-none">
                                             {formatCurrency(total)}
                                         </span>
                                     </div>
@@ -577,7 +577,7 @@ const PDVPage: React.FC = () => {
             <div className="lg:hidden fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 flex items-center justify-between z-50">
                 <div className="flex flex-col pl-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Total Geral</span>
-                    <span className="text-2xl md:text-3xl font-black text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(total)}</span>
+                    <span className="text-xl lg:text-xl xl:text-3xl font-black text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(total)}</span>
                 </div>
                 <button
                     onClick={() => setFormaPagamentoAberta(true)}

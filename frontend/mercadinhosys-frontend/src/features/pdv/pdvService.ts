@@ -1,5 +1,10 @@
 import { apiClient } from '../../api/apiClient';
 import { ApiResponse, Produto, Cliente } from '../../types';
+import { v4 as uuidv4 } from 'uuid';
+
+// Gera um UUID (usa o nativo do browser quando disponível; senão, a lib uuid)
+const genUuid = (): string =>
+    (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : uuidv4();
 
 // Tipos específicos do PDV
 export interface ConfiguracoesPDV {
@@ -230,21 +235,25 @@ export const pdvService = {
      * Retorna { venda, offline: true } quando enfileirado offline.
      */
     finalizarVenda: async (data: FinalizarVendaRequest, offlineEnqueue?: (payload: any) => Promise<string>): Promise<any> => {
+        // Gera o offline_uuid ANTES da 1ª tentativa e envia já no POST online.
+        // Assim, se a resposta se perder (rede caiu DEPOIS de o servidor processar),
+        // o re-envio cai na idempotência do backend e NÃO duplica a venda.
+        const offline_uuid = (data as any).offline_uuid || genUuid();
+        const payload = { ...data, offline_uuid };
         try {
-            const response = await apiClient.post<any>('/pdv/finalizar', data);
+            const response = await apiClient.post<any>('/pdv/finalizar', payload);
             return response.data.venda;
         } catch (err: any) {
-            // Erro de rede (sem internet) → enfileira offline
+            // Erro de rede (sem internet) → enfileira offline (mesmo offline_uuid)
             const isNetworkError = !err?.response;
             if (isNetworkError && offlineEnqueue) {
-                const uuid = await offlineEnqueue(data);
-                console.log('📦 Venda salva offline:', uuid);
-                // Retorna objeto fake para o PDV continuar normalmente
+                await offlineEnqueue(payload);
+                console.log('📦 Venda salva offline:', offline_uuid);
                 return {
-                    id: uuid,
+                    id: offline_uuid,
                     offline: true,
-                    offline_uuid: uuid,
-                    codigo: `OFF-${uuid.slice(0, 8).toUpperCase()}`,
+                    offline_uuid,
+                    codigo: `OFF-${offline_uuid.slice(0, 8).toUpperCase()}`,
                     total: data.total,
                     forma_pagamento: data.pagamentos?.[0]?.forma || 'dinheiro',
                     data: new Date().toISOString(),
