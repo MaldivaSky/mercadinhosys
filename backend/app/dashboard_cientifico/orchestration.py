@@ -191,6 +191,9 @@ class DashboardOrchestrator:
                 "max_purchase": customer_metrics["maior_compra"],
             },
             "rh": rh_metrics,
+            "sfa": {
+                "vendedores": sellers_performance
+            },
             "charts": {
                 "sales_trend": sales_timeseries,
             },
@@ -287,6 +290,7 @@ class DashboardOrchestrator:
             "product_hourly_recommendations": lambda: TemporalAnalysis.get_product_hourly_recommendations(self.establishment_id, days),
             "category_performance_by_time": lambda: TemporalAnalysis.get_category_performance_by_time(self.establishment_id, days),
             "payment_methods_metrics": lambda: DataLayer.get_payment_methods_metrics(self.establishment_id, start_current, end_date),
+            "sellers_performance": lambda: DataLayer.get_sellers_performance(self.establishment_id, days),
         }
 
         try:
@@ -318,6 +322,7 @@ class DashboardOrchestrator:
         product_hourly_recommendations = parallel_results.get("product_hourly_recommendations") or []
         category_performance_by_time = parallel_results.get("category_performance_by_time") or {}
         payment_methods_metrics = parallel_results.get("payment_methods_metrics") or {"metricas": [], "total_processado": 0.0}
+        sellers_performance = parallel_results.get("sellers_performance") or []
 
         _logger.info(f"DONE: Coleta paralela concluida em {time.time()-start_exec:.2f}s")
 
@@ -1006,6 +1011,9 @@ class DashboardOrchestrator:
                 "previsao_demanda": previsao_demanda,
             },
             "rh": rh_metrics,
+            "sfa": {
+                "vendedores": sellers_performance
+            },
             "inventory": inventory_summary,
             "trend": sales_trend,
             # 🔥 NOVO: Formas de Pagamento com porcentagem (Multi-Payment Engine)
