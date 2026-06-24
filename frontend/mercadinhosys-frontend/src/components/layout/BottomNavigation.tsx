@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck } from 'lucide-react';
+import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const mainTabs = [
@@ -11,8 +11,10 @@ const mainTabs = [
 ];
 
 const allMenuItems = [
+    { to: '/pdv?manage=true', icon: DollarSign, label: 'Caixa' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/delivery', icon: Navigation, label: 'Entregas' },
+    { to: '/fiscal', icon: Receipt, label: 'Fiscal' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/reports', icon: BarChart3, label: 'Relatórios' },
     { to: '/suppliers', icon: Truck, label: 'Fornecedores' },

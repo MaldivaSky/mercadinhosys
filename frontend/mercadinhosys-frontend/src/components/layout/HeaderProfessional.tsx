@@ -1,9 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-    User, LogOut, Settings, Moon, Sun, ChevronDown,
-    Menu as MenuIcon, X
-} from 'lucide-react';
+import { User, LogOut, Settings, Moon, Sun, ChevronDown, X } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../theme/useTheme';
@@ -15,7 +12,6 @@ import { InstallButton } from '../pwa/InstallButton';
 
 const HeaderProfessional = () => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [profileModalOpen, setProfileModalOpen] = useState(false);
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -64,7 +60,6 @@ const HeaderProfessional = () => {
 
     const handleLogout = () => {
         setUserMenuOpen(false);
-        setMobileMenuOpen(false);
         logout();
         navigate('/login');
     };
@@ -254,6 +249,8 @@ const HeaderProfessional = () => {
                                     </>
                                 )}
                             </div>
+                        </div>
+
                         {/* Mobile Actions */}
                         <div className="flex items-center gap-2">
                             <InstallButton className="md:hidden" />
