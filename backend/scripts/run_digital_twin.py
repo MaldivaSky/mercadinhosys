@@ -1,4 +1,7 @@
 import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+import sys
 import os
 import shutil
 
@@ -60,7 +63,8 @@ def main():
     
     try:
         # Rodar Simulação Master (6 meses)
-        simulator.run_full_simulation(months=6)
+        with app.app_context():
+            simulator.run_full_simulation(months=6)
         print("\n🏆 Simulação Concluída com Magnitude Senior!")
         print(f"📊 Os dados estão prontos para análise no banco MASTER.")
         
