@@ -2056,41 +2056,50 @@ class DataLayer:
         start_previous = start_current - timedelta(days=days)
 
         # 1. Query Current Period
-        current_query = db.session.query(
+        q_current = db.session.query(
             Venda.funcionario_id,
             func.sum(Venda.total).label('total_atual'),
             func.count(Venda.id).label('qtd_atual')
         ).filter(
-            Venda.estabelecimento_id == estabelecimento_id,
             Venda.status == 'finalizada',
             Venda.data_venda >= start_current,
             Venda.data_venda <= now
-        ).group_by(Venda.funcionario_id).all()
+        )
+        if estabelecimento_id != 'all':
+            q_current = q_current.filter(Venda.estabelecimento_id == estabelecimento_id)
+            
+        current_query = q_current.group_by(Venda.funcionario_id).all()
 
         current_map = {row.funcionario_id: {"total": float(row.total_atual or 0), "qtd": row.qtd_atual} for row in current_query}
 
         # 2. Query Previous Period
-        previous_query = db.session.query(
+        q_prev = db.session.query(
             Venda.funcionario_id,
             func.sum(Venda.total).label('total_passado')
         ).filter(
-            Venda.estabelecimento_id == estabelecimento_id,
             Venda.status == 'finalizada',
             Venda.data_venda >= start_previous,
             Venda.data_venda < start_current
-        ).group_by(Venda.funcionario_id).all()
+        )
+        if estabelecimento_id != 'all':
+            q_prev = q_prev.filter(Venda.estabelecimento_id == estabelecimento_id)
+            
+        previous_query = q_prev.group_by(Venda.funcionario_id).all()
 
         previous_map = {row.funcionario_id: float(row.total_passado or 0) for row in previous_query}
 
         # 3. Retrieve Vendedores info
-        seller_ids = list(set(list(current_map.keys()) + list(previous_map.keys())))
+        seller_ids = [s for s in set(list(current_map.keys()) + list(previous_map.keys())) if s is not None]
         if not seller_ids:
             return []
 
-        funcionarios = db.session.query(Funcionario.id, Funcionario.nome).filter(
-            Funcionario.estabelecimento_id == estabelecimento_id,
+        q_func = db.session.query(Funcionario.id, Funcionario.nome).filter(
             Funcionario.id.in_(seller_ids)
-        ).all()
+        )
+        if estabelecimento_id != 'all':
+            q_func = q_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            
+        funcionarios = q_func.all()
 
         vendedores = []
         for f_id, f_nome in funcionarios:
