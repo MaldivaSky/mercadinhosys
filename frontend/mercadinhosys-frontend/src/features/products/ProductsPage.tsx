@@ -498,27 +498,8 @@ const ProductsPage: React.FC = () => {
         stats={stats} 
         onCardClick={handleCardClick} 
         onAdvancedAnalyticsClick={(type) => {
-          let targetFilter = '';
-          if (type === 'abc_a') targetFilter = 'classe_a';
-          else if (type === 'abc_b') targetFilter = 'classe_b';
-          else if (type === 'abc_c') targetFilter = 'classe_c';
-          else if (type === 'giro_rapido') targetFilter = 'giro_rapido';
-          else if (type === 'giro_normal') targetFilter = 'giro_normal';
-          else if (type === 'giro_lento') targetFilter = 'giro_lento';
-          
-          if (targetFilter) {
-            handleQuickFilterChange(targetFilter);
-            // Scroll to the table softly
-            setTimeout(() => {
-              window.scrollTo({
-                top: document.querySelector('.products-table-wrapper')?.getBoundingClientRect().top! + window.scrollY - 100,
-                behavior: 'smooth'
-              });
-            }, 100);
-          } else {
-            setAdvancedAnalyticsType(type);
-            setShowAdvancedAnalyticsModal(true);
-          }
+          setAdvancedAnalyticsType(type);
+          setShowAdvancedAnalyticsModal(true);
         }}
         onProductClick={openDetailModal}
       />

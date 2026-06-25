@@ -26,53 +26,31 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
     const carregarProdutos = async () => {
         try {
             setLoading(true);
-            // Fetch up to 1000 items to classify properly on frontend
-            const response = await productsService.getAllEstoque(1, 1000, {});
+            
+            let targetFilter = '';
+            if (type === 'abc_a') targetFilter = 'classe_a';
+            else if (type === 'abc_b') targetFilter = 'classe_b';
+            else if (type === 'abc_c') targetFilter = 'classe_c';
+            else if (type === 'giro_rapido') targetFilter = 'giro_rapido';
+            else if (type === 'giro_normal') targetFilter = 'giro_normal';
+            else if (type === 'giro_lento') targetFilter = 'giro_lento';
+            
+            const response = await productsService.getAllEstoque(1, 100, {
+                filtro_rapido: targetFilter || undefined,
+                estoque_status: type === 'alerta_cobertura' ? 'baixo' : undefined,
+                ordenar_por: type.startsWith('abc_') ? 'total_vendido' : 'quantidade',
+                direcao: type.startsWith('abc_') ? 'desc' : 'asc'
+            });
             const allProducts = response.produtos || [];
+            
+            let filtered = [...allProducts];
 
-            let filtered: Produto[] = [];
-
-            if (type.startsWith('abc_')) {
-                const faturamentoTotal = allProducts.reduce((sum, p) => sum + (p.total_vendido || 0), 0);
-                const produtosComFaturamento = allProducts.map(p => ({
-                    ...p,
-                    faturamento: p.total_vendido || 0
-                })).sort((a, b) => b.faturamento - a.faturamento);
-
-                let acumulado = 0;
-                const classA: Produto[] = [];
-                const classB: Produto[] = [];
-                const classC: Produto[] = [];
-
-                if (faturamentoTotal === 0) {
-                    classC.push(...allProducts);
-                } else {
-                    produtosComFaturamento.forEach(p => {
-                        acumulado += p.faturamento;
-                        const percentualAcumulado = acumulado / faturamentoTotal;
-
-                        if (percentualAcumulado <= 0.80) classA.push(p);
-                        else if (percentualAcumulado <= 0.95) classB.push(p);
-                        else classC.push(p);
-                    });
-                }
-
-                if (type === 'abc_a') filtered = classA;
-                if (type === 'abc_b') filtered = classB;
-                if (type === 'abc_c') filtered = classC;
-
-            } else if (type.startsWith('giro_') || type === 'alerta_cobertura') {
+            if (type.startsWith('giro_') || type === 'alerta_cobertura') {
                 const hoje = new Date();
-                const rapido: Produto[] = [];
-                const normal: Produto[] = [];
-                const lento: Produto[] = [];
-                const coberturaBaixa: Produto[] = [];
-
-                allProducts.forEach(p => {
+                filtered.forEach(p => {
                     const dataCadastro = p.created_at ? new Date(p.created_at) : new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
                     let diasVida = Math.max(1, Math.floor((hoje.getTime() - dataCadastro.getTime()) / (1000 * 60 * 60 * 24)));
                     
-                    // Suavizar dias_vida se for muito baixo mas tiver muita venda (simulação)
                     if (diasVida < 7 && (p.quantidade_vendida || 0) > 10) {
                         diasVida = 30;
                     }
@@ -81,30 +59,19 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
                     
                     if (vmd > 0) {
                         const cobertura = (p.quantidade || 0) / vmd;
-                        
-                        // Guardar esses valores no objeto para mostrar na UI depois
                         (p as any)._vmd_calc = vmd;
                         (p as any)._cobertura_calc = cobertura;
-
-                        if (cobertura <= 15) rapido.push(p);
-                        else if (cobertura <= 60) normal.push(p);
-                        else lento.push(p);
-
-                        // Alerta Cobertura Crítica (<= 10 dias)
-                        if (cobertura <= 10) {
-                            coberturaBaixa.push(p);
-                        }
                     } else {
                         (p as any)._vmd_calc = 0;
-                        (p as any)._cobertura_calc = 999; // infinito
-                        lento.push(p);
+                        (p as any)._cobertura_calc = 999;
                     }
                 });
-
-                if (type === 'giro_rapido') filtered = rapido.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
-                if (type === 'giro_normal') filtered = normal.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
-                if (type === 'giro_lento') filtered = lento.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
-                if (type === 'alerta_cobertura') filtered = coberturaBaixa.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
+                
+                filtered.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
+                
+                if (type === 'alerta_cobertura') {
+                    filtered = filtered.filter(p => (p as any)._cobertura_calc <= 10);
+                }
             }
 
             setProdutosFiltrados(filtered);

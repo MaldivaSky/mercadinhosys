@@ -253,7 +253,7 @@ export default function ExecutiveTab({ data }: ExecutiveTabProps) {
                     formatter={(value: number) => [formatCurrency(value), 'Impacto Potencial']}
                   />
                   <Bar dataKey="impacto" radius={[0, 4, 4, 0]} maxBarSize={24}>
-                    {radarData.map((entry, index) => (
+                    {radarData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill="#3b82f6" />
                     ))}
                   </Bar>

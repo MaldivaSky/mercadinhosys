@@ -193,7 +193,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                     outerRadius={100}
                     paddingAngle={5}
                   >
-                    {vendedores.map((entry: any, index: number) => {
+                    {vendedores.map((_: any, index: number) => {
                       const colors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
                       return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} stroke="rgba(0,0,0,0)" />;
                     })}
