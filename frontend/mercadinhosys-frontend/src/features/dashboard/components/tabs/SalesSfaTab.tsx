@@ -9,6 +9,13 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
   // Extrai os Vendedores Reais do Backend (DataLayer / Enterprise SEED)
   const vendedores = data?.sfa?.vendedores || [];
 
+  // Clientes únicos: o dashboard científico não traz customer_metrics; derivamos
+  // da soma dos segmentos RFM (ex.: {Campeão:4, Fiel:5, ...}). Antes ficava zerado.
+  const rfmSegments = data?.rfm?.segments || {};
+  const clientesUnicos = data?.customer_metrics?.unique_customers
+    ?? Object.values(rfmSegments).reduce((acc: number, s: any) =>
+         acc + (typeof s === 'number' ? s : Array.isArray(s) ? s.length : (s?.count ?? s?.total ?? 0)), 0);
+
   // Cálculos Dinâmicos para os KPIs Globais do SFA
   const globalMeta = vendedores.reduce((acc: number, v: any) => acc + (v.meta || 0), 0);
   const globalAlcancado = vendedores.reduce((acc: number, v: any) => acc + (v.alcancado || 0), 0);
@@ -81,7 +88,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
              <h3 className="text-slate-300 font-bold tracking-wide">Clientes Atendidos</h3>
           </div>
           <div className="text-4xl font-black text-white tracking-tight mb-2">
-            {data?.customer_metrics?.unique_customers || 0}
+            {clientesUnicos || 0}
           </div>
           <p className="text-sm text-slate-400 font-medium">
             Ticket médio geral: <span className="text-purple-400 font-bold">{formatCurrency(data?.summary?.avg_ticket?.value || 0)}</span>

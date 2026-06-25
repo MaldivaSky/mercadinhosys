@@ -7,10 +7,21 @@ interface RHTabProps {
 
 export default function RHTab({ data }: RHTabProps) {
   const rh = data?.rh || {};
-  const totalSalarios = rh?.total_salarios || 0;
-  const totalBeneficios = rh?.total_beneficios_mensal || 0;
+  // O backend (cientifico) entrega custo_folha_estimado, benefits_breakdown[] e
+  // listas por funcionário; os nomes antigos (total_salarios/resumo_mes) não existem
+  // e zeravam os cards. Mapeamos para os campos reais com fallback.
+  const totalSalarios = rh?.custo_folha_estimado ?? rh?.total_salarios ?? 0;
+  const totalBeneficios = Array.isArray(rh?.benefits_breakdown)
+    ? rh.benefits_breakdown.reduce((a: number, b: any) => a + (b?.value || 0), 0)
+    : (rh?.total_beneficios_mensal ?? 0);
   const funcionariosAtivos = rh?.funcionarios_ativos || 0;
-  
+  const totalAtrasosMin = Array.isArray(rh?.atrasos_por_funcionario_mes)
+    ? rh.atrasos_por_funcionario_mes.reduce((a: number, b: any) => a + (b?.minutos_atraso || 0), 0)
+    : (rh?.resumo_mes?.total_atrasos_minutos ?? 0);
+  const totalFaltas = Array.isArray(rh?.faltas_por_funcionario_mes)
+    ? rh.faltas_por_funcionario_mes.reduce((a: number, b: any) => a + (b?.faltas || 0), 0)
+    : (rh?.resumo_mes?.total_faltas ?? 0);
+
   return (
     <div className="space-y-8">
       {/* Resumo RH */}
@@ -38,7 +49,7 @@ export default function RHTab({ data }: RHTabProps) {
              <div className="p-2 bg-orange-500/20 rounded-lg"><Clock className="text-orange-400" /></div>
              <h3 className="text-slate-300 font-bold">Atrasos (Mês)</h3>
           </div>
-          <div className="text-3xl font-black text-orange-400">{rh?.resumo_mes?.total_atrasos_minutos || 0} min</div>
+          <div className="text-3xl font-black text-orange-400">{totalAtrasosMin || 0} min</div>
           <p className="text-sm text-orange-500/70 mt-2 font-medium">Total de atrasos somados</p>
         </div>
         
@@ -47,7 +58,7 @@ export default function RHTab({ data }: RHTabProps) {
              <div className="p-2 bg-red-500/20 rounded-lg"><AlertTriangle className="text-red-400" /></div>
              <h3 className="text-slate-300 font-bold">Faltas (Mês)</h3>
           </div>
-          <div className="text-3xl font-black text-red-400">{rh?.resumo_mes?.total_faltas || 0}</div>
+          <div className="text-3xl font-black text-red-400">{totalFaltas || 0}</div>
           <p className="text-sm text-red-500/70 mt-2 font-medium">Dias de falta registrados</p>
         </div>
       </div>
