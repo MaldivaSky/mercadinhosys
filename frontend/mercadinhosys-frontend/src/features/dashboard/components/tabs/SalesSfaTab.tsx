@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Target, TrendingUp, Users, Award, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { formatCurrency } from '../../../../utils/formatters';
 
@@ -7,7 +8,41 @@ interface SalesSfaTabProps {
 
 export default function SalesSfaTab({ data }: SalesSfaTabProps) {
   // Extrai os Vendedores Reais do Backend (DataLayer / Enterprise SEED)
-  const vendedores = data?.sfa?.vendedores || [];
+  let vendedores = data?.sfa?.vendedores || [];
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+
+  if (searchTerm) {
+    vendedores = vendedores.filter((v: any) => 
+      v.nome?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      v.id?.toString().includes(searchTerm)
+    );
+  }
+
+  if (sortConfig) {
+    vendedores = [...vendedores].sort((a: any, b: any) => {
+      let valA = a[sortConfig.key];
+      let valB = b[sortConfig.key];
+      
+      if (sortConfig.key === 'progresso') {
+        valA = a.meta > 0 ? (a.alcancado / a.meta) * 100 : 0;
+        valB = b.meta > 0 ? (b.alcancado / b.meta) * 100 : 0;
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   // Clientes únicos: o dashboard científico não traz customer_metrics; derivamos
   // da soma dos segmentos RFM (ex.: {Campeão:4, Fiel:5, ...}). Antes ficava zerado.
@@ -109,13 +144,22 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
              </div>
            </div>
            
-           {/* Alerta Inteligente */}
-           {vendedores.some((v:any) => v.tendencia <= -15) && (
-             <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-bold animate-pulse">
-                <AlertTriangle className="w-4 h-4" />
-                Atenção: Vendedores com queda severa
-             </div>
-           )}
+           <div className="flex flex-col sm:flex-row items-center gap-4">
+             {/* Alerta Inteligente */}
+             {vendedores.some((v:any) => v.tendencia <= -15) && (
+               <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-bold animate-pulse">
+                  <AlertTriangle className="w-4 h-4" />
+                  Atenção: Vendedores com queda severa
+               </div>
+             )}
+             <input 
+               type="text" 
+               placeholder="Buscar vendedor..." 
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+               className="bg-slate-900/50 border border-slate-700/50 text-white text-sm rounded-xl px-4 py-2 w-full sm:w-64 focus:outline-none focus:border-blue-500/50 placeholder-slate-500"
+             />
+           </div>
         </div>
         
         <div className="p-0 overflow-x-auto">
@@ -129,12 +173,12 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
             <table className="w-full text-left whitespace-nowrap">
               <thead>
                 <tr className="text-slate-400 border-b border-slate-700/60 bg-slate-900/40 text-xs uppercase tracking-wider font-bold">
-                  <th className="px-6 py-4">Vendedor</th>
-                  <th className="px-6 py-4">Vendas</th>
-                  <th className="px-6 py-4">Meta Projetada</th>
-                  <th className="px-6 py-4">Faturamento</th>
-                  <th className="px-6 py-4 w-1/3">Progresso</th>
-                  <th className="px-6 py-4 text-right">Tendência</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('nome')}>Vendedor {sortConfig?.key === 'nome' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('vendas_count')}>Vendas {sortConfig?.key === 'vendas_count' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('meta')}>Meta Projetada {sortConfig?.key === 'meta' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('alcancado')}>Faturamento {sortConfig?.key === 'alcancado' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className="px-6 py-4 w-1/3 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('progresso')}>Progresso {sortConfig?.key === 'progresso' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                  <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('tendencia')}>Tendência {sortConfig?.key === 'tendencia' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">

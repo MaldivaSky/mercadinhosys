@@ -28,10 +28,39 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                    (abcResumo?.C?.faturamento_total || 0);
 
   const [selectedABC, setSelectedABC] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
 
-  const filteredProducts = selectedABC === 'all'
-    ? produtosNormalizados
+  let filteredProducts = selectedABC === 'all'
+    ? [...produtosNormalizados]
     : produtosNormalizados.filter((p: any) => p.classe === selectedABC);
+
+  if (searchTerm) {
+    filteredProducts = filteredProducts.filter((p: any) => 
+      p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.id?.toString().includes(searchTerm)
+    );
+  }
+
+  if (sortConfig) {
+    filteredProducts.sort((a: any, b: any) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (a[sortConfig.key] > b[sortConfig.key]) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -52,7 +81,10 @@ export default function InventoryTab({ data }: InventoryTabProps) {
           <p className="text-sm text-slate-400 font-medium">Valor total alocado em mercadorias</p>
         </div>
         
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-amber-500/30 transition-colors">
+        <div
+          onClick={() => navigate('/products?filtro=baixo')}
+          title="Ver produtos com estoque baixo"
+          className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-amber-500/30 transition-colors cursor-pointer">
           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl group-hover:bg-amber-500/20 transition-all"></div>
           <div className="flex items-center gap-3 mb-4">
              <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
@@ -63,10 +95,13 @@ export default function InventoryTab({ data }: InventoryTabProps) {
           <div className="text-4xl font-black text-amber-400 tracking-tight mb-2">
             {data?.inventory?.low_stock_alert?.value || 0} <span className="text-xl text-amber-500/70 font-medium">itens</span>
           </div>
-          <p className="text-sm text-slate-400 font-medium">Estoque abaixo da margem de segurança</p>
+          <p className="text-sm text-amber-400/80 font-medium group-hover:text-amber-300 flex items-center gap-1">Ver estoque baixo →</p>
         </div>
 
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-red-500/30 transition-colors">
+        <div
+          onClick={() => navigate('/products?filtro=classe_c')}
+          title="Ver produtos Classe C (baixo giro)"
+          className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-red-500/30 transition-colors cursor-pointer">
           <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl group-hover:bg-red-500/20 transition-all"></div>
           <div className="flex items-center gap-3 mb-4">
              <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-red-400">
@@ -77,7 +112,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
           <div className="text-4xl font-black text-white tracking-tight mb-2">
             {formatCurrency(abcResumo?.C?.faturamento_total || 0)}
           </div>
-          <p className="text-sm text-slate-400 font-medium">Custo paralisado em baixo giro</p>
+          <p className="text-sm text-red-400/80 font-medium group-hover:text-red-300">Ver produtos parados →</p>
         </div>
       </div>
 
@@ -98,8 +133,16 @@ export default function InventoryTab({ data }: InventoryTabProps) {
              </div>
           </div>
           
-          {/* Filtros ABC */}
-          <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-700/50">
+          {/* Filtros ABC e Busca */}
+          <div className="flex flex-col md:flex-row gap-4 items-center">
+            <input 
+              type="text" 
+              placeholder="Buscar produto..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-slate-900/50 border border-slate-700/50 text-white text-sm rounded-xl px-4 py-2 w-full md:w-64 focus:outline-none focus:border-blue-500/50 placeholder-slate-500"
+            />
+            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-700/50">
              {(['all', 'A', 'B', 'C'] as const).map((classe) => (
                <button
                  key={classe}
@@ -116,6 +159,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                  {classe === 'all' ? 'Todos' : `Curva ${classe}`}
                </button>
              ))}
+           </div>
           </div>
         </div>
 
@@ -127,8 +171,13 @@ export default function InventoryTab({ data }: InventoryTabProps) {
              const isA = classe === 'A';
              const isB = classe === 'B';
              
+             const ativo = selectedABC === classe;
              return (
-               <div key={classe} className={`p-6 ${classe !== 'C' ? 'border-b md:border-b-0 md:border-r border-slate-700/60' : ''} bg-slate-800/30`}>
+               <div
+                 key={classe}
+                 onClick={() => setSelectedABC(ativo ? 'all' : classe)}
+                 title={`Filtrar a lista pela Curva ${classe}`}
+                 className={`p-6 cursor-pointer transition-colors ${classe !== 'C' ? 'border-b md:border-b-0 md:border-r border-slate-700/60' : ''} ${ativo ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/40' : 'bg-slate-800/30 hover:bg-slate-700/30'}`}>
                  <div className="flex items-center justify-between mb-4">
                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shadow-inner ${
                      isA ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
@@ -172,10 +221,18 @@ export default function InventoryTab({ data }: InventoryTabProps) {
             <table className="w-full text-left whitespace-nowrap">
               <thead className="sticky top-0 bg-slate-900/90 backdrop-blur z-10">
                 <tr className="text-slate-400 border-b border-slate-700/60 text-xs uppercase tracking-wider font-bold">
-                  <th className="px-6 py-4">Produto</th>
-                  <th className="px-6 py-4">Classe</th>
-                  <th className="px-6 py-4 text-right">Faturamento</th>
-                  <th className="px-6 py-4 text-right">Acumulado</th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('nome')}>
+                    Produto {sortConfig?.key === 'nome' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('classe')}>
+                    Classe {sortConfig?.key === 'classe' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  </th>
+                  <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('faturamento')}>
+                    Faturamento {sortConfig?.key === 'faturamento' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  </th>
+                  <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('percentual_acumulado')}>
+                    Acumulado {sortConfig?.key === 'percentual_acumulado' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">
