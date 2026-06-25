@@ -12,7 +12,6 @@ export default function InventoryTab({ data }: InventoryTabProps) {
   const navigate = useNavigate();
   const inventoryValue = data?.inventory?.total_value?.value || data?.inventory?.valor_total || 0;
   const abc = data?.inventory?.abc_analysis || data?.abc || {};
-  const abcResumo = abc?.resumo || {};
 
   // Normaliza os produtos vindos do backend (campos: classificacao, id, faturamento)
   // para os nomes que a tabela usa. Sem isso, classe/id/faturamento vinham vazios.
@@ -24,9 +23,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
     percentual_acumulado: p.percentual_acumulado ?? 0,
   }));
 
-  const totalABC = (abcResumo?.A?.faturamento_total || 0) +
-                   (abcResumo?.B?.faturamento_total || 0) +
-                   (abcResumo?.C?.faturamento_total || 0);
+
 
   const [selectedABC, setSelectedABC] = useState<'all' | 'A' | 'B' | 'C'>('all');
   const [searchTerm, setSearchTerm] = useState('');
