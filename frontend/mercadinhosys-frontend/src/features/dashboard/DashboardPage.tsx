@@ -12,15 +12,16 @@ export default function DashboardPageV2() {
   const [activeTab, setActiveTab] = useState('executive');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [daysFilter, setDaysFilter] = useState(30);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [daysFilter]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/dashboard/cientifico?days=30');
+      const response = await apiClient.get(`/dashboard/cientifico?days=${daysFilter}`);
       setData(response.data?.data || response.data);
     } catch (e) {
       console.error(e);
@@ -46,11 +47,22 @@ export default function DashboardPageV2() {
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
             Intelligence Hub <span className="text-blue-500">•</span>
           </h1>
-          <p className="text-slate-400 mt-1">Resumo estratégico dos últimos 30 dias</p>
+          <p className="text-slate-400 mt-1">Resumo estratégico do período selecionado</p>
         </div>
         <div className="flex gap-2">
-           <button onClick={loadData} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-sm font-medium rounded-lg transition-colors border border-slate-700">
-             Atualizar Dados
+           <select 
+             value={daysFilter} 
+             onChange={(e) => setDaysFilter(Number(e.target.value))}
+             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-sm font-medium rounded-lg transition-colors border border-slate-700 outline-none text-white cursor-pointer"
+           >
+             <option value={7}>Últimos 7 dias</option>
+             <option value={15}>Últimos 15 dias</option>
+             <option value={30}>Últimos 30 dias</option>
+             <option value={90}>Últimos 90 dias</option>
+             <option value={365}>Este Ano (365 dias)</option>
+           </select>
+           <button onClick={loadData} className="px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-sm font-bold rounded-lg transition-colors border border-blue-500/30">
+             Atualizar
            </button>
         </div>
       </div>
