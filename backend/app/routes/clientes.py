@@ -23,14 +23,22 @@ clientes_bp = Blueprint("clientes", __name__, url_prefix="/api/clientes")
 # ============================================
 
 
-def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None):
-    """Valida todos os dados do cliente antes de salvar"""
+def validar_dados_cliente(data, cliente_id=None, estabelecimento_id=None, is_update=False):
+    """Valida todos os dados do cliente antes de salvar.
+
+    is_update=True faz validação PARCIAL: campos obrigatórios só são exigidos
+    quando enviados no payload (não pode mandá-los vazios, mas pode omiti-los).
+    Sem isso, editar só o nome quebrava com 'Cpf/Celular obrigatório'.
+    """
     erros = []
 
     # Validação de campos obrigatórios
     campos_obrigatorios = ["nome", "cpf", "celular"]
     for campo in campos_obrigatorios:
-        if not data.get(campo):
+        if is_update:
+            if campo in data and not data.get(campo):
+                erros.append(f'O campo {campo.replace("_", " ").title()} não pode ficar vazio')
+        elif not data.get(campo):
             erros.append(f'O campo {campo.replace("_", " ").title()} é obrigatório')
 
     # Log para depuração
@@ -629,8 +637,8 @@ def atualizar_cliente(id):
 
         data = request.get_json()
 
-        # Validação dos dados (passando ID para verificação de CPF único)
-        erros = validar_dados_cliente(data, cliente.id, estabelecimento_id)
+        # Validação PARCIAL (update): só exige campos enviados
+        erros = validar_dados_cliente(data, cliente.id, estabelecimento_id, is_update=True)
         if erros:
             return (
                 jsonify(
