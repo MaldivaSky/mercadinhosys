@@ -54,7 +54,10 @@ services:
       # Desligado aqui para não rodar dentro do worker do gunicorn (frágil/corre entre workers).
       SYNC_AUTO_PUSH: "false"
       SYNC_PUSH_INTERVAL_SEC: "300"
-      SYNC_ENABLED: "true"
+      # DESLIGADO: GuerrillaSyncWorker entrava em loop self-referencial
+      # (CLOUD_API_URL=http://mercadinhosys-backend:5000) -> POST /sync/receive
+      # no próprio backend -> 500/429 contínuo, pressão de DB e lentidão nas escritas.
+      SYNC_ENABLED: "false"
 
       # Rate-limiting com storage compartilhado (Redis) — vale entre todos os workers
       RATELIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:-redis_secure_pass}@redis:6379/1

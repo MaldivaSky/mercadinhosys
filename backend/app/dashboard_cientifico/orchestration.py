@@ -89,6 +89,8 @@ class DashboardOrchestrator:
         inventory_summary = DataLayer.get_inventory_summary(self.establishment_id)
         customer_metrics = DataLayer.get_customer_metrics(self.establishment_id, days)
         rh_metrics = DataLayer.get_rh_metrics(self.establishment_id, days)
+        # SFA: performance de vendedores (estava referenciada no retorno sem ser definida)
+        sellers_performance = DataLayer.get_sellers_performance(self.establishment_id, days) or []
 
         def _confidence_from_samples(samples: int) -> str:
             if samples < 5:
@@ -139,10 +141,15 @@ class DashboardOrchestrator:
             ]
         )
 
-        # Score de saúde
-        health_score = PracticalModels.calculate_health_score(
-            sales_summary, inventory_summary, customer_metrics
-        )
+        # Score de saúde — calculate_health_score espera UM dict financeiro
+        # com 'revenue'/'gross_profit' (a assinatura antiga de 3 args não existe).
+        financas_score = {
+            "revenue": float(sales_summary.get("total_faturado", 0) or 0),
+            "gross_profit": float(
+                sales_summary.get("lucro_bruto", sales_summary.get("total_lucro", 0)) or 0
+            ),
+        }
+        health_score = PracticalModels.calculate_health_score(financas_score)
 
         # 4. Serializar para frontend
         serializer = DashboardSerializer()
