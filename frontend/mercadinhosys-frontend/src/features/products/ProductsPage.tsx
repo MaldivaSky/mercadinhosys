@@ -418,6 +418,18 @@ const ProductsPage: React.FC = () => {
     setPage(1);
   };
 
+  // Aplica filtro vindo da URL (dashboard -> /products?filtro=baixo|validade|repor_urgente|classe_a...).
+  // Torna os cards/recomendações do dashboard acionáveis: o clique já abre a lista filtrada.
+  useEffect(() => {
+    const f = new URLSearchParams(location.search).get('filtro');
+    if (!f) return;
+    if (f === 'baixo' || f === 'esgotado' || f === 'normal') handleCardClick(f);
+    else if (f === 'validade' || f === 'vencimento_proximo') handleQuickFilterChange('vencimento_proximo');
+    else if (f === 'vencido') handleQuickFilterChange('vencido');
+    else if (['repor_urgente', 'classe_a', 'classe_b', 'classe_c', 'margem_alta', 'margem_baixa', 'giro_rapido', 'giro_lento'].includes(f)) handleQuickFilterChange(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   const handleSort = (key: string) => {
     setFiltros(prev => ({
       ...prev,
