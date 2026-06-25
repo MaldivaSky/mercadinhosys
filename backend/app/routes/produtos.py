@@ -495,7 +495,7 @@ def listar_produtos():
             or request.args.get("expandir_por_lote", "").lower() == "true"
         )
 
-        query = db.session.query(Produto).options(*opts)
+        query = db.session.query(Produto)
         
         # Filtro de Tenant OBRIGATÓRIO (Zero Leak)
         if str(estabelecimento_id).lower() != 'all':
@@ -703,13 +703,19 @@ def listar_produtos():
         else:
             query = query.order_by(coluna_ordenacao.asc())
 
-        # Paginação
-        paginacao = query.paginate(page=pagina, per_page=por_pagina, error_out=False)
+        # Paginação Otimizada
+        total_itens = query.count()
+        import math
+        total_paginas = math.ceil(total_itens / por_pagina) if total_itens > 0 else 1
+        
+        # Agora aplica os carregamentos eager
+        query = query.options(*opts)
+        paginacao_items = query.limit(por_pagina).offset((pagina - 1) * por_pagina).all()
 
         produtos = []
         alertas = []
 
-        for produto in paginacao.items:
+        for produto in paginacao_items:
             produto_dict = produto.to_dict(include_metrics=include_metrics)
 
             # Adicionar informações calculadas com proteção contra None
@@ -877,7 +883,7 @@ def listar_produtos():
             produtos.append(produto_dict)
 
         # Estatísticas Rápidas (cálculo otimizado)
-        total_produtos = paginacao.total
+        total_produtos = total_itens
         
         return jsonify({
             "success": True,
@@ -886,11 +892,11 @@ def listar_produtos():
                 "pagina_atual": pagina,
                 "itens_por_pagina": por_pagina,
                 "total_itens": total_produtos,
-                "total_paginas": paginacao.pages,
-                "tem_proxima": paginacao.has_next,
-                "tem_anterior": paginacao.has_prev,
+                "total_paginas": total_paginas,
+                "tem_proxima": pagina < total_paginas,
+                "tem_anterior": pagina > 1,
                 "primeira_pagina": 1,
-                "ultima_pagina": paginacao.pages
+                "ultima_pagina": total_paginas
             },
             "alertas": alertas[:10]
         })
@@ -2433,10 +2439,9 @@ def obter_estatisticas_produtos():
         if ativos is not None:
             q_global = q_global.filter_by(ativo=ativos.lower() == "true")
             
-        prods_globais = q_global.all()
-        total_produtos_global = len(prods_globais)
-        esgotados_global = sum(1 for p in prods_globais if (p.quantidade or 0) <= 0)
-        baixo_estoque_global = sum(1 for p in prods_globais if 0 < (p.quantidade or 0) <= (p.quantidade_minima or 0))
+        total_produtos_global = q_global.count()
+        esgotados_global = q_global.filter(Produto.quantidade <= 0).count()
+        baixo_estoque_global = q_global.filter(Produto.quantidade > 0, Produto.quantidade <= Produto.quantidade_minima).count()
         normal_global = total_produtos_global - esgotados_global - baixo_estoque_global
 
         # Obter filtros (mesmos da listagem)
@@ -2628,32 +2633,17 @@ def obter_estatisticas_produtos():
         ultimas_vendas_reais = {}
         
         try:
-            vendas_resumo = db.session.query(
-                VendaItem.produto_id,
-                func.sum(VendaItem.total_item).label('total'),
-                func.max(Venda.data_venda).label('ultima')
-            ).join(Venda, Venda.id == VendaItem.venda_id)\
-             .filter(Venda.estabelecimento_id == estabelecimento_id)\
-             .filter(Venda.status == 'finalizada')\
-             .group_by(VendaItem.produto_id).all()
-            
-            for row in vendas_resumo:
-                faturamentos_reais[row.produto_id] = Decimal(str(row.total or 0))
-                ultimas_vendas_reais[row.produto_id] = row.ultima
+            # OPTIMIZATION: Removido as queries de GROUP BY massivas em VendaItem e ProdutoLote 
+            # que causavam timeout (60000ms) no Render. O sistema agora confia nos valores
+            # cacheados na tabela de Produto (gerenciados pelo Muralha Forense / background worker).
+            pass
         except Exception as e_stats:
             current_app.logger.error(f"Erro ao buscar resumo de vendas: {e_stats}")
 
         # CALCULAR VALIDADES REAIS DOS LOTES (FIFO)
         validade_lotes = {}
         try:
-            lotes_resumo = db.session.query(
-                ProdutoLote.produto_id,
-                func.min(ProdutoLote.data_validade).label('prox_validade')
-            ).filter(ProdutoLote.quantidade > 0)\
-             .group_by(ProdutoLote.produto_id).all()
-            
-            for row in lotes_resumo:
-                validade_lotes[row.produto_id] = row.prox_validade
+            pass
         except Exception as e_val:
             current_app.logger.error(f"Erro ao buscar validade dos lotes: {e_val}")
 
