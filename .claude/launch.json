@@ -5,6 +5,8 @@
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend/mercadinhosys-frontend",
+      "autoPort": false,
       "port": 5173
     }
   ]

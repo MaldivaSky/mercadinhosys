@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Target, TrendingUp, Users, Award, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Target, TrendingUp, Users, Award, AlertTriangle, CheckCircle2, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import { formatCurrency } from '../../../../utils/formatters';
 
 interface SalesSfaTabProps {
@@ -61,6 +62,9 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
     ? vendedores.reduce((acc: number, v: any) => acc + (v.tendencia || 0), 0) / vendedores.length 
     : 0;
 
+  // Total de vendas (para o card dinâmico)
+  const vendasFiltradas = vendedores.reduce((acc: number, v: any) => acc + (v.vendas_count || 0), 0);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
@@ -74,7 +78,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
              <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
                <Target className="w-5 h-5" />
              </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">Meta Global do Mês</h3>
+             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm ? 'Meta Filtrada' : 'Meta Global do Mês'}</h3>
           </div>
           <div className="text-4xl font-black text-white tracking-tight mb-2">
             {formatCurrency(globalAlcancado)}
@@ -101,7 +105,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
              <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
                <TrendingUp className="w-5 h-5" />
              </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">Forecast da Equipe</h3>
+             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm ? 'Tendência (Filtro)' : 'Forecast da Equipe'}</h3>
           </div>
           <div className="flex items-baseline gap-2 mb-2">
             <div className={`text-4xl font-black tracking-tight ${avgTendencia >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -120,16 +124,92 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
              <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400">
                <Users className="w-5 h-5" />
              </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">Clientes Atendidos</h3>
+             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm ? 'Vendas na Seleção' : 'Clientes Atendidos'}</h3>
           </div>
           <div className="text-4xl font-black text-white tracking-tight mb-2">
-            {clientesUnicos || 0}
+            {searchTerm ? vendasFiltradas : (clientesUnicos || 0)}
           </div>
           <p className="text-sm text-slate-400 font-medium">
-            Ticket médio geral: <span className="text-purple-400 font-bold">{formatCurrency(data?.summary?.avg_ticket?.value || 0)}</span>
+            {searchTerm ? 'Total de vendas dos vendedores filtrados' : `Ticket médio geral: ${formatCurrency(data?.summary?.avg_ticket?.value || 0)}`}
           </p>
         </div>
       </div>
+
+      {/* Gráficos Recharts Dinâmicos */}
+      {vendedores.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Gráfico 1: Meta vs Alcançado */}
+          <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <h3 className="text-slate-300 font-bold">Meta vs Realizado por Vendedor</h3>
+            </div>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={vendedores} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="nome" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`} />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9' }}
+                    itemStyle={{ fontWeight: 'bold', color: '#f8fafc' }}
+                    labelStyle={{ color: '#94a3b8', fontWeight: 'bold', marginBottom: '4px' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px', color: '#cbd5e1' }} />
+                  <Bar dataKey="meta" name="Meta Projetada" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="alcancado" name="Faturamento Alcançado" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Gráfico 2: Market Share (Faturamento) */}
+          <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
+                <PieChartIcon className="w-5 h-5" />
+              </div>
+              <h3 className="text-slate-300 font-bold">Share de Faturamento (Equipe)</h3>
+            </div>
+            <div className="h-[300px] w-full flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9' }}
+                    itemStyle={{ fontWeight: 'bold', color: '#f8fafc' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Pie
+                    data={vendedores}
+                    dataKey="alcancado"
+                    nameKey="nome"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={5}
+                  >
+                    {vendedores.map((entry: any, index: number) => {
+                      const colors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
+                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} stroke="rgba(0,0,0,0)" />;
+                    })}
+                  </Pie>
+                  <Legend 
+                    layout="vertical" 
+                    verticalAlign="middle" 
+                    align="right"
+                    wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Painel de Vendedores (SFA) */}
       <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 overflow-hidden shadow-2xl">

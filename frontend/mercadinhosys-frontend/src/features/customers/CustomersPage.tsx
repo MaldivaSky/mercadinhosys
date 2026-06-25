@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -308,6 +309,22 @@ const CustomersPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<CRMTab>('overview');
     const [selectedCampaign, setSelectedCampaign] = useState<CampaignKey>('reactivation');
     const [campaignCustomerId, setCampaignCustomerId] = useState<number | null>(null);
+    const location = useLocation();
+
+    // Filtro vindo da URL (dashboard -> /customers?segmento=Risco). Abre já filtrado.
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const seg = params.get('segmento') as SegmentFilter | null;
+        const tab = params.get('tab') as CRMTab | null;
+        const segmentosValidos: SegmentFilter[] = ['todos', 'Campeão', 'Fiel', 'Regular', 'Risco', 'Perdido', 'Novo'];
+        if (seg && segmentosValidos.includes(seg)) {
+            setSegmentFilter(seg);
+            setActiveTab(tab || 'portfolio');
+        } else if (tab) {
+            setActiveTab(tab);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.search]);
 
     const fetchDashboard = async () => {
         try {

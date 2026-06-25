@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, AlertTriangle, ArrowDownRight, ChartBar } from 'lucide-react';
+import { Package, AlertTriangle, ArrowDownRight, ChartBar, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatCurrency } from '../../../../utils/formatters';
 
 interface InventoryTabProps {
@@ -31,6 +32,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
 
+  // Aplica filtros de pesquisa e aba
   let filteredProducts = selectedABC === 'all'
     ? [...produtosNormalizados]
     : produtosNormalizados.filter((p: any) => p.classe === selectedABC);
@@ -41,6 +43,23 @@ export default function InventoryTab({ data }: InventoryTabProps) {
       p.id?.toString().includes(searchTerm)
     );
   }
+
+  // Cálculos dinâmicos baseados APENAS no que está visível na tela
+  const dynamicAbcResumo = {
+    A: { faturamento_total: 0, quantidade: 0 },
+    B: { faturamento_total: 0, quantidade: 0 },
+    C: { faturamento_total: 0, quantidade: 0 },
+  };
+
+  filteredProducts.forEach((p: any) => {
+    const c = (p.classe || 'C') as 'A' | 'B' | 'C';
+    if (dynamicAbcResumo[c]) {
+      dynamicAbcResumo[c].faturamento_total += (p.faturamento || 0);
+      dynamicAbcResumo[c].quantidade += 1;
+    }
+  });
+
+  const dynamicTotalABC = dynamicAbcResumo.A.faturamento_total + dynamicAbcResumo.B.faturamento_total + dynamicAbcResumo.C.faturamento_total;
 
   if (sortConfig) {
     filteredProducts.sort((a: any, b: any) => {
@@ -65,7 +84,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
-      {/* Resumo Estoque - KPIs Globais */}
+      {/* Resumo Estoque - KPIs Globais (Reativos ao Filtro) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-blue-500/30 transition-colors">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
@@ -73,12 +92,12 @@ export default function InventoryTab({ data }: InventoryTabProps) {
              <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
                <Package className="w-5 h-5" />
              </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">Capital Imobilizado</h3>
+             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm || selectedABC !== 'all' ? 'Faturamento Filtrado' : 'Capital Imobilizado'}</h3>
           </div>
           <div className="text-4xl font-black text-white tracking-tight mb-2">
-            {formatCurrency(inventoryValue)}
+            {formatCurrency(searchTerm || selectedABC !== 'all' ? dynamicTotalABC : inventoryValue)}
           </div>
-          <p className="text-sm text-slate-400 font-medium">Valor total alocado em mercadorias</p>
+          <p className="text-sm text-slate-400 font-medium">{searchTerm || selectedABC !== 'all' ? 'Geração de caixa dos produtos listados' : 'Valor total alocado em mercadorias globais'}</p>
         </div>
         
         <div
@@ -90,12 +109,12 @@ export default function InventoryTab({ data }: InventoryTabProps) {
              <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
                <AlertTriangle className="w-5 h-5" />
              </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">Risco de Ruptura</h3>
+             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm || selectedABC !== 'all' ? 'Produtos Encontrados' : 'Risco de Ruptura'}</h3>
           </div>
           <div className="text-4xl font-black text-amber-400 tracking-tight mb-2">
-            {data?.inventory?.low_stock_alert?.value || 0} <span className="text-xl text-amber-500/70 font-medium">itens</span>
+            {searchTerm || selectedABC !== 'all' ? filteredProducts.length : (data?.inventory?.low_stock_alert?.value || 0)} <span className="text-xl text-amber-500/70 font-medium">itens</span>
           </div>
-          <p className="text-sm text-amber-400/80 font-medium group-hover:text-amber-300 flex items-center gap-1">Ver estoque baixo →</p>
+          <p className="text-sm text-amber-400/80 font-medium group-hover:text-amber-300 flex items-center gap-1">{searchTerm || selectedABC !== 'all' ? 'Quantidade visível no filtro' : 'Ver estoque baixo globais →'}</p>
         </div>
 
         <div
@@ -107,12 +126,12 @@ export default function InventoryTab({ data }: InventoryTabProps) {
              <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-red-400">
                <ArrowDownRight className="w-5 h-5" />
              </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">Curva C (Lentidão)</h3>
+             <h3 className="text-slate-300 font-bold tracking-wide">Curva C {searchTerm || selectedABC !== 'all' ? 'Filtrada' : '(Lentidão)'}</h3>
           </div>
           <div className="text-4xl font-black text-white tracking-tight mb-2">
-            {formatCurrency(abcResumo?.C?.faturamento_total || 0)}
+            {formatCurrency(dynamicAbcResumo.C.faturamento_total)}
           </div>
-          <p className="text-sm text-red-400/80 font-medium group-hover:text-red-300">Ver produtos parados →</p>
+          <p className="text-sm text-red-400/80 font-medium group-hover:text-red-300">Faturamento gerado pela Classe C listada →</p>
         </div>
       </div>
 
@@ -163,11 +182,11 @@ export default function InventoryTab({ data }: InventoryTabProps) {
           </div>
         </div>
 
-        {/* Resumo Estatístico das 3 Classes */}
+        {/* Resumo Estatístico das 3 Classes Dinâmicas */}
         <div className="grid grid-cols-1 md:grid-cols-3 border-b border-slate-700/60">
           {(['A', 'B', 'C'] as const).map((classe) => {
-             const dados = abcResumo?.[classe];
-             const percentual = totalABC > 0 ? (dados?.faturamento_total || 0) / totalABC * 100 : 0;
+             const dados = dynamicAbcResumo[classe];
+             const percentual = dynamicTotalABC > 0 ? (dados.faturamento_total || 0) / dynamicTotalABC * 100 : 0;
              const isA = classe === 'A';
              const isB = classe === 'B';
              
@@ -191,23 +210,105 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                      isB ? 'bg-blue-500/10 text-blue-400' :
                      'bg-amber-500/10 text-amber-400'
                    }`}>
-                     {percentual.toFixed(1)}% do Faturamento
+                     {percentual.toFixed(1)}% do Faturamento (Filtrado)
                    </span>
                  </div>
                  
                  <div className="space-y-1">
-                   <p className="text-2xl font-black text-white">{formatCurrency(dados?.faturamento_total || 0)}</p>
+                   <p className="text-2xl font-black text-white">{formatCurrency(dados.faturamento_total)}</p>
                    <p className="text-sm text-slate-400 font-medium">Geração de Caixa Absoluta</p>
                  </div>
                  
                  <div className="mt-4 pt-4 border-t border-slate-700/40 flex justify-between text-sm">
                    <span className="text-slate-400">Total de Itens:</span>
-                   <span className="text-white font-bold">{dados?.quantidade ?? dados?.quantidade_produtos ?? 0} produtos</span>
+                   <span className="text-white font-bold">{dados.quantidade} produtos</span>
                  </div>
                </div>
              );
           })}
         </div>
+
+        {/* Gráficos Recharts Dinâmicos */}
+        {filteredProducts.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-b border-slate-700/60 bg-slate-900/20">
+            {/* Gráfico 1: Distribuição ABC */}
+            <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div className="flex items-center gap-2 mb-4">
+                <PieChartIcon className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-slate-300 font-bold text-sm">Distribuição do Faturamento</h3>
+              </div>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9' }}
+                      itemStyle={{ fontWeight: 'bold', color: '#f8fafc' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => formatCurrency(value)}
+                    />
+                    <Pie
+                      data={[
+                        { name: 'Curva A', value: dynamicAbcResumo.A.faturamento_total, color: '#10b981' },
+                        { name: 'Curva B', value: dynamicAbcResumo.B.faturamento_total, color: '#3b82f6' },
+                        { name: 'Curva C', value: dynamicAbcResumo.C.faturamento_total, color: '#f59e0b' }
+                      ].filter(d => d.value > 0)}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                    >
+                      {[{ color: '#10b981' }, { color: '#3b82f6' }, { color: '#f59e0b' }].map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />
+                      ))}
+                    </Pie>
+                    <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Gráfico 2: Top 10 Produtos */}
+            <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-slate-300 font-bold text-sm">Maiores Ofensores do Filtro (Top 10)</h3>
+              </div>
+              <div className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={[...filteredProducts].sort((a, b) => (b.faturamento || 0) - (a.faturamento || 0)).slice(0, 10).map(p => ({
+                      nome: p.nome.length > 20 ? p.nome.substring(0, 20) + '...' : p.nome,
+                      faturamento: p.faturamento || 0,
+                      color: p.classe === 'A' ? '#10b981' : p.classe === 'B' ? '#3b82f6' : '#f59e0b'
+                    }))}
+                    margin={{ top: 0, right: 20, left: 20, bottom: 0 }}
+                  >
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="nome" stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9', fontSize: '12px' }}
+                      itemStyle={{ fontWeight: 'bold', color: '#f8fafc' }}
+                      labelStyle={{ color: '#94a3b8', fontWeight: 'bold', marginBottom: '4px' }}
+                      formatter={(value: number) => [formatCurrency(value), 'Faturamento']}
+                    />
+                    <Bar dataKey="faturamento" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                      {
+                        [...filteredProducts].sort((a, b) => (b.faturamento || 0) - (a.faturamento || 0)).slice(0, 10).map((entry: any, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.classe === 'A' ? '#10b981' : entry.classe === 'B' ? '#3b82f6' : '#f59e0b'} />
+                        ))
+                      }
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabela de Produtos Detalhada */}
         <div className="p-0 overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
