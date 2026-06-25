@@ -1202,8 +1202,10 @@ def criar_produto():
             estabelecimento_id=estabelecimento_id,
             categoria_id=categoria_id,
             fornecedor_id=data.get("fornecedor_id") if data.get("fornecedor_id") else None,
-            codigo_barras=data.get("codigo_barras", "").strip(),
-            codigo_interno=data.get("codigo_interno", "").strip(),
+            # Vazio vira NULL: há unique (estab, codigo_interno) e (estab, codigo_barras).
+            # Com "" o 2º produto sem código colidia (500). NULLs não conflitam no Postgres.
+            codigo_barras=((data.get("codigo_barras") or "").strip() or None),
+            codigo_interno=((data.get("codigo_interno") or "").strip() or None),
             nome=data["nome"].strip(),
             descricao=data.get("descricao", "").strip(),
             marca=data.get("marca", "").strip(),
@@ -1431,6 +1433,11 @@ def atualizar_produto(id):
                                 produto.categoria_id = nova_categoria.id
                         else:
                             produto.categoria_id = None
+                    elif campo in ["codigo_barras", "codigo_interno"]:
+                        # Vazio vira NULL p/ não colidir nas unique constraints
+                        # (estab, codigo_interno) / (estab, codigo_barras).
+                        valor = (str(data[campo]).strip() if data[campo] is not None else "")
+                        setattr(produto, campo, valor or None)
                     else:
                         setattr(produto, campo, data[campo])
                 except Exception as field_error:
@@ -3461,8 +3468,10 @@ def criar_produto_estoque():
             estabelecimento_id=estabelecimento_id,
             categoria_id=categoria.id,
             fornecedor_id=data.get("fornecedor_id"),
-            codigo_barras=data.get("codigo_barras", "").strip(),
-            codigo_interno=data.get("codigo_interno", "").strip(),
+            # Vazio vira NULL: há unique (estab, codigo_interno) e (estab, codigo_barras).
+            # Com "" o 2º produto sem código colidia (500). NULLs não conflitam no Postgres.
+            codigo_barras=((data.get("codigo_barras") or "").strip() or None),
+            codigo_interno=((data.get("codigo_interno") or "").strip() or None),
             nome=data["nome"].strip(),
             descricao=data.get("descricao", "").strip(),
             marca=data.get("marca", "").strip(),
