@@ -26,7 +26,7 @@ _STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
 
 limiter = Limiter(
     key_func=get_identifier,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["1000 per hour"],
     storage_uri=_STORAGE_URI,
 )
 
