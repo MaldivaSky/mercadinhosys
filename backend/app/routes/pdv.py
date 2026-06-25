@@ -1073,28 +1073,47 @@ def vendas_hoje():
         inicio_dia = datetime.combine(hoje, datetime.min.time())
         fim_dia = datetime.combine(hoje, datetime.max.time())
         
-        # Vendas do dia
-        vendas = Venda.query.filter(
+        # Vendas do dia (carrega pagamentos junto p/ evitar N+1)
+        vendas = Venda.query.options(db.selectinload(Venda.pagamentos)).filter(
             Venda.estabelecimento_id == funcionario.estabelecimento_id,
             Venda.data_venda >= inicio_dia,
             Venda.data_venda <= fim_dia,
             Venda.status == "finalizada"
         ).all()
-        
+
+        def _formas_aprovadas(v):
+            """A Venda tem múltiplos pagamentos (relação `pagamentos`); o antigo
+            atributo `Venda.forma_pagamento` não existe mais."""
+            return [p.forma_pagamento for p in v.pagamentos if p.status == "aprovado"] or \
+                   [p.forma_pagamento for p in v.pagamentos]
+
+        def _forma_principal(v):
+            formas = _formas_aprovadas(v)
+            if not formas:
+                return "Não informado"
+            principal = formas[0]
+            if len(formas) > 1:
+                principal += f" +{len(formas) - 1}"
+            return principal
+
         # Estatísticas
-        total_vendas = sum(v.total for v in vendas)
+        total_vendas = sum(float(v.total or 0) for v in vendas)
         quantidade_vendas = len(vendas)
         ticket_medio = total_vendas / quantidade_vendas if quantidade_vendas > 0 else 0
-        
-        # Por forma de pagamento
+
+        # Por forma de pagamento (rateado por pagamento, não por venda)
         por_forma_pagamento = {}
         for v in vendas:
-            forma = v.forma_pagamento
-            if forma not in por_forma_pagamento:
-                por_forma_pagamento[forma] = {"quantidade": 0, "total": 0}
-            por_forma_pagamento[forma]["quantidade"] += 1
-            por_forma_pagamento[forma]["total"] += v.total
-        
+            for p in v.pagamentos:
+                forma = p.forma_pagamento or "Não informado"
+                if forma not in por_forma_pagamento:
+                    por_forma_pagamento[forma] = {"quantidade": 0, "total": 0.0}
+                por_forma_pagamento[forma]["quantidade"] += 1
+                por_forma_pagamento[forma]["total"] += float(p.valor or 0)
+
+        def _ref(v):
+            return v.data_venda or v.created_at
+
         return jsonify({
             "success": True,
             "data": hoje.isoformat(),
@@ -1108,11 +1127,11 @@ def vendas_hoje():
                 {
                     "id": v.id,
                     "codigo": v.codigo,
-                    "total": float(v.total),
-                    "hora": v.data_venda.strftime("%H:%M"),
-                    "forma_pagamento": v.forma_pagamento,
+                    "total": float(v.total or 0),
+                    "hora": _ref(v).strftime("%H:%M") if _ref(v) else "--:--",
+                    "forma_pagamento": _forma_principal(v),
                 }
-                for v in sorted(vendas, key=lambda x: x.data_venda, reverse=True)[:10]
+                for v in sorted(vendas, key=lambda x: _ref(x) or datetime.min, reverse=True)[:10]
             ]
         }), 200
         

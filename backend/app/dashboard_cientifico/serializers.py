@@ -162,14 +162,34 @@ class DashboardSerializer:
         }
 
     @staticmethod
-    def serialize_health_score(health_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Serializa score de saúde do negócio"""
-        score = health_data.get("score", 0)
-        health = health_data.get("health", "UNKNOWN")
-        color = health_data.get("color", "gray")
+    def serialize_health_score(health_data: Any) -> Dict[str, Any]:
+        """Serializa score de saúde do negócio.
+
+        Aceita tanto um número (score puro, vindo de calculate_health_score)
+        quanto um dict com {score, health, color, ...}.
+        """
+        if isinstance(health_data, (int, float)):
+            health_data = {"score": float(health_data)}
+        elif not isinstance(health_data, dict):
+            health_data = {}
+
+        score = health_data.get("score", 0) or 0
+
+        # Deriva rótulo/cor a partir do score quando não vierem prontos
+        if score >= 85:
+            default_health, default_color = "EXCELENTE", "green"
+        elif score >= 70:
+            default_health, default_color = "BOM", "blue"
+        elif score >= 50:
+            default_health, default_color = "ATENÇÃO", "yellow"
+        else:
+            default_health, default_color = "CRÍTICO", "red"
+
+        health = health_data.get("health") or default_health
+        color = health_data.get("color") or default_color
 
         # Gerar gráfico simples (array de 10 elementos)
-        bar_count = min(10, max(1, score // 10))
+        bar_count = min(10, max(1, int(score) // 10))
         progress_bar = ["●" if i < bar_count else "○" for i in range(10)]
 
         return {
