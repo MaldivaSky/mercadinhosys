@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
 import os
 import math
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from app.models import (
     db,
     Produto,
@@ -480,16 +480,16 @@ def listar_produtos():
         include_metrics = request.args.get("metrics", "false").lower() == "true"
         filtro_alerta = request.args.get("alerta")
 
-        # Carregar lotes via joinedload apenas quando filtros de validade/lote estiverem ativos
-        # Evita buscar todos os lotes de todos os produtos em cada listagem padrão
-        _precisa_lotes = (
-            request.args.get("validade_proxima") == "true"
-            or request.args.get("vencidos") == "true"
-            or request.args.get("expandir_por_lote", "").lower() == "true"
-        )
-        opts = [joinedload(Produto.categoria), joinedload(Produto.fornecedor)]
-        if _precisa_lotes:
-            opts.append(joinedload(Produto.lotes))
+        # Lotes via selectinload SEMPRE: o loop de serialização acessa produto.lotes
+        # para todo produto (exibir lote/validade FIFO). Sem eager-load isso causava
+        # N+1 (1 query de lotes por produto -> ~9s para 50 itens). selectinload busca
+        # todos os lotes da página numa única query IN e não multiplica linhas como o
+        # joinedload (seguro p/ paginação).
+        opts = [
+            joinedload(Produto.categoria),
+            joinedload(Produto.fornecedor),
+            selectinload(Produto.lotes),
+        ]
 
         query = db.session.query(Produto).options(*opts)
         
