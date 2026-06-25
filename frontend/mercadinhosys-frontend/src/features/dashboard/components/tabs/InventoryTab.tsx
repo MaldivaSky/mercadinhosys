@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Package, AlertTriangle, ArrowDownRight, ChartBar } from 'lucide-react';
 import { formatCurrency } from '../../../../utils/formatters';
 
@@ -7,21 +8,30 @@ interface InventoryTabProps {
 }
 
 export default function InventoryTab({ data }: InventoryTabProps) {
+  const navigate = useNavigate();
   const inventoryValue = data?.inventory?.total_value?.value || data?.inventory?.valor_total || 0;
   const abc = data?.inventory?.abc_analysis || data?.abc || {};
   const abcResumo = abc?.resumo || {};
-  
-  // Extract products
-      
+
+  // Normaliza os produtos vindos do backend (campos: classificacao, id, faturamento)
+  // para os nomes que a tabela usa. Sem isso, classe/id/faturamento vinham vazios.
+  const produtosNormalizados = (abc?.produtos || abc?.itens || []).map((p: any) => ({
+    id: p.id ?? p.produto_id,
+    nome: p.nome,
+    classe: p.classificacao ?? p.classe ?? 'C',
+    faturamento: p.faturamento ?? p.valor_total ?? 0,
+    percentual_acumulado: p.percentual_acumulado ?? 0,
+  }));
+
   const totalABC = (abcResumo?.A?.faturamento_total || 0) +
                    (abcResumo?.B?.faturamento_total || 0) +
                    (abcResumo?.C?.faturamento_total || 0);
 
   const [selectedABC, setSelectedABC] = useState<'all' | 'A' | 'B' | 'C'>('all');
 
-  const filteredProducts = selectedABC === 'all' 
-    ? (abc?.produtos || [])
-    : (abc?.produtos || []).filter((p: any) => p.classe === selectedABC);
+  const filteredProducts = selectedABC === 'all'
+    ? produtosNormalizados
+    : produtosNormalizados.filter((p: any) => p.classe === selectedABC);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -143,7 +153,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                  
                  <div className="mt-4 pt-4 border-t border-slate-700/40 flex justify-between text-sm">
                    <span className="text-slate-400">Total de Itens:</span>
-                   <span className="text-white font-bold">{dados?.quantidade_produtos || 0} produtos</span>
+                   <span className="text-white font-bold">{dados?.quantidade ?? dados?.quantidade_produtos ?? 0} produtos</span>
                  </div>
                </div>
              );
@@ -172,11 +182,17 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                 {filteredProducts.map((p: any, idx: number) => {
                   const isA = p.classe === 'A';
                   const isB = p.classe === 'B';
+                  const podeAbrir = !!p.id;
                   return (
-                    <tr key={idx} className="hover:bg-slate-700/20 transition-colors group">
+                    <tr
+                      key={idx}
+                      onClick={() => podeAbrir && navigate(`/products/${p.id}`)}
+                      className={`hover:bg-slate-700/20 transition-colors group ${podeAbrir ? 'cursor-pointer' : ''}`}
+                      title={podeAbrir ? 'Abrir hub do produto' : undefined}
+                    >
                       <td className="px-6 py-4">
                         <div className="font-bold text-white group-hover:text-indigo-400 transition-colors">{p.nome}</div>
-                        <div className="text-xs text-slate-500 font-medium">ID: {p.produto_id || '-'}</div>
+                        <div className="text-xs text-slate-500 font-medium">ID: {p.id || '-'}</div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold shadow-inner ${
@@ -188,7 +204,7 @@ export default function InventoryTab({ data }: InventoryTabProps) {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right font-black text-white">
-                        {formatCurrency(p.valor_total)}
+                        {formatCurrency(p.faturamento)}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex flex-col items-end gap-1">
