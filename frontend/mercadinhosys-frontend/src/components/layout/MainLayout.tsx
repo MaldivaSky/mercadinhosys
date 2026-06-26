@@ -6,6 +6,7 @@ import FootPage from './FootPage';
 import WelcomeTour from '../WelcomeTour';
 import BottomNavigation from './BottomNavigation';
 import GlobalShortcuts from '../../shortcuts/GlobalShortcuts';
+import TrialNotice from '../../features/trial/TrialNotice';
 
 const MainLayout: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
@@ -13,6 +14,7 @@ const MainLayout: React.FC = () => {
     return (
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
             <GlobalShortcuts />
+            <TrialNotice />
             <WelcomeTour />
             <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
             <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 min-w-0 min-h-0">
