@@ -15,7 +15,7 @@
 
 ```bash
 # Clone e configure
-git clone <seu-repo>
+git clone https://github.com/MaldivaSky/mercadinhosys.git
 cd mercadinhosys
 cp .env.example .env
 
@@ -23,7 +23,7 @@ cp .env.example .env
 make install
 
 # Acesse: http://localhost (Frontend) | http://localhost:5000 (Backend)
-# Login: admin / admin123
+# Login: demo / demo123
 ```
 
 ### Opção 2: Manual
@@ -109,7 +109,7 @@ Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
 
 ```bash
 # Clone o repositório
-git clone <seu-repo>
+git clone https://github.com/MaldivaSky/mercadinhosys.git
 cd mercadinhosys
 
 # Configure variáveis de ambiente
