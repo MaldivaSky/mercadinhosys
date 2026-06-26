@@ -345,7 +345,80 @@ def ativar_tenant(id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@saas_bp.route("/inativar-tenant/<int:id>", methods=["POST"])
+@super_admin_required
+def inativar_tenant(id):
+    """
+    Inativa (suspende) um estabelecimento e seus usuários. Super Admins não são
+    desativados, para o dono da plataforma nunca perder o acesso.
+    """
+    try:
+        estabelecimento = Estabelecimento.query.get(id)
+        if not estabelecimento:
+            return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
+
+        estabelecimento.ativo = False
+        estabelecimento.plano_status = 'suspenso'
+
+        funcionarios = Funcionario.query.filter_by(estabelecimento_id=id).all()
+        for f in funcionarios:
+            if not getattr(f, 'is_super_admin', False):
+                f.ativo = False
+
+        db.session.commit()
+        logger.info(f"🔒 TENANT INATIVADO: {estabelecimento.nome_fantasia} (ID: {id})")
+        return jsonify({
+            "success": True,
+            "message": f"Estabelecimento '{estabelecimento.nome_fantasia}' foi inativado."
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao inativar tenant {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ==================== SUBSCRIPTION & PAYMENTS ====================
+
+
+@saas_bp.route("/trial-status", methods=["GET"])
+@jwt_required()
+def trial_status():
+    """
+    Status do período de teste do estabelecimento logado. Usado pelos modais de
+    aviso de vencimento (10/5/1 dias) e pelo bloqueio pós-vencimento.
+    """
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        eid = get_authorized_establishment_id()
+        if not eid:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
+
+        est = Estabelecimento.query.get(eid)
+        if not est:
+            return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
+
+        venc = est.vencimento_plano
+        dias = (venc - date.today()).days if venc else None
+        em_trial = (est.plano_status == 'experimental')
+        vencido = (dias is not None and dias < 0)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "plano": est.plano,
+                "plano_status": est.plano_status,
+                "ativo": bool(est.ativo),
+                "vencimento_plano": venc.isoformat() if venc else None,
+                "dias_restantes": dias,
+                "em_trial": em_trial,
+                "vencido": vencido,
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Erro em trial_status: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @saas_bp.route("/assinatura/status", methods=["GET"])
 @jwt_required()
