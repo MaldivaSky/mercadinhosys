@@ -5,12 +5,14 @@ import HeaderProfessional from './HeaderProfessional';
 import FootPage from './FootPage';
 import WelcomeTour from '../WelcomeTour';
 import BottomNavigation from './BottomNavigation';
+import GlobalShortcuts from '../../shortcuts/GlobalShortcuts';
 
 const MainLayout: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
 
     return (
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+            <GlobalShortcuts />
             <WelcomeTour />
             <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
             <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 min-w-0 min-h-0">

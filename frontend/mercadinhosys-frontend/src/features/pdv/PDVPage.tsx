@@ -26,6 +26,7 @@ import PDVSkeleton from './components/PDVSkeleton';
 import CaixaManager from './components/CaixaManager';
 import MultiPaymentManager from './components/MultiPaymentManager';
 import { useOfflineQueue } from '../../hooks/useOfflineQueue';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 const PDVPage: React.FC = () => {
 
@@ -206,6 +207,28 @@ const PDVPage: React.FC = () => {
             showToast.warning('Venda cancelada');
         }
     };
+
+    // ── Atalhos de teclado do PDV (F1/F2/F4/F9/F10/Esc) — ver registry de atalhos.
+    useKeyboardShortcuts([
+        {
+            combo: 'f1', allowInInput: true,
+            handler: () => document.getElementById('produto-search-input')?.focus(),
+        },
+        {
+            combo: 'f2', allowInInput: true,
+            handler: () => { setFormaPagamentoAberta(true); setActiveSection('cliente'); },
+        },
+        {
+            combo: 'f4', allowInInput: true,
+            handler: () => { setFormaPagamentoAberta(true); setActiveSection('pagamento'); },
+        },
+        { combo: 'f9', allowInInput: true, handler: () => handleFinalizarVenda() },
+        { combo: 'f10', allowInInput: true, handler: () => handleFinalizarVenda() },
+        {
+            combo: 'escape',
+            handler: () => { if (formaPagamentoAberta) setFormaPagamentoAberta(false); else handleLimparCarrinho(); },
+        },
+    ]);
 
     const handleProdutoSelecionado = (p: any) => {
         const aGranel = ['KG', 'G', 'L', 'ML'].includes(p.unidade_medida?.toUpperCase()) || p.tipo === 'granel';
