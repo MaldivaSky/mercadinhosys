@@ -250,7 +250,7 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
     ] as const;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
             style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }}
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
 

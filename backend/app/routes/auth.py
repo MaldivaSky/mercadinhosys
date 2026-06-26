@@ -2281,21 +2281,8 @@ def guest_demo():
                 senha=generate_password_hash("demo123"),
 
                 ativo=True,
-
-                # Campos de endereço obrigatórios (EnderecoMixin)
-
-                cep="01001-000",
-
-                logradouro="Praça da Sé",
-
-                numero="1",
-
-                bairro="Sé",
-
-                cidade="São Paulo",
-
-                estado="SP"
-
+                role="ADMIN",
+                is_super_admin=False
             )
 
             db.session.add(demo_admin)
