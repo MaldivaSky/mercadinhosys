@@ -47,7 +47,7 @@ Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
 ### Documentação Técnica
 - **[ANALISE_SISTEMA_MERCADINHOSYS.md](ANALISE_SISTEMA_MERCADINHOSYS.md)** - Análise do sistema
 - **[CORRECOES_CRITICAS_ARQUITETURA.md](CORRECOES_CRITICAS_ARQUITETURA.md)** - Correções arquiteturais
-- **[DASHBOARD_*.md](DASHBOARD_RESUMO_FINAL.md)** - Documentação do Dashboard
+- **[DASHBOARD_RESUMO_FINAL.md](DASHBOARD_RESUMO_FINAL.md)** - Documentação do Dashboard
 - **[EMAIL_NOTA_FISCAL.md](EMAIL_NOTA_FISCAL.md)** - Sistema de envio de cupom por email
 
 ---
@@ -72,27 +72,32 @@ Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
 * ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) **Docker** + **Docker Compose**
 * **Render.com** - Deploy em produção
 * **Neon PostgreSQL** - Database serverless
-* **GitHub Actions** - CI/CD
-* **Gunicorn** - WSGI server
 
 ---
 
-## 📋 Funcionalidades Principais
+## 📋 Funcionalidades Principais Implementadas
 
-### � Business Intelligence Científico (BI)
-*   **3 Níveis de Análise:**
-    *   **Visão Geral:** KPIs executivos em tempo real (Faturamento, Lucro Líquido, Margens).
-    *   **Análise Detalhada:** Cruzamento de dados ABC, temporal e financeiro.
-    *   **Modo Científico:** Insights profundos sobre comportamento de clientes e produtos.
-*   **Gestão de Estoque Inteligente:** Classificação ABC automática baseada no Princípio de Pareto.
-*   **Análise de RFM:** Segmentação de clientes (Campeão, Fiel, Risco, Perdido).
-*   **Previsão de Demanda:** Sugestões de reposição baseadas em giro de estoque e lead time.
+### 📊 Business Intelligence & Analytics
+*   **Dashboards Executivos:** KPIs em tempo real (Faturamento, Margens, Lucro Líquido, Ticket Médio).
+*   **Gestão de Estoque Científica:** Classificação ABC automática (Curva de Pareto) e gestão de validades.
+*   **Análise de Clientes (RFM):** Segmentação automática (Campeões, Fiéis, Risco, Perdidos).
+*   **Relatórios Avançados:** Extratos exportáveis, análise de DRE, e relatórios de turnos consolidados.
 
-### 🖥️ PDV & Gestão
-*   **Frente de Caixa Ágil:** PDV moderno com suporte a múltiplos pagamentos e descontos.
-*   **Gestão de Crédito (Fiado):** Controle de exposição de risco e carteira de devedores.
-*   **Controle de Validade:** Gestão completa de Lote, Fabricação e Validade (FIFO).
-*   **Email Automation:** Envio automático de cupons fiscais e relatórios.
+### 🏢 Multi-Tenant & SaaS Pronta
+*   **Arquitetura Multi-Estabelecimento:** Suporte nativo a matriz e múltiplas filiais.
+*   **Onboarding Automático:** Criação de ambiente via acesso Demo e planos de assinatura (Gratuito, Pro, Enterprise).
+*   **Gestão de Planos & Permissões (Guardiões):** Controle de rotas (PlanoGuard/SuperAdminRoute) e módulos habilitados por assinatura.
+
+### 🖥️ PDV & Gestão de Loja (PWA Mobile-First)
+*   **Frente de Caixa (PDV):** Interface ultra-rápida, atalhos de teclado, suporte a múltiplos pagamentos, sangrias, suprimentos.
+*   **Gestão de Caixa Blindada:** Auditoria estrita de quebra de caixa, separando fluxo centralizado (Pix, Crédito) de gaveta física (Dinheiro).
+*   **Gestão de Crédito (Fiado):** Controle de limites, pagamentos parciais e carteira de clientes devedores.
+*   **SFA (Força de Vendas) & Delivery:** Módulos de gestão de pedidos, rotas de entrega e comissões.
+*   **PWA Integrado:** Funciona como App Nativo (Mobile/Desktop) com instalação direta via navegador, cache offline e responsividade total.
+
+### 👥 Gestão de RH & Operações
+*   **Controle de Ponto Fotográfico:** Registro de ponto com captura de imagem e geolocalização.
+*   **Painel do Colaborador:** Holerites, escalas e banco de horas.
 
 ---
 
@@ -116,7 +121,7 @@ make install
 # Acesse:
 # Frontend: http://localhost
 # Backend: http://localhost:5000
-# Login: admin / admin123
+# Login: demo / demo123 (Ou gere no botão Acesso Demo)
 ```
 
 #### Opção 2: Manual
@@ -124,39 +129,20 @@ make install
 **Backend:**
 
 ```bash
-# Acesse a pasta do backend
 cd backend
-
-# Crie um ambiente virtual
 python -m venv venv
-
-# Ative o ambiente virtual
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
-# Instale as dependências
+# Windows: venv\Scripts\activate | Linux/Mac: source venv/bin/activate
 pip install -r requirements.txt
-
-# Crie o banco e popule dados
 python seed_cloud.py
-
-# Execute o servidor
 python run.py
+```
 
 **Frontend:**
 
 ```bash
-# Acesse a pasta do frontend
 cd frontend/mercadinhosys-frontend
-
-# Instale as dependências
 npm install
-
-# Execute o servidor de desenvolvimento
 npm run dev
-
 # Acesse: http://localhost:5173
 ```
 
@@ -169,134 +155,26 @@ Sistema pronto para deploy no **Render.com** com **Neon PostgreSQL**.
 git add .
 git commit -m "feat: production deployment"
 git push origin main
-
-# 2. Criar Blueprint no Render
-# - Acesse: https://dashboard.render.com
-# - New + → Blueprint
-# - Conecte seu repositório
-# - Render detecta render.yaml automaticamente
-# - Apply
-
-# 3. Configurar DATABASE_URL
-# - Backend → Environment → Add DATABASE_URL
-# - Use suas credenciais Neon PostgreSQL
-
-# 4. Atualizar CORS e API URLs
-# - Backend: CORS_ORIGINS com URL do frontend
-# - Frontend: VITE_API_URL com URL do backend
 ```
-
 **Documentação completa:** [DEPLOY_RENDER.md](DEPLOY_RENDER.md)
 
 ---
 
-## 🗄️ Banco de Dados
+## 🗄️ Banco de Dados & Infraestrutura
 
 Sistema detecta ambiente automaticamente:
 - **Local:** SQLite (`c:/temp/mercadinho_instance/mercadinho.db`)
 - **Produção:** PostgreSQL (Neon, Render, Railway, Heroku)
 
-**Seed automático** no primeiro deploy cria:
-- 1 Estabelecimento
-- 2 Funcionários (admin, joao)
-- 3 Clientes
-- 2 Fornecedores
-- 5 Categorias
-- 10 Produtos com estoque
-
-**Credenciais de teste:**
-- Username: `admin` / Password: `admin123` (ADMIN)
-- Username: `joao` / Password: `joao123` (VENDEDOR)
-
 ---
 
-## 🐳 Docker
+## 🔐 Segurança & Arquitetura
 
-```bash
-# Comandos disponíveis
-make install    # Setup completo (primeira vez)
-make up         # Iniciar serviços
-make down       # Parar serviços
-make logs       # Ver logs
-make test       # Rodar testes
-make backup     # Backup do banco
-make clean      # Limpar tudo
-```
-
-Ver [README_DOCKER.md](README_DOCKER.md) para mais detalhes.
-
----
-
-## 🧪 Testes
-
-```bash
-# Backend
-cd backend
-venv\Scripts\activate  # Windows
-pytest
-
-# Frontend
-cd frontend/mercadinhosys-frontend
-npm run test
-```
-
----
-
-## 📊 Arquitetura
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         USUÁRIO                              │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Frontend (React + TypeScript)                   │
-│  • Vite                                                      │
-│  • Tailwind CSS                                              │
-│  • Axios                                                     │
-│  • Recharts                                                  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ REST API (JWT)
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Backend (Flask + Python)                        │
-│  • Flask-JWT-Extended                                        │
-│  • SQLAlchemy ORM                                            │
-│  • Flask-CORS                                                │
-│  • Gunicorn (Produção)                                       │
-└────────────────────────┬────────────────────────────────────┘
-                         │ SQL
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Database                                        │
-│  • SQLite (Desenvolvimento)                                  │
-│  • PostgreSQL (Produção)                                     │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🔐 Segurança
-
-- ✅ Autenticação JWT com refresh tokens
-- ✅ Senhas hasheadas com Werkzeug
-- ✅ CORS configurável por ambiente
-- ✅ SSL obrigatório em produção
-- ✅ Validação de entrada em todas as rotas
-- ✅ Rate limiting (configurável)
-- ✅ Auditoria de login com histórico
-
----
-
-## 📈 Performance
-
-- ✅ Connection pooling para PostgreSQL
-- ✅ Cache de queries (configurável)
-- ✅ Lazy loading de componentes React
-- ✅ Code splitting automático (Vite)
-- ✅ Gzip compression (Nginx)
-- ✅ Multi-worker Gunicorn
+- ✅ **Autenticação JWT** blindada com refresh tokens e isolamento Multi-Tenant (`X-Tenant-ID`).
+- ✅ **Rate Limiting** e proteção contra brute-force nas rotas sensíveis.
+- ✅ **Auditoria Transacional:** Logs de caixa, vendas e histórico de acessos.
+- ✅ **Frontend PWA:** React 18, Vite, TailwindCSS (glassmorphism premium).
+- ✅ **Backend Rest API:** Flask, SQLAlchemy, Gunicorn.
 
 ---
 
@@ -310,44 +188,23 @@ npm run test
 
 ---
 
-## 📝 Licença
+## 📝 Licença & Autor
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
----
-
-## 👨‍💻 Autor
-
-Desenvolvido com 💙 por MaldivasTech - Feito com alma amazônica!
+Este projeto está sob a licença MIT. 
+Desenvolvido com 💙 por **MaldivasTech** - Feito com alma amazônica!
 
 ---
 
-## 📞 Suporte
+## 🎯 Roadmap Futuro
 
-- 📧 Email: rafaelmaldivas@gmail.com
-- 🐛 Issues: [GitHub Issues](https://github.com/MaldivaSky/mercadinhosys/issues)
-- 📚 Docs: Ver pasta de documentação
-
----
-
-## 🎯 Roadmap
-
-### v2.1 (Próximo)
-- [ ] Integração com impressora fiscal
-- [ ] App mobile (React Native)
-- [ ] Relatórios avançados (PDF)
-- [ ] Integração com WhatsApp
-- [ ] Multi-estabelecimento
-
-### v2.2 (Futuro)
-- [ ] BI integrado
-- [ ] Previsão de demanda (ML)
-- [ ] Integração com marketplaces
-- [ ] Sistema de fidelidade
-- [ ] API pública
+### v3.0 (Expansão de Ecossistema)
+- [ ] Integração com PIX automatizado (MercadoPago/Stripe).
+- [ ] Integração Direta com Impressoras Fiscais Bluetooth/Rede (via WebUSB/WebBluetooth).
+- [ ] Módulo de Inteligência Artificial para Previsão de Ruptura de Estoque (Machine Learning).
+- [ ] Integração com WhatsApp (Bot de Pedidos Automáticos).
 
 ---
 
-**🎉 Sistema em produção e pronto para uso!**
+**🎉 Sistema em produção e pronto para uso Comercial!**
 
-Versão: 2.0.0 | Status: Production Ready | Deploy: Render.com + Neon PostgreSQL
+Versão: 2.2.0 Scientific | Status: Production Ready | Multi-Tenant: Ativo
