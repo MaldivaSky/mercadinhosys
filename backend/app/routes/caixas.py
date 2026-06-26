@@ -150,19 +150,21 @@ def fechar_caixa():
             elif tipo_mov == "suprimento":
                 total_suprimentos += valor_mov
 
-        # Cálculo Final (Auditado)
-        entradas = total_vendas + total_suprimentos
+        # ─── Cálculo Final do Dinheiro (Gaveta Física) ───
+        # Apenas as vendas em dinheiro entram no cálculo físico da gaveta
+        vendas_dinheiro = totais_por_forma["dinheiro"]["total"]
+        entradas_dinheiro = vendas_dinheiro + total_suprimentos
         saidas = total_sangrias
-        saldo_calculado = float(caixa.saldo_inicial) + entradas - saidas
+        saldo_calculado = float(caixa.saldo_inicial) + entradas_dinheiro - saidas
 
-        # Diferença entre o informado (físico) e o saldo atual da GAVETA (dinheiro real)
+        # Diferença entre o informado (físico) e o saldo_calculado da GAVETA (dinheiro real)
         # Importante: A quebra de caixa é baseada no que REALMENTE deveria estar na gaveta (Dinheiro)
-        diferenca_gaveta = valor_informado - float(caixa.saldo_atual)
+        diferenca_gaveta = valor_informado - saldo_calculado
 
         caixa.status = "fechado"
         caixa.data_fechamento = datetime.now()
-        caixa.saldo_final = saldo_calculado # Armazenamos o calculado conforme solicitado
-        caixa.observacoes = (caixa.observacoes or "") + f"\n[FECHAMENTO] Calculado: {saldo_calculado:.2f} | Informado Gaveta: {valor_informado:.2f} | Diferença: {diferenca_gaveta:.2f}"
+        caixa.saldo_final = saldo_calculado # Armazenamos o calculado da gaveta conforme solicitado
+        caixa.observacoes = (caixa.observacoes or "") + f"\n[FECHAMENTO] Calculado Gaveta: {saldo_calculado:.2f} | Informado Gaveta: {valor_informado:.2f} | Diferença: {diferenca_gaveta:.2f}"
 
         # Registrar movimentacao de fechamento
         mov = MovimentacaoCaixa(
@@ -198,7 +200,7 @@ def fechar_caixa():
             },
             "resumo_fechamento": {
                 "saldo_inicial": float(caixa.saldo_inicial),
-                "entradas": round(entradas, 2),
+                "entradas": round(entradas_dinheiro, 2),
                 "saidas": round(saidas, 2),
                 "saldo_final": round(saldo_calculado, 2),
                 "quebra_gaveta": round(diferenca_gaveta, 2),
