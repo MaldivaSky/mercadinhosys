@@ -890,7 +890,10 @@ const LandingPage: React.FC = () => {
                             <a href="#features" className="hover:text-blue-600">Recursos</a>
                             <a href="#fiscal" className="hover:text-blue-600">Fiscal NFe/NFCe</a>
                             <a href="#pricing" className="hover:text-blue-600">Planos</a>
+                            <a href="/termos" className="hover:text-blue-600">Termos de Uso</a>
+                            <a href="/privacidade" className="hover:text-blue-600">Privacidade</a>
                             <a href="/login" className="hover:text-blue-600">Acesso Cliente</a>
+                            <a href="/ajuda" className="hover:text-blue-600">Ajuda</a>
                         </div>
                         <p className="text-gray-400 font-medium text-xs">
                             &copy; {new Date().getFullYear()} MercadinhoSys. Todos os direitos reservados.

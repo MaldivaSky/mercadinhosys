@@ -33,6 +33,11 @@ const DeliveryPage = lazy(() => import('../features/delivery/DeliveryPage'));
 const FiscalPage = lazy(() => import('../features/fiscal/FiscalPage'));
 const MonitorPage = lazy(() => import('../features/monitor/MonitorPage'));
 
+// Páginas públicas institucionais (legais / ajuda)
+const TermosPage = lazy(() => import('../features/legal/TermosPage'));
+const PrivacidadePage = lazy(() => import('../features/legal/PrivacidadePage'));
+const AjudaPage = lazy(() => import('../features/legal/AjudaPage'));
+
 // SFA (Sales Force Automation)
 const SFADashboard = lazy(() => import('../features/sfa/SFADashboard'));
 const SFAPedido = lazy(() => import('../features/sfa/SFAPedido'));
@@ -58,6 +63,11 @@ const AppRoutes: React.FC = () => {
                 <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
                 <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
                 <Route path="/test" element={<ConnectionTest />} />
+
+                {/* Públicas — institucionais */}
+                <Route path="/termos" element={<TermosPage />} />
+                <Route path="/privacidade" element={<PrivacidadePage />} />
+                <Route path="/ajuda" element={<AjudaPage />} />
 
                 <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />}>
                     <Route path="dashboard" element={<PlanoGuard planoRequerido="gratuito"><DashboardPage /></PlanoGuard>} />
