@@ -4,7 +4,7 @@ Módulo de Onboarding SaaS
 Rotas públicas para registro de novos clientes/lojas (Self-Service).
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.models import db, Estabelecimento, Funcionario, Configuracao, Auditoria
@@ -12,6 +12,9 @@ from app.utils.response_utils import sanitize_response
 import json
 
 onboarding_bp = Blueprint("onboarding", __name__)
+
+# Duração do período de teste gratuito (self-service)
+TRIAL_DIAS = 30
 
 from app.decorators.rbac import super_admin_required
 
@@ -65,14 +68,25 @@ def registrar_conta():
             except:
                 pass
 
-        # Gerar senha temporária aleatória de 8 caracteres
-        import string
-        import random
-        caracteres = string.ascii_letters + string.digits + "@#$*"
-        senha_temporaria = ''.join(random.choice(caracteres) for i in range(8))
-        
-        # LOG DE SEGURANÇA (FACILITAÇÃO DE TESTES)
-        current_app.logger.info(f"🔑 [ONBOARDING] Nova conta criada: {username} | Senha Temporária: {senha_temporaria}")
+        # Senha definida pelo próprio cliente (self-service). Sem senha → gera temporária.
+        senha_escolhida = (data.get("senha") or "").strip()
+        if senha_escolhida:
+            if len(senha_escolhida) < 6:
+                return jsonify({"success": False, "error": "A senha deve ter ao menos 6 caracteres."}), 400
+            senha_temporaria = senha_escolhida
+            senha_foi_gerada = False
+        else:
+            import string
+            import random
+            caracteres = string.ascii_letters + string.digits + "@#$*"
+            senha_temporaria = ''.join(random.choice(caracteres) for i in range(8))
+            senha_foi_gerada = True
+
+        # Não logamos a senha do cliente — apenas o evento.
+        current_app.logger.info(
+            f"🔑 [ONBOARDING] Nova conta trial: {username} "
+            f"(senha {'gerada' if senha_foi_gerada else 'definida pelo cliente'})"
+        )
 
         # Início da Transação Atômica
         try:
@@ -90,9 +104,10 @@ def registrar_conta():
                 cidade=cidade,
                 estado=estado,
                 data_abertura=date.today(),
-                plano="Basic",
-                plano_status="pendente", # Requer aprovação do Super Admin
-                ativo=False              # Bloqueado até ativação
+                plano="trial",
+                plano_status="experimental",                        # Período de teste self-service
+                vencimento_plano=date.today() + timedelta(days=TRIAL_DIAS),
+                ativo=True                                          # Trial ativo imediatamente
             )
             db.session.add(novo_estabelecimento)
             db.session.flush()
@@ -147,15 +162,9 @@ def registrar_conta():
                 data_admissao=date.today(),
                 username=username,
                 role="ADMIN",
-                status="pendente", # Requer aprovação do Super Admin
-                ativo=False,       # Bloqueado até ativação
-                permissoes_json=json.dumps(permissoes_admin),
-                cep=cep,
-                logradouro=logradouro,
-                numero=numero,
-                bairro=bairro,
-                cidade=cidade,
-                estado=estado
+                status="ativo",
+                ativo=True,
+                permissoes_json=json.dumps(permissoes_admin)
             )
             novo_admin.set_senha(senha_temporaria)
             db.session.add(novo_admin)
@@ -173,32 +182,37 @@ def registrar_conta():
             # Confirmar tudo!
             db.session.commit()
 
-            # Enviar e-mail com as credenciais
-            try:
-                from app.services.email_service import email_service
-                email_service.send_credentials_email(
-                    email_admin, 
-                    nome_admin, 
-                    senha_temporaria,
-                    nome_loja=novo_estabelecimento.nome_fantasia
-                )
-            except Exception as email_e:
-                from flask import current_app
-                current_app.logger.warning(f"Conta criada, mas erro ao enviar e-mail: {str(email_e)}")
+            # Só enviamos credenciais por e-mail quando a senha foi gerada pelo sistema.
+            if senha_foi_gerada:
+                try:
+                    from app.services.email_service import email_service
+                    email_service.send_credentials_email(
+                        email_admin,
+                        nome_admin,
+                        senha_temporaria,
+                        nome_loja=novo_estabelecimento.nome_fantasia
+                    )
+                except Exception as email_e:
+                    current_app.logger.warning(f"Conta criada, mas erro ao enviar e-mail: {str(email_e)}")
 
             return jsonify(sanitize_response({
-                "success": True, 
-                "message": "Conta criada com sucesso! Verifique seu e-mail para acessar suas credenciais de login.",
-                "estabelecimento_id": novo_estabelecimento.id
+                "success": True,
+                "message": f"Conta criada! Seu teste gratuito de {TRIAL_DIAS} dias começou.",
+                "estabelecimento_id": novo_estabelecimento.id,
+                "username": username,
+                # Só devolve a senha quando foi gerada (cliente que escolheu já a conhece).
+                "senha_temporaria": senha_temporaria if senha_foi_gerada else None,
+                "trial": {
+                    "dias": TRIAL_DIAS,
+                    "vencimento": (date.today() + timedelta(days=TRIAL_DIAS)).isoformat(),
+                },
             })), 201
 
         except Exception as intern_e:
             db.session.rollback()
-            from flask import current_app
             current_app.logger.error(f"Erro transacional ao registrar conta SaaS: {str(intern_e)}")
             return jsonify({"success": False, "error": "Erro interno ao processar cadastro. Tente novamente."}), 500
 
     except Exception as e:
-        from flask import current_app
         current_app.logger.error(f"Erro grave no onboarding: {str(e)}")
         return jsonify({"success": False, "error": f"Falha no servidor: {str(e)}"}), 500
