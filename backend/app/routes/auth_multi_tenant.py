@@ -648,3 +648,47 @@ def auth_doctor():
     current_user_id = get_jwt_identity()
     claims = get_jwt()
     return jsonify(get_doctor_info(current_user_id, claims)), 200
+
+
+@auth_bp.route("/profile", methods=["PUT"])
+@jwt_required()
+def update_profile():
+    """
+    Atualiza os dados do próprio usuário (nome/e-mail/telefone) e, opcionalmente,
+    a senha (exige a senha atual). Self-service nas Configurações > Minha Conta.
+    """
+    try:
+        data = request.get_json() or {}
+        user_id = get_jwt_identity()
+        funcionario = Funcionario.query.get(int(user_id))
+        if not funcionario:
+            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+
+        atualizados = []
+        for campo in ("nome", "email", "telefone"):
+            if campo in data and data[campo] is not None:
+                setattr(funcionario, campo, data[campo])
+                atualizados.append(campo)
+
+        if data.get("senha_atual") and data.get("nova_senha"):
+            if not funcionario.check_senha(data["senha_atual"]):
+                return jsonify({
+                    "success": False, "error": "Senha atual incorreta",
+                    "code": "WRONG_CURRENT_PASSWORD",
+                }), 400
+            if len(data["nova_senha"]) < 6:
+                return jsonify({"success": False, "error": "A nova senha deve ter ao menos 6 caracteres"}), 400
+            funcionario.set_senha(data["nova_senha"])
+            atualizados.append("senha")
+
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "Perfil atualizado com sucesso",
+            "updated_fields": atualizados,
+            "data": {"nome": funcionario.nome, "email": funcionario.email},
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar perfil: {e}")
+        return jsonify({"success": False, "error": "Falha ao atualizar perfil"}), 500

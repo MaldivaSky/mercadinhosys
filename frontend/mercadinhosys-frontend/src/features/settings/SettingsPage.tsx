@@ -4,10 +4,11 @@ import {
     Shield, Bell, Upload, MapPin,
     Save, CheckCircle, Building2, Clock,
     ShoppingCart, Package, X, XCircle, Edit2, RefreshCw,
-    Database, HardDrive, Keyboard, DollarSign
+    Database, HardDrive, Keyboard, DollarSign, User
 } from 'lucide-react';
 import settingsService, { Configuracao, Estabelecimento } from './settingsService';
 import ShortcutsHelp from '../../shortcuts/ShortcutsHelp';
+import AccountSettings from './AccountSettings';
 import { showToast } from '../../components/elements/Toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -230,6 +231,11 @@ const EstabelecimentosPanel: React.FC = () => {
 
 const SettingsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState('geral');
+    // Permite abrir uma aba específica via ?tab= (ex.: o CTA do aviso de trial).
+    useEffect(() => {
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        if (tab) setActiveTab(tab);
+    }, []);
     const [novoMotivo, setNovoMotivo] = useState('');
     const [loadingEstab, setLoadingEstab] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -402,6 +408,7 @@ const SettingsPage: React.FC = () => {
 
     const tabs = [
         { id: 'geral', label: 'Geral', icon: Settings },
+        { id: 'conta', label: 'Minha Conta', icon: User },
         { id: 'estabelecimento', label: 'Estabelecimento', icon: Building2 },
         { id: 'fiscal', label: 'Fiscal (NFC-e)', icon: Printer },
         { id: 'vendas', label: 'Vendas & PDV', icon: ShoppingCart },
@@ -615,6 +622,9 @@ const SettingsPage: React.FC = () => {
                             </div>
                         </div>
                     )}
+
+                    {/* ABA MINHA CONTA */}
+                    {activeTab === 'conta' && <AccountSettings />}
 
                     {/* ABA VENDAS */}
                     {activeTab === 'fiscal' && (
