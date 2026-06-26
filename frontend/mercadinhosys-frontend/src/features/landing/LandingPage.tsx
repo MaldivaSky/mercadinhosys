@@ -140,9 +140,11 @@ const LandingPage: React.FC = () => {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                const { access_token, refresh_token, data } = result;
-                const user = data?.user;
-                const estabelecimento = data?.estabelecimento;
+                const data = result.data || {};
+                const access_token = data.access_token || result.access_token;
+                const refresh_token = data.refresh_token || result.refresh_token;
+                const user = data.user;
+                const estabelecimento = data.estabelecimento;
 
                 if (access_token) sessionStorage.setItem('access_token', access_token);
                 if (refresh_token) sessionStorage.setItem('refresh_token', refresh_token);
