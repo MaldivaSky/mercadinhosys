@@ -157,8 +157,8 @@ const LandingPage: React.FC = () => {
                 showToast.info('Entrando no ambiente de demonstração...', { icon: '✨' });
 
                 setTimeout(() => {
-                    navigate('/dashboard');
-                }, 1000);
+                    window.location.href = '/dashboard';
+                }, 500);
             } else {
                 showToast.dismiss();
                 showToast.error(result.error || 'Erro ao acessar demonstração');

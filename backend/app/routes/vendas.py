@@ -841,7 +841,7 @@ def criar_venda():
                 db.session.add(pagamento)
 
                 # Fluxo de Caixa Centralizado
-                if caixa_aberto and forma in ["dinheiro", "pix", "débito", "debito"]:
+                if caixa_aberto:
                     mov_caixa = MovimentacaoCaixa(
                         caixa_id=caixa_aberto.id,
                         estabelecimento_id=nova_venda.estabelecimento_id,
@@ -852,7 +852,10 @@ def criar_venda():
                         descricao=f"Venda PDV #{nova_venda.codigo}"
                     )
                     db.session.add(mov_caixa)
-                    caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual or 0) + valor_p
+                    
+                    # O saldo_atual da GAVETA física só contabiliza dinheiro
+                    if forma == "dinheiro":
+                        caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual or 0) + valor_p
 
                 # Lógica de Fiado (Contas a Receber)
                 if forma == "fiado" and nova_venda.cliente_id:
