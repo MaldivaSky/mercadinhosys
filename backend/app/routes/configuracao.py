@@ -209,7 +209,9 @@ def listar_estabelecimentos():
                 (SELECT COUNT(*) FROM produtos p WHERE p.estabelecimento_id = e.id AND p.ativo = TRUE) as total_produtos,
                 (SELECT COUNT(*) FROM clientes c WHERE c.estabelecimento_id = e.id AND c.ativo = TRUE) as total_clientes,
                 (SELECT COALESCE(SUM(v.total), 0) FROM vendas v WHERE v.estabelecimento_id = e.id AND v.status = 'finalizada') as faturamento_total,
-                (SELECT CAST(MAX(v.data_venda) AS TEXT) FROM vendas v WHERE v.estabelecimento_id = e.id) as ultima_venda
+                (SELECT CAST(MAX(v.data_venda) AS TEXT) FROM vendas v WHERE v.estabelecimento_id = e.id) as ultima_venda,
+                e.plano, e.plano_status,
+                CAST(e.vencimento_plano AS TEXT) as vencimento_plano
             FROM estabelecimentos e
             ORDER BY e.id
         """)
@@ -238,6 +240,9 @@ def listar_estabelecimentos():
                 "total_clientes": r[17] or 0,
                 "faturamento_total": float(r[18]) if r[18] else 0.0,
                 "ultima_venda": r[19],
+                "plano": r[20],
+                "plano_status": r[21],
+                "vencimento_plano": r[22],
             })
 
         return jsonify({"success": True, "estabelecimentos": estabelecimentos}), 200

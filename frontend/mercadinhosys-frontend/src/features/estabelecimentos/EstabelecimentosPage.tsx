@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import {
     Building2, MapPin, Phone, Mail, Users, Package,
     ShoppingBag, TrendingUp, CheckCircle2, XCircle,
-    Calendar, RefreshCw, AlertCircle, Store, Plus, Eye
+    Calendar, RefreshCw, AlertCircle, Store, Plus, Eye, Clock, Power, Ban
 } from 'lucide-react';
 import { apiClient } from '../../api/apiClient';
+import { showToast } from '../../utils/toast';
 import NovoClienteModal from '../../components/modals/NovoClienteModal';
 import EstabelecimentoDetalheModal from '../../components/modals/EstabelecimentoDetalheModal';
 
@@ -29,7 +30,18 @@ interface Estabelecimento {
     total_clientes: number;
     faturamento_total: number;
     ultima_venda: string | null;
+    plano?: string | null;
+    plano_status?: string | null;
+    vencimento_plano?: string | null;
 }
+
+/** Dias restantes até o vencimento do plano/trial (negativo = vencido). */
+const diasRestantes = (venc?: string | null): number | null => {
+    if (!venc) return null;
+    const d = new Date(venc + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    return Math.ceil((d.getTime() - Date.now()) / 86400000);
+};
 
 const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -53,7 +65,16 @@ const MetricPill: React.FC<{ icon: React.ElementType; label: string; value: stri
     </div>
 );
 
-const EstabelecimentoCard: React.FC<{ est: Estabelecimento; onVerDetalhes: (est: Estabelecimento) => void }> = ({ est, onVerDetalhes }) => (
+const EstabelecimentoCard: React.FC<{
+    est: Estabelecimento;
+    onVerDetalhes: (est: Estabelecimento) => void;
+    onAtivar: (est: Estabelecimento) => void;
+    onInativar: (est: Estabelecimento) => void;
+    processando: boolean;
+}> = ({ est, onVerDetalhes, onAtivar, onInativar, processando }) => {
+    const dias = diasRestantes(est.vencimento_plano);
+    const emTrial = est.plano_status === 'experimental';
+    return (
     <div className="relative group rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700/60 bg-white dark:bg-gray-800/60 backdrop-blur-sm shadow-md hover:shadow-xl hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300">
         {/* Header com gradiente */}
         <div className={`px-5 pt-5 pb-4 ${est.ativo
@@ -82,6 +103,18 @@ const EstabelecimentoCard: React.FC<{ est: Estabelecimento; onVerDetalhes: (est:
                 <p className="text-blue-100 text-[11px] uppercase tracking-wider font-medium">Faturamento Total</p>
                 <p className="text-white text-2xl font-bold mt-0.5">{formatCurrency(est.faturamento_total)}</p>
             </div>
+
+            {/* Status do plano / trial */}
+            {(emTrial || est.plano_status) && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-white/90">
+                    <Clock size={12} />
+                    {emTrial
+                        ? (dias != null
+                            ? (dias < 0 ? 'Teste vencido' : `Teste: ${dias} dia(s) restante(s)`)
+                            : 'Em teste')
+                        : `Plano: ${est.plano_status}`}
+                </div>
+            )}
         </div>
 
         {/* Métricas */}
@@ -124,8 +157,8 @@ const EstabelecimentoCard: React.FC<{ est: Estabelecimento; onVerDetalhes: (est:
                 </span>
             </div>
             
-            {/* Botão de Detalhes */}
-            <div className="pt-3 border-t border-gray-100 dark:border-gray-700/50 mt-3">
+            {/* Ações */}
+            <div className="pt-3 border-t border-gray-100 dark:border-gray-700/50 mt-3 space-y-2">
                 <button
                     onClick={() => onVerDetalhes(est)}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
@@ -133,10 +166,28 @@ const EstabelecimentoCard: React.FC<{ est: Estabelecimento; onVerDetalhes: (est:
                     <Eye size={14} />
                     Ver Detalhes
                 </button>
+                {est.ativo ? (
+                    <button
+                        onClick={() => onInativar(est)}
+                        disabled={processando}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        <Ban size={14} /> Inativar conta
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => onAtivar(est)}
+                        disabled={processando}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        <Power size={14} /> Ativar conta
+                    </button>
+                )}
             </div>
         </div>
     </div>
-);
+    );
+};
 
 const EstabelecimentosPage: React.FC = () => {
     const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>([]);
@@ -166,6 +217,35 @@ const EstabelecimentosPage: React.FC = () => {
     const handleVerDetalhes = (estabelecimento: Estabelecimento) => {
         setSelectedEstabelecimento(estabelecimento);
         setShowDetalheModal(true);
+    };
+
+    const [processandoId, setProcessandoId] = useState<number | null>(null);
+
+    const handleAtivar = async (est: Estabelecimento) => {
+        setProcessandoId(est.id);
+        try {
+            await apiClient.post(`/saas/ativar-tenant/${est.id}`);
+            showToast.success(`"${est.nome_fantasia}" ativado.`);
+            await fetchEstabelecimentos();
+        } catch (e: any) {
+            showToast.error(e?.response?.data?.error || 'Falha ao ativar a conta');
+        } finally {
+            setProcessandoId(null);
+        }
+    };
+
+    const handleInativar = async (est: Estabelecimento) => {
+        if (!window.confirm(`Inativar a conta "${est.nome_fantasia}"? O cliente perde o acesso até ser reativado.`)) return;
+        setProcessandoId(est.id);
+        try {
+            await apiClient.post(`/saas/inativar-tenant/${est.id}`);
+            showToast.success(`"${est.nome_fantasia}" inativado.`);
+            await fetchEstabelecimentos();
+        } catch (e: any) {
+            showToast.error(e?.response?.data?.error || 'Falha ao inativar a conta');
+        } finally {
+            setProcessandoId(null);
+        }
     };
 
     useEffect(() => {
@@ -247,7 +327,14 @@ const EstabelecimentosPage: React.FC = () => {
             {!loading && !error && estabelecimentos.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {estabelecimentos.map(est => (
-                        <EstabelecimentoCard key={est.id} est={est} onVerDetalhes={handleVerDetalhes} />
+                        <EstabelecimentoCard
+                            key={est.id}
+                            est={est}
+                            onVerDetalhes={handleVerDetalhes}
+                            onAtivar={handleAtivar}
+                            onInativar={handleInativar}
+                            processando={processandoId === est.id}
+                        />
                     ))}
                 </div>
             )}
