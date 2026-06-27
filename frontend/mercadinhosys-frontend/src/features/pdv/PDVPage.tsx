@@ -345,7 +345,10 @@ const PDVPage: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {/* No mobile o rodapé tem 2 barras fixas (nav 4rem + barra "Pagar" ~5rem).
+                        Reservamos esse espaço para que o último item do carrinho e seus
+                        controles de quantidade nunca fiquem encobertos. lg: sem reserva. */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pb-[calc(9rem+env(safe-area-inset-bottom))] lg:pb-0">
                         {carrinho.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none">
                                 <ShoppingCart className="w-24 h-24 mb-4 text-slate-400" />
