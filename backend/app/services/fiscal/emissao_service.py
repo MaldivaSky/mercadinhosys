@@ -10,6 +10,7 @@ mercadoria, mas a correção fiscal final é do contador do lojista.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict
@@ -27,6 +28,28 @@ FORMA_PGTO_COD = {
 
 def _forma_cod(forma: str) -> str:
     return FORMA_PGTO_COD.get((forma or "").strip().lower(), "99")
+
+
+def _ncm_valido(ncm) -> bool:
+    """NCM fiscal válido: exatamente 8 dígitos e não um placeholder (tudo zero)."""
+    digits = re.sub(r"\D", "", str(ncm or ""))
+    return len(digits) == 8 and digits != "00000000"
+
+
+def _validar_ncm_producao(venda: Venda) -> None:
+    """Em produção, recusa emitir se algum item não tiver NCM válido — em vez de
+    usar o NCM-default e gerar nota com classificação fiscal errada."""
+    sem_ncm = []
+    for item in venda.itens:
+        prod = item.produto
+        if not _ncm_valido(getattr(prod, "ncm", None)):
+            sem_ncm.append(item.produto_nome or (f"produto #{prod.id}" if prod else "item"))
+    if sem_ncm:
+        nomes = ", ".join(dict.fromkeys(sem_ncm))  # únicos, preservando ordem
+        raise EmissaoError(
+            "Não é possível emitir em produção: os produtos a seguir estão sem NCM "
+            f"válido (8 dígitos). Cadastre o NCM correto antes de emitir: {nomes}."
+        )
 
 
 def _build_payload(venda: Venda, estab: Estabelecimento, numero: int, serie: int) -> Dict[str, Any]:
@@ -114,6 +137,10 @@ def emitir_nfce(venda: Venda, estab: Estabelecimento, funcionario_id: int) -> Do
             "(gateway 'focusnfe' + token). Configure as credenciais em "
             "Configurações → Fiscal antes de emitir notas com valor fiscal."
         )
+
+    # Em produção, NCM válido por item é obrigatório (não emitir nota com NCM errado).
+    if ambiente == "producao":
+        _validar_ncm_producao(venda)
 
     payload = _build_payload(venda, estab, numero, serie)
 

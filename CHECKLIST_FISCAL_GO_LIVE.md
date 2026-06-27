@@ -48,10 +48,14 @@ são **sempre do cliente**, nunca suas:
      44 dígitos, QR Code e link da DANFE.
 
 2. **Cadastro fiscal dos produtos** (crítico para nota válida):
-   - Cada produto precisa de **NCM correto**, e idealmente CFOP e CSOSN.
-   - ⚠️ O sistema aplica defaults (CSOSN 102, CFOP 5102) mas **não inventa NCM
-     válido** — produto sem NCM correto pode ser rejeitado pela SEFAZ. Valide a
-     tabela de NCM com a contabilidade do lojista.
+   - Cada produto precisa de **NCM correto** (8 dígitos), e idealmente CFOP e CSOSN.
+   - O **NCM é preenchido automaticamente** ao escanear o código de barras (vem
+     do Cosmos); fica visível e editável no cadastro do produto.
+   - 🔒 **Trava de produção:** o sistema **recusa emitir** em produção qualquer
+     venda com produto sem NCM válido (vazio, zeros ou < 8 dígitos), em vez de
+     usar um NCM-default errado. A mensagem lista os produtos a corrigir.
+   - A correção tributária final (NCM/CSOSN/CFOP) é responsabilidade da
+     contabilidade do lojista.
 
 3. **Virada para produção**:
    - Troque para credenciais de **produção** (token, CSC, CSC ID de produção) e

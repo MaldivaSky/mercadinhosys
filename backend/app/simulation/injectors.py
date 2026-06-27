@@ -277,7 +277,7 @@ class RealisticInjector:
                     margem_lucro=margem,
                     quantidade=qtd,
                     quantidade_minima=Decimal("20.000"),
-                    ncm=item.get("ncm", "00000000"),
+                    ncm=item.get("ncm") or None,  # NCM real do catálogo; sem placeholder falso "00000000"
                     origem=0,
                     controlar_validade=True,
                     data_fabricacao=fabricacao,

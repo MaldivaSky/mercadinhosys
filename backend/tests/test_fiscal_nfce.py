@@ -92,6 +92,38 @@ def test_ncm_do_produto_vai_para_a_nota(client, session):
     )
 
 
+@pytest.mark.parametrize("ncm_ruim", [None, "", "00000000", "123"])
+def test_producao_bloqueia_produto_sem_ncm_valido(client, session, ncm_ruim):
+    """Em produção, produto sem NCM válido (vazio/zeros/curto) impede a emissão."""
+    from app.services.fiscal import emissao_service
+    estab, venda, headers = _setup_venda(client, session, ncm=ncm_ruim)
+    estab.fiscal_ambiente = "producao"
+    estab.fiscal_gateway = "focusnfe"   # passa a trava anti-simulado
+    estab.fiscal_token = "tok_fake"     # NCM é validado ANTES de chamar a rede
+    db.session.commit()
+
+    with pytest.raises(emissao_service.EmissaoError) as exc:
+        emissao_service.emitir_nfce(venda, estab, funcionario_id=1)
+    assert "NCM" in str(exc.value)
+
+
+def test_producao_com_ncm_valido_passa_da_trava(client, session, monkeypatch):
+    """Com NCM válido, a trava de NCM não barra (gateway real é chamado)."""
+    from app.services.fiscal import emissao_service, gateways
+    estab, venda, headers = _setup_venda(client, session, ncm="19053100")
+    estab.fiscal_ambiente = "producao"
+    estab.fiscal_gateway = "focusnfe"
+    estab.fiscal_token = "tok_fake"
+    db.session.commit()
+
+    # Mocka o gateway real p/ não bater na rede; provamos que passou da trava de NCM.
+    monkeypatch.setattr(gateways.FocusNFeGateway, "emitir",
+                        lambda self, payload, ref: {"status": "autorizado", "chave": "1" * 44,
+                                                    "protocolo": "X", "numero": "1", "serie": "1"})
+    doc = emissao_service.emitir_nfce(venda, estab, funcionario_id=1)
+    assert doc.status == "autorizado"
+
+
 def test_listar_e_cancelar_nfce(client, session):
     estab, venda, headers = _setup_venda(client, session)
     emit = client.post(f"/api/fiscal/vendas/{venda.id}/nfce", headers=headers)
