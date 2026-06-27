@@ -1,4 +1,5 @@
 import React, { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ResponsiveModalProps {
@@ -44,15 +45,18 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
     purple: 'from-purple-500 to-purple-600',
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-0 sm:p-4 overflow-hidden animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-0 sm:p-4 overflow-hidden animate-in fade-in duration-200">
       <div
         className={`bg-white dark:bg-gray-800 shadow-2xl w-full ${sizeClasses[size]} 
           h-full sm:h-auto sm:max-h-[95vh] sm:rounded-xl overflow-hidden flex flex-col 
           animate-in zoom-in-95 duration-200`}
       >
-        {/* Header */}
-        <div className={`bg-gradient-to-r ${headerColorClasses[headerColor] || 'from-blue-600 to-blue-700'} px-5 sm:px-6 py-4 flex justify-between items-center flex-shrink-0 shadow-sm z-10`}>
+        {/* Header — paddingTop respeita o notch/status bar no modo tela cheia (mobile) */}
+        <div
+          className={`bg-gradient-to-r ${headerColorClasses[headerColor] || 'from-blue-600 to-blue-700'} px-5 sm:px-6 py-4 flex justify-between items-center flex-shrink-0 shadow-sm z-10`}
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+        >
           <div className="flex items-center gap-3 min-w-0 flex-1">
             {headerIcon && (
               <div className="text-white flex-shrink-0 bg-white/20 p-2 rounded-lg">
@@ -97,7 +101,8 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
