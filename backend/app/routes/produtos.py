@@ -12,6 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
 import os
 import math
+import requests  # proxy Cosmos (buscar_cosmos_gtin / catalogo_lookup) — sem isto o endpoint quebrava com NameError
 from sqlalchemy.orm import joinedload, selectinload, subqueryload
 from app.models import (
     db,
