@@ -66,6 +66,12 @@ class TenantQuery(_BaseQuery):
             return None
 
     def _apply_filters(self):
+        # Não reaplicar critério se a query já foi fatiada (limit/offset). O
+        # paginate() injeta limit/offset e depois chama all()/count() nas fatias;
+        # adicionar .filter() após o limit quebra (erro do SQLAlchemy). O filtro
+        # de tenant já foi aplicado na query-base antes do fatiamento.
+        if getattr(self, "_limit_clause", None) is not None or getattr(self, "_offset_clause", None) is not None:
+            return self
         model = self._model()
         if model is None:
             return self

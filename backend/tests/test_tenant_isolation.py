@@ -122,6 +122,18 @@ def test_session_query_entidade_eh_isolado(dois_tenants):
     assert "Produto Exclusivo B" not in nomes, "VAZAMENTO: db.session.query(Model) retornou outro tenant"
 
 
+def test_paginate_eh_isolado_e_nao_quebra(dois_tenants):
+    """paginate() deve filtrar por tenant E não quebrar (regressão do filtro
+    aplicado após limit/offset)."""
+    a, b = dois_tenants
+    _fixar_tenant(a.id)
+    pag = Produto.query.paginate(page=1, per_page=10, error_out=False)
+    nomes = {p.nome for p in pag.items}
+    assert "Produto Exclusivo A" in nomes
+    assert "Produto Exclusivo B" not in nomes, "VAZAMENTO: paginate retornou produto de outro tenant"
+    assert pag.total == 1, f"VAZAMENTO: paginate.total contou {pag.total} (esperado 1)"
+
+
 def test_session_query_agregado_eh_isolado(dois_tenants):
     from sqlalchemy import func
     from app.models import Produto as P
