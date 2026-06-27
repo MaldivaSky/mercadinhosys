@@ -656,13 +656,13 @@ const ProductsPage: React.FC = () => {
       />
 
       {showStockModal && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
               <h3 className="text-lg font-bold">Ajustar Estoque</h3>
               <button onClick={() => setShowStockModal(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
               <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
                 <p className="font-medium">{selectedProduct.nome}</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Estoque atual: {selectedProduct.quantidade} {selectedProduct.unidade_medida}</p>
@@ -683,7 +683,7 @@ const ProductsPage: React.FC = () => {
                 <textarea value={stockAdjust.motivo} onChange={(e) => setStockAdjust(prev => ({ ...prev, motivo: e.target.value }))} rows={3} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="Informe o motivo do ajuste..." />
               </div>
             </div>
-            <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700">
+            <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700 flex-shrink-0" style={{ paddingBottom: 'max(1rem, calc(0.5rem + env(safe-area-inset-bottom)))' }}>
               <button onClick={() => setShowStockModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
               <button onClick={handleStockAdjust} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Confirmar</button>
             </div>
@@ -772,7 +772,7 @@ const ProductsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3 shrink-0">
+            <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex gap-3 shrink-0" style={{ paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
               <button
                 onClick={() => setShowDiscardModal(false)}
                 className="flex-1 py-4 px-6 rounded-2xl font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-all uppercase text-xs tracking-widest"
@@ -795,13 +795,13 @@ const ProductsPage: React.FC = () => {
       )}
 
       {showMarkupCalculator && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
               <h3 className="text-lg font-bold flex items-center gap-2"><Calculator className="w-5 h-5" />Calculadora de Markup</h3>
               <button onClick={() => setShowMarkupCalculator(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto" style={{ paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
               <div>
                 <label className="block text-sm font-medium mb-1">Preco de Custo</label>
                 <input type="number" step="0.01" value={markupCalc.preco_custo} onChange={(e) => setMarkupCalc(prev => ({ ...prev, preco_custo: parseFloat(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
