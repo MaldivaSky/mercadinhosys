@@ -149,7 +149,27 @@ const settingsService = {
     openPortal: async () => {
         const response = await apiClient.post<{ success: boolean; portal_url: string }>('/billing/portal', {});
         return response.data;
-    }
+    },
+
+    // ----- PIN de segurança (autorização de operações sensíveis) -----
+    getPinStatus: async () => {
+        const response = await apiClient.get<{ success: boolean; tem_pin: boolean }>('/configuracao/pin');
+        return response.data;
+    },
+
+    setPin: async (pin: string) => {
+        const response = await apiClient.put<{ success: boolean; tem_pin: boolean; message?: string }>('/configuracao/pin', { pin });
+        return response.data;
+    },
+
+    verifyPin: async (pin: string): Promise<boolean> => {
+        try {
+            const response = await apiClient.post<{ success: boolean }>('/configuracao/verificar-pin', { pin });
+            return response.data.success === true;
+        } catch {
+            return false;
+        }
+    },
 };
 
 export default settingsService;

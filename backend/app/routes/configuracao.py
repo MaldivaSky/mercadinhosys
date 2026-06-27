@@ -310,7 +310,85 @@ def update_estabelecimento():
         db.session.rollback()
         current_app.logger.error(f"❌ Erro em update_estabelecimento: {str(e)}")
         return jsonify({"success": False, "error": "Falha ao atualizar dados"}), 500
-        
+
+
+# ==================== PIN DE SEGURANÇA (autorização de operações sensíveis) ====================
+
+def autorizar_por_pin(estabelecimento_id, pin):
+    """
+    Valida um PIN contra os admins/gerentes (nível ≤ 2) do tenant.
+    Retorna o Funcionario autorizador ou None. Mesma regra usada no estorno de venda.
+    """
+    from app.models import Funcionario
+    pin = (str(pin or "")).strip()
+    if not pin:
+        return None
+    candidatos = Funcionario.query.filter(
+        Funcionario.estabelecimento_id == estabelecimento_id,
+        Funcionario.pin_cancelamento.isnot(None),
+        Funcionario.nivel_acesso <= 2,
+    ).all()
+    return next((f for f in candidatos if f.check_pin(pin)), None)
+
+
+@configuracao_bp.route("/verificar-pin", methods=["POST"])
+@jwt_required()
+def verificar_pin_seguranca():
+    """Verifica o PIN de segurança do tenant (gate para editar/descartar/estornar)."""
+    try:
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
+        pin = (request.get_json() or {}).get("pin", "")
+        autorizador = autorizar_por_pin(estabelecimento_id, pin)
+        if not autorizador:
+            return jsonify({"success": False, "error": "PIN inválido"}), 403
+        return jsonify({"success": True, "autorizador": autorizador.nome}), 200
+    except Exception as e:
+        current_app.logger.error(f"❌ Erro em verificar_pin_seguranca: {str(e)}")
+        return jsonify({"success": False, "error": "Falha ao verificar PIN"}), 500
+
+
+@configuracao_bp.route("/pin", methods=["GET", "PUT"])
+@jwt_required()
+def pin_seguranca():
+    """
+    GET: informa se o admin logado já tem PIN cadastrado (nunca devolve o PIN).
+    PUT: define/atualiza o PIN (4 a 6 dígitos) do admin logado. Somente nível admin.
+    """
+    from app.models import Funcionario
+    try:
+        estabelecimento_id = get_authorized_establishment_id()
+        claims = get_jwt()
+        role = (claims.get("role") or "").lower()
+        nivel = claims.get("nivel_acesso", 99)
+        # Admin da LOJA (nível 1). O super admin (dono do SaaS, nível 0) NÃO define
+        # este PIN: ele cairia no registro dele e o gate da loja (nível ≤ 2) não o
+        # encontraria. PIN é config operacional, pertence ao admin do tenant.
+        eh_admin_loja = role in ("admin", "dono") or (isinstance(nivel, int) and nivel <= 1)
+        if not eh_admin_loja:
+            return jsonify({"success": False, "error": "Apenas o administrador da loja (nível 1) pode configurar o PIN"}), 403
+
+        user_id = int(get_jwt_identity())
+        funcionario = Funcionario.query.filter_by(id=user_id, estabelecimento_id=estabelecimento_id).first()
+        if not funcionario:
+            return jsonify({"success": False, "error": "Usuário não encontrado"}), 404
+
+        if request.method == "GET":
+            return jsonify({"success": True, "tem_pin": funcionario.tem_pin}), 200
+
+        # PUT
+        pin = (str((request.get_json() or {}).get("pin", ""))).strip()
+        if not pin.isdigit() or not (4 <= len(pin) <= 6):
+            return jsonify({"success": False, "error": "O PIN deve ter de 4 a 6 dígitos numéricos"}), 400
+        funcionario.set_pin(pin)
+        db.session.commit()
+        return jsonify({"success": True, "message": "PIN de segurança atualizado", "tem_pin": True}), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"❌ Erro em pin_seguranca: {str(e)}")
+        return jsonify({"success": False, "error": "Falha ao salvar PIN"}), 500
+
 
 # ==================== PREFERÊNCIAS DO USUÁRIO ====================
 

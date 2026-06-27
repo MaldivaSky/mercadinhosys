@@ -258,6 +258,40 @@ const SettingsPage: React.FC = () => {
     const [estab, setEstab] = useState<Estabelecimento>(defaultEstab);
 
     const isSuperAdmin = user?.is_super_admin || false;
+    // Admin da LOJA = usuário nível 1 (dono do mercadinho). NÃO é o super admin
+    // (dono do SaaS, nível 0). O PIN é uma config operacional da loja, então
+    // pertence ao admin nível 1 — é o registro que o gate (nível ≤ 2) encontra.
+    const isTenantAdmin = !isSuperAdmin && (
+        ['admin', 'dono'].includes(((user as any)?.role || '').toLowerCase())
+        || (((user as any)?.nivel_acesso ?? 99) <= 1)
+    );
+
+    // PIN de segurança (autoriza estorno, editar e descartar produtos)
+    const [pinForm, setPinForm] = useState('');
+    const [temPin, setTemPin] = useState(false);
+    const [savingPin, setSavingPin] = useState(false);
+
+    useEffect(() => {
+        if (!isTenantAdmin) return;
+        settingsService.getPinStatus()
+            .then(r => setTemPin(!!r.tem_pin))
+            .catch(() => {});
+    }, [isTenantAdmin]);
+
+    const salvarPin = async () => {
+        if (pinForm.length < 4) { showToast.error('O PIN deve ter de 4 a 6 dígitos'); return; }
+        setSavingPin(true);
+        try {
+            await settingsService.setPin(pinForm);
+            setTemPin(true);
+            setPinForm('');
+            showToast.success('PIN de segurança salvo!');
+        } catch (e: any) {
+            showToast.error(e?.response?.data?.error || 'Erro ao salvar o PIN');
+        } finally {
+            setSavingPin(false);
+        }
+    };
 
     const coresPredefinidas = [
         { nome: 'Azul Padrão', valor: '#2563eb' },
@@ -991,6 +1025,34 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'sistema' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Segurança" icon={Shield} />
+
+                            {isTenantAdmin && (
+                                <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="text-sm font-bold text-gray-900 dark:text-white">PIN de Segurança (4 a 6 dígitos)</label>
+                                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${temPin ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                                            {temPin ? 'Configurado' : 'Não configurado'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                                        Autoriza operações sensíveis: estorno de venda, editar e descartar produtos.
+                                        Somente administradores definem ou alteram este PIN.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="password" inputMode="numeric" autoComplete="off" maxLength={6}
+                                            value={pinForm}
+                                            onChange={(e) => setPinForm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                            placeholder={temPin ? 'Digite um novo PIN para alterar' : 'Defina um PIN'}
+                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
+                                        />
+                                        <button onClick={salvarPin} disabled={savingPin || pinForm.length < 4}
+                                            className="px-4 py-2 rounded-lg bg-amber-600 text-white font-bold text-sm hover:bg-amber-700 disabled:opacity-60">
+                                            {savingPin ? 'Salvando...' : (temPin ? 'Alterar' : 'Salvar')}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="flex flex-col space-y-1">
