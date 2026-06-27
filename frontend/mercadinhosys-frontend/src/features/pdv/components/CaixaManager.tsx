@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { showToast } from '../../../utils/toast';
 import { pdvService, CaixaPDV } from '../pdvService';
 import {
@@ -175,9 +176,14 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
     // ABERTURA (modal bloqueante)
     // ────────────────────────────────────────────────────────
     if (!caixaAtual) {
-        return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6"
-                style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.85) 0%, rgba(30,27,75,0.85) 100%)', backdropFilter: 'blur(16px)' }}>
+        return createPortal(
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6"
+                style={{
+                    background: 'linear-gradient(135deg, rgba(15,23,42,0.85) 0%, rgba(30,27,75,0.85) 100%)',
+                    backdropFilter: 'blur(16px)',
+                    paddingTop: 'calc(0.75rem + env(safe-area-inset-top))',
+                    paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))',
+                }}>
                 <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
                     style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: '1px solid rgba(99,102,241,0.3)' }}>
 
@@ -236,7 +242,8 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
                         </button>
                     </form>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     }
 
@@ -249,14 +256,14 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
         { key: 'auditoria', label: 'Extrato', icon: <History className="w-4 h-4" />, accent: '#f59e0b' },
     ] as const;
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
             style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }}
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
 
             <div className="w-full sm:max-w-md flex flex-col rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
                 style={{
-                    maxHeight: 'calc(100dvh - 12px)',
+                    maxHeight: 'calc(100dvh - env(safe-area-inset-top) - 8px)',
                     background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
                     border: '1px solid rgba(255,255,255,0.08)'
                 }}>
@@ -299,8 +306,10 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
                     ))}
                 </div>
 
-                {/* ── Conteúdo com scroll ── */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-4">
+                {/* ── Conteúdo com scroll (padding extra no rodapé p/ os botões de ação
+                       nunca ficarem sob a barra de gestos do sistema no celular) ── */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-4"
+                    style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
                     {/* ═══ ABA: AÇÕES (Sangria / Suprimento) ═══ */}
                     {activeTab === 'movimentacao' && (
                         <form onSubmit={handleMovimentacao} className="space-y-4">
@@ -540,7 +549,8 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
                     )}
                 </div>{/* /scroll area */}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
