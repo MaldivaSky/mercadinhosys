@@ -19,6 +19,7 @@ import PurchaseOrderModal from './components/PurchaseOrderModal';
 import CommandToolbar from './components/CommandToolbar';
 
 import ProductFormModal from './components/ProductFormModal';
+import PinDialog from '../../components/modals/PinDialog';
 import { ProductsTable } from './components/ProductsTable';
 import LotesDisponiveisModal from './components/LotesDisponiveisModal';
 import ExpiringProductsModal from './components/ExpiringProductsModal';
@@ -86,6 +87,10 @@ const ProductsPage: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Produto | null>(null);
   const [selectedProductForOrder, setSelectedProductForOrder] = useState<Produto | null>(null);
   const [editMode, setEditMode] = useState(false);
+  // Gate de PIN para operações sensíveis (editar/desativar/descartar)
+  const [pinAction, setPinAction] = useState<{ run: () => void; title: string; description: string } | null>(null);
+  const requirePin = (run: () => void, title: string, description: string) =>
+    setPinAction({ run, title, description });
   const [returnToRoute, setReturnToRoute] = useState<string | null>(null);
 
   const [stockAdjust, setStockAdjust] = useState({
@@ -220,8 +225,7 @@ const ProductsPage: React.FC = () => {
   };
 
   // Handlers
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Desativar este produto?')) return;
+  const doDelete = async (id: number) => {
     try {
       await showToast.promise(productsService.delete(id), {
         loading: 'Desativando produto...',
@@ -233,6 +237,15 @@ const ProductsPage: React.FC = () => {
     } catch (error) {
       // Erro já tratado pelo promise
     }
+  };
+
+  const handleDelete = (id: number) => {
+    const prod = produtos.find(p => p.id === id);
+    requirePin(
+      () => doDelete(id),
+      'Desativar produto',
+      `Autorize com o PIN para desativar ${prod ? `"${prod.nome}"` : 'este produto'}.`,
+    );
   };
 
   const handleStockAdjust = async () => {
@@ -254,13 +267,8 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  const handleDiscard = async () => {
+  const doDiscard = async () => {
     if (!selectedProduct) return;
-    if (discardData.quantidade <= 0) {
-      showToast.error('Quantidade deve ser maior que zero');
-      return;
-    }
-
     try {
       await showToast.promise(
         productsService.descartarProduto(
@@ -283,6 +291,19 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleDiscard = () => {
+    if (!selectedProduct) return;
+    if (discardData.quantidade <= 0) {
+      showToast.error('Quantidade deve ser maior que zero');
+      return;
+    }
+    requirePin(
+      () => doDiscard(),
+      'Descartar produto',
+      `Autorize com o PIN o descarte de ${discardData.quantidade} un. de "${selectedProduct.nome}".`,
+    );
+  };
+
   const handleExportCSV = async () => {
     try {
       const response = await productsService.exportarCSV(true);
@@ -298,9 +319,15 @@ const ProductsPage: React.FC = () => {
   };
 
   const openEditModal = (produto: Produto) => {
-    setSelectedProduct(produto);
-    setEditMode(true);
-    setShowProductModal(true);
+    requirePin(
+      () => {
+        setSelectedProduct(produto);
+        setEditMode(true);
+        setShowProductModal(true);
+      },
+      'Editar produto',
+      `Autorize com o PIN para editar "${produto.nome}".`,
+    );
   };
 
   const openStockModal = (produto: Produto) => {
@@ -618,6 +645,14 @@ const ProductsPage: React.FC = () => {
         fornecedores={fornecedores}
         onClose={() => { handleCloseModal(setShowProductModal); setSelectedProduct(null); setEditMode(false); }}
         onSuccess={() => { handleCloseModal(setShowProductModal); loadProdutos(); loadStats(); }}
+      />
+
+      <PinDialog
+        open={!!pinAction}
+        title={pinAction?.title}
+        description={pinAction?.description}
+        onConfirm={() => { const a = pinAction; setPinAction(null); a?.run(); }}
+        onCancel={() => setPinAction(null)}
       />
 
       {showStockModal && selectedProduct && (
