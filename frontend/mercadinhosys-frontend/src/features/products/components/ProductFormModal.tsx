@@ -36,6 +36,7 @@ const emptyForm = {
     categoria: '',
     marca: '',
     fabricante: '',
+    ncm: '',
     tipo: '',
     unidade_medida: 'un',
     preco_custo: 0,
@@ -77,6 +78,7 @@ const ProductFormModal = ({
                 categoria: produto.categoria || '',
                 marca: produto.marca || '',
                 fabricante: produto.fabricante || '',
+                ncm: (produto as any).ncm || '',
                 tipo: produto.tipo || '',
                 unidade_medida: produto.unidade_medida || 'un',
                 preco_custo: produto.preco_custo || 0,
@@ -112,10 +114,12 @@ const ProductFormModal = ({
                     nome: d.nome || prev.nome,
                     descricao: d.categoria || prev.descricao,
                     marca: d.marca || prev.marca,
+                    ncm: d.ncm || prev.ncm,
                     imagem_url: d.imagem_url || prev.imagem_url,
                 }));
                 const origem = res.source === 'catalogo' ? 'catálogo local' : 'Cosmos';
-                showToast.success(`Dados preenchidos automaticamente (${origem}).`, { id: toastId });
+                const temNcm = d.ncm ? ` NCM ${d.ncm} preenchido.` : ' (sem NCM — preencha manualmente).';
+                showToast.success(`Dados preenchidos (${origem}).${temNcm}`, { id: toastId });
             } else {
                 // Mensagem verdadeira conforme a causa (não mais "não encontrado" genérico)
                 const msg = res.message || 'Não foi possível consultar o produto.';
@@ -270,6 +274,16 @@ const ProductFormModal = ({
                                 <input type="text" value={formData.marca}
                                     onChange={e => field('marca', e.target.value)}
                                     className={inputClass} placeholder="Ex: Nestlé" />
+                            </div>
+                            <div>
+                                <label className={labelClass}>NCM <span className="text-xs text-slate-400">(fiscal — usado na NFC-e)</span></label>
+                                <input type="text" inputMode="numeric" maxLength={8} value={formData.ncm}
+                                    onChange={e => field('ncm', e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                    className={`${inputClass} ${formData.ncm && formData.ncm.length !== 8 ? 'border-amber-400' : ''}`}
+                                    placeholder="8 dígitos (preenchido pelo código de barras)" />
+                                {formData.ncm && formData.ncm.length !== 8 && (
+                                    <p className="text-xs text-amber-600 mt-1">NCM deve ter 8 dígitos.</p>
+                                )}
                             </div>
                             <div>
                                 <label className={labelClass}>Unidade de Medida</label>

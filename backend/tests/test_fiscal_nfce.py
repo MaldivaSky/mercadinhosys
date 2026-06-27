@@ -13,7 +13,7 @@ from flask_jwt_extended import create_access_token
 from app.models import db, Estabelecimento, Produto, CategoriaProduto, Venda, DocumentoFiscal
 
 
-def _setup_venda(client, session):
+def _setup_venda(client, session, ncm="22021000"):
     estab = session.query(Estabelecimento).first()
     cat = CategoriaProduto.query.filter_by(estabelecimento_id=estab.id).first()
     if not cat:
@@ -23,7 +23,7 @@ def _setup_venda(client, session):
     prod = Produto(
         estabelecimento_id=estab.id, categoria_id=cat.id, nome="Refrigerante 2L",
         preco_custo=Decimal("5.00"), preco_venda=Decimal("8.00"), quantidade=100,
-        ncm="22021000", cfop_padrao="5102", csosn="102",
+        ncm=ncm, cfop_padrao="5102", csosn="102",
     )
     session.add(prod)
     session.commit()
@@ -79,6 +79,17 @@ def test_producao_sem_credenciais_falha_explicito(client, session):
     resp = client.post(f"/api/fiscal/vendas/{venda.id}/nfce", headers=headers)
     assert resp.status_code == 400, resp.get_data(as_text=True)
     assert "PRODUÇÃO" in resp.get_json().get("error", "").upper() or "PRODUCAO" in resp.get_json().get("error", "").upper()
+
+
+def test_ncm_do_produto_vai_para_a_nota(client, session):
+    """Prova a cadeia: NCM cadastrado no produto chega na NFC-e (não usa o default)."""
+    from app.services.fiscal import emissao_service
+    estab, venda, headers = _setup_venda(client, session, ncm="19053100")  # NCM de biscoito, != default
+    payload = emissao_service._build_payload(venda, estab, numero=1, serie=1)
+    assert payload["items"], "payload sem itens"
+    assert payload["items"][0]["codigo_ncm"] == "19053100", (
+        f"NCM do produto não chegou na nota: {payload['items'][0]['codigo_ncm']}"
+    )
 
 
 def test_listar_e_cancelar_nfce(client, session):
