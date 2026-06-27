@@ -111,10 +111,58 @@ def test_iteracao_eh_isolada(dois_tenants):
 # ---------------------------------------------------------------------------
 # BURACO #2 — fail-open: sem contexto de tenant, não pode despejar tudo
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# db.session.query também é coberto (entidade resolvida via column_descriptions)
+# ---------------------------------------------------------------------------
+def test_session_query_entidade_eh_isolado(dois_tenants):
+    from app.models import Produto as P
+    a, b = dois_tenants
+    _fixar_tenant(a.id)
+    nomes = {p.nome for p in db.session.query(P).all()}
+    assert "Produto Exclusivo B" not in nomes, "VAZAMENTO: db.session.query(Model) retornou outro tenant"
+
+
+def test_session_query_agregado_eh_isolado(dois_tenants):
+    from sqlalchemy import func
+    from app.models import Produto as P
+    a, b = dois_tenants
+    _fixar_tenant(a.id)
+    total = db.session.query(func.count(P.id)).scalar()
+    assert total == 1, f"VAZAMENTO: agregado via db.session.query contou {total} (esperado 1)"
+
+
+# ---------------------------------------------------------------------------
+# Guard de auth (before_request): fail-closed em token de tenant sem estab
+# ---------------------------------------------------------------------------
+def test_before_request_fail_closed_sem_estabelecimento(client, session):
+    """
+    Token autenticado de tenant (não super-admin) SEM estabelecimento_id deve
+    receber 403 antes de qualquer query — em vez de vazar dados de todos.
+    O before_request roda antes dos decorators da view, então o 403 é do guard.
+    """
+    from flask_jwt_extended import create_access_token
+    token = create_access_token(identity="1", additional_claims={})  # sem estabelecimento_id, sem is_super
+    resp = client.get("/api/produtos/", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403, (
+        f"FAIL-OPEN: token de tenant sem estabelecimento retornou {resp.status_code} (esperado 403)"
+    )
+
+
+def test_before_request_permite_token_valido(client, session):
+    """Token de tenant COM estabelecimento_id não deve ser bloqueado pelo guard (não-403)."""
+    from flask_jwt_extended import create_access_token
+    from app.models import Estabelecimento
+    estab = session.query(Estabelecimento).first()
+    token = create_access_token(identity="1", additional_claims={"estabelecimento_id": estab.id})
+    resp = client.get("/api/produtos/", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code != 403, "Token válido foi bloqueado indevidamente pelo guard de tenant"
+
+
 @pytest.mark.xfail(
-    reason="P0 conhecido: fail-open. Sem tenant em 'g', a query nao filtra (legado). "
-           "Fechar exige garantir g.estabelecimento_id em TODA rota autenticada sem "
-           "quebrar login/rotas publicas/super-admin. Rastreado para a proxima etapa.",
+    reason="Por design: o TenantQuery isolado NAO falha fechado (necessario p/ CLI/"
+           "seeders/login que consultam sem 'g'). A invariante de isolamento e garantida "
+           "na camada HTTP pelo before_request (load_tenant_context), coberto por "
+           "test_before_request_fail_closed_sem_estabelecimento.",
     strict=True,
 )
 def test_sem_contexto_nao_vaza_tudo(dois_tenants):

@@ -198,24 +198,44 @@ def create_app(config_name=None):
         sem depender de chamadas diretas ao get_jwt() dentro da classe Query.
         """
         from flask_jwt_extended import get_jwt, verify_jwt_in_request
-        from flask import g, request
+        from flask import g, request, abort
 
         # Ignorar OPTIONS e rotas de auth/health que não requerem JWT filtrado
         if request.method == "OPTIONS" or any(p in request.path for p in ["/api/auth/login", "/api/health", "/api/onboarding"]):
             return
 
+        # Verifica o JWT sem forçar erro (algumas rotas são públicas). Token
+        # malformado/expirado não deve gerar 500: tratamos como "sem claims".
+        claims = None
         try:
-            # Verifica JWT sem forçar erro (algumas rotas podem ser públicas)
             verify_jwt_in_request(optional=True)
             claims = get_jwt()
-            if claims:
-                # Priorizar Header de Impersonation se existir (mantemos suporte basico de header se presente no ID do JWT)
-                from app.utils.query_helpers import get_authorized_establishment_id
-                g.estabelecimento_id = get_authorized_establishment_id()
-                g.is_super_admin = bool(claims.get("is_super_admin", False))
-        except Exception as e:
-            # Logger silencioso para não poluir em rotas realmente públicas
-            pass
+        except Exception:
+            claims = None
+
+        if not claims:
+            return  # Rota pública / sem autenticação: nada a escopar.
+
+        from app.utils.query_helpers import get_authorized_establishment_id
+        is_super = bool(claims.get("is_super_admin", False))
+        g.is_super_admin = is_super
+        # get_authorized_establishment_id já trata impersonation (header) p/ super-admin.
+        tid = get_authorized_establishment_id()
+
+        if is_super:
+            # Super-admin: pode ser 'all' ou um tenant impersonado. O TenantQuery
+            # trata o bypass; aqui só propagamos o valor.
+            g.estabelecimento_id = tid
+        elif tid is not None:
+            g.estabelecimento_id = tid
+        else:
+            # FAIL-CLOSED: token de tenant autenticado SEM estabelecimento resolvido
+            # é uma anomalia. Negar é mais seguro que vazar dados de todos os tenants.
+            logger.error(
+                "🔒 Token autenticado sem estabelecimento_id resolvido em %s — negando (fail-closed).",
+                request.path,
+            )
+            abort(403, description="Contexto de estabelecimento ausente no token.")
 
     @app.after_request
     def report_server_errors(response):
