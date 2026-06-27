@@ -220,6 +220,108 @@ def buscar_cosmos_gtin(gtin):
         return jsonify({"success": False, "message": "Erro de conexão com o serviço Cosmos"}), 502
 
 
+def _cosmos_para_catalogo(ean: str, j: dict) -> "CatalogoMestre":
+    """Mapeia o JSON do Cosmos para o CatalogoMestre e faz upsert (cache global)."""
+    import json as _json
+    brand = (j.get("brand") or {}) if isinstance(j.get("brand"), dict) else {}
+    ncm = (j.get("ncm") or {}) if isinstance(j.get("ncm"), dict) else {}
+    cat = (j.get("category") or {}) if isinstance(j.get("category"), dict) else {}
+    gpc = (j.get("gpc") or {}) if isinstance(j.get("gpc"), dict) else {}
+    preco = j.get("avg_price") or j.get("price") or None
+    try:
+        preco = float(preco) if preco not in (None, "", "0") else None
+    except (TypeError, ValueError):
+        preco = None
+
+    item = CatalogoMestre.query.filter_by(ean=ean).first()
+    if not item:
+        item = CatalogoMestre(ean=ean)
+        db.session.add(item)
+    item.nome = j.get("description") or item.nome
+    item.marca = brand.get("name") or item.marca
+    item.ncm = (ncm.get("code") or item.ncm or "")[:8] or None
+    item.categoria = cat.get("name") or gpc.get("description") or item.categoria
+    item.imagem_url = j.get("thumbnail") or item.imagem_url
+    item.preco_referencia = preco if preco is not None else item.preco_referencia
+    item.fonte = "cosmos"
+    item.status = "encontrado"
+    item.payload_json = _json.dumps(j)[:60000]
+    item.consultado_em = datetime.utcnow()
+    return item
+
+
+@produtos_bp.route("/catalogo/lookup/<ean>", methods=["GET"])
+@funcionario_required
+def catalogo_lookup(ean):
+    """
+    Lookup inteligente por EAN para o cadastro rápido (câmera/leitor):
+      1) tenta o Catálogo Mestre local (NÃO consome quota Cosmos);
+      2) no miss, consulta o Cosmos e GRAVA no catálogo (cresce sozinho);
+      3) erros transparentes: distingue não-encontrado, quota e conexão.
+
+    Resposta sempre normalizada: {success, source, data:{ean,nome,marca,ncm,
+    categoria,imagem_url,preco_referencia}}.
+    """
+    ean_limpo = "".join(c for c in str(ean) if c.isdigit())
+    if len(ean_limpo) < 8:
+        return jsonify({"success": False, "code": "ean_invalido",
+                        "message": "Código de barras inválido (leitura incompleta?). Tente escanear novamente."}), 400
+
+    # 1) Catálogo local
+    item = CatalogoMestre.query.filter_by(ean=ean_limpo).first()
+    if item and item.status == "encontrado":
+        return jsonify({"success": True, "source": "catalogo", "data": item.to_dict()}), 200
+    if item and item.status == "nao_encontrado":
+        return jsonify({"success": False, "source": "catalogo", "code": "nao_encontrado",
+                        "message": "Este EAN não existe na base Cosmos. Preencha os dados manualmente."}), 404
+
+    # 2) Fallback Cosmos
+    token = os.environ.get("COSMOS_TOKEN") or "MVsiut1dwhg12WGhPuTD9Q"
+    url = f"https://api.cosmos.bluesoft.com.br/gtins/{ean_limpo}.json"
+    headers = {"X-Cosmos-Token": token, "Content-Type": "application/json", "User-Agent": "Cosmos-API-Request"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Cosmos lookup falha de conexão ({ean_limpo}): {e}")
+        return jsonify({"success": False, "code": "conexao",
+                        "message": "Sem conexão com o Cosmos no momento. Tente novamente ou preencha manualmente."}), 502
+
+    if resp.status_code == 200:
+        try:
+            j = resp.json()
+            item = _cosmos_para_catalogo(ean_limpo, j)
+            db.session.commit()
+            return jsonify({"success": True, "source": "cosmos", "data": item.to_dict()}), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Cosmos lookup erro ao gravar catálogo ({ean_limpo}): {e}")
+            return jsonify({"success": False, "code": "erro_interno",
+                            "message": "Produto encontrado, mas houve erro ao salvar no catálogo."}), 500
+
+    if resp.status_code == 404:
+        # Cache negativo: não reconsultar quota para um EAN inexistente
+        neg = CatalogoMestre.query.filter_by(ean=ean_limpo).first() or CatalogoMestre(ean=ean_limpo)
+        neg.status = "nao_encontrado"
+        neg.consultado_em = datetime.utcnow()
+        if not neg.id:
+            db.session.add(neg)
+        db.session.commit()
+        return jsonify({"success": False, "code": "nao_encontrado",
+                        "message": "Este EAN não existe na base Cosmos. Preencha os dados manualmente."}), 404
+
+    if resp.status_code in (401, 403):
+        current_app.logger.error(f"Cosmos token inválido/expirado (HTTP {resp.status_code}).")
+        return jsonify({"success": False, "code": "token",
+                        "message": "Token do Cosmos inválido ou expirado. Configure um COSMOS_TOKEN válido."}), 502
+    if resp.status_code == 429:
+        return jsonify({"success": False, "code": "quota",
+                        "message": "Limite diário de consultas do Cosmos atingido. Use um token próprio (COSMOS_TOKEN) ou tente amanhã."}), 429
+
+    current_app.logger.error(f"Cosmos lookup HTTP {resp.status_code} para {ean_limpo}.")
+    return jsonify({"success": False, "code": "api",
+                    "message": f"Cosmos respondeu erro {resp.status_code}. Tente novamente em instantes."}), 502
+
+
 # ============================================
 # CATÁLOGO MESTRE (alimentado pelo harvester Cosmos)
 # ============================================
