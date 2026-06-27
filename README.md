@@ -1,210 +1,205 @@
-# 🛒 MercadinhoSys - ERP & Scientific BI Dashboard
+<div align="center">
 
-![Version](https://img.shields.io/badge/Version-2.2.0_Scientific-blue)
-![Status](https://img.shields.io/badge/Status-Stable-green)
-![Python](https://img.shields.io/badge/Python-3.11+-blue)
-![React](https://img.shields.io/badge/React-18+_TS-blue)
+# 🛒 MercadinhoSys
 
-**MercadinhoSys** é um ecossistema completo de gestão comercial (ERP) e Ponto de Venda (PDV) de nível industrial, agora potencializado com um **Dashboard de Business Intelligence Científico**. O sistema oferece análise preditiva, gestão de estoque via Classificação ABC e orquestração financeira avançada em uma interface premium e responsiva.
+### ERP & PDV Multi-Tenant com Business Intelligence Científico
+
+*Gestão comercial de nível profissional para mercados, lojas e atacarejos — varejo e atacado.*
+
+<br/>
+
+[![Version](https://img.shields.io/badge/version-2.2.0-2563eb?style=for-the-badge)](#)
+[![Status](https://img.shields.io/badge/status-production-16a34a?style=for-the-badge)](#)
+[![PWA](https://img.shields.io/badge/PWA-instalável-9333ea?style=for-the-badge&logo=pwa&logoColor=white)](#)
+[![License](https://img.shields.io/badge/license-MIT-64748b?style=for-the-badge)](#-licença--autor)
+
+<br/>
+
+**Frontend**
+
+![React](https://img.shields.io/badge/React_18-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)
+![React Router](https://img.shields.io/badge/React_Router-CA4245?style=flat-square&logo=react-router&logoColor=white)
+![Axios](https://img.shields.io/badge/Axios-5A29E4?style=flat-square&logo=axios&logoColor=white)
+
+**Backend**
+
+![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-000000?style=flat-square&logo=flask&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy_2.0-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
+![Gunicorn](https://img.shields.io/badge/Gunicorn-499848?style=flat-square&logo=gunicorn&logoColor=white)
+
+**Dados & Infra**
+
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
+
+</div>
+
+---
+
+## ✨ Visão Geral
+
+**MercadinhoSys** é um ecossistema completo de **ERP + Ponto de Venda (PDV)** com arquitetura **multi-tenant (SaaS)**, emissão fiscal (**NFC-e**), cadastro de produtos por **código de barras** e um **dashboard de Business Intelligence** com análises científicas (Curva ABC, RFM, previsão de ruptura). Tudo numa interface **PWA** instalável, responsiva e mobile-first.
+
+> 📖 **Comece por aqui:** [`GUIA_DO_SISTEMA.md`](GUIA_DO_SISTEMA.md) — o documento-âncora com tudo que está construído, ligado e testado.
 
 ---
 
 ## 🚀 Quick Start
 
-### Opção 1: Docker (Recomendado)
-
 ```bash
-# Clone e configure
+# Clone
 git clone https://github.com/MaldivaSky/mercadinhosys.git
 cd mercadinhosys
+
+# Configure os segredos
 cp .env.example .env
 
-# Inicie tudo com um comando
+# Suba tudo com Docker (backend + frontend + banco)
 make install
-
-# Acesse: http://localhost (Frontend) | http://localhost:5000 (Backend)
-# Login: demo / demo123
 ```
 
-### Opção 2: Manual
+<div align="center">
 
-Ver [QUICK_START.md](QUICK_START.md) para instruções detalhadas.
+| Serviço | URL | Acesso |
+|---|---|---|
+| 🖥️ Frontend | `http://localhost` | botão **Acesso Demo** |
+| ⚙️ Backend API | `http://localhost:5000` | JWT |
+
+</div>
+
+> Setup manual (sem Docker): veja [`README-LOCAL.md`](README-LOCAL.md) · Guia Docker completo: [`README_DOCKER.md`](README_DOCKER.md)
+
+---
+
+## 🧩 Funcionalidades
+
+### 📊 Business Intelligence & Analytics
+- **Dashboards executivos** em tempo real: faturamento, margens, lucro líquido, ticket médio.
+- **Curva ABC** automática (Pareto) e gestão científica de estoque/validade.
+- **Análise RFM** de clientes: segmentação automática (Campeões, Fiéis, Em Risco, Perdidos).
+- **DRE** e relatórios exportáveis em **PDF / Excel / CSV**.
+
+### 🧾 Fiscal (NFC-e) & Catálogo Inteligente
+- **Emissão de NFC-e** (modelo 65) via gateway **Focus NFe**, importação de **XML de entrada**, cancelamento e numeração por loja.
+- **Travas de produção responsáveis:** não emite sem gateway real configurado nem com produto **sem NCM válido**.
+- **Cadastro por código de barras:** leitura de EAN preenche nome, marca, **NCM** e imagem via catálogo local + **API Cosmos**, com cache que cresce sozinho (economiza quota).
+
+### 🏢 Multi-Tenant & SaaS
+- **Isolamento de dados por loja** garantido em nível de ORM (`TenantQuery`) com política **fail-closed** — um lojista jamais vê o dado de outro.
+- **Onboarding self-service** com trial; super admin (dono do SaaS) ativa/inativa lojas.
+- **Planos & permissões** por nível de acesso (Admin → Entregador).
+
+### 🖥️ PDV & Operação de Loja
+- Frente de caixa ultrarrápida com **atalhos de teclado** e **múltiplos pagamentos**.
+- **Caixa blindado:** auditoria de quebra separando gaveta física (dinheiro) de fluxo digital (Pix/cartão).
+- **Crédito (fiado)**, sangria/suprimento, **SFA** e **Delivery** com rotas e comissões.
+- **PIN de segurança** para operações sensíveis (estorno, editar/descartar produto).
+
+### 👥 RH & PWA
+- **Ponto fotográfico** com geolocalização; holerites, escalas e banco de horas.
+- **PWA instalável** (mobile/desktop) com cache offline e pull-to-refresh próprio.
+
+---
+
+## 🏗️ Arquitetura
+
+```
+┌─────────────────────────────┐        ┌──────────────────────────────┐
+│   Frontend (PWA)            │  HTTPS │   Backend API (Flask)         │
+│   React 18 · TS · Vite      │◄──────►│   REST · JWT · SQLAlchemy     │
+│   Tailwind · Recharts       │  JSON  │   TenantQuery (multi-tenant)  │
+└─────────────────────────────┘        └───────────────┬──────────────┘
+                                                        │
+                                  ┌─────────────────────┼─────────────────────┐
+                                  │                      │                     │
+                            PostgreSQL / SQLite     Focus NFe (fiscal)    API Cosmos (EAN)
+```
+
+- **Multi-tenant real:** toda consulta é escopada por estabelecimento automaticamente; rotas autenticadas sem tenant resolvido recebem `403` (fail-closed).
+- **Detecção de ambiente:** SQLite em dev, PostgreSQL em produção, sem mudança de código.
 
 ---
 
 ## 📚 Documentação
 
-### Para Desenvolvedores
-- **[QUICK_START.md](QUICK_START.md)** - Setup rápido (5 minutos)
-- **[README_DOCKER.md](README_DOCKER.md)** - Guia completo do Docker
-- **[DEVOPS_COMPLETE.md](DEVOPS_COMPLETE.md)** - Infraestrutura e CI/CD
-
-### Para Deploy em Produção
-- **[DEPLOY_RENDER.md](DEPLOY_RENDER.md)** - Guia completo de deploy no Render.com
-- **[DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md)** - Checklist pré/pós deploy
-- **[DEPLOY_POSTGRESQL_COMPLETE.md](DEPLOY_POSTGRESQL_COMPLETE.md)** - Migração PostgreSQL
-
-### Documentação Técnica
-- **[ANALISE_SISTEMA_MERCADINHOSYS.md](ANALISE_SISTEMA_MERCADINHOSYS.md)** - Análise do sistema
-- **[CORRECOES_CRITICAS_ARQUITETURA.md](CORRECOES_CRITICAS_ARQUITETURA.md)** - Correções arquiteturais
-- **[DASHBOARD_RESUMO_FINAL.md](DASHBOARD_RESUMO_FINAL.md)** - Documentação do Dashboard
-- **[EMAIL_NOTA_FISCAL.md](EMAIL_NOTA_FISCAL.md)** - Sistema de envio de cupom por email
+| Documento | Conteúdo |
+|---|---|
+| [`GUIA_DO_SISTEMA.md`](GUIA_DO_SISTEMA.md) | **Âncora** — o que está construído, ligado e testado |
+| [`CHECKLIST_FISCAL_GO_LIVE.md`](CHECKLIST_FISCAL_GO_LIVE.md) | Passo a passo para ativar a emissão fiscal de uma loja |
+| [`README_DOCKER.md`](README_DOCKER.md) | Guia completo de Docker |
+| [`README-LOCAL.md`](README-LOCAL.md) | Setup manual local |
 
 ---
 
-## 🚀 Tecnologias Utilizadas
+## 🔐 Segurança
 
-### Frontend
-* ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB) **React 18** + **Vite** - Interface rápida e moderna
-* ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white) **TypeScript** - Tipagem estática
-* ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white) **Tailwind CSS** - Estilização responsiva
-* **Axios** - Cliente HTTP
-* **Recharts** - Visualização de dados
-
-### Backend
-* ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white) **Python 3.11+**
-* ![Flask](https://img.shields.io/badge/Flask-000000?style=flat&logo=flask&logoColor=white) **Flask** - Framework web
-* **SQLAlchemy** - ORM
-* **Flask-JWT-Extended** - Autenticação JWT
-* **PostgreSQL** / **SQLite** - Banco de dados (detecta ambiente automaticamente)
-
-### DevOps
-* ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) **Docker** + **Docker Compose**
-* **Render.com** - Deploy em produção
-* **Neon PostgreSQL** - Database serverless
+- ✅ **Autenticação JWT** com refresh tokens.
+- ✅ **Isolamento multi-tenant ativo** (`TenantQuery` + `before_request` fail-closed).
+- ✅ **PIN de segurança** (hash) para estorno, edição e descarte de produtos.
+- ✅ **Rate limiting** e proteção contra brute-force nas rotas sensíveis.
+- ✅ **Auditoria transacional** de caixa, vendas e acessos.
+- ✅ Segredos fora do versionamento (env vars no servidor).
 
 ---
 
-## 📋 Funcionalidades Principais Implementadas
-
-### 📊 Business Intelligence & Analytics
-*   **Dashboards Executivos:** KPIs em tempo real (Faturamento, Margens, Lucro Líquido, Ticket Médio).
-*   **Gestão de Estoque Científica:** Classificação ABC automática (Curva de Pareto) e gestão de validades.
-*   **Análise de Clientes (RFM):** Segmentação automática (Campeões, Fiéis, Risco, Perdidos).
-*   **Relatórios Avançados:** Extratos exportáveis, análise de DRE, e relatórios de turnos consolidados.
-
-### 🏢 Multi-Tenant & SaaS Pronta
-*   **Arquitetura Multi-Estabelecimento:** Suporte nativo a matriz e múltiplas filiais.
-*   **Onboarding Automático:** Criação de ambiente via acesso Demo e planos de assinatura (Gratuito, Pro, Enterprise).
-*   **Gestão de Planos & Permissões (Guardiões):** Controle de rotas (PlanoGuard/SuperAdminRoute) e módulos habilitados por assinatura.
-
-### 🖥️ PDV & Gestão de Loja (PWA Mobile-First)
-*   **Frente de Caixa (PDV):** Interface ultra-rápida, atalhos de teclado, suporte a múltiplos pagamentos, sangrias, suprimentos.
-*   **Gestão de Caixa Blindada:** Auditoria estrita de quebra de caixa, separando fluxo centralizado (Pix, Crédito) de gaveta física (Dinheiro).
-*   **Gestão de Crédito (Fiado):** Controle de limites, pagamentos parciais e carteira de clientes devedores.
-*   **SFA (Força de Vendas) & Delivery:** Módulos de gestão de pedidos, rotas de entrega e comissões.
-*   **PWA Integrado:** Funciona como App Nativo (Mobile/Desktop) com instalação direta via navegador, cache offline e responsividade total.
-
-### 👥 Gestão de RH & Operações
-*   **Controle de Ponto Fotográfico:** Registro de ponto com captura de imagem e geolocalização.
-*   **Painel do Colaborador:** Holerites, escalas e banco de horas.
-
----
-
-## 🔧 Como Executar o Projeto
-
-### Desenvolvimento Local
-
-#### Opção 1: Docker (Recomendado)
+## 🧪 Qualidade
 
 ```bash
-# Clone o repositório
-git clone https://github.com/MaldivaSky/mercadinhosys.git
-cd mercadinhosys
+# Backend (pytest)
+cd backend && venv/Scripts/python -m pytest tests/ -q     # 41 passed, 1 xfailed
 
-# Configure variáveis de ambiente
-cp .env.example .env
-
-# Inicie tudo com um comando
-make install
-
-# Acesse:
-# Frontend: http://localhost
-# Backend: http://localhost:5000
-# Login: demo / demo123 (Ou gere no botão Acesso Demo)
+# Frontend (type-check + build de produção)
+cd frontend/mercadinhosys-frontend && npm run build
 ```
 
-#### Opção 2: Manual
-
-**Backend:**
-
-```bash
-cd backend
-python -m venv venv
-# Windows: venv\Scripts\activate | Linux/Mac: source venv/bin/activate
-pip install -r requirements.txt
-python seed_cloud.py
-python run.py
-```
-
-**Frontend:**
-
-```bash
-cd frontend/mercadinhosys-frontend
-npm install
-npm run dev
-# Acesse: http://localhost:5173
-```
-
-### Deploy em Produção
-
-Sistema pronto para deploy no **Render.com** com **Neon PostgreSQL**.
-
-```bash
-# 1. Commit e push
-git add .
-git commit -m "feat: production deployment"
-git push origin main
-```
-**Documentação completa:** [DEPLOY_RENDER.md](DEPLOY_RENDER.md)
+Cobertura de testes nos pontos críticos: isolamento multi-tenant, emissão fiscal (NFC-e), lookup de catálogo (Cosmos) e PIN de segurança.
 
 ---
 
-## 🗄️ Banco de Dados & Infraestrutura
+## ☁️ Deploy
 
-Sistema detecta ambiente automaticamente:
-- **Local:** SQLite (`c:/temp/mercadinho_instance/mercadinho.db`)
-- **Produção:** PostgreSQL (Neon, Render, Railway, Heroku)
+Trabalha-se em `main`; a branch **`master`** recebe o *fast-forward* de `main` e o `git push origin master` dispara o deploy (**Render** para o backend, **Vercel** para o frontend, **PostgreSQL** gerenciado).
+
+> Variáveis sensíveis (`SECRET_KEY`, `JWT_SECRET_KEY`, `COSMOS_TOKEN`, credenciais fiscais) ficam nas *env vars* do servidor — nunca no git.
 
 ---
 
-## 🔐 Segurança & Arquitetura
+## 🗺️ Roadmap
 
-- ✅ **Autenticação JWT** blindada com refresh tokens e isolamento Multi-Tenant (`X-Tenant-ID`).
-- ✅ **Rate Limiting** e proteção contra brute-force nas rotas sensíveis.
-- ✅ **Auditoria Transacional:** Logs de caixa, vendas e histórico de acessos.
-- ✅ **Frontend PWA:** React 18, Vite, TailwindCSS (glassmorphism premium).
-- ✅ **Backend Rest API:** Flask, SQLAlchemy, Gunicorn.
+- [ ] **Billing SaaS** — gateway de pagamento real (Asaas/Stripe/Efí) + webhook → ativação automática do tenant.
+- [ ] **Fiscal em produção** — homologação real Focus NFe (certificado A1 + CSC do lojista).
+- [ ] **PIX automático** via webhook (sem confirmação manual).
+- [ ] **Impressoras fiscais** (WebUSB/Bluetooth) e **previsão de ruptura** com ML.
 
 ---
 
 ## 🤝 Contribuindo
 
 1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
+2. Crie sua branch (`git checkout -b feature/MinhaFeature`)
+3. Commit (`git commit -m 'feat: minha feature'`)
+4. Push (`git push origin feature/MinhaFeature`)
 5. Abra um Pull Request
 
 ---
 
 ## 📝 Licença & Autor
 
-Este projeto está sob a licença MIT. 
-Desenvolvido com 💙 por **MaldivasTech** - Feito com alma amazônica!
+Distribuído sob a licença **MIT**.
 
----
+<div align="center">
 
-## 🎯 Roadmap Futuro
+Desenvolvido com 💙 por **MaldivasTech** — feito com alma amazônica 🌳
 
-### v3.0 (Expansão de Ecossistema)
-- [ ] Integração com PIX automatizado (MercadoPago/Stripe).
-- [ ] Integração Direta com Impressoras Fiscais Bluetooth/Rede (via WebUSB/WebBluetooth).
-- [ ] Módulo de Inteligência Artificial para Previsão de Ruptura de Estoque (Machine Learning).
-- [ ] Integração com WhatsApp (Bot de Pedidos Automáticos).
+**MercadinhoSys** · ERP Multi-Tenant · Production Ready
 
----
-
-**🎉 Sistema em produção e pronto para uso Comercial!**
-
-Versão: 2.2.0 Scientific | Status: Production Ready | Multi-Tenant: Ativo
+</div>
