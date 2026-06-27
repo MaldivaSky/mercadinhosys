@@ -69,6 +69,18 @@ def test_emitir_nfce_idempotente(client, session):
     assert total_docs == 1
 
 
+def test_producao_sem_credenciais_falha_explicito(client, session):
+    """Em PRODUÇÃO sem gateway real, deve FALHAR (não emitir simulado silencioso)."""
+    estab, venda, headers = _setup_venda(client, session)
+    estab.fiscal_ambiente = "producao"
+    estab.fiscal_gateway = "simulado"  # sem credencial real
+    db.session.commit()
+
+    resp = client.post(f"/api/fiscal/vendas/{venda.id}/nfce", headers=headers)
+    assert resp.status_code == 400, resp.get_data(as_text=True)
+    assert "PRODUÇÃO" in resp.get_json().get("error", "").upper() or "PRODUCAO" in resp.get_json().get("error", "").upper()
+
+
 def test_listar_e_cancelar_nfce(client, session):
     estab, venda, headers = _setup_venda(client, session)
     emit = client.post(f"/api/fiscal/vendas/{venda.id}/nfce", headers=headers)

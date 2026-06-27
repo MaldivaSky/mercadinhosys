@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any, Dict
 
 from app.models import db, Venda, DocumentoFiscal, Estabelecimento, utcnow
-from app.services.fiscal.gateways import get_gateway
+from app.services.fiscal.gateways import get_gateway, SimuladoGateway
 
 # Mapa forma de pagamento (interno → código Focus NFe / SEFAZ)
 FORMA_PGTO_COD = {
@@ -104,6 +104,16 @@ def emitir_nfce(venda: Venda, estab: Estabelecimento, funcionario_id: int) -> Do
     ambiente = getattr(estab, "fiscal_ambiente", None) or "homologacao"
     gateway = get_gateway(estab)
     gw_nome = (getattr(estab, "fiscal_gateway", None) or "simulado").lower()
+
+    # Trava de segurança: em PRODUÇÃO nunca cair em simulado silenciosamente.
+    # Sem isso, uma loja mal configurada acharia que emite nota válida quando
+    # na verdade está gerando documento SEM valor fiscal.
+    if ambiente == "producao" and isinstance(gateway, SimuladoGateway):
+        raise EmissaoError(
+            "Emissão em PRODUÇÃO exige gateway fiscal real configurado "
+            "(gateway 'focusnfe' + token). Configure as credenciais em "
+            "Configurações → Fiscal antes de emitir notas com valor fiscal."
+        )
 
     payload = _build_payload(venda, estab, numero, serie)
 
