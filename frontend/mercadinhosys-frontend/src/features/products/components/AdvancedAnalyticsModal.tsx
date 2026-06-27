@@ -47,28 +47,38 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
 
             if (type.startsWith('giro_') || type === 'alerta_cobertura') {
                 const hoje = new Date();
+                const DIA = 1000 * 60 * 60 * 24;
                 filtered.forEach(p => {
-                    const dataCadastro = p.created_at ? new Date(p.created_at) : new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
-                    let diasVida = Math.max(1, Math.floor((hoje.getTime() - dataCadastro.getTime()) / (1000 * 60 * 60 * 24)));
-                    
-                    if (diasVida < 7 && (p.quantidade_vendida || 0) > 10) {
+                    // ESPELHO EXATO do backend classificar_giro_produto():
+                    // dias de vida desde o cadastro, estendidos pela última venda,
+                    // suavizados para itens novos de alto volume. Assim a cobertura
+                    // exibida bate com a classificação que filtrou o produto.
+                    const dataCadastro = p.created_at ? new Date(p.created_at) : new Date(hoje.getTime() - 30 * DIA);
+                    let diasVida = Math.max(1, Math.floor((hoje.getTime() - dataCadastro.getTime()) / DIA));
+
+                    if (p.ultima_venda) {
+                        const diasDesdeVenda = Math.floor((hoje.getTime() - new Date(p.ultima_venda).getTime()) / DIA);
+                        if (diasDesdeVenda > diasVida) diasVida = Math.max(1, diasDesdeVenda);
+                    }
+
+                    const qv = p.quantidade_vendida || 0;
+                    if (diasVida < 7 && qv > 10) {
                         diasVida = 30;
                     }
 
-                    const vmd = (p.quantidade_vendida || 0) / diasVida;
-                    
+                    const vmd = qv > 0 ? qv / diasVida : 0;
+
                     if (vmd > 0) {
-                        const cobertura = (p.quantidade || 0) / vmd;
                         (p as any)._vmd_calc = vmd;
-                        (p as any)._cobertura_calc = cobertura;
+                        (p as any)._cobertura_calc = (p.quantidade || 0) / vmd;
                     } else {
                         (p as any)._vmd_calc = 0;
                         (p as any)._cobertura_calc = 999;
                     }
                 });
-                
+
                 filtered.sort((a, b) => (a as any)._cobertura_calc - (b as any)._cobertura_calc);
-                
+
                 if (type === 'alerta_cobertura') {
                     filtered = filtered.filter(p => (p as any)._cobertura_calc <= 10);
                 }

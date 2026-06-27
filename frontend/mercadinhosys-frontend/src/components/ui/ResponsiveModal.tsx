@@ -86,9 +86,13 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
           {children}
         </div>
 
-        {/* Footer */}
+        {/* Footer — respeita a safe-area do dispositivo (barra de gestos / home indicator)
+            para que os botões de ação nunca fiquem sob a barra do sistema no celular. */}
         {footer && (
-          <div className="border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50 backdrop-blur-md px-5 sm:px-6 py-4 flex-shrink-0 flex items-center justify-end gap-3 translate-z-0">
+          <div
+            className="border-t border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50 backdrop-blur-md px-5 sm:px-6 py-4 flex-shrink-0 flex items-center justify-end gap-3 translate-z-0"
+            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+          >
             {footer}
           </div>
         )}

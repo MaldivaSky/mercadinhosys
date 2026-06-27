@@ -13,9 +13,6 @@ import {
     Target,
     X
 } from 'lucide-react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
 import { formatCurrency } from '../../../utils/formatters';
 import { Produto } from '../../../types';
 
@@ -73,25 +70,6 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         icon: any, 
         theme: { header: string, text: string, button: string, stroke: string, shadow: string } 
     } | null>(null);
-
-    const generateHistoryData = (currentValue: number, isCurrency: boolean = false) => {
-        const today = new Date();
-        let val = currentValue;
-        const history = [];
-        for (let i = 0; i < 15; i++) {
-            const d = new Date(today);
-            d.setDate(today.getDate() - i);
-            history.push({
-                date: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-                value: isCurrency ? Number(val.toFixed(2)) : Math.round(val)
-            });
-            const changePercent = (Math.random() * 0.05) - 0.025; // -2.5% to +2.5% daily variation
-            let newVal = val * (1 - changePercent);
-            if (newVal < 0) newVal = 0;
-            val = newVal;
-        }
-        return history.reverse();
-    };
 
     useEffect(() => {
         // Se não tiver produtos E não tiver stats do backend, limpa tudo
@@ -827,7 +805,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </div>
                                 <div>
                                     <h2 className="text-2xl font-black">{activeMetricModal.title}</h2>
-                                    <p className="text-white/80 font-medium">Histórico dos últimos 15 dias</p>
+                                    <p className="text-white/80 font-medium">Indicador atual do estoque</p>
                                 </div>
                             </div>
                             <button onClick={() => setActiveMetricModal(null)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
@@ -844,27 +822,15 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="h-[300px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={generateHistoryData(activeMetricModal.value, activeMetricModal.isCurrency)}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-                                        <XAxis dataKey="date" stroke="#6B7280" fontSize={12} tickMargin={10} />
-                                        <YAxis stroke="#6B7280" fontSize={12} tickFormatter={(val) => activeMetricModal.isCurrency ? `R$ ${val}` : val} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1F2937', borderColor: '#374151', borderRadius: '0.5rem', color: '#F3F4F6' }}
-                                            itemStyle={{ color: '#F3F4F6', fontWeight: 'bold' }}
-                                            formatter={(value: any) => [activeMetricModal.isCurrency ? formatCurrency(value) : value, 'Valor']}
-                                        />
-                                        <Line
-                                            type="monotone"
-                                            dataKey="value"
-                                            stroke={activeMetricModal.theme.stroke}
-                                            strokeWidth={4}
-                                            dot={{ r: 4, strokeWidth: 2, fill: activeMetricModal.theme.stroke }}
-                                            activeDot={{ r: 8, strokeWidth: 0 }}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
+                            <div className="h-[200px] w-full flex flex-col items-center justify-center text-center gap-3 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                                <BarChart3 className="w-10 h-10 text-gray-300 dark:text-gray-600" />
+                                <p className="font-bold text-gray-500 dark:text-gray-400 max-w-md px-6">
+                                    O histórico diário deste indicador ainda não é registrado.
+                                </p>
+                                <p className="text-xs text-gray-400 max-w-md px-6">
+                                    Mostramos apenas o valor atual, apurado em tempo real. A série temporal será exibida
+                                    quando a captura histórica estiver ativa — sem números simulados.
+                                </p>
                             </div>
                         </div>
                     </div>

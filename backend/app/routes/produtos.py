@@ -153,6 +153,61 @@ def calcular_classificacao_abc(produto):
     return "C"
 
 
+def classificar_giro_produto(produto, hoje_date=None):
+    """FONTE ÚNICA da classificação de giro por cobertura de estoque (VMD).
+
+    Mantém os contadores do dashboard, a lista filtrada e o modal de detalhe
+    SEMPRE coerentes — antes cada lugar usava um critério diferente
+    (cobertura<=15 no card, quantidade_vendida>=30 na lista), o que fazia
+    o card dizer "2" e o modal abrir "12".
+
+    Retorna: 'rapido' (cobertura <= 15 dias), 'normal' (16-60) ou
+             'lento' (> 60 dias ou sem vendas).
+    """
+    try:
+        if hoje_date is None:
+            hoje_date = datetime.now(timezone.utc).date()
+
+        data_cadastro = produto.created_at.date() if produto.created_at else (hoje_date - timedelta(days=30))
+        dias_vida = max(1, (hoje_date - data_cadastro).days)
+
+        ultima = getattr(produto, '_ultima_venda_real', None) or produto.ultima_venda
+        if ultima:
+            dt_venda = ultima
+            if isinstance(dt_venda, str):
+                try:
+                    dt_venda = datetime.fromisoformat(dt_venda.replace('Z', '+00:00')).date()
+                except ValueError:
+                    dt_venda = hoje_date
+            elif hasattr(dt_venda, 'date'):
+                dt_venda = dt_venda.date()
+            if isinstance(dt_venda, date):
+                dias_desde_venda = (hoje_date - dt_venda).days
+                if dias_desde_venda > dias_vida:
+                    dias_vida = max(1, dias_desde_venda)
+
+        qtd_vendida = float(produto.quantidade_vendida or 0)
+        # Suaviza VMD de produtos recém-cadastrados com alto volume (seed/importação)
+        if dias_vida < 7 and qtd_vendida > 10:
+            dias_vida = 30
+
+        if qtd_vendida <= 0:
+            return 'lento'
+
+        vmd = qtd_vendida / dias_vida
+        if vmd <= 0:
+            return 'lento'
+
+        cobertura = float(produto.quantidade or 0) / vmd
+        if cobertura <= 15:
+            return 'rapido'
+        if cobertura <= 60:
+            return 'normal'
+        return 'lento'
+    except Exception:
+        return 'lento'
+
+
 def verificar_estoque_baixo(produto):
     """Verifica se o produto está com estoque baixo"""
     if produto.quantidade_minima and produto.quantidade <= produto.quantidade_minima:
@@ -748,18 +803,10 @@ def listar_produtos():
                     Produto.quantidade <= Produto.quantidade_minima
                 )
             )
-        elif filtro_rapido == "giro_rapido":
-            query = query.filter(Produto.quantidade_vendida >= 30)
-        elif filtro_rapido == "giro_normal":
-            query = query.filter(
-                Produto.quantidade_vendida >= 10,
-                Produto.quantidade_vendida < 30
-            )
-        elif filtro_rapido == "giro_lento":
-            query = query.filter(
-                Produto.quantidade_vendida > 0,
-                Produto.quantidade_vendida < 10,
-            )
+        # NOTA: giro_rapido/normal/lento NÃO são filtrados aqui em SQL.
+        # São resolvidos em Python via classificar_giro_produto() (cobertura/VMD),
+        # a MESMA função usada pelos contadores do dashboard — garantindo que o
+        # número do card e a quantidade exibida na lista/modal sejam idênticos.
 
         # Filtro por Classificação ABC (drill-down do dashboard)
         classificacao_abc = request.args.get("classificacao_abc")
@@ -806,14 +853,30 @@ def listar_produtos():
         else:
             query = query.order_by(coluna_ordenacao.asc())
 
-        # Paginação Otimizada
-        total_itens = query.count()
         import math
-        total_paginas = math.ceil(total_itens / por_pagina) if total_itens > 0 else 1
-        
-        # Agora aplica os carregamentos eager
-        query = query.options(*opts)
-        paginacao_items = query.limit(por_pagina).offset((pagina - 1) * por_pagina).all()
+        _giro_buckets = ("giro_rapido", "giro_normal", "giro_lento")
+
+        if filtro_rapido in _giro_buckets:
+            # Giro depende de cobertura/VMD (calculado em Python), então buscamos
+            # o conjunto filtrado por SQL, classificamos com a fonte única e
+            # paginamos manualmente. Catálogos por loja são pequenos (dezenas),
+            # então o custo é desprezível e a consistência com o card é garantida.
+            alvo = filtro_rapido.replace("giro_", "")
+            hoje_giro = datetime.now(timezone.utc).date()
+            todos = query.options(*opts).all()
+            filtrados = [p for p in todos if classificar_giro_produto(p, hoje_giro) == alvo]
+            total_itens = len(filtrados)
+            total_paginas = math.ceil(total_itens / por_pagina) if total_itens > 0 else 1
+            inicio = (pagina - 1) * por_pagina
+            paginacao_items = filtrados[inicio:inicio + por_pagina]
+        else:
+            # Paginação Otimizada (SQL)
+            total_itens = query.count()
+            total_paginas = math.ceil(total_itens / por_pagina) if total_itens > 0 else 1
+
+            # Agora aplica os carregamentos eager
+            query = query.options(*opts)
+            paginacao_items = query.limit(por_pagina).offset((pagina - 1) * por_pagina).all()
 
         produtos = []
         alertas = []
@@ -2646,13 +2709,9 @@ def obter_estatisticas_produtos():
                         Produto.quantidade <= Produto.quantidade_minima
                     )
                 )
-            elif filtro_rapido == "giro_rapido":
-                query = query.filter(Produto.quantidade_vendida >= 30)
-            elif filtro_rapido == "giro_lento":
-                query = query.filter(
-                    Produto.quantidade_vendida > 0,
-                    Produto.quantidade_vendida < 30,
-                )
+            # giro_rapido/normal/lento são resolvidos em Python (cobertura/VMD)
+            # logo abaixo, via classificar_giro_produto() — a MESMA função da
+            # listagem. Nada de pré-filtro SQL aqui (causava divergência card x lista).
             elif filtro_rapido == "margem_alta":
                 # Filtrar em Python: margem > 50%
                 # Será aplicado após buscar todos os produtos
@@ -2683,30 +2742,11 @@ def obter_estatisticas_produtos():
         elif filtro_rapido == "margem_baixa":
             produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) < 30]
 
-        # Aplicar filtros de giro em Python usando Cobertura
+        # Aplicar filtros de giro em Python usando a fonte ÚNICA de cobertura/VMD
         if filtro_rapido in ["giro_rapido", "giro_normal", "giro_lento"]:
-            filtered_produtos = []
-            hoje_date = datetime.now(timezone.utc).date()
-            for p in produtos:
-                try:
-                    data_cadastro = p.created_at.date() if p.created_at else (hoje_date - timedelta(days=365))
-                    dias_vida = max(1, (hoje_date - data_cadastro).days)
-                    qtd_vendida = float(p.quantidade_vendida or 0)
-                    giro_status = "lento"
-                    if qtd_vendida > 0:
-                        vmd = qtd_vendida / dias_vida
-                        if vmd > 0:
-                            cobertura = float(p.quantidade or 0) / vmd
-                            if cobertura <= 15:
-                                giro_status = "rapido"
-                            elif cobertura <= 60:
-                                giro_status = "normal"
-                    if filtro_rapido == f"giro_{giro_status}":
-                        filtered_produtos.append(p)
-                except Exception:
-                    if filtro_rapido == "giro_lento":
-                        filtered_produtos.append(p)
-            produtos = filtered_produtos
+            alvo_giro = filtro_rapido.replace("giro_", "")
+            hoje_giro = datetime.now(timezone.utc).date()
+            produtos = [p for p in produtos if classificar_giro_produto(p, hoje_giro) == alvo_giro]
 
         # CALCULAR ESTATÍSTICAS COM DECIMAL PARA PRECISÃO
         total_produtos = len(produtos)
@@ -2881,20 +2921,9 @@ def obter_estatisticas_produtos():
                 else:
                     abc_counts["C"] += 1
                 
-                # Giro de estoque (Baseado na Inteligência de Cobertura / VMD)
-                try:
-                    if hasattr(produto, '_cobertura_calc') and hasattr(produto, '_vmd_calc') and produto._vmd_calc > 0:
-                        cobertura = produto._cobertura_calc
-                        if cobertura <= 15:
-                            giro_counts["rapido"] += 1
-                        elif cobertura <= 60:
-                            giro_counts["normal"] += 1
-                        else:
-                            giro_counts["lento"] += 1
-                    else:
-                        giro_counts["lento"] += 1
-                except Exception:
-                    giro_counts["lento"] += 1
+                # Giro de estoque — fonte ÚNICA de verdade (classificar_giro_produto),
+                # a MESMA usada na lista e no modal. Card e lista nunca mais divergem.
+                giro_counts[classificar_giro_produto(produto, hoje_date)] += 1
             except Exception as e_prod:
                 current_app.logger.warning(f"Erro ao processar produto {produto.id}: {e_prod}")
                 continue
