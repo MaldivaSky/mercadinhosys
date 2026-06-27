@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from flask import g, has_app_context, current_app
 from flask_login import LoginManager, UserMixin
 from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy.query import Query as _BaseQuery
 from sqlalchemy import MetaData, case, event, func, or_
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import declared_attr, validates
@@ -27,7 +28,100 @@ naming_convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
-db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
+def _tenant_atual():
+    """
+    Retorna o tenant concreto a ser aplicado, ou None quando NÃO se deve filtrar.
+
+    Não filtra (retorna None) quando:
+      - fora de contexto de app (CLI, seeders, workers);
+      - não há tenant em g (rotas públicas/login — comportamento legado);
+      - super admin (g.is_super_admin) ou sentinela 'all' (acesso cross-tenant proposital).
+    """
+    if not has_app_context() or not g:
+        return None
+    if getattr(g, "is_super_admin", False):
+        return None
+    tid = getattr(g, "estabelecimento_id", None)
+    if tid is None or str(tid).lower() == "all":
+        return None
+    return tid
+
+
+class TenantQuery(_BaseQuery):
+    """
+    Rede de segurança de isolamento multi-tenant (defense-in-depth).
+
+    Quando há um tenant concreto em g.estabelecimento_id, TODA consulta via
+    Model.query é automaticamente restrita àquele estabelecimento — mesmo que o
+    desenvolvedor esqueça o .filter(estabelecimento_id==...) manual na rota.
+    Também aplica o soft-delete (deleted_at IS NULL).
+    """
+    def _model(self):
+        try:
+            descs = self.column_descriptions
+            if not descs:
+                return None
+            return descs[0].get("entity")
+        except Exception:
+            return None
+
+    def _apply_filters(self):
+        model = self._model()
+        if model is None:
+            return self
+        q = self
+        if hasattr(model, "estabelecimento_id"):
+            tid = _tenant_atual()
+            if tid is not None:
+                q = q.filter(model.estabelecimento_id == tid)
+        if hasattr(model, "deleted_at"):
+            q = q.filter(model.deleted_at == None)  # noqa: E711
+        return q
+
+    def get(self, ident):
+        # .get() não aceita critério prévio no SQLAlchemy 2.0; fazemos o lookup
+        # por PK e validamos o tenant/soft-delete no objeto retornado.
+        obj = super(TenantQuery, self).get(ident)
+        if obj is None:
+            return None
+        if getattr(obj, "deleted_at", None) is not None:
+            return None
+        if hasattr(obj, "estabelecimento_id"):
+            tid = _tenant_atual()
+            if tid is not None and obj.estabelecimento_id != tid:
+                return None
+        return obj
+
+    def all(self):
+        return super(TenantQuery, self._apply_filters()).all()
+
+    def first(self):
+        return super(TenantQuery, self._apply_filters()).first()
+
+    def first_or_404(self, *args, **kwargs):
+        return super(TenantQuery, self._apply_filters()).first_or_404(*args, **kwargs)
+
+    def one(self):
+        return super(TenantQuery, self._apply_filters()).one()
+
+    def one_or_none(self):
+        return super(TenantQuery, self._apply_filters()).one_or_none()
+
+    def count(self):
+        return super(TenantQuery, self._apply_filters()).count()
+
+    def scalar(self):
+        return super(TenantQuery, self._apply_filters()).scalar()
+
+    def __iter__(self):
+        return super(TenantQuery, self._apply_filters()).__iter__()
+
+    def paginate(self, *args, **kwargs):
+        return super(TenantQuery, self._apply_filters()).paginate(*args, **kwargs)
+
+
+# query_class=TenantQuery ativa a rede de segurança de isolamento em Model.query.
+db = SQLAlchemy(query_class=TenantQuery, metadata=MetaData(naming_convention=naming_convention))
 
 def utcnow() -> datetime:
     return datetime.utcnow()
@@ -62,25 +156,6 @@ def validar_cnpj(cnpj: str) -> bool:
 def is_offline_mode() -> bool:
     return os.environ.get("MERCADINHO_OFFLINE", "false").lower() == "true"
 
-# ------------------------------------------------------------------------------
-# Query customizada (Multi‑tenant + Soft‑delete automáticos)
-# ------------------------------------------------------------------------------
-class TenantQuery(db.Query):
-    def __apply_filters(self):
-        if not hasattr(self, "_primary_entity"): return self
-        model = self._primary_entity.mapper.class_
-        if hasattr(model, "estabelecimento_id") and has_app_context() and g and hasattr(g, "estabelecimento_id"):
-            self = self.filter(model.estabelecimento_id == g.estabelecimento_id)
-        if hasattr(model, "deleted_at"):
-            self = self.filter(model.deleted_at == None)
-        return self
-
-    def get(self, ident): return super(TenantQuery, self.__apply_filters()).get(ident)
-    def all(self): return super(TenantQuery, self.__apply_filters()).all()
-    def paginate(self, page=1, per_page=20, error_out=True, max_per_page=None):
-        return super(TenantQuery, self.__apply_filters()).paginate(page, per_page, error_out, max_per_page)
-
-# ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 # Mixins (Clean Code)
 # ------------------------------------------------------------------------------
