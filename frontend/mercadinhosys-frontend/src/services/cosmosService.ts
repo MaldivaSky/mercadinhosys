@@ -31,9 +31,44 @@ export interface CosmosProductData {
     gross_weight: number;
 }
 
+// Resultado normalizado do lookup inteligente (catálogo local -> Cosmos)
+export interface CatalogoLookupData {
+    ean: string;
+    nome: string | null;
+    marca: string | null;
+    ncm: string | null;
+    categoria: string | null;
+    imagem_url: string | null;
+    preco_referencia: number | null;
+}
+
+export interface CatalogoLookupResult {
+    success: boolean;
+    source?: 'catalogo' | 'cosmos';
+    code?: 'ean_invalido' | 'nao_encontrado' | 'quota' | 'token' | 'conexao' | 'api' | 'erro_interno';
+    message?: string;
+    data?: CatalogoLookupData;
+}
+
 export const cosmosService = {
     async buscarPorGtin(gtin: string): Promise<CosmosProductData> {
         const response = await apiClient.get<CosmosProductData>(`/produtos/cosmos/${gtin}`);
         return response.data;
-    }
+    },
+
+    /**
+     * Lookup inteligente por EAN: tenta o catálogo local (sem quota) e, no miss,
+     * o Cosmos (gravando no catálogo). Não lança em falha de negócio — retorna
+     * o objeto com success/code/message para a UI exibir a causa real.
+     */
+    async lookup(ean: string): Promise<CatalogoLookupResult> {
+        try {
+            const { data } = await apiClient.get<CatalogoLookupResult>(`/produtos/catalogo/lookup/${ean}`);
+            return data;
+        } catch (err: any) {
+            const resp = err?.response?.data;
+            if (resp && typeof resp === 'object') return resp as CatalogoLookupResult;
+            return { success: false, code: 'conexao', message: 'Falha de conexão ao consultar o produto.' };
+        }
+    },
 };

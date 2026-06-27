@@ -104,17 +104,30 @@ const ProductFormModal = ({
         setIsSearchingCosmos(true);
         const toastId = showToast.loading('Consultando banco de dados de produtos...');
         try {
-            const data = await cosmosService.buscarPorGtin(codigo);
-            setFormData(prev => ({
-                ...prev,
-                nome: data?.description || prev.nome,
-                descricao: data?.category?.name || data?.ncm?.full_description || prev.descricao,
-                marca: data?.brand?.name || prev.marca,
-                imagem_url: data?.thumbnail || prev.imagem_url,
-            }));
-            showToast.info('Dados preenchidos automaticamente!', { id: toastId });
+            const res = await cosmosService.lookup(codigo);
+            if (res.success && res.data) {
+                const d = res.data;
+                setFormData(prev => ({
+                    ...prev,
+                    nome: d.nome || prev.nome,
+                    descricao: d.categoria || prev.descricao,
+                    marca: d.marca || prev.marca,
+                    imagem_url: d.imagem_url || prev.imagem_url,
+                }));
+                const origem = res.source === 'catalogo' ? 'catálogo local' : 'Cosmos';
+                showToast.success(`Dados preenchidos automaticamente (${origem}).`, { id: toastId });
+            } else {
+                // Mensagem verdadeira conforme a causa (não mais "não encontrado" genérico)
+                const msg = res.message || 'Não foi possível consultar o produto.';
+                if (res.code === 'nao_encontrado') {
+                    showToast.error(msg, { id: toastId });
+                } else {
+                    // quota/token/conexão/api: alerta diferenciado — o problema NÃO é o produto
+                    showToast.error(msg, { id: toastId, duration: 6000 });
+                }
+            }
         } catch {
-            showToast.error('Produto não encontrado no catálogo.', { id: toastId });
+            showToast.error('Falha inesperada ao consultar o produto.', { id: toastId });
         } finally {
             setIsSearchingCosmos(false);
         }
