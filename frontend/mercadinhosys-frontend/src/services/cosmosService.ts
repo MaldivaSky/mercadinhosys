@@ -37,6 +37,7 @@ export interface CatalogoLookupData {
     nome: string | null;
     marca: string | null;
     ncm: string | null;
+    cest?: string | null;
     categoria: string | null;
     imagem_url: string | null;
     preco_referencia: number | null;

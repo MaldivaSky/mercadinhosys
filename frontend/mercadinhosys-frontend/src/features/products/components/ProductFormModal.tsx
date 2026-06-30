@@ -37,6 +37,9 @@ const emptyForm = {
     marca: '',
     fabricante: '',
     ncm: '',
+    cest: '',
+    cfop_padrao: '5102',
+    csosn: '102',
     tipo: '',
     unidade_medida: 'un',
     preco_custo: 0,
@@ -79,6 +82,9 @@ const ProductFormModal = ({
                 marca: produto.marca || '',
                 fabricante: produto.fabricante || '',
                 ncm: (produto as any).ncm || '',
+                cest: (produto as any).cest || '',
+                cfop_padrao: (produto as any).cfop_padrao || '5102',
+                csosn: (produto as any).csosn || '102',
                 tipo: produto.tipo || '',
                 unidade_medida: produto.unidade_medida || 'un',
                 preco_custo: produto.preco_custo || 0,
@@ -115,6 +121,7 @@ const ProductFormModal = ({
                     descricao: d.categoria || prev.descricao,
                     marca: d.marca || prev.marca,
                     ncm: d.ncm || prev.ncm,
+                    cest: d.cest || prev.cest,
                     imagem_url: d.imagem_url || prev.imagem_url,
                 }));
                 const origem = res.source === 'catalogo' ? 'catálogo local' : 'Cosmos';
@@ -276,22 +283,49 @@ const ProductFormModal = ({
                                     className={inputClass} placeholder="Ex: Nestlé" />
                             </div>
                             <div>
-                                <label className={labelClass}>NCM <span className="text-xs text-slate-400">(fiscal — usado na NFC-e)</span></label>
-                                <input type="text" inputMode="numeric" maxLength={8} value={formData.ncm}
-                                    onChange={e => field('ncm', e.target.value.replace(/\D/g, '').slice(0, 8))}
-                                    className={`${inputClass} ${formData.ncm && formData.ncm.length !== 8 ? 'border-amber-400' : ''}`}
-                                    placeholder="8 dígitos (preenchido pelo código de barras)" />
-                                {formData.ncm && formData.ncm.length !== 8 && (
-                                    <p className="text-xs text-amber-600 mt-1">NCM deve ter 8 dígitos.</p>
-                                )}
-                            </div>
-                            <div>
                                 <label className={labelClass}>Unidade de Medida</label>
                                 <select value={formData.unidade_medida}
                                     onChange={e => field('unidade_medida', e.target.value)}
                                     className={inputClass}>
                                     {UNIDADES.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
                                 </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Seção Tributação ── */}
+                <div>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Tributação (NFC-e / NF-e)</h4>
+                    <div className={sectionClass}>
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div>
+                                <label className={labelClass}>NCM</label>
+                                <input type="text" inputMode="numeric" maxLength={8} value={formData.ncm}
+                                    onChange={e => field('ncm', e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                    className={`${inputClass} ${formData.ncm && formData.ncm.length !== 8 ? 'border-amber-400' : ''}`}
+                                    placeholder="8 dígitos" />
+                                {formData.ncm && formData.ncm.length !== 8 && (
+                                    <p className="text-xs text-amber-600 mt-1">Deve ter 8 dígitos.</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className={labelClass}>CEST</label>
+                                <input type="text" inputMode="numeric" maxLength={7} value={formData.cest}
+                                    onChange={e => field('cest', e.target.value.replace(/\D/g, '').slice(0, 7))}
+                                    className={inputClass} placeholder="7 dígitos" />
+                            </div>
+                            <div>
+                                <label className={labelClass}>CFOP Padrão</label>
+                                <input type="text" inputMode="numeric" maxLength={4} value={formData.cfop_padrao}
+                                    onChange={e => field('cfop_padrao', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                    className={inputClass} placeholder="Ex: 5102" />
+                            </div>
+                            <div>
+                                <label className={labelClass}>CSOSN (Simples)</label>
+                                <input type="text" inputMode="numeric" maxLength={3} value={formData.csosn}
+                                    onChange={e => field('csosn', e.target.value.replace(/\D/g, '').slice(0, 3))}
+                                    className={inputClass} placeholder="Ex: 102" />
                             </div>
                         </div>
                     </div>

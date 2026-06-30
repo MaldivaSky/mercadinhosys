@@ -1023,13 +1023,35 @@ def finalizar_venda():
 
             db.session.commit()
 
+            # Lógica de Emissão NFC-e Automática
+            nfce_status = None
+            nfce_mensagem = None
+            nfce_chave = None
+            if data.get("emitir_nfce"):
+                try:
+                    from app.services.fiscal.emissao_service import emitir_nfce
+                    doc_fiscal = emitir_nfce(nova_venda, estabelecimento, funcionario_data.get("id"))
+                    nfce_status = doc_fiscal.status
+                    nfce_chave = doc_fiscal.chave_acesso
+                    if nfce_status == "erro" or nfce_status == "rejeitado":
+                        nfce_mensagem = doc_fiscal.motivo_rejeicao
+                    else:
+                        nfce_mensagem = "NFC-e emitida com sucesso."
+                except Exception as e:
+                    current_app.logger.error(f"Erro ao emitir NFC-e automática: {e}")
+                    nfce_status = "erro"
+                    nfce_mensagem = str(e)
+
             return jsonify({
                 "success": True,
                 "venda": {
                     "id": nova_venda.id,
                     "codigo": codigo_venda,
                     "data": data_venda.strftime("%d/%m/%Y %H:%M"),
-                    "total": float(total)
+                    "total": float(total),
+                    "nfce_status": nfce_status,
+                    "nfce_mensagem": nfce_mensagem,
+                    "nfce_chave": nfce_chave
                 },
                 "message": "Venda finalizada com sucesso!"
             }), 201
@@ -1459,6 +1481,20 @@ def obter_comprovante_venda(venda_id):
 
         estabelecimento_data = get_estabelecimento_safe(venda_data.get("estabelecimento_id"))
 
+        from app.models import DocumentoFiscal
+        doc_fiscal = DocumentoFiscal.query.filter_by(venda_id=venda_id).first()
+        nfce_data = None
+        if doc_fiscal:
+            nfce_data = {
+                "chave_acesso": doc_fiscal.chave_acesso,
+                "status": doc_fiscal.status,
+                "qr_code": doc_fiscal.qr_code,
+                "danfe_url": doc_fiscal.danfe_url,
+                "numero": doc_fiscal.numero,
+                "serie": doc_fiscal.serie,
+                "protocolo": doc_fiscal.protocolo,
+            }
+
         # Lógica de seleção do logo (Safe)
         logo_url = estabelecimento_data.get("logo_base64") or estabelecimento_data.get("logo_url")
         if not logo_url:
@@ -1527,6 +1563,7 @@ def obter_comprovante_venda(venda_id):
                 "endereco": f"{estabelecimento_data.get('logradouro', '')}, {estabelecimento_data.get('numero', '')} - {estabelecimento_data.get('cidade', '')}/{estabelecimento_data.get('estado', '')}",
             },
             "comprovante": comprovante,
+            "nfce": nfce_data,
         }), 200
     except Exception as e:
         current_app.logger.error(f"Erro ao obter comprovante da venda {venda_id}: {str(e)}")
