@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign } from 'lucide-react';
+import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign, Building2, Activity, Target } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import EstablishmentSelector from '../EstablishmentSelector';
 
 const mainTabs = [
     { to: '/dashboard', icon: Home, label: 'Início' },
@@ -21,6 +22,13 @@ const allMenuItems = [
     { to: '/employees', icon: UserCog, label: 'Equipe' },
     { to: '/rh', icon: Briefcase, label: 'RH' },
     { to: '/ponto', icon: Clock, label: 'Ponto' },
+];
+
+const superAdminItems = [
+    { to: '/estabelecimentos', icon: Building2, label: 'SaaS Lojas' },
+    { to: '/monitor', icon: Activity, label: 'Monitor' },
+    { to: '/leads', icon: Target, label: 'Leads' },
+    { to: '/auditoria', icon: Activity, label: 'Auditoria' },
 ];
 
 const BottomNavigation: React.FC = () => {
@@ -91,14 +99,21 @@ const BottomNavigation: React.FC = () => {
                                     {user?.nome ? user.nome.charAt(0).toUpperCase() : 'U'}
                                 </div>
                             )}
-                            <div>
+                            <div className="flex-1">
                                 <h4 className="font-extrabold text-gray-900 dark:text-white leading-tight">{user?.nome || 'Usuário'}</h4>
                                 <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold">{user?.role || 'Admin'}</p>
                             </div>
                         </div>
 
+                        {user?.is_super_admin && (
+                            <div className="mb-6 px-1">
+                                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Modo Super-Admin</p>
+                                <EstablishmentSelector className="w-full justify-between" />
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-4 gap-y-6 gap-x-2 mb-6">
-                            {allMenuItems.map((item) => {
+                            {(user?.is_super_admin ? [...allMenuItems, ...superAdminItems] : allMenuItems).map((item) => {
                                 // Verifica permissão do Caixa
                                 const role = user?.role?.toLowerCase();
                                 if (role === 'caixa' && !['/sales', '/delivery'].includes(item.to)) return null;
