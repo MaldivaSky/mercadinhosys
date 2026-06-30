@@ -9,6 +9,30 @@ import BottomNavigation from './BottomNavigation';
 import GlobalShortcuts from '../../shortcuts/GlobalShortcuts';
 import TrialNotice from '../../features/trial/TrialNotice';
 import usePullToRefresh from '../../hooks/usePullToRefresh';
+import { useSuperAdmin } from '../../contexts/SuperAdminContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { Eye } from 'lucide-react';
+
+const MirrorReadOnlyBanner: React.FC = () => {
+    const { user } = useAuth();
+    const { selectedTenantId, setSelectedTenantId } = useSuperAdmin();
+    const espelhando = !!user?.is_super_admin && selectedTenantId !== 'all';
+    if (!espelhando) return null;
+    return (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500 text-amber-950 text-xs sm:text-sm font-semibold shadow-sm">
+            <span className="flex items-center gap-2 min-w-0">
+                <Eye className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">Modo espelho (super admin) — visualizando a loja #{selectedTenantId} em <b>somente leitura</b>.</span>
+            </span>
+            <button
+                onClick={() => { setSelectedTenantId('all'); window.location.reload(); }}
+                className="flex-shrink-0 px-3 py-1 rounded-lg bg-amber-950/90 text-amber-50 hover:bg-amber-950 transition-colors"
+            >
+                Sair do espelho
+            </button>
+        </div>
+    );
+};
 
 const MainLayout: React.FC = () => {
     const [isCollapsed, setIsCollapsed] = React.useState(false);
@@ -28,6 +52,7 @@ const MainLayout: React.FC = () => {
             <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
             <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 min-w-0 min-h-0">
                 <HeaderProfessional />
+                <MirrorReadOnlyBanner />
                 {/* On mobile, add padding bottom equal to the bottom navigation height (approx 4rem = 64px) plus safe area */}
                 <main ref={mainRef} className="relative flex-1 overflow-y-auto p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-6 min-h-0">
                     {/* Indicador de pull-to-refresh (mobile) */}

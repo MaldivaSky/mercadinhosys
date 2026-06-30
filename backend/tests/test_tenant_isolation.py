@@ -170,6 +170,103 @@ def test_before_request_permite_token_valido(client, session):
     assert resp.status_code != 403, "Token válido foi bloqueado indevidamente pelo guard de tenant"
 
 
+# ---------------------------------------------------------------------------
+# REGRESSÃO — vazamento na rota /configuracao/estabelecimentos
+# Antes do fix: admin de QUALQUER loja listava TODAS as lojas (nome/CNPJ/
+# faturamento) de todos os tenants. Depois: admin de loja vê só a própria;
+# super admin (nível SaaS) continua vendo todas.
+# ---------------------------------------------------------------------------
+def test_listar_estabelecimentos_admin_loja_ve_so_a_propria(client, dois_tenants):
+    from flask_jwt_extended import create_access_token
+    a, b = dois_tenants
+    token = create_access_token(
+        identity="1",
+        additional_claims={"estabelecimento_id": a.id, "role": "admin", "is_super_admin": False},
+    )
+    resp = client.get("/api/configuracao/estabelecimentos",
+                      headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    ids = {e["id"] for e in resp.get_json()["estabelecimentos"]}
+    assert ids == {a.id}, (
+        f"VAZAMENTO: admin da loja {a.id} enxergou estabelecimentos {ids} "
+        f"(deveria ver apenas o próprio)"
+    )
+
+
+def test_listar_estabelecimentos_super_admin_ve_todas(client, dois_tenants):
+    from flask_jwt_extended import create_access_token
+    a, b = dois_tenants
+    token = create_access_token(
+        identity="1",
+        additional_claims={"role": "admin", "is_super_admin": True},
+    )
+    resp = client.get("/api/configuracao/estabelecimentos",
+                      headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    ids = {e["id"] for e in resp.get_json()["estabelecimentos"]}
+    assert {a.id, b.id}.issubset(ids), (
+        f"Super admin deveria ver todas as lojas; viu {ids}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# MODO ESPELHO do super admin (impersonation): ao escolher uma loja, TODA query
+# reflete aquela loja; em visão global ('all') vê tudo; e escrita é bloqueada.
+# ---------------------------------------------------------------------------
+def test_super_admin_impersonando_espelha_a_loja(dois_tenants):
+    """Super admin com g.estabelecimento_id concreto vê SÓ aquela loja (espelho)."""
+    a, b = dois_tenants
+    g.is_super_admin = True
+    g.estabelecimento_id = a.id
+    try:
+        nomes = {p.nome for p in Produto.query.all()}
+        assert "Produto Exclusivo A" in nomes
+        assert "Produto Exclusivo B" not in nomes, "ESPELHO FALHOU: super admin viu loja não selecionada"
+    finally:
+        g.is_super_admin = False
+
+
+def test_super_admin_global_ve_todas(dois_tenants):
+    """Super admin em 'all' (visão global) continua vendo todas as lojas."""
+    a, b = dois_tenants
+    g.is_super_admin = True
+    g.estabelecimento_id = "all"
+    try:
+        nomes = {p.nome for p in Produto.query.all()}
+        assert {"Produto Exclusivo A", "Produto Exclusivo B"}.issubset(nomes)
+    finally:
+        g.is_super_admin = False
+
+
+def test_super_admin_espelho_e_somente_leitura(client, session):
+    """Impersonando uma loja, escrita no app do tenant é bloqueada (403)."""
+    from flask_jwt_extended import create_access_token
+    from app.models import Estabelecimento
+    estab = session.query(Estabelecimento).first()
+    token = create_access_token(identity="1", additional_claims={"is_super_admin": True})
+    resp = client.post(
+        "/api/produtos/",
+        json={"nome": "Tentativa"},
+        headers={"Authorization": f"Bearer {token}", "X-Impersonate-Tenant-Id": str(estab.id)},
+    )
+    assert resp.status_code == 403, (
+        f"Modo espelho deveria bloquear escrita (403), retornou {resp.status_code}"
+    )
+
+
+def test_super_admin_espelho_permite_leitura(client, session):
+    """Impersonando uma loja, leitura (GET) é permitida (não-403)."""
+    from flask_jwt_extended import create_access_token
+    from app.models import Estabelecimento
+    estab = session.query(Estabelecimento).first()
+    token = create_access_token(identity="1", additional_claims={"is_super_admin": True})
+    resp = client.get(
+        "/api/produtos/",
+        headers={"Authorization": f"Bearer {token}", "X-Impersonate-Tenant-Id": str(estab.id)},
+    )
+    assert resp.status_code != 403, "Leitura no modo espelho não deveria ser bloqueada"
+
+
 @pytest.mark.xfail(
     reason="Por design: o TenantQuery isolado NAO falha fechado (necessario p/ CLI/"
            "seeders/login que consultam sem 'g'). A invariante de isolamento e garantida "
