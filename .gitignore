@@ -99,3 +99,6 @@ backend/test_out.txt
 
 # Documents
 documents/
+
+# PWA dev service worker (gerado pelo vite-plugin-pwa) — nao versionar
+frontend/mercadinhosys-frontend/dev-dist/
