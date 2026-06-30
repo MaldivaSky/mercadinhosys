@@ -1,4 +1,4 @@
-name: MercadinhoSys Backend CI/CD
+name: MercadinhoSys CI
 
 on:
   push:
@@ -6,30 +6,27 @@ on:
   pull_request:
     branches: [ master, main ]
 
+# Cancela execuções antigas do mesmo branch/PR quando um novo push chega.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  # ──────────────────────────────────────────────────────────────
+  # BACKEND — testes (pytest roda em SQLite in-memory via conftest)
+  # ──────────────────────────────────────────────────────────────
+  backend-test:
+    name: Backend · pytest
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: mercadinho_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready --health-interval 10s --health-timeout 5s
-          --health-retries 5
-
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -37,15 +34,12 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest pytest-flask pytest-cov
 
-      - name: Run Tests with Coverage
+      - name: Run tests with coverage
+        working-directory: backend
         env:
-          DATABASE_URL: postgresql://user:password@localhost:5432/mercadinho_test
           FLASK_ENV: testing
-          JWT_SECRET_KEY: test-secret-key
-          STRIPE_SECRET_KEY: sk_test_dummy
-        run: |
-          cd backend
-          pytest --cov=app tests/ --cov-report=xml
+          JWT_SECRET_KEY: ci-secret-key
+        run: pytest --cov=app --cov-report=xml tests/
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -53,19 +47,48 @@ jobs:
           file: ./backend/coverage.xml
           fail_ci_if_error: false
 
-  lint:
+  # ──────────────────────────────────────────────────────────────
+  # BACKEND — lint (erros de sintaxe/símbolos quebram o build)
+  # ──────────────────────────────────────────────────────────────
+  backend-lint:
+    name: Backend · flake8
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Install flake8
         run: pip install flake8
-      - name: Lint with flake8
-        run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 backend/app --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-          flake8 backend/app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Lint (erros graves bloqueiam)
+        run: flake8 backend/app --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Lint (estilo — não bloqueia)
+        run: flake8 backend/app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  # ──────────────────────────────────────────────────────────────
+  # FRONTEND — type-check + build (pega regressões de UI/tipos)
+  # ──────────────────────────────────────────────────────────────
+  frontend-build:
+    name: Frontend · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/mercadinhosys-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/mercadinhosys-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (não bloqueia — apenas relatório)
+        run: npm run lint || true
+
+      - name: Type-check & build
+        run: npm run build
