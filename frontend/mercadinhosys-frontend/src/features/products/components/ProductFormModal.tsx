@@ -70,6 +70,7 @@ const ProductFormModal = ({
     const [formData, setFormData] = useState({ ...emptyForm });
     const [showScanner, setShowScanner] = useState(false);
     const [isSearchingCosmos, setIsSearchingCosmos] = useState(false);
+    const [showForceSync, setShowForceSync] = useState(false);
 
     useEffect(() => {
         if (!show) return;
@@ -106,13 +107,14 @@ const ProductFormModal = ({
         }
     }, [show, editMode, produto]);
 
-    const handleScanCodigo = async (codigo: string) => {
+    const handleScanCodigo = async (codigo: string, force: boolean = false) => {
         setShowScanner(false);
         setFormData(prev => ({ ...prev, codigo_barras: codigo }));
         setIsSearchingCosmos(true);
-        const toastId = showToast.loading('Consultando banco de dados de produtos...');
+        setShowForceSync(false);
+        const toastId = showToast.loading(force ? 'Forçando busca na Sefaz/Cosmos...' : 'Consultando banco de dados de produtos...');
         try {
-            const res = await cosmosService.lookup(codigo);
+            const res = await cosmosService.lookup(codigo, force);
             if (res.success && res.data) {
                 const d = res.data;
                 setFormData(prev => ({
@@ -132,6 +134,7 @@ const ProductFormModal = ({
                 const msg = res.message || 'Não foi possível consultar o produto.';
                 if (res.code === 'nao_encontrado') {
                     showToast.error(msg, { id: toastId });
+                    if (!force) setShowForceSync(true);
                 } else {
                     // quota/token/conexão/api: alerta diferenciado — o problema NÃO é o produto
                     showToast.error(msg, { id: toastId, duration: 6000 });
@@ -261,13 +264,23 @@ const ProductFormModal = ({
                                 <label className={labelClass}>Código de Barras</label>
                                 <div className="flex gap-2">
                                     <input type="text" value={formData.codigo_barras}
-                                        onChange={e => field('codigo_barras', e.target.value)}
+                                        onChange={e => {
+                                            field('codigo_barras', e.target.value);
+                                            setShowForceSync(false);
+                                        }}
                                         className={`${inputClass} font-mono`} placeholder="EAN-13 / EAN-8" />
                                     <button type="button" onClick={() => setShowScanner(true)}
                                         className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 text-blue-600 shadow-sm">
                                         <Camera className="w-5 h-5" />
                                     </button>
                                 </div>
+                                {showForceSync && formData.codigo_barras && (
+                                    <button type="button" onClick={() => handleScanCodigo(formData.codigo_barras, true)}
+                                        className="mt-2 w-full py-2 px-3 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                        <Sparkles className="w-4 h-4" />
+                                        Forçar Busca na API Cosmos
+                                    </button>
+                                )}
                             </div>
                             <div>
                                 <label className={labelClass}>Categoria *</label>
