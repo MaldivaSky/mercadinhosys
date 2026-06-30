@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Clock, Camera, MapPin, CheckCircle, AlertCircle, Calendar,
@@ -313,13 +314,22 @@ const PontoPage: React.FC = () => {
         temLocalizacao: !!loc
       });
 
+      // Hora de parede do dispositivo (correta em qualquer fuso). O backend usa estes
+      // campos em vez do relógio do servidor (UTC), evitando o desvio de fuso.
+      const agora = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const dataLocal = `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}`;
+      const horaLocal = `${pad(agora.getHours())}:${pad(agora.getMinutes())}:${pad(agora.getSeconds())}`;
+
       const dados = {
         tipo_registro: tipoRegistro,
         latitude: loc?.latitude,
         longitude: loc?.longitude,
         foto: foto,
         dispositivo: navigator.userAgent,
-        observacao: `Registrado via web - ${new Date().toLocaleString('pt-BR')}`
+        data_local: dataLocal,
+        hora_local: horaLocal,
+        observacao: `Registrado via web - ${agora.toLocaleString('pt-BR')}`
       };
 
       console.log('💾 ENVIANDO DADOS PARA API:', {
@@ -558,9 +568,15 @@ const PontoPage: React.FC = () => {
       </div>
 
       {/* MODAL DE CÂMERA */}
-      {showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full">
+      {showCamera && createPortal(
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 z-[200] flex items-center justify-center p-4 overflow-y-auto"
+          style={{
+            paddingTop: 'calc(1rem + env(safe-area-inset-top))',
+            paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
+          }}
+        >
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">📸 Tire sua foto</h3>
             <p className="text-gray-600 text-sm mb-4">Posicione seu rosto na câmera e clique em "Capturar Foto"</p>
 
@@ -602,13 +618,20 @@ const PontoPage: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* PREVIEW DA FOTO COM CONFIRMAÇÃO DE LOCALIZAÇÃO */}
-      {foto && !showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full">
+      {foto && !showCamera && createPortal(
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 z-[200] flex items-center justify-center p-4 overflow-y-auto"
+          style={{
+            paddingTop: 'calc(1rem + env(safe-area-inset-top))',
+            paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
+          }}
+        >
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-full overflow-y-auto my-auto">
             <h3 className="text-2xl font-bold text-gray-900 mb-4">Confirmar foto e localização</h3>
             <img src={foto} alt="Preview" className="w-full rounded-lg mb-4" />
 
@@ -663,7 +686,8 @@ const PontoPage: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* BOTÕES DE REGISTRO */}
@@ -954,11 +978,17 @@ const PontoPage: React.FC = () => {
       </div>
 
       {/* MODAL DE FOTO */}
-      {fotoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden animate-fadeIn my-4 sm:my-0">
+      {fotoModal && createPortal(
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 z-[200] flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+          style={{
+            paddingTop: 'calc(0.5rem + env(safe-area-inset-top))',
+            paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))',
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-full flex flex-col overflow-hidden animate-fadeIn my-auto">
             {/* HEADER */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 flex items-center justify-between text-white">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 flex items-center justify-between text-white flex-shrink-0">
               <div className="flex-1">
                 <h3 className="text-lg sm:text-2xl font-bold">📷 Visualizar Foto</h3>
                 <p className="text-blue-100 text-xs sm:text-sm mt-1">
@@ -974,7 +1004,7 @@ const PontoPage: React.FC = () => {
             </div>
 
             {/* CONTEÚDO */}
-            <div className="p-4 sm:p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+            <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
               <img
                 src={construirUrlFoto(fotoModal.url)}
                 alt="Foto do registro"
@@ -1059,7 +1089,7 @@ const PontoPage: React.FC = () => {
             </div>
 
             {/* FOOTER */}
-            <div className="bg-gray-100 p-4 flex justify-end gap-3">
+            <div className="bg-gray-100 p-4 flex justify-end gap-3 flex-shrink-0">
               <button
                 onClick={() => setFotoModal(null)}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition"
@@ -1068,7 +1098,8 @@ const PontoPage: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

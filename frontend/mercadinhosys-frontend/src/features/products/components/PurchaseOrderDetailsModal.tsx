@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X, Package, Calendar, Truck, DollarSign, User, FileText } from 'lucide-react';
 import { PedidoCompra, PedidoCompraItem } from '../purchaseOrderService';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
@@ -16,11 +17,11 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
 }) => {
     if (!isOpen || !pedido) return null;
 
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    return createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[210] p-0 sm:p-4">
+            <div className="bg-white dark:bg-gray-800 sm:rounded-xl shadow-2xl w-full max-w-4xl h-full sm:h-auto max-h-[100dvh] sm:max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
                             <Package className="w-6 h-6 text-blue-600 dark:text-blue-300" />
@@ -211,7 +212,7 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end flex-shrink-0" style={{ paddingBottom: 'max(1.5rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
                     <button
                         onClick={onClose}
                         className="px-6 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white rounded-lg transition-colors font-medium"
@@ -220,7 +221,8 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
