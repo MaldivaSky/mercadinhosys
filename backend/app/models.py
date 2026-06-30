@@ -52,8 +52,11 @@ def _tenant_atual():
         return None
         
     if tid is None and has_request_context():
-        # Fail-closed: se é um request web e não tem tenant setado (ex: esqueceu o @jwt_required),
-        # retorna um ID inválido para não vazar dados de todas as lojas.
+        from flask import request
+        if request.path.startswith("/api/auth") or request.path.startswith("/api/onboarding") or request.path.startswith("/api/saas/webhooks"):
+            return None
+        # Fail-closed: se é um request web de API (não público) e não tem tenant setado,
+        # retorna um ID inválido para não vazar dados de todas as lojas acidentalmente.
         return -1
         
     return tid
