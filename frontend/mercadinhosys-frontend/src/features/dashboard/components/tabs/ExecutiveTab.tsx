@@ -209,18 +209,18 @@ export default function ExecutiveTab({ data }: ExecutiveTabProps) {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
+                    innerRadius="50%"
+                    outerRadius="75%"
                     paddingAngle={5}
                   >
                     {dreData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(0,0,0,0)" />
                     ))}
                   </Pie>
-                  <Legend 
-                    layout="vertical" 
-                    verticalAlign="middle" 
-                    align="right"
+                  <Legend
+                    layout="horizontal"
+                    verticalAlign="bottom"
+                    align="center"
                     wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }}
                   />
                 </PieChart>

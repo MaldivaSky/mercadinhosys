@@ -50,6 +50,42 @@ def calcular_minutos_atraso(hora_registro, hora_esperada, tolerancia):
     return 0
 
 
+# Fuso horário padrão (Brasília, UTC-3). O servidor roda em UTC; sem isso a hora do
+# ponto ficaria adiantada (ex.: 12:09 BRT seria gravada como 15:09 UTC).
+TZ_BRASILIA = timezone(timedelta(hours=-3))
+
+
+def _agora_brasil():
+    """datetime atual (naive) no fuso de Brasília — fallback quando o app não envia a hora local."""
+    return datetime.now(timezone.utc).astimezone(TZ_BRASILIA).replace(tzinfo=None)
+
+
+def _resolver_datahora_local(payload):
+    """Resolve a data/hora do registro priorizando o relógio LOCAL do dispositivo (multi-fuso).
+
+    Aceita 'data_local' (YYYY-MM-DD) + 'hora_local' (HH:MM[:SS]) — a hora de parede do aparelho,
+    correta em qualquer fuso — ou, em segundo plano, 'timestamp_local' (ISO 8601).
+    Fallback: horário de Brasília (UTC-3)."""
+    try:
+        d = payload.get('data_local')
+        h = payload.get('hora_local')
+        if d and h:
+            fmt = '%H:%M:%S' if h.count(':') >= 2 else '%H:%M'
+            return datetime.combine(
+                datetime.strptime(d, '%Y-%m-%d').date(),
+                datetime.strptime(h[:8], fmt).time()
+            )
+        ts = payload.get('timestamp_local')
+        if ts:
+            dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            if dt.tzinfo:
+                dt = dt.astimezone(TZ_BRASILIA).replace(tzinfo=None)
+            return dt
+    except (ValueError, TypeError) as e:
+        logger.warning(f"data/hora local inválida no registro de ponto: {e}")
+    return _agora_brasil()
+
+
 def salvar_foto_base64(foto_base64, funcionario_id):
     """Salva foto em base64 e retorna o caminho"""
     try:
@@ -66,8 +102,8 @@ def salvar_foto_base64(foto_base64, funcionario_id):
         header, encoded = foto_base64.split(',', 1)
         ext = header.split('/')[1].split(';')[0]
         
-        # Criar nome do arquivo
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Criar nome do arquivo (timestamp no fuso local, p/ casar com a hora do registro)
+        timestamp = _agora_brasil().strftime('%Y%m%d_%H%M%S')
         filename = f"ponto_{funcionario_id}_{timestamp}.{ext}"
         
         # Criar diretório se não existir
@@ -153,9 +189,13 @@ def registrar_ponto():
         
         if tipo_registro not in ['entrada', 'saida_almoco', 'retorno_almoco', 'saida']:
             return jsonify({'success': False, 'message': 'Tipo de registro inválido'}), 400
-        
+
+        # Data/hora do registro: usar o relógio LOCAL do dispositivo (multi-fuso).
+        # Sem isso, o servidor (UTC) gravaria a hora adiantada.
+        agora_local = _resolver_datahora_local(data)
+        hoje = agora_local.date()
+
         # Verificar se já existe registro do mesmo tipo hoje
-        hoje = date.today()
         registro_existente = RegistroPonto.query.filter_by(
             funcionario_id=funcionario.id,
             data=hoje,
@@ -191,8 +231,8 @@ def registrar_ponto():
             # Por enquanto, apenas registrar a localização
             # TODO: Adicionar coordenadas ao estabelecimento para validar raio
         
-        # Hora atual
-        hora_atual = datetime.now().time()
+        # Hora atual (relógio local do dispositivo — resolvido acima)
+        hora_atual = agora_local.time()
         
         # Calcular atraso
         minutos_atraso = 0
@@ -268,7 +308,7 @@ def pontos_hoje():
         if not funcionario:
             return jsonify({'success': False, 'message': 'Funcionário não encontrado'}), 404
         
-        hoje = date.today()
+        hoje = _agora_brasil().date()
         registros = RegistroPonto.query.filter_by(
             funcionario_id=funcionario.id,
             data=hoje

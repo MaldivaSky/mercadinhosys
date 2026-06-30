@@ -67,26 +67,30 @@ export default function DashboardPageV2() {
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex overflow-x-auto hide-scrollbar border-b border-slate-800 mb-6 pb-2 gap-6">
-        {tabs.map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 pb-2 px-1 border-b-2 transition-all whitespace-nowrap ${
-                isActive 
-                  ? 'border-blue-500 text-blue-400 font-semibold' 
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <Icon size={18} />
-              {tab.label}
-            </button>
-          )
-        })}
+      {/* Tabs Navigation — no mobile vira uma faixa de "pílulas" com rolagem horizontal
+          (snap + sangria até as bordas) para nunca cortar/embaralhar os rótulos. */}
+      <div className="-mx-4 md:mx-0 mb-6">
+        <div className="flex md:border-b border-slate-800 gap-2 md:gap-6 overflow-x-auto hide-scrollbar snap-x px-4 md:px-0 pb-2">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 whitespace-nowrap snap-start flex-shrink-0 transition-all
+                  rounded-full px-4 py-2 text-sm font-semibold md:rounded-none md:px-1 md:py-0 md:pb-2 md:border-b-2 ${
+                  isActive
+                    ? 'bg-blue-500/15 text-blue-400 md:bg-transparent md:border-blue-500'
+                    : 'bg-slate-800/60 text-slate-400 md:bg-transparent md:border-transparent hover:text-slate-200'
+                }`}
+              >
+                <Icon size={18} className="flex-shrink-0" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Content Area */}
