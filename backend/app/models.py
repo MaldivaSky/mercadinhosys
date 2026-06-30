@@ -35,11 +35,14 @@ def _tenant_atual():
     Não filtra (retorna None) quando:
       - fora de contexto de app (CLI, seeders, workers);
       - não há tenant em g (rotas públicas/login — comportamento legado);
-      - super admin (g.is_super_admin) ou sentinela 'all' (acesso cross-tenant proposital).
+      - sentinela 'all' (super admin em visão GLOBAL — acesso cross-tenant proposital).
+
+    Filtra (retorna o id) quando há tenant concreto em g.estabelecimento_id — INCLUSIVE
+    quando um super admin está IMPERSONANDO uma loja (modo espelho). Nesse caso
+    queremos que TODA consulta reflita exatamente aquela loja (somente leitura é
+    garantido na camada HTTP, em load_tenant_context).
     """
     if not has_app_context() or not g:
-        return None
-    if getattr(g, "is_super_admin", False):
         return None
     tid = getattr(g, "estabelecimento_id", None)
     if tid is None or str(tid).lower() == "all":

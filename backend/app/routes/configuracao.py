@@ -193,14 +193,26 @@ def listar_estabelecimentos():
     """Lista todos os estabelecimentos - apenas para ADMIN (visão multi-loja)"""
     try:
         claims = get_jwt()
-        role = claims.get("role", "").lower()
+        role = (claims.get("role") or "").lower()
+        is_super = bool(claims.get("is_super_admin", False))
 
-        if role not in ["admin", "dono"]:
+        if not is_super and role not in ["admin", "dono"]:
             return jsonify({"success": False, "error": "Acesso restrito à administração"}), 403
 
         from sqlalchemy import text
-        sql = text("""
-            SELECT 
+        from app.utils.query_helpers import get_authorized_establishment_id
+
+        # ISOLAMENTO MULTI-TENANT: super admin (nível SaaS) enxerga todas as lojas;
+        # admin/dono de loja enxerga SOMENTE o próprio estabelecimento. Sem este
+        # filtro, qualquer admin via nome/CNPJ/faturamento de todos os tenants.
+        params = {}
+        where_clause = ""
+        if not is_super:
+            where_clause = "WHERE e.id = :eid"
+            params["eid"] = get_authorized_establishment_id()
+
+        sql = text(f"""
+            SELECT
                 e.id, e.nome_fantasia, e.razao_social, e.cnpj, e.telefone, e.email,
                 e.logradouro, e.numero, e.bairro, e.cidade, e.estado, e.cep,
                 e.ativo, e.regime_tributario,
@@ -213,9 +225,10 @@ def listar_estabelecimentos():
                 e.plano, e.plano_status,
                 CAST(e.vencimento_plano AS TEXT) as vencimento_plano
             FROM estabelecimentos e
+            {where_clause}
             ORDER BY e.id
         """)
-        rows = db.session.execute(sql).fetchall()
+        rows = db.session.execute(sql, params).fetchall()
 
         estabelecimentos = []
         for r in rows:

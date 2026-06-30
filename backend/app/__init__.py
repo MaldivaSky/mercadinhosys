@@ -242,9 +242,20 @@ def create_app(config_name=None):
         tid = get_authorized_establishment_id()
 
         if is_super:
-            # Super-admin: pode ser 'all' ou um tenant impersonado. O TenantQuery
-            # trata o bypass; aqui só propagamos o valor.
+            # Super-admin: pode ser 'all' (visão global) ou um tenant impersonado
+            # (modo espelho). O TenantQuery passa a filtrar por 'tid' quando concreto.
             g.estabelecimento_id = tid
+            # MODO ESPELHO É SOMENTE LEITURA: ao visualizar uma loja específica, o
+            # super admin não pode alterar os dados dela. Bloqueia escrita — exceto
+            # no console SaaS (gestão de lojas/planos) e auth.
+            if (
+                tid is not None
+                and str(tid).lower() != "all"
+                and request.method not in ("GET", "HEAD", "OPTIONS")
+                and not request.path.startswith(("/api/saas", "/api/super-admin", "/api/auth"))
+            ):
+                logger.info("🔒 Modo espelho (super admin) — escrita bloqueada em %s %s", request.method, request.path)
+                abort(403, description="Modo espelho do super admin é somente leitura. Saia do espelho (selecione 'Todos') para alterar dados.")
         elif tid is not None:
             g.estabelecimento_id = tid
         else:

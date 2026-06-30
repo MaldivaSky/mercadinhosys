@@ -18,8 +18,14 @@ def get_global_logs():
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 50, type=int)
         tipo = request.args.get("tipo")
-        # Tenta pegar estab_id da query ou do header de impersonation
-        estab_id = request.args.get("estabelecimento_id", type=int) or get_authorized_establishment_id()
+        # O frontend envia ?estab_id=; mantemos compat com ?estabelecimento_id= e,
+        # por fim, o contexto de impersonation. Antes só lia 'estabelecimento_id',
+        # então o filtro por loja no painel de super admin não funcionava.
+        estab_id = (
+            request.args.get("estab_id")
+            or request.args.get("estabelecimento_id")
+            or get_authorized_establishment_id()
+        )
         
         query = Auditoria.query
 

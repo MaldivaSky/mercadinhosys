@@ -116,6 +116,29 @@ def bootstrap_admin():
             "message": str(e)
         }), 500
 
+def _auditar_login(estabelecimento_id, usuario_id, username, contexto):
+    """Registra um evento de login na auditoria do tenant (para o monitor do super admin).
+    Nunca quebra o login: falhas são apenas logadas. Super admin / 'all' não geram log de tenant."""
+    try:
+        if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
+            return
+        from app.models import Auditoria
+        Auditoria.registrar(
+            estabelecimento_id=int(estabelecimento_id),
+            tipo_evento="login",
+            descricao=f"Login realizado por {username}",
+            usuario_id=usuario_id,
+            detalhes={"contexto": contexto},
+        )
+        db.session.commit()
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.warning(f"[AUDIT] Falha ao registrar login de {username}: {e}")
+
+
 @auth_bp.route('/login', methods=['POST'])
 @limiter.limit("5 per minute", error_message="Muitas tentativas de login. Aguarde um minuto.")
 def login():
@@ -187,6 +210,8 @@ def login():
                 access_token = create_access_token(identity=identity, additional_claims=additional_claims, expires_delta=timedelta(hours=24))
                 refresh_token = create_refresh_token(identity=identity, additional_claims=additional_claims)
 
+                _auditar_login(funcionario_local.estabelecimento_id, funcionario_local.id, username, "local")
+
                 return jsonify({
                     'success': True,
                     'access_token': access_token,
@@ -244,7 +269,9 @@ def login():
             identity=identity,
             additional_claims=additional_claims
         )
-        
+
+        _auditar_login(estabelecimento_id, user_id, username, "cloud")
+
         return jsonify({
             'success': True,
             'access_token': access_token,
