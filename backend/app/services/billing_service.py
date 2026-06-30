@@ -38,28 +38,65 @@ class BillingService:
             if not estab:
                 raise Exception("Estabelecimento não encontrado")
 
-            # 1. Create a charge and link in one step
-            body = {
-                "items": [
-                    {
-                        "name": f"Assinatura Plano {plan_name} - 1 Mês",
-                        "value": self._get_price_amount(plan_name),
-                        "amount": 1
-                    }
-                ],
-                "settings": {
-                    "message": f"Assinatura MercadinhoSys - {plan_name}",
-                    "expire_at": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
-                    "request_delivery_address": False,
-                    "payment_method": "pix,credit_card"
-                },
-                "metadata": {
-                    "custom_id": str(estabelecimento_id),
-                    "notification_url": os.getenv('BACKEND_URL', 'https://mercadinhosys.herokuapp.com') + '/api/billing/webhook'
+            price = self._get_price_amount(plan_name)
+            
+            # Tentar criar um Plano de Assinatura Recorrente (Efí Assinaturas)
+            try:
+                plan_body = {
+                    "name": f"Assinatura {plan_name} - MercadinhoSys",
+                    "repeats": 0, # 0 = indefinido (cobrança recorrente mensal)
+                    "interval": 1
                 }
-            }
+                plan_response = self.efi.create_plan(body=plan_body)
+                if plan_response.get('code') != 200:
+                    raise Exception("Falha ao criar plano")
+                
+                plan_id = plan_response['data']['plan_id']
+                
+                link_body = {
+                    "items": [
+                        {
+                            "name": f"Mensalidade - {plan_name}",
+                            "value": price,
+                            "amount": 1
+                        }
+                    ],
+                    "settings": {
+                        "payment_method": "all",
+                        "expire_at": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
+                        "request_delivery_address": False
+                    },
+                    "metadata": {
+                        "custom_id": str(estabelecimento_id),
+                        "notification_url": os.getenv('BACKEND_URL', 'https://mercadinhosys.herokuapp.com') + '/api/billing/webhook'
+                    }
+                }
+                charge = self.efi.create_one_step_subscription_link(params={"id": plan_id}, body=link_body)
+                
+            except Exception as plan_err:
+                current_app.logger.warning(f"Fallback para cobrança avulsa (Efí): {plan_err}")
+                # Fallback para one-step link avulso
+                body = {
+                    "items": [
+                        {
+                            "name": f"Assinatura Plano {plan_name} - 1 Mês",
+                            "value": price,
+                            "amount": 1
+                        }
+                    ],
+                    "settings": {
+                        "message": f"Assinatura MercadinhoSys - {plan_name}",
+                        "expire_at": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
+                        "request_delivery_address": False,
+                        "payment_method": "pix,credit_card"
+                    },
+                    "metadata": {
+                        "custom_id": str(estabelecimento_id),
+                        "notification_url": os.getenv('BACKEND_URL', 'https://mercadinhosys.herokuapp.com') + '/api/billing/webhook'
+                    }
+                }
+                charge = self.efi.create_one_step_link(body=body)
 
-            charge = self.efi.create_one_step_link(body=body)
             if isinstance(charge, str) or charge.get('code') != 200:
                 raise Exception(f"Erro ao gerar link de pagamento Efí (Verifique suas Credenciais): {charge}")
 
@@ -114,6 +151,6 @@ class BillingService:
     def _handle_charge_canceled(self, charge_id):
         estab = Estabelecimento.query.filter_by(gateway_subscription_id=str(charge_id)).first()
         if estab:
-            estab.plano_status = 'canceled'
+            estab.plano_status = 'cancelado'
             db.session.commit()
             current_app.logger.info(f"Estabelecimento {estab.id} cancelado via webhook Efí.")
