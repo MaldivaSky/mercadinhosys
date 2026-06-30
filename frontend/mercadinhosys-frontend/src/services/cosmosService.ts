@@ -62,12 +62,13 @@ export const cosmosService = {
      * o Cosmos (gravando no catálogo). Não lança em falha de negócio — retorna
      * o objeto com success/code/message para a UI exibir a causa real.
      */
-    async lookup(ean: string): Promise<CatalogoLookupResult> {
+    async lookup(ean: string, force: boolean = false): Promise<CatalogoLookupResult> {
         try {
-            const { data } = await apiClient.get<CatalogoLookupResult>(`/produtos/catalogo/lookup/${ean}`);
+            const url = force ? `/produtos/catalogo/lookup/${ean}?force=true` : `/produtos/catalogo/lookup/${ean}`;
+            const { data } = await apiClient.get<CatalogoLookupResult>(url);
             return data;
-        } catch (err: any) {
-            const resp = err?.response?.data;
+        } catch (error: any) {
+            const resp = error?.response?.data;
             if (resp && typeof resp === 'object') return resp as CatalogoLookupResult;
             return { success: false, code: 'conexao', message: 'Falha de conexão ao consultar o produto.' };
         }

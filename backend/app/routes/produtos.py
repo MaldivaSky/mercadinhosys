@@ -323,13 +323,21 @@ def catalogo_lookup(ean):
         return jsonify({"success": False, "code": "ean_invalido",
                         "message": "Código de barras inválido (leitura incompleta?). Tente escanear novamente."}), 400
 
+    force = request.args.get("force", "false").lower() == "true"
+
     # 1) Catálogo local
-    item = CatalogoMestre.query.filter_by(ean=ean_limpo).first()
-    if item and item.status == "encontrado":
-        return jsonify({"success": True, "source": "catalogo", "data": item.to_dict()}), 200
-    if item and item.status == "nao_encontrado":
-        return jsonify({"success": False, "source": "catalogo", "code": "nao_encontrado",
-                        "message": "Este EAN não existe na base Cosmos. Preencha os dados manualmente."}), 404
+    item = None
+    if not force:
+        item = CatalogoMestre.query.filter_by(ean=ean_limpo).first()
+        if item and item.status == "encontrado":
+            return jsonify({"success": True, "source": "catalogo", "data": item.to_dict()}), 200
+        if item and item.status == "nao_encontrado":
+            # Verificar TTL do cache negativo (7 dias)
+            dias_cache = (datetime.utcnow() - item.consultado_em).days if item.consultado_em else 999
+            if dias_cache <= 7:
+                return jsonify({"success": False, "source": "catalogo", "code": "nao_encontrado",
+                                "message": "Este EAN não existe na base Cosmos. Preencha os dados manualmente."}), 404
+            # Se passou de 7 dias, continua para o Fallback Cosmos (ignora o cache atual)
 
     # 2) Fallback Cosmos
     token = os.environ.get("COSMOS_TOKEN") or "MVsiut1dwhg12WGhPuTD9Q"
