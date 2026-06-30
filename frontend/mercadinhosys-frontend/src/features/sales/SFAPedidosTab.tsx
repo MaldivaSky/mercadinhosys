@@ -122,8 +122,8 @@ export default function SFAPedidosTab() {
             )}
 
             {detalhe && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <Card className="w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
+                    <Card className="w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90dvh]">
                         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                             <h2 className="font-bold text-lg text-slate-800 dark:text-white">Aprovação de Pedido</h2>
                             <Button variant="ghost" size="icon" onClick={() => setDetalhe(null)} className="rounded-full h-8 w-8">

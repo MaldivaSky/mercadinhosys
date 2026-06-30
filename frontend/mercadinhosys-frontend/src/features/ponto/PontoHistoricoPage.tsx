@@ -409,8 +409,8 @@ const PontoHistoricoPage: React.FC = () => {
 
       {/* MODAL */}
       {registroSelecionado && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden my-4 sm:my-0">
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-[100] flex items-center justify-center p-2 sm:p-4 overflow-y-auto" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))', paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden my-auto">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 flex items-center justify-between text-white">
               <div className="flex-1">
                 <h3 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
@@ -548,6 +548,7 @@ const PontoHistoricoPage: React.FC = () => {
       {fotoExpandida && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-90 z-[100] flex items-center justify-center p-2 sm:p-4"
+          style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))', paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}
           onClick={() => setFotoExpandida(null)}
         >
           <div 

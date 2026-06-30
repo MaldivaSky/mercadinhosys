@@ -197,9 +197,9 @@ const EstabelecimentosPanel: React.FC = () => {
 
             {/* Modal de edição */}
             {editando && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
                     <div className="absolute inset-0 bg-black/60" onClick={() => setEditando(null)} />
-                    <div className="relative w-full max-w-md mx-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                    <div className="relative w-full max-w-md mx-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90dvh] overflow-y-auto my-auto">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                 <Building2 size={18} className="text-blue-600" />

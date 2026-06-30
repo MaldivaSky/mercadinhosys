@@ -28,7 +28,7 @@ const ExpenseAnalyticsModal: React.FC<ExpenseAnalyticsModalProps> = ({ isOpen, o
 
     if (!resumo) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md">
                 <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl flex flex-col items-center">
                     <BrainCircuit className="w-12 h-12 text-indigo-500 animate-pulse mb-4" />
                     <p className="text-white font-bold">Iniciando Redes Neurais Financeiras...</p>
@@ -105,8 +105,8 @@ const ExpenseAnalyticsModal: React.FC<ExpenseAnalyticsModalProps> = ({ isOpen, o
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 md:p-6 overflow-y-auto">
-            <div className="w-full max-w-6xl bg-gradient-to-br from-slate-900 to-indigo-950 border border-indigo-500/30 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col my-auto max-h-[95vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 md:p-6 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
+            <div className="w-full max-w-6xl bg-gradient-to-br from-slate-900 to-indigo-950 border border-indigo-500/30 rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col my-auto max-h-[95dvh]">
 
                 {/* Efeitos Decorativos Glass */}
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none" />
