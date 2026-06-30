@@ -26,10 +26,11 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
     const [showPayModal, setShowPayModal] = useState(false);
     const [boletoToPay, setBoletoToPay] = useState<any>(null);
 
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            // 1. Carregar Pedidos
+    useEffect(() => {
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                // 1. Carregar Pedidos
                 try {
                     const resPedidos = await apiClient.get('/pedidos-compra/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
                     setPedidos(resPedidos.data.pedidos || []);
