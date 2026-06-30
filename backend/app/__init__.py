@@ -52,15 +52,34 @@ def create_app(config_name=None):
     load_dotenv()
     
     # 1. MONITORAMENTO (SENTRY)
-    sentry_dsn = os.getenv("SENTRY_DSN")
+    # DSN do projeto. Pode ser sobrescrito pela env SENTRY_DSN (ideal: um projeto
+    # Python dedicado). Se a env não existir, usamos um fallback embutido que SÓ
+    # ativa em produção (Render) — assim o dev/local não envia erros de teste.
+    _FALLBACK_SENTRY_DSN = (
+        "https://322d96621010f0403946446be4460662"
+        "@o4511655329923072.ingest.us.sentry.io/4511655345192960"
+    )
+    _is_prod_env = config_name == "production" or bool(os.getenv("RENDER"))
+    sentry_dsn = os.getenv("SENTRY_DSN") or (_FALLBACK_SENTRY_DSN if _is_prod_env else None)
     if sentry_dsn and sentry_sdk and FlaskIntegration:
+        # Sample rates configuráveis por env. 1.0 (100%) em produção é caro e
+        # estoura a cota do plano gratuito — default conservador de 10%.
+        def _sample_rate(env_key: str, default: float) -> float:
+            try:
+                return max(0.0, min(1.0, float(os.getenv(env_key, str(default)))))
+            except (TypeError, ValueError):
+                return default
+
         sentry_sdk.init(
             dsn=sentry_dsn,
             integrations=[FlaskIntegration()],
-            traces_sample_rate=1.0,
-            profiles_sample_rate=1.0,
-            environment=config_name
+            traces_sample_rate=_sample_rate("SENTRY_TRACES_SAMPLE_RATE", 0.1),
+            profiles_sample_rate=_sample_rate("SENTRY_PROFILES_SAMPLE_RATE", 0.1),
+            environment=os.getenv("SENTRY_ENVIRONMENT", config_name),
+            release=os.getenv("RENDER_GIT_COMMIT") or os.getenv("SENTRY_RELEASE"),
+            send_default_pii=False,  # não enviar dados pessoais por padrão (LGPD)
         )
+        logger.info("🛡️ Sentry inicializado (environment=%s).", os.getenv("SENTRY_ENVIRONMENT", config_name))
     elif sentry_dsn:
         logger.warning("SENTRY_DSN configurado, mas pacote sentry_sdk nao esta instalado. Monitoramento desativado.")
 
@@ -236,43 +255,6 @@ def create_app(config_name=None):
                 request.path,
             )
             abort(403, description="Contexto de estabelecimento ausente no token.")
-
-    @app.after_request
-    def report_server_errors(response):
-        if request.path.startswith("/api/") and response.status_code >= 500:
-            # #region debug-point D:backend-5xx-response
-            try:
-                import json as _json
-                import urllib.request as _urllib_request
-
-                _payload = {
-                    "sessionId": "api-500-error",
-                    "runId": "pre-fix",
-                    "hypothesisId": "D",
-                    "location": "backend/app/__init__.py:after_request",
-                    "msg": "[DEBUG] backend respondeu com 5xx",
-                    "data": {
-                        "path": request.path,
-                        "method": request.method,
-                        "status_code": response.status_code,
-                        "args": request.args.to_dict(),
-                        "json_keys": list((request.get_json(silent=True) or {}).keys())[:15] if request.is_json else [],
-                        "response_preview": response.get_data(as_text=True)[:500],
-                    },
-                }
-                _urllib_request.urlopen(
-                    _urllib_request.Request(
-                        "http://127.0.0.1:7777/event",
-                        data=_json.dumps(_payload).encode(),
-                        headers={"Content-Type": "application/json"},
-                    ),
-                    timeout=1,
-                ).read()
-            except Exception:
-                pass
-            # #endregion
-        return response
-
 
     @app.errorhandler(404)
     def handle_404_error(e):
