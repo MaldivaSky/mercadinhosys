@@ -1127,9 +1127,9 @@ export default function ExpensesPage() {
                 MODAL — Nova / Editar Despesa
             ════════════════════════════════════════════════════════════════ */}
             {modalAberto && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModalAberto(false)} />
-                    <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-6 z-10 max-h-[90vh] overflow-y-auto">
+                    <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-6 z-10 max-h-[90dvh] overflow-y-auto my-auto">
                         <div className="flex items-center justify-between mb-5">
                             <h2 className="text-xl font-black text-slate-800 dark:text-white">
                                 {modoEdicao ? "✏️ Editar Despesa" : "➕ Nova Despesa"}
@@ -1278,9 +1278,9 @@ export default function ExpensesPage() {
 
             {/* ── Modal de Confirmação de Exclusão ─────────────────────────── */}
             {confirmDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDelete(null)} />
-                    <div className="relative bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10">
+                    <div className="relative bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10 my-auto">
                         <div className="text-center mb-4">
                             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
                                 <Trash2 className="w-6 h-6 text-red-500" />

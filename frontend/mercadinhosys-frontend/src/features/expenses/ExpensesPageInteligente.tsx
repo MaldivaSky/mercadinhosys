@@ -682,7 +682,7 @@ const ExpensesPageInteligente: React.FC = () => {
 
             <AnimatePresence>
                 {showAnalyticsModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -694,7 +694,7 @@ const ExpensesPageInteligente: React.FC = () => {
                             initial={{ opacity: 0, scale: 0.9, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl h-full max-h-[85vh] overflow-hidden relative z-10 flex flex-col"
+                            className="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl h-full max-h-[85dvh] overflow-hidden relative z-10 flex flex-col"
                         >
                             <div className="p-10 overflow-y-auto">
                                 <div className="flex justify-between items-start mb-10">

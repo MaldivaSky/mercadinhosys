@@ -328,8 +328,8 @@ export default function JustificativasRH() {
       {/* Modal */}
       {/* Modal Nova Justificativa */}
       {modalAberto && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
             <div className="p-6 border-b border-gray-100 dark:border-gray-700/80 flex items-center justify-between">
               <h3 className="text-xl font-black text-gray-900 dark:text-white">Nova Justificativa</h3>
               <button onClick={() => setModalAberto(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -417,8 +417,8 @@ export default function JustificativasRH() {
       )}
       {/* Modal Responder Justificativa */}
       {modalRespostaAberto && justificativaSelecionada && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
             <div className={`p-6 border-b flex items-center justify-between ${acaoResposta === 'aprovar' ? 'bg-emerald-50/50 dark:bg-emerald-500/5 border-emerald-100 dark:border-emerald-500/10' : 'bg-rose-50/50 dark:bg-rose-500/5 border-rose-100 dark:border-rose-500/10'}`}>
               <h3 className={`text-lg font-black ${acaoResposta === 'aprovar' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                 {acaoResposta === 'aprovar' ? 'Aprovar Justificativa' : 'Rejeitar Justificativa'}
