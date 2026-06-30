@@ -97,7 +97,24 @@ def dashboard_cientifico():
             days = 1
         elif days > 365:
             days = 365
-        
+
+        # 1.5 CACHE — o motor analítico é pesado (~vários segundos). Cacheamos o
+        # resultado por loja + período por um TTL curto, então visualizações
+        # repetidas (e vários usuários da mesma loja) respondem instantaneamente.
+        # Chave inclui o estabelecimento → nunca vaza entre tenants.
+        from app import cache
+        cache_key = (
+            f"dash_cient:v2:{estabelecimento_id}:{days}:"
+            f"{start_date_str or ''}:{end_date_str or ''}"
+        )
+        try:
+            cached_payload = cache.get(cache_key)
+        except Exception:
+            cached_payload = None
+        if cached_payload is not None:
+            logger.info("⚡ Dashboard servido do cache (%s)", cache_key)
+            return jsonify(cached_payload), 200
+
         # 2. Inicializar Orquestrador com contexto seguro
         claims = get_jwt()
         is_super_admin = claims.get("is_super_admin", False)
@@ -110,14 +127,14 @@ def dashboard_cientifico():
             start_date=start_date_obj,
             end_date=end_date_obj
         )
-        
+
         if not data.get("success", True):
             return jsonify(data), 500
 
         logger.info(f"✅ Dashboard retornou com sucesso")
 
         # 4. Resposta Padronizada
-        return jsonify({
+        payload = {
             "success": True,
             "metadata": {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -126,7 +143,15 @@ def dashboard_cientifico():
                 "period_days": days
             },
             "data": data
-        }), 200
+        }
+        # TTL de 120s: dashboard reflete novas vendas em até 2 min (aceitável p/
+        # analítico) e absorve picos de acesso sem reprocessar.
+        try:
+            cache.set(cache_key, payload, timeout=120)
+        except Exception as cache_err:
+            logger.warning("Falha ao gravar cache do dashboard: %s", cache_err)
+
+        return jsonify(payload), 200
         
     except Exception as e:
         # Log detalhado para debug de infraestrutura
