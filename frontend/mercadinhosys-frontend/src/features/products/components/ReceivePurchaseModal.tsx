@@ -1,5 +1,6 @@
 // src/features/products/components/ReceivePurchaseModal.tsx
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Package, FileText, DollarSign, CheckCircle, ChevronDown } from 'lucide-react';
 import { PedidoCompra, ReceberPedidoData, purchaseOrderService } from '../purchaseOrderService';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
@@ -196,7 +197,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[210] p-2 sm:p-4" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))', paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[95dvh] overflow-hidden flex flex-col">
         {/* Header */}
@@ -486,7 +487,8 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

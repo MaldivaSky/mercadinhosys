@@ -252,13 +252,20 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Condição de Pagamento
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.condicao_pagamento}
                   onChange={(e) => setFormData(prev => ({ ...prev, condicao_pagamento: e.target.value }))}
-                  placeholder="Ex: 30 dias"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
+                >
+                  <option value="">Selecione uma condição</option>
+                  <option value="PIX">PIX</option>
+                  <option value="Crédito">Crédito</option>
+                  <option value="Boleto 7 dias">Boleto 7 dias</option>
+                  <option value="Boleto 14 dias">Boleto 14 dias</option>
+                  <option value="Boleto 21 dias">Boleto 21 dias</option>
+                  <option value="Boleto 30 dias">Boleto 30 dias</option>
+                  <option value="À vista (Dinheiro)">À vista (Dinheiro)</option>
+                </select>
               </div>
             </div>
 

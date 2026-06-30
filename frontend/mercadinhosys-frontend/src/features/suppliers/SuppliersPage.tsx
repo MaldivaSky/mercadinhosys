@@ -252,7 +252,7 @@ const SuppliersPage: React.FC = () => {
         setLoadingProdutos(true);
 
         try {
-            const response = await apiClient.get('/produtos/estoque', {
+            const response = await apiClient.get('/produtos/', {
                 params: {
                     fornecedor_id: fornecedor.id,
                     por_pagina: 100,
