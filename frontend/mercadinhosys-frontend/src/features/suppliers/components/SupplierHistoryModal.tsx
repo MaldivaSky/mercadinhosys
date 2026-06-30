@@ -3,6 +3,7 @@ import { X, Clock, Package, DollarSign, Calendar } from 'lucide-react';
 import { Fornecedor } from '../../../types';
 import { apiClient } from '../../../api/apiClient';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
+import { showToast } from '../../../utils/toast';
 
 interface SupplierHistoryModalProps {
     fornecedor: Fornecedor;
@@ -20,16 +21,24 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
             setLoading(true);
             try {
                 // 1. Carregar Pedidos
-                const resPedidos = await apiClient.get('/pedidos-compra/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
-                setPedidos(resPedidos.data.pedidos || []);
+                try {
+                    const resPedidos = await apiClient.get('/pedidos-compra/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
+                    setPedidos(resPedidos.data.pedidos || []);
+                } catch (e: any) {
+                    console.error("Erro ao carregar pedidos:", e);
+                    showToast.error("Erro ao carregar histórico de pedidos");
+                }
 
                 // 2. Carregar Despesas
-                // Nota: O backend precisa permitir filtrar despesas por fornecedor_id, 
-                // assumindo que buscarDespesas permite isso ou pelo menos retorna as do mes
-                const resDespesas = await apiClient.get('/despesas', { params: { fornecedor_id: fornecedor.id, por_pagina: 50 } });
-                setDespesas(resDespesas.data.data || []);
-            } catch (error) {
-                console.error("Erro ao carregar histórico", error);
+                try {
+                    const resDespesas = await apiClient.get('/despesas', { params: { fornecedor_id: fornecedor.id, por_pagina: 50 } });
+                    setDespesas(resDespesas.data.data || []);
+                } catch (e: any) {
+                    console.error("Erro ao carregar despesas:", e);
+                    if (e.response?.status !== 403) {
+                        showToast.error("Erro ao carregar histórico financeiro");
+                    }
+                }
             } finally {
                 setLoading(false);
             }
