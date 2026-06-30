@@ -266,6 +266,14 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                   <option value="Boleto 30 dias">Boleto 30 dias</option>
                   <option value="À vista (Dinheiro)">À vista (Dinheiro)</option>
                 </select>
+                <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="font-semibold mb-1 text-gray-700 dark:text-gray-300">Condições Disponíveis:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-1">
+                    <li><strong className="text-gray-600 dark:text-gray-300">PIX / À vista (Dinheiro):</strong> Pagamento no ato da entrega.</li>
+                    <li><strong className="text-gray-600 dark:text-gray-300">Crédito:</strong> Cartão de crédito.</li>
+                    <li><strong className="text-gray-600 dark:text-gray-300">Boletos (7, 14, 21, 30 dias):</strong> Gera automaticamente uma despesa no financeiro ao receber o pedido.</li>
+                  </ul>
+                </div>
               </div>
             </div>
 

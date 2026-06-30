@@ -700,7 +700,7 @@ const SuppliersPage: React.FC = () => {
                             <div className="space-y-2 mb-3">
                                 {supplier.total_produtos !== undefined && (
                                     <div
-                                        onClick={() => (supplier.total_produtos ?? 0) > 0 && handleVerProdutos(supplier)}
+                                        onClick={() => handleVerProdutos(supplier)}
                                         className={`p-2 rounded-lg ${(supplier.total_produtos ?? 0) > 10
                                             ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
                                             : (supplier.total_produtos ?? 0) > 0
