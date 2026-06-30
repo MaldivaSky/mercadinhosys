@@ -41,13 +41,23 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
 
                 // 2. Carregar Despesas
                 try {
-                    const resDespesas = await apiClient.get('/despesas', { params: { fornecedor_id: fornecedor.id, por_pagina: 50 } });
-                    setDespesas(resDespesas.data.data || []);
-                } catch (e: any) {
-                    console.error("Erro ao carregar despesas:", e);
-                    if (e.response?.status !== 403) {
-                        showToast.error("Erro ao carregar histórico financeiro");
-                    }
+                    // Fetch boletos (Contas a Pagar) em vez de despesas genéricas
+                    const resBoletos = await apiClient.get('/pedidos-compra/boletos-fornecedores/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
+                    const boletosData = resBoletos.data.boletos || resBoletos.data.data || [];
+                    
+                    // Mapear para o formato esperado pelo UI (que usava Despesa)
+                    const boletosMapeados = boletosData.map((b: any) => ({
+                        id: b.id,
+                        descricao: b.numero_documento ? `Boleto ${b.numero_documento}` : `Boleto do Pedido ${b.pedido_numero || ''}`,
+                        valor: b.valor_atual || b.valor_original || 0,
+                        data_despesa: b.data_emissao || b.data_vencimento || new Date().toISOString(),
+                        data_vencimento: b.data_vencimento,
+                        forma_pagamento: b.tipo_documento || 'Boleto',
+                        status: b.status
+                    }));
+                    setDespesas(boletosMapeados);
+                } catch (error) {
+                    console.error("Erro ao carregar boletos do fornecedor:", error);
                 }
             } finally {
                 setLoading(false);
