@@ -228,7 +228,7 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                             .then(res => setPedidos(res.data.pedidos || []))
                             .finally(() => setLoading(false));
                     }}
-                    pedidoId={selectedPedidoFull.id}
+                    pedido={selectedPedidoFull}
                 />
             )}
 
