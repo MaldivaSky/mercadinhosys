@@ -44,9 +44,18 @@ def _tenant_atual():
     """
     if not has_app_context() or not g:
         return None
+        
+    from flask import has_request_context
     tid = getattr(g, "estabelecimento_id", None)
-    if tid is None or str(tid).lower() == "all":
+    
+    if str(tid).lower() == "all":
         return None
+        
+    if tid is None and has_request_context():
+        # Fail-closed: se é um request web e não tem tenant setado (ex: esqueceu o @jwt_required),
+        # retorna um ID inválido para não vazar dados de todas as lojas.
+        return -1
+        
     return tid
 
 

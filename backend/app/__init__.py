@@ -258,6 +258,16 @@ def create_app(config_name=None):
                 abort(403, description="Modo espelho do super admin é somente leitura. Saia do espelho (selecione 'Todos') para alterar dados.")
         elif tid is not None:
             g.estabelecimento_id = tid
+            # Bloqueio Global de Inadimplência (Fase 1 Comercial)
+            if request.path.startswith("/api/"):
+                allowed_prefixes = ("/api/auth", "/api/billing", "/api/onboarding", "/api/saas", "/api/health")
+                if not request.path.startswith(allowed_prefixes):
+                    from app.models import Estabelecimento
+                    # Ideal usar cache aqui no futuro para não penalizar performance
+                    est = Estabelecimento.query.get(tid)
+                    if est and est.plano_status in ['cancelado', 'inadimplente', 'suspenso']:
+                        logger.warning(f"🚫 Acesso bloqueado para tenant {tid} devido a inadimplência ({est.plano_status}). Rota: {request.path}")
+                        abort(403, description="Sua assinatura está inativa ou suspensa. Acesse o painel de cobrança para regularizar.")
         else:
             # FAIL-CLOSED: token de tenant autenticado SEM estabelecimento resolvido
             # é uma anomalia. Negar é mais seguro que vazar dados de todos os tenants.
