@@ -599,13 +599,13 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
 // Componente Modal de Pagamento de Boleto
 // ===============================================
 
-interface ModalPagamentoBoletoProps {
+export interface ModalPagamentoBoletoProps {
   boleto: BoletoFornecedor;
   onClose: () => void;
   onPago: () => void;
 }
 
-const ModalPagamentoBoleto: React.FC<ModalPagamentoBoletoProps> = ({ boleto, onClose, onPago }) => {
+export const ModalPagamentoBoleto: React.FC<ModalPagamentoBoletoProps> = ({ boleto, onClose, onPago }) => {
   const [formaPagamento, setFormaPagamento] = useState('pix');
   const [valorPago, setValorPago] = useState(boleto.valor_atual.toString());
   const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().split('T')[0]);

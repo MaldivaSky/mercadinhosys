@@ -4,6 +4,10 @@ import { Fornecedor } from '../../../types';
 import { apiClient } from '../../../api/apiClient';
 import { formatCurrency, formatDate } from '../../../utils/formatters';
 import { showToast } from '../../../utils/toast';
+import { purchaseOrderService, PedidoCompra } from '../../products/purchaseOrderService';
+import PurchaseOrderDetailsModal from '../../products/components/PurchaseOrderDetailsModal';
+import ReceivePurchaseModal from '../../products/components/ReceivePurchaseModal';
+import { ModalPagamentoBoleto } from '../../expenses/components/BoletosAVencerPanel';
 
 interface SupplierHistoryModalProps {
     fornecedor: Fornecedor;
@@ -16,11 +20,16 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
     const [despesas, setDespesas] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                // 1. Carregar Pedidos
+    const [selectedPedidoFull, setSelectedPedidoFull] = useState<PedidoCompra | null>(null);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [showReceiveModal, setShowReceiveModal] = useState(false);
+    const [showPayModal, setShowPayModal] = useState(false);
+    const [boletoToPay, setBoletoToPay] = useState<any>(null);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            // 1. Carregar Pedidos
                 try {
                     const resPedidos = await apiClient.get('/pedidos-compra/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } });
                     setPedidos(resPedidos.data.pedidos || []);
@@ -43,8 +52,20 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                 setLoading(false);
             }
         };
+        
         loadData();
     }, [fornecedor.id]);
+
+    const handlePedidoClick = async (pedidoId: number) => {
+        try {
+            const fullPedido = await purchaseOrderService.obterPedido(pedidoId);
+            setSelectedPedidoFull(fullPedido);
+            setShowDetailsModal(true);
+        } catch (error) {
+            console.error('Erro ao carregar detalhes do pedido', error);
+            showToast.error('Erro ao carregar detalhes do pedido');
+        }
+    };
 
     const stats = {
         totalPedidos: pedidos.length,
@@ -115,7 +136,7 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                         {pedidos.map(p => (
-                                            <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                            <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer" onClick={() => handlePedidoClick(p.id)}>
                                                 <td className="px-4 py-3 font-medium text-gray-800 dark:text-white">{formatDate(p.data_pedido || p.created_at)}</td>
                                                 <td className="px-4 py-3 text-gray-600 dark:text-gray-300">#{p.numero_pedido}</td>
                                                 <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">{formatCurrency(p.total)}</td>
@@ -158,6 +179,74 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                     )}
                 </div>
             </div>
+
+            {showDetailsModal && selectedPedidoFull && (
+                <PurchaseOrderDetailsModal
+                    isOpen={showDetailsModal}
+                    onClose={() => setShowDetailsModal(false)}
+                    pedido={selectedPedidoFull}
+                    onReceiveClick={(p) => {
+                        setSelectedPedidoFull(p);
+                        setShowReceiveModal(true);
+                    }}
+                    onPayClick={(p) => {
+                        const conta = (p as any).conta_pagar;
+                        if (conta) {
+                            const boletoData = {
+                                id: conta.id,
+                                numero_documento: conta.numero_documento || `Boleto #${conta.id}`,
+                                origem: 'mercadoria',
+                                descricao: conta.descricao || p.numero_pedido,
+                                fornecedor_nome: p.fornecedor_nome || '',
+                                fornecedor_id: p.fornecedor_id,
+                                valor_original: conta.valor || p.total,
+                                valor_atual: conta.valor || p.total,
+                                data_emissao: conta.data_emissao || p.data_pedido,
+                                data_vencimento: conta.data_vencimento,
+                                dias_vencimento: Math.floor((new Date(conta.data_vencimento).getTime() - new Date().getTime()) / (1000 * 3600 * 24)),
+                                status_vencimento: 'normal',
+                                pedido_numero: p.numero_pedido,
+                                pedido_id: p.id,
+                            };
+                            setBoletoToPay(boletoData);
+                            setShowPayModal(true);
+                        }
+                    }}
+                />
+            )}
+
+            {showReceiveModal && selectedPedidoFull && (
+                <ReceivePurchaseModal
+                    isOpen={showReceiveModal}
+                    onClose={() => setShowReceiveModal(false)}
+                    onSuccess={() => {
+                        setShowReceiveModal(false);
+                        // Refresh data after receiving
+                        setLoading(true);
+                        apiClient.get('/pedidos-compra/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } })
+                            .then(res => setPedidos(res.data.pedidos || []))
+                            .finally(() => setLoading(false));
+                    }}
+                    pedidoId={selectedPedidoFull.id}
+                />
+            )}
+
+            {showPayModal && boletoToPay && (
+                <ModalPagamentoBoleto
+                    boleto={boletoToPay}
+                    onClose={() => setShowPayModal(false)}
+                    onPago={() => {
+                        setShowPayModal(false);
+                        showToast.success('Boleto pago com sucesso!');
+                        // Refresh finance data
+                        apiClient.get('/despesas', { params: { fornecedor_id: fornecedor.id, por_pagina: 50 } })
+                            .then(res => setDespesas(res.data.data || []));
+                        // Refresh pedidos to reflect paid boleto
+                        apiClient.get('/pedidos-compra/', { params: { fornecedor_id: fornecedor.id, per_page: 50 } })
+                            .then(res => setPedidos(res.data.pedidos || []));
+                    }}
+                />
+            )}
         </div>
     );
 };

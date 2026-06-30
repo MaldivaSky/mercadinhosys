@@ -8,12 +8,16 @@ interface PurchaseOrderDetailsModalProps {
     isOpen: boolean;
     onClose: () => void;
     pedido: PedidoCompra | null;
+    onReceiveClick?: (pedido: PedidoCompra) => void;
+    onPayClick?: (pedido: PedidoCompra) => void;
 }
 
 const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
     isOpen,
     onClose,
-    pedido
+    pedido,
+    onReceiveClick,
+    onPayClick
 }) => {
     if (!isOpen || !pedido) return null;
 
@@ -205,6 +209,27 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
                                         <span className="font-medium text-gray-900 dark:text-white">{pedido.numero_nota_fiscal} (Série: {pedido.serie_nota_fiscal})</span>
                                     </div>
                                 )}
+                                {/* Exibir info do Boleto (conta a pagar) se existir */}
+                                {(pedido as any).conta_pagar && (
+                                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-semibold text-gray-800 dark:text-white">Boleto / Conta a Pagar</span>
+                                            <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${(pedido as any).conta_pagar.status === 'pago' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {(pedido as any).conta_pagar.status.toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                                            <span>Vencimento:</span>
+                                            <span className={`font-medium ${
+                                                (pedido as any).conta_pagar.status !== 'pago' && new Date((pedido as any).conta_pagar.data_vencimento) < new Date() 
+                                                    ? 'text-red-600' 
+                                                    : 'text-gray-900 dark:text-white'
+                                            }`}>
+                                                {formatDate((pedido as any).conta_pagar.data_vencimento)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -212,13 +237,35 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end flex-shrink-0" style={{ paddingBottom: 'max(1.5rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 flex-shrink-0" style={{ paddingBottom: 'max(1.5rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
                     <button
                         onClick={onClose}
                         className="px-6 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white rounded-lg transition-colors font-medium"
                     >
                         Fechar
                     </button>
+                    {pedido.status === 'pendente' && onReceiveClick && (
+                        <button
+                            onClick={() => {
+                                onClose();
+                                onReceiveClick(pedido);
+                            }}
+                            className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors font-medium flex items-center gap-2"
+                        >
+                            <Truck className="w-4 h-4" /> Receber Pedido
+                        </button>
+                    )}
+                    {pedido.status !== 'pendente' && (pedido as any).conta_pagar && (pedido as any).conta_pagar.status !== 'pago' && onPayClick && (
+                        <button
+                            onClick={() => {
+                                onClose();
+                                onPayClick(pedido);
+                            }}
+                            className="px-6 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors font-medium flex items-center gap-2"
+                        >
+                            <DollarSign className="w-4 h-4" /> Pagar Boleto
+                        </button>
+                    )}
                 </div>
             </div>
         </div>,
