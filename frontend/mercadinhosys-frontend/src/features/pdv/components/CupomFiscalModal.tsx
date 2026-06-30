@@ -141,7 +141,7 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
 
                             {/* ── Identificação do cupom ── */}
                             <div className="text-center border-b border-dashed border-black pb-2 mb-2">
-                                <p className="font-black text-sm">CUPOM NÃO FISCAL</p>
+                                <p className="font-black text-sm">{dados.nfce ? "CUPOM FISCAL ELETRÔNICO" : "CUPOM NÃO FISCAL"}</p>
                                 <p className="text-[10px]">Nº {venda?.codigo}</p>
                                 <p className="text-[10px]">{dataHora}</p>
                                 <p className="text-[10px]">Cliente: {comp.cliente || 'Consumidor Final'}</p>
@@ -203,13 +203,36 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                             {/* ── Rodapé ── */}
                             <div className="text-center text-[10px] mt-2">
                                 <p className="font-bold">{comp.rodape || 'Obrigado pela preferência!'}</p>
-                                <p className="text-[9px] mt-1 text-slate-500">
-                                    Documento sem valor fiscal • MercadinhoSys
-                                </p>
-                                <p className="text-[9px]">
-                                    *** {new Date().getFullYear()} ***
-                                </p>
+                                {!dados.nfce && (
+                                    <>
+                                        <p className="text-[9px] mt-1 text-slate-500">
+                                            Documento sem valor fiscal • MercadinhoSys
+                                        </p>
+                                        <p className="text-[9px]">
+                                            *** {new Date().getFullYear()} ***
+                                        </p>
+                                    </>
+                                )}
                             </div>
+
+                            {/* ── NFC-e ── */}
+                            {dados.nfce && (
+                                <div className="mt-4 pt-2 border-t border-dashed border-black text-center text-[9px]">
+                                    <p className="font-black text-[10px] mb-1">NFC-e</p>
+                                    <p>No. {dados.nfce.numero} Série {dados.nfce.serie}</p>
+                                    <p className="mt-1 break-all">CHAVE DE ACESSO:<br/>{dados.nfce.chave_acesso}</p>
+                                    <p className="mt-1 break-all">Protocolo de Autorização:<br/>{dados.nfce.protocolo}</p>
+                                    {dados.nfce.qr_code && (
+                                        <div className="mt-2 text-center">
+                                            <p className="mb-1 font-bold">Consulte via Leitor de QR Code</p>
+                                            <div className="mx-auto w-24 h-24 bg-white border border-black p-1">
+                                                {/* Representação simbólica, idealmente usar library para QR code */}
+                                                <img src={dados.nfce.qr_code.startsWith('http') ? dados.nfce.qr_code : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(dados.nfce.qr_code)}`} alt="QR Code NFC-e" className="w-full h-full object-contain" />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

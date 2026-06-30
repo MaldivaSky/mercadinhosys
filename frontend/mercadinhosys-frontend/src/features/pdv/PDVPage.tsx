@@ -93,6 +93,7 @@ const PDVPage: React.FC = () => {
     const [cupomModalAberto, setCupomModalAberto] = useState(false);
     const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
     const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
+    const [emitirNfce, setEmitirNfce] = useState(true);
 
     const isFiado = pagamentos.some(p => p.forma === 'fiado');
 
@@ -169,11 +170,22 @@ const PDVPage: React.FC = () => {
         }
 
         try {
+            const extraData = { 
+                data_vencimento_fiado: isFiado && dataVencimentoFiado ? dataVencimentoFiado : undefined,
+                emitir_nfce: emitirNfce
+            };
             const venda = await showToast.promise(
-                finalizarVenda({ data_vencimento_fiado: isFiado && dataVencimentoFiado ? dataVencimentoFiado : undefined }, enqueue),
+                finalizarVenda(extraData, enqueue),
                 {
                     loading: isOnline ? 'Finalizando venda...' : '📦 Salvando venda offline...',
-                    success: (v: any) => v?.offline ? `📱 Venda salva offline! Código: ${v.codigo}` : '✅ Venda concluída!',
+                    success: (v: any) => {
+                        let msg = v?.offline ? `📱 Venda salva offline! Código: ${v.codigo}` : '✅ Venda concluída!';
+                        if (v?.nfce_status) {
+                            if (v.nfce_status === 'autorizado') msg += ' (NFC-e Autorizada)';
+                            else msg += ' (NFC-e: ' + v.nfce_status + ')';
+                        }
+                        return msg;
+                    },
                     error: (err: any) => err.message || 'Erro ao finalizar venda'
                 }
             );
@@ -550,6 +562,19 @@ const PDVPage: React.FC = () => {
                                             {formatCurrency(total)}
                                         </span>
                                     </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 px-1 py-2 mb-2 bg-slate-100 dark:bg-slate-900 rounded-xl">
+                                    <input 
+                                        type="checkbox" 
+                                        id="emitir-nfce-check" 
+                                        checked={emitirNfce}
+                                        onChange={(e) => setEmitirNfce(e.target.checked)}
+                                        className="w-5 h-5 ml-2 text-red-600 rounded"
+                                    />
+                                    <label htmlFor="emitir-nfce-check" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        Emitir NFC-e (Nota Fiscal Consumidor Eletrônica)
+                                    </label>
                                 </div>
 
                                 <button

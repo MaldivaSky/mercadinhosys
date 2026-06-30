@@ -63,10 +63,11 @@ def get_estabelecimento_safe(estab_id):
         if not estab_id: return None
         db = _get_db()
         # Colunas core garantidas
-        row = db.session.execute(
-            text("SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, ativo FROM estabelecimentos WHERE id = :eid"),
-            {"eid": estab_id}
-        ).fetchone()
+        with db.session.begin_nested():
+            row = db.session.execute(
+                text("SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, ativo FROM estabelecimentos WHERE id = :eid"),
+                {"eid": estab_id}
+            ).fetchone()
 
         if not row: return None
 
@@ -84,11 +85,12 @@ def get_estabelecimento_safe(estab_id):
         def _fetch_col(col, default=None):
             try:
                 db = _get_db()
-                r = db.session.execute(
-                    text(f"SELECT {col} FROM estabelecimentos WHERE id = :eid"),
-                    {"eid": estab_id}
-                ).fetchone()
-                return r[0] if r else default
+                with db.session.begin_nested():
+                    r = db.session.execute(
+                        text(f"SELECT {col} FROM estabelecimentos WHERE id = :eid"),
+                        {"eid": estab_id}
+                    ).fetchone()
+                    return r[0] if r else default
             except:
                 return default
 
@@ -136,7 +138,8 @@ def get_configuracao_safe(estab_id):
                 LIMIT 1
             """
             db = _get_db()
-            row = db.session.execute(text(sql_fast), {"eid": estab_id}).fetchone()
+            with db.session.begin_nested():
+                row = db.session.execute(text(sql_fast), {"eid": estab_id}).fetchone()
             
             if row:
                 # Se sucesso, monta o dict direto (Fast!)
@@ -185,10 +188,11 @@ def get_configuracao_safe(estab_id):
         # --- TENTATIVA 2: SAFE PATH (Fallback Resiliente) ---
         # Se chegou aqui, a query completa falhou.
         db = _get_db()
-        row = db.session.execute(
-            text("SELECT id, estabelecimento_id FROM configuracoes WHERE estabelecimento_id = :eid"),
-            {"eid": estab_id}
-        ).fetchone()
+        with db.session.begin_nested():
+            row = db.session.execute(
+                text("SELECT id, estabelecimento_id FROM configuracoes WHERE estabelecimento_id = :eid"),
+                {"eid": estab_id}
+            ).fetchone()
 
         if not row: return None
 
@@ -200,11 +204,12 @@ def get_configuracao_safe(estab_id):
         def _fetch_col(col, default=None):
             try:
                 db = _get_db()
-                r = db.session.execute(
-                    text(f"SELECT {col} FROM configuracoes WHERE estabelecimento_id = :eid"),
-                    {"eid": estab_id}
-                ).fetchone()
-                return r[0] if r and r[0] is not None else default
+                with db.session.begin_nested():
+                    r = db.session.execute(
+                        text(f"SELECT {col} FROM configuracoes WHERE estabelecimento_id = :eid"),
+                        {"eid": estab_id}
+                    ).fetchone()
+                    return r[0] if r and r[0] is not None else default
             except:
                 return default
 
@@ -304,11 +309,12 @@ def get_funcionario_safe(func_id):
                 if col == "login": target_col = "username"
                 
                 db = _get_db()
-                r = db.session.execute(
-                    text(f"SELECT {target_col} FROM funcionarios WHERE id = :fid"),
-                    {"fid": func_id}
-                ).fetchone()
-                return r[0] if r and r[0] is not None else default
+                with db.session.begin_nested():
+                    r = db.session.execute(
+                        text(f"SELECT {target_col} FROM funcionarios WHERE id = :fid"),
+                        {"fid": func_id}
+                    ).fetchone()
+                    return r[0] if r and r[0] is not None else default
             except:
                 return default
 
@@ -361,11 +367,12 @@ def get_produto_safe(prod_id):
         def _fetch_col(col, default=None):
             try:
                 db = _get_db()
-                r = db.session.execute(
-                    text(f"SELECT {col} FROM produtos WHERE id = :pid"),
-                    {"pid": prod_id}
-                ).fetchone()
-                return r[0] if r else default
+                with db.session.begin_nested():
+                    r = db.session.execute(
+                        text(f"SELECT {col} FROM produtos WHERE id = :pid"),
+                        {"pid": prod_id}
+                    ).fetchone()
+                    return r[0] if r else default
             except:
                 return default
 

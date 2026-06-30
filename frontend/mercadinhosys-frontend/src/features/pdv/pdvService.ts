@@ -94,6 +94,7 @@ export interface FinalizarVendaRequest {
     observacoes?: string;
     data_vencimento_fiado?: string;
     paymentMethod?: string; // Mantido para compatibilidade temporária
+    emitir_nfce?: boolean; // Gatilho de Emissão
 }
 
 export interface AutorizarGerenteRequest {
@@ -136,6 +137,15 @@ export interface ComprovanteVendaResponse {
         valor_recebido: number;
         troco: number;
         rodape?: string;
+    };
+    nfce?: {
+        chave_acesso?: string;
+        status?: string;
+        qr_code?: string;
+        danfe_url?: string;
+        numero?: string;
+        serie?: string;
+        protocolo?: string;
     };
 }
 

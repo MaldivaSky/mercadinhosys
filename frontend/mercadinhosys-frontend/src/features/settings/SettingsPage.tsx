@@ -664,8 +664,14 @@ const SettingsPage: React.FC = () => {
                     {activeTab === 'fiscal' && (
                         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6 animate-fadeIn">
                             <SectionTitle title="Emissão Fiscal (NFC-e / NF-e)" icon={Printer} />
-                            <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
-                                Em <strong>homologação</strong> a emissão é de teste (sem valor fiscal) e gratuita. Para produção, informe o token do gateway e o CSC obtido na SEFAZ. A correção tributária (NCM, CSOSN, CFOP) deve ser validada pelo seu contador.
+                            <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 px-4 py-3 text-sm text-blue-700 dark:text-blue-300 mb-6">
+                                <p className="mb-2">
+                                    Em <strong>homologação</strong> a emissão é de teste (sem valor fiscal) e gratuita. Para produção, você precisará informar o Token da API e o CSC obtido na SEFAZ do seu estado.
+                                </p>
+                                <div className="p-3 bg-white dark:bg-gray-800 rounded border border-blue-200 dark:border-blue-700">
+                                    <h4 className="font-bold mb-1">🔐 Certificado Digital A1 (e-CNPJ)</h4>
+                                    <p>Para emitir notas reais, o sistema (através do Gateway Focus NFe) exige que você faça o upload do seu Certificado A1 diretamente no painel da Focus NFe. Ele assina digitalmente a nota com validade jurídica antes de transmitir para a SEFAZ. <strong>Sem o certificado configurado no seu Gateway, as notas de Produção serão rejeitadas.</strong></p>
+                                </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
