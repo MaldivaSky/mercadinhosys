@@ -1,38 +1,35 @@
 <div align="center">
 
-# 🛒 MercadinhoSys
+# 🛒 MercadinhoSys (v5.0 Enterprise)
 
-### ERP & PDV Multi-Tenant com Business Intelligence Científico
+### Plataforma SaaS Multi-Tenant de Gestão Comercial e E-commerce
 
-*Gestão comercial de nível profissional para mercados, lojas e atacarejos — varejo e atacado.*
+*O sistema operacional de ponta a ponta para o varejo moderno. ERP, PDV Fiscal, Gestão de Recebimentos e Business Intelligence em uma única plataforma na Nuvem.*
 
 <br/>
 
-[![Version](https://img.shields.io/badge/version-2.2.0-2563eb?style=for-the-badge)](#)
-[![Status](https://img.shields.io/badge/status-production-16a34a?style=for-the-badge)](#)
-[![PWA](https://img.shields.io/badge/PWA-instalável-9333ea?style=for-the-badge&logo=pwa&logoColor=white)](#)
+[![Version](https://img.shields.io/badge/version-5.0.0-2563eb?style=for-the-badge)](#)
+[![Status](https://img.shields.io/badge/status-Enterprise_Ready-16a34a?style=for-the-badge)](#)
+[![PWA](https://img.shields.io/badge/Duo_Management-Mobile_&_Desktop-9333ea?style=for-the-badge&logo=pwa&logoColor=white)](#)
 [![License](https://img.shields.io/badge/license-MIT-64748b?style=for-the-badge)](#-licença--autor)
 
 <br/>
 
-**Frontend**
+**Frontend (Client & Mobile)**
 
 ![React](https://img.shields.io/badge/React_18-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)
-![React Router](https://img.shields.io/badge/React_Router-CA4245?style=flat-square&logo=react-router&logoColor=white)
-![Axios](https://img.shields.io/badge/Axios-5A29E4?style=flat-square&logo=axios&logoColor=white)
+![PWA](https://img.shields.io/badge/Progressive_Web_App-5A0FC8?style=flat-square&logo=pwa&logoColor=white)
 
-**Backend**
+**Backend (Core Services)**
 
 ![Python](https://img.shields.io/badge/Python_3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-000000?style=flat-square&logo=flask&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask_RESTful-000000?style=flat-square&logo=flask&logoColor=white)
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy_2.0-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white)
-![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens&logoColor=white)
-![Gunicorn](https://img.shields.io/badge/Gunicorn-499848?style=flat-square&logo=gunicorn&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT_Auth-000000?style=flat-square&logo=jsonwebtokens&white)
 
-**Dados & Infra**
+**Data & Cloud Infrastructure**
 
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white)
@@ -45,25 +42,50 @@
 
 ---
 
-## ✨ Visão Geral
+## ✨ Visão Geral da Arquitetura
 
-**MercadinhoSys** é um ecossistema completo de **ERP + Ponto de Venda (PDV)** com arquitetura **multi-tenant (SaaS)**, emissão fiscal (**NFC-e**), cadastro de produtos por **código de barras** e um **dashboard de Business Intelligence** com análises científicas (Curva ABC, RFM, previsão de ruptura). Tudo numa interface **PWA** instalável, responsiva e mobile-first.
+O **MercadinhoSys** evoluiu de um sistema de caixa para um **Ecossistema Enterprise Multi-Tenant**. Projetado para suportar operações comerciais intensas com resiliência militar. 
 
-> 📖 **Comece por aqui:** [`GUIA_DO_SISTEMA.md`](GUIA_DO_SISTEMA.md) — o documento-âncora com tudo que está construído, ligado e testado.
+Nossa arquitetura prioriza **Zero-Downtime** e tolerância a falhas. O backend foi desenvolvido utilizando **Savepoints Transacionais (`begin_nested`)** que isolam falhas pontuais (ex: desatualização temporária de Schema) garantindo que rotas críticas, como o fechamento de vendas no PDV, nunca abortem a transação principal do banco de dados de produção.
+
+> 📱 **Mobile-First & Duo Management**: O sistema é 100% projetado para ser gerenciado tanto na mesa do escritório (Desktop) quanto na palma da mão (Mobile via PWA), trazendo ferramentas como Seletor de Tenant, Painel SaaS e Auditoria diretamente no celular do dono do negócio.
 
 ---
 
-## 🚀 Quick Start
+## 🎯 Capacidades Enterprise
 
+### 🧾 Integração Fiscal e Inteligência Tributária
+- **Motor NFC-e / NF-e**: Emissão nativa integrada à SEFAZ (via Focus NFe) com tratativa automática de rejeições, cancelamentos e impressão de DANFE com QR Code oficial.
+- **Auditoria de NCM/CEST e CFOP**: Bloqueio ativo de emissão para produtos com tributação ausente ou irregular, garantindo conformidade fiscal para os lojistas.
+
+### 📦 Gestão Profissional de Produtos (Master Catalog & Sefaz/Cosmos)
+- **Harvester Inteligente (API Cosmos)**: Leitura de código de barras consome dados diretamente da base da Cosmos/Bluesoft.
+- **Cache Negativo com TTL Dinâmico**: Produtos não encontrados ganham cache local de 7 dias (para preservar a quota da API), com opção de *Force Sync* via UI (Devolve o poder ao estoquista).
+- **Entrada via XML (O Padrão Ouro)**: Importação de Notas Fiscais de Entrada extrai EAN, NCM, CEST, Lotes e custos diretamente do XML dos fornecedores, auto-alimentando o catálogo e o estoque.
+
+### 🏢 Plataforma SaaS (Multi-Tenancy Isolado)
+- **Proteção Fail-Closed no ORM**: Todo e qualquer query é blindada pelo `TenantQuery`. Um lojista **nunca** consegue acessar o ID de outro, mesmo por Injection.
+- **Gestão de Franquias (SuperAdmin)**: O "Duo Gerenciamento" permite ao dono do sistema transitar (impersonar) contas de Lojistas pelo smartphone com 1 clique para auditar ou ajudar no suporte.
+
+### 📊 Business Intelligence Científico
+- **Dashboard Executivo**: Curva ABC, RFM de Clientes (Machine Learning base) e previsão algorítmica de ruptura de estoque.
+- **Gestão de DRE**: Fechamento automático com cruzamento de Despesas vs. Faturamento líquido.
+
+---
+
+## 🚀 Engenharia e Resiliência em Produção
+
+O MercadinhoSys v5.0 conta com um pipeline avançado de implantação:
+
+1. **Testes e Build Automatizados**: O GitHub Actions audita dependências, compila o Frontend (TypeScript Strict) e roda testes no Backend (Pytest).
+2. **Deploy Automático**: Vercel (Front) e Render (Back).
+3. **Database Migrations Seguras**: Flask-Migrate sincroniza perfeitamente o schema no PostgreSQL de produção. Em caso de *schema drift*, as consultas no Python isolam exceções via `psycopg2` Savepoints, impedindo queda em cascata (*Efeito Dominó*).
+
+### Setup Rápido (Ambiente de Desenvolvimento)
 ```bash
-# Clone
 git clone https://github.com/MaldivaSky/mercadinhosys.git
 cd mercadinhosys
-
-# Configure os segredos
 cp .env.example .env
-
-# Suba tudo com Docker (backend + frontend + banco)
 make install
 ```
 
@@ -173,11 +195,14 @@ Trabalha-se em `main`; a branch **`master`** recebe o *fast-forward* de `main` e
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap de Inovação
+
+O ecossistema não para de crescer. Próximos módulos:
 
 - [ ] **Billing SaaS** — gateway de pagamento real (Asaas/Stripe/Efí) + webhook → ativação automática do tenant.
+- [ ] **Marketplace E-commerce (White Label)**: Cada Tenant gerará seu próprio Link/Loja Digital com carrinho sincronizado ao estoque do ERP em tempo real (Next.js & Django).
 - [ ] **Fiscal em produção** — homologação real Focus NFe (certificado A1 + CSC do lojista).
-- [ ] **PIX automático** via webhook (sem confirmação manual).
+- [ ] **PIX automático & Conciliação Bancária** — integração OFX e baixas financeiras diretas via webhook bancário.
 - [ ] **Impressoras fiscais** (WebUSB/Bluetooth) e **previsão de ruptura** com ML.
 
 ---
@@ -197,6 +222,8 @@ Trabalha-se em `main`; a branch **`master`** recebe o *fast-forward* de `main` e
 Distribuído sob a licença **MIT**.
 
 <div align="center">
+
+<img src="docs/maldivas-tech.jpg" alt="MaldivasTech Logo" width="200" style="border-radius: 12px; margin-bottom: 16px;" />
 
 Desenvolvido com 💙 por **MaldivasTech** — feito com alma amazônica 🌳
 
