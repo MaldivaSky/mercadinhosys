@@ -2806,8 +2806,8 @@ def obter_estatisticas_produtos():
         
         vencidos_count = validade_query.filter(Produto.data_validade < hoje).count()
         vence_15_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_15_dias).count()
-        vence_30_count = validade_query.filter(Produto.data_validade > vence_15_dias, Produto.data_validade <= vence_30_dias).count()
-        vence_90_count = validade_query.filter(Produto.data_validade > vence_30_dias, Produto.data_validade <= vence_90_dias).count()
+        vence_30_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_30_dias).count()
+        vence_90_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_90_dias).count()
 
         # 5. Margem Alta/Baixa e Giro (Aproximação ou limite para não estourar RAM)
         # O cálculo de Margem por item e Giro usa lógica Python no código atual (VMD, divisões).
