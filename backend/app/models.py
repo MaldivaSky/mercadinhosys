@@ -659,6 +659,7 @@ class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     ativo = db.Column(db.Boolean, default=True)
     tabela_preco_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id"), nullable=True)
     rota_id = db.Column(db.Integer, db.ForeignKey("rotas.id"), nullable=True)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
     observacoes = db.Column(db.Text)
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     data_atualizacao = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
@@ -1078,6 +1079,26 @@ class CatalogoMestre(db.Model):
 # ------------------------------------------------------------------------------
 # SFA (Sales Force Automation) e Distribuidora
 # ------------------------------------------------------------------------------
+class ProdutoFoco(db.Model, MultiTenantMixin):
+    __tablename__ = "produtos_foco"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    meta_quantidade = db.Column(db.Integer, default=0)
+    ativo = db.Column(db.Boolean, default=True)
+
+class MetaVendedor(db.Model, MultiTenantMixin):
+    __tablename__ = "metas_vendedor"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    mes = db.Column(db.Integer, nullable=False)
+    ano = db.Column(db.Integer, nullable=False)
+    meta_faturamento = db.Column(db.Numeric(19, 4), default=0)
+    meta_positivacao = db.Column(db.Integer, default=0) # numero de clientes a atender
+    
 class TabelaPreco(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
     __tablename__ = "tabelas_preco"
     id = db.Column(db.Integer, primary_key=True)
