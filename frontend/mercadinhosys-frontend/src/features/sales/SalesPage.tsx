@@ -266,11 +266,41 @@ export default function SalesPage() {
         return { labels: h.map((x) => `${x.hora}h`), datasets: [{ label: "Vendas", data: h.map((x) => Number(x.quantidade || 0)), backgroundColor: "#06b6d4", borderRadius: 6, borderWidth: 0 }] };
     }, [analytics]);
 
+    const chartClientes = useMemo(() => {
+        const c = (analytics?.vendas_por_cliente || []).slice(0, 5);
+        return { labels: c.map(x => x.cliente || "Avulso"), datasets: [{ label: "Faturamento", data: c.map(x => Number(x.total || 0)), backgroundColor: "#8b5cf6", borderRadius: 4, borderWidth: 0 }] };
+    }, [analytics]);
+
+    const chartTicketMedio = useMemo(() => {
+        const dias = (analytics?.vendas_por_dia || []).slice(-14);
+        return {
+            labels: dias.map(d => fmtDM(d.data)),
+            datasets: [{
+                label: "Ticket Médio",
+                data: dias.map(d => d.quantidade > 0 ? (d.total / d.quantidade) : 0),
+                borderColor: "#10b981",
+                backgroundColor: "rgba(16, 185, 129, 0.1)",
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: "#10b981",
+                borderWidth: 2,
+            }]
+        };
+    }, [analytics]);
+
     const opts = (money = true) => ({
         responsive: true, maintainAspectRatio: false, animation: false as const,
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: { dataset: { label?: string }; raw: unknown }) => `${c.dataset.label}: ${money ? brl(c.raw) : num(c.raw)}` } } },
         scales: { y: { beginAtZero: true, grid: { color: "rgba(100,116,139,0.12)" }, ticks: { callback: (v: unknown) => money ? `R$ ${num(v)}` : num(v) } }, x: { grid: { display: false } } },
     });
+
+    const horizontalOpts = {
+        indexAxis: 'y' as const,
+        responsive: true, maintainAspectRatio: false, animation: false as const,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c: { dataset: { label?: string }; raw: unknown }) => `${c.dataset.label}: ${brl(c.raw)}` } } },
+        scales: { x: { beginAtZero: true, grid: { color: "rgba(100,116,139,0.12)" }, ticks: { callback: (v: unknown) => `R$ ${num(v)}` } }, y: { grid: { display: false } } },
+    };
 
     // ── Insights data-driven ──
     const insights = useMemo(() => {
@@ -360,6 +390,40 @@ export default function SalesPage() {
                 <Kpi titulo="Itens Vendidos" valor={num(stats?.total_itens)} Icon={ShoppingBag} cor="bg-warning-50 text-warning-600 dark:bg-warning-900/20" />
             </div>
 
+            {/* Filtros */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Filtros Rápidos:</span>
+                    <button onClick={() => setQuickDate(0)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">Hoje</button>
+                    <button onClick={() => setQuickDate(1)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">Últimas 24h</button>
+                    <button onClick={() => setQuickDate(7)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">7 Dias</button>
+                    <button onClick={() => setQuickDate(30)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">30 Dias</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div className="lg:col-span-2 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input defaultValue={filtros.search} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por código ou cliente..." className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
+                    </div>
+                    <input type="date" value={filtros.data_inicio} onChange={(e) => aplicar({ data_inicio: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
+                    <input type="date" value={filtros.data_fim} onChange={(e) => aplicar({ data_fim: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
+                    <select value={filtros.status} onChange={(e) => aplicar({ status: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">Todos os status</option><option value="finalizada">Finalizada</option><option value="cancelada">Cancelada</option>
+                    </select>
+                    <select value={filtros.forma_pagamento} onChange={(e) => aplicar({ forma_pagamento: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">Todas as Formas</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="pix">PIX</option>
+                        <option value="cartao_credito">Cartão de Crédito</option>
+                        <option value="cartao_debito">Cartão de Débito</option>
+                        <option value="vale_alimentacao">Vale Alimentação</option>
+                        <option value="vale_refeicao">Vale Refeição</option>
+                        <option value="fiado">Fiado</option>
+                    </select>
+                </div>
+            </div>
+
+
+
             {/* Insights */}
             {!loadingA && insights.length > 0 && (
                 <div>
@@ -395,17 +459,33 @@ export default function SalesPage() {
                 </div>
             </div>
 
-            {/* Hora + Top produtos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            {/* Gráficos Secundários */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm xl:col-span-1">
                     <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Vendas por horário</h3>
                     {loadingA ? <div className="h-52 flex items-center justify-center text-slate-400"><RefreshCw className="w-5 h-5 animate-spin" /></div>
                         : chartHoras.labels.length ? <div className="relative h-52 w-full overflow-hidden"><Bar data={chartHoras} options={opts(false)} /></div>
                             : <div className="h-52 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>}
                 </div>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Top produtos</h3>
-                    <div className="space-y-2 max-h-52 overflow-y-auto">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm xl:col-span-1">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Evolução do Ticket Médio</h3>
+                    {loadingA ? <div className="h-52 flex items-center justify-center text-slate-400"><RefreshCw className="w-5 h-5 animate-spin" /></div>
+                        : chartTicketMedio.labels.length ? <div className="relative h-52 w-full overflow-hidden"><Line data={chartTicketMedio} options={opts(true)} /></div>
+                            : <div className="h-52 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>}
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm xl:col-span-1">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Top Clientes</h3>
+                    {loadingA ? <div className="h-52 flex items-center justify-center text-slate-400"><RefreshCw className="w-5 h-5 animate-spin" /></div>
+                        : chartClientes.labels.length ? <div className="relative h-52 w-full overflow-hidden"><Bar data={chartClientes} options={horizontalOpts} /></div>
+                            : <div className="h-52 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>}
+                </div>
+            </div>
+
+            {/* Top Produtos Lista */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Ranking de Produtos Mais Vendidos</h3>
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                         {(analytics?.produtos_mais_vendidos || []).slice(0, 7).map((p, i) => (
                             <div key={i} className="flex items-center justify-between gap-3 text-sm">
                                 <div className="flex items-center gap-2 min-w-0">
@@ -420,38 +500,6 @@ export default function SalesPage() {
                         ))}
                         {(!analytics?.produtos_mais_vendidos || analytics.produtos_mais_vendidos.length === 0) && <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>}
                     </div>
-                </div>
-            </div>
-
-            {/* Filtros */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Filtros Rápidos:</span>
-                    <button onClick={() => setQuickDate(0)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">Hoje</button>
-                    <button onClick={() => setQuickDate(1)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">Últimas 24h</button>
-                    <button onClick={() => setQuickDate(7)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">7 Dias</button>
-                    <button onClick={() => setQuickDate(30)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">30 Dias</button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
-                    <div className="lg:col-span-2 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input defaultValue={filtros.search} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por código ou cliente..." className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
-                    </div>
-                    <input type="date" value={filtros.data_inicio} onChange={(e) => aplicar({ data_inicio: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
-                    <input type="date" value={filtros.data_fim} onChange={(e) => aplicar({ data_fim: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
-                    <select value={filtros.status} onChange={(e) => aplicar({ status: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500">
-                        <option value="">Todos os status</option><option value="finalizada">Finalizada</option><option value="cancelada">Cancelada</option>
-                    </select>
-                    <select value={filtros.forma_pagamento} onChange={(e) => aplicar({ forma_pagamento: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500">
-                        <option value="">Todas as Formas</option>
-                        <option value="dinheiro">Dinheiro</option>
-                        <option value="pix">PIX</option>
-                        <option value="cartao_credito">Cartão de Crédito</option>
-                        <option value="cartao_debito">Cartão de Débito</option>
-                        <option value="vale_alimentacao">Vale Alimentação</option>
-                        <option value="vale_refeicao">Vale Refeição</option>
-                        <option value="fiado">Fiado</option>
-                    </select>
                 </div>
             </div>
 
