@@ -41,6 +41,7 @@ const AjudaPage = lazy(() => import('../features/legal/AjudaPage'));
 // SFA (Sales Force Automation)
 const SFADashboard = lazy(() => import('../features/sfa/SFADashboard'));
 const SFAPedido = lazy(() => import('../features/sfa/SFAPedido'));
+const SFAManagement = lazy(() => import('../features/sfa/SFAManagement'));
 
 
 
@@ -88,6 +89,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="sfa" element={<PlanoGuard planoRequerido="pro"><SFADashboard /></PlanoGuard>} />
                     <Route path="sfa/pedido" element={<PlanoGuard planoRequerido="pro"><SFAPedido /></PlanoGuard>} />
                     <Route path="sfa/pedido/:id" element={<PlanoGuard planoRequerido="pro"><SFAPedido /></PlanoGuard>} />
+                    <Route path="sfa/gestao" element={<PlanoGuard planoRequerido="pro"><SFAManagement /></PlanoGuard>} />
                     <Route path="employees" element={<PlanoGuard planoRequerido="gratuito"><EmployeesPage /></PlanoGuard>} />
                     <Route path="rh" element={<PlanoGuard planoRequerido="pro"><RHPage /></PlanoGuard>} />
                     <Route path="ponto" element={<PlanoGuard planoRequerido="pro"><PontoPage /></PlanoGuard>} />

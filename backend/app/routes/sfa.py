@@ -171,8 +171,8 @@ def kpi_vendedor():
         # 2. Vendas do mês atual deste vendedor
         pedidos = PedidoVenda.query.filter(
             PedidoVenda.vendedor_id == vendedor_id,
-            db.extract('month', PedidoVenda.data_cadastro) == mes,
-            db.extract('year', PedidoVenda.data_cadastro) == ano,
+            db.extract('month', PedidoVenda.data_emissao) == mes,
+            db.extract('year', PedidoVenda.data_emissao) == ano,
             PedidoVenda.status != 'cancelado'
         ).all()
         
@@ -206,8 +206,8 @@ def kpi_vendedor():
              .join(PedidoVenda, PedidoVenda.id == PedidoVendaItem.pedido_id)\
              .filter(
                 PedidoVenda.vendedor_id == vendedor_id,
-                db.extract('month', PedidoVenda.data_cadastro) == mes,
-                db.extract('year', PedidoVenda.data_cadastro) == ano,
+                db.extract('month', PedidoVenda.data_emissao) == mes,
+                db.extract('year', PedidoVenda.data_emissao) == ano,
                 PedidoVenda.status != 'cancelado',
                 Produto.id.in_(foco_ids)
              ).group_by(Produto.nome).all()
@@ -243,5 +243,114 @@ def kpi_vendedor():
                 }
             }
         }), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# -------------------------------------------------------------------------
+# SFA MANAGEMENT (ADMIN)
+# -------------------------------------------------------------------------
+
+@bp.route("/sfa/admin/metas", methods=["GET", "POST"])
+def admin_metas():
+    try:
+        estabelecimento_id = getattr(g, "estabelecimento_id", request.args.get("estabelecimento_id", 1))
+        
+        if request.method == "POST":
+            data = request.json
+            vendedor_id = data.get("vendedor_id")
+            mes = data.get("mes")
+            ano = data.get("ano")
+            
+            meta = MetaVendedor.query.filter_by(estabelecimento_id=estabelecimento_id, vendedor_id=vendedor_id, mes=mes, ano=ano).first()
+            if not meta:
+                meta = MetaVendedor(estabelecimento_id=estabelecimento_id, vendedor_id=vendedor_id, mes=mes, ano=ano)
+                db.session.add(meta)
+                
+            meta.meta_faturamento = data.get("meta_faturamento", 0)
+            meta.meta_positivacao = data.get("meta_positivacao", 0)
+            db.session.commit()
+            return jsonify({"status": "success", "message": "Meta atualizada", "data": meta.to_dict()}), 200
+            
+        # GET
+        mes = request.args.get("mes", datetime.now().month)
+        ano = request.args.get("ano", datetime.now().year)
+        metas = MetaVendedor.query.filter_by(estabelecimento_id=estabelecimento_id, mes=mes, ano=ano).all()
+        return jsonify({"status": "success", "data": [m.to_dict() for m in metas]}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@bp.route("/sfa/admin/produtos-foco", methods=["GET", "POST", "DELETE"])
+def admin_produtos_foco():
+    try:
+        estabelecimento_id = getattr(g, "estabelecimento_id", request.args.get("estabelecimento_id", 1))
+        
+        if request.method == "POST":
+            data = request.json
+            pf = ProdutoFoco(
+                estabelecimento_id=estabelecimento_id,
+                produto_id=data.get("produto_id"),
+                data_inicio=datetime.strptime(data.get("data_inicio"), "%Y-%m-%d").date(),
+                data_fim=datetime.strptime(data.get("data_fim"), "%Y-%m-%d").date(),
+                meta_quantidade=data.get("meta_quantidade", 0),
+                ativo=data.get("ativo", True)
+            )
+            db.session.add(pf)
+            db.session.commit()
+            return jsonify({"status": "success", "data": pf.to_dict()}), 201
+            
+        if request.method == "DELETE":
+            pf_id = request.args.get("id")
+            pf = ProdutoFoco.query.get(pf_id)
+            if pf:
+                db.session.delete(pf)
+                db.session.commit()
+            return jsonify({"status": "success"}), 200
+            
+        # GET
+        focos = ProdutoFoco.query.filter_by(estabelecimento_id=estabelecimento_id).all()
+        # Join com Produto para pegar o nome
+        result = []
+        for f in focos:
+            d = f.to_dict()
+            prod = Produto.query.get(f.produto_id)
+            d["produto_nome"] = prod.nome if prod else "Desconhecido"
+            result.append(d)
+        return jsonify({"status": "success", "data": result}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@bp.route("/sfa/admin/rotas", methods=["GET", "POST", "DELETE"])
+def admin_rotas():
+    try:
+        estabelecimento_id = getattr(g, "estabelecimento_id", request.args.get("estabelecimento_id", 1))
+        
+        if request.method == "POST":
+            data = request.json
+            if "id" in data and data["id"]:
+                rota = Rota.query.get(data["id"])
+            else:
+                rota = Rota(estabelecimento_id=estabelecimento_id)
+                db.session.add(rota)
+                
+            rota.nome = data.get("nome")
+            rota.vendedor_id = data.get("vendedor_id")
+            rota.dia_semana = data.get("dia_semana", 0)
+            rota.ativa = data.get("ativa", True)
+            db.session.commit()
+            return jsonify({"status": "success", "data": rota.to_dict()}), 200
+            
+        if request.method == "DELETE":
+            rota_id = request.args.get("id")
+            rota = Rota.query.get(rota_id)
+            if rota:
+                # Update clientes para remover desta rota
+                Cliente.query.filter_by(rota_id=rota.id).update({"rota_id": None})
+                db.session.delete(rota)
+                db.session.commit()
+            return jsonify({"status": "success"}), 200
+            
+        # GET
+        rotas = Rota.query.filter_by(estabelecimento_id=estabelecimento_id).all()
+        return jsonify({"status": "success", "data": [r.to_dict() for r in rotas]}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

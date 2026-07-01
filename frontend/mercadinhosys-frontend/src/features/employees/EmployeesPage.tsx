@@ -43,6 +43,7 @@ const CARGOS = [
     "Caixa",
     "Estoquista",
     "Auxiliar",
+    "Vendedor",
     "Outros"
 ];
 
@@ -51,6 +52,7 @@ const NIVEIS_ACESSO = [
     { value: "gerente", label: "Gerente" },
     { value: "atendente", label: "Atendente" },
     { value: "caixa", label: "Caixa" },
+    { value: "vendedor", label: "Vendedor Externo" },
 ];
 
 function formatCurrency(value: number) {
