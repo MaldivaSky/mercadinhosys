@@ -22,13 +22,13 @@ const allMenuItems = [
     { to: '/employees', icon: UserCog, label: 'Equipe' },
     { to: '/rh', icon: Briefcase, label: 'RH' },
     { to: '/ponto', icon: Clock, label: 'Ponto' },
+    { to: '/auditoria', icon: Activity, label: 'Auditoria' },
 ];
 
 const superAdminItems = [
     { to: '/estabelecimentos', icon: Building2, label: 'SaaS Lojas' },
     { to: '/monitor', icon: Activity, label: 'Monitor' },
     { to: '/leads', icon: Target, label: 'Leads' },
-    { to: '/auditoria', icon: Activity, label: 'Auditoria' },
 ];
 
 const BottomNavigation: React.FC = () => {
