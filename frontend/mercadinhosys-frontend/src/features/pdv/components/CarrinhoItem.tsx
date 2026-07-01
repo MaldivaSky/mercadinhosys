@@ -74,28 +74,31 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
             exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white dark:bg-gray-800 border-b border-slate-100 dark:border-slate-800 transition-all duration-150"
         >
-            <div className="p-2 sm:p-3">
-                <div className="flex items-center gap-3">
+            <div className="p-3">
+                {/* ── LINHA 1: identificação + total ──
+                    Em mobile tudo empilha para não cortar; a partir de sm o layout
+                    horizontal antigo é preservado. */}
+                <div className="flex items-start gap-2.5">
 
                     {/* Quantidade badge */}
-                    <div className="w-9 h-9 flex-shrink-0 bg-red-600 dark:bg-red-700 rounded-xl text-white font-black flex items-center justify-center text-base shadow-sm">
+                    <div className="w-8 h-8 flex-shrink-0 bg-red-600 dark:bg-red-700 rounded-lg text-white font-black flex items-center justify-center text-sm shadow-sm tabular-nums">
                         {quantidade}
                     </div>
 
-                    {/* Nome + preço unitário */}
+                    {/* Nome + metadados */}
                     <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-slate-800 dark:text-white text-sm leading-tight uppercase tracking-tight truncate">
                             {produto.nome}
                         </h4>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-xs font-bold text-slate-500">
+                                {formatCurrency(precoUnitario)}<span className="text-[10px] opacity-50">/un</span>
+                            </span>
                             {produto.codigo_barras && (
                                 <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded uppercase tracking-wide">
                                     {produto.codigo_barras}
                                 </span>
                             )}
-                            <span className="text-xs font-bold text-slate-500">
-                                {formatCurrency(precoUnitario)}<span className="text-[10px] opacity-50">/un</span>
-                            </span>
                             {/* Estoque disponível */}
                             {(() => {
                                 const estoque = produto.estoque_atual ?? (produto as any).quantidade ?? null;
@@ -136,55 +139,59 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                                 </span>
                             )}
                         </div>
-
                     </div>
 
-                    {/* Controles de quantidade */}
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+                    {/* Total (canto superior direito) */}
+                    <div className="text-right flex-shrink-0">
+                        <p className="text-base sm:text-lg font-black text-red-600 dark:text-red-400 tabular-nums tracking-tight leading-none">
+                            {formatCurrency(total)}
+                        </p>
+                        {desconto > 0 && (
+                            <p className="text-[10px] text-slate-400 line-through tabular-nums mt-0.5">
+                                {formatCurrency(subtotalItem)}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── LINHA 2: controle de quantidade + unidade + ações ── */}
+                <div className="flex items-center justify-between gap-2 mt-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                        {/* Stepper de quantidade */}
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                             <button
                                 onClick={() => onAtualizarQuantidade(Math.max(0, quantidade - (isGranel ? 0.1 : 1)))}
-                                className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-90"
+                                className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-90"
+                                aria-label="Diminuir quantidade"
                             >
-                                <Minus className="w-5 h-5" />
+                                <Minus className="w-4 h-4" />
                             </button>
                             <input
                                 type="number"
                                 value={quantidade}
                                 step={isGranel ? "0.001" : "1"}
                                 onChange={(e) => onAtualizarQuantidade(parseFloat(e.target.value) || 0)}
-                                className="w-16 text-center bg-transparent border-none font-black text-slate-900 dark:text-white focus:outline-none tabular-nums"
+                                className="w-12 text-center bg-transparent border-none font-black text-slate-900 dark:text-white focus:outline-none tabular-nums text-sm"
                             />
                             <button
                                 onClick={() => onAtualizarQuantidade(quantidade + (isGranel ? 0.1 : 1))}
-                                className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-90"
+                                className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all active:scale-90"
+                                aria-label="Aumentar quantidade"
                             >
-                                <Plus className="w-5 h-5" />
+                                <Plus className="w-4 h-4" />
                             </button>
                         </div>
-                        <span className="text-[10px] font-black text-slate-400 border border-slate-200 dark:border-slate-700 px-2 py-1 rounded-lg uppercase tracking-widest">
+                        <span className="text-[10px] font-black text-slate-400 border border-slate-200 dark:border-slate-700 px-2 py-1 rounded-lg uppercase tracking-widest flex-shrink-0">
                             {produto.unidade_medida || 'UN'}
                         </span>
                     </div>
 
-                    {/* Total + ações */}
-                    <div className="text-right min-w-[80px]">
-                        <p className="text-lg font-black text-red-600 dark:text-red-400 tabular-nums tracking-tighter leading-none">
-                            {formatCurrency(total)}
-                        </p>
-                        {desconto > 0 && (
-                            <p className="text-[10px] text-slate-400 line-through tabular-nums">
-                                {formatCurrency(subtotalItem)}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Botões de ação — SEMPRE VISÍVEIS */}
-                    <div className="flex flex-col gap-1">
+                    {/* Botões de ação */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                             onClick={() => { setMostrarDesconto(!mostrarDesconto); setValorDesconto(''); }}
                             title="Desconto neste item"
-                            className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${mostrarDesconto || desconto > 0
+                            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all ${mostrarDesconto || desconto > 0
                                 ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
                                 : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                                 }`}
@@ -194,7 +201,7 @@ const CarrinhoItem: React.FC<CarrinhoItemProps> = ({
                         <button
                             onClick={onRemover}
                             title="Remover item"
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
