@@ -26,6 +26,7 @@ import ExpiringProductsModal from './components/ExpiringProductsModal';
 import ProductImportModal from './components/ProductImportModal';
 import ProdutoDetalhesModal from './components/ProdutoDetalhesModal';
 import AdvancedAnalyticsModal from './components/AdvancedAnalyticsModal';
+import AdvancedFiltersModal from './components/AdvancedFiltersModal';
 
 type LoteNoPeriodo = { id: number | null; numero_lote: string; data_validade: string | null; quantidade: number; preco_venda: number | null; preco_produto: number };
 type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
@@ -167,12 +168,18 @@ const ProductsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [buscaLocal]);
 
-  // Carrega produtos, categorias e fornecedores em paralelo — muito mais rápido
+  // Carrega apenas no mount (não depende de filtros)
   useEffect(() => {
-    Promise.all([loadProdutos(), loadCategorias(), loadFornecedores()]);
-  }, [loadProdutos, loadCategorias, loadFornecedores]);
+    loadCategorias();
+    loadFornecedores();
+  }, [loadCategorias, loadFornecedores]);
 
-  // Stats carregam depois, sem bloquear a listagem
+  // Carrega produtos quando página ou filtros mudam
+  useEffect(() => {
+    loadProdutos();
+  }, [loadProdutos]);
+
+  // Stats carregam com debounce quando filtros mudam, sem bloquear a listagem
   useEffect(() => {
     const timer = setTimeout(() => { loadStats(); }, 600);
     return () => clearTimeout(timer);
@@ -533,87 +540,15 @@ const ProductsPage: React.FC = () => {
 
       <QuickFiltersPanel activeFilter={filtroRapido} onFilterChange={handleQuickFilterChange} counts={contadoresFiltros} />
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-        {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 border-b border-slate-800 bg-slate-900/50">
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Categoria</label>
-              <select value={filtros.categoria || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, categoria: e.target.value || undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
-                <option value="">Todas</option>
-                {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Fornecedor</label>
-              <select value={filtros.fornecedor_id || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, fornecedor_id: e.target.value ? parseInt(e.target.value) : undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
-                <option value="">Todos</option>
-                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Status Estoque</label>
-              <select value={filtros.estoque_status || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, estoque_status: (e.target.value || undefined) as 'baixo' | 'esgotado' | 'normal' | undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
-                <option value="">Todos</option>
-                <option value="normal">Normal</option>
-                <option value="baixo">Baixo</option>
-                <option value="esgotado">Esgotado</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Tipo</label>
-              <select value={filtros.tipo || ''} onChange={(e) => { setFiltros(prev => ({ ...prev, tipo: e.target.value || undefined })); setPage(1); }} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
-                <option value="">Todos</option>
-                <option value="Higiene">Higiene</option>
-                <option value="Limpeza">Limpeza</option>
-                <option value="Alimentos">Alimentos</option>
-                <option value="Bebidas">Bebidas</option>
-                <option value="Hortifruti">Hortifruti</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Validade</label>
-              <select value={filtros.vencidos ? 'vencidos' : (filtros.validade_proxima ? `proxima_${filtros.dias_validade || 30}` : '')}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const nf: ProdutoFiltros = { ...filtros, vencidos: false, validade_proxima: false, dias_validade: undefined };
-                  if (val === 'vencidos') {
-                    nf.vencidos = true;
-                  } else if (val.startsWith('proxima_')) {
-                    nf.validade_proxima = true;
-                    nf.dias_validade = parseInt(val.split('_')[1]);
-                  }
-                  setFiltros(nf);
-                  setPage(1);
-                }}
-                className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm"
-              >
-                <option value="">Qualquer</option>
-                <option value="vencidos">Já Vencidos</option>
-                <option value="proxima_15">Vence em 15 dias</option>
-                <option value="proxima_30">Vence em 30 dias</option>
-                <option value="proxima_90">Vence em 90 dias</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Ordenar por</label>
-              <select value={filtros.ordenar_por || 'nome'} onChange={(e) => setFiltros(prev => ({ ...prev, ordenar_por: e.target.value }))} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
-                <option value="nome">Nome</option>
-                <option value="quantidade">Quantidade</option>
-                <option value="preco_venda">Preco</option>
-                <option value="margem_lucro">Margem</option>
-                <option value="data_validade">Validade</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1 text-slate-400">Direcao</label>
-              <select value={filtros.direcao || 'asc'} onChange={(e) => setFiltros(prev => ({ ...prev, direcao: e.target.value as 'asc' | 'desc' }))} className="w-full px-3 py-2 border border-slate-700 bg-slate-800 text-slate-200 rounded-lg text-sm">
-                <option value="asc">Crescente</option>
-                <option value="desc">Decrescente</option>
-              </select>
-            </div>
-          </div>
-        )}
-      </div>
+      <AdvancedFiltersModal 
+        show={showFilters}
+        onClose={() => setShowFilters(false)}
+        filtros={filtros}
+        setFiltros={setFiltros}
+        categorias={categorias}
+        fornecedores={fornecedores}
+        onApply={() => { setShowFilters(false); setPage(1); }}
+      />
 
       <div className="products-table-wrapper">
         <ProductsTable

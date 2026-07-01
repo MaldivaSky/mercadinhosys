@@ -233,10 +233,7 @@ const PontoPage: React.FC = () => {
       const validacao = validarHorarioRegistro(tipoRegistro);
 
       if (!validacao.valido) {
-        setToast({
-          message: validacao.mensagem,
-          type: 'error'
-        });
+        showToast.error(validacao.mensagem);
         if (validacao.alerta) {
           alert(validacao.alerta);
         }
@@ -268,10 +265,7 @@ const PontoPage: React.FC = () => {
         console.error('❌ Erro ao obter localização:', error);
 
         if (configuracao?.exigir_localizacao) {
-          setToast({
-            message: '📍 Localização obrigatória. Habilite a geolocalização no navegador.',
-            type: 'warning'
-          });
+          showToast.warning('📍 Localização obrigatória. Habilite a geolocalização no navegador.');
           setLoading(false);
           setTipoRegistroSelecionado(null);
           return;
@@ -377,10 +371,7 @@ const PontoPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('❌ Erro ao registrar ponto:', error);
-      setToast({
-        message: error.response?.data?.message || error.message || 'Erro desconhecido',
-        type: 'error'
-      });
+      showToast.error(error.response?.data?.message || error.message || 'Erro desconhecido');
     } finally {
       setLoading(false);
     }
