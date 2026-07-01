@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, g
 from sqlalchemy.orm import joinedload
-from app.models import db, TabelaPreco, TabelaPrecoItem, Rota, PedidoVenda, PedidoVendaItem, Cliente, Produto
-from datetime import datetime
+from app.models import db, TabelaPreco, TabelaPrecoItem, Rota, PedidoVenda, PedidoVendaItem, Cliente, Produto, MetaVendedor, ProdutoFoco
+from datetime import datetime, timezone
 import json
 
 bp = Blueprint("sfa", __name__)
@@ -147,4 +147,101 @@ def aprovar_pedido(pedido_id):
         return jsonify({"status": "success", "message": "Pedido aprovado e faturado"}), 200
     except Exception as e:
         db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+import calendar
+from sqlalchemy import func, case, and_
+
+@bp.route("/sfa/kpi/vendedor", methods=["GET"])
+def kpi_vendedor():
+    """Retorna os indicadores cruciais para o Vendedor (Metas, Positivação, Foco)"""
+    try:
+        vendedor_id = request.args.get("vendedor_id")
+        if not vendedor_id:
+            return jsonify({"status": "error", "message": "vendedor_id é obrigatório"}), 400
+            
+        hoje = datetime.now(timezone.utc).date()
+        ano, mes = hoje.year, hoje.month
+        
+        # 1. Obter a Meta do Vendedor para o mês atual
+        meta = MetaVendedor.query.filter_by(vendedor_id=vendedor_id, mes=mes, ano=ano).first()
+        meta_faturamento = float(meta.meta_faturamento) if meta else 0.0
+        meta_positivacao = int(meta.meta_positivacao) if meta else 0
+        
+        # 2. Vendas do mês atual deste vendedor
+        pedidos = PedidoVenda.query.filter(
+            PedidoVenda.vendedor_id == vendedor_id,
+            db.extract('month', PedidoVenda.data_cadastro) == mes,
+            db.extract('year', PedidoVenda.data_cadastro) == ano,
+            PedidoVenda.status != 'cancelado'
+        ).all()
+        
+        faturamento_realizado = sum(float(p.total) for p in pedidos)
+        
+        # 3. Positivação (Base de Clientes vs Compradores)
+        base_clientes = Cliente.query.filter_by(vendedor_id=vendedor_id, ativo=True).count()
+        clientes_positivados = len(set(p.cliente_id for p in pedidos))
+        
+        # 4. Tendência Matemática
+        _, ultimo_dia_mes = calendar.monthrange(ano, mes)
+        dias_corridos = max(hoje.day, 1)
+        tendencia = (faturamento_realizado / dias_corridos) * ultimo_dia_mes
+        
+        # 5. Produtos Foco
+        produtos_foco = ProdutoFoco.query.filter(
+            ProdutoFoco.data_inicio <= hoje,
+            ProdutoFoco.data_fim >= hoje,
+            ProdutoFoco.ativo == True
+        ).all()
+        
+        foco_vendido = 0
+        foco_detalhes = []
+        if produtos_foco:
+            foco_ids = [pf.produto_id for pf in produtos_foco]
+            # Conta o que foi vendido desses produtos por esse vendedor neste mes
+            itens_foco = db.session.query(
+                Produto.nome,
+                func.sum(PedidoVendaItem.quantidade).label('qtd_vendida')
+            ).join(PedidoVendaItem, Produto.id == PedidoVendaItem.produto_id)\
+             .join(PedidoVenda, PedidoVenda.id == PedidoVendaItem.pedido_id)\
+             .filter(
+                PedidoVenda.vendedor_id == vendedor_id,
+                db.extract('month', PedidoVenda.data_cadastro) == mes,
+                db.extract('year', PedidoVenda.data_cadastro) == ano,
+                PedidoVenda.status != 'cancelado',
+                Produto.id.in_(foco_ids)
+             ).group_by(Produto.nome).all()
+             
+            for f in itens_foco:
+                foco_detalhes.append({
+                    "produto": f.nome,
+                    "quantidade": float(f.qtd_vendida)
+                })
+                foco_vendido += float(f.qtd_vendida)
+                
+        return jsonify({
+            "status": "success",
+            "data": {
+                "meta": {
+                    "faturamento": meta_faturamento,
+                    "positivacao": meta_positivacao or base_clientes
+                },
+                "realizado": {
+                    "faturamento": faturamento_realizado,
+                    "tendencia": tendencia,
+                    "dias_corridos": dias_corridos,
+                    "total_dias": ultimo_dia_mes
+                },
+                "carteira": {
+                    "base_clientes": base_clientes,
+                    "positivados": clientes_positivados,
+                    "nao_compraram": max(0, base_clientes - clientes_positivados)
+                },
+                "produto_foco": {
+                    "total_itens_vendidos": foco_vendido,
+                    "detalhes": foco_detalhes
+                }
+            }
+        }), 200
+    except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
