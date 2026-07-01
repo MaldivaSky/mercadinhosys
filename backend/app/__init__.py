@@ -262,11 +262,19 @@ def create_app(config_name=None):
             if request.path.startswith("/api/"):
                 allowed_prefixes = ("/api/auth", "/api/billing", "/api/onboarding", "/api/saas", "/api/health")
                 if not request.path.startswith(allowed_prefixes):
-                    from app.models import Estabelecimento
-                    # Ideal usar cache aqui no futuro para não penalizar performance
-                    est = Estabelecimento.query.get(tid)
-                    if est and est.plano_status in ['cancelado', 'inadimplente', 'suspenso']:
-                        logger.warning(f"🚫 Acesso bloqueado para tenant {tid} devido a inadimplência ({est.plano_status}). Rota: {request.path}")
+                    # Performance: o plano_status era buscado no Postgres em CADA request
+                    # autenticada (uma ida ao banco remoto por chamada). Agora fica em cache
+                    # por 60s. Ativar/inativar loja invalida a chave (ver saas), então o
+                    # bloqueio continua imediato quando o status muda de verdade.
+                    status_key = f"plano_status:{tid}"
+                    plano_status = cache.get(status_key)
+                    if plano_status is None:
+                        from app.models import Estabelecimento
+                        est = Estabelecimento.query.get(tid)
+                        plano_status = (est.plano_status if est else "ativo") or "ativo"
+                        cache.set(status_key, plano_status, timeout=60)
+                    if plano_status in ['cancelado', 'inadimplente', 'suspenso']:
+                        logger.warning(f"🚫 Acesso bloqueado para tenant {tid} devido a inadimplência ({plano_status}). Rota: {request.path}")
                         abort(403, description="Sua assinatura está inativa ou suspensa. Acesse o painel de cobrança para regularizar.")
         else:
             # FAIL-CLOSED: token de tenant autenticado SEM estabelecimento resolvido

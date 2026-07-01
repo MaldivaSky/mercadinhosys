@@ -16,6 +16,16 @@ from app.middleware.rate_limit import limiter
 saas_bp = Blueprint("saas", __name__)
 logger = logging.getLogger(__name__)
 
+
+def _invalidar_cache_plano(tenant_id):
+    """Invalida o cache de plano_status (usado no before_request p/ bloqueio de
+    inadimplência) para que ativar/inativar loja tenha efeito imediato."""
+    try:
+        from app import cache
+        cache.delete(f"plano_status:{tenant_id}")
+    except Exception:
+        pass
+
 # ==================== LEAD MANAGEMENT ====================
 
 @saas_bp.route("/leads/registrar", methods=["POST"])
@@ -331,7 +341,8 @@ def ativar_tenant(id):
                 f.status = 'ativo'
         
         db.session.commit()
-        
+        _invalidar_cache_plano(id)
+
         logger.info(f"🔓 TENANT ATIVADO: {estabelecimento.nome_fantasia} (ID: {id})")
         
         return jsonify({
@@ -366,6 +377,7 @@ def inativar_tenant(id):
                 f.ativo = False
 
         db.session.commit()
+        _invalidar_cache_plano(id)
         logger.info(f"🔒 TENANT INATIVADO: {estabelecimento.nome_fantasia} (ID: {id})")
         return jsonify({
             "success": True,
@@ -501,9 +513,10 @@ def alterar_plano_estabelecimento(id):
         estabelecimento.plano = data["plano"]
         if "plano_status" in data:
             estabelecimento.plano_status = data["plano_status"]
-            
+
         db.session.commit()
-        
+        _invalidar_cache_plano(id)
+
         logger.info(f"🔄 PLANO ALTERADO: Estabelecimento {id} mudou para {estabelecimento.plano}")
         
         # Security: Sanitize response to ensure no password fields are exposed
