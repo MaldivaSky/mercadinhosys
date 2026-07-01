@@ -2,7 +2,7 @@ import React from 'react';
 import { X, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 export type StatusFilter = 'todos' | 'ativos' | 'inativos';
-export type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo';
+export type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo' | 'VIP' | 'Em Risco';
 
 interface CustomersAdvancedFiltersModalProps {
     show: boolean;
@@ -105,6 +105,8 @@ const CustomersAdvancedFiltersModal: React.FC<CustomersAdvancedFiltersModalProps
                             <option value="Risco">Em Risco</option>
                             <option value="Perdido">Perdidos</option>
                             <option value="Novo">Novos</option>
+                            <option value="VIP">VIP</option>
+                            <option value="Em Risco">Em Risco</option>
                         </select>
                     </div>
 

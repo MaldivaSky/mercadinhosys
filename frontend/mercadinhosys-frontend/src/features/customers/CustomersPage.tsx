@@ -51,7 +51,7 @@ import CustomersAdvancedFiltersModal from './components/CustomersAdvancedFilters
 type CRMTab = 'overview' | 'recovery' | 'campaigns' | 'portfolio';
 type CampaignKey = 'reactivation' | 'vip' | 'debt' | 'promotion';
 type StatusFilter = 'todos' | 'ativos' | 'inativos';
-type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo';
+type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perdido' | 'Novo' | 'VIP' | 'Em Risco';
 
 type DashboardState = {
     total: number;
@@ -315,7 +315,7 @@ const CustomersPage: React.FC = () => {
         const params = new URLSearchParams(location.search);
         const seg = params.get('segmento') as SegmentFilter | null;
         const tab = params.get('tab') as CRMTab | null;
-        const segmentosValidos: SegmentFilter[] = ['todos', 'Campeão', 'Fiel', 'Regular', 'Risco', 'Perdido', 'Novo'];
+        const segmentosValidos: SegmentFilter[] = ['todos', 'Campeão', 'Fiel', 'Regular', 'Risco', 'Perdido', 'Novo', 'VIP', 'Em Risco'];
         if (seg && segmentosValidos.includes(seg)) {
             setSegmentFilter(seg);
             setActiveTab(tab || 'portfolio');
@@ -442,7 +442,14 @@ const CustomersPage: React.FC = () => {
             if (statusFilter === 'ativos' && !cliente.ativo) return false;
             if (statusFilter === 'inativos' && cliente.ativo !== false) return false;
             if (fiadoFilter && !cliente.hasDebt) return false;
-            if (segmentFilter !== 'todos' && cliente.crmSegment !== segmentFilter) return false;
+            if (segmentFilter === 'VIP') {
+                const isVip = ['vip', 'Campeão', 'Fiel'].includes(cliente.lifecycle) || ['Campeão', 'Fiel'].includes(cliente.crmSegment);
+                if (!isVip) return false;
+            } else if (segmentFilter === 'Em Risco') {
+                if (cliente.lifecycle !== 'em_risco') return false;
+            } else if (segmentFilter !== 'todos' && cliente.crmSegment !== segmentFilter) {
+                return false;
+            }
             
             if (birthdayFilter) {
                 const dn = (cliente as any).data_nascimento;
@@ -888,7 +895,7 @@ const CustomersPage: React.FC = () => {
                         color="#ea580c" 
                         icon={<AutorenewIcon />} 
                         onClick={() => {
-                            setSegmentFilter('Risco');
+                            setSegmentFilter('Em Risco');
                             setActiveTab('portfolio');
                         }}
                     />
@@ -914,7 +921,7 @@ const CustomersPage: React.FC = () => {
                         color="#7c3aed" 
                         icon={<StarIcon />} 
                         onClick={() => {
-                            setSegmentFilter('Campeão'); // Pode ser 'Fiel' também, mas filtramos o topo
+                            setSegmentFilter('VIP');
                             setActiveTab('portfolio');
                         }}
                     />

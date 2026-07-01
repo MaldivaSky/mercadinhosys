@@ -1,7 +1,10 @@
 import React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, CircularProgress, IconButton } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, CircularProgress, IconButton, Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Paper, Typography } from '@mui/material';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import CloseIcon from '@mui/icons-material/Close';
+import InventoryIcon from '@mui/icons-material/Inventory';
+import { apiClient } from '../../../api/apiClient';
+import { useState, useEffect } from 'react';
 
 interface CustomerDetailsModalProps {
   open: boolean;
@@ -14,6 +17,23 @@ interface CustomerDetailsModalProps {
 }
 
 const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, cliente, loading, onClose, onEdit, onDelete, rfmData }) => {
+
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [loadingProdutos, setLoadingProdutos] = useState(false);
+
+  useEffect(() => {
+    if (open && cliente?.id) {
+        setLoadingProdutos(true);
+        apiClient.get(`/clientes/${cliente.id}/produtos`)
+            .then(res => {
+                if (res.data.success) setProdutos(res.data.produtos);
+            })
+            .catch(err => console.error("Erro ao buscar produtos do cliente", err))
+            .finally(() => setLoadingProdutos(false));
+    } else {
+        setProdutos([]);
+    }
+  }, [open, cliente]);
 
   const InfoRow = ({ label, value, valueClassName = '' }: { label: string; value: React.ReactNode; valueClassName?: string }) => (
     <div className="flex flex-col sm:flex-row sm:items-center py-2.5 border-b border-slate-100 dark:border-slate-800/60 last:border-0 gap-1 sm:gap-4">
@@ -174,6 +194,48 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
                     </div>
 
                 </div>
+            </section>
+
+            {/* Produtos Mais Comprados */}
+            <section className="bg-white dark:bg-slate-800/40 rounded-2xl p-5 md:p-6 border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                <h3 className="text-sm font-extrabold text-orange-600 dark:text-orange-400 uppercase tracking-widest flex items-center gap-2 mb-6">
+                    <span className="w-2 h-2 rounded-full bg-orange-500" /> Histórico de Consumo
+                </h3>
+                {loadingProdutos ? (
+                    <div className="flex justify-center p-6"><CircularProgress size={24} /></div>
+                ) : produtos.length > 0 ? (
+                    <TableContainer component={Paper} elevation={0} className="border border-slate-100 dark:border-slate-700/50 rounded-xl overflow-hidden bg-transparent">
+                        <Table size="small">
+                            <TableHead className="bg-slate-50 dark:bg-slate-800/80">
+                                <TableRow>
+                                    <TableCell className="font-bold text-slate-600 dark:text-slate-300">Produto</TableCell>
+                                    <TableCell align="right" className="font-bold text-slate-600 dark:text-slate-300">Qtd. Total</TableCell>
+                                    <TableCell align="right" className="font-bold text-slate-600 dark:text-slate-300">Valor Gasto</TableCell>
+                                    <TableCell align="right" className="font-bold text-slate-600 dark:text-slate-300">Última Compra</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {produtos.map((prod) => (
+                                    <TableRow key={prod.produto_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                        <TableCell className="text-slate-700 dark:text-slate-200 font-medium">{prod.nome}</TableCell>
+                                        <TableCell align="right" className="text-slate-600 dark:text-slate-400">{prod.quantidade_total}</TableCell>
+                                        <TableCell align="right" className="text-slate-600 dark:text-slate-400">
+                                            R$ {Number(prod.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </TableCell>
+                                        <TableCell align="right" className="text-slate-500 dark:text-slate-500 text-xs">
+                                            {prod.ultima_compra ? new Date(prod.ultima_compra).toLocaleDateString('pt-BR') : '-'}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                ) : (
+                    <div className="text-center p-6 text-slate-500 flex flex-col items-center justify-center gap-2">
+                        <InventoryIcon className="text-slate-300 dark:text-slate-600" fontSize="large" />
+                        <Typography variant="body2">Nenhum produto consumido (vendas finalizadas) encontrado para este cliente.</Typography>
+                    </div>
+                )}
             </section>
           </div>
         ) : (
