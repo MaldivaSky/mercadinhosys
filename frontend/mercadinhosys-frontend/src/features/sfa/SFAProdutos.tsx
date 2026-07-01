@@ -15,7 +15,7 @@ export default function SFAProdutos() {
         try {
             setLoading(true);
             const res = await apiClient.get('/produtos'); // Vendedor agora tem acesso via RBAC
-            setProdutos(res.data.data || []);
+            setProdutos(res.data.produtos || []);
         } catch (error) {
             console.error('Erro ao buscar produtos', error);
             showToast.error('Erro ao carregar catálogo.');

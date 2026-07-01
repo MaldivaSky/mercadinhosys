@@ -153,7 +153,7 @@ def calcular_limite_disponivel(cliente):
 # ============================================
 
 
-@clientes_bp.route("/", methods=["GET"])
+@clientes_bp.route("/", methods=["GET"], strict_slashes=False)
 @funcionario_required
 def listar_clientes():
     """Lista todos os clientes com filtros e paginação"""

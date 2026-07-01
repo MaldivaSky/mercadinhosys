@@ -144,7 +144,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
         </div>
 
         {/* Resumo */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4">
           <div className="bg-red-50 dark:bg-red-900 p-3 rounded-lg">
             <div className="text-sm text-red-600 dark:text-red-300">Vencidos</div>
             <div className="text-lg font-bold text-red-800 dark:text-red-200">
@@ -187,7 +187,7 @@ const BoletosAVencerPanel: React.FC<BoletosAVencerPanelProps> = ({ className = '
         </div>
 
         {/* Filtros */}
-        <div className="flex gap-2 mt-4">
+        <div className="flex flex-wrap gap-2 mt-4">
           <button
             onClick={() => setFiltro('todos')}
             className={`px-3 py-1 rounded-lg text-sm transition-colors ${filtro === 'todos'

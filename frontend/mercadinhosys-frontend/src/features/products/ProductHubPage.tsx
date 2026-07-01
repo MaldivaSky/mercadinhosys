@@ -211,7 +211,7 @@ export default function ProductHubPage() {
             </header>
 
             {/* Ações Rápidas Integradas */}
-            <div style={{ display: 'flex', gap: '12px', padding: '0 24px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            <div className="hub-actions-wrapper">
                 <button 
                     onClick={() => navigate('/products', { state: { openEditFor: produto.id, returnTo: `/products/${produto.id}` } })}
                     className="btn-primary" 
@@ -247,7 +247,7 @@ export default function ProductHubPage() {
             </div>
 
             {/* Filtros e KPIs Principais */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px', padding: '0 24px' }}>
+            <div className="hub-controls-wrapper">
                 <select 
                     value={periodo} 
                     onChange={(e) => setPeriodo(e.target.value)}

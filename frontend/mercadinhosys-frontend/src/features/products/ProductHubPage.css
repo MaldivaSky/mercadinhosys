@@ -11,6 +11,13 @@
   animation: fadeIn 0.4s ease-out;
 }
 
+@media (max-width: 768px) {
+  .product-hub-container {
+    padding: 16px;
+    gap: 16px;
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -27,6 +34,15 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .hub-header {
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+  }
 }
 
 .hub-header::before {
@@ -51,6 +67,12 @@
   color: #f8fafc; /* slate-50 */
   margin: 0;
   letter-spacing: -0.02em;
+}
+
+@media (max-width: 768px) {
+  .product-name {
+    font-size: 1.5rem;
+  }
 }
 
 .product-meta {
@@ -111,11 +133,80 @@
   border-color: #475569; /* slate-600 */
 }
 
+/* Quick Status */
+.quick-status {
+  display: flex;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .quick-status {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: space-between;
+  }
+  .status-item {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 120px;
+  }
+}
+
+/* Actions Wrapper */
+.hub-actions-wrapper {
+  display: flex;
+  gap: 12px;
+  padding: 0 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.hub-actions-wrapper button {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 768px) {
+  .hub-actions-wrapper {
+    padding: 0;
+    flex-direction: column;
+  }
+  .hub-actions-wrapper button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Controls Wrapper */
+.hub-controls-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+  padding: 0 24px;
+}
+
+@media (max-width: 768px) {
+  .hub-controls-wrapper {
+    padding: 0;
+    justify-content: stretch;
+  }
+  .hub-controls-wrapper select {
+    width: 100%;
+    text-overflow: ellipsis;
+  }
+}
+
 /* KPI Grid */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }
 
 .kpi-card {
@@ -197,6 +288,13 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .content-panel {
+    padding: 16px;
+  }
 }
 
 .panel-header {

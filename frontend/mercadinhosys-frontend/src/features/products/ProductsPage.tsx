@@ -92,6 +92,21 @@ const ProductsPage: React.FC = () => {
   const [pinAction, setPinAction] = useState<{ run: () => void; title: string; description: string } | null>(null);
   const requirePin = (run: () => void, title: string, description: string) =>
     setPinAction({ run, title, description });
+
+  // Regra sênior: operações sensíveis pedem o PIN ANTES de iniciar o fluxo, nunca
+  // depois. Aqui o descarte só abre o formulário de perda após o PIN ser validado —
+  // ponto de entrada único usado pela tabela, pelo modal de vencidos e por deep-link.
+  const abrirFluxoDescarte = (produto: Produto, motivoPadrao: string = '') => {
+    requirePin(
+      () => {
+        setSelectedProduct(produto);
+        setDiscardData({ quantidade: 0, motivo_especifico: motivoPadrao || 'Avaria', observacoes: '' });
+        setShowDiscardModal(true);
+      },
+      'Autorizar descarte',
+      `Autorize com o PIN para registrar a perda de "${produto.nome}".`,
+    );
+  };
   const [returnToRoute, setReturnToRoute] = useState<string | null>(null);
 
   const [stockAdjust, setStockAdjust] = useState({
@@ -206,8 +221,7 @@ const ProductsPage: React.FC = () => {
       } else if (state.openDiscardFor) {
         const prod = produtos.find(p => p.id === state.openDiscardFor);
         if (prod) {
-          setSelectedProduct(prod);
-          setShowDiscardModal(true);
+          abrirFluxoDescarte(prod);
         }
       } else if (state.openEditFor) {
         const prod = produtos.find(p => p.id === state.openEditFor);
@@ -304,11 +318,9 @@ const ProductsPage: React.FC = () => {
       showToast.error('Quantidade deve ser maior que zero');
       return;
     }
-    requirePin(
-      () => doDiscard(),
-      'Descartar produto',
-      `Autorize com o PIN o descarte de ${discardData.quantidade} un. de "${selectedProduct.nome}".`,
-    );
+    // O PIN já foi validado ao abrir este fluxo (abrirFluxoDescarte). Aqui apenas
+    // executa — não pedimos PIN de novo para não duplicar a autorização.
+    doDiscard();
   };
 
   const handleExportCSV = async () => {
@@ -565,7 +577,7 @@ const ProductsPage: React.FC = () => {
         onHistory={(p) => { setSelectedProduct(p); setShowProductHistory(true); }}
         onMakeOrder={openOrderModal}
         onViewLotes={(p) => { setSelectedProduct(p); setShowLotesModal(true); }}
-        onDiscard={(p) => { setSelectedProduct(p); setDiscardData({ quantidade: 0, motivo_especifico: 'Vencido', observacoes: '' }); setShowDiscardModal(true); }}
+        onDiscard={(p) => abrirFluxoDescarte(p)}
         onProductClick={openDetailModal}
         onSort={handleSort}
         sortConfig={{ key: filtros.ordenar_por || 'nome', direction: filtros.direcao || 'asc' }}
@@ -586,8 +598,8 @@ const ProductsPage: React.FC = () => {
         open={!!pinAction}
         title={pinAction?.title}
         description={pinAction?.description}
-        onConfirm={() => { const a = pinAction; setPinAction(null); a?.run(); }}
-        onCancel={() => setPinAction(null)}
+        onSuccess={() => { const a = pinAction; setPinAction(null); a?.run(); }}
+        onClose={() => setPinAction(null)}
       />
 
       {showStockModal && selectedProduct && (
@@ -788,10 +800,7 @@ const ProductsPage: React.FC = () => {
           loadProdutos();
         }}
         timeframe={expiryTimeframe}
-        onDiscard={(produto) => {
-          setSelectedProduct(produto);
-          setShowDiscardModal(true);
-        }}
+        onDiscard={(produto) => abrirFluxoDescarte(produto, 'Vencido')}
       />
 
       <AdvancedAnalyticsModal

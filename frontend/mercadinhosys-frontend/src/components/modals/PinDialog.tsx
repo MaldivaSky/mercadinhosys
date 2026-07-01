@@ -6,9 +6,9 @@ interface PinDialogProps {
     open: boolean;
     title?: string;
     description?: string;
-    /** Chamado SOMENTE após o PIN ser validado com sucesso. */
-    onConfirm: () => void;
-    onCancel: () => void;
+    /** Chamado SOMENTE após o PIN ser validado com sucesso, recebendo o PIN digitado. */
+    onSuccess: (pin: string) => void;
+    onClose: () => void;
 }
 
 /**
@@ -16,7 +16,7 @@ interface PinDialogProps {
  * (mesmo PIN de admin do estorno) e só dispara onConfirm se for válido.
  * Reutilizável para operações sensíveis (editar/descartar produto, etc.).
  */
-const PinDialog = ({ open, title = 'Autorização necessária', description, onConfirm, onCancel }: PinDialogProps) => {
+const PinDialog = ({ open, title = 'Autorização necessária', description, onSuccess, onClose }: PinDialogProps) => {
     const [pin, setPin] = useState('');
     const [erro, setErro] = useState('');
     const [verificando, setVerificando] = useState(false);
@@ -34,7 +34,7 @@ const PinDialog = ({ open, title = 'Autorização necessária', description, onC
         const ok = await settingsService.verifyPin(pin);
         setVerificando(false);
         if (ok) {
-            onConfirm();
+            onSuccess(pin);
         } else {
             setErro('PIN inválido ou sem permissão.');
             setPin('');
@@ -42,14 +42,14 @@ const PinDialog = ({ open, title = 'Autorização necessária', description, onC
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                         <div className="p-2 rounded-lg bg-amber-100 text-amber-600"><ShieldAlert className="w-5 h-5" /></div>
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
                     </div>
-                    <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
                 </div>
                 {description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>}
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">PIN de segurança</label>
@@ -67,7 +67,7 @@ const PinDialog = ({ open, title = 'Autorização necessária', description, onC
                 </div>
                 {erro && <p className="text-sm text-red-600 mt-2">{erro}</p>}
                 <div className="flex gap-2 mt-5">
-                    <button onClick={onCancel} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
                         Cancelar
                     </button>
                     <button onClick={confirmar} disabled={verificando || pin.length < 4}
