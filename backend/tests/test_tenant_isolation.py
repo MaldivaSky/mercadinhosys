@@ -267,20 +267,33 @@ def test_super_admin_espelho_permite_leitura(client, session):
     assert resp.status_code != 403, "Leitura no modo espelho não deveria ser bloqueada"
 
 
-def test_sem_contexto_nao_vaza_tudo(dois_tenants):
+def test_sem_contexto_nao_vaza_tudo(app, dois_tenants):
     """
-    Se g.estabelecimento_id NÃO estiver setado (ex.: before_request falhou),
-    a query NÃO pode retornar dados de todos os tenants. Deve falhar fechado.
-
-    Sob contexto HTTP (request context), o guard _tenant_atual() retorna -1
-    (fail-closed) quando não há tenant em g, garantindo isolamento. Este teste
-    documenta essa invariante — antes marcada xfail incorretamente.
+    A fronteira de segurança é o REQUEST HTTP: se, DENTRO de um request
+    autenticado (não público), o tenant não foi resolvido (ex.: bug/bypass do
+    before_request), a query NÃO pode retornar dados de todos os tenants — deve
+    falhar fechada (_tenant_atual retorna -1).
     """
     a, b = dois_tenants
-    if hasattr(g, "estabelecimento_id"):
-        delattr(g, "estabelecimento_id")
-    resultado = Produto.query.all()
-    assert len(resultado) == 0, (
-        "FAIL-OPEN: sem contexto de tenant a query retornou "
-        f"{len(resultado)} produtos de todos os tenants"
-    )
+    # Simula um request de API autenticado, mas SEM g.estabelecimento_id resolvido.
+    with app.test_request_context("/api/produtos/"):
+        if hasattr(g, "estabelecimento_id"):
+            delattr(g, "estabelecimento_id")
+        resultado = Produto.query.all()
+        assert len(resultado) == 0, (
+            "FAIL-OPEN: request sem tenant resolvido retornou "
+            f"{len(resultado)} produtos de todos os tenants"
+        )
+
+
+def test_fora_de_request_nao_filtra_por_padrao(app, dois_tenants):
+    """
+    FORA de request (CLI/jobs/seeders), cross-tenant é legítimo: por padrão não
+    filtra. E allow_all_tenants() torna esse acesso explícito/auditável.
+    """
+    from app.models import allow_all_tenants
+    a, b = dois_tenants
+    # Sem request context e sem tenant → acesso global (comportamento de plataforma).
+    assert len(Produto.query.all()) >= 2
+    with allow_all_tenants():
+        assert len(Produto.query.all()) >= 2

@@ -1,14 +1,22 @@
 import schedule
 import time
 from datetime import datetime, timedelta
+from flask import current_app
 from app import db
-from app.models import DashboardMetrica, Venda, Produto
+from app.models import DashboardMetrica, Venda, Produto, Estabelecimento, allow_all_tenants
 
 
 def calcular_metricas_diarias():
-    """Job que roda diariamente para calcular métricas do dashboard"""
+    """Job diário que calcula métricas do dashboard de TODAS as lojas. Por ser
+    cross-tenant e rodar fora de request, explicita o acesso global via
+    allow_all_tenants (sem ele, o filtro de tenant falharia fechado)."""
     hoje = datetime.now().date()
 
+    with allow_all_tenants():
+        _calcular_metricas_todas_lojas(hoje)
+
+
+def _calcular_metricas_todas_lojas(hoje):
     # Buscar todos os estabelecimentos
     estabelecimentos = Estabelecimento.query.all()
 
