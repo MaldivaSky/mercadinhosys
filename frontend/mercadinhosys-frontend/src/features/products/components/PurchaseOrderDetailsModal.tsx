@@ -108,76 +108,63 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
                         <h3 className="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
                             <Package className="w-4 h-4" /> Itens do Pedido
                         </h3>
-                        <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <table className="w-full">
-                                <thead className="bg-gray-50 dark:bg-gray-700 text-xs uppercase text-gray-500 dark:text-gray-400 font-medium">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left">Produto</th>
-                                        <th className="px-4 py-3 text-center">Unidade</th>
-                                        <th className="px-4 py-3 text-center">Qtd. Solicitada</th>
-                                        <th className="px-4 py-3 text-center">Qtd. Recebida</th>
-                                        <th className="px-4 py-3 text-right">Preço Unit.</th>
-                                        <th className="px-4 py-3 text-right">Desc. %</th>
-                                        <th className="px-4 py-3 text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {pedido.itens?.map((item: PedidoCompraItem) => (
-                                        <tr key={item.id} className="bg-white dark:bg-gray-800">
-                                            <td className="px-4 py-3">
-                                                <p className="font-medium text-gray-900 dark:text-white text-sm">{item.produto_nome}</p>
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                                                {item.produto_unidade}
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-sm font-medium text-gray-900 dark:text-white">
-                                                {item.quantidade_solicitada}
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-sm">
-                                                <span className={`${item.quantidade_recebida && item.quantidade_recebida < item.quantidade_solicitada
-                                                    ? 'text-orange-600 font-medium'
-                                                    : item.quantidade_recebida === item.quantidade_solicitada
-                                                        ? 'text-green-600 font-medium'
-                                                        : 'text-gray-500'
-                                                    }`}>
-                                                    {item.quantidade_recebida || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
-                                                {formatCurrency(item.preco_unitario)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
-                                                {item.desconto_percentual}%
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">
-                                                {formatCurrency(item.total_item)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                                <tfoot className="bg-gray-50 dark:bg-gray-700 font-semibold text-gray-900 dark:text-white text-sm">
-                                    <tr>
-                                        <td colSpan={6} className="px-4 py-3 text-right">Subtotal:</td>
-                                        <td className="px-4 py-3 text-right">{formatCurrency(pedido.subtotal)}</td>
-                                    </tr>
-                                    {pedido.desconto > 0 && (
-                                        <tr>
-                                            <td colSpan={6} className="px-4 py-3 text-right text-green-600">Desconto:</td>
-                                            <td className="px-4 py-3 text-right text-green-600">-{formatCurrency(pedido.desconto)}</td>
-                                        </tr>
-                                    )}
-                                    {pedido.frete > 0 && (
-                                        <tr>
-                                            <td colSpan={6} className="px-4 py-3 text-right text-orange-600">Frete:</td>
-                                            <td className="px-4 py-3 text-right text-orange-600">+{formatCurrency(pedido.frete)}</td>
-                                        </tr>
-                                    )}
-                                    <tr>
-                                        <td colSpan={6} className="px-4 py-3 text-right text-base font-bold">Total:</td>
-                                        <td className="px-4 py-3 text-right text-base font-bold text-blue-600 dark:text-blue-400">{formatCurrency(pedido.total)}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
+                        <div className="space-y-3">
+                            {pedido.itens?.map((item: PedidoCompraItem) => (
+                                <div key={item.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm flex flex-col gap-2">
+                                    <div className="flex justify-between items-start gap-2">
+                                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base leading-tight">
+                                            {item.produto_nome}
+                                        </h4>
+                                        <span className="text-sm font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                                            {formatCurrency(item.total_item)}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                        <div className="flex flex-col">
+                                            <span className="text-gray-400 dark:text-gray-500 uppercase text-[10px] font-bold tracking-wider">Solicitado</span>
+                                            <span className="font-medium text-gray-800 dark:text-gray-200">{item.quantidade_solicitada} {item.produto_unidade}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-gray-400 dark:text-gray-500 uppercase text-[10px] font-bold tracking-wider">Recebido</span>
+                                            <span className={`font-medium ${item.quantidade_recebida && item.quantidade_recebida < item.quantidade_solicitada ? 'text-orange-600' : item.quantidade_recebida === item.quantidade_solicitada ? 'text-green-600' : 'text-gray-500'}`}>
+                                                {item.quantidade_recebida || '-'}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-gray-400 dark:text-gray-500 uppercase text-[10px] font-bold tracking-wider">Preço Unit.</span>
+                                            <span className="font-medium">{formatCurrency(item.preco_unitario)}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-gray-400 dark:text-gray-500 uppercase text-[10px] font-bold tracking-wider">Desconto</span>
+                                            <span className="font-medium">{item.desconto_percentual}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Totais do Pedido */}
+                        <div className="mt-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2">
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600 dark:text-gray-400 font-medium">Subtotal</span>
+                                <span className="text-gray-900 dark:text-white">{formatCurrency(pedido.subtotal)}</span>
+                            </div>
+                            {pedido.desconto > 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-green-600 font-medium">Desconto</span>
+                                    <span className="text-green-600">-{formatCurrency(pedido.desconto)}</span>
+                                </div>
+                            )}
+                            {pedido.frete > 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-orange-600 font-medium">Frete</span>
+                                    <span className="text-orange-600">+{formatCurrency(pedido.frete)}</span>
+                                </div>
+                            )}
+                            <div className="pt-2 mt-2 border-t border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                                <span className="text-base font-bold text-gray-900 dark:text-white">Total</span>
+                                <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(pedido.total)}</span>
+                            </div>
                         </div>
                     </div>
 
