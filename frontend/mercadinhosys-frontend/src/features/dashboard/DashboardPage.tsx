@@ -110,7 +110,7 @@ export default function DashboardPageV2() {
           </div>
         ) : (
           <div className="animate-in slide-in-from-bottom-4 duration-500">
-            {activeTab === 'executive' && <ExecutiveTab data={data} />}
+            {activeTab === 'executive' && <ExecutiveTab data={data} onNavigateToTab={setActiveTab} />}
             {activeTab === 'sales' && <SalesSfaTab data={data} />}
             {activeTab === 'inventory' && <InventoryTab data={data} />}
             {activeTab === 'financial' && <FinancialTab data={data} />}
