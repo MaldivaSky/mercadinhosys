@@ -6,6 +6,7 @@ import { apiClient } from '../../api/apiClient';
 import { showToast } from '../../utils/toast';
 import PurchaseOrderModal from '../products/components/PurchaseOrderModal';
 import SupplierHistoryModal from './components/SupplierHistoryModal';
+import { SupplierIntelligenceModal } from './components/SupplierIntelligenceModal';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -54,6 +55,9 @@ const SuppliersPage: React.FC = () => {
 
     const [showDossieModal, setShowDossieModal] = useState(false);
     const [selectedForDossie, setSelectedForDossie] = useState<Fornecedor | null>(null);
+
+    const [showIntelligenceModal, setShowIntelligenceModal] = useState(false);
+    const [selectedForIntelligence, setSelectedForIntelligence] = useState<Fornecedor | null>(null);
 
     const [formData, setFormData] = useState<SupplierFormData>({
         nome: '',
@@ -805,6 +809,17 @@ const SuppliersPage: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => {
+                                        setSelectedForIntelligence(supplier);
+                                        setShowIntelligenceModal(true);
+                                    }}
+                                    className="flex-1 px-3 py-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+                                    title="Inteligência do Fornecedor"
+                                >
+                                    <TrendingUp className="w-4 h-4" />
+                                    Métricas
+                                </button>
+                                <button
+                                    onClick={() => {
                                         setSelectedForDossie(supplier);
                                         setShowDossieModal(true);
                                     }}
@@ -1177,6 +1192,16 @@ const SuppliersPage: React.FC = () => {
                 <SupplierHistoryModal
                     fornecedor={selectedForDossie}
                     onClose={() => setShowDossieModal(false)}
+                />
+            )}
+
+            {/* Inteligência de Fornecedores */}
+            {selectedForIntelligence && (
+                <SupplierIntelligenceModal
+                    isOpen={showIntelligenceModal}
+                    onClose={() => setShowIntelligenceModal(false)}
+                    fornecedorId={selectedForIntelligence.id}
+                    fornecedorNome={selectedForIntelligence.nome_fantasia || selectedForIntelligence.razao_social}
                 />
             )}
 

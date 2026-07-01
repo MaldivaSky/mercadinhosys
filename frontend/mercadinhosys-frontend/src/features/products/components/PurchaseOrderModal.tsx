@@ -37,6 +37,7 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [searchProduto, setSearchProduto] = useState('');
+  const [condicoesPagamento, setCondicoesPagamento] = useState<{nome: string, tipo: string, dias_prazo: number}[]>([]);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -52,6 +53,15 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   // Initialize with initial data if provided
   useEffect(() => {
     if (isOpen) {
+      // Fetch dynamic payment conditions
+      apiClient.get('/configuracao/condicoes-pagamento')
+        .then(res => {
+          if (res.data.success && res.data.condicoes) {
+            setCondicoesPagamento(res.data.condicoes);
+          }
+        })
+        .catch(err => console.error('Erro ao buscar condicoes de pagamento:', err));
+
       if (initialSupplierId) {
         setFormData(prev => ({ ...prev, fornecedor_id: initialSupplierId }));
       }
@@ -258,13 +268,19 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 >
                   <option value="">Selecione uma condição</option>
-                  <option value="PIX">PIX</option>
-                  <option value="Crédito">Crédito</option>
-                  <option value="Boleto 7 dias">Boleto 7 dias</option>
-                  <option value="Boleto 14 dias">Boleto 14 dias</option>
-                  <option value="Boleto 21 dias">Boleto 21 dias</option>
-                  <option value="Boleto 30 dias">Boleto 30 dias</option>
-                  <option value="À vista (Dinheiro)">À vista (Dinheiro)</option>
+                  {condicoesPagamento.length > 0 ? condicoesPagamento.map((c, i) => (
+                    <option key={i} value={c.nome}>{c.nome}</option>
+                  )) : (
+                    <>
+                      <option value="PIX">PIX</option>
+                      <option value="Crédito">Crédito</option>
+                      <option value="Boleto 7 dias">Boleto 7 dias</option>
+                      <option value="Boleto 14 dias">Boleto 14 dias</option>
+                      <option value="Boleto 21 dias">Boleto 21 dias</option>
+                      <option value="Boleto 30 dias">Boleto 30 dias</option>
+                      <option value="À vista (Dinheiro)">À vista (Dinheiro)</option>
+                    </>
+                  )}
                 </select>
                 <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
                   <p className="font-semibold mb-1 text-gray-700 dark:text-gray-300">Condições Disponíveis:</p>

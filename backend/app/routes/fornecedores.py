@@ -1492,6 +1492,7 @@ def relatorio_analitico_fornecedores():
 def sincronizar_metricas_fornecedor(fornecedor_id):
     """Sincroniza métricas de um fornecedor (chamar após cada pedido)"""
     try:
+        from app.models import CondicaoPagamento
         fornecedor = Fornecedor.query.get(fornecedor_id)
         if not fornecedor:
             return
@@ -1502,20 +1503,88 @@ def sincronizar_metricas_fornecedor(fornecedor_id):
             estabelecimento_id=fornecedor.estabelecimento_id,
             status="concluido",
         ).all()
+        
+        # fallback caso haja pedidos com status recebido em vez de concluido
+        pedidos_recebidos = PedidoCompra.query.filter_by(
+            fornecedor_id=fornecedor_id,
+            estabelecimento_id=fornecedor.estabelecimento_id,
+            status="recebido",
+        ).all()
+        pedidos = pedidos + pedidos_recebidos
 
         total_compras = len(pedidos)
+        if total_compras == 0:
+            return
+            
         valor_total = sum(float(p.total) for p in pedidos)
 
-        # Atualizar fornecedor
+        # Atualizar básicos
         fornecedor.total_compras = total_compras
         fornecedor.valor_total_comprado = valor_total
 
-        # Atualizar classificação
-        if valor_total > 100000:
+        # === CÁLCULO DE INTELIGÊNCIA ===
+        # 1. Pontualidade
+        atraso_total_dias = 0
+        entregas_no_prazo = 0
+        pedidos_com_data = 0
+        
+        # 2. Desconto
+        desconto_acumulado_percentual = 0
+        
+        # 3. Prazo Pagamento
+        dias_prazo_acumulado = 0
+        todas_condicoes = {c.nome: c.dias_prazo for c in CondicaoPagamento.query.filter_by(estabelecimento_id=fornecedor.estabelecimento_id).all()}
+
+        for p in pedidos:
+            # Pontualidade
+            if p.data_recebimento and p.data_previsao_entrega:
+                pedidos_com_data += 1
+                diff = (p.data_recebimento - p.data_previsao_entrega).days
+                if diff <= 0:
+                    entregas_no_prazo += 1
+                else:
+                    atraso_total_dias += diff
+                    
+            # Desconto
+            subtotal = float(p.subtotal or 0)
+            desc = float(p.desconto or 0)
+            if subtotal > 0:
+                desconto_acumulado_percentual += (desc / subtotal) * 100
+                
+            # Pagamento
+            if p.condicao_pagamento:
+                dias_prazo_acumulado += todas_condicoes.get(p.condicao_pagamento, 0)
+
+        # Atualizar Métricas Inteligentes no Modelo
+        if pedidos_com_data > 0:
+            fornecedor.percentual_entregas_no_prazo = (entregas_no_prazo / pedidos_com_data) * 100
+            fornecedor.atraso_medio_dias = (atraso_total_dias / pedidos_com_data)
+        else:
+            fornecedor.percentual_entregas_no_prazo = 100.0
+            fornecedor.atraso_medio_dias = 0.0
+            
+        fornecedor.desconto_medio_percentual = desconto_acumulado_percentual / total_compras
+        fornecedor.prazo_pagamento_medio_dias = dias_prazo_acumulado / total_compras
+
+        # Calcular Score Geral (0-100)
+        # Pesos: Pontualidade (50%), Descontos (25%), Pagamento (25%)
+        # Score Pontualidade (máx 50)
+        score_pont = (fornecedor.percentual_entregas_no_prazo / 100.0) * 50
+        
+        # Score Desconto (máx 25) - ex: 10% de desconto médio é ótimo, dá 25 pts. Acima disso capeia.
+        score_desc = min((fornecedor.desconto_medio_percentual / 10.0) * 25, 25)
+        
+        # Score Pagamento (máx 25) - ex: 30 dias médio é padrão (15 pts), 60 dias (25 pts)
+        score_pag = min((fornecedor.prazo_pagamento_medio_dias / 60.0) * 25, 25)
+        
+        fornecedor.score_geral = int(score_pont + score_desc + score_pag)
+
+        # Atualizar classificação baseada no valor total E pontuação
+        if fornecedor.score_geral >= 80 and valor_total > 50000:
             fornecedor.classificacao = "PREMIUM"
-        elif valor_total > 50000:
+        elif fornecedor.score_geral >= 70:
             fornecedor.classificacao = "A"
-        elif valor_total > 10000:
+        elif fornecedor.score_geral >= 50:
             fornecedor.classificacao = "B"
         else:
             fornecedor.classificacao = "C"
@@ -1524,6 +1593,53 @@ def sincronizar_metricas_fornecedor(fornecedor_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(
-            f"Erro ao sincronizar métricas do fornecedor {fornecedor_id}: {str(e)}"
-        )
+        current_app.logger.error(f"Erro ao sincronizar métricas do fornecedor {fornecedor_id}: {str(e)}")
+
+@fornecedores_bp.route("/<int:id>/inteligencia", methods=["GET"])
+@funcionario_required
+def get_inteligencia(id):
+    """Retorna o dossiê avançado de inteligência do fornecedor"""
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        
+        fornecedor = Fornecedor.query.filter_by(id=id, estabelecimento_id=estabelecimento_id).first_or_404()
+        
+        # Sincroniza em tempo real para garantir dados frescos
+        sincronizar_metricas_fornecedor(fornecedor.id)
+        
+        # Busca últimos pedidos recebidos para a timeline
+        pedidos = PedidoCompra.query.filter(
+            PedidoCompra.fornecedor_id == id,
+            PedidoCompra.estabelecimento_id == estabelecimento_id,
+            PedidoCompra.status.in_(["concluido", "recebido"])
+        ).order_by(PedidoCompra.data_recebimento.desc()).limit(10).all()
+        
+        timeline = []
+        for p in pedidos:
+            if p.data_recebimento and p.data_previsao_entrega:
+                diff = (p.data_recebimento - p.data_previsao_entrega).days
+                timeline.append({
+                    "id": p.id,
+                    "numero": p.numero_pedido,
+                    "data": p.data_recebimento.isoformat(),
+                    "total": float(p.total),
+                    "atraso_dias": diff,
+                    "no_prazo": diff <= 0
+                })
+        
+        return jsonify({
+            "success": True,
+            "inteligencia": {
+                "score_geral": fornecedor.score_geral,
+                "atraso_medio_dias": round(fornecedor.atraso_medio_dias, 1),
+                "percentual_entregas_no_prazo": round(fornecedor.percentual_entregas_no_prazo, 1),
+                "desconto_medio_percentual": round(fornecedor.desconto_medio_percentual, 1),
+                "prazo_pagamento_medio_dias": round(fornecedor.prazo_pagamento_medio_dias, 1),
+                "classificacao": fornecedor.classificacao
+            },
+            "timeline": timeline
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Erro inteligência: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
