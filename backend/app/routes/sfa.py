@@ -1,43 +1,93 @@
 from flask import Blueprint, jsonify, request, g
-from app.models import db, TabelaPreco, TabelaPrecoItem, Rota, PedidoVenda, PedidoVendaItem, Cliente, Produto, MetaVendedor, ProdutoFoco, Funcionario
-from datetime import datetime, timezone
+from app.models import (db, TabelaPreco, TabelaPrecoItem, Rota, PedidoVenda, PedidoVendaItem,
+                        Cliente, Produto, MetaVendedor, ProdutoFoco, Funcionario,
+                        Venda, VendaItem, ContaReceber)
+from app.services.venda_service import VendaService
+from app.utils.errors import EstoqueInsuficienteError
+from app.decorators.decorator_jwt import funcionario_required, gerente_ou_admin_required
+from flask_jwt_extended import get_jwt_identity, get_jwt
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal
+import re
 import calendar as cal_lib
 from sqlalchemy import func
 
 bp = Blueprint("sfa", __name__)
 
 
+def _parcelas_condicao(condicao, total, base_dt):
+    """Traduz a condição de pagamento em parcelas (valor, vencimento).
+    'A Vista' → 1x hoje; '30 Dias' → 1x +30d; '30/60' → 2x; '30/60/90' → 3x."""
+    total = Decimal(str(total or 0))
+    dias = [int(x) for x in re.findall(r"\d+", condicao or "")]
+    if not dias:
+        dias = [0]  # à vista / sem prazo
+    dias = sorted(dias)
+    n = len(dias)
+    base_val = (total / n).quantize(Decimal("0.01"))
+    parcelas, acc = [], Decimal("0")
+    for i, d in enumerate(dias):
+        valor = base_val if i < n - 1 else (total - acc)  # última ajusta centavos
+        acc += valor
+        parcelas.append((valor, (base_dt + timedelta(days=d)).date()))
+    return parcelas
+
+
 def _estab_id():
-    """Retorna o estabelecimento_id do token JWT (g) ou query param."""
-    return getattr(g, "estabelecimento_id", None) or request.args.get("estabelecimento_id")
+    """Estabelecimento do tenant autenticado (JWT via g). Nunca confia em query param."""
+    return getattr(g, "estabelecimento_id", None)
+
+
+def _is_privileged():
+    """Admin/gerente/super-admin: pode consultar a carteira de qualquer vendedor da loja."""
+    try:
+        claims = get_jwt()
+    except Exception:
+        return False
+    if claims.get("is_super_admin"):
+        return True
+    role = (claims.get("role") or "").lower()
+    return role in ("admin", "administrador", "proprietario", "dono", "master", "gerente")
+
+
+def _vendedor_id():
+    """Vendedor enxerga a própria carteira; admin/gerente pode passar ?vendedor_id p/ ver outro."""
+    req = request.args.get("vendedor_id")
+    if req and _is_privileged():
+        return req
+    return get_jwt_identity()
 
 
 # ─────────────────────────────────────────────
 #  SYNC DATA (Download do Roteiro para o App)
 # ─────────────────────────────────────────────
 @bp.route("/sfa/sync-data", methods=["GET"])
+@funcionario_required
 def sync_data():
     """Baixa o roteiro do dia, clientes, produtos e tabelas do vendedor para o PWA."""
     try:
-        vendedor_id = request.args.get("vendedor_id")
+        vendedor_id = _vendedor_id()
         estab_id = _estab_id()
 
-        if not vendedor_id and not estab_id:
-            return jsonify({"status": "error", "message": "vendedor_id ou token necessário"}), 400
+        if not estab_id:
+            return jsonify({"status": "error", "message": "Contexto de estabelecimento ausente"}), 400
 
-        # 1. Rotas do vendedor (usa SQL direto para contornar o filtro automático de tenant)
+        # Filtro opcional de rota "de hoje" (dia_semana: 0=Seg..6=Dom). ?hoje=1 aplica.
+        somente_hoje = request.args.get("hoje") in ("1", "true", "True")
+
+        # 1. Rotas do vendedor (raw SQL, sempre restrito ao tenant do token)
         from sqlalchemy import text
-        if vendedor_id:
-            q_rotas = db.session.execute(
-                text("SELECT id, nome, dia_semana, ativa FROM rotas WHERE vendedor_id = :vid AND (deleted_at IS NULL)"),
-                {"vid": vendedor_id}
-            ).mappings().all()
-        else:
-            q_rotas = []
+        params = {"vid": vendedor_id, "eid": estab_id}
+        sql_rotas = "SELECT id, nome, dia_semana, ativa FROM rotas WHERE vendedor_id = :vid AND estabelecimento_id = :eid AND (deleted_at IS NULL)"
+        if somente_hoje:
+            # Python weekday(): 0=Seg..6=Dom, mesmo padrão de Rota.dia_semana
+            params["dow"] = datetime.now(timezone.utc).weekday()
+            sql_rotas += " AND dia_semana = :dow"
+        q_rotas = db.session.execute(text(sql_rotas), params).mappings().all()
 
         rota_ids = [r["id"] for r in q_rotas]
 
-        # 2. Clientes dessas rotas (com dados completos)
+        # 2. Clientes dessas rotas (com dados completos), sempre restrito ao tenant
         clientes_rows = []
         if rota_ids:
             placeholders = ",".join(str(i) for i in rota_ids)
@@ -48,9 +98,10 @@ def sync_data():
                            limite_credito, saldo_devedor, tabela_preco_id, rota_id,
                            ultima_compra, ativo
                     FROM clientes
-                    WHERE rota_id IN ({placeholders}) AND (deleted_at IS NULL)
+                    WHERE rota_id IN ({placeholders}) AND estabelecimento_id = :eid AND (deleted_at IS NULL)
                     LIMIT 100
-                """)
+                """),
+                {"eid": estab_id}
             ).mappings().all()
 
         # 3. Produtos do estabelecimento
@@ -106,22 +157,24 @@ def sync_data():
 #  KPI DO VENDEDOR
 # ─────────────────────────────────────────────
 @bp.route("/sfa/kpi/vendedor", methods=["GET"])
+@funcionario_required
 def kpi_vendedor():
     """Retorna os indicadores cruciais para o Vendedor (Metas, Positivação, Foco)"""
     try:
         from sqlalchemy import text
 
-        vendedor_id = request.args.get("vendedor_id")
-        if not vendedor_id:
-            return jsonify({"status": "error", "message": "vendedor_id é obrigatório"}), 400
+        vendedor_id = _vendedor_id()
+        estab_id = _estab_id()
+        if not vendedor_id or not estab_id:
+            return jsonify({"status": "error", "message": "Contexto de vendedor/estabelecimento ausente"}), 400
 
         hoje = datetime.now(timezone.utc).date()
         ano, mes = hoje.year, hoje.month
 
-        # 1. Meta do Vendedor (raw SQL para evitar filtro automático de tenant)
+        # 1. Meta do Vendedor (raw SQL sempre restrito ao tenant)
         meta_row = db.session.execute(
-            text("SELECT meta_faturamento, meta_positivacao FROM metas_vendedor WHERE vendedor_id = :vid AND mes = :mes AND ano = :ano LIMIT 1"),
-            {"vid": vendedor_id, "mes": mes, "ano": ano}
+            text("SELECT meta_faturamento, meta_positivacao FROM metas_vendedor WHERE vendedor_id = :vid AND mes = :mes AND ano = :ano AND estabelecimento_id = :eid LIMIT 1"),
+            {"vid": vendedor_id, "mes": mes, "ano": ano, "eid": estab_id}
         ).mappings().first()
 
         meta_faturamento = float(meta_row["meta_faturamento"]) if meta_row else 0.0
@@ -133,12 +186,13 @@ def kpi_vendedor():
                 SELECT id, total, cliente_id
                 FROM pedidos_venda
                 WHERE vendedor_id = :vid
+                  AND estabelecimento_id = :eid
                   AND EXTRACT(month FROM data_emissao) = :mes
                   AND EXTRACT(year FROM data_emissao) = :ano
                   AND status != 'cancelado'
                   AND (deleted_at IS NULL)
             """),
-            {"vid": vendedor_id, "mes": mes, "ano": ano}
+            {"vid": vendedor_id, "mes": mes, "ano": ano, "eid": estab_id}
         ).mappings().all()
 
         faturamento_realizado = sum(float(p["total"]) for p in pedidos_rows)
@@ -150,9 +204,9 @@ def kpi_vendedor():
                 SELECT COUNT(c.id) as total
                 FROM clientes c
                 JOIN rotas r ON c.rota_id = r.id
-                WHERE r.vendedor_id = :vid AND (c.deleted_at IS NULL)
+                WHERE r.vendedor_id = :vid AND c.estabelecimento_id = :eid AND (c.deleted_at IS NULL)
             """),
-            {"vid": vendedor_id}
+            {"vid": vendedor_id, "eid": estab_id}
         ).mappings().first()
         base_clientes = int(base_row["total"]) if base_row else 0
 
@@ -166,9 +220,10 @@ def kpi_vendedor():
             text("""
                 SELECT pf.produto_id
                 FROM produtos_foco pf
-                WHERE pf.data_inicio <= :hoje AND pf.data_fim >= :hoje AND pf.ativo = TRUE
+                WHERE pf.data_inicio <= :hoje AND pf.data_fim >= :hoje
+                  AND pf.ativo = TRUE AND pf.estabelecimento_id = :eid
             """),
-            {"hoje": hoje}
+            {"hoje": hoje, "eid": estab_id}
         ).mappings().all()
 
         foco_vendido = 0.0
@@ -180,12 +235,13 @@ def kpi_vendedor():
                     FROM pedido_venda_itens pvi
                     JOIN pedidos_venda pv ON pv.id = pvi.pedido_id
                     WHERE pv.vendedor_id = :vid
+                      AND pv.estabelecimento_id = :eid
                       AND EXTRACT(month FROM pv.data_emissao) = :mes
                       AND EXTRACT(year FROM pv.data_emissao) = :ano
                       AND pv.status != 'cancelado'
                       AND pvi.produto_id IN ({foco_ids})
                 """),
-                {"vid": vendedor_id, "mes": mes, "ano": ano}
+                {"vid": vendedor_id, "mes": mes, "ano": ano, "eid": estab_id}
             ).mappings().first()
             foco_vendido = float(itens_foco["total"]) if itens_foco else 0.0
 
@@ -195,11 +251,11 @@ def kpi_vendedor():
                 SELECT pv.id, pv.codigo, pv.total, pv.status, pv.data_emissao, c.nome as cliente_nome
                 FROM pedidos_venda pv
                 LEFT JOIN clientes c ON c.id = pv.cliente_id
-                WHERE pv.vendedor_id = :vid AND (pv.deleted_at IS NULL)
+                WHERE pv.vendedor_id = :vid AND pv.estabelecimento_id = :eid AND (pv.deleted_at IS NULL)
                 ORDER BY pv.data_emissao DESC
                 LIMIT 10
             """),
-            {"vid": vendedor_id}
+            {"vid": vendedor_id, "eid": estab_id}
         ).mappings().all()
 
         return jsonify({
@@ -235,12 +291,16 @@ def kpi_vendedor():
 #  SYNC PEDIDOS (POST — Vendedor envia pedidos)
 # ─────────────────────────────────────────────
 @bp.route("/sfa/sync-pedidos", methods=["POST"])
+@funcionario_required
 def sync_pedidos():
     """Recebe pedidos feitos offline (Pré-Venda) e persiste no banco."""
     try:
-        data = request.json
+        data = request.json or {}
         pedidos = data.get("pedidos", [])
         estab_id = _estab_id()
+        vendedor_token = _vendedor_id()
+        if not estab_id:
+            return jsonify({"status": "error", "message": "Contexto de estabelecimento ausente"}), 400
 
         synced = []
         for p_data in pedidos:
@@ -248,17 +308,20 @@ def sync_pedidos():
 
             if offline_uuid:
                 existente = db.session.execute(
-                    db.text("SELECT id, codigo FROM pedidos_venda WHERE offline_uuid = :uuid LIMIT 1"),
-                    {"uuid": offline_uuid}
+                    db.text("SELECT id, codigo FROM pedidos_venda WHERE offline_uuid = :uuid AND estabelecimento_id = :eid LIMIT 1"),
+                    {"uuid": offline_uuid, "eid": estab_id}
                 ).mappings().first()
                 if existente:
                     synced.append(existente["codigo"])
                     continue
 
+            # vendedor sempre o do token; admin/gerente pode lançar em nome de outro (?vendedor_id)
+            vendedor_id = p_data.get("vendedor_id") if _is_privileged() else vendedor_token
+
             novo_pedido = PedidoVenda(
-                estabelecimento_id=estab_id or p_data.get("estabelecimento_id"),
+                estabelecimento_id=estab_id,
                 cliente_id=p_data.get("cliente_id"),
-                vendedor_id=p_data.get("vendedor_id"),
+                vendedor_id=vendedor_id,
                 codigo=p_data.get("codigo", f"PED-SFA-{int(datetime.utcnow().timestamp())}"),
                 status="pendente",
                 subtotal=p_data.get("subtotal", 0),
@@ -298,12 +361,16 @@ def sync_pedidos():
 #  PEDIDOS DO VENDEDOR (Listagem e Detalhes)
 # ─────────────────────────────────────────────
 @bp.route("/sfa/pedidos", methods=["GET"])
+@funcionario_required
 def listar_pedidos_vendedor():
     """Lista pedidos do vendedor com filtro de status."""
     try:
         from sqlalchemy import text
-        vendedor_id = request.args.get("vendedor_id")
+        vendedor_id = _vendedor_id()
+        estab_id = _estab_id()
         status = request.args.get("status")
+        if not estab_id:
+            return jsonify({"status": "error", "message": "Contexto de estabelecimento ausente"}), 400
 
         sql = """
             SELECT pv.id, pv.codigo, pv.total, pv.status, pv.data_emissao,
@@ -311,9 +378,9 @@ def listar_pedidos_vendedor():
                    c.nome as cliente_nome
             FROM pedidos_venda pv
             LEFT JOIN clientes c ON c.id = pv.cliente_id
-            WHERE pv.vendedor_id = :vid AND (pv.deleted_at IS NULL)
+            WHERE pv.vendedor_id = :vid AND pv.estabelecimento_id = :eid AND (pv.deleted_at IS NULL)
         """
-        params = {"vid": vendedor_id}
+        params = {"vid": vendedor_id, "eid": estab_id}
         if status:
             sql += " AND pv.status = :status"
             params["status"] = status
@@ -326,33 +393,101 @@ def listar_pedidos_vendedor():
 
 
 @bp.route("/sfa/pedidos/<int:pedido_id>/aprovar", methods=["POST"])
+@gerente_ou_admin_required
 def aprovar_pedido(pedido_id):
-    """Backoffice aprova o pedido, reserva limite de crédito e abate estoque."""
+    """Aprova o pedido do vendedor e o transforma em Venda real:
+    valida crédito, baixa estoque, cria Venda + itens e gera Conta(s) a Receber
+    conforme a condição de pagamento. Idempotente por pedido."""
     try:
         pedido = PedidoVenda.query.get(pedido_id)
         if not pedido:
             return jsonify({"status": "error", "message": "Pedido não encontrado"}), 404
 
-        if pedido.status != "pendente":
-            return jsonify({"status": "error", "message": f"Pedido já está {pedido.status}"}), 400
+        # Idempotência: pedido já faturado não refatura.
+        if pedido.status == "faturado":
+            return jsonify({"status": "success", "message": "Pedido já faturado", "pedido": pedido.to_dict()}), 200
+        if pedido.status == "cancelado":
+            return jsonify({"status": "error", "message": "Pedido cancelado não pode ser aprovado"}), 400
+        if not pedido.itens:
+            return jsonify({"status": "error", "message": "Pedido sem itens"}), 400
 
-        cliente = Cliente.query.get(pedido.cliente_id)
+        estab_id = pedido.estabelecimento_id
+        cliente = Cliente.query.get(pedido.cliente_id) if pedido.cliente_id else None
+
+        # 1. Validação de crédito (fiado a prazo consome limite do cliente)
         if cliente:
             limite_disponivel = float(cliente.limite_credito or 0) - float(cliente.saldo_devedor or 0)
             if float(pedido.total) > limite_disponivel:
-                return jsonify({"status": "error", "message": "Limite de crédito excedido"}), 400
-            cliente.saldo_devedor = float(cliente.saldo_devedor or 0) + float(pedido.total)
+                return jsonify({"status": "error",
+                                "message": f"Limite de crédito excedido. Disponível: R$ {limite_disponivel:.2f}, pedido: R$ {float(pedido.total):.2f}"}), 400
 
+        agora = datetime.utcnow()
+        codigo_venda = f"VD-SFA-{pedido.id}-{int(agora.timestamp())}"
+
+        # 2. Cria a Venda (faturamento) vinculada ao vendedor do pedido
+        venda = Venda(
+            estabelecimento_id=estab_id,
+            cliente_id=pedido.cliente_id,
+            funcionario_id=pedido.vendedor_id,
+            codigo=codigo_venda,
+            subtotal=pedido.subtotal or pedido.total,
+            desconto=pedido.desconto or Decimal("0"),
+            total=pedido.total,
+            status="finalizada",
+            tipo_venda="sfa",
+            quantidade_itens=len(pedido.itens),
+            observacoes=f"Faturamento do pedido SFA {pedido.codigo}",
+            data_venda=agora,
+        )
+        db.session.add(venda)
+        db.session.flush()  # obtém venda.id
+
+        # 3. Itens da venda + baixa de estoque (valida disponibilidade)
         for item in pedido.itens:
             produto = Produto.query.get(item.produto_id)
-            if produto:
-                produto.movimentar_estoque(float(item.quantidade), "saida", f"Pedido {pedido.codigo}", pedido.vendedor_id)
+            if not produto:
+                return jsonify({"status": "error", "message": f"Produto {item.produto_id} não encontrado"}), 400
+            VendaService.atualizar_estoque(
+                produto_id=produto.id, quantidade=Decimal(str(item.quantidade)),
+                venda_id=venda.id, estabelecimento_id=estab_id,
+                funcionario_id=pedido.vendedor_id, data_venda=agora, codigo_venda=codigo_venda)
+            db.session.add(VendaItem(
+                estabelecimento_id=estab_id, venda_id=venda.id, produto_id=produto.id,
+                produto_nome=produto.nome, produto_codigo=produto.codigo_interno,
+                produto_unidade=produto.unidade_medida,
+                quantidade=item.quantidade, preco_unitario=item.preco_unitario,
+                desconto=item.desconto or Decimal("0"), total_item=item.total_item,
+                custo_unitario=produto.preco_custo))
 
+        # 4. Conta(s) a Receber conforme a condição de pagamento
+        parcelas = _parcelas_condicao(pedido.condicao_pagamento, pedido.total, agora)
+        for i, (valor, venc) in enumerate(parcelas, start=1):
+            db.session.add(ContaReceber(
+                estabelecimento_id=estab_id, cliente_id=pedido.cliente_id, venda_id=venda.id,
+                numero_documento=f"DUP-{codigo_venda}-{i}/{len(parcelas)}",
+                valor_original=valor, valor_atual=valor,
+                data_emissao=agora.date(), data_vencimento=venc, status="aberto",
+                observacoes=f"Pedido SFA {pedido.codigo} - parcela {i}/{len(parcelas)} ({pedido.condicao_pagamento or 'à vista'})"))
+
+        # 5. Atualiza saldo devedor e métricas do cliente
+        if cliente:
+            cliente.saldo_devedor = float(cliente.saldo_devedor or 0) + float(pedido.total)
+            VendaService.atualizar_metricas_cliente(cliente.id, Decimal(str(pedido.total)), agora)
+
+        # 6. Fecha o ciclo do pedido
         pedido.status = "faturado"
+        pedido.observacoes = (pedido.observacoes or "") + f" | Faturado como {codigo_venda}"
         db.session.commit()
-        return jsonify({"status": "success", "message": "Pedido aprovado e faturado"}), 200
+
+        return jsonify({"status": "success", "message": "Pedido aprovado e faturado",
+                        "data": {"venda_codigo": codigo_venda, "venda_id": venda.id,
+                                 "parcelas": len(parcelas), "total": float(pedido.total)}}), 200
+    except EstoqueInsuficienteError as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         db.session.rollback()
+        import traceback; traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -360,9 +495,12 @@ def aprovar_pedido(pedido_id):
 #  SFA MANAGEMENT (ADMIN — Gestão de Rotas/Metas)
 # ─────────────────────────────────────────────
 @bp.route("/sfa/admin/metas", methods=["GET", "POST"])
+@gerente_ou_admin_required
 def admin_metas():
     try:
-        estabelecimento_id = getattr(g, "estabelecimento_id", None) or request.args.get("estabelecimento_id", 1)
+        estabelecimento_id = _estab_id()
+        if not estabelecimento_id:
+            return jsonify({"status": "error", "message": "Contexto de estabelecimento ausente"}), 400
 
         if request.method == "POST":
             data = request.json
@@ -403,9 +541,12 @@ def admin_metas():
 
 
 @bp.route("/sfa/admin/rotas", methods=["GET", "POST", "PUT"])
+@gerente_ou_admin_required
 def admin_rotas():
     try:
-        estabelecimento_id = getattr(g, "estabelecimento_id", None) or request.args.get("estabelecimento_id", 1)
+        estabelecimento_id = _estab_id()
+        if not estabelecimento_id:
+            return jsonify({"status": "error", "message": "Contexto de estabelecimento ausente"}), 400
 
         if request.method in ("POST", "PUT"):
             data = request.json
@@ -439,8 +580,12 @@ def admin_rotas():
 
 
 @bp.route("/sfa/admin/rotas/<int:rota_id>", methods=["DELETE"])
-def delete_rota(rota_id):
+@bp.route("/sfa/admin/rotas", methods=["DELETE"])
+@gerente_ou_admin_required
+def delete_rota(rota_id=None):
     try:
+        if rota_id is None:
+            rota_id = request.args.get("id", type=int)
         rota = Rota.query.get(rota_id)
         if not rota:
             return jsonify({"status": "error", "message": "Rota não encontrada"}), 404
@@ -453,9 +598,13 @@ def delete_rota(rota_id):
 
 
 @bp.route("/sfa/admin/focos", methods=["GET", "POST"])
+@bp.route("/sfa/admin/produtos-foco", methods=["GET", "POST"])
+@gerente_ou_admin_required
 def admin_focos():
     try:
-        estabelecimento_id = getattr(g, "estabelecimento_id", None) or request.args.get("estabelecimento_id", 1)
+        estabelecimento_id = _estab_id()
+        if not estabelecimento_id:
+            return jsonify({"status": "error", "message": "Contexto de estabelecimento ausente"}), 400
 
         if request.method == "POST":
             data = request.json
@@ -479,8 +628,12 @@ def admin_focos():
 
 
 @bp.route("/sfa/admin/focos/<int:foco_id>", methods=["DELETE"])
-def delete_foco(foco_id):
+@bp.route("/sfa/admin/produtos-foco", methods=["DELETE"])
+@gerente_ou_admin_required
+def delete_foco(foco_id=None):
     try:
+        if foco_id is None:
+            foco_id = request.args.get("id", type=int)
         foco = ProdutoFoco.query.get(foco_id)
         if not foco:
             return jsonify({"status": "error", "message": "Foco não encontrado"}), 404
@@ -493,8 +646,10 @@ def delete_foco(foco_id):
 
 
 @bp.route("/sfa/tabelas", methods=["GET"])
+@funcionario_required
 def get_tabelas():
     try:
+        # TenantQuery já restringe ao estabelecimento do token.
         tabelas = TabelaPreco.query.all()
         return jsonify({"status": "success", "data": [t.to_dict() for t in tabelas]}), 200
     except Exception as e:
@@ -502,9 +657,11 @@ def get_tabelas():
 
 
 @bp.route("/sfa/rotas", methods=["GET"])
+@funcionario_required
 def get_rotas():
     try:
-        vendedor_id = request.args.get("vendedor_id")
+        # Vendedor vê apenas as próprias rotas; admin/gerente pode filtrar por ?vendedor_id.
+        vendedor_id = _vendedor_id()
         q = Rota.query
         if vendedor_id:
             q = q.filter_by(vendedor_id=vendedor_id)

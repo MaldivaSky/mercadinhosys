@@ -1079,7 +1079,7 @@ class CatalogoMestre(db.Model):
 # ------------------------------------------------------------------------------
 # SFA (Sales Force Automation) e Distribuidora
 # ------------------------------------------------------------------------------
-class ProdutoFoco(db.Model, MultiTenantMixin):
+class ProdutoFoco(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "produtos_foco"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
@@ -1088,8 +1088,14 @@ class ProdutoFoco(db.Model, MultiTenantMixin):
     data_fim = db.Column(db.Date, nullable=False)
     meta_quantidade = db.Column(db.Integer, default=0)
     ativo = db.Column(db.Boolean, default=True)
+    produto = db.relationship("Produto")
 
-class MetaVendedor(db.Model, MultiTenantMixin):
+    def to_dict(self, depth=0):
+        data = super().to_dict(depth=depth)
+        data["produto_nome"] = self.produto.nome if self.produto else None
+        return data
+
+class MetaVendedor(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "metas_vendedor"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
@@ -1098,7 +1104,14 @@ class MetaVendedor(db.Model, MultiTenantMixin):
     ano = db.Column(db.Integer, nullable=False)
     meta_faturamento = db.Column(db.Numeric(19, 4), default=0)
     meta_positivacao = db.Column(db.Integer, default=0) # numero de clientes a atender
-    
+    vendedor = db.relationship("Funcionario")
+
+    def to_dict(self, depth=0):
+        data = super().to_dict(depth=depth)
+        data["meta_faturamento"] = float(self.meta_faturamento or 0)
+        data["vendedor_nome"] = self.vendedor.nome if self.vendedor else None
+        return data
+
 class TabelaPreco(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
     __tablename__ = "tabelas_preco"
     id = db.Column(db.Integer, primary_key=True)
