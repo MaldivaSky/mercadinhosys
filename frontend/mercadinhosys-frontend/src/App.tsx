@@ -10,8 +10,13 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SuperAdminProvider } from './contexts/SuperAdminContext';
 import { Toaster } from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useGlobalOverlayScrollLock } from './hooks/useBodyScrollLock';
 
 const App: React.FC = () => {
+  // Trava automaticamente o scroll do body sempre que qualquer modal "fixed inset-0"
+  // estiver montado em qualquer lugar do app — cobre todos os modais do sistema.
+  useGlobalOverlayScrollLock();
+
   return (
     <ErrorBoundary name="MercadinhoSys Global">
       <SuperAdminProvider>

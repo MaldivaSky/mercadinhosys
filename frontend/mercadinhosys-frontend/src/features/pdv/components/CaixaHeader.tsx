@@ -46,13 +46,13 @@ const CaixaHeader: React.FC<CaixaHeaderProps> = ({
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-800 dark:to-blue-900 text-white rounded-xl shadow-lg p-4 md:p-6 mb-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 {/* Informações do Caixa */}
-                <div className="flex items-center space-x-4">
-                    <div className="p-4 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm">
+                <div className="flex items-center space-x-4 min-w-0 w-full md:w-auto">
+                    <div className="p-4 bg-white bg-opacity-20 rounded-xl backdrop-blur-sm flex-shrink-0">
                         <User className="w-8 h-8" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-xl md:text-2xl font-bold truncate max-w-[200px] md:max-w-none">
+                            <h2 className="text-xl md:text-2xl font-bold truncate max-w-[65vw] md:max-w-none">
                                 {funcionarioNome}
                             </h2>
                             {funcionarioRole && (

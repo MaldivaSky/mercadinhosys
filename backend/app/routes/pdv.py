@@ -1503,6 +1503,22 @@ def obter_comprovante_venda(venda_id):
             if config_data:
                 logo_url = config_data.get("logo_base64") or config_data.get("logo_url")
 
+        # Valor aproximado dos tributos (Lei da Transparência Fiscal, 12.741/2012):
+        # soma das alíquotas cadastradas por produto (ICMS + PIS + COFINS) aplicada
+        # sobre o valor de cada item. É uma estimativa — a lei exige apenas o valor
+        # aproximado, não o cálculo fiscal exato do documento autorizado.
+        itens_venda_raw = get_venda_itens_safe(venda_id)
+        valor_tributos = sum(
+            float(it.get("total_item") or 0) * (
+                float(it.get("icms_aliquota") or 0)
+                + float(it.get("pis_aliquota") or 0)
+                + float(it.get("cofins_aliquota") or 0)
+            ) / 100
+            for it in itens_venda_raw
+        )
+        subtotal_venda = float(venda_data.get("subtotal") or 0)
+        percentual_tributos = (valor_tributos / subtotal_venda * 100) if subtotal_venda > 0 else 0
+
         comprovante = {
             "funcionario": "Operador Balcão",
             "cliente": nome_cliente,
@@ -1515,7 +1531,7 @@ def obter_comprovante_venda(venda_id):
                     "preco_unitario": float(it.get("preco_unitario") or 0),
                     "total": float(it.get("total_item") or 0)
                 }
-                for it in get_venda_itens_safe(venda_id)
+                for it in itens_venda_raw
             ],
             "subtotal": float(venda_data.get("subtotal") or 0),
             "desconto": float(desconto_geral) if (desconto_geral := venda_data.get("desconto")) else 0.0,
@@ -1524,6 +1540,8 @@ def obter_comprovante_venda(venda_id):
             "valor_recebido": float(venda_data.get("valor_recebido") or 0),
             "troco": float(venda_data.get("troco") or 0),
             "rodape": "Obrigado pela preferência!",
+            "valor_tributos": round(valor_tributos, 2),
+            "percentual_tributos": round(percentual_tributos, 2),
         }
 
         # Melhoria na extração e formatação da data (Paridade Masterclass)

@@ -460,13 +460,14 @@ def get_venda_itens_safe(venda_id):
         db = _get_db()
         sql = """
             SELECT vi.id, vi.produto_id, vi.quantidade, vi.preco_unitario, vi.total_item,
-                   p.nome as produto_nome, p.codigo_barras
+                   p.nome as produto_nome, p.codigo_barras,
+                   p.icms_aliquota, p.pis_aliquota, p.cofins_aliquota
             FROM venda_itens vi
             JOIN produtos p ON vi.produto_id = p.id
             WHERE vi.venda_id = :vid
         """
         rows = db.session.execute(text(sql), {"vid": venda_id}).fetchall()
-        
+
         return [
             {
                 "id": r[0],
@@ -475,7 +476,10 @@ def get_venda_itens_safe(venda_id):
                 "preco_unitario": r[3],
                 "total_item": r[4],
                 "produto_nome": r[5],
-                "produto_codigo": r[6]
+                "produto_codigo": r[6],
+                "icms_aliquota": float(r[7] or 0),
+                "pis_aliquota": float(r[8] or 0),
+                "cofins_aliquota": float(r[9] or 0),
             }
             for r in rows
         ]

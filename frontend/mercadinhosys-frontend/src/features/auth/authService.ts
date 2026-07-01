@@ -220,7 +220,8 @@ class AuthService {
             'estabelecimento_data',
             'current_estabelecimento_id',
             'theme',
-            'preferencias_usuario'
+            'preferencias_usuario',
+            'pdv_sessions_v1'
         ];
 
         keysToRemove.forEach(key => {

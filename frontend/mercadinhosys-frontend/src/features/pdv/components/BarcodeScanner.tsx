@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Camera, X, Scan, Keyboard, AlertCircle, CheckCircle2, Smartphone } from 'lucide-react';
 import Quagga from '@ericblade/quagga2';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface BarcodeScannerProps {
     onScan: (codigo: string) => void;
@@ -18,6 +19,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose }) => {
     const scannerRef = useRef<HTMLDivElement>(null);
     const lastScanTimeRef = useRef<number>(0);
     const lastScanRef = useRef<string | null>(null);
+
+    // Este componente só é montado enquanto o scanner estiver aberto (sem prop isOpen),
+    // então trava o scroll do fundo durante toda a vida do componente.
+    useBodyScrollLock(true);
 
     // Cleanup Quagga
     const pararCamera = useCallback(async () => {

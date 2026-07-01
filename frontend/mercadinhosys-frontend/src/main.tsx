@@ -34,8 +34,17 @@ function ErrorFallback() {
 }
 
 // StrictMode removido — causava dupla execução de useEffect (dobrava chamadas de API)
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-    <App />
-  </Sentry.ErrorBoundary>
-);
+const container = document.getElementById('root')!;
+
+// Guarda contra dupla montagem: em PWA com service worker, uma navegação/reload
+// disparado antes do documento anterior terminar de descarregar pode fazer este
+// módulo rodar duas vezes, criando duas raízes React no mesmo container (o app
+// inteiro renderiza duplicado, sobreposto, na tela).
+if (!(container as any)._mercadinhoRootMounted) {
+  (container as any)._mercadinhoRootMounted = true;
+  ReactDOM.createRoot(container).render(
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+      <App />
+    </Sentry.ErrorBoundary>
+  );
+}
