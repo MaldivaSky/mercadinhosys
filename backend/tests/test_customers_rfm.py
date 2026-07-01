@@ -5,6 +5,12 @@ from app.models import Funcionario
 
 def test_clientes_rfm_retorna_200_sem_explodir(client, app, session):
     with app.app_context():
+        # Espelha tenant autenticado: sem g, o guard fail-closed filtra por -1.
+        from flask import g, has_request_context
+        from app.models import Estabelecimento
+        _estab = Estabelecimento.query.first()
+        if has_request_context() and _estab:
+            g.estabelecimento_id = _estab.id
         admin = Funcionario.query.filter_by(ativo=True).first()
         assert admin is not None
         token = create_access_token(

@@ -12,6 +12,10 @@ def test_venda_entrega_multi_pagamento_sucesso(client, session):
     """Testa venda com entrega e múltiplos pagamentos atomicamente."""
     # Use existing Estabelecimento + Funcionario from conftest session fixture
     estab = session.query(Estabelecimento).first()
+    # Espelha tenant autenticado: sem g, o guard fail-closed filtra por -1.
+    from flask import g, has_request_context
+    if has_request_context():
+        g.estabelecimento_id = estab.id
     admin = session.query(Funcionario).filter_by(estabelecimento_id=estab.id).first()
 
     cat = CategoriaProduto(nome="Geral", estabelecimento_id=estab.id)

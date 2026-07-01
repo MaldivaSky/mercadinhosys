@@ -12,7 +12,12 @@ from app.models import Funcionario, Estabelecimento, Auditoria
 
 
 def test_login_gera_evento_de_auditoria(client, session):
+    from flask import g, has_request_context
     estab = session.query(Estabelecimento).first()
+    # Espelha tenant autenticado no corpo do teste: a consulta ao evento de
+    # auditoria (Auditoria tem estabelecimento_id) é filtrada por tenant.
+    if has_request_context():
+        g.estabelecimento_id = estab.id
 
     user = Funcionario(
         estabelecimento_id=estab.id,

@@ -113,6 +113,10 @@ def test_cloud_receiver_processa_payload_json_fallback(session):
 
     assert _process_sync_data(data, session) is True
 
+    # Espelha tenant autenticado: Despesa tem estabelecimento_id e é filtrada.
+    from flask import g, has_request_context
+    if has_request_context():
+        g.estabelecimento_id = estab.id
     despesa = session.query(Despesa).filter_by(id=9001).first()
     assert despesa is not None
     assert despesa.descricao == "Internet Fibra"

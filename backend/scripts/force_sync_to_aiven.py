@@ -91,8 +91,15 @@ def force_sync(app=None, silent=False):
     TABLES = [
         "estabelecimentos", "fornecedores", "categorias_produto",
         "funcionarios", "configuracoes", "configuracoes_horario",
+        # SFA: tabelas de preço e rotas ANTES de clientes — clientes referenciam
+        # rota_id e tabela_preco_id, então precisam existir no destino primeiro.
+        "tabelas_preco", "rotas",
         "clientes", "produtos", "produto_lotes", "estoque_lotes",
+        # SFA: dependem de produtos/funcionarios (já sincronizados acima).
+        "tabela_preco_itens", "produtos_foco", "metas_vendedor",
         "caixas", "vendas", "venda_itens", "pagamentos",
+        # SFA: pedidos da força de vendas (dependem de clientes/produtos/funcionarios).
+        "pedidos_venda", "pedido_venda_itens",
         "movimentacao_estoque", "despesas", "contas_pagar", "contas_receber",
         "fiados", "registros_ponto", "movimentacoes_caixa",
         "pedidos_compra", "pedidos_compra_itens",

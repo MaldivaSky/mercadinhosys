@@ -9,7 +9,12 @@ from app.models import db, Estabelecimento, Funcionario
 
 
 def _admin(session):
+    from flask import g, has_request_context
     estab = session.query(Estabelecimento).first()
+    # Espelha um request autenticado: sem tenant em g, o guard multi-tenant
+    # (fail-closed) filtra as queries por estabelecimento_id = -1 e o seed some.
+    if has_request_context():
+        g.estabelecimento_id = estab.id
     func = session.query(Funcionario).filter_by(estabelecimento_id=estab.id).first()
     func.nivel_acesso = 1  # admin (em produção já é 1; conftest cria como 3)
     db.session.commit()
