@@ -15,6 +15,7 @@ const allMenuItems = [
     { to: '/pdv?manage=true', icon: DollarSign, label: 'Caixa' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/sfa', icon: MapPin, label: 'SFA (Externo)' },
+    { to: '/sfa/gestao', icon: MapPin, label: 'Gestão SFA' },
     { to: '/delivery', icon: Navigation, label: 'Entregas' },
     { to: '/fiscal', icon: Receipt, label: 'Fiscal' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },

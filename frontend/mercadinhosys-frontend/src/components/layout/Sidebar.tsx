@@ -34,6 +34,7 @@ const menuItems = [
     { to: '/customers', icon: Users, label: 'Clientes' },
     { to: '/sales', icon: CreditCard, label: 'Vendas' },
     { to: '/sfa', icon: MapPin, label: 'Força de Vendas' },
+    { to: '/sfa/gestao', icon: MapPin, label: 'Gestão SFA' },
     { to: '/delivery', icon: Navigation, label: 'Logística & Entregas' },
     { to: '/expenses', icon: FileText, label: 'Despesas' },
     { to: '/fiscal', icon: Receipt, label: 'Fiscal' },
@@ -88,13 +89,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                         }
 
                         if (role === 'estoquista') {
-                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings', '/delivery', '/sfa'];
+                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings', '/delivery'];
+                            return permitidos.includes(item.to);
+                        }
+
+                        if (role === 'vendedor') {
+                            const permitidos = ['/sfa'];
                             return permitidos.includes(item.to);
                         }
 
                         // Funcionário genérico?
                         if (role === 'funcionario') {
-                            const bloqueados = ['/sales', '/expenses', '/employees', '/rh', '/ponto-relatorios', '/ponto-diagnostico', '/reports'];
+                            const bloqueados = ['/sales', '/expenses', '/employees', '/rh', '/ponto-relatorios', '/ponto-diagnostico', '/reports', '/sfa/gestao'];
                             return !bloqueados.includes(item.to);
                         }
 

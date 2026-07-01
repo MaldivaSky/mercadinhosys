@@ -486,7 +486,7 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
     pin_cancelamento = db.Column(db.String(255))  # Hash do PIN numérico (4 a 6 dígitos) para cancelamentos/estornos
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
-    # nivel_acesso: 1=Admin, 2=Gerente, 3=Caixa, 4=Estoque, 5=RH, 6=Entregador
+    # nivel_acesso: 1=Admin, 2=Gerente, 3=Caixa, 4=Estoque, 5=RH, 6=Entregador, 7=Vendedor
     nivel_acesso = db.Column(db.Integer, default=3)
     status = db.Column(db.String(20), default="ativo")
     is_super_admin = db.Column(db.Boolean, default=False)
