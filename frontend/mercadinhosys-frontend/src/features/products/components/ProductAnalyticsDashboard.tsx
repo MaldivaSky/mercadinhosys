@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatters';
 import { Produto } from '../../../types';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 interface ProductAnalyticsDashboardProps {
     produtos: Produto[];
@@ -70,6 +71,52 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
         icon: any, 
         theme: { header: string, text: string, button: string, stroke: string, shadow: string } 
     } | null>(null);
+
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#a855f7', '#6366f1', '#ec4899'];
+
+    // Data para o gráfico do modal (Composição por Categoria)
+    const getModalChartData = () => {
+        if (!activeMetricModal || !produtos) return [];
+        const categorias: any = {};
+        let dataToProcess = produtos;
+
+        if (activeMetricModal.id === 'normal') {
+            dataToProcess = produtos.filter(p => (p.quantidade || 0) > (p.quantidade_minima || 0) && p.estoque_status !== 'esgotado');
+        } else if (activeMetricModal.id === 'baixo') {
+            dataToProcess = produtos.filter(p => (p.quantidade || 0) <= (p.quantidade_minima || 0) && (p.quantidade || 0) > 0);
+        } else if (activeMetricModal.id === 'esgotado') {
+            dataToProcess = produtos.filter(p => (p.quantidade || 0) === 0 || p.estoque_status === 'esgotado');
+        }
+
+        dataToProcess.forEach(p => {
+            const cat = p.categoria || 'Sem Categoria';
+            if (!categorias[cat]) {
+                if (activeMetricModal.id === 'margem') categorias[cat] = { sum: 0, count: 0 };
+                else categorias[cat] = 0;
+            }
+            
+            if (activeMetricModal.id === 'valor') {
+                categorias[cat] += ((p.quantidade || 0) * (p.preco_custo || 0));
+            } else if (activeMetricModal.id === 'margem') {
+                categorias[cat].sum += (p.margem_lucro || 0);
+                categorias[cat].count += 1;
+            } else {
+                categorias[cat] += 1;
+            }
+        });
+
+        if (activeMetricModal.id === 'margem') {
+            return Object.keys(categorias).map(cat => ({
+                name: cat,
+                value: categorias[cat].count > 0 ? (categorias[cat].sum / categorias[cat].count) : 0
+            })).sort((a, b) => b.value - a.value).slice(0, 6);
+        }
+
+        return Object.keys(categorias).map(cat => ({
+            name: cat,
+            value: categorias[cat]
+        })).sort((a, b) => b.value - a.value).slice(0, 6);
+    };
 
     useEffect(() => {
         // Se não tiver produtos E não tiver stats do backend, limpa tudo
@@ -824,15 +871,59 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="h-[200px] w-full flex flex-col items-center justify-center text-center gap-3 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
-                                <BarChart3 className="w-10 h-10 text-gray-300 dark:text-gray-600" />
-                                <p className="font-bold text-gray-500 dark:text-gray-400 max-w-md px-6">
-                                    O histórico diário deste indicador ainda não é registrado.
-                                </p>
-                                <p className="text-xs text-gray-400 max-w-md px-6">
-                                    Mostramos apenas o valor atual, apurado em tempo real. A série temporal será exibida
-                                    quando a captura histórica estiver ativa — sem números simulados.
-                                </p>
+                            <div className="h-[250px] w-full mt-6">
+                                {getModalChartData().length > 0 ? (
+                                    <>
+                                        <p className="text-center text-sm font-bold text-gray-500 uppercase mb-4">
+                                            {activeMetricModal.id === 'margem' ? 'Margem Média por Categoria' : 
+                                             activeMetricModal.id === 'valor' ? 'Valor por Categoria' : 
+                                             'Distribuição por Categoria'}
+                                        </p>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            {activeMetricModal.id === 'margem' || activeMetricModal.id === 'valor' ? (
+                                                <BarChart data={getModalChartData()}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                                    <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                                                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" width={80} 
+                                                        tickFormatter={(val) => activeMetricModal.isCurrency ? formatCurrency(val) : `${val}%`} 
+                                                    />
+                                                    <RechartsTooltip 
+                                                        formatter={(value: any) => [activeMetricModal.isCurrency ? formatCurrency(value) : (activeMetricModal.id === 'margem' ? `${Number(value).toFixed(1)}%` : value), activeMetricModal.id === 'margem' ? 'Margem' : 'Valor']}
+                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    />
+                                                    <Bar dataKey="value" fill={activeMetricModal.theme.stroke} radius={[4, 4, 0, 0]} />
+                                                </BarChart>
+                                            ) : (
+                                                <RechartsPieChart>
+                                                    <Pie
+                                                        data={getModalChartData()}
+                                                        cx="50%"
+                                                        cy="50%"
+                                                        innerRadius={60}
+                                                        outerRadius={80}
+                                                        paddingAngle={5}
+                                                        dataKey="value"
+                                                    >
+                                                        {getModalChartData().map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                        ))}
+                                                    </Pie>
+                                                    <RechartsTooltip 
+                                                        formatter={(value: any) => [value, 'Produtos']}
+                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    />
+                                                </RechartsPieChart>
+                                            )}
+                                        </ResponsiveContainer>
+                                    </>
+                                ) : (
+                                    <div className="h-full w-full flex flex-col items-center justify-center text-center gap-3 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                                        <BarChart3 className="w-10 h-10 text-gray-300 dark:text-gray-600" />
+                                        <p className="font-bold text-gray-500 dark:text-gray-400">
+                                            Sem produtos catalogados no momento para exibir o gráfico.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
