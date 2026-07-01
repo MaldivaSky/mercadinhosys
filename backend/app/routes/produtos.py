@@ -331,6 +331,13 @@ def catalogo_lookup(ean):
         item = CatalogoMestre.query.filter_by(ean=ean_limpo, status="encontrado").first()
         if item:
             return jsonify({"success": True, "source": "catalogo", "data": item.to_dict()}), 200
+        # Cache negativo: EAN já consultado e inexistente NÃO reconsulta o Cosmos
+        # (economiza quota, que é limitada — ver tratamento de 429 abaixo). O
+        # usuário pode forçar um refresh com ?force=true caso o Cosmos atualize.
+        negativo = CatalogoMestre.query.filter_by(ean=ean_limpo, status="nao_encontrado").first()
+        if negativo:
+            return jsonify({"success": False, "source": "catalogo", "code": "nao_encontrado",
+                            "message": "EAN já consultado e ausente na base. Preencha manualmente ou use ?force=true."}), 404
 
     # 2) Fallback Cosmos (se não encontrou localmente, ou se forçou)
     token = os.environ.get("COSMOS_TOKEN") or "MVsiut1dwhg12WGhPuTD9Q"
