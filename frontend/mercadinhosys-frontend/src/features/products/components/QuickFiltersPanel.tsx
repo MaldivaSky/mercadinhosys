@@ -163,7 +163,7 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
                 )}
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+            <div className="flex overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 gap-2 sm:grid sm:grid-cols-4 lg:grid-cols-8 snap-x snap-mandatory hide-scrollbar">
                 {filters.map((filter) => {
                     const isActive = activeFilter === filter.id;
                     const colors = colorClasses[filter.color as keyof typeof colorClasses];
@@ -173,7 +173,7 @@ const QuickFiltersPanel: React.FC<QuickFiltersPanelProps> = ({
                             key={filter.id}
                             onClick={() => onFilterChange(isActive ? null : filter.id)}
                             className={`
-                                p-3 rounded-lg transition-all duration-200 text-left
+                                p-3 rounded-lg transition-all duration-200 text-left min-w-[150px] sm:min-w-0 snap-start flex-shrink-0
                                 ${isActive ? colors.active : `${colors.bg} ${colors.text} ${colors.hover}`}
                                 ${filter.pulse && !isActive ? 'animate-pulse' : ''}
                             `}
