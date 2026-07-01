@@ -41,9 +41,9 @@ class CloudPushScheduler(threading.Thread):
         time.sleep(min(120, self.interval))
         while True:
             try:
-                from scripts.force_sync_to_aiven import force_sync
+                from scripts.robust_sync import robust_sync
                 with self.app.app_context():
-                    res = force_sync(app=self.app, silent=True)
+                    res = robust_sync(silent=True)
                 if res.get("success"):
                     self.app.logger.info(
                         f"[CLOUD PUSH] OK: {res.get('total_registros', 0)} registros enviados ao Aiven."

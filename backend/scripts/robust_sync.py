@@ -6,16 +6,23 @@ linha) quando um lote falhava por FK, travando indefinidamente — e o Aiven nã
 permite `session_replication_role = replica` (avnadmin não é superuser).
 
 Estratégia desta versão:
+- Fonte Agnostica: Lê dados do banco local usando SQLAlchemy (suporta SQLite perfeitamente).
+- Destino Otimizado: Grava dados no Aiven via psycopg2 bulk (execute_values).
 - Ordem por dependência (pais antes de filhos).
 - Para tabelas-filho, carrega os IDs válidos do PAI no Aiven e **descarta órfãos**
   (filhos cujo FK não existe no destino) → o lote nunca falha por FK.
-- Upsert em lote (execute_values) com guarda de updated_at; SEM fallback lento.
-- Cursor server-side no local (sem OFFSET, escala para centenas de milhares).
 """
 import os
+import sys
 import psycopg2
 import psycopg2.extras
 from psycopg2.extras import Json
+
+from sqlalchemy import inspect, text
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 from scripts.force_sync_to_aiven import _parse_url
 
@@ -50,6 +57,27 @@ def _adapt(v):
     return Json(v) if isinstance(v, (dict, list)) else v
 
 
+def _get_local_engine():
+    """Garante que temos o engine do SQLAlchemy ativo, mesmo executado por CLI."""
+    from flask import current_app
+    from app.models import db
+    if current_app:
+        return db.engine
+    
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        return db.engine
+
+
+def _get_local_columns(engine, table):
+    """Retorna as colunas de uma tabela local independente do dialeto."""
+    inspector = inspect(engine)
+    if not inspector.has_table(table):
+        return []
+    return [col['name'] for col in inspector.get_columns(table)]
+
+
 def _cols(cur, table):
     cur.execute(
         "SELECT column_name FROM information_schema.columns WHERE table_name=%s AND table_schema='public'",
@@ -63,15 +91,16 @@ def robust_sync(silent=False):
         if not silent:
             print(m, flush=True)
 
-    local_url = os.environ.get("DATABASE_URL")
     aiven_url = os.environ.get("AIVEN_DATABASE_URL")
-    if not local_url or not aiven_url:
-        return {"success": False, "erro": "DATABASE_URL/AIVEN_DATABASE_URL ausentes"}
+    if not aiven_url:
+        return {"success": False, "erro": "AIVEN_DATABASE_URL ausente"}
 
     try:
-        lconn = psycopg2.connect(**_parse_url(local_url, force_no_ssl=True))
+        # Aiven (Destino) sempre em PostgreSQL via psycopg2
         aconn = psycopg2.connect(**_parse_url(aiven_url))
-        lconn.autocommit = False
+        
+        # Local (Fonte) via SQLAlchemy (suporta SQLite e Postgres)
+        local_engine = _get_local_engine()
     except Exception as e:
         return {"success": False, "erro": f"conexao: {e}"}
 
@@ -94,79 +123,92 @@ def robust_sync(silent=False):
     log(f"  {'Tabela':<26}{'Lidos':>9}{'Enviados':>10}{'Órfãos':>8}")
     log("-" * 58)
 
-    for table, fks in PLAN:
-        if table not in aiven_tables:
-            continue
-        try:
-            lc = lconn.cursor()
-            lcols = _cols(lc, table)
-            ac = aconn.cursor()
-            acols = set(_cols(ac, table))
-            cols = [c for c in lcols if c in acols]
-            if "id" not in cols:
-                lc.close(); ac.close(); continue
-
-            fk_filters = [(c, p) for (c, p) in fks if c in cols and p in aiven_tables]
-            fk_sets = {c: parent_ids(p) for (c, p) in fk_filters}
-
-            has_upd = "updated_at" in cols
-            collist = ", ".join(f'"{c}"' for c in cols)
-            upd = ", ".join(f'"{c}"=EXCLUDED."{c}"' for c in cols if c != "id")
-            conflict = (
-                f'ON CONFLICT (id) DO UPDATE SET {upd} '
-                + (f'WHERE "{table}".updated_at <= EXCLUDED.updated_at' if has_upd else "")
-            ) if upd else "ON CONFLICT (id) DO NOTHING"
-            sql = f'INSERT INTO "{table}" ({collist}) VALUES %s {conflict}'
-
-            scur = lconn.cursor(name=f"srv_{table}", cursor_factory=psycopg2.extras.RealDictCursor)
-            scur.itersize = BATCH
-            scur.execute(f'SELECT {collist} FROM "{table}"')
-
-            lidos = enviados = orfaos = 0
-            batch = []
-
-            def flush(rows):
-                nonlocal enviados
-                if not rows:
-                    return
-                try:
-                    psycopg2.extras.execute_values(ac, sql, rows, page_size=BATCH)
-                    aconn.commit()
-                    enviados += len(rows)
-                except Exception as e:
-                    aconn.rollback()
-                    log(f"    ⚠ lote {table}: {str(e)[:90]}")
-
-            for row in scur:
-                lidos += 1
-                orfao = False
-                for c, valid in fk_sets.items():
-                    v = row[c]
-                    if v is not None and v not in valid:
-                        orfao = True
-                        break
-                if orfao:
-                    orfaos += 1
+    with local_engine.connect() as lconn:
+        for table, fks in PLAN:
+            if table not in aiven_tables:
+                continue
+            try:
+                lcols = _get_local_columns(local_engine, table)
+                if not lcols:
                     continue
-                batch.append(tuple(_adapt(row[c]) for c in cols))
-                if len(batch) >= BATCH:
-                    flush(batch); batch = []
-            flush(batch)
-            scur.close(); lc.close(); ac.close()
+                    
+                ac = aconn.cursor()
+                acols = set(_cols(ac, table))
+                cols = [c for c in lcols if c in acols]
+                if "id" not in cols:
+                    ac.close(); continue
 
-            # invalida cache deste destino (acabou de receber linhas) p/ filhos seguintes
-            parent_ids_cache.pop(table, None)
-            total += enviados
-            log(f"  {table:<26}{lidos:>9}{enviados:>10}{orfaos:>8}")
-        except Exception as e:
-            try: aconn.rollback()
-            except Exception: pass
-            log(f"  ❌ {table}: {str(e)[:120]}")
-            continue
+                fk_filters = [(c, p) for (c, p) in fks if c in cols and p in aiven_tables]
+                fk_sets = {c: parent_ids(p) for (c, p) in fk_filters}
+
+                has_upd = "updated_at" in cols
+                collist = ", ".join(f'"{c}"' for c in cols)
+                upd = ", ".join(f'"{c}"=EXCLUDED."{c}"' for c in cols if c != "id")
+                conflict = (
+                    f'ON CONFLICT (id) DO UPDATE SET {upd} '
+                    + (f'WHERE "{table}".updated_at <= EXCLUDED.updated_at' if has_upd else "")
+                ) if upd else "ON CONFLICT (id) DO NOTHING"
+                sql_bulk = f'INSERT INTO "{table}" ({collist}) VALUES %s {conflict}'
+                placeholders = ", ".join(["%s"] * len(cols))
+                sql_single = f'INSERT INTO "{table}" ({collist}) VALUES ({placeholders}) {conflict}'
+
+                # SQLAlchemy execution (agnostic)
+                result = lconn.execute(text(f'SELECT {collist} FROM "{table}"'))
+                
+                lidos = enviados = orfaos = 0
+                batch = []
+
+                def flush(rows):
+                    nonlocal enviados
+                    if not rows:
+                        return
+                    try:
+                        psycopg2.extras.execute_values(ac, sql_bulk, rows, page_size=BATCH)
+                        aconn.commit()
+                        enviados += len(rows)
+                    except Exception as e:
+                        aconn.rollback()
+                        log(f"    ⚠ lote {table}: {str(e)[:90]} (fallback para linha-a-linha)")
+                        for r in rows:
+                            try:
+                                ac.execute(sql_single, r)
+                                aconn.commit()
+                                enviados += 1
+                            except Exception:
+                                aconn.rollback()
+
+                # Using row mappings to simulate dict access
+                for row_data in result.mappings():
+                    lidos += 1
+                    orfao = False
+                    for c, valid in fk_sets.items():
+                        v = row_data[c]
+                        if v is not None and v not in valid:
+                            orfao = True
+                            break
+                    if orfao:
+                        orfaos += 1
+                        continue
+                    batch.append(tuple(_adapt(row_data[c]) for c in cols))
+                    if len(batch) >= BATCH:
+                        flush(batch); batch = []
+                        
+                flush(batch)
+                ac.close()
+
+                # invalida cache deste destino (acabou de receber linhas) p/ filhos seguintes
+                parent_ids_cache.pop(table, None)
+                total += enviados
+                log(f"  {table:<26}{lidos:>9}{enviados:>10}{orfaos:>8}")
+            except Exception as e:
+                try: aconn.rollback()
+                except Exception: pass
+                log(f"  ❌ {table}: {str(e)[:120]}")
+                continue
 
     log("-" * 58)
     log(f"  TOTAL ENVIADO: {total}")
-    lconn.close(); aconn.close()
+    aconn.close()
     return {"success": True, "total_registros": total}
 
 
