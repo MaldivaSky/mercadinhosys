@@ -2909,254 +2909,28 @@ def obter_estatisticas_produtos():
             total_filtrado = giro_estoque["rapido"]
         elif filtro_rapido == "giro_lento":
             total_filtrado = giro_estoque["lento"]
-            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) < 30]
 
-        # Aplicar filtros de giro em Python usando a fonte ÚNICA de cobertura/VMD
-        if filtro_rapido in ["giro_rapido", "giro_normal", "giro_lento"]:
-            alvo_giro = filtro_rapido.replace("giro_", "")
-            hoje_giro = datetime.now(timezone.utc).date()
-            produtos = [p for p in produtos if classificar_giro_produto(p, hoje_giro) == alvo_giro]
-
-        # CALCULAR ESTATÍSTICAS COM DECIMAL PARA PRECISÃO
-        total_produtos = len(produtos)
-        produtos_esgotados = 0
-        produtos_baixo_estoque = 0
-        produtos_normal = 0
-        valor_total_estoque = Decimal('0')
-        soma_margens = Decimal('0')
-        margem_alta_count = 0   # margem >= 50%
-        margem_baixa_count = 0  # margem < 30%
-
-        # Classificação ABC
-        abc_counts = {"A": 0, "B": 0, "C": 0}
-
-        # Giro de estoque
-        giro_counts = {"rapido": 0, "normal": 0, "lento": 0}
-
-        # Monitor de validade
-        val_counts = {"vencidos": 0, "vence_15": 0, "vence_30": 0, "vence_90": 0}
-        
-        hoje = datetime.now(timezone.utc)
-        hoje_date = hoje.date()
-        
-        # CALCULAR FATURAMENTO REAL E ÚLTIMA VENDA DOS ITENS (Sincronização Dinâmica)
-        # Isso resolve o problema de métricas zeradas se os campos cacheados estiverem desatualizados
-        faturamentos_reais = {}
-        ultimas_vendas_reais = {}
-        
-        try:
-            # OPTIMIZATION: Removido as queries de GROUP BY massivas em VendaItem e ProdutoLote 
-            # que causavam timeout (60000ms) no Render. O sistema agora confia nos valores
-            # cacheados na tabela de Produto (gerenciados pelo Muralha Forense / background worker).
-            pass
-        except Exception as e_stats:
-            current_app.logger.error(f"Erro ao buscar resumo de vendas: {e_stats}")
-
-        # CALCULAR VALIDADES REAIS DOS LOTES (FIFO)
-        validade_lotes = {}
-        try:
-            pass
-        except Exception as e_val:
-            current_app.logger.error(f"Erro ao buscar validade dos lotes: {e_val}")
-
-        # Calcular faturamento total para classificação ABC
-        produtos_com_faturamento = []
-        faturamento_total = Decimal('0')
-        
-        for produto in produtos:
-            # Priorizar faturamento real calculado dos itens, fallback para o cache
-            faturamento = faturamentos_reais.get(produto.id)
-            if faturamento is None:
-                faturamento = Decimal(str(produto.total_vendido or 0))
-            
-            # Atualizar dinamicamente a última venda para o cálculo de Giro
-            if produto.id in ultimas_vendas_reais:
-                produto._ultima_venda_real = ultimas_vendas_reais[produto.id]
-            else:
-                produto._ultima_venda_real = produto.ultima_venda
-                
-            # Sincronização dinâmica de validade (Prioriza lotes ativos)
-            produto._data_validade_real = validade_lotes.get(produto.id) or produto.data_validade
-
-            produtos_com_faturamento.append({
-                'produto': produto,
-                'faturamento': faturamento
-            })
-            faturamento_total += faturamento
-        
-        # Ordenar por faturamento para classificação ABC
-        produtos_com_faturamento.sort(key=lambda x: x['faturamento'], reverse=True)
-        
-        # Processar cada produto - LOOP ÚNICO
-        acumulado_faturamento = Decimal('0')
-        
-        for item in produtos_com_faturamento:
-            produto = item['produto']
-            faturamento = item['faturamento']
-            
-            try:
-                # Calcular VMD e Cobertura (Inteligência de Estoque)
-                data_cadastro = produto.created_at.date() if produto.created_at else (hoje_date - timedelta(days=30))
-                # Se houver uma data de última venda e for anterior ao cadastro (ex: seed retroativo), ajusta os dias de vida
-                dias_vida = max(1, (hoje_date - data_cadastro).days)
-                if hasattr(produto, '_ultima_venda_real') and produto._ultima_venda_real:
-                    dt_venda = produto._ultima_venda_real
-                    if isinstance(dt_venda, str):
-                        try:
-                            # Tenta converter string ISO para date
-                            dt_venda = datetime.fromisoformat(dt_venda.replace('Z', '+00:00')).date()
-                        except ValueError:
-                            # Fallback rudimentar se falhar
-                            dt_venda = hoje_date
-                    elif hasattr(dt_venda, 'date'):
-                        dt_venda = dt_venda.date()
-                        
-                    if isinstance(dt_venda, date):
-                        dias_desde_venda = (hoje_date - dt_venda).days
-                        if dias_desde_venda > dias_vida:
-                            dias_vida = max(1, dias_desde_venda)
-                
-                # Se dias_vida for muito curto e houver muita venda (simulação), vamos suavizar para evitar VMD infinito
-                if dias_vida < 7 and (produto.quantidade_vendida or 0) > 10:
-                    dias_vida = 30 # Suaviza a média para produtos recém cadastrados com alto volume (ex: importação/seed)
-
-                qtd_vendida = float(produto.quantidade_vendida or 0)
-                vmd = qtd_vendida / dias_vida if qtd_vendida > 0 else 0
-                cobertura = float(produto.quantidade or 0) / vmd if vmd > 0 else 999
-                
-                # Armazenar VMD e Cobertura no objeto para usar depois no Giro
-                produto._vmd_calc = vmd
-                produto._cobertura_calc = cobertura
-
-                # Status do estoque com Inteligência
-                qtd = produto.quantidade or 0
-                qtd_min = produto.quantidade_minima or 0
-                
-                # Inteligência: Considera baixo estoque se a quantidade < quantidade_minima OU se a cobertura for < 10 dias (mínimo inteligente de 10 dias de VMD)
-                estoque_minimo_inteligente = max(qtd_min, math.ceil(vmd * 10))
-
-                if qtd <= 0:
-                    produtos_esgotados += 1
-                elif qtd <= estoque_minimo_inteligente:
-                    produtos_baixo_estoque += 1
-                else:
-                    produtos_normal += 1
-                
-                # Valor total do estoque
-                p_custo = Decimal(str(produto.preco_custo or 0))
-                valor_produto = p_custo * Decimal(str(qtd))
-                valor_total_estoque += valor_produto
-                
-                # Margem
-                p_venda = float(produto.preco_venda or 0)
-                p_custo_f = float(produto.preco_custo or 0)
-                margem_calculada = calcular_margem_lucro(p_venda, p_custo_f)
-                soma_margens += Decimal(str(margem_calculada))
-                if margem_calculada >= 50:
-                    margem_alta_count += 1
-                elif margem_calculada < 30:
-                    margem_baixa_count += 1
-
-                # Validade
-                dt_val_efetiva = getattr(produto, '_data_validade_real', None)
-                if dt_val_efetiva and produto.quantidade > 0:
-                    try:
-                        dt_val = dt_val_efetiva.date() if hasattr(dt_val_efetiva, 'date') else dt_val_efetiva
-                        if isinstance(dt_val, date):
-                            if dt_val < hoje_date:
-                                val_counts["vencidos"] += 1
-                            elif dt_val <= hoje_date + timedelta(days=15):
-                                val_counts["vence_15"] += 1
-                                val_counts["vence_30"] += 1
-                                val_counts["vence_90"] += 1
-                            elif dt_val <= hoje_date + timedelta(days=30):
-                                val_counts["vence_30"] += 1
-                                val_counts["vence_90"] += 1
-                            elif dt_val <= hoje_date + timedelta(days=90):
-                                val_counts["vence_90"] += 1
-                    except Exception:
-                        pass
-                
-                # Classificação ABC
-                acumulado_faturamento += faturamento
-                if faturamento_total > 0:
-                    percentual_acumulado = acumulado_faturamento / faturamento_total
-                    if percentual_acumulado <= Decimal('0.80'):
-                        abc_counts["A"] += 1
-                    elif percentual_acumulado <= Decimal('0.95'):
-                        abc_counts["B"] += 1
-                    else:
-                        abc_counts["C"] += 1
-                else:
-                    abc_counts["C"] += 1
-                
-                # Giro de estoque — fonte ÚNICA de verdade (classificar_giro_produto),
-                # a MESMA usada na lista e no modal. Card e lista nunca mais divergem.
-                giro_counts[classificar_giro_produto(produto, hoje_date)] += 1
-            except Exception as e_prod:
-                current_app.logger.warning(f"Erro ao processar produto {produto.id}: {e_prod}")
-                continue
-
-        # Calcular margem média
-        margem_media = soma_margens / total_produtos if total_produtos > 0 else Decimal('0')
-
-        # Preparar lista de produtos e listas auxiliares com proteção
-        produtos_lista = []
-        for p in produtos:
-            try:
-                produtos_lista.append(p.to_dict())
-            except Exception as e_dict:
-                current_app.logger.error(f"Erro em to_dict do produto {p.id}: {e_dict}")
-        
-        # Top 10 Críticos (Agora com Inteligência de Cobertura)
-        criticos_candidatos = []
-        for p in produtos:
-            qtd = p.quantidade or 0
-            qtd_min = p.quantidade_minima or 0
-            cobertura = getattr(p, '_cobertura_calc', 999)
-            if qtd <= qtd_min or cobertura <= 10:
-                criticos_candidatos.append(p)
-                
-        criticos = sorted(
-            criticos_candidatos,
-            key=lambda x: (x.quantidade or 0)
-        )[:10]
-        
-        criticos_lista = []
-        for p in criticos:
-            try:
-                criticos_lista.append(p.to_dict())
-            except Exception: pass
-
-        # Top 5 Margem
-        top_margem = sorted(
-            produtos,
-            key=lambda x: calcular_margem_lucro(float(x.preco_venda or 0), float(x.preco_custo or 0)),
-            reverse=True
-        )[:5]
-        top_margem_lista = []
-        for p in top_margem:
-            try:
-                top_margem_lista.append(p.to_dict())
-            except Exception: pass
-
-        # Preparar resposta
         estatisticas = {
             "total_produtos": total_produtos_global,
-            "produtos_baixo_estoque": produtos_baixo_estoque, # Usar a variável do loop com inteligência
-            "produtos_esgotados": produtos_esgotados, # Usar a variável do loop
-            "produtos_normal": produtos_normal, # Usar a variável do loop
-            "total_filtrado": total_produtos,
-            "valor_total_estoque": float(valor_total_estoque.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
-            "margem_media": float(margem_media.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "produtos_baixo_estoque": baixo_estoque_global,
+            "produtos_esgotados": esgotados_global,
+            "produtos_normal": normal_global,
+            "total_filtrado": total_filtrado,
+            "valor_total_estoque": float(Decimal(str(valor_total_estoque)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "margem_media": float(Decimal(str(margem_media)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
             "margem_alta": margem_alta_count,
             "margem_baixa": margem_baixa_count,
-            "classificacao_abc": abc_counts,
-            "giro_estoque": giro_counts,
-            "validade": val_counts,
-            "top_produtos_margem": top_margem_lista,
-            "produtos_criticos": criticos_lista,
-            "produtos": produtos_lista,
+            "classificacao_abc": abc_dict,
+            "giro_estoque": giro_estoque,
+            "validade": {
+                "vencidos": vencidos_count,
+                "vence_15": vence_15_count,
+                "vence_30": vence_30_count,
+                "vence_90": vence_90_count
+            },
+            "top_produtos_margem": top_margem,
+            "produtos_criticos": produtos_criticos,
+            "produtos": [], # A lista completa já é enviada na rota principal
             "filtros_aplicados": {
                 "categoria": categoria,
                 "ativos": ativos,
@@ -3167,7 +2941,7 @@ def obter_estatisticas_produtos():
                 "filtro_rapido": filtro_rapido
             }
         }
-
+        
         return jsonify({
             "success": True,
             "estatisticas": estatisticas

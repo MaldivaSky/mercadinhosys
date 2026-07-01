@@ -1347,6 +1347,63 @@ def listar_compras_cliente(id):
         )
 
 
+@clientes_bp.route("/<int:id>/produtos", methods=["GET"])
+@funcionario_required
+def listar_produtos_cliente(id):
+    """Lista os produtos comprados por um cliente (histórico de consumo agregado)"""
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        
+        # Verificar se cliente existe
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+
+        # Agrupar VendaItem por produto para este cliente em vendas finalizadas
+        # Pegamos produto_id, produto_nome, sum(quantidade), sum(total_item), max(data_venda)
+        resultados = (
+            db.session.query(
+                VendaItem.produto_id,
+                VendaItem.produto_nome,
+                func.sum(VendaItem.quantidade).label('total_quantidade'),
+                func.sum(VendaItem.total_item).label('total_gasto'),
+                func.max(Venda.data_venda).label('ultima_compra')
+            )
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(
+                Venda.cliente_id == id,
+                Venda.estabelecimento_id == estabelecimento_id,
+                Venda.status == "finalizada"
+            )
+            .group_by(VendaItem.produto_id, VendaItem.produto_nome)
+            .order_by(func.sum(VendaItem.quantidade).desc())
+            .limit(100)
+            .all()
+        )
+
+        produtos = []
+        for r in resultados:
+            produtos.append({
+                "produto_id": r.produto_id,
+                "nome": r.produto_nome,
+                "quantidade_total": float(r.total_quantidade or 0),
+                "valor_total": float(r.total_gasto or 0),
+                "ultima_compra": r.ultima_compra.isoformat() if r.ultima_compra else None
+            })
+
+        return jsonify({
+            "success": True,
+            "cliente": cliente.nome,
+            "produtos": produtos,
+            "total_produtos_diferentes": len(produtos)
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar produtos do cliente {id}: {str(e)}")
+        return jsonify({"success": False, "message": "Erro interno ao listar produtos"}), 500
+
+
 @clientes_bp.route("/exportar", methods=["GET"])
 @funcionario_required
 def exportar_clientes():
