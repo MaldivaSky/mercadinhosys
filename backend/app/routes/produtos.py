@@ -328,18 +328,11 @@ def catalogo_lookup(ean):
     # 1) Catálogo local
     item = None
     if not force:
-        item = CatalogoMestre.query.filter_by(ean=ean_limpo).first()
-        if item and item.status == "encontrado":
+        item = CatalogoMestre.query.filter_by(ean=ean_limpo, status="encontrado").first()
+        if item:
             return jsonify({"success": True, "source": "catalogo", "data": item.to_dict()}), 200
-        if item and item.status == "nao_encontrado":
-            # Verificar TTL do cache negativo (7 dias)
-            dias_cache = (datetime.utcnow() - item.consultado_em).days if item.consultado_em else 999
-            if dias_cache <= 7:
-                return jsonify({"success": False, "source": "catalogo", "code": "nao_encontrado",
-                                "message": "Este EAN não existe na base Cosmos. Preencha os dados manualmente."}), 404
-            # Se passou de 7 dias, continua para o Fallback Cosmos (ignora o cache atual)
 
-    # 2) Fallback Cosmos
+    # 2) Fallback Cosmos (se não encontrou localmente, ou se forçou)
     token = os.environ.get("COSMOS_TOKEN") or "MVsiut1dwhg12WGhPuTD9Q"
     url = f"https://api.cosmos.bluesoft.com.br/gtins/{ean_limpo}.json"
     headers = {"X-Cosmos-Token": token, "Content-Type": "application/json", "User-Agent": "Cosmos-API-Request"}
@@ -363,13 +356,8 @@ def catalogo_lookup(ean):
                             "message": "Produto encontrado, mas houve erro ao salvar no catálogo."}), 500
 
     if resp.status_code == 404:
-        # Cache negativo: não reconsultar quota para um EAN inexistente
-        neg = CatalogoMestre.query.filter_by(ean=ean_limpo).first() or CatalogoMestre(ean=ean_limpo)
-        neg.status = "nao_encontrado"
-        neg.consultado_em = datetime.utcnow()
-        if not neg.id:
-            db.session.add(neg)
-        db.session.commit()
+        # Não gravamos cache negativo para permitir que o usuário cadastre manualmente 
+        # sem ser bloqueado em consultas futuras caso a API do Cosmos seja atualizada.
         return jsonify({"success": False, "code": "nao_encontrado",
                         "message": "Este EAN não existe na base Cosmos. Preencha os dados manualmente."}), 404
 
@@ -2741,13 +2729,186 @@ def obter_estatisticas_produtos():
             elif filtro_rapido == "sem_fornecedor":
                 query = query.filter(Produto.fornecedor_id == None)
 
-        # Obter todos os produtos filtrados
-        produtos = query.all()
+        # ==========================================
+        # OTIMIZAÇÃO: CONSULTAS AGREGADAS NO BANCO (SQL)
+        # Previne WORKER TIMEOUT e estouro de memória (SIGKILL)
+        # ==========================================
         
-        # Aplicar filtros de margem em Python (após calcular a margem corretamente)
+        # 1. Total de produtos filtrados
+        total_filtrado = query.count()
+        
+        if total_filtrado == 0:
+            return jsonify({
+                "success": True,
+                "estatisticas": {
+                    "total_produtos": total_produtos_global,
+                    "produtos_baixo_estoque": baixo_estoque_global,
+                    "produtos_esgotados": esgotados_global,
+                    "produtos_normal": normal_global,
+                    "total_filtrado": 0,
+                    "valor_total_estoque": 0.0,
+                    "margem_media": 0.0,
+                    "margem_alta": 0,
+                    "margem_baixa": 0,
+                    "classificacao_abc": {"A": 0, "B": 0, "C": 0},
+                    "giro_estoque": {"rapido": 0, "normal": 0, "lento": 0},
+                    "validade": {"vencidos": 0, "vence_15": 0, "vence_30": 0, "vence_90": 0},
+                    "top_produtos_margem": [],
+                    "produtos_criticos": [],
+                    "filtros_aplicados": {
+                        "categoria": categoria,
+                        "ativos": ativos,
+                        "estoque_status": estoque_status,
+                        "tipo": tipo,
+                        "fornecedor_id": fornecedor_id,
+                        "busca": busca,
+                        "filtro_rapido": filtro_rapido
+                    }
+                }
+            })
+
+        # 2. Agregações Básicas (Valor do Estoque)
+        estoque_stats = query.with_entities(
+            func.sum(Produto.quantidade * Produto.preco_custo).label('total_custo'),
+            func.sum(Produto.quantidade * Produto.preco_venda).label('total_venda')
+        ).first()
+
+        valor_total_estoque = float(estoque_stats.total_venda or 0.0)
+        total_custo_geral = float(estoque_stats.total_custo or 0.0)
+        
+        # Margem Média Global (ponderada pelo valor em estoque)
+        margem_media = 0.0
+        if total_custo_geral > 0 and valor_total_estoque > 0:
+            margem_media = ((valor_total_estoque - total_custo_geral) / total_custo_geral) * 100
+        
+        # 3. Classificação ABC (Agrupamento SQL)
+        abc_counts = query.with_entities(
+            func.upper(Produto.classificacao_abc).label('classe'),
+            func.count(Produto.id).label('total')
+        ).group_by(func.upper(Produto.classificacao_abc)).all()
+        
+        abc_dict = {"A": 0, "B": 0, "C": 0}
+        for c, t in abc_counts:
+            classe_limpa = (c or "C").upper()
+            if classe_limpa in abc_dict:
+                abc_dict[classe_limpa] += t
+            else:
+                abc_dict["C"] += t # Fallback
+
+        # 4. Status de Validade (SQL Condicional)
+        hoje = datetime.now(timezone.utc).date()
+        vence_15_dias = hoje + timedelta(days=15)
+        vence_30_dias = hoje + timedelta(days=30)
+        vence_90_dias = hoje + timedelta(days=90)
+
+        # Buscamos apenas os produtos que controlam validade e possuem data definida
+        validade_query = query.filter(Produto.controlar_validade == True, Produto.data_validade != None)
+        
+        vencidos_count = validade_query.filter(Produto.data_validade < hoje).count()
+        vence_15_count = validade_query.filter(Produto.data_validade >= hoje, Produto.data_validade <= vence_15_dias).count()
+        vence_30_count = validade_query.filter(Produto.data_validade > vence_15_dias, Produto.data_validade <= vence_30_dias).count()
+        vence_90_count = validade_query.filter(Produto.data_validade > vence_30_dias, Produto.data_validade <= vence_90_dias).count()
+
+        # 5. Margem Alta/Baixa e Giro (Aproximação ou limite para não estourar RAM)
+        # O cálculo de Margem por item e Giro usa lógica Python no código atual (VMD, divisões).
+        # Para resolver o OOM, vamos buscar APENAS as colunas necessárias em memória, não o objeto SQLAlchemy inteiro
+        produtos_lite = query.with_entities(
+            Produto.id, Produto.nome, Produto.preco_custo, Produto.preco_venda, 
+            Produto.quantidade, Produto.quantidade_minima, Produto.created_at,
+            Produto.quantidade_vendida, Produto.ultima_venda
+        ).all()
+
+        margem_alta_count = 0
+        margem_baixa_count = 0
+        giro_estoque = {"rapido": 0, "normal": 0, "lento": 0}
+        produtos_com_margem = []
+        produtos_criticos = []
+        
+        hoje_datetime = datetime.now(timezone.utc)
+        
+        for p in produtos_lite:
+            # 5.1 Cálculo de Margem Individual
+            p_custo = float(p.preco_custo or 0)
+            p_venda = float(p.preco_venda or 0)
+            p_margem = 0
+            if p_custo > 0 and p_venda > 0:
+                p_margem = ((p_venda - p_custo) / p_custo) * 100
+                
+            if p_margem >= 50:
+                margem_alta_count += 1
+            elif p_margem < 30 and p_margem > 0:
+                margem_baixa_count += 1
+                
+            if p_venda > 0:
+                produtos_com_margem.append({
+                    "id": p.id,
+                    "nome": p.nome,
+                    "margem": p_margem,
+                    "preco_custo": p_custo,
+                    "preco_venda": p_venda
+                })
+
+            # 5.2 Giro de Estoque (Replicando a lógica do classificar_giro_produto() para Tuplas)
+            data_cadastro = p.created_at.date() if p.created_at else (hoje_datetime.date() - timedelta(days=30))
+            dias_vida = max(1, (hoje_datetime.date() - data_cadastro).days)
+            
+            dt_venda = p.ultima_venda
+            if dt_venda:
+                if isinstance(dt_venda, str):
+                    try:
+                        dt_venda = datetime.fromisoformat(dt_venda.replace('Z', '+00:00')).date()
+                    except ValueError:
+                        dt_venda = hoje_datetime.date()
+                elif hasattr(dt_venda, 'date'):
+                    dt_venda = dt_venda.date()
+                if isinstance(dt_venda, date):
+                    dias_desde_venda = (hoje_datetime.date() - dt_venda).days
+                    if dias_desde_venda > dias_vida:
+                        dias_vida = max(1, dias_desde_venda)
+
+            qtd_vendida = float(p.quantidade_vendida or 0)
+            if dias_vida < 7 and qtd_vendida > 10:
+                dias_vida = 30
+                
+            giro = "lento"
+            if qtd_vendida > 0:
+                vmd = qtd_vendida / dias_vida
+                if vmd > 0:
+                    cobertura = float(p.quantidade or 0) / vmd
+                    if cobertura <= 15:
+                        giro = "rapido"
+                    elif cobertura <= 60:
+                        giro = "normal"
+                        
+            giro_estoque[giro] += 1
+            
+            # 5.3 Produtos Críticos (Apenas para exibir no final, limitado)
+            qtd = float(p.quantidade or 0)
+            qtd_min = float(p.quantidade_minima or 0)
+            if qtd <= 0 or (qtd_min > 0 and qtd <= qtd_min):
+                if len(produtos_criticos) < 15:
+                    produtos_criticos.append({
+                        "id": p.id,
+                        "nome": p.nome,
+                        "quantidade": qtd,
+                        "quantidade_minima": qtd_min,
+                        "motivo": "Esgotado" if qtd <= 0 else "Estoque Baixo"
+                    })
+
+        # Ordenar os top 5 por margem
+        top_margem = sorted(produtos_com_margem, key=lambda x: x["margem"], reverse=True)[:5]
+
+        # Se houver um filtro rápido específico de margem, ele atualiza o total no retorno
         if filtro_rapido == "margem_alta":
-            produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) >= 50]
+            total_filtrado = margem_alta_count
         elif filtro_rapido == "margem_baixa":
+            total_filtrado = margem_baixa_count
+            
+        # Para giro_rapido / giro_lento, também corrigir o total_filtrado que foi passado na interface
+        if filtro_rapido == "giro_rapido":
+            total_filtrado = giro_estoque["rapido"]
+        elif filtro_rapido == "giro_lento":
+            total_filtrado = giro_estoque["lento"]
             produtos = [p for p in produtos if calcular_margem_lucro(float(p.preco_venda or 0), float(p.preco_custo or 0)) < 30]
 
         # Aplicar filtros de giro em Python usando a fonte ÚNICA de cobertura/VMD
