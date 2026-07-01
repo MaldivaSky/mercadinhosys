@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Bar, Line } from "react-chartjs-2";
+import { Bar, Line, Doughnut } from "react-chartjs-2";
 import {
     Chart as ChartJS, BarElement, CategoryScale, LinearScale,
     PointElement, LineElement, ArcElement, Tooltip, Legend, Filler,
@@ -53,13 +53,15 @@ const formaLabel = (f = "") => f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.to
 
 // Normaliza variantes ("cartao_debito", "cartão de débito", "debito"...) num rótulo único
 const canonicalForma = (f = "") => {
-    const s = f.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[_\s]+/g, " ").trim();
+    const s = f.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
     if (s.includes("debito")) return "Cartão Débito";
     if (s.includes("credito")) return "Cartão Crédito";
     if (s.includes("dinheiro") || s === "cash" || s === "especie") return "Dinheiro";
     if (s.includes("pix")) return "PIX";
     if (s.includes("fiado") || s.includes("crediario") || s.includes("a prazo")) return "Fiado";
-    if (s.includes("voucher") || s.includes("vale") || s.includes("ticket")) return "Voucher";
+    if (s.includes("vale alimentacao")) return "Vale Alimentação";
+    if (s.includes("vale refeicao")) return "Vale Refeição";
+    if (s.includes("voucher") || s.includes("vale") || s.includes("ticket")) return "Outros / Voucher";
     if (s.includes("transfer")) return "Transferência";
     if (s.includes("boleto")) return "Boleto";
     return f ? formaLabel(f) : "Outros";
@@ -146,8 +148,14 @@ export default function SalesPage() {
 
     const [filtros, setFiltros] = useState({
         data_inicio: isoDate(new Date(Date.now() - 30 * 86400000)), data_fim: isoDate(),
-        search: "", status: "", page: 1,
+        search: "", status: "", forma_pagamento: "", page: 1,
     });
+
+    const setQuickDate = (dias: number) => {
+        const data_fim = isoDate();
+        const data_inicio = isoDate(new Date(Date.now() - dias * 86400000));
+        aplicar({ data_inicio, data_fim });
+    };
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
     const carregarVendas = useCallback(async (f = filtros) => {
@@ -158,6 +166,7 @@ export default function SalesPage() {
             if (f.data_inicio) params.data_inicio = f.data_inicio;
             if (f.data_fim) params.data_fim = f.data_fim;
             if (f.status) params.status = f.status;
+            if (f.forma_pagamento) params.forma_pagamento = f.forma_pagamento;
             const { data } = await apiClient.get("/vendas", { params });
             setVendas((data.vendas || []).map((v: Venda) => ({ ...v, status: v.status || "finalizada" })));
             setPaginacao(data.paginacao || null);
@@ -239,7 +248,17 @@ export default function SalesPage() {
         const merged = new Map<string, number>();
         for (const f of fp) merged.set(canonicalForma(f.forma), (merged.get(canonicalForma(f.forma)) || 0) + Number(f.total || 0));
         const ordenado = [...merged.entries()].sort((a, b) => b[1] - a[1]);
-        return { labels: ordenado.map(([k]) => k), datasets: [{ label: "Total", data: ordenado.map(([, v]) => v), backgroundColor: ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"], borderRadius: 8, borderWidth: 0 }] };
+        return { 
+            labels: ordenado.map(([k]) => k), 
+            datasets: [{ 
+                label: "Total", 
+                data: ordenado.map(([, v]) => v), 
+                backgroundColor: ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#14b8a6"], 
+                borderWidth: 2, 
+                borderColor: "#ffffff",
+                hoverOffset: 4
+            }] 
+        };
     }, [analytics]);
 
     const chartHoras = useMemo(() => {
@@ -369,9 +388,9 @@ export default function SalesPage() {
                             : <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Sem dados no período</div>}
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Formas de pagamento</h3>
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">Distribuição de Pagamentos</h3>
                     {loadingA ? <div className="h-56 flex items-center justify-center text-slate-400"><RefreshCw className="w-5 h-5 animate-spin" /></div>
-                        : chartFormas.labels.length ? <div className="relative h-56 w-full overflow-hidden"><Bar data={chartFormas} options={opts(true)} /></div>
+                        : chartFormas.labels.length ? <div className="relative h-56 w-full overflow-hidden flex justify-center"><Doughnut data={chartFormas} options={{ ...opts(true), maintainAspectRatio: false, plugins: { ...opts(true).plugins, legend: { display: true, position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } } }} /></div>
                             : <div className="h-56 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>}
                 </div>
             </div>
@@ -406,7 +425,14 @@ export default function SalesPage() {
 
             {/* Filtros */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Filtros Rápidos:</span>
+                    <button onClick={() => setQuickDate(0)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">Hoje</button>
+                    <button onClick={() => setQuickDate(1)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">Últimas 24h</button>
+                    <button onClick={() => setQuickDate(7)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">7 Dias</button>
+                    <button onClick={() => setQuickDate(30)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-primary-50 hover:text-primary-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-primary-900/30 transition-colors">30 Dias</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                     <div className="lg:col-span-2 relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input defaultValue={filtros.search} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por código ou cliente..." className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
@@ -415,6 +441,16 @@ export default function SalesPage() {
                     <input type="date" value={filtros.data_fim} onChange={(e) => aplicar({ data_fim: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500" />
                     <select value={filtros.status} onChange={(e) => aplicar({ status: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500">
                         <option value="">Todos os status</option><option value="finalizada">Finalizada</option><option value="cancelada">Cancelada</option>
+                    </select>
+                    <select value={filtros.forma_pagamento} onChange={(e) => aplicar({ forma_pagamento: e.target.value })} className="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">Todas as Formas</option>
+                        <option value="dinheiro">Dinheiro</option>
+                        <option value="pix">PIX</option>
+                        <option value="cartao_credito">Cartão de Crédito</option>
+                        <option value="cartao_debito">Cartão de Débito</option>
+                        <option value="vale_alimentacao">Vale Alimentação</option>
+                        <option value="vale_refeicao">Vale Refeição</option>
+                        <option value="fiado">Fiado</option>
                     </select>
                 </div>
             </div>
