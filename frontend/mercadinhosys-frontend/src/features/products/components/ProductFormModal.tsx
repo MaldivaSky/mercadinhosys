@@ -174,19 +174,36 @@ const ProductFormModal = ({
 
         setLoading(true);
         try {
-            const promise = editMode && produto
-                ? productsService.update(produto.id, formData)
-                : productsService.create(formData);
+            if (editMode && produto) {
+                await showToast.promise(productsService.update(produto.id, formData), {
+                    loading: 'Atualizando produto...',
+                    success: 'Produto atualizado!',
+                    error: 'Erro ao atualizar produto',
+                }, { theme: 'warning' });
+                onSuccess();
+            } else {
+                // Criar produto — tratando 409 (EAN duplicado) explicitamente
+                const result = await productsService.create(formData);
 
-            await showToast.promise(promise, {
-                loading: editMode ? 'Atualizando produto...' : 'Criando produto...',
-                success: editMode ? 'Produto atualizado!' : 'Produto cadastrado!',
-                error: 'Erro ao salvar produto',
-            }, { theme: editMode ? 'warning' : 'success' });
+                if (!result.success && (result.code === 'PRODUTO_DUPLICADO_EAN' || result.code === 'PRODUTO_DUPLICADO_CODIGO')) {
+                    const existente = result.produto_existente;
+                    const msg = existente
+                        ? `Este produto já está cadastrado como "${existente.nome}" (id ${existente.id}). Edite o produto existente para atualizar estoque ou preço.`
+                        : result.message || 'Produto já cadastrado com este EAN.';
+                    showToast.error(msg, { duration: 8000 });
+                    return; // Não chama onSuccess, não fecha o modal
+                }
 
-            onSuccess();
-        } catch {
-            // tratado pelo showToast.promise
+                if (!result.success) {
+                    showToast.error(result.message || 'Erro ao criar produto');
+                    return;
+                }
+
+                showToast.success('Produto cadastrado com sucesso!');
+                onSuccess();
+            }
+        } catch (err: any) {
+            showToast.error(err?.response?.data?.message || 'Erro ao salvar produto');
         } finally {
             setLoading(false);
         }

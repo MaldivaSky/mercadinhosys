@@ -64,9 +64,24 @@ export const productsService = {
         return response.data;
     },
 
-    create: async (data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
-        const response = await apiClient.post<any>('/produtos/', data);
-        return response.data;
+    create: async (data: Partial<Produto>): Promise<{
+        success: boolean;
+        message: string;
+        produto?: Produto;
+        code?: string;
+        produto_existente?: Partial<Produto>;
+    }> => {
+        try {
+            const response = await apiClient.post<any>('/produtos/', data);
+            return response.data;
+        } catch (error: any) {
+            // 409: EAN ou código interno já existe — retorna os dados do produto existente
+            // para que a UI possa oferecer edição em vez de criação.
+            if (error?.response?.status === 409) {
+                return error.response.data;
+            }
+            throw error;
+        }
     },
 
     update: async (id: number, data: Partial<Produto>): Promise<{ success: boolean; message: string; produto: Produto }> => {
