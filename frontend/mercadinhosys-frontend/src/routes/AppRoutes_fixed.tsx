@@ -104,8 +104,8 @@ const AppRoutes: React.FC = () => {
                         <Route path="expenses" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ExpensesPage /></RoleGuard>} />
                         <Route path="employees" element={<RoleGuard allowedRoles={['admin', 'gerente']}><EmployeesPage /></RoleGuard>} />
                         <Route path="rh" element={<RoleGuard allowedRoles={['admin', 'gerente']}><RHPage /></RoleGuard>} />
-                        <Route path="ponto" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><PontoPage /></RoleGuard>} />
-                        <Route path="ponto-historico" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista']}><PontoHistoricoPage /></RoleGuard>} />
+                        <Route path="ponto" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista', 'rh', 'entregador', 'vendedor']}><PontoPage /></RoleGuard>} />
+                        <Route path="ponto-historico" element={<RoleGuard allowedRoles={['admin', 'gerente', 'funcionario', 'caixa', 'estoquista', 'rh', 'entregador', 'vendedor']}><PontoHistoricoPage /></RoleGuard>} />
                         <Route path="ponto-relatorios" element={<RoleGuard allowedRoles={['admin', 'gerente']}><RelatoriosPontoPage /></RoleGuard>} />
                         <Route path="ponto-diagnostico" element={<RoleGuard allowedRoles={['admin', 'gerente']}><DiagnosticoFotos /></RoleGuard>} />
                         <Route path="reports" element={<RoleGuard allowedRoles={['admin', 'gerente']}><ReportsPage /></RoleGuard>} />

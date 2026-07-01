@@ -19,6 +19,7 @@ NIVEL_LABELS = {
     4: "Estoque",
     5: "RH",
     6: "Entregador",
+    7: "Vendedor",
 }
 
 ROLE_TO_NIVEL = {
@@ -28,6 +29,7 @@ ROLE_TO_NIVEL = {
     "ESTOQUE":     4, "ALMOXARIFE":    4,
     "RH":          5, "RECURSOS_HUMANOS": 5,
     "ENTREGADOR":  6, "MOTOBOY":       6, "MOTORISTA": 6,
+    "VENDEDOR":    7, "SAF":           7,
     "FUNCIONARIO": 3,  # fallback: trata como caixa
 }
 
@@ -39,10 +41,10 @@ RBAC_MATRIX: dict[str, set[int]] = {
     "vendas":        {1, 2, 3},
     "cancelar_venda":{1, 2},
     # Clientes
-    "clientes":      {1, 2, 3, 4},
+    "clientes":      {1, 2, 3, 4, 7},
     # Estoque / Produtos
     "estoque":       {1, 2, 4},
-    "produtos":      {1, 2, 4},
+    "produtos":      {1, 2, 4, 7},
     "entrada_xml":   {1, 2, 4},
     "lotes":         {1, 2, 4},
     # Compras / Fornecedores
@@ -59,7 +61,7 @@ RBAC_MATRIX: dict[str, set[int]] = {
     "rh":            {1, 5},
     "folha":         {1, 5},
     "beneficios":    {1, 5},
-    "ponto":         {1, 2, 3, 4, 5, 6},  # todos registram ponto
+    "ponto":         {1, 2, 3, 4, 5, 6, 7},  # todos registram ponto
     # Delivery
     "delivery":      {1, 2, 6},
     # Dashboard

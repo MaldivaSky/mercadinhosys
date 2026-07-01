@@ -7,6 +7,7 @@ import { MapPin, UserCircle, RefreshCcw, ShoppingCart, Clock, Target, TrendingUp
 import { showToast } from '../../utils/toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency } from '../../utils/formatters';
+import SFABottomNav from './SFABottomNav';
 
 export default function SFADashboard() {
     const navigate = useNavigate();
@@ -268,6 +269,7 @@ export default function SFADashboard() {
                     </div>
                 </div>
             )}
+            <SFABottomNav />
         </div>
     );
 }
