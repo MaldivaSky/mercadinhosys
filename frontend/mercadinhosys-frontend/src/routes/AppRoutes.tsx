@@ -48,7 +48,13 @@ const SFAManagement = lazy(() => import('../features/sfa/SFAManagement'));
 
 const AppRoutes: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
-
+    
+    // Calcula a rota default baseado na role
+    const getTargetRoute = () => {
+        const user = authService.getCurrentUser();
+        return user?.role === 'vendedor' ? '/sfa' : '/dashboard';
+    };
+    
     useEffect(() => {
         const checkAuth = () => {
             setIsAuthenticated(authService.isAuthenticated());
@@ -61,8 +67,8 @@ const AppRoutes: React.FC = () => {
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
             <Routes>
                 <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-                <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
+                <Route path="/login" element={isAuthenticated ? <Navigate to={getTargetRoute()} replace /> : <LoginPage />} />
+                <Route path="/register" element={isAuthenticated ? <Navigate to={getTargetRoute()} replace /> : <RegisterPage />} />
                 <Route path="/test" element={<ConnectionTest />} />
 
                 {/* Públicas — institucionais */}
@@ -103,7 +109,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="leads" element={<SuperAdminRoute><LeadDashboard /></SuperAdminRoute>} />
                 </Route>
 
-                <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} />
+                <Route path="*" element={<Navigate to={isAuthenticated ? getTargetRoute() : "/"} replace />} />
             </Routes>
         </Suspense>
     );
