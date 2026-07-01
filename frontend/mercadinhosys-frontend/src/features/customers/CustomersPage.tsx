@@ -12,7 +12,6 @@ import {
     DialogContent,
     DialogTitle,
     FormControl,
-    InputAdornment,
     InputLabel,
     Menu,
     MenuItem,
@@ -21,13 +20,9 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import ClearIcon from '@mui/icons-material/Clear';
 import GetAppIcon from '@mui/icons-material/GetApp';
 import SyncIcon from '@mui/icons-material/Sync';
 import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
-import HandshakeIcon from '@mui/icons-material/Handshake';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
@@ -50,6 +45,8 @@ import CustomerDashboard from './components/CustomerDashboard';
 import CustomerDetailsModal from './components/CustomerDetailsModal';
 import CustomerForm from './components/CustomerForm';
 import CustomerTable from './components/CustomerTable';
+import CustomersCommandToolbar from './components/CustomersCommandToolbar';
+import CustomersAdvancedFiltersModal from './components/CustomersAdvancedFiltersModal';
 
 type CRMTab = 'overview' | 'recovery' | 'campaigns' | 'portfolio';
 type CampaignKey = 'reactivation' | 'vip' | 'debt' | 'promotion';
@@ -299,6 +296,8 @@ const CustomersPage: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
     const [segmentFilter, setSegmentFilter] = useState<SegmentFilter>('todos');
     const [fiadoFilter, setFiadoFilter] = useState(false);
+    const [birthdayFilter, setBirthdayFilter] = useState(false);
+    const [showFiltersModal, setShowFiltersModal] = useState(false);
     const [exportMenuAnchor, setExportMenuAnchor] = useState<null | HTMLElement>(null);
     const [fiadoModal, setFiadoModal] = useState<{ open: boolean; cliente: Cliente | null }>({ open: false, cliente: null });
     const [fiadoValor, setFiadoValor] = useState('');
@@ -444,6 +443,13 @@ const CustomersPage: React.FC = () => {
             if (statusFilter === 'inativos' && cliente.ativo !== false) return false;
             if (fiadoFilter && !cliente.hasDebt) return false;
             if (segmentFilter !== 'todos' && cliente.crmSegment !== segmentFilter) return false;
+            
+            if (birthdayFilter) {
+                const dn = (cliente as any).data_nascimento;
+                if (!dn) return false;
+                const d = new Date(String(dn).includes('T') ? dn : `${dn}T00:00:00`);
+                if (isNaN(d.getTime()) || d.getMonth() !== new Date().getMonth()) return false;
+            }
 
             if (!searchTerm.trim()) return true;
             const term = searchTerm.toLowerCase();
@@ -455,7 +461,7 @@ const CustomersPage: React.FC = () => {
                 cliente.telefone?.includes(term)
             );
         });
-    }, [crmClientes, statusFilter, fiadoFilter, segmentFilter, searchTerm]);
+    }, [crmClientes, statusFilter, fiadoFilter, segmentFilter, birthdayFilter, searchTerm]);
 
     const clientesComFiado = useMemo(() => crmClientes.filter((cliente) => cliente.hasDebt), [crmClientes]);
     const totalFiadoAberto = useMemo(
@@ -847,45 +853,86 @@ const CustomersPage: React.FC = () => {
                 </Box>
             </section>
 
-            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(6, minmax(0, 1fr))' } }}>
-                <KpiCard title="Base Ativa" value={dashboard.total} subtitle="Clientes gerenciados no CRM" color="#2563eb" icon={<AutoGraphIcon />} />
-                <KpiCard 
-                    title="Aniversariantes" 
-                    value={crmStats.aniversariantes} 
-                    subtitle="Neste mês — envie um WhatsApp" 
-                    color="#db2777" 
-                    icon={<CakeIcon />} 
-                    onClick={() => {
-                        // TODO: Implement actual birthday filtering logic in filteredClientes
-                        // For now we just go to portfolio
-                        setActiveTab('portfolio');
-                    }}
-                />
-                <KpiCard 
-                    title="Clientes Em Risco" 
-                    value={crmStats.inRisk} 
-                    subtitle="Exigem contato de retencao" 
-                    color="#ea580c" 
-                    icon={<AutorenewIcon />} 
-                    onClick={() => {
-                        setSegmentFilter('Risco');
-                        setActiveTab('portfolio');
-                    }}
-                />
-                <KpiCard title="Clientes Inativos" value={crmStats.inactive} subtitle="Fila de reativacao comercial" color="#dc2626" icon={<WarningAmberIcon />} />
-                <KpiCard title="VIP & Fidelidade" value={crmStats.vip} subtitle="Carteira de alto valor" color="#7c3aed" icon={<StarIcon />} />
-                <KpiCard title="Fiado Em Aberto" value={formatCurrency(totalFiadoAberto)} subtitle={`${crmStats.debt} clientes com saldo`} color="#d97706" icon={<AttachMoneyIcon />} onClick={() => { setFiadoFilter(true); setActiveTab('portfolio'); }} />
-            </Box>
+            <div className="flex overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 snap-x snap-mandatory hide-scrollbar">
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard 
+                        title="Base Ativa" 
+                        value={dashboard.total} 
+                        subtitle="Clientes gerenciados no CRM" 
+                        color="#2563eb" 
+                        icon={<AutoGraphIcon />} 
+                        onClick={() => {
+                            setStatusFilter('ativos');
+                            setActiveTab('portfolio');
+                        }}
+                    />
+                </div>
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard 
+                        title="Aniversariantes" 
+                        value={crmStats.aniversariantes} 
+                        subtitle="Neste mês — envie um WhatsApp" 
+                        color="#db2777" 
+                        icon={<CakeIcon />} 
+                        onClick={() => {
+                            setBirthdayFilter(true);
+                            setActiveTab('portfolio');
+                        }}
+                    />
+                </div>
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard 
+                        title="Clientes Em Risco" 
+                        value={crmStats.inRisk} 
+                        subtitle="Exigem contato de retencao" 
+                        color="#ea580c" 
+                        icon={<AutorenewIcon />} 
+                        onClick={() => {
+                            setSegmentFilter('Risco');
+                            setActiveTab('portfolio');
+                        }}
+                    />
+                </div>
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard 
+                        title="Clientes Inativos" 
+                        value={crmStats.inactive} 
+                        subtitle="Fila de reativacao comercial" 
+                        color="#dc2626" 
+                        icon={<WarningAmberIcon />}
+                        onClick={() => {
+                            setStatusFilter('inativos');
+                            setActiveTab('portfolio');
+                        }} 
+                    />
+                </div>
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard 
+                        title="VIP & Fidelidade" 
+                        value={crmStats.vip} 
+                        subtitle="Carteira de alto valor" 
+                        color="#7c3aed" 
+                        icon={<StarIcon />} 
+                        onClick={() => {
+                            setSegmentFilter('Campeão'); // Pode ser 'Fiel' também, mas filtramos o topo
+                            setActiveTab('portfolio');
+                        }}
+                    />
+                </div>
+                <div className="min-w-[260px] sm:min-w-0 snap-start">
+                    <KpiCard title="Fiado Em Aberto" value={formatCurrency(totalFiadoAberto)} subtitle={`${crmStats.debt} clientes com saldo`} color="#d97706" icon={<AttachMoneyIcon />} onClick={() => { setFiadoFilter(true); setActiveTab('portfolio'); }} />
+                </div>
+            </div>
 
             <section className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
-                <div className="grid gap-3 lg:grid-cols-4">
+                <div className="flex overflow-x-auto gap-3 pb-1 lg:grid lg:grid-cols-4 snap-x hide-scrollbar">
                     {tabs.map((tab) => {
                         const active = activeTab === tab.id;
                         return (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`rounded-2xl border px-4 py-4 text-left transition ${
+                                className={`min-w-[180px] lg:min-w-0 snap-start rounded-2xl border px-4 py-4 text-left transition shrink-0 ${
                                     active
                                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
                                         : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -1297,60 +1344,48 @@ const CustomersPage: React.FC = () => {
 
             {activeTab === 'portfolio' && (
                 <div className="space-y-4">
-                    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr 1fr' }, alignItems: 'center' }}>
-                        <TextField
-                            placeholder="Buscar por nome, CPF, telefone ou email"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            variant="outlined"
-                            size="small"
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon />
-                                    </InputAdornment>
-                                ),
-                                endAdornment: searchTerm && (
-                                    <InputAdornment position="end">
-                                        <ClearIcon sx={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
+                    <CustomersCommandToolbar
+                        searchTerm={searchTerm}
+                        setSearchTerm={setSearchTerm}
+                        onNewCustomer={() => {
+                            setEditData(undefined);
+                            setFormOpen(true);
+                        }}
+                        onExport={handleExportClick}
+                        onSync={handleRecalcularMetricas}
+                        syncing={recalcLoading}
+                        onFilterClick={() => setShowFiltersModal(true)}
+                        hasActiveFilters={statusFilter !== 'todos' || segmentFilter !== 'todos' || fiadoFilter || birthdayFilter}
+                    />
 
-                        <FormControl size="small">
-                            <InputLabel>Status</InputLabel>
-                            <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} startAdornment={<FilterListIcon sx={{ mr: 1 }} />}>
-                                <MenuItem value="todos">Todos</MenuItem>
-                                <MenuItem value="ativos">Ativos</MenuItem>
-                                <MenuItem value="inativos">Inativos</MenuItem>
-                            </Select>
-                        </FormControl>
-
-                        <FormControl size="small">
-                            <InputLabel>Segmento</InputLabel>
-                            <Select value={segmentFilter} label="Segmento" onChange={(e) => setSegmentFilter(e.target.value as SegmentFilter)}>
-                                <MenuItem value="todos">Todos</MenuItem>
-                                <MenuItem value="Campeão">Campeão</MenuItem>
-                                <MenuItem value="Fiel">Fiel</MenuItem>
-                                <MenuItem value="Regular">Regular</MenuItem>
-                                <MenuItem value="Risco">Risco</MenuItem>
-                                <MenuItem value="Perdido">Perdido</MenuItem>
-                                <MenuItem value="Novo">Novo</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Box>
+                    <CustomersAdvancedFiltersModal
+                        show={showFiltersModal}
+                        onClose={() => setShowFiltersModal(false)}
+                        statusFilter={statusFilter}
+                        setStatusFilter={setStatusFilter}
+                        segmentFilter={segmentFilter}
+                        setSegmentFilter={setSegmentFilter}
+                        fiadoFilter={fiadoFilter}
+                        setFiadoFilter={setFiadoFilter}
+                        birthdayFilter={birthdayFilter}
+                        setBirthdayFilter={setBirthdayFilter}
+                        onApply={() => setShowFiltersModal(false)}
+                    />
 
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                         <Chip label={`${filteredClientes.length} clientes na carteira`} className="bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-200 font-bold" />
-                        <Chip
-                            label={fiadoFilter ? 'Somente com fiado' : 'Todos os perfis'}
-                            onClick={() => setFiadoFilter((current) => !current)}
-                            color={fiadoFilter ? 'warning' : 'default'}
-                            icon={<HandshakeIcon />}
-                        />
+                        
+                        {statusFilter !== 'todos' && (
+                            <Chip label={`Status: ${statusFilter}`} onDelete={() => setStatusFilter('todos')} color="primary" variant="outlined" />
+                        )}
                         {segmentFilter !== 'todos' && (
-                            <Chip label={`Segmento ${segmentFilter}`} onDelete={() => setSegmentFilter('todos')} color="primary" variant="outlined" />
+                            <Chip label={`Segmento: ${segmentFilter}`} onDelete={() => setSegmentFilter('todos')} color="primary" variant="outlined" />
+                        )}
+                        {fiadoFilter && (
+                            <Chip label="Com Fiado Aberto" onDelete={() => setFiadoFilter(false)} color="warning" variant="outlined" />
+                        )}
+                        {birthdayFilter && (
+                            <Chip label="Aniversariantes do Mês" onDelete={() => setBirthdayFilter(false)} color="secondary" variant="outlined" />
                         )}
                     </Box>
 
