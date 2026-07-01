@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../api/apiClient';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { MapPin, UserCircle, RefreshCcw, ShoppingCart, DollarSign, Clock, Target, TrendingUp, Users, AlertTriangle, PackageOpen } from 'lucide-react';
+import { MapPin, UserCircle, RefreshCcw, ShoppingCart, Clock, Target, TrendingUp, Users, AlertTriangle, PackageOpen } from 'lucide-react';
 import { showToast } from '../../utils/toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency } from '../../utils/formatters';

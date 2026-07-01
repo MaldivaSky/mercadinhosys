@@ -24,7 +24,6 @@ import {
     X,
     MapPin,
     Briefcase,
-    Building2,
     DollarSign
 } from 'lucide-react';
 import { motion } from 'framer-motion';
