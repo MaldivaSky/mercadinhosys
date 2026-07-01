@@ -1376,6 +1376,48 @@ def criar_produto():
             except (ValueError, TypeError):
                 return default
 
+        # VERIFICACAO ANTI-DUPLICACAO: checar EAN antes do INSERT para evitar
+        # UniqueViolation silenciosa que consumia IDs e retornava 500.
+        codigo_barras_novo = (data.get('codigo_barras') or '').strip() or None
+        codigo_interno_novo = (data.get('codigo_interno') or '').strip() or None
+
+        if codigo_barras_novo:
+            produto_existente_ean = Produto.query.filter_by(
+                estabelecimento_id=estabelecimento_id,
+                codigo_barras=codigo_barras_novo
+            ).first()
+            if produto_existente_ean:
+                return jsonify({
+                    'success': False,
+                    'code': 'PRODUTO_DUPLICADO_EAN',
+                    'message': f'EAN {codigo_barras_novo} ja cadastrado como produto: {produto_existente_ean.nome}. Edite o produto existente.',
+                    'produto_existente': {
+                        'id': produto_existente_ean.id,
+                        'nome': produto_existente_ean.nome,
+                        'codigo_barras': produto_existente_ean.codigo_barras,
+                        'preco_venda': float(produto_existente_ean.preco_venda or 0),
+                        'quantidade': float(produto_existente_ean.quantidade or 0),
+                    }
+                }), 409
+
+        if codigo_interno_novo:
+            produto_existente_cod = Produto.query.filter_by(
+                estabelecimento_id=estabelecimento_id,
+                codigo_interno=codigo_interno_novo
+            ).first()
+            if produto_existente_cod:
+                return jsonify({
+                    'success': False,
+                    'code': 'PRODUTO_DUPLICADO_CODIGO',
+                    'message': f'Codigo interno ja cadastrado como: {produto_existente_cod.nome}. Edite o produto existente.',
+                    'produto_existente': {
+                        'id': produto_existente_cod.id,
+                        'nome': produto_existente_cod.nome,
+                        'preco_venda': float(produto_existente_cod.preco_venda or 0),
+                        'quantidade': float(produto_existente_cod.quantidade or 0),
+                    }
+                }), 409
+
         # Criar produto
         produto = Produto(
             estabelecimento_id=estabelecimento_id,
