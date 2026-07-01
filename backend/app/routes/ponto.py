@@ -19,8 +19,13 @@ import math
 logger = logging.getLogger(__name__)
 ponto_bp = Blueprint('ponto', __name__)
 
-# Cache de configurações
-_config_cache = {}
+# Cache de configurações do ponto.
+# IMPORTANTE: guardamos apenas o ID (PK), NUNCA a instância ORM. Cachear a
+# instância entre requests causava DetachedInstanceError ("not bound to a
+# Session") quando outra request acessava seus atributos após a sessão original
+# ter sido fechada. Com o ID, o obter_configuracao_com_cache re-liga o objeto à
+# sessão ativa via db.session.get().
+_config_id_cache = {}
 _config_cache_time = {}
 CACHE_TIMEOUT = 3600  # 1 hora
 
@@ -163,23 +168,24 @@ def calcular_distancia_haversine(lat1, lon1, lat2, lon2):
 
 
 def obter_configuracao_com_cache(estabelecimento_id):
-    """Obtém configuração com cache"""
+    """Obtém configuração com cache (salva ID, não instância ORM)."""
     cache_key = f"config_{estabelecimento_id}"
     now = datetime.now().timestamp()
-    
-    if cache_key in _config_cache:
-        if now - _config_cache_time.get(cache_key, 0) < CACHE_TIMEOUT:
-            return _config_cache[cache_key]
-    
-    # Buscar do banco de dados
+
+    config_id = _config_id_cache.get(cache_key)
+    if config_id and (now - _config_cache_time.get(cache_key, 0)) < CACHE_TIMEOUT:
+        # Rebind seguro: busca pelo PK na sessão ativa
+        return db.session.get(ConfiguracaoHorario, config_id)
+
+    # Cache miss ou expirado: busca completa
     config = ConfiguracaoHorario.query.filter_by(
         estabelecimento_id=estabelecimento_id
     ).first()
-    
-    # Armazenar em cache
-    _config_cache[cache_key] = config
-    _config_cache_time[cache_key] = now
-    
+
+    if config:
+        _config_id_cache[cache_key] = config.id
+        _config_cache_time[cache_key] = now
+
     return config
 
 
