@@ -8,6 +8,7 @@ import logo from '../../../logoprincipal.png';
 import { authService } from '../../features/auth/authService';
 import EstablishmentSelector from '../EstablishmentSelector';
 import { InstallButton } from '../pwa/InstallButton';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 // Removed mobileMenuItems since they were moved to BottomNavigation
 
 const HeaderProfessional = () => {
@@ -37,6 +38,8 @@ const HeaderProfessional = () => {
     const isDark = mode === 'dark';
     const { user, logout } = useAuth();
     const isSuperAdmin = user?.is_super_admin;
+
+    useBodyScrollLock(profileModalOpen);
 
     const [showChangePassword, setShowChangePassword] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -131,19 +134,19 @@ const HeaderProfessional = () => {
     return (
         <>
             <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900 dark:border-gray-800 shadow-sm safe-area-top" style={{ paddingTop: 'env(safe-area-inset-top)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
-                <div className="container mx-auto px-4 max-w-full">
-                    <div className="flex h-16 items-center justify-between">
+                <div className="container mx-auto px-3 sm:px-4 max-w-full overflow-hidden">
+                    <div className="flex h-16 items-center justify-between gap-2">
                         {/* Logo */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                             <img
                                 src={logoUrl}
                                 alt="Logo"
-                                className="h-10 w-auto rounded-lg object-contain"
+                                className="h-8 sm:h-10 w-auto rounded-lg object-contain flex-shrink-0"
                                 onError={(e) => {
                                     e.currentTarget.src = logo;
                                 }}
                             />
-                            <span className="text-xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                            <span className="text-base sm:text-xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent truncate min-w-0">
                                 MercadinhoSys
                             </span>
                         </div>
@@ -252,7 +255,7 @@ const HeaderProfessional = () => {
                         </div>
 
                         {/* Mobile Actions */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-shrink-0">
                             <InstallButton className="md:hidden" />
                             
                             {/* Mobile Theme Toggle */}

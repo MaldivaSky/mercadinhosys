@@ -27,6 +27,7 @@ import CaixaManager from './components/CaixaManager';
 import MultiPaymentManager from './components/MultiPaymentManager';
 import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 const PDVPage: React.FC = () => {
 
@@ -94,6 +95,8 @@ const PDVPage: React.FC = () => {
     const [mostrarModalPeso, setMostrarModalPeso] = useState(false);
     const [produtoPendentePeso, setProdutoPendentePeso] = useState<any>(null);
     const [emitirNfce, setEmitirNfce] = useState(true);
+
+    useBodyScrollLock(formaPagamentoAberta);
 
     const isFiado = pagamentos.some(p => p.forma === 'fiado');
 
@@ -430,10 +433,10 @@ const PDVPage: React.FC = () => {
                         <motion.div
                             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                            className="fixed top-0 right-0 bottom-0 w-full sm:w-[480px] bg-white dark:bg-slate-900 shadow-2xl z-[100] flex flex-col"
+                            className="fixed top-0 right-0 h-[100dvh] w-full sm:w-[480px] bg-white dark:bg-slate-900 shadow-2xl z-[100] flex flex-col"
                         >
                             {/* Drawer Header */}
-                            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-slate-900">
                                         <Check className="w-6 h-6" />
@@ -548,8 +551,12 @@ const PDVPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Drawer Footer */}
-                            <div className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 space-y-6">
+                            {/* Drawer Footer — paddingBottom respeita a barra de gestos/home indicator
+                                para o botão "Concluir Venda" nunca ficar sob a UI do sistema. */}
+                            <div
+                                className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 space-y-6 flex-shrink-0"
+                                style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+                            >
 
                                 <div className="flex justify-between items-center px-1">
                                     <div className="flex flex-col">

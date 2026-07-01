@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Scale, X, Check, Calculator } from 'lucide-react';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface PesoInputModalProps {
     isOpen: boolean;
@@ -21,6 +22,8 @@ const PesoInputModal: React.FC<PesoInputModalProps> = ({ isOpen, onClose, onConf
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [isOpen]);
+
+    useBodyScrollLock(isOpen);
 
     if (!produto) return null;
 

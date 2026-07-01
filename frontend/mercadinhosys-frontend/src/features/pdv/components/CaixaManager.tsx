@@ -8,6 +8,7 @@ import {
     RefreshCw, Wallet
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatters';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface CaixaManagerProps {
     caixaAtual: CaixaPDV | null;
@@ -48,6 +49,8 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
         if (isOpen || !caixaAtual) window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, caixaAtual, onClose]);
+
+    useBodyScrollLock(isOpen);
 
     if (!caixaAtual && !isOpen) return null;
     if (!isOpen && caixaAtual) return null;

@@ -48,6 +48,25 @@ const createInitialSession = (): PDVSession => ({
     descontoPercentual: false,
 });
 
+// Persistência da sessão do caixa: sem isso, sair da tela do PDV (menu, notificação,
+// bloqueio de tela) e voltar zera o carrinho inteiro, pois o estado vivia só em memória.
+const PDV_STORAGE_KEY = 'pdv_sessions_v1';
+
+const carregarSessoesSalvas = (): { sessoes: PDVSession[]; sessaoAtivaId: string } | null => {
+    try {
+        const raw = sessionStorage.getItem(PDV_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed.sessoes) || parsed.sessoes.length === 0) return null;
+        const sessaoAtivaId = parsed.sessoes.some((s: PDVSession) => s.id === parsed.sessaoAtivaId)
+            ? parsed.sessaoAtivaId
+            : parsed.sessoes[0].id;
+        return { sessoes: parsed.sessoes, sessaoAtivaId };
+    } catch {
+        return null;
+    }
+};
+
 export const usePDV = () => {
     // Configurações e permissões globais
     const [configuracoes, setConfiguracoes] = useState<ConfiguracoesPDV | null>(null);
@@ -55,9 +74,18 @@ export const usePDV = () => {
     const [loading, setLoading] = useState(false);
     const [caixaAberto, setCaixaAberto] = useState<CaixaPDV | null>(null);
 
-    // Múltiplas Sessões do PDV
-    const [sessoes, setSessoes] = useState<PDVSession[]>([createInitialSession()]);
-    const [sessaoAtivaId, setSessaoAtivaId] = useState<string>(sessoes[0].id);
+    // Múltiplas Sessões do PDV — restauradas do sessionStorage ao remontar a tela
+    const [estadoInicial] = useState(() => carregarSessoesSalvas());
+    const [sessoes, setSessoes] = useState<PDVSession[]>(() => estadoInicial?.sessoes ?? [createInitialSession()]);
+    const [sessaoAtivaId, setSessaoAtivaId] = useState<string>(() => estadoInicial?.sessaoAtivaId ?? sessoes[0].id);
+
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(PDV_STORAGE_KEY, JSON.stringify({ sessoes, sessaoAtivaId }));
+        } catch {
+            // sessionStorage indisponível (modo privado/quota) — segue apenas em memória
+        }
+    }, [sessoes, sessaoAtivaId]);
 
     const sessaoAtiva = sessoes.find(s => s.id === sessaoAtivaId) || sessoes[0];
 

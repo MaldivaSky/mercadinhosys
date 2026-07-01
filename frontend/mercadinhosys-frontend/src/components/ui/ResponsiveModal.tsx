@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface ResponsiveModalProps {
   isOpen: boolean;
@@ -27,6 +28,8 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
   headerColor = 'blue',
   closeButton = true,
 }) => {
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -46,10 +49,10 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-0 sm:p-4 overflow-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 h-[100dvh] bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-0 sm:p-4 overflow-hidden animate-in fade-in duration-200">
       <div
-        className={`bg-white dark:bg-gray-800 shadow-2xl w-full ${sizeClasses[size]} 
-          h-full sm:h-auto sm:max-h-[95vh] sm:rounded-xl overflow-hidden flex flex-col 
+        className={`bg-white dark:bg-gray-800 shadow-2xl w-full ${sizeClasses[size]}
+          h-[100dvh] sm:h-auto sm:max-h-[95dvh] sm:rounded-xl overflow-hidden flex flex-col
           animate-in zoom-in-95 duration-200`}
       >
         {/* Header — paddingTop respeita o notch/status bar no modo tela cheia (mobile) */}

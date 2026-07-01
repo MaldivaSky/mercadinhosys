@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Printer, X, Eye } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { pdvService, ComprovanteVendaResponse } from '../pdvService';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface CupomFiscalModalProps {
     aberto: boolean;
@@ -35,6 +37,8 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
             .catch(() => setErro('Não foi possível carregar o comprovante.'))
             .finally(() => setCarregando(false));
     }, [aberto, vendaId]);
+
+    useBodyScrollLock(aberto);
 
     const handleImprimir = () => {
         if (!cupomRef.current) return;
@@ -200,6 +204,16 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                                 )}
                             </div>
 
+                            {/* Lei da Transparência Fiscal (12.741/2012): valor aproximado dos tributos */}
+                            {(comp.valor_tributos ?? 0) > 0 && (
+                                <div className="border-b border-dashed border-black pb-2 mb-2 text-[9px] text-center">
+                                    <p>
+                                        Valor Aprox. dos Tributos: {formatBRL(comp.valor_tributos ?? 0)} ({(comp.percentual_tributos ?? 0).toFixed(2)}%)
+                                    </p>
+                                    <p className="text-slate-500">Fonte: IBPT (Lei 12.741/2012)</p>
+                                </div>
+                            )}
+
                             {/* ── Rodapé ── */}
                             <div className="text-center text-[10px] mt-2">
                                 <p className="font-bold">{comp.rodape || 'Obrigado pela preferência!'}</p>
@@ -225,9 +239,8 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                                     {dados.nfce.qr_code && (
                                         <div className="mt-2 text-center">
                                             <p className="mb-1 font-bold">Consulte via Leitor de QR Code</p>
-                                            <div className="mx-auto w-24 h-24 bg-white border border-black p-1">
-                                                {/* Representação simbólica, idealmente usar library para QR code */}
-                                                <img src={dados.nfce.qr_code.startsWith('http') ? dados.nfce.qr_code : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(dados.nfce.qr_code)}`} alt="QR Code NFC-e" className="w-full h-full object-contain" />
+                                            <div className="mx-auto w-36 h-36 bg-white border border-black p-2 flex items-center justify-center">
+                                                <QRCodeSVG value={dados.nfce.qr_code} size={128} level="M" />
                                             </div>
                                         </div>
                                     )}
@@ -237,15 +250,19 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                     )}
                 </div>
 
-                {/* Footer com botões */}
-                {dados && (
-                    <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
-                        <button
-                            onClick={onFechar}
-                            className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
-                        >
-                            Fechar
-                        </button>
+                {/* Footer com botões — sempre visível (mesmo em erro/carregando) para que o
+                    usuário nunca fique preso na tela do comprovante em conexões instáveis. */}
+                <div
+                    className="px-4 py-3 border-t border-slate-100 flex gap-2 flex-shrink-0"
+                    style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+                >
+                    <button
+                        onClick={onFechar}
+                        className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
+                    >
+                        Fechar
+                    </button>
+                    {dados && (
                         <button
                             onClick={handleImprimir}
                             className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg"
@@ -253,8 +270,8 @@ const CupomFiscalModal: React.FC<CupomFiscalModalProps> = ({ aberto, vendaId, on
                             <Printer className="w-4 h-4" />
                             Imprimir
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

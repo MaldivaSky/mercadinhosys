@@ -137,6 +137,8 @@ export interface ComprovanteVendaResponse {
         valor_recebido: number;
         troco: number;
         rodape?: string;
+        valor_tributos?: number;
+        percentual_tributos?: number;
     };
     nfce?: {
         chave_acesso?: string;
