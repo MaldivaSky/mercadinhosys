@@ -2,15 +2,13 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { apiClient } from '../../api/apiClient';
 import { showToast } from '../../utils/toast';
 import { MapPin, Target, PackageOpen, Users, Save, Trash2, Plus, Clock } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 
 export default function SFAManagement() {
-    const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('metas');
     
     // Data lists
     const [metas, setMetas] = useState<any[]>([]);
@@ -46,7 +44,6 @@ export default function SFAManagement() {
     };
 
     const loadSFAData = async () => {
-        setLoading(true);
         try {
             const [resMetas, resFocos, resRotas] = await Promise.all([
                 apiClient.get(`/sfa/admin/metas?mes=${new Date().getMonth() + 1}&ano=${new Date().getFullYear()}`),
@@ -59,8 +56,6 @@ export default function SFAManagement() {
         } catch (error) {
             console.error(error);
             showToast.error('Erro ao carregar dados do SFA');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -146,17 +141,18 @@ export default function SFAManagement() {
                 </Button>
             </div>
 
-            <Tabs defaultValue="metas" className="w-full">
+            <div className="w-full">
                 <div className="overflow-x-auto pb-2">
-                    <TabsList className="flex w-max min-w-full mb-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                        <TabsTrigger value="metas" className="flex-1 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Metas de Vendedor</TabsTrigger>
-                        <TabsTrigger value="foco" className="flex-1 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Produtos Foco</TabsTrigger>
-                        <TabsTrigger value="rotas" className="flex-1 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Rotas e Territórios</TabsTrigger>
-                    </TabsList>
+                    <div className="flex w-max min-w-full mb-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                        <button onClick={() => setActiveTab('metas')} className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${activeTab === 'metas' ? 'bg-white shadow-sm text-black' : 'text-slate-500 hover:text-slate-900'}`}>Metas de Vendedor</button>
+                        <button onClick={() => setActiveTab('foco')} className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${activeTab === 'foco' ? 'bg-white shadow-sm text-black' : 'text-slate-500 hover:text-slate-900'}`}>Produtos Foco</button>
+                        <button onClick={() => setActiveTab('rotas')} className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${activeTab === 'rotas' ? 'bg-white shadow-sm text-black' : 'text-slate-500 hover:text-slate-900'}`}>Rotas e Territórios</button>
+                    </div>
                 </div>
 
                 {/* ABA DE METAS */}
-                <TabsContent value="metas" className="space-y-6">
+                {activeTab === 'metas' && (
+                <div className="space-y-6">
                     <Card className="border-none shadow-lg bg-white/70 backdrop-blur-xl">
                         <CardHeader>
                             <CardTitle>Definir Nova Meta</CardTitle>
@@ -165,7 +161,7 @@ export default function SFAManagement() {
                         <CardContent>
                             <form onSubmit={handleSaveMeta} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                                 <div className="space-y-2 lg:col-span-1">
-                                    <Label>Vendedor</Label>
+                                    <label className="text-sm font-medium leading-none">Vendedor</label>
                                     <select 
                                         className="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                         value={metaForm.vendedor_id}
@@ -179,19 +175,19 @@ export default function SFAManagement() {
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Mês</Label>
+                                    <label className="text-sm font-medium leading-none">Mês</label>
                                     <Input type="number" min="1" max="12" value={metaForm.mes} onChange={(e) => setMetaForm({...metaForm, mes: Number(e.target.value)})} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Ano</Label>
+                                    <label className="text-sm font-medium leading-none">Ano</label>
                                     <Input type="number" value={metaForm.ano} onChange={(e) => setMetaForm({...metaForm, ano: Number(e.target.value)})} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Meta Faturamento (R$)</Label>
+                                    <label className="text-sm font-medium leading-none">Meta Faturamento (R$)</label>
                                     <Input type="number" step="0.01" value={metaForm.meta_faturamento} onChange={(e) => setMetaForm({...metaForm, meta_faturamento: e.target.value})} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Meta Positivação (Clientes)</Label>
+                                    <label className="text-sm font-medium leading-none">Meta Positivação (Clientes)</label>
                                     <Input type="number" value={metaForm.meta_positivacao} onChange={(e) => setMetaForm({...metaForm, meta_positivacao: e.target.value})} required />
                                 </div>
                                 <div className="lg:col-span-5 flex justify-end">
@@ -233,10 +229,12 @@ export default function SFAManagement() {
                             )
                         })}
                     </div>
-                </TabsContent>
+                </div>
+                )}
 
                 {/* ABA PRODUTO FOCO */}
-                <TabsContent value="foco" className="space-y-6">
+                {activeTab === 'foco' && (
+                <div className="space-y-6">
                     <Card className="border-none shadow-lg bg-white/70 backdrop-blur-xl">
                         <CardHeader>
                             <CardTitle>Novo Produto Foco</CardTitle>
@@ -245,7 +243,7 @@ export default function SFAManagement() {
                         <CardContent>
                             <form onSubmit={handleSaveFoco} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                 <div className="space-y-2 lg:col-span-2">
-                                    <Label>Produto</Label>
+                                    <label className="text-sm font-medium leading-none">Produto</label>
                                     <select 
                                         className="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                         value={focoForm.produto_id}
@@ -259,15 +257,15 @@ export default function SFAManagement() {
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Data Início</Label>
+                                    <label className="text-sm font-medium leading-none">Data Início</label>
                                     <Input type="date" value={focoForm.data_inicio} onChange={(e) => setFocoForm({...focoForm, data_inicio: e.target.value})} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Data Fim</Label>
+                                    <label className="text-sm font-medium leading-none">Data Fim</label>
                                     <Input type="date" value={focoForm.data_fim} onChange={(e) => setFocoForm({...focoForm, data_fim: e.target.value})} required />
                                 </div>
                                 <div className="space-y-2 lg:col-span-2">
-                                    <Label>Meta de Quantidade (Opcional)</Label>
+                                    <label className="text-sm font-medium leading-none">Meta de Quantidade (Opcional)</label>
                                     <Input type="number" value={focoForm.meta_quantidade} onChange={(e) => setFocoForm({...focoForm, meta_quantidade: e.target.value})} />
                                 </div>
                                 <div className="lg:col-span-2 flex justify-end">
@@ -304,10 +302,12 @@ export default function SFAManagement() {
                             </Card>
                         ))}
                     </div>
-                </TabsContent>
+                </div>
+                )}
 
                 {/* ABA ROTAS */}
-                <TabsContent value="rotas" className="space-y-6">
+                {activeTab === 'rotas' && (
+                <div className="space-y-6">
                     <Card className="border-none shadow-lg bg-white/70 backdrop-blur-xl">
                         <CardHeader>
                             <CardTitle>Criar Nova Rota</CardTitle>
@@ -316,11 +316,11 @@ export default function SFAManagement() {
                         <CardContent>
                             <form onSubmit={handleSaveRota} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                 <div className="space-y-2 lg:col-span-2">
-                                    <Label>Nome da Rota (Ex: Rota Centro Sul)</Label>
+                                    <label className="text-sm font-medium leading-none">Nome da Rota (Ex: Rota Centro Sul)</label>
                                     <Input value={rotaForm.nome} onChange={(e) => setRotaForm({...rotaForm, nome: e.target.value})} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Vendedor Responsável</Label>
+                                    <label className="text-sm font-medium leading-none">Vendedor Responsável</label>
                                     <select 
                                         className="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                         value={rotaForm.vendedor_id}
@@ -334,7 +334,7 @@ export default function SFAManagement() {
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Dia da Semana (0=Seg, 6=Dom)</Label>
+                                    <label className="text-sm font-medium leading-none">Dia da Semana (0=Seg, 6=Dom)</label>
                                     <select 
                                         className="w-full h-10 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                         value={rotaForm.dia_semana}
@@ -390,8 +390,9 @@ export default function SFAManagement() {
                             )
                         })}
                     </div>
-                </TabsContent>
-            </Tabs>
+                </div>
+                )}
+            </div>
         </div>
     );
 }
