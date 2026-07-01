@@ -238,15 +238,15 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* Cards Principais - Grid Responsivo */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+            {/* Cards Principais - Grid Responsivo (Carrossel no Mobile) */}
+            <div className="flex overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 snap-x snap-mandatory hide-scrollbar">
                 {/* Total de Produtos */}
                 <div
                     onClick={() => setActiveMetricModal({ 
                         id: 'all', title: 'Total Produtos', value: stats.total_produtos, formattedValue: stats.total_produtos.toString(), isCurrency: false, icon: Package, 
                         theme: { header: 'bg-blue-600', text: 'text-blue-600 dark:text-blue-400', button: 'bg-blue-600 hover:bg-blue-700', stroke: '#3b82f6', shadow: 'shadow-blue-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-3 sm:p-6 text-slate-200 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="min-w-[60vw] max-w-[260px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
                 >
                     <div className="flex items-center gap-3 mb-3">
                         <Package className="w-8 h-8 text-blue-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -264,7 +264,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'normal', title: 'Estoque Normal', value: stats.produtos_normal, formattedValue: stats.produtos_normal.toString(), isCurrency: false, icon: Target, 
                         theme: { header: 'bg-emerald-600', text: 'text-emerald-600 dark:text-emerald-400', button: 'bg-emerald-600 hover:bg-emerald-700', stroke: '#10b981', shadow: 'shadow-emerald-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-3 sm:p-6 text-slate-200 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="min-w-[60vw] max-w-[260px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
                 >
                     <div className="flex items-center gap-3 mb-3">
                         <Target className="w-8 h-8 text-emerald-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -283,7 +283,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'baixo', title: 'Baixo Estoque', value: stats.produtos_baixo_estoque, formattedValue: stats.produtos_baixo_estoque.toString(), isCurrency: false, icon: AlertTriangle, 
                         theme: { header: 'bg-amber-500', text: 'text-amber-500 dark:text-amber-400', button: 'bg-amber-500 hover:bg-amber-600', stroke: '#f59e0b', shadow: 'shadow-amber-500/30' } 
                     })}
-                    className="bg-slate-900 border border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.1)] p-3 sm:p-6 text-slate-200 cursor-pointer hover:border-amber-500/60 hover:bg-slate-800 transition-all duration-200 group"
+                    className="min-w-[60vw] max-w-[260px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-amber-500/30 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.1)] p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-amber-500/60 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
                 >
                     <div className="flex items-center gap-3 mb-3">
                         <AlertTriangle className="w-8 h-8 text-amber-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -301,7 +301,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'esgotado', title: 'Esgotados', value: stats.produtos_esgotados, formattedValue: stats.produtos_esgotados.toString(), isCurrency: false, icon: Activity, 
                         theme: { header: 'bg-rose-500', text: 'text-rose-500 dark:text-rose-400', button: 'bg-rose-500 hover:bg-rose-600', stroke: '#f43f5e', shadow: 'shadow-rose-500/30' } 
                     })}
-                    className="bg-slate-900 border border-rose-500/40 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.15)] p-3 sm:p-6 text-slate-200 cursor-pointer hover:border-rose-500/70 hover:bg-slate-800 transition-all duration-200 group"
+                    className="min-w-[60vw] max-w-[260px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-rose-500/40 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.15)] p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-rose-500/70 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
                 >
                     <div className="flex items-center gap-3 mb-3">
                         <Activity className="w-8 h-8 text-rose-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -319,7 +319,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'valor', title: 'Valor em Estoque', value: stats.valor_total_estoque, formattedValue: formatCurrency(stats.valor_total_estoque), isCurrency: true, icon: DollarSign, 
                         theme: { header: 'bg-purple-600', text: 'text-purple-500 dark:text-purple-400', button: 'bg-purple-600 hover:bg-purple-700', stroke: '#a855f7', shadow: 'shadow-purple-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-3 sm:p-6 text-slate-200 cursor-pointer hover:border-purple-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="min-w-[60vw] max-w-[260px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-purple-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
                 >
                     <div className="flex items-center gap-3 mb-3">
                         <DollarSign className="w-8 h-8 text-purple-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -339,7 +339,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                         id: 'margem', title: 'Margem Média', value: stats.margem_media, formattedValue: `${stats.margem_media.toFixed(1)}%`, isCurrency: false, icon: PieChart, 
                         theme: { header: 'bg-indigo-600', text: 'text-indigo-500 dark:text-indigo-400', button: 'bg-indigo-600 hover:bg-indigo-700', stroke: '#6366f1', shadow: 'shadow-indigo-600/30' } 
                     })}
-                    className="bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-3 sm:p-6 text-slate-200 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-all duration-200 group"
+                    className="min-w-[60vw] max-w-[260px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-slate-900 border border-slate-800 rounded-xl shadow-lg p-4 sm:p-6 text-slate-200 cursor-pointer hover:border-indigo-500/50 hover:bg-slate-800 transition-all duration-200 group flex-shrink-0"
                 >
                     <div className="flex items-center gap-3 mb-3">
                         <PieChart className="w-8 h-8 text-indigo-500 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -352,10 +352,10 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
             </div>
 
-            {/* Análises Avançadas - Grid 3 Colunas */}
-            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3 sm:p-6">
+            {/* Análises Avançadas - Grid 3 Colunas (Carrossel no Mobile) */}
+            <div className="flex overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 gap-4 sm:grid sm:grid-cols-1 lg:grid-cols-3 sm:p-6 snap-x snap-mandatory hide-scrollbar">
                 {/* Classificação ABC */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
+                <div className="min-w-[85vw] max-w-[320px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 sm:p-6 flex-shrink-0">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
                             <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-300" />
@@ -446,7 +446,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Status de Giro */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
+                <div className="min-w-[85vw] max-w-[320px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 sm:p-6 flex-shrink-0">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
                             <Zap className="w-6 h-6 text-purple-600 dark:text-purple-300" />
@@ -563,7 +563,7 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                 </div>
 
                 {/* Monitor de Validade */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6">
+                <div className="min-w-[85vw] max-w-[320px] sm:min-w-0 sm:max-w-none snap-center sm:snap-align-none bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5 sm:p-6 flex-shrink-0">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
                             <Clock className="w-6 h-6 text-orange-600 dark:text-orange-300" />
