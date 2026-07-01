@@ -4,7 +4,7 @@ import threading
 import requests
 import os
 from datetime import datetime
-from app.models import db, SyncQueue
+from app.models import db, SyncQueue, allow_all_tenants
 
 class GuerrillaSyncWorker(threading.Thread):
     """
@@ -33,8 +33,9 @@ class GuerrillaSyncWorker(threading.Thread):
             return False
 
     def sync_deltas(self):
-        """Processa a fila de sincronização"""
-        with self.app.app_context():
+        """Processa a fila de sincronização (cross-tenant: a fila abrange todas as
+        lojas, então o acesso global é explicitado via allow_all_tenants)."""
+        with self.app.app_context(), allow_all_tenants():
             pendentes = SyncQueue.query.filter_by(status="pendente").order_by(SyncQueue.created_at.asc()).limit(50).all()
             
             if not pendentes:

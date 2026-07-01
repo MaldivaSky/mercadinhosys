@@ -4,12 +4,14 @@
 import json
 import os
 import re
+import threading
 import uuid as uuid_module
+from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional
 
-from flask import g, has_app_context, current_app
+from flask import g, has_app_context, has_request_context, current_app
 from flask_login import LoginManager, UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.query import Query as _BaseQuery
@@ -28,38 +30,80 @@ naming_convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+# Opt-in EXPLÍCITO para acesso cross-tenant (fora de request): jobs de background,
+# seeders, cálculo de métricas globais, sincronização. Thread-local porque workers
+# rodam em threads separadas. FORA deste contexto e sem tenant concreto, a query
+# falha FECHADA (não vaza dados de todas as lojas). Ver [isolamento-multi-tenant].
+_tenant_bypass = threading.local()
+
+
+def _is_tenant_bypass() -> bool:
+    return getattr(_tenant_bypass, "active", False)
+
+
+@contextmanager
+def allow_all_tenants():
+    """
+    Habilita acesso cross-tenant DENTRO deste bloco, de forma explícita e auditável.
+    Use SOMENTE em código de plataforma confiável (jobs agendados, sincronização,
+    seeders, relatórios globais do super admin). Nunca em handlers de request de loja.
+
+        with allow_all_tenants():
+            for estab in Estabelecimento.query.all():
+                ...  # consultas veem todas as lojas
+    """
+    anterior = getattr(_tenant_bypass, "active", False)
+    _tenant_bypass.active = True
+    try:
+        yield
+    finally:
+        _tenant_bypass.active = anterior
+
+
 def _tenant_atual():
     """
-    Retorna o tenant concreto a ser aplicado, ou None quando NÃO se deve filtrar.
+    Retorna o tenant a aplicar no filtro automático, ou None quando NÃO se deve filtrar.
 
-    Não filtra (retorna None) quando:
-      - fora de contexto de app (CLI, seeders, workers);
-      - não há tenant em g (rotas públicas/login — comportamento legado);
-      - sentinela 'all' (super admin em visão GLOBAL — acesso cross-tenant proposital).
-
-    Filtra (retorna o id) quando há tenant concreto em g.estabelecimento_id — INCLUSIVE
-    quando um super admin está IMPERSONANDO uma loja (modo espelho). Nesse caso
-    queremos que TODA consulta reflita exatamente aquela loja (somente leitura é
-    garantido na camada HTTP, em load_tenant_context).
+    A fronteira de segurança real é o REQUEST HTTP — é ali que dados de um tenant
+    poderiam vazar para o usuário de outro. Por isso:
+      - None (sem filtro) nos casos seguros:
+          * fora de app context (não há ORM ativo);
+          * bypass explícito via allow_all_tenants() (plataforma confiável);
+          * sentinela 'all' (super admin em visão GLOBAL);
+          * rotas públicas de auth/onboarding/webhooks (sem tenant por design);
+          * FORA de request (CLI/seeders/jobs/relatórios globais) — cross-tenant
+            é legítimo nesse contexto; use allow_all_tenants() para deixar
+            explícito quando quiser.
+      - id concreto quando há g.estabelecimento_id — inclusive super admin
+        IMPERSONANDO uma loja (modo espelho; escrita bloqueada na camada HTTP).
+      - -1 (FAIL-CLOSED) quando estamos DENTRO de um request autenticado e o
+        tenant não foi resolvido (ex.: bug/bypass do before_request). Assim a
+        query não encontra nada em vez de despejar os dados de todas as lojas.
     """
-    if not has_app_context() or not g:
+    if not has_app_context():
         return None
-        
-    from flask import has_request_context
-    tid = getattr(g, "estabelecimento_id", None)
-    
+
+    # Opt-in explícito de plataforma (jobs/seeders/sync) tem precedência.
+    if _is_tenant_bypass():
+        return None
+
+    tid = getattr(g, "estabelecimento_id", None) if g else None
+
     if str(tid).lower() == "all":
         return None
-        
-    if tid is None and has_request_context():
+
+    if tid is not None:
+        return tid
+
+    # Sem tenant concreto. Dentro de um request, falha fechado (a menos que seja
+    # rota pública). Fora de request, cross-tenant é legítimo (fail-open).
+    if has_request_context():
         from flask import request
-        if request.path.startswith("/api/auth") or request.path.startswith("/api/onboarding") or request.path.startswith("/api/saas/webhooks"):
+        if request.path.startswith(("/api/auth", "/api/onboarding", "/api/saas/webhooks")):
             return None
-        # Fail-closed: se é um request web de API (não público) e não tem tenant setado,
-        # retorna um ID inválido para não vazar dados de todas as lojas acidentalmente.
         return -1
-        
-    return tid
+
+    return None
 
 
 class TenantQuery(_BaseQuery):

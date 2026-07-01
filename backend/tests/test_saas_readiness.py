@@ -108,16 +108,17 @@ def test_onboarding_atomic_flow(client, session):
     assert data['success'] is True
     assert data['data']['estabelecimento']['nome_fantasia'] == "Auto Test Store"
     
-    # Verify DB state
-    from app.models import Estabelecimento as Est, Funcionario as Fun
-    stored_est = Est.query.filter_by(email="test@autostore.com").first()
-    assert stored_est is not None
-    assert stored_est.plano == "Premium" # Default in onboarding
+    # Verify DB state. Provisionar uma loja e conferir seu admin é uma operação
+    # CROSS-TENANT (estamos validando dados de um tenant recém-criado, fora de um
+    # request daquele tenant). Explicitamos isso com allow_all_tenants — sem ele,
+    # um tenant vazado no g do request anterior filtraria o admin novo e o teste
+    # veria None.
+    from app.models import Estabelecimento as Est, Funcionario as Fun, allow_all_tenants
+    with allow_all_tenants():
+        stored_est = Est.query.filter_by(email="test@autostore.com").first()
+        assert stored_est is not None
+        assert stored_est.plano == "Premium"  # Default in onboarding
 
-    # Espelha tenant do NOVO estabelecimento p/ verificar seu admin (filtrado).
-    from flask import g, has_request_context
-    if has_request_context():
-        g.estabelecimento_id = stored_est.id
-    stored_admin = Fun.query.filter_by(email="admin@autostore.com").first()
-    assert stored_admin is not None
-    assert stored_admin.check_password("SecurePass123!") is True
+        stored_admin = Fun.query.filter_by(email="admin@autostore.com").first()
+        assert stored_admin is not None
+        assert stored_admin.check_password("SecurePass123!") is True
