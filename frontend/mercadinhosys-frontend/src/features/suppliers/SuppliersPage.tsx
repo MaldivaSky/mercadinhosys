@@ -445,11 +445,11 @@ const SuppliersPage: React.FC = () => {
     }, [filteredSuppliers]);
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-4 sm:p-6 max-w-full overflow-x-hidden">
 
             {/* Header */}
-            <div className="flex justify-between items-start">
-                <div>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                <div className="min-w-0">
                     <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
                         Fornecedores
                     </h1>
@@ -468,12 +468,12 @@ const SuppliersPage: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div className="flex gap-3 relative">
-                    <div className="relative">
+                <div className="flex flex-wrap gap-3 relative w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none">
                         <button
                             onClick={() => setShowExportMenu(!showExportMenu)}
                             disabled={exportando || suppliers.length === 0}
-                            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full justify-center sm:w-auto px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {exportando ? (
                                 <>
@@ -520,7 +520,7 @@ const SuppliersPage: React.FC = () => {
                             resetForm();
                             setShowModal(true);
                         }}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 transition-colors"
+                        className="flex-1 sm:flex-none justify-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 transition-colors whitespace-nowrap"
                     >
                         <Plus className="w-5 h-5" />
                         <span>Novo Fornecedor</span>

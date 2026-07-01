@@ -54,7 +54,7 @@ const MainLayout: React.FC = () => {
                 <HeaderProfessional />
                 <MirrorReadOnlyBanner />
                 {/* On mobile, add padding bottom equal to the bottom navigation height (approx 4rem = 64px) plus safe area */}
-                <main ref={mainRef} className="relative flex-1 overflow-y-auto p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-6 min-h-0">
+                <main ref={mainRef} className="relative flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-6 min-h-0">
                     {/* Indicador de pull-to-refresh (mobile) */}
                     {(distance > 0 || refreshing) && (
                         <div
