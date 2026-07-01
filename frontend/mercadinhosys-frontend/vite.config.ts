@@ -21,7 +21,7 @@ export default defineConfig(() => {
         // Não injeta o registerSW automaticamente — controlamos manualmente
         // para evitar que erros de registro (ex: HTTP, escopo, Safari privado)
         // sejam propagados ao Sentry como erros críticos.
-        injectRegisterSW: false,
+        injectRegister: null,
         devOptions: {
           enabled: false // Desativar SW em dev evita cache stale e erros de escopo
         },
