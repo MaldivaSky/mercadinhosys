@@ -465,6 +465,8 @@ def create_app(config_name=None):
                     ("produtos", "subcategoria",                    "VARCHAR(50)"),
                     ("produtos", "ncm",                             "VARCHAR(8)"),
                     ("produtos", "origem",                          "INTEGER DEFAULT 0"),
+                    # Clientes
+                    ("clientes", "vendedor_id",                     "INTEGER"),
                     ("produtos", "controlar_validade",              "BOOLEAN DEFAULT FALSE"),
                     ("produtos", "data_validade",                   "DATE"),
                     ("produtos", "lote",                            "VARCHAR(50)"),
@@ -510,6 +512,45 @@ def create_app(config_name=None):
                             logger.warning(f"⚠️ Erro ao adicionar {table}.{col}: {e}")
 
                 logger.info(f"✅ Schema sync concluido: {added} colunas novas adicionadas.")
+                
+                # Criar novas tabelas SFA que não existiam antes para evitar erro 500 em Produção onde create_all é desativado
+                if "metas_vendedor" not in existing_tables:
+                    try:
+                        logger.info("Criando tabela metas_vendedor (SFA)...")
+                        id_syntax = "SERIAL PRIMARY KEY" if app.config.get("USING_POSTGRES") else "INTEGER PRIMARY KEY AUTOINCREMENT"
+                        db.session.execute(_sync_text(f"""
+                            CREATE TABLE IF NOT EXISTS metas_vendedor (
+                                id {id_syntax},
+                                vendedor_id INTEGER NOT NULL REFERENCES funcionarios(id),
+                                estabelecimento_id INTEGER NOT NULL REFERENCES estabelecimentos(id),
+                                mes INTEGER NOT NULL,
+                                ano INTEGER NOT NULL,
+                                valor_meta NUMERIC(10, 2) NOT NULL DEFAULT 0.0
+                            )
+                        """))
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.warning(f"Erro ao criar metas_vendedor: {e}")
+                        
+                if "produtos_foco" not in existing_tables:
+                    try:
+                        logger.info("Criando tabela produtos_foco (SFA)...")
+                        id_syntax = "SERIAL PRIMARY KEY" if app.config.get("USING_POSTGRES") else "INTEGER PRIMARY KEY AUTOINCREMENT"
+                        db.session.execute(_sync_text(f"""
+                            CREATE TABLE IF NOT EXISTS produtos_foco (
+                                id {id_syntax},
+                                estabelecimento_id INTEGER NOT NULL REFERENCES estabelecimentos(id),
+                                produto_id INTEGER NOT NULL REFERENCES produtos(id),
+                                ativo BOOLEAN DEFAULT TRUE,
+                                data_inicio DATE NOT NULL,
+                                data_fim DATE
+                            )
+                        """))
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        logger.warning(f"Erro ao criar produtos_foco: {e}")
             except Exception as sync_err:
                 db.session.rollback()
                 logger.error(f"⚠️ Schema sync falhou: {sync_err}")
