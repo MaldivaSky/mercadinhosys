@@ -10,6 +10,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { buscarCep, formatCep, formatPhone } from '../../utils/cepUtils';
+import PageContainer from '../../components/layout/PageContainer';
+import PageHeader from '../../components/layout/PageHeader';
 
 // Tipos atualizados - todas as propriedades do Fornecedor estão disponíveis
 
@@ -445,88 +447,84 @@ const SuppliersPage: React.FC = () => {
     }, [filteredSuppliers]);
 
     return (
-        <div className="space-y-6 p-4 sm:p-6 max-w-full overflow-x-hidden">
+        <PageContainer>
 
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                <div className="min-w-0">
-                    <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
-                        Fornecedores
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
-                        Gerencie seus fornecedores e parcerias
-                    </p>
-                    {filterStatus !== 'all' && (
-                        <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm">
-                            <span>Filtro ativo: {filterStatus === 'active' ? 'Ativos' : 'Inativos'}</span>
+            {/* Header (primitivo responsivo — empilha e vira full-width no mobile) */}
+            <PageHeader
+                title="Fornecedores"
+                subtitle="Gerencie seus fornecedores e parcerias"
+                actions={
+                    <>
+                        <div className="relative flex-1 sm:flex-none">
                             <button
-                                onClick={() => setFilterStatus('all')}
-                                className="hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-0.5"
+                                onClick={() => setShowExportMenu(!showExportMenu)}
+                                disabled={exportando || suppliers.length === 0}
+                                className="w-full justify-center sm:w-auto px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                ✕
+                                {exportando ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        <span>Exportando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Package className="w-5 h-5" />
+                                        <span>Exportar</span>
+                                        <ChevronDown className="w-4 h-4 ml-1" />
+                                    </>
+                                )}
                             </button>
-                        </div>
-                    )}
-                </div>
-                <div className="flex flex-wrap gap-3 relative w-full sm:w-auto">
-                    <div className="relative flex-1 sm:flex-none">
-                        <button
-                            onClick={() => setShowExportMenu(!showExportMenu)}
-                            disabled={exportando || suppliers.length === 0}
-                            className="w-full justify-center sm:w-auto px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {exportando ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                    <span>Exportando...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Package className="w-5 h-5" />
-                                    <span>Exportar</span>
-                                    <ChevronDown className="w-4 h-4 ml-1" />
-                                </>
-                            )}
-                        </button>
 
-                        {showExportMenu && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700">
-                                <button
-                                    onClick={exportarCSV}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-t-lg"
-                                >
-                                    <FileText className="w-4 h-4 text-green-500" />
-                                    CSV
-                                </button>
-                                <button
-                                    onClick={exportarExcel}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
-                                >
-                                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                                    Excel
-                                </button>
-                                <button
-                                    onClick={exportarPDF}
-                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg"
-                                >
-                                    <FileText className="w-4 h-4 text-red-500" />
-                                    PDF
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                            {showExportMenu && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700">
+                                    <button
+                                        onClick={exportarCSV}
+                                        className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-t-lg"
+                                    >
+                                        <FileText className="w-4 h-4 text-green-500" />
+                                        CSV
+                                    </button>
+                                    <button
+                                        onClick={exportarExcel}
+                                        className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                    >
+                                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                                        Excel
+                                    </button>
+                                    <button
+                                        onClick={exportarPDF}
+                                        className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-lg"
+                                    >
+                                        <FileText className="w-4 h-4 text-red-500" />
+                                        PDF
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => {
+                                resetForm();
+                                setShowModal(true);
+                            }}
+                            className="justify-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 transition-colors whitespace-nowrap"
+                        >
+                            <Plus className="w-5 h-5" />
+                            <span>Novo Fornecedor</span>
+                        </button>
+                    </>
+                }
+            />
+            {filterStatus !== 'all' && (
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm">
+                    <span>Filtro ativo: {filterStatus === 'active' ? 'Ativos' : 'Inativos'}</span>
                     <button
-                        onClick={() => {
-                            resetForm();
-                            setShowModal(true);
-                        }}
-                        className="flex-1 sm:flex-none justify-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 transition-colors whitespace-nowrap"
+                        onClick={() => setFilterStatus('all')}
+                        className="hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-0.5"
                     >
-                        <Plus className="w-5 h-5" />
-                        <span>Novo Fornecedor</span>
+                        ✕
                     </button>
                 </div>
-            </div>
+            )}
 
             {/* Dashboard de Estatísticas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1171,7 +1169,7 @@ const SuppliersPage: React.FC = () => {
                     onClose={() => setShowDossieModal(false)}
                 />
             )}
-        </div>
+        </PageContainer>
     );
 };
 
