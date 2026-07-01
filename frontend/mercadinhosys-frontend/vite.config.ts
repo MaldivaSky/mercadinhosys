@@ -18,8 +18,26 @@ export default defineConfig(() => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        // Não injeta o registerSW automaticamente — controlamos manualmente
+        // para evitar que erros de registro (ex: HTTP, escopo, Safari privado)
+        // sejam propagados ao Sentry como erros críticos.
+        injectRegisterSW: false,
         devOptions: {
-          enabled: true
+          enabled: false // Desativar SW em dev evita cache stale e erros de escopo
+        },
+        workbox: {
+          // Ignora chamadas de API e arquivos dinâmicos no cache do SW
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//],
+          runtimeCaching: [
+            {
+              urlPattern: /^\/api\//,
+              handler: 'NetworkOnly', // API nunca entra em cache offline
+            },
+          ],
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
         manifest: {

@@ -35,5 +35,31 @@ export function initSentry(): void {
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate,
     sendDefaultPii: false, // não enviar dados pessoais por padrão (LGPD)
+
+    /**
+     * Filtro de eventos: evita que ruído de infraestrutura (SW, rede, extensões)
+     * polua o painel de erros com falsos positivos.
+     */
+    beforeSend(event, hint) {
+      const err = hint?.originalException;
+      if (err instanceof Error) {
+        const msg = err.message?.toLowerCase() ?? '';
+        // Erros de Service Worker — esperados em HTTP ou Safari privado
+        if (msg.includes('serviceworker') || msg.includes('sw.js') || msg.includes('rejected')) {
+          return null; // Descartar
+        }
+        // Erros de rede genéricos (offline, proxy, CORS de terceiros)
+        if (msg.includes('networkerror') || msg.includes('failed to fetch') || msg.includes('load failed')) {
+          return null;
+        }
+        // Erros de extensão de browser
+        if (event.exception?.values?.[0]?.stacktrace?.frames?.some(
+          (f) => f.filename?.includes('chrome-extension') || f.filename?.includes('moz-extension')
+        )) {
+          return null;
+        }
+      }
+      return event;
+    },
   });
 }
