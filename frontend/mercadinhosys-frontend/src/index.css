@@ -13,12 +13,19 @@
    MELHORIAS PARA MOBILE E RESPONSIVIDADE
    ======================================== */
 
-/* Garante que o body ocupe toda a altura disponível */
+/* Garante que o body ocupe toda a altura disponível.
+   Usa 100dvh (dynamic viewport height) para respeitar a barra de endereço do
+   mobile — 100vh no iOS/Android inclui a área da barra e causa corte/"pulo" de
+   layout. Fallback em 100vh para navegadores antigos. Também blindamos contra
+   scroll horizontal acidental de qualquer página no shell inteiro. */
 html, body, #root {
   width: 100%;
+  max-width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -36,17 +43,14 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Garante que modais sejam acessíveis em mobile */
-.fixed {
-  position: fixed !important;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Botões maiores para toque em mobile */
-button {
-  min-height: 44px; /* Apple HIG */
-  min-width: 44px;
+/* Alvo de toque mínimo (Apple HIG) apenas em telas de toque, e SÓ min-height.
+   Forçar min-width em todo botão empurrava barras de ícones para fora da tela
+   (estouro horizontal). Botões que precisam de área de toque maior devem definir
+   o próprio tamanho. */
+@media (hover: none) and (pointer: coarse) {
+  button:not([class*="w-"]):not([class*="h-"]) {
+    min-height: 44px;
+  }
 }
 
 /* ========================================
@@ -156,29 +160,14 @@ button {
   animation: fadeIn 0.3s ease-in-out;
 }
 
-/* Melhorias para modais em mobile */
-@media (max-width: 640px) {
-  .fixed.inset-0 {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    z-index: 40 !important;
-  }
-
-  /* Garante que o modal seja clicável */
-  .fixed.inset-0 > div {
-    max-height: calc(100vh - 2rem);
-    height: auto;
-    max-width: 100%;
-  }
-
-  /* Melhora touch em botões pequenos */
-  button {
-    padding: 0.5rem;
-  }
-}
+/* NOTA: os antigos overrides globais de modal em mobile foram REMOVIDOS aqui.
+   Eles forçavam `z-index: 40 !important` em TODO overlay `.fixed.inset-0`
+   (quebrando o empilhamento de modais aninhados, que usam z-[200]/z-[210]) e
+   `max-height: calc(100vh - 2rem)` com !important em todo filho de overlay
+   (brigando com o layout responsivo de cada modal). Agora cada modal é dono do
+   seu próprio dimensionamento via ResponsiveModal / classes utilitárias
+   (h-[100dvh], max-h-[90dvh], safe-area-inset) — comportamento previsível e
+   consistente em mobile e desktop. */
 
 /* ========================================
    SCROLLBARS DE ELITE
