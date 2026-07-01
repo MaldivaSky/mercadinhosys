@@ -165,28 +165,28 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 
                     <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm">
-                        <span className="text-4xl font-black text-indigo-600 dark:text-indigo-400 mb-2">{cliente.total_compras ?? 0}</span>
-                        <span className="text-xs font-bold text-indigo-900/60 dark:text-indigo-200/60 uppercase tracking-widest">Total Compras</span>
+                        <span className="text-3xl lg:text-4xl font-black text-indigo-600 dark:text-indigo-400 mb-2 truncate">{cliente.total_compras ?? 0}</span>
+                        <span className="text-[10px] sm:text-xs font-bold text-indigo-900/60 dark:text-indigo-200/60 uppercase tracking-widest">Total Compras</span>
                     </div>
 
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm">
-                        <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-2 truncate">
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm overflow-hidden">
+                        <span className="text-xl sm:text-lg md:text-xl lg:text-3xl font-black text-emerald-600 dark:text-emerald-400 mb-2 truncate tracking-tight">
                             R$ {cliente.valor_total_gasto ? Number(cliente.valor_total_gasto).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
                         </span>
-                        <span className="text-xs font-bold text-emerald-900/60 dark:text-emerald-200/60 uppercase tracking-widest">Valor Gasto</span>
+                        <span className="text-[10px] sm:text-xs font-bold text-emerald-900/60 dark:text-emerald-200/60 uppercase tracking-widest truncate">Valor Gasto</span>
                     </div>
 
-                    <div className={`bg-gradient-to-br border rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm ${
+                    <div className={`bg-gradient-to-br border rounded-2xl p-6 text-center flex flex-col justify-center shadow-sm overflow-hidden ${
                         (cliente.saldo_devedor ?? 0) > 0 
                             ? 'from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/20 border-rose-200 dark:border-rose-800/50' 
                             : 'from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-emerald-200 dark:border-emerald-800/50'
                     }`}>
-                        <span className={`text-3xl font-black mb-2 truncate ${
+                        <span className={`text-xl sm:text-lg md:text-xl lg:text-3xl font-black mb-2 truncate tracking-tight ${
                             (cliente.saldo_devedor ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
                         }`}>
                             R$ {cliente.saldo_devedor ? Number(cliente.saldo_devedor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
                         </span>
-                        <span className={`text-xs font-bold uppercase tracking-widest ${
+                        <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest truncate ${
                             (cliente.saldo_devedor ?? 0) > 0 ? 'text-rose-900/60 dark:text-rose-200/60' : 'text-emerald-900/60 dark:text-emerald-200/60'
                         }`}>
                             {(cliente.saldo_devedor ?? 0) > 0 ? 'Saldo Devedor' : 'Sem Débitos'}
@@ -218,9 +218,11 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ open, clien
                                 {produtos.map((prod) => (
                                     <TableRow key={prod.produto_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                                         <TableCell className="text-slate-700 dark:text-slate-200 font-medium">{prod.nome}</TableCell>
-                                        <TableCell align="right" className="text-slate-600 dark:text-slate-400">{prod.quantidade_total}</TableCell>
                                         <TableCell align="right" className="text-slate-600 dark:text-slate-400">
-                                            R$ {Number(prod.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            {Number(prod.quantidade_total).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                                        </TableCell>
+                                        <TableCell align="right" className="text-slate-600 dark:text-slate-400">
+                                            R$ {Number(prod.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
                                         <TableCell align="right" className="text-slate-500 dark:text-slate-500 text-xs">
                                             {prod.ultima_compra ? new Date(prod.ultima_compra).toLocaleDateString('pt-BR') : '-'}

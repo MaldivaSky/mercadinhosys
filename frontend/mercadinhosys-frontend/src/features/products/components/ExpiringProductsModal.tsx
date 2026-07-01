@@ -181,8 +181,10 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                             <p className="text-gray-500">Seu controle de validade está em dia.</p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
+                        <div className="space-y-3">
+                            {/* Cabeçalho de tabela — só no desktop. No mobile cada linha vira
+                                um card com rótulos, evitando colunas espremidas/sobrepostas. */}
+                            <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
                                 <div className="col-span-4">Produto / Lote</div>
                                 <div className="col-span-2">Validade</div>
                                 <div className="col-span-2 text-right">Preço Atual</div>
@@ -195,34 +197,42 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                                 const precoSugerido = precoAtual * (1 - sugestao.desconto);
                                 const dataValidade = lote?.data_validade ?? p.data_validade;
                                 const key = lote && lote.id != null ? `p-${p.id}-l-${lote.id}` : `p-${p.id}-${idx}`;
+                                const diasRestantes = dataValidade
+                                    ? Math.ceil((new Date(dataValidade).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                                    : null;
 
                                 return (
-                                    <div key={key} className="grid grid-cols-12 gap-4 items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
-                                        <div className="col-span-4">
+                                    <div key={key} className="flex flex-col gap-3 sm:grid sm:grid-cols-12 sm:gap-4 sm:items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
+                                        {/* Produto / Lote */}
+                                        <div className="sm:col-span-4 min-w-0">
                                             <p className="font-bold text-gray-900 dark:text-white truncate">{p.nome}</p>
-                                            <p className="text-xs text-gray-500">
+                                            <p className="text-xs text-gray-500 truncate">
                                                 {p.categoria}
                                                 {lote ? ` | Lote: ${lote.numero_lote} (${lote.quantidade} un.)` : ` | Qtd: ${p.quantidade}`}
                                             </p>
                                         </div>
-                                        <div className="col-span-2">
-                                            <div className="flex flex-col">
+                                        {/* Validade */}
+                                        <div className="flex items-center justify-between sm:block sm:col-span-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider sm:hidden">Validade</span>
+                                            <div className="flex flex-col items-end sm:items-start">
                                                 <span className={`text-sm font-medium ${timeframe === 'vencidos' ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'}`}>
                                                     {dataValidade ? new Date(dataValidade).toLocaleDateString() : 'N/A'}
                                                 </span>
-                                                {dataValidade && (
-                                                    <span className="text-[10px] text-gray-400">
-                                                        {Math.ceil((new Date(dataValidade).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} dias
-                                                    </span>
+                                                {diasRestantes !== null && (
+                                                    <span className="text-[10px] text-gray-400">{diasRestantes} dias</span>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="col-span-2 text-right">
+                                        {/* Preço Atual */}
+                                        <div className="flex items-center justify-between sm:block sm:col-span-2 sm:text-right">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider sm:hidden">Preço Atual</span>
                                             <p className="text-sm font-medium">{formatCurrency(precoAtual)}</p>
                                         </div>
-                                        <div className="col-span-2 text-right">
+                                        {/* Sugestão */}
+                                        <div className="flex items-center justify-between sm:block sm:col-span-2 sm:text-right">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider sm:hidden">Sugestão</span>
                                             {sugestao.desconto > 0 ? (
-                                                <div className="flex flex-col items-end">
+                                                <div className="flex items-center gap-2 sm:flex-col sm:items-end">
                                                     <span className="text-sm font-bold text-green-600">{formatCurrency(precoSugerido)}</span>
                                                     <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">-{sugestao.desconto * 100}%</span>
                                                 </div>
@@ -230,16 +240,17 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                                                 <span className="text-sm text-gray-400">---</span>
                                             )}
                                         </div>
-                                        <div className="col-span-2 text-right">
+                                        {/* Ação */}
+                                        <div className="sm:col-span-2 sm:text-right">
                                             {sugestao.acao === 'Descarte' ? (
-                                                <button 
+                                                <button
                                                     onClick={() => onDiscard?.(p, lote?.id ?? undefined)}
-                                                    className={`text-xs font-bold px-3 py-1.5 rounded-full shadow-sm border opacity-90 hover:opacity-100 uppercase tracking-tighter transition-all bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800`}
+                                                    className="w-full sm:w-auto text-xs font-bold px-3 py-2 sm:py-1.5 rounded-full shadow-sm border opacity-90 hover:opacity-100 uppercase tracking-tighter transition-all bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
                                                 >
                                                     {sugestao.acao}
                                                 </button>
                                             ) : (
-                                                <span className={`text-xs font-bold px-2 py-1 rounded-full bg-white dark:bg-gray-800 shadow-sm border ${sugestao.cor} border-current opacity-80 uppercase tracking-tighter`}>
+                                                <span className={`inline-block text-xs font-bold px-2 py-1 rounded-full bg-white dark:bg-gray-800 shadow-sm border ${sugestao.cor} border-current opacity-80 uppercase tracking-tighter`}>
                                                     {sugestao.acao}
                                                 </span>
                                             )}

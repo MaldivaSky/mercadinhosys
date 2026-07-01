@@ -2676,7 +2676,7 @@ def obter_estatisticas_produtos():
 
         if estoque_status:
             if estoque_status == "esgotado":
-                query = query.filter(Produto.quantidade == 0)
+                query = query.filter(Produto.quantidade <= 0)
             elif estoque_status == "baixo":
                 query = query.filter(
                     Produto.quantidade > 0,

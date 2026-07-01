@@ -18,7 +18,7 @@ export default function SFAClientes() {
         try {
             setLoading(true);
             const res = await apiClient.get('/clientes'); // Vendedor agora tem acesso à API de clientes
-            setClientes(res.data.data || []);
+            setClientes(res.data.clientes || []);
         } catch (error) {
             console.error('Erro ao buscar clientes', error);
             showToast.error('Erro ao carregar carteira de clientes.');

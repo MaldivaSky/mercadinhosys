@@ -12,6 +12,7 @@ import * as XLSX from "xlsx";
 import { buscarCep, formatCep, formatPhone } from '../../utils/cepUtils';
 import PageContainer from '../../components/layout/PageContainer';
 import PageHeader from '../../components/layout/PageHeader';
+import PinDialog from '../../components/modals/PinDialog';
 
 // Tipos atualizados - todas as propriedades do Fornecedor estão disponíveis
 
@@ -69,6 +70,11 @@ const SuppliersPage: React.FC = () => {
         observacoes: '',
         ativo: true,
     });
+
+    // Gate de PIN para operações sensíveis
+    const [pinAction, setPinAction] = useState<{ run: () => void; title: string; description: string } | null>(null);
+    const requirePin = (run: () => void, title: string, description: string) =>
+        setPinAction({ run, title, description });
 
     // Calcular estatísticas
     const stats = useMemo(() => {
@@ -233,19 +239,23 @@ const SuppliersPage: React.FC = () => {
         setShowModal(true);
     };
 
-    const handleDelete = async (id: number) => {
-        if (!window.confirm('Tem certeza que deseja desativar este fornecedor?')) return;
-
-        try {
-            // Usar PATCH para desativar ao invés de DELETE
-            await apiClient.patch(`/fornecedores/${id}/status`, { ativo: false });
-            showToast.error('Fornecedor desativado');
-            loadSuppliers();
-        } catch (error: unknown) {
-            console.error('Erro ao desativar fornecedor:', error);
-            const apiError = error as { response?: { data?: { message?: string } } };
-            showToast.error(apiError.response?.data?.message || 'Erro ao desativar fornecedor');
-        }
+    const handleDelete = async (id: number, nome: string) => {
+        requirePin(
+            async () => {
+                try {
+                    // Usar PATCH para desativar ao invés de DELETE
+                    await apiClient.patch(`/fornecedores/${id}/status`, { ativo: false });
+                    showToast.success('Fornecedor desativado');
+                    loadSuppliers();
+                } catch (error: unknown) {
+                    console.error('Erro ao desativar fornecedor:', error);
+                    const apiError = error as { response?: { data?: { message?: string } } };
+                    showToast.error(apiError.response?.data?.message || 'Erro ao desativar fornecedor');
+                }
+            },
+            'Autorizar desativação',
+            `Autorize com o PIN para desativar o fornecedor "${nome}".`
+        );
     };
 
     const handleVerProdutos = async (fornecedor: Fornecedor) => {
@@ -824,11 +834,11 @@ const SuppliersPage: React.FC = () => {
                                     </a>
                                 )}
                                 <button
-                                    onClick={() => handleDelete(supplier.id)}
-                                    className="px-3 py-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center"
-                                    title="Desativar"
+                                    onClick={() => handleDelete(supplier.id, supplier.nome)}
+                                    className="flex-1 px-3 py-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2 font-medium text-sm"
                                 >
                                     <Trash2 className="w-4 h-4" />
+                                    Desativar
                                 </button>
                             </div>
                         </div>
@@ -1169,6 +1179,17 @@ const SuppliersPage: React.FC = () => {
                     onClose={() => setShowDossieModal(false)}
                 />
             )}
+
+            <PinDialog
+                open={!!pinAction}
+                onClose={() => setPinAction(null)}
+                onSuccess={() => {
+                    pinAction?.run();
+                    setPinAction(null);
+                }}
+                title={pinAction?.title || ''}
+                description={pinAction?.description || ''}
+            />
         </PageContainer>
     );
 };

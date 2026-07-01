@@ -706,7 +706,9 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                         <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                                            {produto.margem_lucro?.toFixed(1)}%
+                                            {(produto as any).margem !== undefined && (produto as any).margem !== null 
+                                                ? `${Number((produto as any).margem).toFixed(1)}%` 
+                                                : '-'}
                                         </p>
                                     </div>
                                 </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers, PackageX, MoreHorizontal } from 'lucide-react';
+import { Edit, Trash2, Archive, ShoppingCart, FileText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Layers, PackageX, MoreHorizontal, History } from 'lucide-react';
 import { Produto } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 
@@ -86,7 +86,7 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
 
     return (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto hidden lg:block">
                 <table className="w-full text-left border-collapse whitespace-nowrap min-w-[1000px]">
                     <thead className="bg-slate-900/90 backdrop-blur-sm sticky top-0 z-10 border-b border-slate-800">
                         <tr>
@@ -276,6 +276,81 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                     </tbody>
                 </table>
             </div>
+
+            {/* Visualização em Cards (Mobile) */}
+            <div className="lg:hidden flex flex-col gap-4 p-4">
+                {(produtos || []).length === 0 ? (
+                    <div className="text-center text-slate-500 py-8 italic font-semibold">Nenhum produto encontrado.</div>
+                ) : (
+                    (produtos || []).map((produto) => (
+                        <div key={produto.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex flex-col gap-4 relative cursor-pointer hover:bg-slate-800 transition-colors active:scale-[0.99]" onClick={(e) => {
+                            const target = e.target as HTMLElement;
+                            if (!target.closest('.actions-container-mobile')) {
+                                onProductClick?.(produto);
+                            }
+                        }}>
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1 pr-4">
+                                    <h4 className="font-bold text-slate-200 text-lg leading-tight">{produto.nome}</h4>
+                                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+                                        <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">{produto.categoria}</span>
+                                        {produto.codigo_barras && <span className="font-mono text-slate-500">{produto.codigo_barras}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStockBadge(produto)} whitespace-nowrap`}>
+                                        {getStockLabel(produto)}
+                                    </span>
+                                    <ChevronRight className="w-5 h-5 text-slate-500" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div className="flex flex-col bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Estoque</span>
+                                    <span className="font-semibold text-slate-200">{produto.quantidade} <span className="text-xs text-slate-400 font-normal">{produto.unidade_medida}</span></span>
+                                </div>
+                                <div className="flex flex-col bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Venda</span>
+                                    <span className="font-bold text-emerald-400">{formatCurrency(produto.preco_venda)}</span>
+                                </div>
+                                <div className="flex flex-col bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Lote / Validade</span>
+                                    <span className="font-medium text-slate-300">
+                                        {produto.lote ? <span className="text-blue-400">{produto.lote}</span> : '-'} / {produto.data_validade ? new Date(produto.data_validade).toLocaleDateString('pt-BR') : '-'}
+                                    </span>
+                                </div>
+                                <div className="flex flex-col bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
+                                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Margem</span>
+                                    <span className={`font-bold ${(produto.margem_lucro || 0) >= 30 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                        {(produto.margem_lucro || 0).toFixed(1)}%
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="actions-container-mobile grid grid-cols-4 gap-2 pt-3 border-t border-slate-700/50 mt-1">
+                                <button onClick={() => onEdit(produto)} className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-700/30 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors active:scale-95" title="Editar">
+                                    <Edit className="w-5 h-5 mb-1" />
+                                    <span className="text-[9px] font-bold uppercase">Editar</span>
+                                </button>
+                                <button onClick={() => onStockAdjust(produto)} className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-700/30 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors active:scale-95" title="Estoque">
+                                    <Archive className="w-5 h-5 mb-1" />
+                                    <span className="text-[9px] font-bold uppercase">Estoque</span>
+                                </button>
+                                <button onClick={() => onDiscard(produto)} className="flex flex-col items-center justify-center p-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white transition-colors active:scale-95 border border-rose-500/20" title="Descartar">
+                                    <PackageX className="w-5 h-5 mb-1" />
+                                    <span className="text-[9px] font-bold uppercase">Descartar</span>
+                                </button>
+                                <button onClick={() => onHistory(produto)} className="flex flex-col items-center justify-center p-2 rounded-lg bg-slate-700/30 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors active:scale-95" title="Histórico">
+                                    <History className="w-5 h-5 mb-1" />
+                                    <span className="text-[9px] font-bold uppercase">Histórico</span>
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
 
             {/* Pagination - Sleek Dark */}
             <div className="flex items-center justify-between px-6 py-4 bg-slate-900 border-t border-slate-800">

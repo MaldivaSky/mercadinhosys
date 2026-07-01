@@ -47,6 +47,7 @@ import CustomerForm from './components/CustomerForm';
 import CustomerTable from './components/CustomerTable';
 import CustomersCommandToolbar from './components/CustomersCommandToolbar';
 import CustomersAdvancedFiltersModal from './components/CustomersAdvancedFiltersModal';
+import PinDialog from '../../components/modals/PinDialog';
 
 type CRMTab = 'overview' | 'recovery' | 'campaigns' | 'portfolio';
 type CampaignKey = 'reactivation' | 'vip' | 'debt' | 'promotion';
@@ -309,6 +310,11 @@ const CustomersPage: React.FC = () => {
     const [selectedCampaign, setSelectedCampaign] = useState<CampaignKey>('reactivation');
     const [campaignCustomerId, setCampaignCustomerId] = useState<number | null>(null);
     const location = useLocation();
+
+    // Gate de PIN para operações sensíveis
+    const [pinAction, setPinAction] = useState<{ run: () => void; title: string; description: string } | null>(null);
+    const requirePin = (run: () => void, title: string, description: string) =>
+        setPinAction({ run, title, description });
 
     // Filtro vindo da URL (dashboard -> /customers?segmento=Risco). Abre já filtrado.
     useEffect(() => {
@@ -610,61 +616,62 @@ const CustomersPage: React.FC = () => {
             return;
         }
 
-        const confirmed = window.confirm(
-            `Tem certeza que deseja excluir o cliente "${cliente.nome}"?\n\nEsta ação não pode ser desfeita e removerá permanentemente os dados do cliente.`,
-        );
-        if (!confirmed) return;
-
-        try {
-            await showToast.promise(
-                customerService.remove(cliente.id),
-                {
-                    loading: 'Excluindo cliente...',
-                    success: `Cliente "${cliente.nome}" excluído com sucesso`,
-                    error: 'Erro ao excluir cliente',
-                },
-                { theme: 'error' },
-            );
-            await refreshAll();
-        } catch (error: unknown) {
-            const err = error as {
-                response?: {
-                    status?: number;
-                    data?: {
-                        message?: string;
-                        vinculos?: { vendas: number; contas_a_receber: number };
+        requirePin(
+            async () => {
+                try {
+                    await showToast.promise(
+                        customerService.remove(cliente.id!),
+                        {
+                            loading: 'Excluindo cliente...',
+                            success: `Cliente "${cliente.nome}" excluído com sucesso`,
+                            error: 'Erro ao excluir cliente',
+                        },
+                        { theme: 'error' },
+                    );
+                    await refreshAll();
+                } catch (error: unknown) {
+                    const err = error as {
+                        response?: {
+                            status?: number;
+                            data?: {
+                                message?: string;
+                                vinculos?: { vendas: number; contas_a_receber: number };
+                            };
+                        };
                     };
-                };
-            };
 
-            if (err.response?.status === 400 && err.response?.data?.vinculos) {
-                const { vendas, contas_a_receber } = err.response.data.vinculos;
-                const msg =
-                    `Não é possível excluir este cliente pois ele possui registros vinculados:\n` +
-                    `• ${vendas} vendas\n` +
-                    `• ${contas_a_receber} débitos em aberto\n\n` +
-                    `Deseja desativar o cliente em vez de excluir?`;
+                    if (err.response?.status === 400 && err.response?.data?.vinculos) {
+                        const { vendas, contas_a_receber } = err.response.data.vinculos;
+                        const msg =
+                            `Não é possível excluir este cliente pois ele possui registros vinculados:\n` +
+                            `• ${vendas} vendas\n` +
+                            `• ${contas_a_receber} débitos em aberto\n\n` +
+                            `Deseja desativar o cliente em vez de excluir?`;
 
-                if (window.confirm(msg)) {
-                    try {
-                        await apiClient.patch(`/clientes/${cliente.id}/status`, { ativo: false });
-                        showToast.success(`Cliente "${cliente.nome}" desativado com sucesso`);
-                        await refreshAll();
-                    } catch (patchErr: unknown) {
-                        const patchMsg =
-                            (patchErr as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-                            'Erro ao desativar cliente';
-                        showToast.error(patchMsg);
+                        if (window.confirm(msg)) {
+                            try {
+                                await apiClient.patch(`/clientes/${cliente.id}/status`, { ativo: false });
+                                showToast.success(`Cliente "${cliente.nome}" desativado com sucesso`);
+                                await refreshAll();
+                            } catch (patchErr: unknown) {
+                                const patchMsg =
+                                    (patchErr as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                                    'Erro ao desativar cliente';
+                                showToast.error(patchMsg);
+                            }
+                            return;
+                        }
                     }
-                    return;
-                }
-            }
 
-            const errorMessage = err.response?.data?.message || 'Erro ao excluir cliente';
-            showToast.error(errorMessage);
-        } finally {
-            setSaving(false);
-        }
+                    const errorMessage = err.response?.data?.message || 'Erro ao excluir cliente';
+                    showToast.error(errorMessage);
+                } finally {
+                    setSaving(false);
+                }
+            },
+            'Autorizar exclusão',
+            `Autorize com o PIN para excluir permanentemente o cliente "${cliente.nome}".`
+        );
     };
 
     const handleSave = async (data: Partial<Cliente>) => {
@@ -1500,6 +1507,17 @@ const CustomersPage: React.FC = () => {
                     <CircularProgress />
                 </div>
             )}
+
+            <PinDialog
+                open={!!pinAction}
+                onClose={() => setPinAction(null)}
+                onSuccess={() => {
+                    pinAction?.run();
+                    setPinAction(null);
+                }}
+                title={pinAction?.title || ''}
+                description={pinAction?.description || ''}
+            />
         </div>
     );
 };

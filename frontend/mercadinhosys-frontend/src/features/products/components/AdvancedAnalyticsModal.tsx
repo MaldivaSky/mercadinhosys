@@ -145,7 +145,7 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
+                            <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
                                 <div className="col-span-5">Produto</div>
                                 <div className="col-span-2 text-right">Estoque</div>
                                 <div className="col-span-2 text-right">Preço Venda</div>
@@ -158,42 +158,50 @@ const AdvancedAnalyticsModal: React.FC<AdvancedAnalyticsModalProps> = ({ isOpen,
                                              onClose();
                                              navigate(`/products/${p.id}`);
                                          }}
-                                         className="grid grid-cols-12 gap-4 items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-blue-300 cursor-pointer">
-                                        <div className="col-span-5">
-                                            <p className="font-bold text-gray-900 dark:text-white truncate">{p.nome}</p>
-                                            <p className="text-xs text-gray-500">
+                                         className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 items-start md:items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-blue-300 cursor-pointer">
+                                        <div className="w-full md:col-span-5 flex flex-col md:block">
+                                            <p className="font-bold text-gray-900 dark:text-white truncate text-base md:text-sm">{p.nome}</p>
+                                            <p className="text-xs text-gray-500 mt-0.5 md:mt-0">
                                                 {p.categoria} | Código: {p.codigo_barras || p.id}
                                             </p>
                                         </div>
-                                        <div className="col-span-2 text-right">
-                                            <p className={`text-sm font-bold ${p.quantidade <= 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
-                                                {p.quantidade} {p.unidade_medida}
-                                            </p>
-                                        </div>
-                                        <div className="col-span-2 text-right">
-                                            <p className="text-sm font-medium text-green-600 dark:text-green-400">{formatCurrency(p.preco_venda)}</p>
-                                        </div>
-                                        <div className="col-span-3 text-right">
-                                            {isABC ? (
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-sm font-bold text-blue-600">Fat: {formatCurrency(p.total_vendido || 0)}</span>
-                                                </div>
-                                            ) : (isGiro || type === 'alerta_cobertura') ? (
-                                                <div className="flex flex-col items-end">
-                                                    <span className={`text-sm font-bold ${(p as any)._cobertura_calc <= 10 ? 'text-red-600' : 'text-purple-600'}`}>
-                                                        Cob: {(p as any)._cobertura_calc === 999 ? 'Infinito' : `${Math.ceil((p as any)._cobertura_calc)} dias`}
-                                                    </span>
-                                                    <span className="text-xs text-gray-500">
-                                                        VMD: {((p as any)._vmd_calc || 0).toFixed(1)}/dia
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-sm font-medium text-purple-600">
-                                                        {p.ultima_venda ? new Date(p.ultima_venda).toLocaleDateString() : 'Nunca vendido'}
-                                                    </span>
-                                                </div>
-                                            )}
+                                        
+                                        <div className="w-full grid grid-cols-3 gap-2 md:contents">
+                                            <div className="flex flex-col md:block md:col-span-2 md:text-right bg-white dark:bg-gray-800 md:bg-transparent p-2 rounded-lg md:p-0 md:rounded-none border border-gray-100 dark:border-gray-700 md:border-none">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 md:hidden mb-1 block">Estoque</span>
+                                                <p className={`text-sm font-bold ${p.quantidade <= 0 ? 'text-red-500' : 'text-gray-900 dark:text-white'}`}>
+                                                    {p.quantidade} <span className="text-xs font-normal text-gray-500 md:hidden">{p.unidade_medida}</span><span className="hidden md:inline">{p.unidade_medida}</span>
+                                                </p>
+                                            </div>
+                                            
+                                            <div className="flex flex-col md:block md:col-span-2 md:text-right bg-white dark:bg-gray-800 md:bg-transparent p-2 rounded-lg md:p-0 md:rounded-none border border-gray-100 dark:border-gray-700 md:border-none">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 md:hidden mb-1 block">Preço</span>
+                                                <p className="text-sm font-medium text-green-600 dark:text-green-400">{formatCurrency(p.preco_venda)}</p>
+                                            </div>
+                                            
+                                            <div className="flex flex-col md:block md:col-span-3 md:text-right bg-white dark:bg-gray-800 md:bg-transparent p-2 rounded-lg md:p-0 md:rounded-none border border-gray-100 dark:border-gray-700 md:border-none">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400 md:hidden mb-1 block">Métrica</span>
+                                                {isABC ? (
+                                                    <div className="flex flex-col md:items-end">
+                                                        <span className="text-sm font-bold text-blue-600 truncate">Fat: {formatCurrency(p.total_vendido || 0)}</span>
+                                                    </div>
+                                                ) : (isGiro || type === 'alerta_cobertura') ? (
+                                                    <div className="flex flex-col md:items-end">
+                                                        <span className={`text-sm font-bold ${(p as any)._cobertura_calc <= 10 ? 'text-red-600' : 'text-purple-600'}`}>
+                                                            Cob: {(p as any)._cobertura_calc === 999 ? 'Infinito' : `${Math.ceil((p as any)._cobertura_calc)}d`}
+                                                        </span>
+                                                        <span className="text-[10px] md:text-xs text-gray-500 truncate">
+                                                            VMD: {((p as any)._vmd_calc || 0).toFixed(1)}/dia
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col md:items-end">
+                                                        <span className="text-sm font-medium text-purple-600 truncate">
+                                                            {p.ultima_venda ? new Date(p.ultima_venda).toLocaleDateString('pt-BR') : 'Nunca'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 );

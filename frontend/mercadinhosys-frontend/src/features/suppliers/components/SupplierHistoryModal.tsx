@@ -136,8 +136,9 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                             </div>
                             
                             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-gray-100 dark:bg-gray-700/50 text-gray-500 font-bold uppercase text-xs">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                        <thead className="bg-gray-100 dark:bg-gray-700/50 text-gray-500 font-bold uppercase text-xs">
                                         <tr>
                                             <th className="px-4 py-3">Data</th>
                                             <th className="px-4 py-3">Pedido N.</th>
@@ -158,6 +159,7 @@ const SupplierHistoryModal = ({ fornecedor, onClose }: SupplierHistoryModalProps
                                         ))}
                                     </tbody>
                                 </table>
+                                </div>
                             </div>
                         </div>
                     ) : (

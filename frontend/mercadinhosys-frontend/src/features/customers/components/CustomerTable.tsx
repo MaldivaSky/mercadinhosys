@@ -16,8 +16,9 @@ interface CustomerTableProps {
 }
 const CustomerTable: React.FC<CustomerTableProps> = ({ clientes, loading, onRowClick, onEdit, onDelete, onReceberFiado, selectedClienteId, rfmData }) => {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+      <div className="hidden lg:block overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th className="px-2 sm:px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Nome</th>
@@ -164,6 +165,121 @@ const CustomerTable: React.FC<CustomerTableProps> = ({ clientes, loading, onRowC
           )}
         </tbody>
       </table>
+      </div>
+
+      {/* Visão de Cards Mobile */}
+      <div className="lg:hidden flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="p-4 flex flex-col gap-2">
+              <Skeleton variant="text" width="60%" height={24} />
+              <Skeleton variant="text" width="40%" height={20} />
+              <Skeleton variant="rectangular" width="100%" height={40} className="mt-2" />
+            </div>
+          ))
+        ) : clientes.length === 0 ? (
+          <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+            Nenhum cliente encontrado.
+          </div>
+        ) : (
+          clientes.map((cliente) => {
+            const temFiado = (cliente.saldo_devedor ?? 0) > 0;
+            const rfmCliente = rfmData?.customers?.find((c: any) => c.cliente_id === cliente.id);
+            const segmento = rfmCliente?.segment;
+            
+            return (
+              <div 
+                key={cliente.id}
+                className={`p-4 flex flex-col gap-3 transition cursor-pointer ${
+                  selectedClienteId === cliente.id
+                    ? 'bg-blue-50/50 dark:bg-blue-900/10'
+                    : temFiado
+                    ? 'bg-orange-50/30 dark:bg-orange-900/5'
+                    : 'bg-white dark:bg-gray-900'
+                }`}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (!target.closest('.actions-mobile')) {
+                    onRowClick?.(cliente);
+                  }
+                }}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 font-bold shadow-sm">
+                      {cliente.nome ? cliente.nome.charAt(0).toUpperCase() : '?'}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                        {cliente.nome}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {cliente.celular || cliente.telefone || (cliente.cpf ? `CPF: ${cliente.cpf}` : 'Sem contato')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                     {segmento && (
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                            segmento === 'Campeão' ? 'bg-green-50 text-green-700 border-green-200' : 
+                            segmento === 'Fiel' ? 'bg-blue-50 text-blue-700 border-blue-200' : 
+                            segmento === 'Perdido' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-purple-50 text-purple-700 border-purple-200'
+                        }`}>
+                          {segmento}
+                        </span>
+                     )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-md p-2 flex flex-col">
+                    <span className="text-[10px] text-gray-500 uppercase font-bold">Fiado Pendente</span>
+                    {temFiado ? (
+                      <span className="text-sm font-bold text-orange-600">{(cliente.saldo_devedor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    ) : (
+                      <span className="text-xs font-medium text-gray-400">R$ 0,00</span>
+                    )}
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-md p-2 flex flex-col">
+                    <span className="text-[10px] text-gray-500 uppercase font-bold">Email</span>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
+                      {cliente.email || '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="actions-mobile flex items-center justify-end gap-2 mt-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  {temFiado && onReceberFiado && (
+                    <button 
+                      onClick={() => onReceberFiado(cliente)} 
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors"
+                    >
+                      <HandshakeIcon style={{ fontSize: 16 }} />
+                      <span className="text-xs font-bold">Receber</span>
+                    </button>
+                  )}
+                  {onEdit && (
+                    <button 
+                      onClick={() => onEdit(cliente)} 
+                      className="flex items-center justify-center p-1.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                    >
+                      <EditIcon style={{ fontSize: 18 }} />
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button 
+                      onClick={() => onDelete(cliente)} 
+                      className="flex items-center justify-center p-1.5 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                    >
+                      <DeleteIcon style={{ fontSize: 18 }} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 };
