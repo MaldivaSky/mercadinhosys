@@ -267,17 +267,14 @@ def test_super_admin_espelho_permite_leitura(client, session):
     assert resp.status_code != 403, "Leitura no modo espelho não deveria ser bloqueada"
 
 
-@pytest.mark.xfail(
-    reason="Por design: o TenantQuery isolado NAO falha fechado (necessario p/ CLI/"
-           "seeders/login que consultam sem 'g'). A invariante de isolamento e garantida "
-           "na camada HTTP pelo before_request (load_tenant_context), coberto por "
-           "test_before_request_fail_closed_sem_estabelecimento.",
-    strict=True,
-)
 def test_sem_contexto_nao_vaza_tudo(dois_tenants):
     """
     Se g.estabelecimento_id NÃO estiver setado (ex.: before_request falhou),
     a query NÃO pode retornar dados de todos os tenants. Deve falhar fechado.
+
+    Sob contexto HTTP (request context), o guard _tenant_atual() retorna -1
+    (fail-closed) quando não há tenant em g, garantindo isolamento. Este teste
+    documenta essa invariante — antes marcada xfail incorretamente.
     """
     a, b = dois_tenants
     if hasattr(g, "estabelecimento_id"):

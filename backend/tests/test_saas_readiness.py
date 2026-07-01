@@ -23,7 +23,13 @@ def test_premium_required_decorator(app, client, session):
     estab_free = Estabelecimento.query.first()
     estab_free.plano = "Gratuito"
     estab_free.plano_status = "ativo"
-    
+
+    # Espelha request autenticado: sem tenant em g o guard fail-closed filtra
+    # Funcionario por estabelecimento_id = -1 e o admin some.
+    from flask import g, has_request_context
+    if has_request_context():
+        g.estabelecimento_id = estab_free.id
+
     admin = Funcionario.query.filter_by(estabelecimento_id=estab_free.id).first()
     token_free = create_access_token(identity=str(admin.id), additional_claims={
         "is_super_admin": False,
@@ -86,7 +92,14 @@ def test_onboarding_atomic_flow(client, session):
         session.add(superadmin)
         session.commit()
 
-    token = create_access_token(identity=str(superadmin.id), additional_claims={"is_super_admin": True})
+    # Token espelhando o login real: super admin sempre carrega estabelecimento_id
+    # e status; sem eles o guard multi-tenant (fail-closed) devolve 401.
+    token = create_access_token(identity=str(superadmin.id), additional_claims={
+        "is_super_admin": True,
+        "estabelecimento_id": superadmin.estabelecimento_id,
+        "role": "admin",
+        "status": "ativo",
+    })
     headers = {"Authorization": f"Bearer {token}"}
     
     response = client.post('/api/saas/onboarding', json=payload, headers=headers)
@@ -100,7 +113,11 @@ def test_onboarding_atomic_flow(client, session):
     stored_est = Est.query.filter_by(email="test@autostore.com").first()
     assert stored_est is not None
     assert stored_est.plano == "Premium" # Default in onboarding
-    
+
+    # Espelha tenant do NOVO estabelecimento p/ verificar seu admin (filtrado).
+    from flask import g, has_request_context
+    if has_request_context():
+        g.estabelecimento_id = stored_est.id
     stored_admin = Fun.query.filter_by(email="admin@autostore.com").first()
     assert stored_admin is not None
     assert stored_admin.check_password("SecurePass123!") is True
