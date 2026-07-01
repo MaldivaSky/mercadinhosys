@@ -159,7 +159,40 @@ class MasterSeeder:
                 )
                 operador.set_password("caixa123")
                 db.session.add(operador)
-            
+
+            # Estoque (nível 4) e RH (nível 5) — para demonstrar TODOS os níveis de
+            # acesso do RBAC (o admin=1 e caixa=3 já existem; vendedor=7 vem do
+            # seed_sfa). Assim há um usuário logável para cada papel na demo.
+            n = config['id'].replace("admin", "")  # sufixo da loja: admin1 -> "1"
+            extras = [
+                {"u": f"estoque{n}", "nome": f"Estoquista {config['id'].upper()}",
+                 "role": "ESTOQUE", "nivel": 4, "cargo": "Auxiliar de Estoque",
+                 "senha": "estoque123", "cel": "(92) 96666-0000"},
+                {"u": f"rh{n}", "nome": f"RH {config['id'].upper()}",
+                 "role": "RH", "nivel": 5, "cargo": "Analista de RH",
+                 "senha": "rh123", "cel": "(92) 95555-0000"},
+            ]
+            for ex in extras:
+                if not Funcionario.query.filter_by(username=ex["u"]).first():
+                    f_extra = Funcionario(
+                        estabelecimento_id=est.id,
+                        nome=ex["nome"],
+                        username=ex["u"],
+                        cargo=ex["cargo"],
+                        role=ex["role"],
+                        nivel_acesso=ex["nivel"],
+                        salario_base=1800,
+                        salario=1800,
+                        cpf=RealisticInjector.generate_cpf(),
+                        email=f"{ex['u']}@negocio.com",
+                        celular=ex["cel"],
+                        data_nascimento=date(1992, 1, 1),
+                        data_admissao=est.data_abertura,
+                        ativo=True,
+                    )
+                    f_extra.set_password(ex["senha"])
+                    db.session.add(f_extra)
+
             db.session.commit()
 
             # 3. SIMULAÇÃO MASTER (CRONOLOGIA & NEGÓCIO)
@@ -173,3 +206,12 @@ class MasterSeeder:
             simulator.simulate_history(est, dna, config['meses'], dono.id)
             
         print("\n[SEED] [MAGNITUDE SÊNIOR] SEED CONCLUÍDA COM SUCESSO!")
+        print("-" * 60)
+        print("ACESSOS PARA DEMONSTRAÇÃO (por nível de acesso RBAC):")
+        print("  Super Admin (SaaS)........: maldivas / ***REMOVED-SUPERADMIN-PWD***")
+        print("  Admin loja (nível 1)......: admin1..admin5 / admin123")
+        print("  Caixa (nível 3)...........: caixa1..caixa5 / caixa123")
+        print("  Estoque (nível 4).........: estoque1..estoque5 / estoque123")
+        print("  RH (nível 5)..............: rh1..rh5 / rh123")
+        print("  Vendedor (nível 7)........: rode seed_sfa.py (sfa_vend_a_<id> / 123456)")
+        print("-" * 60)
