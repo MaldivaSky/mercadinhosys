@@ -22,7 +22,7 @@ from app.services.fiscal.gateways import get_gateway, SimuladoGateway
 FORMA_PGTO_COD = {
     "dinheiro": "01", "cheque": "02", "cartao de credito": "03", "cartão de crédito": "03",
     "cartao de debito": "04", "cartão de débito": "04", "credito loja": "05",
-    "vale": "10", "voucher": "10", "pix": "17", "boleto": "15", "fiado": "99", "outros": "99",
+    "vale": "10", "voucher": "10", "vale_alimentacao": "10", "vale_refeicao": "11", "pix": "17", "boleto": "15", "fiado": "99", "outros": "99",
 }
 
 

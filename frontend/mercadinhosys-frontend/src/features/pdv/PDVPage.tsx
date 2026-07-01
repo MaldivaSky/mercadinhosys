@@ -623,7 +623,10 @@ const PDVPage: React.FC = () => {
                         await showToast.promise(pdvService.enviarCupomFiscal(vendaFinalizada.id, email), {
                             loading: 'Enviando nota fiscal...',
                             success: 'Nota fiscal enviada por e-mail!',
-                            error: (err: any) => err.response?.data?.error || 'Erro ao enviar e-mail'
+                            error: (err: any) => {
+                                const msg = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro ao enviar e-mail';
+                                return typeof msg === 'string' ? msg : 'Erro ao enviar e-mail';
+                            }
                         });
                         setMostrarModalNotaFiscal(false);
                         setVendaFinalizada(null);

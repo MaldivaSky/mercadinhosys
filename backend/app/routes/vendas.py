@@ -417,11 +417,19 @@ def estatisticas_vendas():
 
         vendas_historicas = [{"data": str(v.data), "quantidade": v.quantidade, "total": float(v.total or 0), "tipo": "historico"} for v in vendas_por_dia_res]
 
+        from sqlalchemy import case
         formas_pgto_res = db.session.query(
             Pagamento.forma_pagamento,
             func.count(Pagamento.id).label("quantidade"),
-            func.sum(Pagamento.valor).label("total")
-        ).filter(Pagamento.venda_id.in_(ids_select)).group_by(Pagamento.forma_pagamento).all()
+            func.sum(
+                case(
+                    (Pagamento.forma_pagamento == 'dinheiro', Pagamento.valor - func.coalesce(Venda.troco, 0)),
+                    else_=Pagamento.valor
+                )
+            ).label("total")
+        ).join(Venda, Venda.id == Pagamento.venda_id).filter(
+            Pagamento.venda_id.in_(ids_select)
+        ).group_by(Pagamento.forma_pagamento).all()
 
         vendas_func_res = query_base.join(Funcionario).with_entities(
             Funcionario.nome, func.count(Venda.id), func.sum(Venda.total)
@@ -714,19 +722,19 @@ def criar_venda():
         if total_pago < total:
             return jsonify({"error": f"Valor total pago (R$ {total_pago:.2f}) é menor que o total da venda (R$ {total:.2f})"}), 400
 
-        tem_restrito = any((p.get("forma_pagamento") or p.get("forma")) in ["fiado", "voucher"] for p in pagamentos_data)
+        tem_restrito = any((p.get("forma_pagamento") or p.get("forma")) in ["fiado", "vale_alimentacao", "vale_refeicao"] for p in pagamentos_data)
         if tem_restrito:
             plano_atual = (estabelecimento.plano or "Basic").upper()
             if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
-                return jsonify({"error": "FUNCIONALIDADE_RESTRITA", "message": "Seu plano não permite vendas no FIADO/VOUCHER."}), 403
+                return jsonify({"error": "FUNCIONALIDADE_RESTRITA", "message": "Seu plano não permite vendas no FIADO/VALE."}), 403
             if not cliente_id:
-                return jsonify({"error": "CLIENTE_OBRIGATORIO", "message": "Vendas no FIADO/VOUCHER exigem um cliente cadastrado."}), 400
+                return jsonify({"error": "CLIENTE_OBRIGATORIO", "message": "Vendas no FIADO/VALE exigem um cliente cadastrado."}), 400
 
             cliente_obj = Cliente.query.get(cliente_id)
             if not cliente_obj:
                 return jsonify({"error": "CLIENTE_NAO_ENCONTRADO", "message": "Cliente informado não foi encontrado."}), 404
 
-            valor_restrito = sum(float(p.get("valor") or 0) for p in pagamentos_data if (p.get("forma_pagamento") or p.get("forma")) in ["fiado", "voucher"])
+            valor_restrito = sum(float(p.get("valor") or 0) for p in pagamentos_data if (p.get("forma_pagamento") or p.get("forma")) in ["fiado", "vale_alimentacao", "vale_refeicao"])
             limite = float(cliente_obj.limite_credito or 0)
             saldo_atual = float(cliente_obj.saldo_devedor or 0)
 

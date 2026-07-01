@@ -773,8 +773,8 @@ def finalizar_venda():
             plano_atual = (estabelecimento.plano or "Basic").upper()
             if "PREMIUM" not in plano_atual and "BASI" not in plano_atual:
                 return jsonify({
-                    "error": "FUNCIONALIDADE_RESTRITA", 
-                    "message": "Seu plano não permite vendas no FIADO/VOUCHER."
+                    "error": "FUNCIONALIDADE_RESTRITA",
+                    "message": "Seu plano não permite vendas no FIADO/VALE."
                 }), 403
             
             if not cliente_id:

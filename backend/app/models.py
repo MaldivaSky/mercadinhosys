@@ -484,7 +484,7 @@ class Configuracao(db.Model, MultiTenantMixin, SerializableMixin):
     desconto_maximo_percentual = db.Column(db.Numeric(5, 2), default=10.00)
     desconto_maximo_funcionario = db.Column(db.Numeric(5, 2), default=10.00)
     arredondamento_valores = db.Column(db.Boolean, default=True)
-    formas_pagamento = db.Column(db.Text, default='["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Voucher", "Fiado"]')
+    formas_pagamento = db.Column(db.Text, default='["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Vale Alimentação", "Vale Refeição", "Fiado"]')
     motivos_estorno = db.Column(db.Text, default='["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"]')
     controlar_validade = db.Column(db.Boolean, default=True)
     alerta_estoque_minimo = db.Column(db.Boolean, default=True)
@@ -502,7 +502,7 @@ class Configuracao(db.Model, MultiTenantMixin, SerializableMixin):
     def to_dict(self, depth=0):
         data = super().to_dict(depth=depth)
         try: data["formas_pagamento"] = json.loads(self.formas_pagamento or "[]")
-        except: data["formas_pagamento"] = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Voucher", "Fiado"]
+        except: data["formas_pagamento"] = ["Dinheiro", "Cartão de Crédito", "Cartão de Débito", "PIX", "Vale Alimentação", "Vale Refeição", "Fiado"]
         try: data["motivos_estorno"] = json.loads(self.motivos_estorno or "[]")
         except: data["motivos_estorno"] = ["Erro de digitação", "Desistência do cliente", "Produto avariado", "Cobrança duplicada", "Treinamento/Teste"]
         return data
