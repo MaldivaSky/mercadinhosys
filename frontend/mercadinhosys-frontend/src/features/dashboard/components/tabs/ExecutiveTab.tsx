@@ -5,9 +5,10 @@ import { formatCurrency } from '../../../../utils/formatters';
 
 interface ExecutiveTabProps {
   data: any;
+  onNavigateToTab?: (tabId: string) => void;
 }
 
-export default function ExecutiveTab({ data }: ExecutiveTabProps) {
+export default function ExecutiveTab({ data, onNavigateToTab }: ExecutiveTabProps) {
   const navigate = useNavigate();
 
   // Torna a recomendação acionável: leva à listagem certa, já filtrada.
@@ -165,11 +166,22 @@ export default function ExecutiveTab({ data }: ExecutiveTabProps) {
             </div>
           </div>
           <div className="text-3xl font-black text-white mb-2">{formatCurrency(data?.receivables?.total_recebivel || 0)}</div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm mb-4">
              <span className="text-orange-400 flex items-center bg-orange-400/10 px-2 py-0.5 rounded-full font-medium">
                 Fiado: {formatCurrency(data?.fiado?.total_aberto || 0)}
              </span>
           </div>
+          <p className="text-slate-400 text-sm font-semibold mb-3">
+            <span className="text-red-400 font-bold">{formatCurrency(data?.receivables?.total_vencido || 0)}</span> atrasados
+          </p>
+          {onNavigateToTab && (
+            <button 
+              onClick={() => onNavigateToTab('financial')}
+              className="mt-2 text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 transition-colors z-20 relative cursor-pointer"
+            >
+              Acessar Contas a Receber <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
       </div>
