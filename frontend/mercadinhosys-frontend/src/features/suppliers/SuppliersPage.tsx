@@ -1201,7 +1201,7 @@ const SuppliersPage: React.FC = () => {
                     isOpen={showIntelligenceModal}
                     onClose={() => setShowIntelligenceModal(false)}
                     fornecedorId={selectedForIntelligence.id}
-                    fornecedorNome={selectedForIntelligence.nome_fantasia || selectedForIntelligence.razao_social}
+                    fornecedorNome={selectedForIntelligence.nome_fantasia || selectedForIntelligence.razao_social || selectedForIntelligence.nome || 'Fornecedor'}
                 />
             )}
 
