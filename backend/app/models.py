@@ -776,6 +776,14 @@ class Fornecedor(db.Model, MultiTenantMixin, EnderecoMixin, SoftDeleteMixin, Ser
     classificacao = db.Column(db.String(20), default="REGULAR")
     total_compras = db.Column(db.Integer, default=0)
     valor_total_comprado = db.Column(db.Numeric(19, 4), default=0)
+    
+    # Inteligencia e Metricas
+    score_geral = db.Column(db.Integer, default=50) # 0 a 100
+    atraso_medio_dias = db.Column(db.Float, default=0.0)
+    percentual_entregas_no_prazo = db.Column(db.Float, default=100.0)
+    desconto_medio_percentual = db.Column(db.Float, default=0.0)
+    prazo_pagamento_medio_dias = db.Column(db.Float, default=0.0)
+
     ativo = db.Column(db.Boolean, default=True)
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     data_atualizacao = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
@@ -1367,6 +1375,21 @@ class HistoricoPrecos(db.Model, MultiTenantMixin, SerializableMixin):
     produto = db.relationship("Produto", backref=db.backref("historico_precos", lazy=True))
     funcionario = db.relationship("Funcionario", backref=db.backref("alteracoes_precos", lazy=True))
     __table_args__ = (db.Index("ix_historico_produto", "produto_id"), db.Index("ix_historico_data", "data_alteracao"))
+
+class CondicaoPagamento(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin):
+    __tablename__ = "condicoes_pagamento"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    nome = db.Column(db.String(100), nullable=False) # Ex: "Boleto 30 Dias"
+    tipo = db.Column(db.String(50), nullable=False, default="prazo") # "a_vista", "prazo", "parcelado"
+    dias_prazo = db.Column(db.Integer, default=0) # Tempo de prazo médio para calcular pontuação
+    ativo = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    
+    __table_args__ = (
+        db.Index("ix_condicao_pag_nome", "nome"),
+        db.UniqueConstraint("estabelecimento_id", "nome", name="uq_condicao_pag_estab_nome")
+    )
 
 class PedidoCompra(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "pedidos_compra"

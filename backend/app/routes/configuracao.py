@@ -8,7 +8,7 @@ Usa SQL direto via query_helpers para evitar falhas de ORM em produção.
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app import db
-from app.models import Configuracao, FuncionarioPreferencias
+from app.models import Configuracao, FuncionarioPreferencias, CondicaoPagamento
 from app.utils.query_helpers import get_configuracao_safe, get_estabelecimento_full_safe, get_authorized_establishment_id
 from app.utils.smart_cache import get_cached_config, set_cached_config, invalidate_config
 import json
@@ -557,3 +557,48 @@ def upload_logo():
         db.session.rollback()
         current_app.logger.error(f"❌ Erro em upload_logo: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ==================== CONDIÇÕES DE PAGAMENTO ====================
+
+@configuracao_bp.route("/condicoes-pagamento", methods=["GET"])
+@jwt_required()
+def listar_condicoes_pagamento():
+    """Lista as condicoes de pagamento cadastradas para o tenant"""
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        condicoes = CondicaoPagamento.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True).all()
+        return jsonify({
+            "success": True,
+            "condicoes": [c.to_dict() for c in condicoes]
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar condicoes_pagamento: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao carregar condicoes de pagamento"}), 500
+
+@configuracao_bp.route("/condicoes-pagamento", methods=["POST"])
+@jwt_required()
+def criar_condicao_pagamento():
+    """Cria uma nova condicao de pagamento (apenas admin)"""
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estabelecimento_id = get_authorized_establishment_id()
+        claims = get_jwt()
+        if claims.get("role") not in ["admin", "dono", "ADMIN", "gerente"]:
+            return jsonify({"success": False, "error": "Acesso negado"}), 403
+
+        data = request.get_json()
+        nova = CondicaoPagamento(
+            estabelecimento_id=estabelecimento_id,
+            nome=data.get("nome"),
+            tipo=data.get("tipo", "prazo"),
+            dias_prazo=data.get("dias_prazo", 0),
+            ativo=True
+        )
+        db.session.add(nova)
+        db.session.commit()
+        return jsonify({"success": True, "condicao": nova.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao criar condicao_pagamento: {str(e)}")
+        return jsonify({"success": False, "error": "Erro ao salvar condicao de pagamento"}), 500
