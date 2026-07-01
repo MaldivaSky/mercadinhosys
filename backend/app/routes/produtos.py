@@ -2788,19 +2788,36 @@ def obter_estatisticas_produtos():
         if total_custo_geral > 0 and valor_total_estoque > 0:
             margem_media = ((valor_total_estoque - total_custo_geral) / total_custo_geral) * 100
         
-        # 3. Classificação ABC (Agrupamento SQL)
-        abc_counts = query.with_entities(
-            func.upper(Produto.classificacao_abc).label('classe'),
-            func.count(Produto.id).label('total')
-        ).group_by(func.upper(Produto.classificacao_abc)).all()
-        
+        # 3. Classificação ABC — DINÂMICA (por faturamento real), a MESMA lógica que o
+        #    filtro rápido classe_a/b/c usa na listagem. Antes o card lia a coluna
+        #    gravada `classificacao_abc` (estática/desatualizada), então o número do card
+        #    (ex.: 4 em Classe A) divergia do modal que recalcula (ex.: 12). Agora ambos
+        #    partem da mesma fonte de verdade. Produtos sem venda no período contam como C.
         abc_dict = {"A": 0, "B": 0, "C": 0}
-        for c, t in abc_counts:
-            classe_limpa = (c or "C").upper()
-            if classe_limpa in abc_dict:
-                abc_dict[classe_limpa] += t
-            else:
-                abc_dict["C"] += t # Fallback
+        if str(estabelecimento_id).lower() != "all":
+            ids_no_escopo = [row[0] for row in query.with_entities(Produto.id).all()]
+            if ids_no_escopo:
+                classificacoes = Produto.calcular_classificacao_abc_dinamica(estabelecimento_id, periodo_dias=3650)
+                ids_no_escopo_set = set(ids_no_escopo)
+                for pid, classe in classificacoes.items():
+                    if pid in ids_no_escopo_set and classe in abc_dict:
+                        abc_dict[classe] += 1
+                # Sem venda no período (não classificados) → encalhados = Classe C
+                classificados = set(classificacoes.keys())
+                abc_dict["C"] += sum(1 for pid in ids_no_escopo if pid not in classificados)
+        else:
+            # Super admin visualizando todas as lojas: mantém a coluna gravada (igual ao
+            # fallback do filtro rápido para "all"), pois o cálculo dinâmico é por tenant.
+            abc_counts = query.with_entities(
+                func.upper(Produto.classificacao_abc).label('classe'),
+                func.count(Produto.id).label('total')
+            ).group_by(func.upper(Produto.classificacao_abc)).all()
+            for c, t in abc_counts:
+                classe_limpa = (c or "C").upper()
+                if classe_limpa in abc_dict:
+                    abc_dict[classe_limpa] += t
+                else:
+                    abc_dict["C"] += t # Fallback
 
         # 4. Status de Validade (SQL Condicional)
         hoje = datetime.now(timezone.utc).date()
