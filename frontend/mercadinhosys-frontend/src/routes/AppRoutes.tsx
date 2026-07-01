@@ -42,6 +42,9 @@ const AjudaPage = lazy(() => import('../features/legal/AjudaPage'));
 const SFADashboard = lazy(() => import('../features/sfa/SFADashboard'));
 const SFAPedido = lazy(() => import('../features/sfa/SFAPedido'));
 const SFAManagement = lazy(() => import('../features/sfa/SFAManagement'));
+const SFAClientes = lazy(() => import('../features/sfa/SFAClientes'));
+const SFAClienteForm = lazy(() => import('../features/sfa/SFAClienteForm'));
+const SFAProdutos = lazy(() => import('../features/sfa/SFAProdutos'));
 
 
 
@@ -93,6 +96,9 @@ const AppRoutes: React.FC = () => {
                     <Route path="fiscal" element={<PlanoGuard planoRequerido="gratuito"><FiscalPage /></PlanoGuard>} />
                     <Route path="auditoria" element={<PlanoGuard planoRequerido="gratuito"><MonitorPage /></PlanoGuard>} />
                     <Route path="sfa" element={<PlanoGuard planoRequerido="pro"><SFADashboard /></PlanoGuard>} />
+                    <Route path="sfa/clientes" element={<PlanoGuard planoRequerido="pro"><SFAClientes /></PlanoGuard>} />
+                    <Route path="sfa/clientes/novo" element={<PlanoGuard planoRequerido="pro"><SFAClienteForm /></PlanoGuard>} />
+                    <Route path="sfa/produtos" element={<PlanoGuard planoRequerido="pro"><SFAProdutos /></PlanoGuard>} />
                     <Route path="sfa/pedido" element={<PlanoGuard planoRequerido="pro"><SFAPedido /></PlanoGuard>} />
                     <Route path="sfa/pedido/:id" element={<PlanoGuard planoRequerido="pro"><SFAPedido /></PlanoGuard>} />
                     <Route path="sfa/gestao" element={<PlanoGuard planoRequerido="pro"><SFAManagement /></PlanoGuard>} />
