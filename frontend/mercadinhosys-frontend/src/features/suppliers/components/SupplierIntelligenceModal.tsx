@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, Clock, Percent, Calendar, ShieldCheck, AlertTriangle } from 'lucide-react';
-import api from '../../../services/api';
+import { apiClient } from '../../../api/apiClient';
 
 interface SupplierIntelligenceModalProps {
   isOpen: boolean;
@@ -46,7 +46,7 @@ export const SupplierIntelligenceModal: React.FC<SupplierIntelligenceModalProps>
   const loadIntelligence = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/fornecedores/${fornecedorId}/inteligencia`);
+      const response = await apiClient.get(`/fornecedores/${fornecedorId}/inteligencia`);
       if (response.data.success) {
         setData(response.data.inteligencia);
         setTimeline(response.data.timeline);
@@ -197,7 +197,7 @@ export const SupplierIntelligenceModal: React.FC<SupplierIntelligenceModalProps>
                 <div className="p-5">
                   {timeline.length > 0 ? (
                     <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 dark:before:via-gray-700 before:to-transparent">
-                      {timeline.map((item, idx) => (
+                      {timeline.map((item) => (
                         <div key={item.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
                           <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-white dark:border-gray-800 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10 ${item.no_prazo ? 'bg-emerald-500' : 'bg-rose-500'}`}>
                             {item.no_prazo ? <ShieldCheck className="w-4 h-4 text-white" /> : <AlertTriangle className="w-4 h-4 text-white" />}
