@@ -10,6 +10,7 @@ from app.utils.query_helpers import get_authorized_establishment_id
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 import re
 from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber, Funcionario
 from app.utils import validar_cpf, validar_email, formatar_telefone, calcular_idade
