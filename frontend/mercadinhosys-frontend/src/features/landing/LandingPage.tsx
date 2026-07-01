@@ -21,7 +21,11 @@ import {
     Receipt,
     FileUp,
     Award,
-    X
+    X,
+    MapPin,
+    Briefcase,
+    Building2,
+    DollarSign
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { showToast } from '../../utils/toast';
@@ -670,6 +674,24 @@ const LandingPage: React.FC = () => {
                                 color: "bg-teal-600",
                                 title: "Sistema em Nuvem",
                                 description: "Acesse os relatórios gerenciais pelo celular ou de casa. Seus dados estão seguros e backupeados em nossos servidores."
+                            },
+                            {
+                                icon: <MapPin className="w-10 h-10 text-white" />,
+                                color: "bg-orange-500",
+                                title: "SFA - Força de Vendas",
+                                description: "Dashboard inteligente para vendedores externos. Acompanhe rotas, metas, tendência matemática de vendas e foco de produtos direto pelo celular."
+                            },
+                            {
+                                icon: <DollarSign className="w-10 h-10 text-white" />,
+                                color: "bg-emerald-600",
+                                title: "Gestão Financeira e Fiado",
+                                description: "Controle contas a pagar, receber, limite de crédito de clientes (fiado) e tenha um Dashboard Científico demonstrando sua DRE e margens de lucro."
+                            },
+                            {
+                                icon: <Briefcase className="w-10 h-10 text-white" />,
+                                color: "bg-rose-500",
+                                title: "RH e Controle de Ponto",
+                                description: "Bata ponto digitalmente com geolocalização. O sistema calcula banco de horas, atrasos e emite relatórios para a folha de pagamento da sua equipe."
                             }
                         ].map((feat, i) => (
                             <motion.div
