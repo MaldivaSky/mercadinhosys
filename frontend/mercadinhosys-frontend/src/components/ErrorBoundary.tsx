@@ -24,6 +24,23 @@ class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(`❌ [ErrorBoundary] Error in ${this.props.name || 'Component'}:`, error, errorInfo);
+    
+    // Auto-reload on Vite chunk loading errors (caused by new deployments on Vercel)
+    const isChunkLoadError = 
+      error.name === 'ChunkLoadError' ||
+      error.message.includes('Failed to fetch dynamically imported module') ||
+      error.message.includes('Importing a module script failed');
+      
+    if (isChunkLoadError) {
+      const lastReload = parseInt(sessionStorage.getItem('chunk_reload_timestamp') || '0', 10);
+      const now = Date.now();
+      // Only reload if we haven't reloaded in the last 10 seconds to prevent infinite loops
+      if (now - lastReload > 10000) {
+        sessionStorage.setItem('chunk_reload_timestamp', now.toString());
+        console.warn('🔄 Auto-reloading due to chunk load error...');
+        window.location.reload();
+      }
+    }
   }
 
   private handleReset = () => {

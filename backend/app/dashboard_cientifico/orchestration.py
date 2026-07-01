@@ -20,7 +20,7 @@ _PM = PracticalModels
 logger = logging.getLogger(__name__)
 
 
-def run_in_parallel(task_dict: Dict[str, Any], max_workers: int = 10) -> Dict[str, Any]:
+def run_in_parallel(task_dict: Dict[str, Any], max_workers: int = 3) -> Dict[str, Any]:
     """
     Executes multiple database tasks in parallel, safely propagating Flask app context
     and releasing SQLAlchemy sessions to prevent connection pool overflow.
@@ -48,14 +48,24 @@ def run_in_parallel(task_dict: Dict[str, Any], max_workers: int = 10) -> Dict[st
                 from app.models import db
                 db.session.remove()
 
+    # Limit to 3 workers to prevent SQLAlchemy QueuePool exhaustion
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(worker, name, func) for name, func in task_dict.items()]
         for fut in futures:
             name, res, err = fut.result()
+            
+            # Critical tasks must not fail silently, otherwise the dashboard caches zeros.
+            critical_tasks = [
+                "financials_data", "sales_current_summary", 
+                "expense_details", "sales_previous_summary", "sales_timeseries"
+            ]
+            if err and name in critical_tasks:
+                _logger.critical(f"Aborting dashboard generation due to critical task failure: {name}")
+                raise Exception(f"Critical task '{name}' failed: {err}")
+                
             results[name] = res
 
     return results
-
 
 class DashboardOrchestrator:
     """Orquestra a geração do dashboard"""
@@ -301,10 +311,10 @@ class DashboardOrchestrator:
         }
 
         try:
-            parallel_results = run_in_parallel(tasks, max_workers=10)
+            parallel_results = run_in_parallel(tasks, max_workers=3)
         except Exception as parallel_err:
-            _logger.critical(f"Falha critica no executor paralelo: {parallel_err}")
-            parallel_results = {}
+            _logger.critical(f"Falha critica no executor paralelo (re-lançando para evitar cache falso): {parallel_err}")
+            raise parallel_err
 
         # Mapeamento com fallbacks robustos
         financials_data = parallel_results.get("financials_data") or {"revenue": 0.0, "cogs": 0.0, "gross_profit": 0.0}
