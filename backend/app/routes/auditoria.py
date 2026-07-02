@@ -5,7 +5,7 @@ Auditoria do TENANT — cada loja vê apenas os próprios logs.
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required
 from app.models import db, Auditoria
-from app.utils.query_helpers import get_authorized_establishment_id
+from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
 
 auditoria_bp = Blueprint("auditoria", __name__)
 
@@ -29,7 +29,7 @@ def listar_auditoria():
         if tipo:
             q = q.filter(Auditoria.tipo_evento == tipo)
         if busca:
-            q = q.filter(Auditoria.descricao.ilike(f"%{busca}%"))
+            q = q.filter(ilike_unaccent(Auditoria.descricao, f"%{busca}%"))
 
         pag = q.order_by(Auditoria.data_evento.desc()).paginate(
             page=page, per_page=per_page, error_out=False

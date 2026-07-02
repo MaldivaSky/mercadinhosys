@@ -45,7 +45,7 @@ def listar_despesas():
     - ordenar_por: string (data_despesa, valor, categoria, descricao)
     - ordem: string (asc ou desc, padrão: desc)
     """
-    from app.utils.query_helpers import get_authorized_establishment_id
+    from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
     estabelecimento_id = get_authorized_establishment_id()
     if not estabelecimento_id:
         return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -83,7 +83,7 @@ def listar_despesas():
     # Filtro por categoria (Case-insensitive)
     categoria = request.args.get("categoria")
     if categoria:
-        query = query.filter(Despesa.categoria.ilike(categoria))
+        query = query.filter(ilike_unaccent(Despesa.categoria, categoria))
 
     # Filtro por tipo
     tipo = request.args.get("tipo")
@@ -133,16 +133,16 @@ def listar_despesas():
         busca_like = f"%{busca}%"
         query = query.filter(
             or_(
-                Despesa.descricao.ilike(busca_like),
-                Despesa.observacoes.ilike(busca_like),
-                Despesa.categoria.ilike(busca_like),
+                ilike_unaccent(Despesa.descricao, busca_like),
+                ilike_unaccent(Despesa.observacoes, busca_like),
+                ilike_unaccent(Despesa.categoria, busca_like),
             )
         )
 
     # Busca específica por descrição
     descricao = request.args.get("descricao")
     if descricao:
-        query = query.filter(Despesa.descricao.ilike(f"%{descricao}%"))
+        query = query.filter(ilike_unaccent(Despesa.descricao, f"%{descricao}%"))
 
     # Filtro por fornecedor
     fornecedor_id = request.args.get("fornecedor_id")
@@ -302,7 +302,7 @@ def listar_despesas():
 @plan_required('Pro')
 def obter_estatisticas_despesas():
     """Obtém estatísticas de despesas para o dashboard, com suporte a filtros de data."""
-    from app.utils.query_helpers import get_authorized_establishment_id
+    from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
     estabelecimento_id = get_authorized_establishment_id()
     if not estabelecimento_id:
         return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -675,7 +675,7 @@ def boletos_a_vencer():
         from app.models import ContaPagar, Fornecedor
         from datetime import date, timedelta
         
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
@@ -783,7 +783,7 @@ def resumo_financeiro():
         from app.dashboard_cientifico.data_layer import DataLayer
         from datetime import date, timedelta, datetime
 
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
@@ -940,7 +940,7 @@ def historico_comparativo():
         from datetime import date, timedelta
         from collections import defaultdict
 
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
@@ -1147,7 +1147,7 @@ def boletos_por_status():
         from app.models import ContaPagar, Fornecedor
         from datetime import date, timedelta
 
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400

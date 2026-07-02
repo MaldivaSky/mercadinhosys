@@ -153,7 +153,7 @@ def calcular_classificacao_fornecedor(fornecedor):
 def listar_fornecedores():
     """Lista todos os fornecedores com filtros e paginação"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -181,11 +181,11 @@ def listar_fornecedores():
             busca_termo = f"%{busca}%"
             query = query.filter(
                 db.or_(
-                    Fornecedor.nome_fantasia.ilike(busca_termo),
-                    Fornecedor.razao_social.ilike(busca_termo),
-                    Fornecedor.cnpj.ilike(busca_termo),
-                    Fornecedor.email.ilike(busca_termo),
-                    Fornecedor.contato_nome.ilike(busca_termo),
+                    ilike_unaccent(Fornecedor.nome_fantasia, busca_termo),
+                    ilike_unaccent(Fornecedor.razao_social, busca_termo),
+                    ilike_unaccent(Fornecedor.cnpj, busca_termo),
+                    ilike_unaccent(Fornecedor.email, busca_termo),
+                    ilike_unaccent(Fornecedor.contato_nome, busca_termo),
                 )
             )
 
@@ -234,7 +234,7 @@ def listar_fornecedores():
     except Exception as e:
         current_app.logger.error(f"Erro ao listar fornecedores: {str(e)}")
         try:
-            from app.utils.query_helpers import get_authorized_establishment_id
+            from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
             estabelecimento_id = get_authorized_establishment_id()
             pagina = request.args.get("pagina", 1, type=int)
             por_pagina = request.args.get("por_pagina", 50, type=int)
@@ -297,7 +297,7 @@ def listar_fornecedores():
 def obter_fornecedor(id):
     """Obtém detalhes completos de um fornecedor específico"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -398,7 +398,7 @@ def criar_fornecedor():
     """Cria um novo fornecedor"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
@@ -480,7 +480,7 @@ def atualizar_fornecedor(id):
     """Atualiza um fornecedor existente"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
@@ -577,7 +577,7 @@ def atualizar_status_fornecedor(id):
     """Ativa/desativa um fornecedor"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
@@ -653,7 +653,7 @@ def excluir_fornecedor(id):
     """Exclui um fornecedor (apenas se não houver vínculos)"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         username = jwt_data.get("sub")
         
@@ -720,7 +720,7 @@ def buscar_fornecedores():
     """Busca rápida de fornecedores para autocomplete"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         termo = request.args.get("q", "", type=str).strip()
@@ -741,10 +741,10 @@ def buscar_fornecedores():
         fornecedores = (
             query.filter(
                 db.or_(
-                    Fornecedor.nome_fantasia.ilike(busca_termo),
-                    Fornecedor.razao_social.ilike(busca_termo),
-                    Fornecedor.cnpj.ilike(busca_termo),
-                    Fornecedor.contato_nome.ilike(busca_termo),
+                    ilike_unaccent(Fornecedor.nome_fantasia, busca_termo),
+                    ilike_unaccent(Fornecedor.razao_social, busca_termo),
+                    ilike_unaccent(Fornecedor.cnpj, busca_termo),
+                    ilike_unaccent(Fornecedor.contato_nome, busca_termo),
                 )
             )
             .limit(limite)
@@ -786,7 +786,7 @@ def estatisticas_fornecedores():
     """Retorna estatísticas gerais sobre fornecedores"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         # Total de fornecedores
@@ -900,7 +900,7 @@ def listar_pedidos_fornecedor(id):
     """Lista todos os pedidos de um fornecedor"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         pagina = request.args.get("pagina", 1, type=int)
@@ -973,7 +973,7 @@ def exportar_fornecedores():
     """Exporta fornecedores em formato CSV ou Excel"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         formato = request.args.get("formato", "csv", type=str).lower()
@@ -1157,7 +1157,7 @@ def importar_fornecedores():
     """Importa fornecedores a partir de arquivo CSV"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         if "file" not in request.files:
@@ -1300,7 +1300,7 @@ def relatorio_analitico_fornecedores():
     """Gera relatório analítico detalhado dos fornecedores"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros de filtro
@@ -1600,7 +1600,7 @@ def sincronizar_metricas_fornecedor(fornecedor_id):
 def get_inteligencia(id):
     """Retorna o dossiê avançado de inteligência do fornecedor"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         fornecedor = Fornecedor.query.filter_by(id=id, estabelecimento_id=estabelecimento_id).first_or_404()

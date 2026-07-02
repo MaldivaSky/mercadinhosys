@@ -6,7 +6,7 @@ from datetime import timezone
 from flask import Blueprint, request, jsonify, current_app
 # from flask_login import login_required, current_user  # Removido - usando JWT
 from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required
-from app.utils.query_helpers import get_authorized_establishment_id
+from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
@@ -159,7 +159,7 @@ def listar_clientes():
     """Lista todos os clientes com filtros e paginação"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         if estabelecimento_id is None:
@@ -199,11 +199,11 @@ def listar_clientes():
             busca_termo = f"%{busca}%"
             query = query.filter(
                 db.or_(
-                    Cliente.nome.ilike(busca_termo),
-                    Cliente.cpf.ilike(busca_termo),
-                    Cliente.email.ilike(busca_termo),
-                    Cliente.celular.ilike(busca_termo),
-                    Cliente.telefone.ilike(busca_termo),
+                    ilike_unaccent(Cliente.nome, busca_termo),
+                    ilike_unaccent(Cliente.cpf, busca_termo),
+                    ilike_unaccent(Cliente.email, busca_termo),
+                    ilike_unaccent(Cliente.celular, busca_termo),
+                    ilike_unaccent(Cliente.telefone, busca_termo),
                 )
             )
 
@@ -319,7 +319,7 @@ def obter_cliente(id):
     """Obtém detalhes completos de um cliente específico"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         if estabelecimento_id is None:
@@ -871,7 +871,7 @@ def buscar_clientes():
     """Busca rápida de clientes para autocomplete"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         termo = request.args.get("q", "", type=str).strip()
@@ -882,7 +882,7 @@ def buscar_clientes():
         if not termo or len(termo) < 2:
             return jsonify({"success": True, "clientes": []})
 
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -903,10 +903,10 @@ def buscar_clientes():
         clientes = (
             query.filter(
                 db.or_(
-                    Cliente.nome.ilike(busca_termo),
-                    Cliente.cpf.ilike(busca_termo),
-                    Cliente.email.ilike(busca_termo),
-                    Cliente.celular.ilike(busca_termo),
+                    ilike_unaccent(Cliente.nome, busca_termo),
+                    ilike_unaccent(Cliente.cpf, busca_termo),
+                    ilike_unaccent(Cliente.email, busca_termo),
+                    ilike_unaccent(Cliente.celular, busca_termo),
                 )
             )
             .limit(limite)
@@ -955,7 +955,7 @@ def recalcular_metricas_clientes():
     Útil para sincronizar dados após seeds ou migrações.
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         clientes_lista = Cliente.query.filter_by(estabelecimento_id=estabelecimento_id).all()
@@ -1093,7 +1093,7 @@ def estatisticas_clientes():
     """Retorna estatísticas gerais sobre clientes"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Total de clientes
@@ -1255,7 +1255,7 @@ def listar_compras_cliente(id):
     """Lista todas as compras de um cliente"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         pagina = request.args.get("pagina", 1, type=int)
@@ -1353,7 +1353,7 @@ def listar_compras_cliente(id):
 def listar_produtos_cliente(id):
     """Lista os produtos comprados por um cliente (histórico de consumo agregado)"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Verificar se cliente existe
@@ -1411,7 +1411,7 @@ def exportar_clientes():
     """Exporta clientes em formato CSV ou Excel"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         formato = request.args.get("formato", "csv", type=str).lower()
@@ -1650,7 +1650,7 @@ def curva_compras():
     """Retorna a curva de compras agregada por mês (últimos 12 meses)"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         hoje = datetime.utcnow()
@@ -1662,7 +1662,7 @@ def curva_compras():
             meses.append(mes)
 
         # Buscar vendas agrupadas por ano/mês
-        from app.utils.query_helpers import get_year_extract, get_month_extract
+        from app.utils.query_helpers import ilike_unaccent, get_year_extract, get_month_extract
         year_extract = get_year_extract(Venda.data_venda)
         month_extract = get_month_extract(Venda.data_venda)
 
@@ -1735,7 +1735,7 @@ def relatorio_analitico_clientes():
     """Gera relatório analítico detalhado dos clientes"""
     try:
         # Get estabelecimento_id from JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros de filtro

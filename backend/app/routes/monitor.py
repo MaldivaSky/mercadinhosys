@@ -2,7 +2,7 @@ from datetime import timezone
 # app/routes/monitor.py
 from flask import Blueprint, jsonify, request, current_app
 from app.models import db, Auditoria, Estabelecimento, Venda, Funcionario
-from app.utils.query_helpers import get_authorized_establishment_id
+from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
 from app.decorators.decorator_jwt import super_admin_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -185,8 +185,8 @@ def list_establishments():
         
         if search:
             query = query.filter(
-                (Estabelecimento.nome_fantasia.ilike(f"%{search}%")) |
-                (Estabelecimento.cnpj.ilike(f"%{search}%"))
+                (ilike_unaccent(Estabelecimento.nome_fantasia, f"%{search}%")) |
+                (ilike_unaccent(Estabelecimento.cnpj, f"%{search}%"))
             )
             
         establishments = query.order_by(Estabelecimento.data_cadastro.desc()).all()
@@ -263,7 +263,7 @@ def delete_establishment(id):
         estab = Estabelecimento.query.get_or_404(id)
         nome = estab.nome_fantasia
         
-        from app.utils.query_helpers import get_estabelecimento_safe, get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_estabelecimento_safe, get_authorized_establishment_id
         claims = get_jwt()
         # Prioriza o contexto de impersonation se for Super Admin
         estabelecimento_id = get_authorized_establishment_id()

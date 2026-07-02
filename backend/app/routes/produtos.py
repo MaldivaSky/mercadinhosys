@@ -6,7 +6,7 @@ from datetime import timezone
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
 from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required
-from app.utils.query_helpers import get_authorized_establishment_id
+from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
 from datetime import datetime, date, timedelta
 from decimal import Decimal, ROUND_HALF_UP, DecimalException
 import re
@@ -411,9 +411,9 @@ def catalogo_listar():
     query = CatalogoMestre.query.filter_by(status="encontrado")
     if busca:
         like = f"%{busca}%"
-        query = query.filter(or_(CatalogoMestre.nome.ilike(like),
-                                 CatalogoMestre.marca.ilike(like),
-                                 CatalogoMestre.ean.ilike(like)))
+        query = query.filter(or_(ilike_unaccent(CatalogoMestre.nome, like),
+                                 ilike_unaccent(CatalogoMestre.marca, like),
+                                 ilike_unaccent(CatalogoMestre.ean, like)))
     if categoria:
         query = query.filter(CatalogoMestre.categoria == categoria)
 
@@ -614,7 +614,7 @@ def bulk_update_prices():
 def listar_produtos():
     """Lista todos os produtos com filtros avançados e paginação"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
@@ -706,11 +706,11 @@ def listar_produtos():
             busca_termo = f"%{busca}%"
             query = query.filter(
                 or_(
-                    Produto.nome.ilike(busca_termo),
-                    Produto.codigo_barras.ilike(busca_termo),
-                    Produto.codigo_interno.ilike(busca_termo),
-                    Produto.descricao.ilike(busca_termo),
-                    Produto.marca.ilike(busca_termo),
+                    ilike_unaccent(Produto.nome, busca_termo),
+                    ilike_unaccent(Produto.codigo_barras, busca_termo),
+                    ilike_unaccent(Produto.codigo_interno, busca_termo),
+                    ilike_unaccent(Produto.descricao, busca_termo),
+                    ilike_unaccent(Produto.marca, busca_termo),
                 )
             )
 
@@ -1092,7 +1092,7 @@ def listar_produtos():
 def obter_produto(id):
     """Obtém detalhes completos de um produto específico"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -1314,7 +1314,7 @@ def criar_produto():
             current_app.logger.error(f"Erro ao obter get_jwt(): {str(je)}")
             claims = {}
         
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         data = request.get_json()
@@ -1554,7 +1554,7 @@ def atualizar_produto(id):
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
         claims = get_jwt()
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -1781,7 +1781,7 @@ def deletar_produto(id):
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
         claims = get_jwt()
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -1821,7 +1821,7 @@ def ajustar_estoque(id):
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
         claims = get_jwt()
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -1957,7 +1957,7 @@ def atualizar_preco(id):
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
         claims = get_jwt()
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
         
@@ -2062,7 +2062,7 @@ def descartar_produto(id):
     try:
         from flask_jwt_extended import get_jwt, get_jwt_identity
         claims = get_jwt()
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = int(get_jwt_identity())
         
@@ -2216,7 +2216,7 @@ def buscar_produtos():
             return jsonify({"success": True, "produtos": []})
 
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         query = Produto.query.filter_by(
@@ -2236,8 +2236,8 @@ def buscar_produtos():
             query.filter(
                 db.or_(
                     db.func.lower(Produto.nome).like(busca_termo),
-                    Produto.codigo_barras.ilike(busca_termo),
-                    Produto.codigo_interno.ilike(busca_termo),
+                    ilike_unaccent(Produto.codigo_barras, busca_termo),
+                    ilike_unaccent(Produto.codigo_interno, busca_termo),
                     db.func.lower(Produto.descricao).like(busca_termo),
                 )
             )
@@ -2305,7 +2305,7 @@ def listar_produtos_estoque():
     """Lista todos os produtos com filtros e paginação - Compatível com JWT"""
     try:
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Atualizar classificações ABC se não foram atualizadas recentemente
@@ -2336,7 +2336,7 @@ def listar_produtos_estoque():
         if categoria:
             # Buscar categoria pelo nome (case insensitive)
             current_app.logger.info(f"🔍 Filtrando por categoria: '{categoria}'")
-            cat_filters = [CategoriaProduto.nome.ilike(categoria)]
+            cat_filters = [ilike_unaccent(CategoriaProduto.nome, categoria)]
             if str(estabelecimento_id).lower() != 'all':
                 cat_filters.append(CategoriaProduto.estabelecimento_id == estabelecimento_id)
             
@@ -2351,7 +2351,7 @@ def listar_produtos_estoque():
                 categoria_normalizada = CategoriaProduto.normalizar_nome_categoria(categoria)
                 current_app.logger.info(f"🔄 Tentando com nome normalizado: '{categoria_normalizada}'")
                 
-                cat_filters_norm = [CategoriaProduto.nome.ilike(categoria_normalizada)]
+                cat_filters_norm = [ilike_unaccent(CategoriaProduto.nome, categoria_normalizada)]
                 if str(estabelecimento_id).lower() != 'all':
                     cat_filters_norm.append(CategoriaProduto.estabelecimento_id == estabelecimento_id)
                 
@@ -2368,7 +2368,7 @@ def listar_produtos_estoque():
         if tipo:
             # CORRIGIDO: Filtrar por campo 'tipo' ao invés de 'descricao'
             current_app.logger.info(f"🔍 Filtrando por tipo: '{tipo}'")
-            query = query.filter(Produto.tipo.ilike(f"%{tipo}%"))
+            query = query.filter(ilike_unaccent(Produto.tipo, f"%{tipo}%"))
             count_tipo = query.count()
             current_app.logger.info(f"📊 Produtos encontrados com tipo '{tipo}': {count_tipo}")
 
@@ -2390,11 +2390,11 @@ def listar_produtos_estoque():
             busca_termo = f"%{busca}%"
             query = query.filter(
                 db.or_(
-                    Produto.nome.ilike(busca_termo),
-                    Produto.codigo_barras.ilike(busca_termo),
-                    Produto.codigo_interno.ilike(busca_termo),
-                    Produto.descricao.ilike(busca_termo),
-                    Produto.marca.ilike(busca_termo),
+                    ilike_unaccent(Produto.nome, busca_termo),
+                    ilike_unaccent(Produto.codigo_barras, busca_termo),
+                    ilike_unaccent(Produto.codigo_interno, busca_termo),
+                    ilike_unaccent(Produto.descricao, busca_termo),
+                    ilike_unaccent(Produto.marca, busca_termo),
                 )
             )
 
@@ -2510,7 +2510,7 @@ def listar_produtos_estoque():
     except Exception as e:
         current_app.logger.error(f"❌ Erro ao listar produtos: {str(e)}")
         try:
-            from app.utils.query_helpers import get_authorized_establishment_id
+            from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
             estabelecimento_id = get_authorized_establishment_id()
             pagina = request.args.get("pagina", 1, type=int)
             por_pagina = request.args.get("por_pagina", 50, type=int)
@@ -2638,7 +2638,7 @@ def obter_estatisticas_produtos():
     """
     try:
         # Obter estabelecimento_id usando o helper que resolve 'all'
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         ativos = request.args.get("ativos", None, type=str)
@@ -2673,7 +2673,7 @@ def obter_estatisticas_produtos():
             query = query.filter_by(ativo=ativos.lower() == "true")
 
         if categoria:
-            q_cat = CategoriaProduto.query.filter(CategoriaProduto.nome.ilike(categoria))
+            q_cat = CategoriaProduto.query.filter(ilike_unaccent(CategoriaProduto.nome, categoria))
             if estabelecimento_id != 'all':
                 q_cat = q_cat.filter(CategoriaProduto.estabelecimento_id == estabelecimento_id)
             cat = q_cat.first()
@@ -2711,7 +2711,7 @@ def obter_estatisticas_produtos():
                 })
 
         if tipo:
-            query = query.filter(Produto.tipo.ilike(f"%{tipo or ''}%"))
+            query = query.filter(ilike_unaccent(Produto.tipo, f"%{tipo or ''}%"))
 
         if fornecedor_id:
             query = query.filter_by(fornecedor_id=fornecedor_id)
@@ -2731,11 +2731,11 @@ def obter_estatisticas_produtos():
             busca_termo = f"%{busca}%"
             query = query.filter(
                 db.or_(
-                    Produto.nome.ilike(busca_termo),
-                    Produto.codigo_barras.ilike(busca_termo),
-                    Produto.codigo_interno.ilike(busca_termo),
-                    Produto.descricao.ilike(busca_termo),
-                    Produto.marca.ilike(busca_termo),
+                    ilike_unaccent(Produto.nome, busca_termo),
+                    ilike_unaccent(Produto.codigo_barras, busca_termo),
+                    ilike_unaccent(Produto.codigo_interno, busca_termo),
+                    ilike_unaccent(Produto.descricao, busca_termo),
+                    ilike_unaccent(Produto.marca, busca_termo),
                 )
             )
 
@@ -3029,7 +3029,7 @@ def listar_categorias():
     """Lista todas as categorias de produtos"""
     try:
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         categorias = (
@@ -3071,7 +3071,7 @@ def listar_categorias():
     except Exception as e:
         current_app.logger.error(f"Erro ao listar categorias: {str(e)}")
         try:
-            from app.utils.query_helpers import get_authorized_establishment_id
+            from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
             estabelecimento_id = get_authorized_establishment_id()
             # Fallback: usar categorias_produto se existir, senão extrair de produtos via categoria_id
             sql = text(
@@ -3127,7 +3127,7 @@ def alertas_produtos():
     - dias: Dias para considerar validade próxima (default: 30)
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Parâmetros opcionais
@@ -3312,7 +3312,7 @@ def alertas_produtos():
 def exportar_produtos():
     """Exporta produtos em formato CSV"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         apenas_ativos = request.args.get("ativo", "true", type=str).lower() == "true"
@@ -3483,7 +3483,7 @@ def exportar_csv():
         from io import StringIO
         
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         ativos = request.args.get("ativos", None, type=str)
@@ -3566,7 +3566,7 @@ def criar_produto_estoque():
     
     try:
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         data = request.get_json()
@@ -3645,7 +3645,7 @@ def obter_produto_estoque(id):
     
     try:
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -3679,7 +3679,7 @@ def obter_produto_estoque(id):
             produto_id=id, 
             estabelecimento_id=estabelecimento_id,
             tipo="saida"
-        ).filter(MovimentacaoEstoque.motivo.ilike("%descarte%")).order_by(MovimentacaoEstoque.created_at.desc()).limit(5).all()
+        ).filter(ilike_unaccent(MovimentacaoEstoque.motivo, "%descarte%")).order_by(MovimentacaoEstoque.created_at.desc()).limit(5).all()
         
         dados_produto["historico_perdas"] = [p.to_dict() for p in perdas]
 
@@ -3742,7 +3742,7 @@ def atualizar_produto_estoque(id):
     
     try:
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -3826,7 +3826,7 @@ def deletar_produto_estoque(id):
     
     try:
         # Obter claims do JWT
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
@@ -3868,7 +3868,7 @@ def obter_historico_precos(id):
     - Compliance e auditoria fiscal
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Verificar se produto existe e pertence ao estabelecimento
@@ -3960,7 +3960,7 @@ def obter_produto_hub(id):
     Obtém todos os dados agregados de um produto para a tela de Hub (Raio-X).
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         from datetime import datetime, timezone
         estabelecimento_id = get_authorized_establishment_id()
         
@@ -4093,7 +4093,7 @@ def obter_vendas_historico(id):
     - Identificação de padrões e sazonalidade
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         # Verificar se produto existe e pertence ao estabelecimento
@@ -4276,7 +4276,7 @@ def atualizar_classificacao_abc():
     }
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         data = request.get_json() or {}

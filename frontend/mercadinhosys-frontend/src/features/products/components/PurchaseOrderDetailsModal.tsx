@@ -111,11 +111,21 @@ const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps> = ({
                         <div className="space-y-3">
                             {pedido.itens?.map((item: PedidoCompraItem) => (
                                 <div key={item.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm flex flex-col gap-2">
-                                    <div className="flex justify-between items-start gap-2">
-                                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base leading-tight">
-                                            {item.produto_nome}
-                                        </h4>
-                                        <span className="text-sm font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                                    <div className="flex justify-between items-start gap-3">
+                                        {item.produto?.imagem_url && (
+                                            <img src={item.produto.imagem_url} alt={item.produto_nome} className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-700 flex-shrink-0" />
+                                        )}
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base leading-tight">
+                                                {item.produto_nome}
+                                            </h4>
+                                            {item.produto?.codigo_barras && (
+                                                <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                                                    EAN: {item.produto.codigo_barras}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="text-sm font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded flex-shrink-0">
                                             {formatCurrency(item.total_item)}
                                         </span>
                                     </div>

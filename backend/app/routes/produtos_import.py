@@ -5,7 +5,7 @@
 def importar_produtos():
     """Importa produtos via arquivo CSV ou Excel"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         
         if 'file' not in request.files:
@@ -75,7 +75,7 @@ def importar_produtos():
                 if forn_nome:
                     fornecedor = Fornecedor.query.filter(
                         Fornecedor.estabelecimento_id == estabelecimento_id,
-                        Fornecedor.nome_fantasia.ilike(f"%{forn_nome}%")
+                        ilike_unaccent(Fornecedor.nome_fantasia, f"%{forn_nome}%")
                     ).first()
                     if fornecedor:
                         fornecedor_id = fornecedor.id
