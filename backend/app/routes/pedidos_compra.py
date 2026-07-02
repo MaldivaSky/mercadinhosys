@@ -323,14 +323,18 @@ def receber_pedido_compra():
             # Atualizar estoque do produto
             produto = item.produto
             if produto:
-                # Obter data de validade do item (se fornecida)
+                # Obter data de validade e fabricação do item (se fornecidas)
                 data_validade = None
+                data_fabricacao = None
                 if item_data.get('data_validade'):
                     from datetime import datetime as dt
                     data_validade = dt.strptime(item_data['data_validade'], '%Y-%m-%d').date()
+                if item_data.get('data_fabricacao'):
+                    from datetime import datetime as dt
+                    data_fabricacao = dt.strptime(item_data['data_fabricacao'], '%Y-%m-%d').date()
                 
                 # Criar lote para este recebimento
-                numero_lote = item_data.get('numero_lote', f"LOTE-{pedido.numero_pedido}-{item.id}")
+                numero_lote = item_data.get('numero_lote') or f"LOTE-{pedido.numero_pedido}-{item.id}"
                 
                 lote = ProdutoLote(
                     estabelecimento_id=user.estabelecimento_id,
@@ -340,6 +344,7 @@ def receber_pedido_compra():
                     numero_lote=numero_lote,
                     quantidade=quantidade_recebida,
                     quantidade_inicial=quantidade_recebida,
+                    data_fabricacao=data_fabricacao,
                     data_validade=data_validade or (date.today() + timedelta(days=365)),  # Padrão: 1 ano
                     data_entrada=date.today(),
                     preco_custo_unitario=item.preco_unitario,

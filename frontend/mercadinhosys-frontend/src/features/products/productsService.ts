@@ -99,12 +99,20 @@ export const productsService = {
         quantidade: number,
         operacao: 'entrada' | 'saida',
         motivo?: string,
-        observacoes?: string
+        observacoes?: string,
+        fornecedor_id?: number,
+        lote?: string,
+        data_fabricacao?: string,
+        data_validade?: string
     ): Promise<{ success: boolean; message: string; produto: any }> => {
         const payload: any = {
             tipo: operacao,
             quantidade,
             motivo,
+            fornecedor_id,
+            lote,
+            data_fabricacao,
+            data_validade
         };
         if (observacoes !== undefined) payload.observacoes = observacoes;
         const response = await apiClient.post<any>(`/produtos/${id}/estoque`, payload);

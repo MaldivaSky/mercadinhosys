@@ -207,16 +207,12 @@ export default function ProductHubPage() {
                         <span className="status-label">Margem Base</span>
                         <span className="status-value highlight-green">{margemReal.toFixed(2)}%</span>
                     </div>
-                    {produto.data_fabricacao && (
+                    {lotes && lotes.length > 0 && (
                         <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span className="status-label">Fabricação</span>
-                            <span className="status-value">{new Date(produto.data_fabricacao).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                    )}
-                    {produto.data_validade && (
-                        <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <span className="status-label">Validade</span>
-                            <span className="status-value">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
+                            <span className="status-label">Próx. Validade</span>
+                            <span className="status-value highlight-green">
+                                {new Date(Math.min(...lotes.filter((l: any) => l.data_validade).map((l: any) => new Date(l.data_validade).getTime()))).toLocaleDateString('pt-BR')}
+                            </span>
                         </div>
                     )}
                 </div>
@@ -362,32 +358,34 @@ export default function ProductHubPage() {
                     </p>
                     
                     <div className="supplier-list">
-                        {/* Como não temos uma lista cruzada profunda pronta, renderizamos o fornecedor atual como "O Melhor" se ele existir */}
-                        {produto.fornecedor_id ? (
-                            <div 
-                                className="supplier-item best-price" 
-                                style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid transparent' }}
-                                onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                                onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
-                                onClick={() => navigate(`/suppliers/${produto.fornecedor_id}`)}
-                                title="Clique para abrir o cadastro do fornecedor"
-                            >
-                                <div className="supplier-info">
-                                    <span className="supplier-name">{produto.fornecedor?.nome_fantasia || produto.fornecedor?.razao_social || 'Fornecedor Principal'}</span>
-                                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
-                                        {(produto.fornecedor as any)?.telefone && <span>📞 {(produto.fornecedor as any).telefone}</span>}
-                                        {(produto.fornecedor as any)?.contato_nome && <span>👤 {(produto.fornecedor as any).contato_nome} {(produto.fornecedor as any)?.contato_telefone ? `(${(produto.fornecedor as any).contato_telefone})` : ''}</span>}
+                        {/* Lista de Fornecedores baseada nos lotes */}
+                        {lotes && lotes.length > 0 ? (
+                            lotes.map((lote: any, idx: number) => {
+                                if (!lote.fornecedor) return null;
+                                return (
+                                    <div 
+                                        key={idx}
+                                        className="supplier-item best-price" 
+                                        style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid transparent', marginBottom: '8px' }}
+                                        onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                        onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                                        onClick={() => navigate(`/suppliers/${lote.fornecedor.id}`)}
+                                    >
+                                        <div className="supplier-info">
+                                            <span className="supplier-name">{lote.fornecedor.nome_fantasia || lote.fornecedor.razao_social}</span>
+                                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
+                                                Lote: {lote.numero_lote} | Qtd: {lote.quantidade}
+                                            </div>
+                                        </div>
+                                        <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
+                                            <span className="supplier-price">{formatCurrency(lote.preco_custo_unitario)}</span>
+                                        </div>
                                     </div>
-                                    <span className="supplier-badge" style={{ marginTop: '8px', display: 'inline-block' }}>Melhor Preço Histórico</span>
-                                </div>
-                                <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
-                                    <span className="supplier-price">{formatCurrency(produto.preco_custo)}</span>
-                                    <span className="supplier-lead-time" style={{ color: '#3b82f6', fontWeight: 'bold' }}>Abrir Fornecedor ➔</span>
-                                </div>
-                            </div>
+                                );
+                            }).filter(Boolean)
                         ) : (
                             <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
-                                Nenhum fornecedor vinculado a este produto.
+                                Nenhum fornecedor registrado nos lotes.
                             </div>
                         )}
                         

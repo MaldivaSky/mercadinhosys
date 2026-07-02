@@ -19,6 +19,7 @@ interface ItemRecebimento {
   quantidade_solicitada: number;
   quantidade_recebida: number;
   preco_unitario: number;
+  data_fabricacao: string;
   data_validade: string;
   numero_lote: string;
   conferido: boolean;
@@ -78,6 +79,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
           quantidade_solicitada: item.quantidade_solicitada,
           quantidade_recebida: 0, // Inicia zerado, o usuário vai conferir
           preco_unitario: item.preco_unitario,
+          data_fabricacao: '',
           data_validade: dataValidadePadrao.toISOString().split('T')[0],
           numero_lote: `LOTE-${detalhes.numero_pedido}-${index + 1}`,
           conferido: false,
@@ -115,6 +117,12 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
   const handleDataValidadeChange = (index: number, data: string) => {
     const novosItens = [...itensRecebimento];
     novosItens[index].data_validade = data;
+    setItensRecebimento(novosItens);
+  };
+
+  const handleDataFabricacaoChange = (index: number, data: string) => {
+    const novosItens = [...itensRecebimento];
+    novosItens[index].data_fabricacao = data;
     setItensRecebimento(novosItens);
   };
 
@@ -194,6 +202,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
         itens: itensComRecebimento.map(item => ({
           item_id: item.item_id,
           quantidade_recebida: item.quantidade_recebida,
+          data_fabricacao: item.data_fabricacao || undefined, // NOVO
           data_validade: item.data_validade,  // NOVO
           numero_lote: item.numero_lote       // NOVO
         }))
@@ -381,6 +390,15 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                                       max={item.quantidade_solicitada}
                                       value={item.quantidade_recebida}
                                       onChange={(e) => handleQuantidadeChange(index, parseInt(e.target.value) || 0)}
+                                      className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
+                                    />
+                                  </div>
+                                  <div className="col-span-2 sm:col-span-1">
+                                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fabricação</label>
+                                    <input
+                                      type="date"
+                                      value={item.data_fabricacao}
+                                      onChange={(e) => handleDataFabricacaoChange(index, e.target.value)}
                                       className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
                                     />
                                   </div>

@@ -47,12 +47,6 @@ const emptyForm = {
     margem_lucro: 30,
     quantidade: 0,
     quantidade_minima: 10,
-    fornecedor_id: undefined as number | undefined,
-    lote: '',
-    data_validade: '',
-    data_fabricacao: '',
-    data_compra: '',
-    data_recebimento: '',
     ativo: true,
     imagem_url: '',
 };
@@ -93,12 +87,6 @@ const ProductFormModal = ({
                 margem_lucro: produto.margem_lucro || 30,
                 quantidade: produto.quantidade || 0,
                 quantidade_minima: produto.quantidade_minima || 10,
-                fornecedor_id: produto.fornecedor_id,
-                lote: produto.lote || '',
-                data_validade: produto.data_validade || '',
-                data_fabricacao: produto.data_fabricacao || '',
-                data_compra: (produto as any).data_compra || '',
-                data_recebimento: (produto as any).data_recebimento || '',
                 ativo: produto.ativo ?? true,
                 imagem_url: produto.imagem_url || '',
             });
@@ -168,7 +156,6 @@ const ProductFormModal = ({
         // Validações obrigatórias
         if (!formData.nome.trim()) { showToast.error('Nome do produto é obrigatório'); return; }
         if (!formData.categoria.trim()) { showToast.error('Categoria é obrigatória'); return; }
-        if (!formData.fornecedor_id) { showToast.error('Fornecedor é obrigatório'); return; }
         if (!formData.preco_custo || formData.preco_custo <= 0) { showToast.error('Preço de custo inválido'); return; }
         if (!formData.preco_venda || formData.preco_venda <= 0) { showToast.error('Preço de venda inválido'); return; }
 
@@ -256,15 +243,7 @@ const ProductFormModal = ({
                     </button>
                 )}
 
-                {/* Aviso de fornecedor obrigatório */}
-                {!formData.fornecedor_id && (
-                    <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                        <p className="text-sm text-amber-700 dark:text-amber-300">
-                            <strong>Fornecedor obrigatório.</strong> Todo produto deve ter um fornecedor vinculado para rastreabilidade e geração automática de despesa de compra.
-                        </p>
-                    </div>
-                )}
+
 
                 {/* ── Seção 1: Identificação ── */}
                 <div>
@@ -361,46 +340,7 @@ const ProductFormModal = ({
                     </div>
                 </div>
 
-                {/* ── Seção 2: Fornecedor (obrigatório) ── */}
-                <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Fornecedor *</h4>
-                    <div className={sectionClass}>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="sm:col-span-3">
-                                <label className={labelClass}>Fornecedor Principal *</label>
-                                <select value={formData.fornecedor_id || ''} required
-                                    onChange={e => field('fornecedor_id', e.target.value ? Number(e.target.value) : undefined)}
-                                    className={`${inputClass} ${!formData.fornecedor_id ? 'border-amber-400 focus:ring-amber-400' : 'border-green-300'}`}>
-                                    <option value="">-- Selecione o Fornecedor --</option>
-                                    {fornecedores.map(f => (
-                                        <option key={f.id} value={f.id}>{f.nome_fantasia || f.nome}</option>
-                                    ))}
-                                </select>
-                                {fornecedores.length === 0 && (
-                                    <p className="text-xs text-red-500 mt-1">Nenhum fornecedor cadastrado. Cadastre um fornecedor antes de criar produtos.</p>
-                                )}
-                            </div>
-                            <div>
-                                <label className={labelClass}>Data da Compra</label>
-                                <input type="date" value={formData.data_compra}
-                                    onChange={e => field('data_compra', e.target.value)}
-                                    className={inputClass} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Data de Recebimento</label>
-                                <input type="date" value={formData.data_recebimento}
-                                    onChange={e => field('data_recebimento', e.target.value)}
-                                    className={inputClass} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Lote</label>
-                                <input type="text" value={formData.lote}
-                                    onChange={e => field('lote', e.target.value)}
-                                    className={inputClass} placeholder="Ex: L2024-01" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
 
                 {/* ── Seção 3: Precificação ── */}
                 <div>
@@ -433,34 +373,16 @@ const ProductFormModal = ({
                     </div>
                 </div>
 
-                {/* ── Seção 4: Estoque e Validade ── */}
+                {/* ── Seção 4: Estoque Mínimo ── */}
                 <div>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Estoque e Validade</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Controle de Estoque</h4>
                     <div className={sectionClass}>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className={labelClass}>Qtd. Atual</label>
-                                <input type="number" min="0" value={formData.quantidade}
-                                    onChange={e => field('quantidade', parseFloat(e.target.value) || 0)}
-                                    className={inputClass} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Qtd. Mínima</label>
+                                <label className={labelClass}>Qtd. Mínima (Alerta)</label>
                                 <input type="number" min="0" value={formData.quantidade_minima}
                                     onChange={e => field('quantidade_minima', parseFloat(e.target.value) || 0)}
                                     className={inputClass} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Data de Fabricação</label>
-                                <input type="date" value={formData.data_fabricacao}
-                                    onChange={e => field('data_fabricacao', e.target.value)}
-                                    className={inputClass} />
-                            </div>
-                            <div>
-                                <label className={labelClass}>Data de Validade</label>
-                                <input type="date" value={formData.data_validade}
-                                    onChange={e => field('data_validade', e.target.value)}
-                                    className={`${inputClass} ${formData.data_validade && new Date(formData.data_validade) < new Date() ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : ''}`} />
                             </div>
                         </div>
                     </div>

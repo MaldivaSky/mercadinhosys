@@ -89,6 +89,14 @@ export interface CreatePedidoData {
   }[];
 }
 
+export interface ItemRecebimentoData {
+  item_id: number;
+  quantidade_recebida: number;
+  data_fabricacao?: string;
+  data_validade?: string;
+  numero_lote?: string;
+}
+
 export interface ReceberPedidoData {
   pedido_id: number;
   numero_nota_fiscal?: string;
@@ -96,12 +104,7 @@ export interface ReceberPedidoData {
   gerar_boleto: boolean;
   data_vencimento?: string;
   numero_documento?: string;
-  itens: {
-    item_id: number;
-    quantidade_recebida: number;
-    data_validade?: string;  // NOVO
-    numero_lote?: string;    // NOVO
-  }[];
+  itens: ItemRecebimentoData[];
 }
 
 class PurchaseOrderService {

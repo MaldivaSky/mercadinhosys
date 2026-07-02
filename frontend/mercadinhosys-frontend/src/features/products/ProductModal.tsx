@@ -14,12 +14,7 @@ interface ProductFormData {
     preco_custo: number;
     preco_venda: number;
     margem_lucro: number;
-    quantidade: number;
     quantidade_minima: number;
-    fornecedor_id?: number;
-    lote?: string;
-    data_fabricacao?: string;
-    data_validade?: string;
     ativo: boolean;
 }
 
@@ -28,16 +23,7 @@ interface ProductModalProps {
     editMode: boolean;
     formData: ProductFormData;
     categorias: string[];
-    fornecedores: Fornecedor[];
-    onClose: () => void;
-    onSubmit: (e: React.FormEvent) => void;
-    onNomeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onCodigoBarrasChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onCategoriaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onMarcaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onFabricanteChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onDescricaoChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-    onFornecedorChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onTipoChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onUnidadeChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onPrecoCustoChange: (value: string) => void;
@@ -46,12 +32,8 @@ interface ProductModalProps {
     onPrecoVendaBlur: () => void;
     onMargemChange: (value: string) => void;
     onMargemBlur: () => void;
-    onQuantidadeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onQuantidadeMinimaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onAtivoChange: (checked: boolean) => void;
-    onLoteChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onDataFabricacaoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onDataValidadeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const ProductModal: React.FC<ProductModalProps> = ({
@@ -59,16 +41,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
     editMode,
     formData,
     categorias,
-    fornecedores,
-    onClose,
-    onSubmit,
-    onNomeChange,
-    onCodigoBarrasChange,
-    onCategoriaChange,
-    onMarcaChange,
-    onFabricanteChange,
     onDescricaoChange,
-    onFornecedorChange,
     onTipoChange,
     onUnidadeChange,
     onPrecoCustoChange,
@@ -77,12 +50,8 @@ const ProductModal: React.FC<ProductModalProps> = ({
     onPrecoVendaBlur,
     onMargemChange,
     onMargemBlur,
-    onQuantidadeChange,
     onQuantidadeMinimaChange,
     onAtivoChange,
-    onLoteChange,
-    onDataFabricacaoChange,
-    onDataValidadeChange,
 }) => {
     if (!show) return null;
 
@@ -181,24 +150,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                             />
                         </div>
 
-                        {/* Fornecedor */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Fornecedor
-                            </label>
-                            <select
-                                value={formData.fornecedor_id || ''}
-                                onChange={onFornecedorChange}
-                                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="">Selecione</option>
-                                {fornecedores.map((fornecedor) => (
-                                    <option key={fornecedor.id} value={fornecedor.id}>
-                                        {fornecedor.nome}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+
 
                         {/* Tipo */}
                         <div>
@@ -321,22 +273,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                             />
                         </div>
 
-                        {/* Quantidade */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Quantidade em Estoque *
-                            </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                required
-                                value={formData.quantidade}
-                                onChange={onQuantidadeChange}
-                                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                                placeholder="0"
-                            />
-                        </div>
+
 
                         {/* Quantidade Mínima */}
                         <div>
@@ -354,45 +291,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                                 placeholder="10"
                             />
                         </div>
-                        {/* Lote */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Lote
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.lote || ''}
-                                onChange={onLoteChange}
-                                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                                placeholder="Ex: L123456"
-                            />
-                        </div>
 
-                        {/* Data de Fabricação */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Data de Fabricação
-                            </label>
-                            <input
-                                type="date"
-                                value={formData.data_fabricacao || ''}
-                                onChange={onDataFabricacaoChange}
-                                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-
-                        {/* Data de Validade */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Data de Validade
-                            </label>
-                            <input
-                                type="date"
-                                value={formData.data_validade || ''}
-                                onChange={onDataValidadeChange}
-                                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
                         {/* Descrição */}
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

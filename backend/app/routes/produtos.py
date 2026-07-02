@@ -1788,20 +1788,46 @@ def deletar_produto(id):
             id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
-        # Soft delete - apenas desativa
-        produto.ativo = False
-        db.session.commit()
+        force = request.args.get('force', 'false').lower() == 'true'
 
-        current_app.logger.info(
-            f"Produto desativado: {id} por {get_jwt().get('username')}"
-        )
+        if force:
+            from sqlalchemy.exc import IntegrityError
+            try:
+                # Primeiro, excluir lotes e históricos que podem não ter cascade configurado
+                from app.models import HistoricoPrecos, MovimentacaoEstoque, ProdutoLote
+                HistoricoPrecos.query.filter_by(produto_id=produto.id).delete()
+                MovimentacaoEstoque.query.filter_by(produto_id=produto.id).delete()
+                ProdutoLote.query.filter_by(produto_id=produto.id).delete()
+                
+                db.session.delete(produto)
+                db.session.commit()
+                current_app.logger.info(f"Produto excluído definitivamente: {id} por {claims.get('username')}")
+                return jsonify({
+                    "success": True,
+                    "message": "Produto excluído definitivamente com sucesso"
+                })
+            except IntegrityError as e:
+                db.session.rollback()
+                current_app.logger.warning(f"Tentativa de exclusão física bloqueada (IntegrityError) para produto {id}: {str(e)}")
+                return jsonify({
+                    "success": False,
+                    "message": "Não é possível excluir este produto pois ele já possui registros associados (como vendas ou compras). Por favor, apenas desative-o."
+                }), 400
+        else:
+            # Soft delete - apenas desativa
+            produto.ativo = False
+            db.session.commit()
 
-        return jsonify(
-            {
-                "success": True,
-                "message": "Produto desativado com sucesso",
-            }
-        )
+            current_app.logger.info(
+                f"Produto desativado: {id} por {claims.get('username')}"
+            )
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Produto desativado com sucesso",
+                }
+            )
 
     except Exception as e:
         if "404 Not Found" in str(e):
@@ -1835,6 +1861,15 @@ def ajustar_estoque(id):
         custo_unitario = data.get("custo_unitario", None)
         motivo = data.get("motivo", "")
         observacoes = data.get("observacoes", "")
+        lote_str = data.get("lote", "").strip()
+        data_fabricacao_str = data.get("data_fabricacao", "")
+        data_validade_str = data.get("data_validade", "")
+        fornecedor_id = data.get("fornecedor_id")
+
+        if fornecedor_id == "":
+            fornecedor_id = None
+        elif fornecedor_id is not None:
+            fornecedor_id = int(fornecedor_id)
 
         if tipo not in ["entrada", "saida"]:
             return (
@@ -1887,6 +1922,37 @@ def ajustar_estoque(id):
                     observacoes=f"Custo anterior: R$ {custo_anterior}, Novo custo: R$ {produto.preco_custo}"
                 )
                 db.session.add(historico)
+
+            # Criar lote se fornecido validade ou lote
+            novo_lote = None
+            if lote_str or data_validade_str:
+                numero_lote_final = lote_str if lote_str else f"ENT-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                validade_final = datetime.strptime(data_validade_str, "%Y-%m-%d").date() if data_validade_str else (date.today() + timedelta(days=365))
+                fabricacao_final = datetime.strptime(data_fabricacao_str, "%Y-%m-%d").date() if data_fabricacao_str else None
+                
+                novo_lote = ProdutoLote(
+                    estabelecimento_id=estabelecimento_id,
+                    produto_id=produto.id,
+                    fornecedor_id=fornecedor_id,
+                    numero_lote=numero_lote_final,
+                    quantidade=quantidade,
+                    quantidade_inicial=quantidade,
+                    data_fabricacao=fabricacao_final,
+                    data_validade=validade_final,
+                    preco_custo_unitario=custo_unitario if custo_unitario is not None else produto.preco_custo,
+                    preco_venda=produto.preco_venda,
+                    ativo=True
+                )
+                db.session.add(novo_lote)
+                db.session.flush() # Para obter o ID do lote
+                
+                # Se o produto não tinha data de validade global, atualizar
+                if not produto.data_validade or produto.data_validade < validade_final:
+                    produto.data_validade = validade_final
+                if lote_str and not produto.lote:
+                    produto.lote = lote_str
+                if fornecedor_id and not produto.fornecedor_id:
+                    produto.fornecedor_id = fornecedor_id
         else:  # saida
             if to_decimal(produto.quantidade, precision=3) < quantidade:
                 return (
@@ -1905,6 +1971,7 @@ def ajustar_estoque(id):
             estabelecimento_id=estabelecimento_id,
             produto_id=produto.id,
             funcionario_id=int(get_jwt_identity()),
+            lote_id=novo_lote.id if tipo == "entrada" and 'novo_lote' in locals() and novo_lote else None,
             tipo=tipo,
             quantidade=quantidade,
             quantidade_anterior=quantidade_anterior,

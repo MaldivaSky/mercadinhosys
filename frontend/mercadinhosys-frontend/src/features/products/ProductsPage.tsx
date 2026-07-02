@@ -113,6 +113,10 @@ const ProductsPage: React.FC = () => {
     quantidade: 0,
     operacao: 'entrada' as 'entrada' | 'saida',
     motivo: '',
+    fornecedor_id: undefined as number | undefined,
+    lote: '',
+    data_fabricacao: '',
+    data_validade: '',
   });
 
   const [markupCalc, setMarkupCalc] = useState({
@@ -248,10 +252,10 @@ const ProductsPage: React.FC = () => {
   // Handlers
   const doDelete = async (id: number) => {
     try {
-      await showToast.promise(productsService.delete(id), {
-        loading: 'Desativando produto...',
-        success: 'Produto desativado com sucesso!',
-        error: 'Erro ao desativar produto'
+      await showToast.promise(productsService.delete(id, true), {
+        loading: 'Excluindo produto...',
+        success: 'Produto excluído definitivamente!',
+        error: 'Erro ao excluir produto'
       });
       loadProdutos();
       loadStats();
@@ -264,8 +268,8 @@ const ProductsPage: React.FC = () => {
     const prod = produtos.find(p => p.id === id);
     requirePin(
       () => doDelete(id),
-      'Desativar produto',
-      `Autorize com o PIN para desativar ${prod ? `"${prod.nome}"` : 'este produto'}.`,
+      'Excluir produto',
+      `Autorize com o PIN para EXCLUIR DEFINITIVAMENTE ${prod ? `"${prod.nome}"` : 'este produto'}. Esta ação não pode ser desfeita.`,
     );
   };
 
@@ -275,11 +279,24 @@ const ProductsPage: React.FC = () => {
       return;
     }
     try {
-      await showToast.promise(productsService.ajustarEstoque(selectedProduct.id, stockAdjust.quantidade, stockAdjust.operacao, stockAdjust.motivo), {
-        loading: 'Ajustando estoque...',
-        success: 'Estoque ajustado com sucesso!',
-        error: 'Erro ao ajustar estoque'
-      });
+      await showToast.promise(
+        productsService.ajustarEstoque(
+          selectedProduct.id, 
+          stockAdjust.quantidade, 
+          stockAdjust.operacao, 
+          stockAdjust.motivo,
+          undefined, // observacoes
+          stockAdjust.fornecedor_id,
+          stockAdjust.lote,
+          stockAdjust.data_fabricacao,
+          stockAdjust.data_validade
+        ), 
+        {
+          loading: 'Ajustando estoque...',
+          success: 'Estoque ajustado com sucesso!',
+          error: 'Erro ao ajustar estoque'
+        }
+      );
       setShowStockModal(false);
       loadProdutos();
       loadStats();
@@ -627,8 +644,37 @@ const ProductsPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Motivo *</label>
-                <textarea value={stockAdjust.motivo} onChange={(e) => setStockAdjust(prev => ({ ...prev, motivo: e.target.value }))} rows={3} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="Informe o motivo do ajuste..." />
+                <textarea value={stockAdjust.motivo} onChange={(e) => setStockAdjust(prev => ({ ...prev, motivo: e.target.value }))} rows={2} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="Informe o motivo do ajuste..." />
               </div>
+
+              {stockAdjust.operacao === 'entrada' && (
+                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-800 space-y-3">
+                  <h4 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest">Informações Adicionais (Opcional)</h4>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Fornecedor (Origem)</label>
+                    <select value={stockAdjust.fornecedor_id || ''} onChange={(e) => setStockAdjust(prev => ({ ...prev, fornecedor_id: e.target.value ? Number(e.target.value) : undefined }))} className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                      <option value="">-- Nenhum --</option>
+                      {fornecedores.map(f => (
+                        <option key={f.id} value={f.id}>{f.nome_fantasia || f.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Nº Lote</label>
+                      <input type="text" value={stockAdjust.lote} onChange={(e) => setStockAdjust(prev => ({ ...prev, lote: e.target.value }))} className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="L2024..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Fabricação</label>
+                      <input type="date" value={stockAdjust.data_fabricacao} onChange={(e) => setStockAdjust(prev => ({ ...prev, data_fabricacao: e.target.value }))} className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Validade</label>
+                    <input type="date" value={stockAdjust.data_validade} onChange={(e) => setStockAdjust(prev => ({ ...prev, data_validade: e.target.value }))} className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700 flex-shrink-0" style={{ paddingBottom: 'max(1rem, calc(0.5rem + env(safe-area-inset-bottom)))' }}>
               <button onClick={() => setShowStockModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
