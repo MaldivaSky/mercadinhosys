@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Package, MapPin, User, Truck, ChevronRight, DollarSign, Plus, Minus, Trash2 } from 'lucide-react';
+import { X, Search, Package, MapPin, User, Truck, ChevronRight, DollarSign, Plus, Minus, Trash2, Camera, Barcode } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { deliveryService, Motorista, Veiculo } from './deliveryService';
 import { productsService } from '../products/productsService';
@@ -7,6 +7,7 @@ import { customerService } from '../customers/customerService';
 import toast from 'react-hot-toast';
 import MultiPaymentManager, { PagamentoItem } from '../pdv/components/MultiPaymentManager';
 import { FormaPagamentoPDV } from '../pdv/pdvService';
+import BarcodeScanner from '../pdv/components/BarcodeScanner';
 
 interface Props {
     isOpen: boolean;
@@ -31,6 +32,7 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated,
     // Search states
     const [prodSearch, setProdSearch] = useState('');
     const [custSearch, setCustSearch] = useState('');
+    const [scannerAberto, setScannerAberto] = useState(false);
 
     // Form state
     const [selectedCustomer, setSelectedCustomer] = useState<any>(initialCustomer);
@@ -296,32 +298,55 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated,
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                         <Package className="w-4 h-4" /> Itens do Pedido
                                     </h3>
-                                    <div className="relative group">
-                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar produtos pelo nome ou barras..."
-                                            value={prodSearch}
-                                            onChange={(e) => setProdSearch(e.target.value)}
-                                            className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                                        />
-                                        {prodSearch && (
-                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-20 max-h-64 overflow-y-auto">
-                                                {filteredProds.map(p => (
-                                                    <button
-                                                        key={p.id}
-                                                        onClick={() => { addToCart(p); setProdSearch(''); }}
-                                                        className="w-full p-4 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-center justify-between"
-                                                    >
-                                                        <div>
-                                                            <p className="font-bold text-gray-900 dark:text-white">{p.nome}</p>
-                                                            <p className="text-xs text-gray-500">Estoque: {p.estoque_atual} • R$ {p.preco_venda.toFixed(2)}</p>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setScannerAberto(true)}
+                                            title="Escanear código de barras"
+                                            className="p-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow flex-shrink-0"
+                                        >
+                                            <Camera className="w-5 h-5" />
+                                        </button>
+                                        <div className="relative group flex-1">
+                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar produtos pelo nome ou código de barras..."
+                                                value={prodSearch}
+                                                onChange={(e) => setProdSearch(e.target.value)}
+                                                className="w-full pl-12 pr-4 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                                            />
+                                            {prodSearch && (
+                                                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-20 max-h-64 overflow-y-auto">
+                                                    {filteredProds.map(p => (
+                                                        <button
+                                                            key={p.id}
+                                                            onClick={() => { addToCart(p); setProdSearch(''); }}
+                                                            className="w-full p-4 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                                    {p.nome}
+                                                                    {p.codigo_barras && (
+                                                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500">{p.codigo_barras}</span>
+                                                                    )}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">Estoque: {p.estoque_atual} • R$ {p.preco_venda.toFixed(2)}</p>
+                                                            </div>
+                                                            <Plus className="w-5 h-5 text-blue-500" />
+                                                        </button>
+                                                    ))}
+                                                    {/* Diferente da compra: numa VENDA não dá pra vender o que não
+                                                        está cadastrado — sem fallback COSMOS aqui, só orienta. */}
+                                                    {filteredProds.length === 0 && (
+                                                        <div className="p-4 flex items-center gap-2 text-sm text-gray-500">
+                                                            <Barcode className="w-4 h-4 flex-shrink-0" />
+                                                            <span>Nenhum produto encontrado. Cadastre o produto em Produtos antes de vendê-lo.</span>
                                                         </div>
-                                                        <Plus className="w-5 h-5 text-blue-500" />
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </section>
                             </div>
@@ -522,6 +547,13 @@ const UnifiedDeliverySaleModal: React.FC<Props> = ({ isOpen, onClose, onCreated,
                     </div>
                 </div>
             </motion.div>
+
+            {scannerAberto && (
+                <BarcodeScanner
+                    onScan={(codigo) => { setScannerAberto(false); setProdSearch(codigo); }}
+                    onClose={() => setScannerAberto(false)}
+                />
+            )}
         </div>
     );
 };
