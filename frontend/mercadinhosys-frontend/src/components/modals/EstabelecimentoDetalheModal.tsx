@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, CreditCard, Settings, Edit2, Check, Loader2, Save } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../api/apiClient';
+import { isValidCNPJ } from '../../utils/validators';
 
 interface EstabelecimentoDetalheModalProps {
     estabelecimento: any;
@@ -44,6 +45,10 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
     };
 
     const handleSave = async () => {
+        if (formData.cnpj && !isValidCNPJ(formData.cnpj)) {
+            alert('CNPJ inválido!');
+            return;
+        }
         try {
             setIsSaving(true);
             await apiClient.put(`/saas/estabelecimentos/${estabelecimento.id}`, formData);
@@ -185,7 +190,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">CNPJ</span>
                                         {isEditing ? (
-                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.cnpj || ''} onChange={e => handleInputChange('cnpj', e.target.value)} />
+                                            <input type="text" className={`px-2 py-1 text-sm border-2 rounded bg-white dark:bg-gray-800 dark:text-white outline-none ${formData.cnpj ? (isValidCNPJ(formData.cnpj) ? 'border-green-500' : 'border-red-500') : 'dark:border-gray-600'}`} value={formData.cnpj || ''} onChange={e => handleInputChange('cnpj', e.target.value)} />
                                         ) : (
                                             <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cnpj}</span>
                                         )}

@@ -21,6 +21,7 @@ import {
 import { apiClient } from '../../api/apiClient';
 import { toast } from 'react-hot-toast';
 import { useSuperAdmin } from '../../contexts/SuperAdminContext';
+import { isValidCNPJ, isValidCPF, isValidEmail } from '../../utils/validators';
 
 interface Log {
     id: number;
@@ -150,6 +151,10 @@ const SystemMonitorPage: React.FC = () => {
 
     const handleCreateAccount = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isValidCNPJ(formData.cnpj)) return toast.error('CNPJ da loja é inválido!');
+        if (!isValidCPF(formData.cpf_admin)) return toast.error('CPF do administrador é inválido!');
+        if (!isValidEmail(formData.email_loja) || !isValidEmail(formData.email_admin)) return toast.error('E-mail fornecido é inválido!');
+        
         setSubmitting(true);
         try {
             const res = await apiClient.post('/onboarding/registrar', formData);
@@ -222,6 +227,10 @@ const SystemMonitorPage: React.FC = () => {
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingTenant) return;
+        
+        if (editFormData.cnpj && !isValidCNPJ(editFormData.cnpj)) return toast.error('CNPJ inválido!');
+        if (editFormData.email && !isValidEmail(editFormData.email)) return toast.error('E-mail inválido!');
+
         setSubmitting(true);
         try {
             const res = await apiClient.put(`/saas/estabelecimentos/${editingTenant.id}`, editFormData);
@@ -638,7 +647,7 @@ const SystemMonitorPage: React.FC = () => {
                                         <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-1">CNPJ *</label>
                                         <input
                                             required
-                                            className="w-full px-4 py-3 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-700"
+                                            className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-2xl transition-all font-bold text-gray-700 outline-none ${formData.cnpj ? (isValidCNPJ(formData.cnpj) ? 'border-green-500 focus:ring-green-600 focus:border-green-500' : 'border-red-500 focus:ring-red-600 focus:border-red-500') : 'border-transparent focus:ring-2 focus:ring-indigo-600'}`}
                                             value={formData.cnpj}
                                             onChange={e => setFormData({ ...formData, cnpj: e.target.value })}
                                             placeholder="00.000.000/0001-00"
@@ -659,7 +668,7 @@ const SystemMonitorPage: React.FC = () => {
                                             <input
                                                 required
                                                 type="email"
-                                                className="w-full px-4 py-3 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-700 text-sm"
+                                                className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-2xl transition-all font-bold text-gray-700 text-sm outline-none ${formData.email_loja ? (isValidEmail(formData.email_loja) ? 'border-green-500 focus:ring-green-600 focus:border-green-500' : 'border-red-500 focus:ring-red-600 focus:border-red-500') : 'border-transparent focus:ring-2 focus:ring-indigo-600'}`}
                                                 value={formData.email_loja}
                                                 onChange={e => setFormData({ ...formData, email_loja: e.target.value })}
                                             />
@@ -694,7 +703,7 @@ const SystemMonitorPage: React.FC = () => {
                                         <input
                                             required
                                             type="email"
-                                            className="w-full px-4 py-3 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-700"
+                                            className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-2xl transition-all font-bold text-gray-700 outline-none ${formData.email_admin ? (isValidEmail(formData.email_admin) ? 'border-green-500 focus:ring-green-600 focus:border-green-500' : 'border-red-500 focus:ring-red-600 focus:border-red-500') : 'border-transparent focus:ring-2 focus:ring-indigo-600'}`}
                                             value={formData.email_admin}
                                             onChange={e => setFormData({ ...formData, email_admin: e.target.value })}
                                         />
@@ -704,7 +713,7 @@ const SystemMonitorPage: React.FC = () => {
                                             <label className="block text-[10px] font-black text-gray-400 uppercase mb-1 ml-1">CPF Admin *</label>
                                             <input
                                                 required
-                                                className="w-full px-4 py-3 bg-gray-50 border-0 rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-700 text-sm"
+                                                className={`w-full px-4 py-3 bg-gray-50 border-2 rounded-2xl transition-all font-bold text-gray-700 text-sm outline-none ${formData.cpf_admin ? (isValidCPF(formData.cpf_admin) ? 'border-green-500 focus:ring-green-600 focus:border-green-500' : 'border-red-500 focus:ring-red-600 focus:border-red-500') : 'border-transparent focus:ring-2 focus:ring-indigo-600'}`}
                                                 value={formData.cpf_admin}
                                                 onChange={e => setFormData({ ...formData, cpf_admin: e.target.value })}
                                             />
@@ -838,7 +847,7 @@ const SystemMonitorPage: React.FC = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CNPJ</label>
-                                        <input value={editFormData.cnpj} onChange={e => setEditFormData({...editFormData, cnpj: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        <input value={editFormData.cnpj} onChange={e => setEditFormData({...editFormData, cnpj: e.target.value})} className={`w-full h-12 px-4 bg-gray-50 border-2 rounded-2xl text-sm font-bold outline-none transition-all ${editFormData.cnpj ? (isValidCNPJ(editFormData.cnpj) ? 'border-green-500 focus:ring-green-500' : 'border-red-500 focus:ring-red-500') : 'border-gray-100 focus:ring-2 focus:ring-indigo-500/20'}`} />
                                     </div>
                                 </div>
                             )}
@@ -852,7 +861,7 @@ const SystemMonitorPage: React.FC = () => {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
-                                            <input value={editFormData.email} onChange={e => setEditFormData({...editFormData, email: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                            <input value={editFormData.email} onChange={e => setEditFormData({...editFormData, email: e.target.value})} className={`w-full h-12 px-4 bg-gray-50 border-2 rounded-2xl text-sm font-bold outline-none transition-all ${editFormData.email ? (isValidEmail(editFormData.email) ? 'border-green-500 focus:ring-green-500' : 'border-red-500 focus:ring-red-500') : 'border-gray-100 focus:ring-2 focus:ring-indigo-500/20'}`} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-4">
