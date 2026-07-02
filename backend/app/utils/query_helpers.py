@@ -1,26 +1,67 @@
 import logging
 import os
 import traceback
+import unicodedata
 from flask import request
 from flask_jwt_extended import get_jwt
 from sqlalchemy import func, extract, text
 
 logger = logging.getLogger(__name__)
 
+# Pares (acento minúsculo → base) para dobrar acentos direto em SQL com replace().
+# Usamos SÓ minúsculas porque aplicamos lower() antes. replace() e lower() existem
+# tanto no PostgreSQL quanto no SQLite — logo, NÃO dependemos da extensão `unaccent`
+# (que pode não estar no Neon e fazia a busca dar 500) nem de função custom.
+# Inclui as MAIÚSCULAS acentuadas mapeadas para a base minúscula porque o lower()
+# do SQLite é ASCII-only (não rebaixa "Á"→"á"); assim o folding funciona igual em
+# SQLite (testes) e PostgreSQL (produção).
+_ACCENT_PAIRS = [
+    ("á", "a"), ("à", "a"), ("â", "a"), ("ã", "a"), ("ä", "a"),
+    ("é", "e"), ("è", "e"), ("ê", "e"), ("ë", "e"),
+    ("í", "i"), ("ì", "i"), ("î", "i"), ("ï", "i"),
+    ("ó", "o"), ("ò", "o"), ("ô", "o"), ("õ", "o"), ("ö", "o"),
+    ("ú", "u"), ("ù", "u"), ("û", "u"), ("ü", "u"),
+    ("ç", "c"), ("ñ", "n"), ("ý", "y"),
+    ("Á", "a"), ("À", "a"), ("Â", "a"), ("Ã", "a"), ("Ä", "a"),
+    ("É", "e"), ("È", "e"), ("Ê", "e"), ("Ë", "e"),
+    ("Í", "i"), ("Ì", "i"), ("Î", "i"), ("Ï", "i"),
+    ("Ó", "o"), ("Ò", "o"), ("Ô", "o"), ("Õ", "o"), ("Ö", "o"),
+    ("Ú", "u"), ("Ù", "u"), ("Û", "u"), ("Ü", "u"),
+    ("Ç", "c"), ("Ñ", "n"), ("Ý", "y"),
+]
+
+
+def _strip_accents(s: str) -> str:
+    """Remove acentos de um texto em Python (preserva curingas % e _)."""
+    if s is None:
+        return s
+    return "".join(c for c in unicodedata.normalize("NFD", str(s))
+                   if unicodedata.category(c) != "Mn")
+
+
+def _fold_accents_sql(column):
+    """Expressão SQL que retorna a coluna em minúsculas e sem acentos, usando
+    apenas lower()+replace() — portável (Postgres e SQLite), sem extensão."""
+    expr = func.lower(column)
+    for acento, base in _ACCENT_PAIRS:
+        expr = func.replace(expr, acento, base)
+    return expr
+
+
 def _get_db():
     from app.models import db
     return db
 
+
 def ilike_unaccent(column, search_term):
     """
-    Pesquisa Case-Insensitive e Accent-Insensitive suportada nativamente no PostgreSQL usando a extensão unaccent.
-    Faz o fallback seguro para ambientes que usam SQLite (ou não possuem extensão instalada).
+    Busca case-insensitive E accent-insensitive, PORTÁVEL e robusta:
+    'agua' encontra 'Água', 'acai' encontra 'Açaí'. A coluna é dobrada (lower +
+    sem acento) em SQL; o termo é normalizado em Python. Não usa a extensão
+    unaccent (evita 'function unaccent does not exist' no Neon → 500 na busca).
     """
-    db = _get_db()
-    engine_name = db.engine.name
-    if engine_name == 'postgresql':
-        return func.unaccent(column).ilike(func.unaccent(search_term))
-    return column.ilike(search_term)
+    termo_norm = _strip_accents(search_term).lower()
+    return _fold_accents_sql(column).like(termo_norm)
 
 def get_hour_extract(column):
     """
