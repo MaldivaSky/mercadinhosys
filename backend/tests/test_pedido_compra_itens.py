@@ -22,7 +22,10 @@ def ctx(session):
     estab = session.query(Estabelecimento).first()
     admin = session.query(Funcionario).filter_by(estabelecimento_id=estab.id).first()
     forn = Fornecedor(estabelecimento_id=estab.id, nome_fantasia="LimpaTudo Atacado",
-                      razao_social="LimpaTudo LTDA", cnpj="11222333000144")
+                      razao_social="LimpaTudo LTDA", cnpj="11222333000144",
+                      telefone="9233330000", email="forn@limpatudo.com",
+                      cep="69000-000", logradouro="Rua X", numero="1",
+                      bairro="Centro", cidade="Manaus", estado="AM", pais="Brasil")
     cat = CategoriaProduto(estabelecimento_id=estab.id, nome="Limpeza")
     session.add_all([forn, cat])
     session.flush()
@@ -64,3 +67,16 @@ def test_pedido_com_item_aparece_na_lista_e_detalhe(client, ctx):
     itens = det.get("itens") or det.get("pedido", {}).get("itens")
     assert itens and len(itens) == 1, f"detalhe sem itens: {det}"
     assert Decimal(str(det.get("total") or det.get("pedido", {}).get("total"))) > 0
+
+
+def test_busca_de_produtos_para_adicionar_ao_pedido(client, ctx):
+    """A busca do modal de pedido (GET /produtos/?busca=) deve achar o produto
+    para o operador conseguir adicioná-lo — se isto falha, não dá pra montar pedido."""
+    estab, admin, prod = ctx["estab"], ctx["admin"], ctx["prod"]
+    headers = _headers(estab.id, admin.id)
+
+    r = client.get("/api/produtos/?busca=Sanit", headers=headers)
+    assert r.status_code == 200, r.get_data(as_text=True)
+    produtos = r.get_json().get("produtos", [])
+    nomes = [p["nome"] for p in produtos]
+    assert prod.nome in nomes, f"busca não retornou o produto: {nomes}"
