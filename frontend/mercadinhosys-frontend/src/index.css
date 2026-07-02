@@ -201,3 +201,32 @@ body {
 .dark .custom-scrollbar {
   scrollbar-color: #374151 transparent; /* gray-700 */
 }
+
+/* ========================================
+   MERCADINHOSYS CUSTOM ANIMATIONS
+   ======================================== */
+@keyframes msys-pop { 
+  0% { transform: scale(.3); opacity: 0; } 
+  60% { transform: scale(1.08); opacity: 1; } 
+  100% { transform: scale(1); opacity: 1; } 
+}
+
+@keyframes msys-rise { 
+  from { opacity: 0; transform: translateY(14px); } 
+  to { opacity: 1; transform: translateY(0); } 
+}
+
+@keyframes msys-twinkle { 
+  0%, 100% { opacity: 0; transform: rotate(45deg) scale(.4); } 
+  50% { opacity: 1; transform: rotate(45deg) scale(1); } 
+}
+
+@keyframes msys-fill { 
+  from { width: 0; } 
+  to { width: 100%; } 
+}
+
+.animate-msys-pop { animation: msys-pop 0.7s cubic-bezier(.2,1.4,.4,1) both; }
+.animate-msys-rise { animation: msys-rise 0.6s ease-out both; }
+.animate-msys-twinkle { animation: msys-twinkle 1.6s ease-in-out infinite; }
+.animate-msys-fill { animation: msys-fill 1.4s ease-in-out both; }

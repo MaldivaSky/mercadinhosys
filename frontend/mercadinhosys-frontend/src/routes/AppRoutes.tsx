@@ -8,6 +8,8 @@ import { authService } from '../features/auth/authService';
 import SuperAdminRoute from '../components/routes/SuperAdminRoute';
 import PlanoGuard from '../components/routes/PlanoGuard';
 
+import { SplashLoading } from '../components/common/SplashLoading';
+
 // Lazy loading das páginas
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
 const PDVPage = lazy(() => import('../features/pdv/PDVPage'));
@@ -67,7 +69,7 @@ const AppRoutes: React.FC = () => {
     }, []);
 
     return (
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
+        <Suspense fallback={<SplashLoading />}>
             <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={isAuthenticated ? <Navigate to={getTargetRoute()} replace /> : <LoginPage />} />
