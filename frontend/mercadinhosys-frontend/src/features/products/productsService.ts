@@ -89,8 +89,8 @@ export const productsService = {
         return response.data;
     },
 
-    delete: async (id: number): Promise<{ success: boolean; message: string }> => {
-        const response = await apiClient.delete<any>(`/produtos/${id}/`);
+    delete: async (id: number, force?: boolean): Promise<{ success: boolean; message: string }> => {
+        const response = await apiClient.delete<any>(`/produtos/${id}/`, { params: force ? { force: true } : undefined });
         return response.data;
     },
 
@@ -144,6 +144,16 @@ export const productsService = {
         }
         const response = await apiClient.get<any>('/produtos/relatorio/estoque', { params });
         return response.data;
+    },
+
+    async getProductSalesHistory(id: number, dias: number = 90): Promise<any> {
+        try {
+            const response = await apiClient.get(`/produtos/${id}/vendas-historico`, { params: { dias } });
+            return response.data;
+        } catch (error) {
+            console.error('Erro ao obter histórico de vendas do produto:', error);
+            throw error;
+        }
     },
 
     exportarCSV: async (ativos = true): Promise<{ success: boolean; csv: string; total_produtos: number }> => {

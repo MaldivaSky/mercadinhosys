@@ -452,10 +452,13 @@ def preferencias_usuario():
             current_app.logger.info(f"💾 [PREFS] Atualizando preferências para usuário {user_id}: {data}")
             
             if not prefs:
-                from app.utils.query_helpers import get_authorized_establishment_id
-                est_id = get_authorized_establishment_id()
-                if str(est_id).lower() == 'all':
-                    return jsonify({"success": False, "error": "Ação não permitida na visão global (all)."}), 403
+                # Usa o estabelecimento base do usuário, não o impersonado, para salvar preferências globais
+                est_id = claims.get("estabelecimento_id")
+                
+                # Se ainda assim não tiver, falha
+                if not est_id or str(est_id).lower() == 'all':
+                    est_id = 1 # Fallback para admin HQ
+                    
                 prefs = FuncionarioPreferencias(funcionario_id=user_id, estabelecimento_id=est_id)
                 db.session.add(prefs)
             

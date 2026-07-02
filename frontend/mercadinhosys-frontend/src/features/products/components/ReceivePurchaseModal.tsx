@@ -18,6 +18,9 @@ interface ItemRecebimento {
   produto_nome: string;
   quantidade_solicitada: number;
   quantidade_recebida: number;
+  quantidade_avariada: number;
+  quantidade_faltante: number;
+  quantidade_bonificada: number;
   preco_unitario: number;
   data_fabricacao: string;
   data_validade: string;
@@ -78,6 +81,9 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
           produto_nome: item.produto_nome,
           quantidade_solicitada: item.quantidade_solicitada,
           quantidade_recebida: 0, // Inicia zerado, o usuário vai conferir
+          quantidade_avariada: 0,
+          quantidade_faltante: 0,
+          quantidade_bonificada: 0,
           preco_unitario: item.preco_unitario,
           data_fabricacao: '',
           data_validade: dataValidadePadrao.toISOString().split('T')[0],
@@ -111,6 +117,24 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
   const handleQuantidadeChange = (index: number, quantidade: number) => {
     const novosItens = [...itensRecebimento];
     novosItens[index].quantidade_recebida = Math.max(0, quantidade);
+    setItensRecebimento(novosItens);
+  };
+
+  const handleQuantidadeAvariadaChange = (index: number, quantidade: number) => {
+    const novosItens = [...itensRecebimento];
+    novosItens[index].quantidade_avariada = Math.max(0, quantidade);
+    setItensRecebimento(novosItens);
+  };
+
+  const handleQuantidadeFaltanteChange = (index: number, quantidade: number) => {
+    const novosItens = [...itensRecebimento];
+    novosItens[index].quantidade_faltante = Math.max(0, quantidade);
+    setItensRecebimento(novosItens);
+  };
+
+  const handleQuantidadeBonificadaChange = (index: number, quantidade: number) => {
+    const novosItens = [...itensRecebimento];
+    novosItens[index].quantidade_bonificada = Math.max(0, quantidade);
     setItensRecebimento(novosItens);
   };
 
@@ -202,9 +226,12 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
         itens: itensComRecebimento.map(item => ({
           item_id: item.item_id,
           quantidade_recebida: item.quantidade_recebida,
-          data_fabricacao: item.data_fabricacao || undefined, // NOVO
-          data_validade: item.data_validade,  // NOVO
-          numero_lote: item.numero_lote       // NOVO
+          quantidade_avariada: item.quantidade_avariada, // NOVO
+          quantidade_faltante: item.quantidade_faltante, // NOVO
+          quantidade_bonificada: item.quantidade_bonificada, // NOVO
+          data_fabricacao: item.data_fabricacao || undefined, 
+          data_validade: item.data_validade,  
+          numero_lote: item.numero_lote       
         }))
       };
 
@@ -425,6 +452,46 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                                     <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total do Item</div>
                                     <div className="font-semibold text-gray-800 dark:text-white">
                                       {formatCurrency(item.quantidade_recebida * item.preco_unitario)}
+                                    </div>
+                                  </div>
+
+                                  {/* NOVOS CAMPOS: Discrepâncias */}
+                                  <div className="col-span-2 sm:col-span-4 mt-2 mb-1 border-t border-gray-200 dark:border-gray-700 pt-3">
+                                    <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Divergências Físicas e Bonificações</h5>
+                                    <div className="grid grid-cols-3 gap-3">
+                                      <div>
+                                        <label className="block text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">Qtd Avariada</label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.quantidade_avariada}
+                                          onChange={(e) => handleQuantidadeAvariadaChange(index, parseInt(e.target.value) || 0)}
+                                          className="w-full px-2 py-1.5 text-sm border border-amber-300 dark:border-amber-600/50 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-amber-900/10 dark:text-white placeholder-amber-200 dark:placeholder-amber-800/50"
+                                          placeholder="Ex: 2"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-red-600 dark:text-red-400 mb-1">Qtd Faltante</label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.quantidade_faltante}
+                                          onChange={(e) => handleQuantidadeFaltanteChange(index, parseInt(e.target.value) || 0)}
+                                          className="w-full px-2 py-1.5 text-sm border border-red-300 dark:border-red-600/50 rounded-lg focus:ring-2 focus:ring-red-500 dark:bg-red-900/10 dark:text-white placeholder-red-200 dark:placeholder-red-800/50"
+                                          placeholder="Ex: 1"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Qtd Bonificada</label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.quantidade_bonificada}
+                                          onChange={(e) => handleQuantidadeBonificadaChange(index, parseInt(e.target.value) || 0)}
+                                          className="w-full px-2 py-1.5 text-sm border border-blue-300 dark:border-blue-600/50 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-blue-900/10 dark:text-white placeholder-blue-200 dark:placeholder-blue-800/50"
+                                          placeholder="Ex: 5"
+                                        />
+                                      </div>
                                     </div>
                                   </div>
                                 </div>

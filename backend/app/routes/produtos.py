@@ -3140,13 +3140,24 @@ def listar_categorias():
         try:
             from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
             estabelecimento_id = get_authorized_establishment_id()
-            # Fallback: usar categorias_produto se existir, senão extrair de produtos via categoria_id
-            sql = text(
-                "SELECT DISTINCT cp.nome FROM categorias_produto cp "
-                "INNER JOIN produtos p ON p.categoria_id = cp.id "
-                "WHERE (p.estabelecimento_id = :est_id OR :est_id = 'all') AND (p.ativo = TRUE OR p.ativo IS NULL)"
-            )
-            result = db.session.execute(sql, {"est_id": estabelecimento_id}).fetchall()
+            db.session.rollback() # Clear the failed transaction state
+            
+            if str(estabelecimento_id).lower() == 'all':
+                sql = text(
+                    "SELECT DISTINCT cp.nome FROM categorias_produto cp "
+                    "INNER JOIN produtos p ON p.categoria_id = cp.id "
+                    "WHERE (p.ativo = TRUE OR p.ativo IS NULL)"
+                )
+                params = {}
+            else:
+                sql = text(
+                    "SELECT DISTINCT cp.nome FROM categorias_produto cp "
+                    "INNER JOIN produtos p ON p.categoria_id = cp.id "
+                    "WHERE p.estabelecimento_id = :est_id AND (p.ativo = TRUE OR p.ativo IS NULL)"
+                )
+                params = {"est_id": estabelecimento_id}
+                
+            result = db.session.execute(sql, params).fetchall()
             categorias_nomes = []
             for row in result:
                 try:

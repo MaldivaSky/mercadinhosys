@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Camera, Sparkles, AlertTriangle } from 'lucide-react';
+import { Camera, Sparkles } from 'lucide-react';
 import ResponsiveModal from '../../../components/ui/ResponsiveModal';
 import { showToast } from '../../../utils/toast';
-import { Fornecedor, Produto } from '../../../types';
+import { Produto } from '../../../types';
 import { productsService } from '../productsService';
 import { cosmosService } from '../../../services/cosmosService';
 import BarcodeScanner from '../../pdv/components/BarcodeScanner';
@@ -12,7 +12,6 @@ interface ProductFormModalProps {
     editMode: boolean;
     produto: Produto | null;
     categorias: string[];
-    fornecedores: Fornecedor[];
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -56,7 +55,7 @@ const ProductFormModal = ({
     editMode,
     produto,
     categorias,
-    fornecedores,
+    // Removendo fornecedores não utilizado
     onClose,
     onSuccess,
 }: ProductFormModalProps) => {

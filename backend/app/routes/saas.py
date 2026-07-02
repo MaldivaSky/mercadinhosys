@@ -552,12 +552,22 @@ def update_estabelecimento_admin(id):
         campos_permitidos = [
             "nome_fantasia", "razao_social", "cnpj", "inscricao_estadual", "regime_tributario",
             "telefone", "email", "logradouro", "numero", "complemento", "bairro", "cidade", 
-            "estado", "cep", "gateway_customer_id", "gateway_subscription_id"
+            "estado", "cep", "gateway_customer_id", "gateway_subscription_id",
+            "plano", "plano_status", "ativo"
         ]
         
         for campo in campos_permitidos:
             if campo in data:
                 setattr(estabelecimento, campo, data[campo])
+                
+        if "vencimento_assinatura" in data:
+            if data["vencimento_assinatura"]:
+                try:
+                    estabelecimento.vencimento_assinatura = datetime.strptime(data["vencimento_assinatura"], "%Y-%m-%d").date()
+                except Exception as e:
+                    pass
+            else:
+                estabelecimento.vencimento_assinatura = None
                 
         db.session.commit()
         

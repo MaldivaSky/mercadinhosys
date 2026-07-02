@@ -113,6 +113,7 @@ const ProductsPage: React.FC = () => {
     quantidade: 0,
     operacao: 'entrada' as 'entrada' | 'saida',
     motivo: '',
+    fonte: 'Estoque Loja / Geral', // NOVO: Fonte do ajuste
     fornecedor_id: undefined as number | undefined,
     lote: '',
     data_fabricacao: '',
@@ -279,12 +280,14 @@ const ProductsPage: React.FC = () => {
       return;
     }
     try {
+      const motivoFinal = stockAdjust.fonte ? `[Origem: ${stockAdjust.fonte}] ${stockAdjust.motivo}` : stockAdjust.motivo;
+      
       await showToast.promise(
         productsService.ajustarEstoque(
           selectedProduct.id, 
           stockAdjust.quantidade, 
           stockAdjust.operacao, 
-          stockAdjust.motivo,
+          motivoFinal,
           undefined, // observacoes
           stockAdjust.fornecedor_id,
           stockAdjust.lote,
@@ -368,7 +371,16 @@ const ProductsPage: React.FC = () => {
 
   const openStockModal = (produto: Produto) => {
     setSelectedProduct(produto);
-    setStockAdjust({ quantidade: 0, operacao: 'entrada', motivo: '' });
+    setStockAdjust({ 
+      quantidade: 0, 
+      operacao: 'entrada', 
+      motivo: '',
+      fonte: 'Estoque Loja / Geral',
+      fornecedor_id: undefined,
+      lote: '',
+      data_fabricacao: '',
+      data_validade: ''
+    });
     setShowStockModal(true);
   };
 
@@ -606,7 +618,6 @@ const ProductsPage: React.FC = () => {
         editMode={editMode}
         produto={selectedProduct}
         categorias={categorias}
-        fornecedores={fornecedores}
         onClose={() => { handleCloseModal(setShowProductModal); setSelectedProduct(null); setEditMode(false); }}
         onSuccess={() => { handleCloseModal(setShowProductModal); loadProdutos(); loadStats(); }}
       />
@@ -631,19 +642,41 @@ const ProductsPage: React.FC = () => {
                 <p className="font-medium">{selectedProduct.nome}</p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Estoque atual: {selectedProduct.quantidade} {selectedProduct.unidade_medida}</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Operacao</label>
-                <select value={stockAdjust.operacao} onChange={(e) => setStockAdjust(prev => ({ ...prev, operacao: e.target.value as 'entrada' | 'saida' }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
-                  <option value="entrada">Entrada</option>
-                  <option value="saida">Saida</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Operação</label>
+                  <select value={stockAdjust.operacao} onChange={(e) => setStockAdjust(prev => ({ ...prev, operacao: e.target.value as 'entrada' | 'saida' }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                    <option value="entrada">Entrada (+)</option>
+                    <option value="saida">Saída (-)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Quantidade</label>
+                  <input type="number" min="1" value={stockAdjust.quantidade} onChange={(e) => setStockAdjust(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                </div>
               </div>
+              
               <div>
-                <label className="block text-sm font-medium mb-1">Quantidade</label>
-                <input type="number" min="1" value={stockAdjust.quantidade} onChange={(e) => setStockAdjust(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
+                <label className="block text-sm font-medium mb-1">Fonte / Origem do Ajuste *</label>
+                <input 
+                  type="text" 
+                  value={stockAdjust.fonte} 
+                  onChange={(e) => setStockAdjust(prev => ({ ...prev, fonte: e.target.value }))} 
+                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" 
+                  placeholder="Ex: Estoque Loja, Veículo 1, Caminhão..." 
+                  list="fontes-sugestoes"
+                />
+                <datalist id="fontes-sugestoes">
+                  <option value="Estoque Loja / Geral" />
+                  <option value="Veículo de Entrega" />
+                  <option value="Veículo do Proprietário" />
+                  <option value="Fornecedor (Devolução)" />
+                  <option value="Perda / Avaria (Prateleira)" />
+                </datalist>
               </div>
+
               <div>
-                <label className="block text-sm font-medium mb-1">Motivo *</label>
+                <label className="block text-sm font-medium mb-1">Motivo / Justificativa *</label>
                 <textarea value={stockAdjust.motivo} onChange={(e) => setStockAdjust(prev => ({ ...prev, motivo: e.target.value }))} rows={2} className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="Informe o motivo do ajuste..." />
               </div>
 

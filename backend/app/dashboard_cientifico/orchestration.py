@@ -71,11 +71,7 @@ class DashboardOrchestrator:
     """Orquestra a geração do dashboard"""
 
     def __init__(self, establishment_id: Any, is_super_admin: bool = False):
-        # 🔥 SENIOR LOGIC: Somente Super Admins acessando a HQ (ID 1) têm visão global
-        if is_super_admin and str(establishment_id) == '1':
-            self.establishment_id = 'all'
-        else:
-            self.establishment_id = establishment_id
+        self.establishment_id = establishment_id
 
     # @cache_response(ttl_seconds=60, require_db_check=False)  # DESATIVADO PARA DEBUG
     def get_executive_dashboard(self, days: int = 30) -> Dict[str, Any]:

@@ -313,16 +313,25 @@ def receber_pedido_compra():
                 continue
             
             quantidade_recebida = int(item_data.get('quantidade_recebida', 0))
-            if quantidade_recebida <= 0:
+            quantidade_avariada = int(item_data.get('quantidade_avariada', 0))
+            quantidade_faltante = int(item_data.get('quantidade_faltante', 0))
+            quantidade_bonificada = int(item_data.get('quantidade_bonificada', 0))
+
+            if quantidade_recebida <= 0 and quantidade_bonificada <= 0:
                 continue
             
             # Atualizar item
             item.quantidade_recebida = quantidade_recebida
-            item.status = 'recebido' if quantidade_recebida >= item.quantidade_solicitada else 'parcial'
+            item.quantidade_avariada = quantidade_avariada
+            item.quantidade_faltante = quantidade_faltante
+            item.quantidade_bonificada = quantidade_bonificada
+            item.status = 'recebido' if (quantidade_recebida + quantidade_faltante) >= item.quantidade_solicitada else 'parcial'
             
-            # Atualizar estoque do produto
+            # Atualizar estoque do produto (apenas com a quantidade boa: recebida + bonificada - avariada)
+            quantidade_para_estoque = max(0, quantidade_recebida + quantidade_bonificada - quantidade_avariada)
+
             produto = item.produto
-            if produto:
+            if produto and quantidade_para_estoque > 0:
                 # Obter data de validade e fabricação do item (se fornecidas)
                 data_validade = None
                 data_fabricacao = None
@@ -342,8 +351,8 @@ def receber_pedido_compra():
                     fornecedor_id=pedido.fornecedor_id,
                     pedido_compra_id=pedido.id,
                     numero_lote=numero_lote,
-                    quantidade=quantidade_recebida,
-                    quantidade_inicial=quantidade_recebida,
+                    quantidade=quantidade_para_estoque,
+                    quantidade_inicial=quantidade_para_estoque,
                     data_fabricacao=data_fabricacao,
                     data_validade=data_validade or (date.today() + timedelta(days=365)),  # Padrão: 1 ano
                     data_entrada=date.today(),
@@ -357,7 +366,7 @@ def receber_pedido_compra():
                 if hasattr(produto, 'recalcular_preco_custo_ponderado'):
                     try:
                         produto.recalcular_preco_custo_ponderado(
-                            quantidade_entrada=quantidade_recebida,
+                            quantidade_entrada=quantidade_para_estoque,
                             custo_unitario_entrada=item.preco_unitario,
                             funcionario_id=user.id,
                             motivo=f'Recebimento pedido {pedido.numero_pedido}'
@@ -369,10 +378,14 @@ def receber_pedido_compra():
                         )
 
                 # Movimentar estoque (atualiza produto.quantidade e cria MovimentacaoEstoque)
+                motivo_movimentacao = f'Recebimento pedido {pedido.numero_pedido}. Lote: {numero_lote}'
+                if quantidade_avariada > 0 or quantidade_bonificada > 0:
+                    motivo_movimentacao += f' (Avarias: {quantidade_avariada}, Bônus: {quantidade_bonificada})'
+
                 movimentacao = produto.movimentar_estoque(
-                    quantidade=quantidade_recebida,
+                    quantidade=quantidade_para_estoque,
                     tipo='entrada',
-                    motivo=f'Recebimento pedido {pedido.numero_pedido}. Lote: {numero_lote}',
+                    motivo=motivo_movimentacao,
                     usuario_id=user.id
                 )
                 movimentacao.pedido_compra_id = pedido.id

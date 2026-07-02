@@ -5,7 +5,7 @@ Rotas para Sistema de Controle de Ponto
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models import db, RegistroPonto, ConfiguracaoHorario, Funcionario, Estabelecimento
+from app.models import db, RegistroPonto, ConfiguracaoHorario, Funcionario, Estabelecimento, Auditoria
 from datetime import datetime, date, time, timedelta
 from sqlalchemy import func, and_, or_
 from app.decorators.plan_guards import plan_required, permission_required
@@ -312,6 +312,18 @@ def registrar_ponto():
         
         db.session.add(registro)
         db.session.commit()
+        
+        # Auditoria SaaS
+        try:
+            Auditoria.registrar(
+                estabelecimento_id=funcionario.estabelecimento_id,
+                funcionario_id=funcionario.id,
+                tipo_evento='Bateu Ponto',
+                descricao=f"Funcionário {funcionario.nome} bateu ponto ({tipo_registro}) às {hora_atual.strftime('%H:%M')}."
+            )
+        except Exception as e_auditoria:
+            logger.error(f"Erro ao registrar auditoria de ponto: {e_auditoria}")
+
         
         return jsonify({
             'success': True,
@@ -821,6 +833,17 @@ def ajustar_ponto(registro_id):
         
         logger.info(f"✅ Ponto ajustado: {registro.funcionario.nome} - {registro.data} {registro.hora}")
         
+        # Auditoria SaaS
+        try:
+            Auditoria.registrar(
+                estabelecimento_id=registro.estabelecimento_id,
+                funcionario_id=funcionario.id,
+                tipo_evento='Editou Ponto',
+                descricao=f"Funcionário {funcionario.nome} editou o ponto ({registro.tipo_registro}) do funcionário {registro.funcionario.nome} para {registro.data} {registro.hora}."
+            )
+        except Exception as e_auditoria:
+            logger.error(f"Erro ao registrar auditoria de edição de ponto: {e_auditoria}")
+        
         return jsonify({
             'success': True,
             'message': f'Registro de ponto ajustado com sucesso!',
@@ -1071,6 +1094,17 @@ def limpar_registros_teste():
             db.session.delete(registro)
         
         db.session.commit()
+        
+        # Auditoria SaaS
+        try:
+            Auditoria.registrar(
+                estabelecimento_id=funcionario.estabelecimento_id,
+                funcionario_id=funcionario.id,
+                tipo_evento='Excluiu Ponto',
+                descricao=f"Funcionário {funcionario.nome} excluiu {len(registros)} registros de ponto."
+            )
+        except Exception as e_auditoria:
+            logger.error(f"Erro ao registrar auditoria de exclusão de ponto: {e_auditoria}")
         
         return jsonify({
             'success': True,

@@ -239,15 +239,30 @@ def listar_fornecedores():
             pagina = request.args.get("pagina", 1, type=int)
             por_pagina = request.args.get("por_pagina", 50, type=int)
             offset = (pagina - 1) * por_pagina
+        except Exception as e2:
+            db.session.rollback()
+            current_app.logger.error(f"Fallback fornecedores falhou: {str(e2)}")
             from sqlalchemy import text
-            sql = text(
-                "SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, cidade, estado, ativo, classificacao "
-                "FROM fornecedores "
-                "WHERE (estabelecimento_id = :estabelecimento_id OR :estabelecimento_id = 'all') "
-                "ORDER BY nome_fantasia ASC "
-                "LIMIT :limit OFFSET :offset"
-            )
-            rows = db.session.execute(sql, {"estabelecimento_id": estabelecimento_id, "limit": por_pagina, "offset": offset}).fetchall()
+            
+            if str(estabelecimento_id).lower() == 'all':
+                sql = text(
+                    "SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, cidade, estado, ativo, classificacao "
+                    "FROM fornecedores "
+                    "ORDER BY nome_fantasia ASC "
+                    "LIMIT :limit OFFSET :offset"
+                )
+                params = {"limit": por_pagina, "offset": offset}
+            else:
+                sql = text(
+                    "SELECT id, nome_fantasia, razao_social, cnpj, telefone, email, cidade, estado, ativo, classificacao "
+                    "FROM fornecedores "
+                    "WHERE estabelecimento_id = :estabelecimento_id "
+                    "ORDER BY nome_fantasia ASC "
+                    "LIMIT :limit OFFSET :offset"
+                )
+                params = {"estabelecimento_id": estabelecimento_id, "limit": por_pagina, "offset": offset}
+                
+            rows = db.session.execute(sql, params).fetchall()
             fornecedores = []
             for r in rows:
                 try:
@@ -267,10 +282,12 @@ def listar_fornecedores():
                 except Exception:
                     pass
                 fornecedores.append(d)
-            total_sql = text(
-                "SELECT COUNT(*) FROM fornecedores WHERE estabelecimento_id = :estabelecimento_id"
-            )
-            total = db.session.execute(total_sql, {"estabelecimento_id": estabelecimento_id}).scalar() or 0
+            if str(estabelecimento_id).lower() == 'all':
+                total_sql = text("SELECT COUNT(*) FROM fornecedores")
+                total = db.session.execute(total_sql).scalar() or 0
+            else:
+                total_sql = text("SELECT COUNT(*) FROM fornecedores WHERE estabelecimento_id = :estabelecimento_id")
+                total = db.session.execute(total_sql, {"estabelecimento_id": estabelecimento_id}).scalar() or 0
             total_paginas = (total + por_pagina - 1) // por_pagina
             return jsonify(
                 {

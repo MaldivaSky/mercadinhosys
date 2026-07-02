@@ -92,6 +92,9 @@ export interface CreatePedidoData {
 export interface ItemRecebimentoData {
   item_id: number;
   quantidade_recebida: number;
+  quantidade_avariada?: number;
+  quantidade_faltante?: number;
+  quantidade_bonificada?: number;
   data_fabricacao?: string;
   data_validade?: string;
   numero_lote?: string;

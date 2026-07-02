@@ -42,6 +42,13 @@ interface Establishment {
     cnpj: string;
     telefone: string;
     email: string;
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
+    gateway_customer_id?: string;
+    gateway_subscription_id?: string;
     ativo: boolean;
     plano: string;
     plano_status: string;
@@ -89,11 +96,24 @@ const SystemMonitorPage: React.FC = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingTenant, setEditingTenant] = useState<Establishment | null>(null);
     const [editFormData, setEditFormData] = useState({
+        nome_fantasia: '',
+        razao_social: '',
+        cnpj: '',
+        telefone: '',
+        email: '',
+        logradouro: '',
+        numero: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        gateway_customer_id: '',
+        gateway_subscription_id: '',
         plano: '',
         plano_status: '',
         ativo: true,
         vencimento_assinatura: ''
     });
+    const [editModalTab, setEditModalTab] = useState<'plano' | 'principal' | 'contato' | 'sistema'>('plano');
 
     const fetchData = useCallback(async () => {
         try {
@@ -178,11 +198,24 @@ const SystemMonitorPage: React.FC = () => {
     const handleEdit = (tenant: Establishment) => {
         setEditingTenant(tenant);
         setEditFormData({
-            plano: tenant.plano,
-            plano_status: tenant.plano_status,
+            nome_fantasia: tenant.nome_fantasia || '',
+            razao_social: tenant.razao_social || '',
+            cnpj: tenant.cnpj || '',
+            telefone: tenant.telefone || '',
+            email: tenant.email || '',
+            logradouro: tenant.logradouro || '',
+            numero: tenant.numero || '',
+            bairro: tenant.bairro || '',
+            cidade: tenant.cidade || '',
+            estado: tenant.estado || '',
+            gateway_customer_id: tenant.gateway_customer_id || '',
+            gateway_subscription_id: tenant.gateway_subscription_id || '',
+            plano: tenant.plano || '',
+            plano_status: tenant.plano_status || '',
             ativo: tenant.ativo,
             vencimento_assinatura: tenant.vencimento_assinatura ? tenant.vencimento_assinatura.split('T')[0] : ''
         });
+        setEditModalTab('plano');
         setIsEditModalOpen(true);
     };
 
@@ -191,7 +224,7 @@ const SystemMonitorPage: React.FC = () => {
         if (!editingTenant) return;
         setSubmitting(true);
         try {
-            const res = await apiClient.put(`/saas/monitor/establishments/${editingTenant.id}`, editFormData);
+            const res = await apiClient.put(`/saas/estabelecimentos/${editingTenant.id}`, editFormData);
             if (res.data.success) {
                 toast.success('Estabelecimento atualizado com sucesso!');
                 setIsEditModalOpen(false);
@@ -731,58 +764,138 @@ const SystemMonitorPage: React.FC = () => {
                             </div>
                         </div>
 
-                        <form onSubmit={handleUpdate} className="p-8 space-y-5">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Plano Atual</label>
-                                    <select
-                                        value={editFormData.plano}
-                                        onChange={(e) => setEditFormData({ ...editFormData, plano: e.target.value })}
-                                        className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                    >
-                                        <option value="Gratuito">Gratuito</option>
-                                        <option value="Pro">Pro</option>
-                                    </select>
+                        <div className="flex border-b px-2 pt-2 bg-gray-50">
+                            <button onClick={() => setEditModalTab('plano')} className={`flex-1 py-3 px-1 text-[10px] sm:text-xs font-black uppercase tracking-widest ${editModalTab === 'plano' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Plano & Status</button>
+                            <button onClick={() => setEditModalTab('principal')} className={`flex-1 py-3 px-1 text-[10px] sm:text-xs font-black uppercase tracking-widest ${editModalTab === 'principal' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Principal</button>
+                            <button onClick={() => setEditModalTab('contato')} className={`flex-1 py-3 px-1 text-[10px] sm:text-xs font-black uppercase tracking-widest ${editModalTab === 'contato' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Contato/End.</button>
+                            <button onClick={() => setEditModalTab('sistema')} className={`flex-1 py-3 px-1 text-[10px] sm:text-xs font-black uppercase tracking-widest ${editModalTab === 'sistema' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>Sistema</button>
+                        </div>
+
+                        <form onSubmit={handleUpdate} className="p-8 space-y-5 max-h-[60vh] overflow-y-auto">
+                            {editModalTab === 'plano' && (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Plano Atual</label>
+                                            <select
+                                                value={editFormData.plano}
+                                                onChange={(e) => setEditFormData({ ...editFormData, plano: e.target.value })}
+                                                className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                            >
+                                                <option value="Gratuito">Gratuito</option>
+                                                <option value="Pro">Pro</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status do Plano</label>
+                                            <select
+                                                value={editFormData.plano_status}
+                                                onChange={(e) => setEditFormData({ ...editFormData, plano_status: e.target.value })}
+                                                className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                            >
+                                                <option value="experimental">Experimental</option>
+                                                <option value="ativo">Ativo</option>
+                                                <option value="atrasado">Atrasado</option>
+                                                <option value="suspenso">Suspenso</option>
+                                                <option value="cancelado">Cancelado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vencimento da Assinatura</label>
+                                        <input
+                                            type="date"
+                                            value={editFormData.vencimento_assinatura}
+                                            onChange={(e) => setEditFormData({ ...editFormData, vencimento_assinatura: e.target.value })}
+                                            className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-3 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 mt-4">
+                                        <input
+                                            type="checkbox"
+                                            id="is_active"
+                                            checked={editFormData.ativo}
+                                            onChange={(e) => setEditFormData({ ...editFormData, ativo: e.target.checked })}
+                                            className="w-5 h-5 rounded-lg border-indigo-200 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="is_active" className="text-sm font-black text-indigo-900 italic">CONTA ATIVA NO SISTEMA</label>
+                                    </div>
                                 </div>
+                            )}
 
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status do Plano</label>
-                                    <select
-                                        value={editFormData.plano_status}
-                                        onChange={(e) => setEditFormData({ ...editFormData, plano_status: e.target.value })}
-                                        className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                    >
-                                        <option value="experimental">Experimental</option>
-                                        <option value="ativo">Ativo</option>
-                                        <option value="atrasado">Atrasado</option>
-                                        <option value="suspenso">Suspenso</option>
-                                        <option value="cancelado">Cancelado</option>
-                                    </select>
+                            {editModalTab === 'principal' && (
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nome Fantasia</label>
+                                        <input value={editFormData.nome_fantasia} onChange={e => setEditFormData({...editFormData, nome_fantasia: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Razão Social</label>
+                                        <input value={editFormData.razao_social} onChange={e => setEditFormData({...editFormData, razao_social: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CNPJ</label>
+                                        <input value={editFormData.cnpj} onChange={e => setEditFormData({...editFormData, cnpj: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vencimento da Assinatura</label>
-                                <input
-                                    type="date"
-                                    value={editFormData.vencimento_assinatura}
-                                    onChange={(e) => setEditFormData({ ...editFormData, vencimento_assinatura: e.target.value })}
-                                    className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                />
-                            </div>
+                            {editModalTab === 'contato' && (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Telefone</label>
+                                            <input value={editFormData.telefone} onChange={e => setEditFormData({...editFormData, telefone: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
+                                            <input value={editFormData.email} onChange={e => setEditFormData({...editFormData, email: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-2 col-span-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Logradouro</label>
+                                            <input value={editFormData.logradouro} onChange={e => setEditFormData({...editFormData, logradouro: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Número</label>
+                                            <input value={editFormData.numero} onChange={e => setEditFormData({...editFormData, numero: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Bairro</label>
+                                            <input value={editFormData.bairro} onChange={e => setEditFormData({...editFormData, bairro: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Cidade</label>
+                                            <input value={editFormData.cidade} onChange={e => setEditFormData({...editFormData, cidade: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Estado</label>
+                                            <input value={editFormData.estado} onChange={e => setEditFormData({...editFormData, estado: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
-                            <div className="flex items-center gap-3 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
-                                <input
-                                    type="checkbox"
-                                    id="is_active"
-                                    checked={editFormData.ativo}
-                                    onChange={(e) => setEditFormData({ ...editFormData, ativo: e.target.checked })}
-                                    className="w-5 h-5 rounded-lg border-indigo-200 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <label htmlFor="is_active" className="text-sm font-black text-indigo-900 italic">CONTA ATIVA NO SISTEMA</label>
-                            </div>
+                            {editModalTab === 'sistema' && (
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Gateway Customer ID</label>
+                                        <input value={editFormData.gateway_customer_id} onChange={e => setEditFormData({...editFormData, gateway_customer_id: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-mono" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Gateway Subscription ID</label>
+                                        <input value={editFormData.gateway_subscription_id} onChange={e => setEditFormData({...editFormData, gateway_subscription_id: e.target.value})} className="w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-mono" />
+                                    </div>
+                                </div>
+                            )}
 
-                            <div className="flex gap-4 pt-4">
+                            <div className="flex gap-4 pt-4 border-t border-gray-100">
                                 <button
                                     type="button"
                                     onClick={() => setIsEditModalOpen(false)}

@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { productsService } from './productsService';
 import { formatCurrency } from '../../utils/formatters';
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    ComposedChart, Bar, Line, Legend
 } from 'recharts';
 import { ArrowLeft, TrendingUp, DollarSign, Activity, Truck, AlertTriangle, Percent, Clock, Package } from 'lucide-react';
 import './ProductHubPage.css';
@@ -16,6 +17,7 @@ export default function ProductHubPage() {
     const [hubData, setHubData] = useState<any>(null);
     const [error, setError] = useState('');
     const [periodo, setPeriodo] = useState('all');
+    const [vendasHistorico, setVendasHistorico] = useState<any[]>([]);
 
     useEffect(() => {
         if (!id) return;
@@ -36,7 +38,28 @@ export default function ProductHubPage() {
             .finally(() => {
                 setLoading(false);
             });
-    }, [id, periodo]);
+            
+        // Fetch vendas histórico
+        let dias = 30;
+        if (periodo === '7d') dias = 7;
+        else if (periodo === '90d') dias = 90;
+        else if (periodo === '1y') dias = 365;
+        else if (periodo === 'all') dias = 365 * 2; // Máximo 2 anos para evitar sobrecarga no gráfico
+
+        productsService.getProductSalesHistory(parseInt(id), dias)
+            .then(data => {
+                if (data.success && data.historico) {
+                    const vendasFormatadas = data.historico.map((v: any) => ({
+                        data: v.data,
+                        quantidade_total: v.quantidade,
+                        preco_medio: v.quantidade > 0 ? (v.valor_total / v.quantidade).toFixed(2) : 0,
+                        custo_estimado: hubData?.produto?.preco_custo || 0 // Usando custo atual como proxy simples
+                    }));
+                    setVendasHistorico(vendasFormatadas);
+                }
+            })
+            .catch(err => console.error('Erro ao carregar histórico de vendas:', err));
+    }, [id, periodo, hubData?.produto?.preco_custo]);
 
     if (loading) {
         return (
@@ -252,6 +275,21 @@ export default function ProductHubPage() {
                     <AlertTriangle size={18} />
                     Descartar Perda/Vencido
                 </button>
+                <button 
+                    onClick={() => {
+                        if (window.confirm('ATENÇÃO! Esta ação é irreversível e excluirá definitivamente este produto. Deseja continuar?')) {
+                            productsService.delete(produto.id, true).then(() => {
+                                alert('Produto excluído com sucesso.');
+                                navigate('/products');
+                            }).catch(() => alert('Erro ao excluir produto.'));
+                        }
+                    }}
+                    className="btn-secondary" 
+                    style={{ background: '#fff1f2', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: '1px solid #fda4af', marginLeft: 'auto' }}
+                >
+                    <AlertTriangle size={18} />
+                    Excluir Definitivamente
+                </button>
             </div>
 
             {/* Filtros e KPIs Principais */}
@@ -319,18 +357,58 @@ export default function ProductHubPage() {
 
             {/* Área de Conteúdo */}
             <section className="hub-content-grid">
+                {/* Gráfico de Inteligência: Giro vs Margem */}
+                <div className="content-panel" style={{ gridColumn: '1 / -1' }}>
+                    <div className="panel-header">
+                        <h3 className="panel-title"><Activity size={20} color="#10b981" /> Inteligência de Produtos: Giro vs Preço/Margem</h3>
+                    </div>
+                    <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        Analise o volume de vendas (Giro) em relação às mudanças de preço e custo médio do período.
+                    </p>
+                    <div style={{ width: '100%', height: 350, marginTop: '20px' }}>
+                        {vendasHistorico.length > 0 ? (
+                            <ResponsiveContainer>
+                                <ComposedChart data={vendasHistorico} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="data" stroke="#94a3b8" fontSize={12} tickFormatter={(val) => {
+                                        const d = new Date(val);
+                                        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                                    }} />
+                                    <YAxis yAxisId="left" stroke="#3b82f6" fontSize={12} orientation="left" />
+                                    <YAxis yAxisId="right" stroke="#10b981" fontSize={12} orientation="right" tickFormatter={(val) => `R$${val}`} />
+                                    <Tooltip 
+                                        formatter={(value: any, name: string) => {
+                                            if (name === 'Volume (Giro)') return [value, name];
+                                            return [formatCurrency(value), name];
+                                        }}
+                                        labelFormatter={(label) => new Date(label).toLocaleDateString('pt-BR')}
+                                    />
+                                    <Legend />
+                                    <Bar yAxisId="left" dataKey="quantidade_total" name="Volume (Giro)" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Line yAxisId="right" type="monotone" dataKey="preco_medio" name="Preço Médio Praticado" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="custo_estimado" name="Custo Médio" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                                </ComposedChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
+                                Nenhum dado de venda no período selecionado para cruzar com preço/margem.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Gráfico de Evolução de Preços */}
                 <div className="content-panel">
                     <div className="panel-header">
-                        <h3 className="panel-title"><TrendingUp size={20} color="#3b82f6" /> Histórico de Preço e Custo</h3>
+                        <h3 className="panel-title"><TrendingUp size={20} color="#6366f1" /> Histórico de Preço e Custo</h3>
                     </div>
                     <div style={{ width: '100%', height: 350, marginTop: '20px' }}>
                         <ResponsiveContainer>
                             <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorVenda" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
                                     </linearGradient>
                                     <linearGradient id="colorCusto" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.3}/>
@@ -341,7 +419,7 @@ export default function ProductHubPage() {
                                 <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${val}`} domain={['auto', 'auto']} />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Area type="monotone" dataKey="Venda" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorVenda)" />
+                                <Area type="monotone" dataKey="Venda" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorVenda)" />
                                 <Area type="monotone" dataKey="Custo" stroke="#94a3b8" strokeWidth={3} fillOpacity={1} fill="url(#colorCusto)" />
                             </AreaChart>
                         </ResponsiveContainer>
