@@ -50,12 +50,16 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   const ehEAN = (v: string) => /^\d{8,14}$/.test(v.trim());
 
   // Form data
+  const hoje = new Date().toISOString().slice(0, 10);
   const [formData, setFormData] = useState({
     fornecedor_id: 0,
     condicao_pagamento: '',
     observacoes: '',
     desconto: 0,
-    frete: 0
+    frete: 0,
+    data_pedido: hoje,
+    data_previsao_entrega: '',
+    horario_entrega: '',
   });
 
   const [itens, setItens] = useState<ItemPedido[]>([]);
@@ -247,6 +251,9 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
         observacoes: formData.observacoes,
         desconto: formData.desconto,
         frete: formData.frete,
+        data_pedido: formData.data_pedido || undefined,
+        data_previsao_entrega: formData.data_previsao_entrega || undefined,
+        horario_entrega: formData.horario_entrega || undefined,
         itens: itens.map(item => ({
           produto_id: item.produto_id,
           quantidade: item.quantidade,
@@ -273,7 +280,10 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
       condicao_pagamento: '',
       observacoes: '',
       desconto: 0,
-      frete: 0
+      frete: 0,
+      data_pedido: hoje,
+      data_previsao_entrega: '',
+      horario_entrega: '',
     });
     setItens([]);
     setSearchProduto('');
@@ -357,6 +367,46 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
                     <li><strong className="text-gray-600 dark:text-gray-300">Boletos (7, 14, 21, 30 dias):</strong> Gera automaticamente uma despesa no financeiro ao receber o pedido.</li>
                   </ul>
                 </div>
+              </div>
+            </div>
+
+            {/* Datas e janela de entrega */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Data do Pedido
+                </label>
+                <input
+                  type="date"
+                  value={formData.data_pedido}
+                  onChange={(e) => setFormData(prev => ({ ...prev, data_pedido: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Previsão de Entrega
+                </label>
+                <input
+                  type="date"
+                  value={formData.data_previsao_entrega}
+                  min={formData.data_pedido || undefined}
+                  onChange={(e) => setFormData(prev => ({ ...prev, data_previsao_entrega: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Em branco: usa o prazo do fornecedor.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Horário de Entrega
+                </label>
+                <input
+                  type="text"
+                  value={formData.horario_entrega}
+                  onChange={(e) => setFormData(prev => ({ ...prev, horario_entrega: e.target.value }))}
+                  placeholder="Ex: 08:00 - 12:00"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
               </div>
             </div>
 

@@ -36,6 +36,29 @@ def ctx(session):
     return {"estab": estab, "admin": admin, "forn": forn, "prod": prod}
 
 
+def test_pedido_persiste_datas_e_horario_de_entrega(client, ctx):
+    """Campos profissionais do pedido: data do pedido, previsão e horário de entrega
+    informados pelo operador devem ser salvos e retornados."""
+    estab, admin, forn, prod = ctx["estab"], ctx["admin"], ctx["forn"], ctx["prod"]
+    headers = _headers(estab.id, admin.id)
+
+    r = client.post("/api/pedidos-compra/", json={
+        "fornecedor_id": forn.id,
+        "data_pedido": "2026-07-01",
+        "data_previsao_entrega": "2026-07-05",
+        "horario_entrega": "08:00 - 12:00",
+        "itens": [{"produto_id": prod.id, "quantidade": 3, "preco_unitario": 4.0, "desconto_percentual": 0}],
+    }, headers=headers)
+    assert r.status_code == 201, r.get_data(as_text=True)
+    pedido_id = r.get_json()["pedido"]["id"]
+
+    det = client.get(f"/api/pedidos-compra/{pedido_id}", headers=headers).get_json()
+    p = det.get("pedido", det)
+    assert (p.get("data_pedido") or "").startswith("2026-07-01"), p.get("data_pedido")
+    assert p.get("data_previsao_entrega") == "2026-07-05", p.get("data_previsao_entrega")
+    assert p.get("horario_entrega") == "08:00 - 12:00", p.get("horario_entrega")
+
+
 def test_fluxo_real_cadastra_busca_por_agua_e_pedido_sobe_o_item(client, ctx):
     """Fluxo EXATO do usuário: cadastra 'Água Sanitária Supreme', BUSCA por 'agua'
     (sem acento) no endpoint real, pega o id retornado, cria o pedido com esse id

@@ -1400,6 +1400,7 @@ class PedidoCompra(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     numero_pedido = db.Column(db.String(50), nullable=False)
     data_pedido = db.Column(db.DateTime, default=utcnow, nullable=False)
     data_previsao_entrega = db.Column(db.Date)
+    horario_entrega = db.Column(db.String(30))  # janela de entrega, ex.: "08:00 - 12:00"
     data_recebimento = db.Column(db.Date)
     status = db.Column(db.String(20), default="pendente")
     subtotal = db.Column(db.Numeric(19, 4), default=0)

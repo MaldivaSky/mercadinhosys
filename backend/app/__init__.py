@@ -497,6 +497,8 @@ def create_app(config_name=None):
                     # Despesas
                     ("despesas", "data_emissao",                    "DATE"),
                     ("despesas", "data_vencimento",                 "DATE"),
+                    # Pedido de Compra - janela de entrega
+                    ("pedidos_compra", "horario_entrega",           "VARCHAR(30)"),
                 ]
 
                 from sqlalchemy import inspect as _insp

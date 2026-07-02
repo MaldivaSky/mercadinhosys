@@ -129,17 +129,33 @@ def criar_pedido():
         ).order_by(PedidoCompra.id.desc()).first()
         
         numero_pedido = f"PC{(ultimo_pedido.id + 1 if ultimo_pedido else 1):06d}"
-        
-        # Calcular data de previsão de entrega
-        data_previsao = date.today() + timedelta(days=fornecedor.prazo_entrega or 7)
-        
+
+        def _parse_date(valor, default=None):
+            """Aceita 'YYYY-MM-DD' (input date do front). Retorna default se vazio/inválido."""
+            if not valor:
+                return default
+            try:
+                return datetime.strptime(str(valor)[:10], "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                return default
+
+        # Datas: usa o que o operador informou; senão, defaults sensatos.
+        data_pedido = _parse_date(data.get('data_pedido'), date.today())
+        data_previsao = _parse_date(
+            data.get('data_previsao_entrega'),
+            date.today() + timedelta(days=fornecedor.prazo_entrega or 7),
+        )
+        horario_entrega = (data.get('horario_entrega') or '').strip() or None
+
         # Criar pedido
         pedido = PedidoCompra(
             estabelecimento_id=user.estabelecimento_id,
             fornecedor_id=data['fornecedor_id'],
             funcionario_id=user.id,
             numero_pedido=numero_pedido,
+            data_pedido=datetime.combine(data_pedido, datetime.min.time()) if data_pedido else datetime.utcnow(),
             data_previsao_entrega=data_previsao,
+            horario_entrega=horario_entrega,
             condicao_pagamento=data.get('condicao_pagamento', fornecedor.forma_pagamento),
             observacoes=data.get('observacoes', ''),
             status='pendente'

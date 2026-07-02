@@ -10,6 +10,7 @@ export interface PedidoCompra {
   status: 'pendente' | 'recebido' | 'cancelado';
   data_pedido: string;
   data_previsao_entrega?: string;
+  horario_entrega?: string;
   data_recebimento?: string;
   subtotal: number;
   desconto: number;
@@ -77,6 +78,9 @@ export interface CreatePedidoData {
   observacoes?: string;
   desconto?: number;
   frete?: number;
+  data_pedido?: string;              // YYYY-MM-DD
+  data_previsao_entrega?: string;    // YYYY-MM-DD
+  horario_entrega?: string;          // janela, ex.: "08:00 - 12:00"
   itens: {
     produto_id: number;
     quantidade: number;
