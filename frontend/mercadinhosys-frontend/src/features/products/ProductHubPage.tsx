@@ -6,7 +6,8 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     ComposedChart, Bar, Line, Legend
 } from 'recharts';
-import { ArrowLeft, TrendingUp, DollarSign, Activity, Truck, AlertTriangle, Percent, Clock, Package } from 'lucide-react';
+import { ArrowLeft, TrendingUp, DollarSign, Activity, Truck, AlertTriangle, Percent, Clock, Package, CheckCircle } from 'lucide-react';
+import { showToast } from '../../utils/toast';
 import './ProductHubPage.css';
 
 export default function ProductHubPage() {
@@ -260,7 +261,7 @@ export default function ProductHubPage() {
                             try {
                                 await productsService.toggleProductStatus(produto.id, !produto.ativo);
                                 showToast.success(produto.ativo ? 'Produto inativado com sucesso.' : 'Produto reativado com sucesso.');
-                                fetchHubData();
+                                setHubData((prev: any) => prev ? { ...prev, produto: { ...prev.produto, ativo: !prev.produto.ativo } } : prev);
                             } catch (e) {
                                 showToast.error('Erro ao alterar status do produto.');
                             }
