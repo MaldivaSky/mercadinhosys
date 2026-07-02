@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, CreditCard, Settings, Eye, Edit2, Check, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Building2, Users, Package, ShoppingBag, TrendingUp, MapPin, Phone, CreditCard, Settings, Eye, Edit2, Check, Loader2, Save } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../api/apiClient';
 
@@ -23,14 +23,40 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
     const [selectedPlan, setSelectedPlan] = useState('');
     const [isSavingPlan, setIsSavingPlan] = useState(false);
 
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState<any>({});
+    const [isSaving, setIsSaving] = useState(false);
+
     // Initial sync
-    React.useEffect(() => {
-        if (estabelecimento?.plano) {
-            setSelectedPlan(estabelecimento.plano);
+    useEffect(() => {
+        if (estabelecimento) {
+            setFormData(estabelecimento);
+            if (estabelecimento.plano) {
+                setSelectedPlan(estabelecimento.plano);
+            }
         }
     }, [estabelecimento]);
 
     if (!isOpen || !estabelecimento) return null;
+
+    const handleInputChange = (field: string, value: any) => {
+        setFormData((prev: any) => ({ ...prev, [field]: value }));
+    };
+
+    const handleSave = async () => {
+        try {
+            setIsSaving(true);
+            await apiClient.put(`/saas/estabelecimentos/${estabelecimento.id}`, formData);
+            setIsEditing(false);
+            if (onUpdate) onUpdate();
+            else window.location.reload();
+        } catch (error) {
+            console.error('Erro ao salvar:', error);
+            alert('Falha ao atualizar dados.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const handleSavePlan = async () => {
         try {
@@ -92,9 +118,9 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))', paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90dvh] overflow-hidden my-auto">
+            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90dvh] overflow-hidden my-auto flex flex-col">
                 {/* Header */}
-                <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shrink-0">
                     <button
                         onClick={onClose}
                         className="absolute top-4 right-4 p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
@@ -107,8 +133,29 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                             <Building2 size={32} />
                         </div>
                         <div className="flex-1">
-                            <h2 className="text-2xl font-bold">{estabelecimento.nome_fantasia}</h2>
-                            <p className="text-blue-100 mt-1">{estabelecimento.razao_social}</p>
+                            {isEditing ? (
+                                <div className="space-y-2">
+                                    <input 
+                                        type="text" 
+                                        className="text-2xl font-bold bg-white/10 border border-white/30 rounded px-2 py-1 w-full text-white placeholder-white/50 focus:outline-none focus:border-white" 
+                                        value={formData.nome_fantasia || ''} 
+                                        onChange={e => handleInputChange('nome_fantasia', e.target.value)} 
+                                        placeholder="Nome Fantasia"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        className="text-blue-100 bg-white/10 border border-white/30 rounded px-2 py-1 w-full placeholder-white/50 focus:outline-none focus:border-white" 
+                                        value={formData.razao_social || ''} 
+                                        onChange={e => handleInputChange('razao_social', e.target.value)} 
+                                        placeholder="Razão Social"
+                                    />
+                                </div>
+                            ) : (
+                                <>
+                                    <h2 className="text-2xl font-bold">{estabelecimento.nome_fantasia}</h2>
+                                    <p className="text-blue-100 mt-1">{estabelecimento.razao_social}</p>
+                                </>
+                            )}
                             <div className="flex items-center gap-3 mt-3">
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPlanoColor(estabelecimento.plano)}`}>
                                     {estabelecimento.plano || 'Basic'}
@@ -125,7 +172,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                 </div>
 
                 {/* Content */}
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+                <div className="p-6 overflow-y-auto flex-1">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Informações Principais */}
                         <div className="space-y-4">
@@ -137,15 +184,27 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">CNPJ</span>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cnpj}</span>
+                                        {isEditing ? (
+                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.cnpj || ''} onChange={e => handleInputChange('cnpj', e.target.value)} />
+                                        ) : (
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cnpj}</span>
+                                        )}
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Inscrição Estadual</span>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.inscricao_estadual || 'Não informado'}</span>
+                                        {isEditing ? (
+                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.inscricao_estadual || ''} onChange={e => handleInputChange('inscricao_estadual', e.target.value)} />
+                                        ) : (
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.inscricao_estadual || 'Não informado'}</span>
+                                        )}
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Regime Tributário</span>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.regime_tributario || 'Não informado'}</span>
+                                        {isEditing ? (
+                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.regime_tributario || ''} onChange={e => handleInputChange('regime_tributario', e.target.value)} />
+                                        ) : (
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.regime_tributario || 'Não informado'}</span>
+                                        )}
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Data de Abertura</span>
@@ -238,11 +297,19 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Telefone</span>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.telefone}</span>
+                                        {isEditing ? (
+                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.telefone || ''} onChange={e => handleInputChange('telefone', e.target.value)} />
+                                        ) : (
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.telefone}</span>
+                                        )}
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">E-mail</span>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.email}</span>
+                                        {isEditing ? (
+                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white w-full max-w-[200px]" value={formData.email || ''} onChange={e => handleInputChange('email', e.target.value)} />
+                                        ) : (
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.email}</span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -253,24 +320,43 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                     Endereço
                                 </h3>
                                 <div className="space-y-3">
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">Endereço Completo</span>
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                                            {estabelecimento.logradouro && estabelecimento.numero
-                                                ? `${estabelecimento.logradouro}, ${estabelecimento.numero}`
-                                                : 'Endereço não informado'
-                                            }
-                                            {estabelecimento.complemento && `, ${estabelecimento.complemento}`}
-                                            {estabelecimento.bairro && `, ${estabelecimento.bairro}`}
-                                            {estabelecimento.cidade && estabelecimento.estado
-                                                ? `, ${estabelecimento.cidade}/${estabelecimento.estado}`
-                                                : ''
-                                            }
-                                        </p>
+                                        {isEditing ? (
+                                            <div className="space-y-2 mt-2">
+                                                <div className="flex gap-2">
+                                                    <input type="text" placeholder="Logradouro" className="flex-1 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.logradouro || ''} onChange={e => handleInputChange('logradouro', e.target.value)} />
+                                                    <input type="text" placeholder="Número" className="w-24 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.numero || ''} onChange={e => handleInputChange('numero', e.target.value)} />
+                                                </div>
+                                                <input type="text" placeholder="Complemento" className="w-full px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.complemento || ''} onChange={e => handleInputChange('complemento', e.target.value)} />
+                                                <input type="text" placeholder="Bairro" className="w-full px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.bairro || ''} onChange={e => handleInputChange('bairro', e.target.value)} />
+                                                <div className="flex gap-2">
+                                                    <input type="text" placeholder="Cidade" className="flex-1 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.cidade || ''} onChange={e => handleInputChange('cidade', e.target.value)} />
+                                                    <input type="text" placeholder="UF" className="w-16 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.estado || ''} onChange={e => handleInputChange('estado', e.target.value)} />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
+                                                {estabelecimento.logradouro && estabelecimento.numero
+                                                    ? `${estabelecimento.logradouro}, ${estabelecimento.numero}`
+                                                    : 'Endereço não informado'
+                                                }
+                                                {estabelecimento.complemento && `, ${estabelecimento.complemento}`}
+                                                {estabelecimento.bairro && `, ${estabelecimento.bairro}`}
+                                                {estabelecimento.cidade && estabelecimento.estado
+                                                    ? `, ${estabelecimento.cidade}/${estabelecimento.estado}`
+                                                    : ''
+                                                }
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">CEP</span>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cep || 'Não informado'}</span>
+                                        {isEditing ? (
+                                            <input type="text" className="px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.cep || ''} onChange={e => handleInputChange('cep', e.target.value)} />
+                                        ) : (
+                                            <span className="text-sm font-medium text-gray-900 dark:text-white">{estabelecimento.cep || 'Não informado'}</span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -321,7 +407,7 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                             <Settings size={18} />
                             Informações do Sistema
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">ID do Estabelecimento</span>
                                 <span className="text-sm font-medium text-gray-900 dark:text-white">#{estabelecimento.id}</span>
@@ -332,24 +418,32 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                                     {estabelecimento.data_cadastro ? formatDate(estabelecimento.data_cadastro) : 'Não informado'}
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex-wrap gap-2">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">Gateway Customer ID</span>
-                                <span className="font-medium text-gray-900 dark:text-white break-all">
-                                    {estabelecimento.gateway_customer_id || 'Não configurado'}
-                                </span>
+                                {isEditing ? (
+                                    <input type="text" className="flex-1 min-w-[200px] px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.gateway_customer_id || ''} onChange={e => handleInputChange('gateway_customer_id', e.target.value)} />
+                                ) : (
+                                    <span className="font-medium text-gray-900 dark:text-white break-all">
+                                        {estabelecimento.gateway_customer_id || 'Não configurado'}
+                                    </span>
+                                )}
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex-wrap gap-2">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">Gateway Subscription ID</span>
-                                <span className="font-medium text-gray-900 dark:text-white break-all">
-                                    {estabelecimento.gateway_subscription_id || 'Não configurado'}
-                                </span>
+                                {isEditing ? (
+                                    <input type="text" className="flex-1 min-w-[200px] px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white" value={formData.gateway_subscription_id || ''} onChange={e => handleInputChange('gateway_subscription_id', e.target.value)} />
+                                ) : (
+                                    <span className="font-medium text-gray-900 dark:text-white break-all">
+                                        {estabelecimento.gateway_subscription_id || 'Não configurado'}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 shrink-0">
                     <div className="flex justify-between items-center">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                             Última atualização: {estabelecimento.data_cadastro ? formatDate(estabelecimento.data_cadastro) : 'Não informado'}
@@ -361,12 +455,26 @@ const EstabelecimentoDetalheModal: React.FC<EstabelecimentoDetalheModalProps> = 
                             >
                                 Fechar
                             </button>
-                            <button
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                            >
-                                <Eye size={16} />
-                                Ver Detalhes Completos
-                            </button>
+                            {isSuperAdmin && (
+                                isEditing ? (
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={isSaving}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                                        Salvar Alterações
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                    >
+                                        <Edit2 size={16} />
+                                        Editar Estabelecimento
+                                    </button>
+                                )
+                            )}
                         </div>
                     </div>
                 </div>

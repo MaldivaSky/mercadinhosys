@@ -112,7 +112,7 @@ def get_estabelecimento_safe(estab_id):
     Retorna um dicionário com os dados ou None se não encontrado.
     """
     try:
-        if not estab_id: return None
+        if not estab_id or str(estab_id).lower() == 'all': return None
         db = _get_db()
         # Colunas core garantidas
         with db.session.begin_nested():
@@ -170,7 +170,7 @@ def get_configuracao_safe(estab_id):
     2. Se falhar (ex: coluna nova não existe), busca item a item (Resiliência Máxima).
     """
     try:
-        if not estab_id: return None
+        if not estab_id or str(estab_id).lower() == 'all': return None
         
         # --- TENTATIVA 1: FAST PATH (1 Query) ---
         try:
@@ -547,6 +547,7 @@ def get_estabelecimento_full_safe(estabelecimento_id):
     Ensina o sistema a retornar a verdade completa (CEP, Complemento, Estado) para o Frontend.
     """
     try:
+        if not estabelecimento_id or str(estabelecimento_id).lower() == 'all': return None
         # Busca dinâmica de colunas para evitar erros de schema e garantir todos os campos
         # Incluímos um LEFT JOIN com configuracoes para pegar a logo_base64 oficial
         sql = """

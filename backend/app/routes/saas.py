@@ -531,3 +531,46 @@ def alterar_plano_estabelecimento(id):
         db.session.rollback()
         logger.error(f"Erro ao alterar plano do estabelecimento {id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@saas_bp.route("/estabelecimentos/<int:id>", methods=["PUT"])
+@super_admin_required
+def update_estabelecimento_admin(id):
+    """
+    Atualiza os dados de um estabelecimento (Apenas Super Admin)
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "Nenhum dado fornecido"}), 400
+            
+        estabelecimento = Estabelecimento.query.get(id)
+        if not estabelecimento:
+            return jsonify({"success": False, "error": "Estabelecimento não encontrado"}), 404
+            
+        # Atualiza campos permitidos
+        campos_permitidos = [
+            "nome_fantasia", "razao_social", "cnpj", "inscricao_estadual", "regime_tributario",
+            "telefone", "email", "logradouro", "numero", "complemento", "bairro", "cidade", 
+            "estado", "cep", "gateway_customer_id", "gateway_subscription_id"
+        ]
+        
+        for campo in campos_permitidos:
+            if campo in data:
+                setattr(estabelecimento, campo, data[campo])
+                
+        db.session.commit()
+        
+        logger.info(f"🔄 DADOS ALTERADOS: Estabelecimento {id} atualizado pelo Super Admin.")
+        
+        from app.utils.response_utils import sanitize_response
+        return jsonify(sanitize_response({
+            "success": True, 
+            "message": "Estabelecimento atualizado com sucesso",
+            "estabelecimento": estabelecimento.to_dict()
+        })), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar estabelecimento {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500

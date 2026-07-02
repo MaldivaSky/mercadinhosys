@@ -75,6 +75,9 @@ def atualizar_configuracoes():
         estabelecimento_id = get_authorized_establishment_id()
         role = claims.get("role")
         
+        if str(estabelecimento_id).lower() == 'all':
+            return jsonify({"success": False, "error": "Ação não permitida na visão global (all)."}), 403
+            
         if role not in ["admin", "dono", "gerente", "ADMIN"]:
             return jsonify({"success": False, "error": "Sem permissão para alterar configurações"}), 403
 
@@ -276,6 +279,9 @@ def update_estabelecimento():
         role = (claims.get("role") or "").lower()
         is_super = claims.get("is_super_admin", False)
         
+        if str(estabelecimento_id).lower() == 'all':
+            return jsonify({"success": False, "error": "Ação não permitida na visão global (all)."}), 403
+            
         if role not in ["admin", "dono", "ADMIN"] and not is_super:
             return jsonify({"success": False, "error": "Apenas proprietários podem alterar dados da empresa"}), 403
 
@@ -448,6 +454,8 @@ def preferencias_usuario():
             if not prefs:
                 from app.utils.query_helpers import get_authorized_establishment_id
                 est_id = get_authorized_establishment_id()
+                if str(est_id).lower() == 'all':
+                    return jsonify({"success": False, "error": "Ação não permitida na visão global (all)."}), 403
                 prefs = FuncionarioPreferencias(funcionario_id=user_id, estabelecimento_id=est_id)
                 db.session.add(prefs)
             
@@ -496,6 +504,9 @@ def upload_logo():
         claims = get_jwt()
         user_role = (claims.get("role") or "").lower()
         
+        if str(estabelecimento_id).lower() == 'all':
+            return jsonify({"success": False, "error": "Ação não permitida na visão global (all)."}), 403
+            
         # Verificação de permissão - apenas ADMIN e GERENTE podem fazer upload
         if user_role not in ["admin", "gerente"]:
             return jsonify({
