@@ -19,6 +19,33 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose }) => {
     const scannerRef = useRef<HTMLDivElement>(null);
     const lastScanTimeRef = useRef<number>(0);
     const lastScanRef = useRef<string | null>(null);
+    
+    // Filtro de Confiança (Debounce Triplo)
+    const scanCountRef = useRef<number>(0);
+    const candidateRef = useRef<string>('');
+    const candidateTimeRef = useRef<number>(0);
+
+    // Validação matemática do EAN-13 e EAN-8
+    const isValidEAN = (ean: string): boolean => {
+        if (!ean || (ean.length !== 8 && ean.length !== 13)) return false;
+        if (ean.length === 13) {
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+                sum += parseInt(ean[i], 10) * (i % 2 === 0 ? 1 : 3);
+            }
+            const check = (10 - (sum % 10)) % 10;
+            return check === parseInt(ean[12], 10);
+        }
+        if (ean.length === 8) {
+            let sum = 0;
+            for (let i = 0; i < 7; i++) {
+                sum += parseInt(ean[i], 10) * (i % 2 === 0 ? 3 : 1);
+            }
+            const check = (10 - (sum % 10)) % 10;
+            return check === parseInt(ean[7], 10);
+        }
+        return false;
+    };
 
     // Este componente só é montado enquanto o scanner estiver aberto (sem prop isOpen),
     // então trava o scroll do fundo durante toda a vida do componente.
@@ -69,9 +96,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose }) => {
                     readers: [
                         "ean_reader",
                         "ean_8_reader",
-                        "upc_reader",
-                        "code_128_reader",
-                        "code_39_reader"
+                        "upc_reader"
                     ],
                     multiple: false
                 },
@@ -87,22 +112,40 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose }) => {
                 const now = Date.now();
                 const code = data.codeResult?.code;
 
-                if (!code) return;
+                if (!code || !isValidEAN(code)) return;
 
-                // Debounce de 2s para o mesmo código
+                // Debounce de 2s para o mesmo código (para não floodar quando já aceitou)
                 if (code === lastScanRef.current && now - lastScanTimeRef.current < 2000) {
                     return;
                 }
 
-                lastScanRef.current = code;
-                lastScanTimeRef.current = now;
-                setScanSuccess(true);
+                // Reseta a contagem se passar muito tempo (1 segundo)
+                if (now - candidateTimeRef.current > 1000) {
+                    candidateRef.current = '';
+                    scanCountRef.current = 0;
+                }
 
-                // Feedback visual
-                setTimeout(() => setScanSuccess(false), 500);
+                if (code !== candidateRef.current) {
+                    candidateRef.current = code;
+                    scanCountRef.current = 1;
+                    candidateTimeRef.current = now;
+                } else {
+                    scanCountRef.current += 1;
+                    candidateTimeRef.current = now;
+                }
 
-                // Notificar componente pai
-                onScan(code);
+                // Somente notifica após 3 leituras consecutivas idênticas e válidas
+                if (scanCountRef.current >= 3) {
+                    lastScanRef.current = code;
+                    lastScanTimeRef.current = now;
+                    setScanSuccess(true);
+                    
+                    setTimeout(() => setScanSuccess(false), 500);
+                    onScan(code);
+                    
+                    candidateRef.current = '';
+                    scanCountRef.current = 0;
+                }
             });
 
         } catch (error: any) {

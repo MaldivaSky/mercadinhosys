@@ -23,7 +23,7 @@ from app.models import (
 )
 from flask_jwt_extended import jwt_required, get_jwt
 from app.decorators.plan_guards import permission_required
-from app.utils.query_helpers import get_authorized_establishment_id, get_dow_extract, get_hour_extract
+from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id, get_dow_extract, get_hour_extract
 from sqlalchemy import or_, func, distinct, select
 from collections import defaultdict
 import random
@@ -38,12 +38,12 @@ vendas_bp = Blueprint("vendas", __name__)
 # ------------------------------------------------------------------------------
 
 FILTROS_PERMITIDOS_VENDAS = {
-    "codigo": lambda value: Venda.codigo.ilike(f"%{value}%"),
-    "cliente_nome": lambda value: Cliente.nome.ilike(f"%{value}%"),
-    "cliente_cpf": lambda value: Cliente.cpf.ilike(f"%{value}%"),
-    "funcionario_nome": lambda value: Funcionario.nome.ilike(f"%{value}%"),
-    "status": lambda value: Venda.status.ilike(value),
-    "observacoes": lambda value: Venda.observacoes.ilike(f"%{value}%"),
+    "codigo": lambda value: ilike_unaccent(Venda.codigo, f"%{value}%"),
+    "cliente_nome": lambda value: ilike_unaccent(Cliente.nome, f"%{value}%"),
+    "cliente_cpf": lambda value: ilike_unaccent(Cliente.cpf, f"%{value}%"),
+    "funcionario_nome": lambda value: ilike_unaccent(Funcionario.nome, f"%{value}%"),
+    "status": lambda value: ilike_unaccent(Venda.status, value),
+    "observacoes": lambda value: ilike_unaccent(Venda.observacoes, f"%{value}%"),
 }
 
 ORDENACOES_PERMITIDAS = {
@@ -72,7 +72,7 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
     # Filtro por forma de pagamento (subconsulta na tabela Pagamento)
     if filtros.get("forma_pagamento"):
         sub = db.session.query(Pagamento.venda_id).filter(
-            Pagamento.forma_pagamento.ilike(f"%{filtros['forma_pagamento']}%")
+            ilike_unaccent(Pagamento.forma_pagamento, f"%{filtros['forma_pagamento']}%")
         ).subquery()
         query = query.filter(Venda.id.in_(select(sub)))
 
@@ -135,8 +135,8 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
     if "produto_nome" in filtros and filtros["produto_nome"]:
         query = query.join(VendaItem).join(Produto).filter(
             or_(
-                Produto.nome.ilike(f"%{filtros['produto_nome']}%"),
-                Produto.codigo_barras.ilike(f"%{filtros['produto_nome']}%"),
+                ilike_unaccent(Produto.nome, f"%{filtros['produto_nome']}%"),
+                ilike_unaccent(Produto.codigo_barras, f"%{filtros['produto_nome']}%"),
             )
         )
 
@@ -262,11 +262,11 @@ def listar_vendas():
         if search:
             query_base = query_base.filter(
                 or_(
-                    Venda.codigo.ilike(f"%{search}%"),
-                    Venda.observacoes.ilike(f"%{search}%"),
-                    Cliente.nome.ilike(f"%{search}%"),
-                    Cliente.cpf.ilike(f"%{search}%"),
-                    Funcionario.nome.ilike(f"%{search}%"),
+                    ilike_unaccent(Venda.codigo, f"%{search}%"),
+                    ilike_unaccent(Venda.observacoes, f"%{search}%"),
+                    ilike_unaccent(Cliente.nome, f"%{search}%"),
+                    ilike_unaccent(Cliente.cpf, f"%{search}%"),
+                    ilike_unaccent(Funcionario.nome, f"%{search}%"),
                 )
             )
 

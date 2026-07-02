@@ -23,6 +23,8 @@ interface ItemRecebimento {
   numero_lote: string;
   conferido: boolean;
   expanded?: boolean;
+  imagem_url?: string;
+  codigo_barras?: string;
 }
 
 const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
@@ -79,7 +81,9 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
           data_validade: dataValidadePadrao.toISOString().split('T')[0],
           numero_lote: `LOTE-${detalhes.numero_pedido}-${index + 1}`,
           conferido: false,
-          expanded: false
+          expanded: false,
+          imagem_url: item.produto?.imagem_url,
+          codigo_barras: item.produto?.codigo_barras
         }));
         setItensRecebimento(itens);
       }
@@ -331,10 +335,18 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
                                 <div className={`mt-0.5 rounded flex items-center justify-center transition-colors ${item.conferido ? 'text-green-600' : 'text-gray-300 group-hover:text-green-500'}`}>
                                   {item.conferido ? <CheckSquare className="w-6 h-6" /> : <Square className="w-6 h-6" />}
                                 </div>
+                                {item.imagem_url && (
+                                  <img src={item.imagem_url} alt={item.produto_nome} className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                                )}
                                 <div className="flex-1">
                                   <h4 className={`font-semibold text-sm sm:text-base transition-colors ${item.conferido ? 'text-green-800 dark:text-green-300' : 'text-gray-800 dark:text-white'}`}>
                                     {item.produto_nome}
                                   </h4>
+                                  {item.codigo_barras && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                                      EAN: {item.codigo_barras}
+                                    </div>
+                                  )}
                                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                                     <span>Sol: <b className="text-gray-700 dark:text-gray-300">{item.quantidade_solicitada}</b></span>
                                     <span>Preço: {formatCurrency(item.preco_unitario)}</span>
@@ -530,7 +542,7 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+            <div className="flex-shrink-0 flex justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700" style={{ paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
               <button
                 type="button"
                 onClick={onClose}

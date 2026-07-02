@@ -34,7 +34,7 @@ def listar_funcionarios():
     - ordem: asc/desc (padrão: asc)
     """
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -72,12 +72,12 @@ def listar_funcionarios():
             busca_like = f"%{busca}%"
             query = query.filter(
                 or_(
-                    Funcionario.nome.ilike(busca_like),
-                    Funcionario.cpf.ilike(busca_like),
-                    Funcionario.username.ilike(busca_like),
-                    Funcionario.email.ilike(busca_like),
-                    Funcionario.telefone.ilike(busca_like),
-                    Funcionario.cargo.ilike(busca_like),
+                    ilike_unaccent(Funcionario.nome, busca_like),
+                    ilike_unaccent(Funcionario.cpf, busca_like),
+                    ilike_unaccent(Funcionario.username, busca_like),
+                    ilike_unaccent(Funcionario.email, busca_like),
+                    ilike_unaccent(Funcionario.telefone, busca_like),
+                    ilike_unaccent(Funcionario.cargo, busca_like),
                 )
             )
 
@@ -366,7 +366,7 @@ def listar_funcionarios():
 def estatisticas_funcionarios():
     """Obtém estatísticas detalhadas de funcionários para dashboard"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -646,7 +646,7 @@ def estatisticas_funcionarios():
 def relatorio_vendas_funcionarios():
     """Relatório de vendas por funcionário"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -798,7 +798,7 @@ def relatorio_vendas_funcionarios():
 def detalhes_funcionario(id):
     """Obter detalhes de um funcionário com estatísticas completas"""
     try:
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -985,7 +985,7 @@ def criar_funcionario():
     """Criar um novo funcionário"""
     try:
         # Obter estabelecimento do token
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         data = request.get_json()
@@ -1153,7 +1153,7 @@ def atualizar_funcionario(id):
     """Atualizar informações de um funcionário"""
     try:
         # Obter estabelecimento do token
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         funcionario = Funcionario.query.filter_by(
@@ -1310,7 +1310,7 @@ def excluir_funcionario(id):
     """Excluir (desativar) um funcionário"""
     try:
         # Obter estabelecimento do token
-        from app.utils.query_helpers import get_authorized_establishment_id
+        from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
 
         funcionario = Funcionario.query.filter_by(

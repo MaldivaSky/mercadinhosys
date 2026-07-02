@@ -11,6 +11,17 @@ def _get_db():
     from app.models import db
     return db
 
+def ilike_unaccent(column, search_term):
+    """
+    Pesquisa Case-Insensitive e Accent-Insensitive suportada nativamente no PostgreSQL usando a extensão unaccent.
+    Faz o fallback seguro para ambientes que usam SQLite (ou não possuem extensão instalada).
+    """
+    db = _get_db()
+    engine_name = db.engine.name
+    if engine_name == 'postgresql':
+        return func.unaccent(column).ilike(func.unaccent(search_term))
+    return column.ilike(search_term)
+
 def get_hour_extract(column):
     """
     Returns the dialect-specific expression to extract the hour.

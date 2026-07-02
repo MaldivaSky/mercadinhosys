@@ -71,7 +71,13 @@ def listar_pedidos():
                 pedido_dict['fornecedor_nome'] = pedido.fornecedor.nome_fantasia if pedido.fornecedor else None
                 pedido_dict['funcionario_nome'] = pedido.funcionario.nome if pedido.funcionario else None
                 pedido_dict['total_itens'] = len(pedido.itens) if pedido.itens else 0
-                pedido_dict['itens'] = [item.to_dict() for item in pedido.itens] if pedido.itens else []
+                pedido_dict['itens'] = []
+                if pedido.itens:
+                    for item in pedido.itens:
+                        item_data = item.to_dict()
+                        if item.produto:
+                            item_data['produto'] = item.produto.to_dict()
+                        pedido_dict['itens'].append(item_data)
                 pedidos.append(pedido_dict)
             except Exception as e:
                 print(f"Erro ao processar pedido {pedido.id}: {str(e)}")
@@ -238,7 +244,12 @@ def obter_pedido(pedido_id):
         pedido_dict = pedido.to_dict()
         pedido_dict['fornecedor'] = pedido.fornecedor.to_dict() if pedido.fornecedor else None
         pedido_dict['funcionario'] = pedido.funcionario.to_dict() if pedido.funcionario else None
-        pedido_dict['itens'] = [item.to_dict() for item in pedido.itens]
+        pedido_dict['itens'] = []
+        for item in pedido.itens:
+            item_data = item.to_dict()
+            if item.produto:
+                item_data['produto'] = item.produto.to_dict()
+            pedido_dict['itens'].append(item_data)
         
         # Adicionar informações de conta a pagar se existir
         if pedido.conta_pagar:

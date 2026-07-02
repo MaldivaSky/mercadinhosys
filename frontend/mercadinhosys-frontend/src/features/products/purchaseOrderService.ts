@@ -42,6 +42,10 @@ export interface PedidoCompraItem {
   total_item: number;
   status: string;
   produto_unidade?: string;
+  produto?: {
+    codigo_barras?: string;
+    imagem_url?: string;
+  };
 }
 
 export interface BoletoFornecedor {
