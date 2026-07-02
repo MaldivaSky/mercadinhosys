@@ -36,6 +36,43 @@ def ctx(session):
     return {"estab": estab, "admin": admin, "forn": forn, "prod": prod}
 
 
+def test_fluxo_real_cadastra_busca_por_agua_e_pedido_sobe_o_item(client, ctx):
+    """Fluxo EXATO do usuário: cadastra 'Água Sanitária Supreme', BUSCA por 'agua'
+    (sem acento) no endpoint real, pega o id retornado, cria o pedido com esse id
+    e confere que o pedido NÃO fica com 0 itens — o produto sobe e aparece."""
+    estab, admin, forn = ctx["estab"], ctx["admin"], ctx["forn"]
+    headers = _headers(estab.id, admin.id)
+
+    # 1) Cadastra o produto via API (como o usuário fez)
+    rc = client.post("/api/produtos/", json={
+        "nome": "Água Sanitária Supreme", "categoria": "Limpeza",
+        "preco_custo": 4.20, "preco_venda": 7.90, "quantidade": 0,
+        "codigo_barras": "7899999000015",
+    }, headers=headers)
+    assert rc.status_code in (200, 201), rc.get_data(as_text=True)
+
+    # 2) BUSCA por 'agua' (sem acento) — tem que achar
+    rb = client.get("/api/produtos/?busca=agua&por_pagina=20", headers=headers)
+    assert rb.status_code == 200, rb.get_data(as_text=True)
+    achados = [p for p in rb.get_json().get("produtos", []) if p["nome"] == "Água Sanitária Supreme"]
+    assert achados, f"busca 'agua' não achou o produto: {[p['nome'] for p in rb.get_json().get('produtos', [])]}"
+    produto_id = achados[0]["id"]
+
+    # 3) Cria o pedido com o produto encontrado
+    rp = client.post("/api/pedidos-compra/", json={
+        "fornecedor_id": forn.id, "condicao_pagamento": "pix",
+        "itens": [{"produto_id": produto_id, "quantidade": 12, "preco_unitario": 4.20, "desconto_percentual": 0}],
+    }, headers=headers)
+    assert rp.status_code == 201, rp.get_data(as_text=True)
+    pedido_id = rp.get_json()["pedido"]["id"]
+
+    # 4) O pedido NÃO pode ficar com 0 itens — o produto subiu
+    rl = client.get("/api/pedidos-compra/", headers=headers)
+    alvo = next(p for p in rl.get_json()["pedidos"] if p["id"] == pedido_id)
+    assert alvo["total_itens"] == 1, f"PEDIDO SUBIU 0 ITENS (bug do PC000006). total_itens={alvo['total_itens']}"
+    assert alvo["itens"][0]["produto_nome"] == "Água Sanitária Supreme"
+
+
 def test_pedido_com_item_aparece_na_lista_e_detalhe(client, ctx):
     estab, admin, forn, prod = ctx["estab"], ctx["admin"], ctx["forn"], ctx["prod"]
     headers = _headers(estab.id, admin.id)
