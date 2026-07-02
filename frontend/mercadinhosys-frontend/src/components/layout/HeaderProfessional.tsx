@@ -278,9 +278,12 @@ const HeaderProfessional = () => {
             </header>
             {/* Modal de Perfil */}
             {profileModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+                    onClick={(e) => { if (e.target === e.currentTarget) setProfileModalOpen(false); }}
+                >
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meu Perfil</h3>
                             <button
                                 onClick={() => setProfileModalOpen(false)}
@@ -290,7 +293,7 @@ const HeaderProfessional = () => {
                                 <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                             </button>
                         </div>
-                        <div className="px-5 py-4 space-y-4">
+                        <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
                             <div className="flex items-center gap-3">
                                 {user?.foto_url ? (
                                     <img src={user.foto_url} alt={user.nome} className="w-12 h-12 rounded-full object-cover" />
@@ -468,7 +471,7 @@ const HeaderProfessional = () => {
                                 )}
                             </div>
                         </div>
-                        <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                        <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end flex-shrink-0">
                             <button
                                 onClick={() => setProfileModalOpen(false)}
                                 className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
