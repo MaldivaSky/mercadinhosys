@@ -4000,41 +4000,42 @@ def obter_produto_hub(id):
         from app.models import Venda, VendaItem
         
         hoje = datetime.now(timezone.utc)
-        dias_sem_venda = None
-        if produto.ultima_venda:
-            delta = hoje.date() - produto.ultima_venda.date()
-            dias_sem_venda = delta.days
-
         periodo = request.args.get('periodo', 'all')
-        
-        qtd_vendida = float(produto.quantidade_vendida or 0)
-        total_vendido = float(produto.total_vendido or 0)
-        
+
+        # FONTE DA VERDADE: agrega SEMPRE de venda_itens (o "ledger"), não das
+        # colunas denormalizadas do produto (total_vendido/quantidade_vendida/
+        # ultima_venda), que não eram atualizadas na venda e ficavam zeradas —
+        # causando o HUB mostrar 0 mesmo com vendas reais. Exclui vendas canceladas.
+        base_q = db.session.query(
+            func.sum(VendaItem.quantidade).label('qtd'),
+            func.sum(VendaItem.total_item).label('total'),
+        ).join(Venda, Venda.id == VendaItem.venda_id).filter(
+            VendaItem.produto_id == id,
+            Venda.estabelecimento_id == estabelecimento_id,
+            func.lower(func.coalesce(Venda.status, '')) != 'cancelada',
+        )
+
         if periodo != 'all':
-            dias_filtro = 30
-            if periodo == '7d': dias_filtro = 7
-            elif periodo == '30d': dias_filtro = 30
-            elif periodo == '90d': dias_filtro = 90
-            elif periodo == '1y': dias_filtro = 365
-            
-            data_limite = hoje - timedelta(days=dias_filtro)
-            
-            # Query the sums for the specific period
-            vendas_agregadas = db.session.query(
-                func.sum(VendaItem.quantidade).label('qtd'),
-                func.sum(VendaItem.total_item).label('total')
-            ).join(Venda, Venda.id == VendaItem.venda_id).filter(
-                VendaItem.produto_id == id,
-                Venda.estabelecimento_id == estabelecimento_id,
-                Venda.data_venda >= data_limite
-            ).first()
-            
-            if vendas_agregadas and vendas_agregadas.qtd:
-                qtd_vendida = float(vendas_agregadas.qtd or 0)
-                total_vendido = float(vendas_agregadas.total or 0)
-            else:
-                qtd_vendida = 0.0
-                total_vendido = 0.0
+            dias_filtro = {'7d': 7, '30d': 30, '90d': 90, '1y': 365}.get(periodo, 30)
+            base_q = base_q.filter(Venda.data_venda >= hoje - timedelta(days=dias_filtro))
+
+        agg = base_q.first()
+        qtd_vendida = float(agg.qtd or 0) if agg else 0.0
+        total_vendido = float(agg.total or 0) if agg else 0.0
+
+        # Última venda calculada ao vivo (max data_venda para este produto).
+        ultima_venda_dt = db.session.query(func.max(Venda.data_venda)).join(
+            VendaItem, VendaItem.venda_id == Venda.id
+        ).filter(
+            VendaItem.produto_id == id,
+            Venda.estabelecimento_id == estabelecimento_id,
+            func.lower(func.coalesce(Venda.status, '')) != 'cancelada',
+        ).scalar()
+
+        dias_sem_venda = None
+        if ultima_venda_dt:
+            ref = ultima_venda_dt.date() if hasattr(ultima_venda_dt, 'date') else ultima_venda_dt
+            dias_sem_venda = (hoje.date() - ref).days
 
         lucro_estimado = 0
         if produto.preco_venda and produto.preco_custo:
@@ -4045,7 +4046,9 @@ def obter_produto_hub(id):
         # Override the metrics in the dict so the UI uses the filtered ones
         produto_dict['quantidade_vendida'] = qtd_vendida
         produto_dict['total_vendido'] = total_vendido
-        
+        # ultima_venda ao vivo (não o campo denormalizado, que ficava nulo)
+        produto_dict['ultima_venda'] = ultima_venda_dt.isoformat() if ultima_venda_dt else None
+
         # Find primeira venda for accurate VMD calculation
         primeira_venda_query = db.session.query(func.min(Venda.data_venda)).join(VendaItem, VendaItem.venda_id == Venda.id).filter(
             VendaItem.produto_id == id,

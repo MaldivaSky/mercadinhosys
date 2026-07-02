@@ -912,6 +912,13 @@ def finalizar_venda():
                 estoque_anterior = to_decimal(produto.quantidade, precision=3)
                 produto.quantidade = to_decimal(estoque_anterior - quantidade, precision=3)
 
+                # Mantém os contadores denormalizados em sincronia com o ledger,
+                # para as telas de LISTAGEM (giro, mais vendidos) não ficarem zeradas.
+                # O HUB do produto agrega ao vivo; aqui é a via rápida das listas.
+                produto.quantidade_vendida = to_decimal((produto.quantidade_vendida or 0) + quantidade, precision=3)
+                produto.total_vendido = to_decimal((produto.total_vendido or 0) + total_item, precision=2)
+                produto.ultima_venda = data_venda
+
                 mov = MovimentacaoEstoque(
                     estabelecimento_id=nova_venda.estabelecimento_id,
                     produto_id=produto.id,

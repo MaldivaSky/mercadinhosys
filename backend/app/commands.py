@@ -105,3 +105,45 @@ def register_commands(app):
                 click.echo(f"[LIMPO] Removidos: {removidos} pedidos, {contas_removidas} contas a pagar. Preservados: {preservados}.")
             else:
                 click.echo("-> Rode com --apply para efetivar a limpeza.")
+
+    @app.cli.command("backfill-vendas-produto")
+    @click.option("--apply", is_flag=True, help="Grava (sem esta flag é dry-run).")
+    @with_appcontext
+    def backfill_vendas_produto(apply):
+        """Recalcula os contadores denormalizados de venda de CADA produto
+        (total_vendido, quantidade_vendida, ultima_venda) a partir do ledger
+        (venda_itens, ignorando vendas canceladas). Corrige dados históricos que
+        ficaram zerados porque a venda antiga não atualizava esses campos."""
+        from sqlalchemy import func
+        from app.models import db, Produto, Venda, VendaItem, allow_all_tenants
+
+        with allow_all_tenants():
+            linhas = (
+                db.session.query(
+                    VendaItem.produto_id.label("pid"),
+                    func.sum(VendaItem.quantidade).label("q"),
+                    func.sum(VendaItem.total_item).label("t"),
+                    func.max(Venda.data_venda).label("u"),
+                )
+                .join(Venda, Venda.id == VendaItem.venda_id)
+                .filter(func.lower(func.coalesce(Venda.status, "")) != "cancelada")
+                .group_by(VendaItem.produto_id)
+                .all()
+            )
+
+            atualizados = 0
+            for row in linhas:
+                p = Produto.query.get(row.pid)
+                if not p:
+                    continue
+                p.quantidade_vendida = row.q or 0
+                p.total_vendido = row.t or 0
+                p.ultima_venda = row.u
+                atualizados += 1
+                click.echo(f"  - {p.nome}: qtd={float(row.q or 0)}, total={float(row.t or 0)}")
+
+            if apply:
+                db.session.commit()
+                click.echo(f"[OK] {atualizados} produtos recalculados a partir do ledger.")
+            else:
+                click.echo(f"[DRY-RUN] {atualizados} produtos seriam recalculados. Use --apply.")
