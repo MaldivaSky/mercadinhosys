@@ -226,9 +226,9 @@ const ProductsPage: React.FC = () => {
       } else if (state.openEditFor) {
         const prod = produtos.find(p => p.id === state.openEditFor);
         if (prod) {
-          setSelectedProduct(prod);
-          setEditMode(true);
-          setShowProductModal(true);
+          // Deep-link do HUB também exige PIN ANTES de abrir a edição — mesma
+          // regra do botão de editar da lista (openEditModal). Antes abria direto.
+          openEditModal(prod);
         }
       }
       // Clear state so it doesn't reopen on reload

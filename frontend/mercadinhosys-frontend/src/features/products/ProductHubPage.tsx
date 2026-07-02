@@ -207,6 +207,18 @@ export default function ProductHubPage() {
                         <span className="status-label">Margem Base</span>
                         <span className="status-value highlight-green">{margemReal.toFixed(2)}%</span>
                     </div>
+                    {produto.data_fabricacao && (
+                        <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span className="status-label">Fabricação</span>
+                            <span className="status-value">{new Date(produto.data_fabricacao).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                    )}
+                    {produto.data_validade && (
+                        <div className="status-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span className="status-label">Validade</span>
+                            <span className="status-value">{new Date(produto.data_validade).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                    )}
                 </div>
             </header>
 
