@@ -31,6 +31,8 @@ def listar_pedidos():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
         page = int(request.args.get('page', 1))
         per_page = min(int(request.args.get('per_page', 20)), 100)
@@ -41,13 +43,13 @@ def listar_pedidos():
         data_inicio = request.args.get('data_inicio')
         data_fim = request.args.get('data_fim')
         
-        query = PedidoCompra.query.filter_by(
-            estabelecimento_id=user.estabelecimento_id
-        ).options(
+        query = PedidoCompra.query.options(
             joinedload(PedidoCompra.fornecedor),
             joinedload(PedidoCompra.funcionario),
             joinedload(PedidoCompra.itens),
         )
+        if estab_id and str(estab_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estab_id)
         
         if status:
             query = query.filter(PedidoCompra.status == status)
@@ -106,6 +108,8 @@ def criar_pedido():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
         data = request.get_json()
         
@@ -118,14 +122,14 @@ def criar_pedido():
         # Verificar se fornecedor existe
         fornecedor = Fornecedor.query.filter_by(
             id=data['fornecedor_id'],
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).first()
         if not fornecedor:
             return jsonify({'error': 'Fornecedor não encontrado'}), 404
         
         # Gerar número do pedido
         ultimo_pedido = PedidoCompra.query.filter_by(
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).order_by(PedidoCompra.id.desc()).first()
         
         numero_pedido = f"PC{(ultimo_pedido.id + 1 if ultimo_pedido else 1):06d}"
@@ -149,7 +153,7 @@ def criar_pedido():
 
         # Criar pedido
         pedido = PedidoCompra(
-            estabelecimento_id=user.estabelecimento_id,
+            estabelecimento_id=estab_id,
             fornecedor_id=data['fornecedor_id'],
             funcionario_id=user.id,
             numero_pedido=numero_pedido,
@@ -169,7 +173,7 @@ def criar_pedido():
         for item_data in data['itens']:
             produto = Produto.query.filter_by(
                 id=item_data['produto_id'],
-                estabelecimento_id=user.estabelecimento_id
+                estabelecimento_id=estab_id
             ).first()
             
             if not produto:
@@ -183,7 +187,7 @@ def criar_pedido():
             
             item = PedidoCompraItem(
                 pedido_id=pedido.id,
-                estabelecimento_id=user.estabelecimento_id,
+                estabelecimento_id=estab_id,
                 produto_id=produto.id,
                 produto_nome=produto.nome,
                 produto_unidade=produto.unidade_medida,
@@ -211,7 +215,7 @@ def criar_pedido():
         # A Despesa é criada quando o boleto for pago (pagar boleto)
         data_vencimento = data_previsao or (date.today() + timedelta(days=30))
         conta_pagar = ContaPagar(
-            estabelecimento_id=user.estabelecimento_id,
+            estabelecimento_id=estab_id,
             fornecedor_id=pedido.fornecedor_id,
             pedido_compra_id=pedido.id,
             numero_documento=f'PC-{numero_pedido}',
@@ -244,11 +248,14 @@ def obter_pedido(pedido_id):
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
-        pedido = PedidoCompra.query.filter_by(
-            id=pedido_id,
-            estabelecimento_id=user.estabelecimento_id
-        ).options(
+        query = PedidoCompra.query.filter_by(id=pedido_id)
+        if estab_id and str(estab_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estab_id)
+            
+        pedido = query.options(
             joinedload(PedidoCompra.fornecedor),
             joinedload(PedidoCompra.funcionario),
             joinedload(PedidoCompra.itens).joinedload(PedidoCompraItem.produto)
@@ -284,13 +291,15 @@ def receber_pedido_compra():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
         data = request.get_json()
         pedido_id = data.get('pedido_id')
         
         pedido = PedidoCompra.query.filter_by(
             id=pedido_id,
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).first()
         
         if not pedido:
@@ -346,7 +355,7 @@ def receber_pedido_compra():
                 numero_lote = item_data.get('numero_lote') or f"LOTE-{pedido.numero_pedido}-{item.id}"
                 
                 lote = ProdutoLote(
-                    estabelecimento_id=user.estabelecimento_id,
+                    estabelecimento_id=estab_id,
                     produto_id=produto.id,
                     fornecedor_id=pedido.fornecedor_id,
                     pedido_compra_id=pedido.id,
@@ -401,7 +410,7 @@ def receber_pedido_compra():
 
         # Conta a pagar: usar a criada na emissão do pedido ou criar se recebimento pedir boleto
         conta_existente = getattr(pedido, 'conta_pagar', None) or (
-            ContaPagar.query.filter_by(pedido_compra_id=pedido.id, estabelecimento_id=user.estabelecimento_id).first()
+            ContaPagar.query.filter_by(pedido_compra_id=pedido.id, estabelecimento_id=estab_id).first()
         )
         if conta_existente:
             # Atualizar valor com o total realmente recebido (pode diferir do pedido)
@@ -423,7 +432,7 @@ def receber_pedido_compra():
                 data_vencimento = datetime.strptime(data_vencimento_str, '%Y-%m-%d').date()
 
             conta_pagar = ContaPagar(
-                estabelecimento_id=user.estabelecimento_id,
+                estabelecimento_id=estab_id,
                 fornecedor_id=pedido.fornecedor_id,
                 pedido_compra_id=pedido.id,
                 numero_documento=data.get('numero_documento', f'BOL-{pedido.numero_pedido}'),
@@ -459,10 +468,12 @@ def devolver_pedido_compra(pedido_id):
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
             
         pedido = PedidoCompra.query.filter_by(
             id=pedido_id,
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).first()
         
         if not pedido:
@@ -476,7 +487,7 @@ def devolver_pedido_compra(pedido_id):
         pedido.observacoes = f"{pedido.observacoes or ''}\n[Devolução Total registrada em {date.today().strftime('%d/%m/%Y')} por {user.nome}]"
         
         # Cancela qualquer conta a pagar que já pudesse ter sido criada para ele
-        contas = ContaPagar.query.filter_by(pedido_compra_id=pedido.id, estabelecimento_id=user.estabelecimento_id).all()
+        contas = ContaPagar.query.filter_by(pedido_compra_id=pedido.id, estabelecimento_id=estab_id).all()
         for conta in contas:
             if conta.status == 'aberto':
                 conta.status = 'cancelado'
@@ -500,6 +511,8 @@ def listar_boletos():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
         page = int(request.args.get('page', 1))
         per_page = min(int(request.args.get('per_page', 20)), 100)
@@ -511,7 +524,7 @@ def listar_boletos():
         apenas_vencidos = request.args.get('apenas_vencidos') == 'true'
         
         query = ContaPagar.query.filter_by(
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).options(
             joinedload(ContaPagar.fornecedor),
             joinedload(ContaPagar.pedido_compra)
@@ -557,21 +570,21 @@ def listar_boletos():
         # Estatísticas
         stats = {
             'total_aberto': db.session.query(func.sum(ContaPagar.valor_atual)).filter(
-                ContaPagar.estabelecimento_id == user.estabelecimento_id,
+                ContaPagar.estabelecimento_id == estab_id,
                 ContaPagar.status == 'aberto'
             ).scalar() or 0,
             'vencidos': db.session.query(func.count(ContaPagar.id)).filter(
-                ContaPagar.estabelecimento_id == user.estabelecimento_id,
+                ContaPagar.estabelecimento_id == estab_id,
                 ContaPagar.status == 'aberto',
                 ContaPagar.data_vencimento < date.today()
             ).scalar() or 0,
             'vence_hoje': db.session.query(func.count(ContaPagar.id)).filter(
-                ContaPagar.estabelecimento_id == user.estabelecimento_id,
+                ContaPagar.estabelecimento_id == estab_id,
                 ContaPagar.status == 'aberto',
                 ContaPagar.data_vencimento == date.today()
             ).scalar() or 0,
             'vence_7_dias': db.session.query(func.count(ContaPagar.id)).filter(
-                ContaPagar.estabelecimento_id == user.estabelecimento_id,
+                ContaPagar.estabelecimento_id == estab_id,
                 ContaPagar.status == 'aberto',
                 ContaPagar.data_vencimento.between(date.today(), date.today() + timedelta(days=7))
             ).scalar() or 0
@@ -599,10 +612,12 @@ def listar_lotes_disponiveis(produto_id):
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
         produto = Produto.query.filter_by(
             id=produto_id,
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).first()
         
         if not produto:
@@ -611,7 +626,7 @@ def listar_lotes_disponiveis(produto_id):
         # Buscar lotes ativos ordenados por data de validade (FIFO)
         lotes = ProdutoLote.query.filter_by(
             produto_id=produto_id,
-            estabelecimento_id=user.estabelecimento_id,
+            estabelecimento_id=estab_id,
             ativo=True
         ).filter(
             ProdutoLote.quantidade > 0  # Apenas lotes com quantidade disponível
@@ -655,12 +670,14 @@ def pagar_boleto(conta_id):
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
         
         data = request.get_json()
         
         conta = ContaPagar.query.filter_by(
             id=conta_id,
-            estabelecimento_id=user.estabelecimento_id
+            estabelecimento_id=estab_id
         ).first()
         
         if not conta:
@@ -682,7 +699,7 @@ def pagar_boleto(conta_id):
         
         # Criar despesa correspondente
         despesa = Despesa(
-            estabelecimento_id=user.estabelecimento_id,
+            estabelecimento_id=estab_id,
             fornecedor_id=conta.fornecedor_id,
             descricao=f'Pagamento {conta.numero_documento} - {conta.fornecedor.nome_fantasia if conta.fornecedor else "Fornecedor"}',
             categoria='Fornecedores',

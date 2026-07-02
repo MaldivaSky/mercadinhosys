@@ -93,6 +93,20 @@ def _check_resource(user: Funcionario, resource: str) -> bool:
 # Decoradores
 # ---------------------------------------------------------------------------
 
+def _enforce_impersonation_readonly(user: Funcionario):
+    """Bloqueia mutações se o Super Admin estiver espelhando um tenant."""
+    if not getattr(user, "is_super_admin", False):
+        return None
+    
+    impersonated_id = request.headers.get("X-Impersonate-Tenant-Id")
+    if impersonated_id and str(impersonated_id).lower() != "all":
+        if request.method in ["POST", "PUT", "PATCH", "DELETE"]:
+            return jsonify({
+                "success": False, 
+                "error": "Acesso de somente leitura. Como Super Admin espelhando um cliente, você não pode alterar os dados dele."
+            }), 403
+    return None
+
 def nivel_required(nivel_minimo: int):
     """
     Exige que o usuário tenha nível <= nivel_minimo.
@@ -115,6 +129,11 @@ def nivel_required(nivel_minimo: int):
                         "success": False,
                         "error": f"Acesso negado. Necessário nível {nivel_minimo} ({label_minimo}) ou superior."
                     }), 403
+
+                # Trava global de impersonation
+                readonly_err = _enforce_impersonation_readonly(user)
+                if readonly_err:
+                    return readonly_err
 
                 request.current_user = user
                 return f(*args, **kwargs)
@@ -147,6 +166,11 @@ def resource_required(resource: str):
                         "success": False,
                         "error": f"Acesso negado. O cargo '{label}' não tem permissão para '{resource}'."
                     }), 403
+
+                # Trava global de impersonation
+                readonly_err = _enforce_impersonation_readonly(user)
+                if readonly_err:
+                    return readonly_err
 
                 request.current_user = user
                 return f(*args, **kwargs)
@@ -185,6 +209,12 @@ def super_admin_required(f):
             from app.utils.auth_utils import normalize_status, is_user_active
             if not is_user_active(normalize_status(getattr(user, "status", "ativo"))):
                 return jsonify({"success": False, "error": "Conta suspensa"}), 403
+            
+            # Trava global de impersonation
+            readonly_err = _enforce_impersonation_readonly(user)
+            if readonly_err:
+                return readonly_err
+
             request.current_user = user
             request.is_super_admin = True
             return f(*args, **kwargs)
@@ -245,6 +275,12 @@ def role_required(*allowed_roles):
                 from app.utils.auth_utils import normalize_status, is_user_active
                 if not is_user_active(normalize_status(getattr(user, "status", "ativo"))):
                     return jsonify({"success": False, "error": "Conta suspensa"}), 403
+                
+                # Trava global de impersonation
+                readonly_err = _enforce_impersonation_readonly(user)
+                if readonly_err:
+                    return readonly_err
+
                 if user.is_super_admin:
                     request.current_user = user
                     return f(*args, **kwargs)

@@ -1847,8 +1847,14 @@ def toggle_ativo_produto(id):
         user = get_current_user()
         if not user:
             return jsonify({"error": "Usuário não encontrado"}), 404
+        from app.utils.query_helpers import get_authorized_establishment_id
+        estab_id = get_authorized_establishment_id()
+        
+        query_prod = Produto.query.filter_by(id=id)
+        if estab_id and str(estab_id).lower() != 'all':
+            query_prod = query_prod.filter_by(estabelecimento_id=estab_id)
             
-        produto = Produto.query.filter_by(id=id, estabelecimento_id=user.estabelecimento_id).first()
+        produto = query_prod.first()
         if not produto:
             return jsonify({"error": "Produto não encontrado"}), 404
             
@@ -4208,9 +4214,10 @@ def obter_vendas_historico(id):
         estabelecimento_id = get_authorized_establishment_id()
         
         # Verificar se produto existe e pertence ao estabelecimento
-        produto = Produto.query.filter_by(
-            id=id, estabelecimento_id=estabelecimento_id
-        ).first_or_404()
+        query_prod = Produto.query.filter_by(id=id)
+        if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
+            query_prod = query_prod.filter_by(estabelecimento_id=estabelecimento_id)
+        produto = query_prod.first_or_404()
         
         # Calcular data de 90 dias atrás
         from datetime import datetime, timedelta
@@ -4220,7 +4227,7 @@ def obter_vendas_historico(id):
         # Agregar por data usando func.date() que é mais compatível
         from sqlalchemy.orm import joinedload, aliased
         
-        vendas_por_dia = (
+        query_vendas = (
             db.session.query(
                 func.date(Venda.data_venda).label('data'),
                 func.sum(VendaItem.quantidade).label('quantidade_total'),
@@ -4230,10 +4237,16 @@ def obter_vendas_historico(id):
             .join(Venda, VendaItem.venda_id == Venda.id)
             .filter(
                 VendaItem.produto_id == id,
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.status == 'finalizada',
                 Venda.data_venda >= data_inicio
             )
+        )
+        
+        if estabelecimento_id and str(estabelecimento_id).lower() != 'all':
+            query_vendas = query_vendas.filter(Venda.estabelecimento_id == estabelecimento_id)
+            
+        vendas_por_dia = (
+            query_vendas
             .group_by(func.date(Venda.data_venda))
             .order_by(func.date(Venda.data_venda).asc())
             .all()
