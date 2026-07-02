@@ -212,6 +212,7 @@ const SystemMonitorPage: React.FC = () => {
         if (type.includes('despesa')) return <DollarSign className="text-red-500" size={20} />;
         if (type.includes('estoque')) return <Activity className="text-amber-500" size={20} />;
         if (type.includes('caixa')) return <DollarSign className="text-indigo-500" size={20} />;
+        if (type.includes('ponto')) return <Clock className="text-cyan-500" size={20} />;
 
         switch (type) {
             case 'venda_finalizada': return <ShoppingBag className="text-green-500" size={20} />;
@@ -398,6 +399,8 @@ const SystemMonitorPage: React.FC = () => {
                                 <option value="despesa">Financeiro / Despesas</option>
                                 <option value="pedido_compra">Compras</option>
                                 <option value="estabelecimento_registrado">Onboarding</option>
+                                <option value="ponto">RH / Ponto</option>
+                                <option value="funcionario">Funcionários</option>
                             </select>
                         </div>
                     )}

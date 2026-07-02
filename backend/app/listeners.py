@@ -65,10 +65,11 @@ def registrar_evento_forense(mapper, connection, target, operacao):
     if isinstance(target, (Auditoria, AuditoriaSincronia)):
         return
 
-    # Só processa se a tabela estiver na lista de sincronizáveis ou monitoradas
+    # O DONO DO SAAS solicitou ver TODOS os logs do sistema.
+    # Portanto, comentamos o early return que impedia tabelas não-monitoradas de gerarem log.
     tabela = target.__tablename__
-    if tabela not in TABELAS_SINCRONIZAVEIS and tabela not in TABELAS_MONITOR_MASTER:
-        return
+    # if tabela not in TABELAS_SINCRONIZAVEIS and tabela not in TABELAS_MONITOR_MASTER:
+    #     return
 
     # 1. Resolução de Estabelecimento ID com Precisão de Auditoria
     estabelecimento_id = getattr(target, 'estabelecimento_id', None)
