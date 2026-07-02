@@ -1840,6 +1840,36 @@ def deletar_produto(id):
         )
 
 
+@produtos_bp.route("/<int:id>/toggle-ativo", methods=["PATCH"])
+@funcionario_required
+def toggle_ativo_produto(id):
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({"error": "Usuário não encontrado"}), 404
+            
+        produto = Produto.query.filter_by(id=id, estabelecimento_id=user.estabelecimento_id).first()
+        if not produto:
+            return jsonify({"error": "Produto não encontrado"}), 404
+            
+        data = request.get_json()
+        if "ativo" not in data:
+            return jsonify({"error": "O campo 'ativo' é obrigatório"}), 400
+            
+        novo_status = bool(data["ativo"])
+        produto.ativo = novo_status
+        db.session.commit()
+        
+        status_str = "ativado" if novo_status else "inativado"
+        return jsonify({
+            "message": f"Produto {status_str} com sucesso",
+            "produto": produto.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 @produtos_bp.route("/<int:id>/estoque", methods=["POST"])
 @funcionario_required
 def ajustar_estoque(id):

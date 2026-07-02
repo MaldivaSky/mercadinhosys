@@ -252,6 +252,27 @@ export default function ProductHubPage() {
                     Editar Produto
                 </button>
                 <button 
+                    onClick={async () => {
+                        const confirmMsg = produto.ativo 
+                            ? 'Deseja realmente inativar este produto? Ele não aparecerá nas listagens padrão.' 
+                            : 'Deseja reativar este produto?';
+                        if (window.confirm(confirmMsg)) {
+                            try {
+                                await productsService.toggleProductStatus(produto.id, !produto.ativo);
+                                showToast.success(produto.ativo ? 'Produto inativado com sucesso.' : 'Produto reativado com sucesso.');
+                                fetchHubData();
+                            } catch (e) {
+                                showToast.error('Erro ao alterar status do produto.');
+                            }
+                        }
+                    }}
+                    className="btn-secondary" 
+                    style={{ background: produto.ativo ? '#fff1f2' : '#f0fdf4', color: produto.ativo ? '#be123c' : '#15803d', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold', border: `1px solid ${produto.ativo ? '#fecdd3' : '#bbf7d0'}` }}
+                >
+                    {produto.ativo ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
+                    {produto.ativo ? 'Inativar Produto' : 'Reativar Produto'}
+                </button>
+                <button 
                     onClick={() => navigate('/products', { state: { openHistoryFor: produto.id, returnTo: `/products/${produto.id}` } })}
                     className="btn-primary" 
                     style={{ background: '#4f46e5', color: 'white', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px', fontWeight: 'bold' }}
@@ -437,35 +458,47 @@ export default function ProductHubPage() {
                     
                     <div className="supplier-list">
                         {/* Lista de Fornecedores baseada nos lotes */}
-                        {lotes && lotes.length > 0 ? (
-                            lotes.map((lote: any, idx: number) => {
-                                if (!lote.fornecedor) return null;
-                                return (
-                                    <div 
-                                        key={idx}
-                                        className="supplier-item best-price" 
-                                        style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid transparent', marginBottom: '8px' }}
-                                        onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                                        onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
-                                        onClick={() => navigate(`/suppliers/${lote.fornecedor.id}`)}
-                                    >
-                                        <div className="supplier-info">
-                                            <span className="supplier-name">{lote.fornecedor.nome_fantasia || lote.fornecedor.razao_social}</span>
-                                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
-                                                Lote: {lote.numero_lote} | Qtd: {lote.quantidade}
+                        {(() => {
+                            const lotesForRadar = lotes && lotes.length > 0 ? lotes : [];
+                            if (lotesForRadar.length === 0 && produto?.fornecedor) {
+                                lotesForRadar.push({
+                                    fornecedor: produto.fornecedor,
+                                    numero_lote: 'Padrão (Cadastro Inicial)',
+                                    quantidade: produto.quantidade || 0,
+                                    preco_custo_unitario: produto.preco_custo
+                                });
+                            }
+
+                            return lotesForRadar.length > 0 ? (
+                                lotesForRadar.map((lote: any, idx: number) => {
+                                    if (!lote.fornecedor) return null;
+                                    return (
+                                        <div 
+                                            key={idx}
+                                            className="supplier-item best-price" 
+                                            style={{ cursor: 'pointer', transition: 'all 0.2s ease', border: '1px solid transparent', marginBottom: '8px' }}
+                                            onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                            onMouseOut={(e) => e.currentTarget.style.borderColor = 'transparent'}
+                                            onClick={() => navigate(`/suppliers/${lote.fornecedor.id}`)}
+                                        >
+                                            <div className="supplier-info">
+                                                <span className="supplier-name">{lote.fornecedor.nome_fantasia || lote.fornecedor.razao_social}</span>
+                                                <div style={{ display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
+                                                    Lote: {lote.numero_lote} | Qtd: {lote.quantidade}
+                                                </div>
+                                            </div>
+                                            <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
+                                                <span className="supplier-price">{formatCurrency(lote.preco_custo_unitario)}</span>
                                             </div>
                                         </div>
-                                        <div className="supplier-metrics" style={{ alignSelf: 'center', textAlign: 'right' }}>
-                                            <span className="supplier-price">{formatCurrency(lote.preco_custo_unitario)}</span>
-                                        </div>
-                                    </div>
-                                );
-                            }).filter(Boolean)
-                        ) : (
-                            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
-                                Nenhum fornecedor registrado nos lotes.
-                            </div>
-                        )}
+                                    );
+                                }).filter(Boolean)
+                            ) : (
+                                <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '8px' }}>
+                                    Nenhum fornecedor registrado.
+                                </div>
+                            );
+                        })()}
                         
                         {pedidos_pendentes && pedidos_pendentes.length > 0 && (
                             <div style={{ marginTop: '16px', padding: '12px', background: '#fff7ed', borderRadius: '8px', border: '1px solid #ffedd5' }}>

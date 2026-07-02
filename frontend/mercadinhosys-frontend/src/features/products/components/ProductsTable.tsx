@@ -161,7 +161,14 @@ export const ProductsTable: React.FC<ProductsTableProps> = ({
                                 }
                             }}>
                                 <td className="px-5 py-3">
-                                    <div className="font-semibold text-slate-200">{produto.nome}</div>
+                                    <div className="font-semibold text-slate-200">
+                                        {produto.nome}
+                                        {produto.ativo === false && (
+                                            <span className="ml-2 px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] uppercase tracking-wider font-bold">
+                                                Inativo
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
                                         <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{produto.categoria}</span>
                                         {produto.codigo_barras && <span>{produto.codigo_barras}</span>}

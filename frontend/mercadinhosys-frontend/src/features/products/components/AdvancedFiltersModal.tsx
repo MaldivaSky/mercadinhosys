@@ -161,10 +161,28 @@ const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
 
           <hr className="border-slate-100 dark:border-slate-800" />
 
-          {/* Ordenação */}
+          {/* Status e Ordenação */}
           <div>
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Ordenação de Exibição</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Status do Produto */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status do Produto</label>
+                <select 
+                  value={filtros.ativos === true ? 'ativos' : (filtros.ativos === false ? 'inativos' : 'todos')} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'ativos') handleChange('ativos', true);
+                    else if (val === 'inativos') handleChange('ativos', false);
+                    else handleChange('ativos', undefined);
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+                >
+                  <option value="ativos">Apenas Ativos</option>
+                  <option value="inativos">Apenas Inativos</option>
+                  <option value="todos">Todos (Ativos e Inativos)</option>
+                </select>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Critério</label>
                 <select 

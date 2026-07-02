@@ -448,6 +448,50 @@ def receber_pedido_compra():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@pedidos_compra_bp.route('/<int:pedido_id>/devolver', methods=['POST'])
+@funcionario_required
+def devolver_pedido_compra(pedido_id):
+    """
+    Recusa/Devolve um pedido de compra inteiro na doca.
+    O pedido muda para status 'devolvido', cancelando qualquer cobrança atrelada gerada previamente.
+    """
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Usuário não encontrado'}), 404
+            
+        pedido = PedidoCompra.query.filter_by(
+            id=pedido_id,
+            estabelecimento_id=user.estabelecimento_id
+        ).first()
+        
+        if not pedido:
+            return jsonify({'error': 'Pedido não encontrado'}), 404
+            
+        if pedido.status != 'pendente':
+            return jsonify({'error': f'Apenas pedidos pendentes podem ser devolvidos. Status atual: {pedido.status}'}), 400
+            
+        # Marca o pedido como devolvido
+        pedido.status = 'devolvido'
+        pedido.observacoes = f"{pedido.observacoes or ''}\n[Devolução Total registrada em {date.today().strftime('%d/%m/%Y')} por {user.nome}]"
+        
+        # Cancela qualquer conta a pagar que já pudesse ter sido criada para ele
+        contas = ContaPagar.query.filter_by(pedido_compra_id=pedido.id, estabelecimento_id=user.estabelecimento_id).all()
+        for conta in contas:
+            if conta.status == 'aberto':
+                conta.status = 'cancelado'
+                conta.observacoes = f"{conta.observacoes or ''} (Cancelado devido à devolução total do pedido na doca)"
+                
+        db.session.commit()
+        return jsonify({
+            'message': 'Pedido devolvido/recusado com sucesso.',
+            'pedido': pedido.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @pedidos_compra_bp.route('/boletos-fornecedores/', methods=['GET'])
 @funcionario_required
 def listar_boletos():

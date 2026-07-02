@@ -123,6 +123,12 @@ export const productsService = {
         const response = await apiClient.get<any>('/produtos/alertas');
         return response.data.alertas || [];
     },
+
+    toggleProductStatus: async (id: number, ativo: boolean): Promise<any> => {
+        const response = await apiClient.patch<any>(`/produtos/${id}/toggle-ativo`, { ativo });
+        return response.data;
+    },
+
     // ==================== CATEGORIAS E RELATÓRIOS ====================
     getCategorias: async (ativos = true): Promise<{ categorias: string[]; total_categorias: number }> => {
         const response = await apiClient.get<any>('/produtos/categorias', {

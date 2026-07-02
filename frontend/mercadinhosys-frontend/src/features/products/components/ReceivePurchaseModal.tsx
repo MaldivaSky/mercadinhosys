@@ -198,6 +198,23 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
     }, 0);
   };
 
+  const handleDevolver = async () => {
+    if (window.confirm('ATENÇÃO: Você está prestes a DEVOLVER (recusar) este pedido por completo. Ele será marcado como devolvido e não entrará no estoque. Deseja continuar?')) {
+      setLoading(true);
+      try {
+        await purchaseOrderService.devolverPedido(pedido.id);
+        showToast.success('Pedido devolvido com sucesso!');
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 1500);
+      } catch (error) {
+        showToast.error('Erro ao devolver pedido.');
+        setLoading(false);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -627,31 +644,43 @@ const ReceivePurchaseModal: React.FC<ReceivePurchaseModalProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="flex-shrink-0 flex justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700" style={{ paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
+            <div className="flex-shrink-0 flex justify-between gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700" style={{ paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))' }}>
               <button
                 type="button"
-                onClick={onClose}
-                className="px-3 sm:px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                onClick={handleDevolver}
+                disabled={loading}
+                className="px-3 sm:px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 font-medium rounded-lg transition-colors flex items-center gap-2 border border-transparent hover:border-red-200 dark:hover:border-red-800"
               >
-                Cancelar
+                <AlertCircle className="w-4 h-4" />
+                Devolver Pedido
               </button>
-              <button
-                type="submit"
-                disabled={loading || itensRecebimento.every(item => !item.conferido || item.quantidade_recebida === 0)}
-                className="px-4 sm:px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Processando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Confirmar
-                  </>
-                )}
-              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3 sm:px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || itensRecebimento.every(item => !item.conferido || item.quantidade_recebida === 0)}
+                  className="px-4 sm:px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Confirmar Recebimento
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         )}

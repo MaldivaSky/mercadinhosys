@@ -154,6 +154,14 @@ class PurchaseOrderService {
     return response.data;
   }
 
+  async devolverPedido(pedidoId: number) {
+    const response = await apiClient.post<{
+      message: string;
+      pedido: PedidoCompra;
+    }>(`/pedidos-compra/${pedidoId}/devolver`);
+    return response.data;
+  }
+
   // ==================== BOLETOS DE FORNECEDORES ====================
 
   async listarBoletos(params?: {
