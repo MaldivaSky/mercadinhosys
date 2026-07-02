@@ -1282,12 +1282,12 @@ def listar_compras_cliente(id):
 
         # Verificar se cliente existe
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         # Query de vendas
         query = Venda.query.filter_by(
-            cliente_id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            cliente_id=id, estabelecimento_id=estabelecimento_id
         )
 
         if status:
@@ -1333,7 +1333,7 @@ def listar_compras_cliente(id):
             db.session.query(db.func.sum(Venda.total))
             .filter(
                 Venda.cliente_id == id,
-                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
+                Venda.estabelecimento_id == estabelecimento_id,
             )
             .scalar()
             or 0
@@ -1435,7 +1435,7 @@ def exportar_clientes():
 
         # Buscar clientes
         query = Cliente.query.filter_by(
-            estabelecimento_id=jwt_data.get("estabelecimento_id")
+            estabelecimento_id=estabelecimento_id
         )
 
         if apenas_ativos:
@@ -1690,7 +1690,7 @@ def curva_compras():
                 db.func.sum(Venda.total).label("total"),
             )
             .filter(
-                Venda.estabelecimento_id == jwt_data.get("estabelecimento_id"),
+                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= meses[-1],
                 Venda.status == "finalizada",
             )
@@ -1761,7 +1761,7 @@ def relatorio_analitico_clientes():
 
         # Query base de clientes
         query = Cliente.query.filter_by(
-            estabelecimento_id=jwt_data.get("estabelecimento_id"), ativo=True
+            estabelecimento_id=estabelecimento_id, ativo=True
         )
 
         if classificacao:
@@ -1783,7 +1783,7 @@ def relatorio_analitico_clientes():
             # Vendas do cliente no período
             vendas_query = Venda.query.filter_by(
                 cliente_id=cliente.id,
-                estabelecimento_id=jwt_data.get("estabelecimento_id"),
+                estabelecimento_id=estabelecimento_id,
                 status="finalizada",
             )
 

@@ -913,14 +913,21 @@ def criar_venda():
 def obter_venda(venda_id):
     try:
         estabelecimento_id = get_authorized_establishment_id()
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).options(
+        query = Venda.query.filter_by(id=venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
+            
+        venda = query.options(
             db.joinedload(Venda.itens),
             db.joinedload(Venda.cliente),
             db.joinedload(Venda.funcionario),
             db.selectinload(Venda.pagamentos),
         ).first_or_404()
 
-        movimentacoes = MovimentacaoEstoque.query.filter_by(venda_id=venda_id, estabelecimento_id=estabelecimento_id).all()
+        mov_query = MovimentacaoEstoque.query.filter_by(venda_id=venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            mov_query = mov_query.filter_by(estabelecimento_id=estabelecimento_id)
+        movimentacoes = mov_query.all()
 
         return jsonify({"venda": {
             "id": venda.id,
@@ -1069,7 +1076,10 @@ def cancelar_venda(venda_id):
         motivo = data.get("motivo", "Cancelamento solicitado pelo usuário")
         funcionario_id = data.get("funcionario_id", 1)
 
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).options(db.joinedload(Venda.itens)).first_or_404()
+        query = Venda.query.filter_by(id=venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
+        venda = query.options(db.joinedload(Venda.itens)).first_or_404()
         if venda.status == "cancelada":
             return jsonify({"error": "Esta venda já está cancelada"}), 400
 
@@ -1206,7 +1216,10 @@ def exportar_vendas():
 def comprovante_venda(venda_id):
     try:
         estabelecimento_id = get_authorized_establishment_id()
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id).first_or_404()
+        query = Venda.query.filter_by(id=venda_id)
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
+        venda = query.first_or_404()
         itens = VendaItem.query.filter_by(venda_id=venda.id).all()
         cliente_nome = venda.cliente.nome if venda.cliente else "Consumidor Final"
         func_nome = venda.funcionario.nome if venda.funcionario else "N/A"
@@ -1296,7 +1309,10 @@ def adicionar_item_pdv(venda_id):
         quantidade = data.get("quantidade", 1)
         if not produto_id:
             return jsonify({"error": "Produto é obrigatório"}), 400
-        venda = Venda.query.filter_by(id=venda_id, estabelecimento_id=estabelecimento_id, status="em_andamento").first_or_404()
+        query = Venda.query.filter_by(id=venda_id, status="em_andamento")
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter_by(estabelecimento_id=estabelecimento_id)
+        venda = query.first_or_404()
         produto = Produto.query.filter_by(id=produto_id, estabelecimento_id=estabelecimento_id).first_or_404()
         if float(produto.quantidade or 0) < quantidade:
             return jsonify({"error": f"Estoque insuficiente. Disponível: {produto.quantidade}"}), 400

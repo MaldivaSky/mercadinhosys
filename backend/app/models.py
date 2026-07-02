@@ -720,13 +720,18 @@ class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
         return "Regular"
 
     @classmethod
-    def calcular_rfm(cls, estabelecimento_id: int, days: int = 180) -> Dict[str, Any]:
+    def calcular_rfm(cls, estabelecimento_id, days: int = 180) -> Dict[str, Any]:
         days = int(days) if days else 180
         if days <= 0: days = 180
         data_inicio = utcnow() - timedelta(days=days)
-        rows = db.session.query(Venda.cliente_id, func.count(Venda.id), func.coalesce(func.sum(Venda.total), 0), func.max(Venda.data_venda))\
-            .filter(Venda.estabelecimento_id == estabelecimento_id, Venda.data_venda >= data_inicio, Venda.status == "finalizada", Venda.cliente_id.isnot(None))\
-            .group_by(Venda.cliente_id).all()
+        
+        query = db.session.query(Venda.cliente_id, func.count(Venda.id), func.coalesce(func.sum(Venda.total), 0), func.max(Venda.data_venda))\
+            .filter(Venda.data_venda >= data_inicio, Venda.status == "finalizada", Venda.cliente_id.isnot(None))
+            
+        if str(estabelecimento_id).lower() != 'all':
+            query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+            
+        rows = query.group_by(Venda.cliente_id).all()
         now = utcnow()
         metrics = []
         for r in rows:

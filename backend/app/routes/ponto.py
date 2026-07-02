@@ -317,7 +317,7 @@ def registrar_ponto():
         try:
             Auditoria.registrar(
                 estabelecimento_id=funcionario.estabelecimento_id,
-                funcionario_id=funcionario.id,
+                usuario_id=funcionario.id,
                 tipo_evento='Bateu Ponto',
                 descricao=f"Funcionário {funcionario.nome} bateu ponto ({tipo_registro}) às {hora_atual.strftime('%H:%M')}."
             )
