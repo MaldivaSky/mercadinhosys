@@ -81,17 +81,17 @@ def register_commands(app):
                       .all())
 
             if not orfaos:
-                click.echo("✅ Nenhum pedido órfão (todos têm itens).")
+                click.echo("[OK] Nenhum pedido orfao (todos tem itens).")
                 return
 
             click.echo(f"{'[DRY-RUN] ' if not apply else ''}Pedidos SEM itens encontrados: {len(orfaos)}")
             removidos, contas_removidas, preservados = 0, 0, 0
             for p in orfaos:
                 if str(p.status).lower() == "recebido":
-                    click.echo(f"  • {p.numero_pedido}: PRESERVADO (status=recebido)")
+                    click.echo(f"  - {p.numero_pedido}: PRESERVADO (status=recebido)")
                     preservados += 1
                     continue
-                click.echo(f"  • {p.numero_pedido} (loja {p.estabelecimento_id}, total {p.total}) → remover")
+                click.echo(f"  - {p.numero_pedido} (loja {p.estabelecimento_id}, total {p.total}) -> remover")
                 if apply:
                     conta = ContaPagar.query.filter_by(pedido_compra_id=p.id).first()
                     if conta and str(conta.status).lower() == "aberto":
@@ -102,6 +102,6 @@ def register_commands(app):
 
             if apply:
                 db.session.commit()
-                click.echo(f"🗑️  Removidos: {removidos} pedidos, {contas_removidas} contas a pagar. Preservados: {preservados}.")
+                click.echo(f"[LIMPO] Removidos: {removidos} pedidos, {contas_removidas} contas a pagar. Preservados: {preservados}.")
             else:
-                click.echo("→ Rode com --apply para efetivar a limpeza.")
+                click.echo("-> Rode com --apply para efetivar a limpeza.")
