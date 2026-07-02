@@ -95,12 +95,15 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
         try {
           const response = await apiClient.get<{ produtos: Produto[] }>('/produtos/', {
             params: {
+              // Nomes de parâmetro conforme o backend (listar_produtos): por_pagina/ativo.
+              // 'busca' casa por nome E por código de barras, então digitar/escanear
+              // um EAN neste campo já encontra o produto existente.
               busca: searchProduto,
-              per_page: 20,
-              ativos: true
+              por_pagina: 20,
+              ativo: true,
             }
           });
-          setProdutos(response.data.produtos);
+          setProdutos(response.data.produtos || []);
         } catch (error) {
           console.error('Erro ao buscar produtos:', error);
         }
