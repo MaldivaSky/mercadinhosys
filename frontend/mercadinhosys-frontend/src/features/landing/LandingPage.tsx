@@ -6,21 +6,16 @@ import {
     ShieldCheck,
     MessageCircle,
     Star,
-    Lock,
     Mail,
     Phone,
     User,
     ArrowRight,
     TrendingUp,
     Check,
-    CheckCircle,
     Truck,
     Receipt,
     FileUp,
-    Award,
     X,
-    MapPin,
-    Briefcase,
     DollarSign,
     Zap,
     Globe
@@ -28,7 +23,6 @@ import {
 import { motion } from 'framer-motion';
 import { showToast } from '../../utils/toast';
 import { API_CONFIG } from '../../api/apiConfig';
-import { SplashLoading } from '../../components/common/SplashLoading';
 
 const LandingPage: React.FC = () => {
     const navigate = useNavigate();
