@@ -1,12 +1,15 @@
 // src/features/products/components/PurchaseOrderModal.tsx
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2, Package, Save } from 'lucide-react';
+import { X, Trash2, Package, Save, Camera, Barcode, Cloud, Loader2 } from 'lucide-react';
 import { Fornecedor, Produto } from '../../../types';
 import { CreatePedidoData, purchaseOrderService } from '../purchaseOrderService';
+import { productsService } from '../productsService';
+import { cosmosService } from '../../../services/cosmosService';
 import { apiClient } from '../../../api/apiClient';
 import { formatCurrency } from '../../../utils/formatters';
 import { showToast } from '../../../utils/toast';
+import BarcodeScanner from '../../pdv/components/BarcodeScanner';
 
 interface PurchaseOrderModalProps {
   isOpen: boolean;
@@ -38,6 +41,13 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [searchProduto, setSearchProduto] = useState('');
   const [condicoesPagamento, setCondicoesPagamento] = useState<{nome: string, tipo: string, dias_prazo: number}[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  // EAN digitado/escaneado que não existe no nosso banco → oferece cadastro via COSMOS
+  const [eanNaoEncontrado, setEanNaoEncontrado] = useState<string | null>(null);
+  const [buscandoCosmos, setBuscandoCosmos] = useState(false);
+  const [scannerAberto, setScannerAberto] = useState(false);
+
+  const ehEAN = (v: string) => /^\d{8,14}$/.test(v.trim());
 
   // Form data
   const [formData, setFormData] = useState({
@@ -88,32 +98,86 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
     }
   }, [isOpen, initialProduct, initialSupplierId]);
 
-  // Buscar produtos
+  // Buscar produtos (mesmo mecanismo do PDV: busca local por nome/código de barras;
+  // se for um EAN e não existir no nosso banco, oferece cadastrar puxando da COSMOS).
   useEffect(() => {
-    if (searchProduto.length >= 2) {
-      const timer = setTimeout(async () => {
-        try {
-          const response = await apiClient.get<{ produtos: Produto[] }>('/produtos/', {
-            params: {
-              // Nomes de parâmetro conforme o backend (listar_produtos): por_pagina/ativo.
-              // 'busca' casa por nome E por código de barras, então digitar/escanear
-              // um EAN neste campo já encontra o produto existente.
-              busca: searchProduto,
-              por_pagina: 20,
-              ativo: true,
-            }
-          });
-          setProdutos(response.data.produtos || []);
-        } catch (error) {
-          console.error('Erro ao buscar produtos:', error);
-        }
-      }, 300);
-
-      return () => clearTimeout(timer);
-    } else {
+    const termo = searchProduto.trim();
+    setEanNaoEncontrado(null);
+    if (termo.length < 2) {
       setProdutos([]);
+      return;
     }
+    const timer = setTimeout(async () => {
+      setBuscando(true);
+      try {
+        const response = await apiClient.get<{ produtos: Produto[] }>('/produtos/', {
+          params: {
+            // Params conforme o backend (listar_produtos): por_pagina/ativo.
+            // 'busca' casa por NOME e por CÓDIGO DE BARRAS.
+            busca: termo,
+            por_pagina: 20,
+            ativo: true,
+          }
+        });
+        const achados = response.data.produtos || [];
+        setProdutos(achados);
+        // EAN digitado/escaneado sem correspondência → habilita fluxo COSMOS
+        if (achados.length === 0 && ehEAN(termo)) {
+          setEanNaoEncontrado(termo);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar produtos:', error);
+      } finally {
+        setBuscando(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [searchProduto]);
+
+  // Não achou o EAN no banco → consulta COSMOS, cadastra o produto e adiciona ao pedido.
+  const cadastrarViaCosmos = async (ean: string) => {
+    setBuscandoCosmos(true);
+    try {
+      const res = await cosmosService.lookup(ean);
+      if (!res.success || !res.data) {
+        showToast.error(res.message || 'Produto não encontrado na COSMOS.');
+        return;
+      }
+      const c = res.data;
+      const precoRef = c.preco_referencia ?? 0;
+      const criado = await productsService.create({
+        nome: c.nome || `Produto ${ean}`,
+        categoria: c.categoria || 'Geral',
+        codigo_barras: ean,
+        preco_custo: precoRef || 0.01,
+        preco_venda: precoRef || 0.01,
+        marca: c.marca || undefined,
+        ncm: c.ncm || undefined,
+        quantidade: 0,
+      } as any);
+
+      // create trata 409 (já existe) devolvendo o produto existente
+      const prod = (criado.produto || (criado as any).produto_existente) as Produto | undefined;
+      if (!prod || !prod.id) {
+        showToast.error(criado.message || 'Não foi possível cadastrar o produto.');
+        return;
+      }
+      handleAddItem(prod);
+      showToast.success(`"${prod.nome}" cadastrado via ${res.source === 'catalogo' ? 'catálogo' : 'COSMOS'} e adicionado.`);
+      setSearchProduto('');
+      setEanNaoEncontrado(null);
+    } catch (e: any) {
+      showToast.error(e?.response?.data?.error || 'Falha ao cadastrar produto via COSMOS.');
+    } finally {
+      setBuscandoCosmos(false);
+    }
+  };
+
+  const handleScan = (codigo: string) => {
+    setScannerAberto(false);
+    setSearchProduto(codigo);
+  };
 
   // Calcular totais
   const subtotal = itens.reduce((sum, item) => sum + item.total_item, 0);
@@ -296,38 +360,84 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
               </div>
             </div>
 
-            {/* Busca de Produtos */}
+            {/* Busca de Produtos (nome ou código de barras; scanner + fallback COSMOS) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Adicionar Produtos
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchProduto}
-                  onChange={(e) => setSearchProduto(e.target.value)}
-                  placeholder="Digite o nome do produto para buscar..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setScannerAberto(true)}
+                  title="Escanear código de barras"
+                  className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow flex-shrink-0"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={searchProduto}
+                    onChange={(e) => setSearchProduto(e.target.value)}
+                    placeholder="Nome, marca ou código de barras (EAN)..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  {buscando && (
+                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                  )}
 
-                {produtos.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mt-1 max-h-60 overflow-y-auto z-10">
-                    {produtos.map(produto => (
-                      <button
-                        key={produto.id}
-                        type="button"
-                        onClick={() => handleAddItem(produto)}
-                        className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-600 last:border-b-0"
-                      >
-                        <div className="font-medium text-gray-800 dark:text-white">{produto.nome}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          Custo: {formatCurrency(produto.preco_custo)} | Estoque: {produto.quantidade}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {produtos.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mt-1 max-h-60 overflow-y-auto z-10">
+                      {produtos.map(produto => (
+                        <button
+                          key={produto.id}
+                          type="button"
+                          onClick={() => handleAddItem(produto)}
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-600 last:border-b-0"
+                        >
+                          <div className="font-medium text-gray-800 dark:text-white flex items-center gap-2">
+                            {produto.nome}
+                            {(produto as any).codigo_barras && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500">
+                                {(produto as any).codigo_barras}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            Custo: {formatCurrency(produto.preco_custo)} | Estoque: {produto.quantidade}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* EAN não cadastrado no nosso banco → puxar da COSMOS e cadastrar */}
+              {eanNaoEncontrado && (
+                <div className="mt-2 p-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Barcode className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        EAN {eanNaoEncontrado} não está no seu catálogo
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Consulte a COSMOS para cadastrar e adicionar ao pedido.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => cadastrarViaCosmos(eanNaoEncontrado)}
+                    disabled={buscandoCosmos}
+                    className="flex-shrink-0 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold flex items-center gap-2 disabled:opacity-60"
+                  >
+                    {buscandoCosmos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+                    {buscandoCosmos ? 'Consultando...' : 'Buscar na COSMOS'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Lista de Itens */}
@@ -493,6 +603,10 @@ const PurchaseOrderModal: React.FC<PurchaseOrderModalProps> = ({
           </div>
         </form>
       </div>
+
+      {scannerAberto && (
+        <BarcodeScanner onScan={handleScan} onClose={() => setScannerAberto(false)} />
+      )}
     </div>,
     document.body
   );
