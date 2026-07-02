@@ -67,10 +67,14 @@ def rh_dashboard():
 @funcionario_required
 @plan_required('Pro')
 def listar_justificativas():
-    """Lista justificativas de ponto com filtros opcionais."""
+    """Lista justificativas de ponto com filtros e paginação."""
     try:
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
+
+        # Paginação
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = min(request.args.get("por_pagina", 50, type=int), 200)
 
         query = JustificativaPonto.query.filter_by(
             estabelecimento_id=estabelecimento_id
@@ -98,16 +102,32 @@ def listar_justificativas():
                 JustificativaPonto.data <= datetime.strptime(data_fim, "%Y-%m-%d").date()
             )
 
-        justificativas = query.order_by(JustificativaPonto.created_at.desc()).all()
+        # Resumo agregado ANTES da paginação (sem carregar todos os objetos)
+        total = query.count()
+        from sqlalchemy import func as sqlfunc
+        resumo_raw = db.session.query(
+            JustificativaPonto.status,
+            sqlfunc.count(JustificativaPonto.id)
+        ).filter(
+            JustificativaPonto.estabelecimento_id == estabelecimento_id
+        ).group_by(JustificativaPonto.status).all()
+        resumo = {r[0]: r[1] for r in resumo_raw}
+
+        paginacao = query.order_by(JustificativaPonto.created_at.desc()).paginate(
+            page=pagina, per_page=por_pagina, error_out=False
+        )
 
         return jsonify({
             "success": True,
-            "data": [j.to_dict() for j in justificativas],
-            "total": len(justificativas),
+            "data": [j.to_dict() for j in paginacao.items],
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": paginacao.pages,
             "resumo": {
-                "pendentes": sum(1 for j in justificativas if j.status == "pendente"),
-                "aprovados": sum(1 for j in justificativas if j.status == "aprovado"),
-                "rejeitados": sum(1 for j in justificativas if j.status == "rejeitado"),
+                "pendentes": resumo.get("pendente", 0),
+                "aprovados": resumo.get("aprovado", 0),
+                "rejeitados": resumo.get("rejeitado", 0),
             },
         })
 
@@ -356,27 +376,37 @@ def criar_beneficio_funcionario():
 @funcionario_required
 @plan_required('Pro')
 def listar_banco_horas():
-    """Lista banco de horas dos funcionários."""
+    """Lista banco de horas dos funcionários com paginação."""
     try:
         from app.models import BancoHoras
-
         from app.utils.query_helpers import get_authorized_establishment_id
+        from sqlalchemy.orm import joinedload
+
         estabelecimento_id = get_authorized_establishment_id()
         funcionario_id = request.args.get("funcionario_id")
         mes_referencia = request.args.get("mes_referencia")
 
+        # Paginação
+        pagina = request.args.get("pagina", 1, type=int)
+        por_pagina = min(request.args.get("por_pagina", 50, type=int), 200)
+
+        # Usar joinedload para evitar N+1 query no bh.funcionario
         query = db.session.query(BancoHoras).join(
             Funcionario, BancoHoras.funcionario_id == Funcionario.id
         ).filter(
             Funcionario.estabelecimento_id == estabelecimento_id
-        )
+        ).options(joinedload(BancoHoras.funcionario))
 
         if funcionario_id:
             query = query.filter(BancoHoras.funcionario_id == funcionario_id)
         if mes_referencia:
             query = query.filter(BancoHoras.mes_referencia == mes_referencia)
 
-        registros = query.order_by(BancoHoras.mes_referencia.desc()).all()
+        total = query.count()
+        registros = query.order_by(BancoHoras.mes_referencia.desc()).limit(por_pagina).offset((pagina - 1) * por_pagina).all()
+
+        import math
+        total_paginas = math.ceil(total / por_pagina) if total > 0 else 1
 
         result = []
         for bh in registros:
@@ -399,7 +429,10 @@ def listar_banco_horas():
         return jsonify({
             "success": True,
             "data": result,
-            "total": len(result),
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": total_paginas,
         })
 
     except Exception as e:

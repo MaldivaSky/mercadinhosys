@@ -635,8 +635,8 @@ class FuncionarioBeneficio(db.Model, MultiTenantMixin):
     __tablename__ = "funcionario_beneficios"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False)
-    beneficio_id = db.Column(db.Integer, db.ForeignKey("beneficios.id", ondelete="CASCADE"), nullable=False)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    beneficio_id = db.Column(db.Integer, db.ForeignKey("beneficios.id", ondelete="CASCADE"), nullable=False, index=True)
     valor = db.Column(db.Numeric(19, 4), nullable=False)
     data_inicio = db.Column(db.Date, default=date.today)
     ativo = db.Column(db.Boolean, default=True)
@@ -647,7 +647,7 @@ class BancoHoras(db.Model, MultiTenantMixin):
     __tablename__ = "banco_horas"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
     mes_referencia = db.Column(db.String(7), nullable=False)
     saldo_minutos = db.Column(db.Integer, default=0)
     valor_hora_extra = db.Column(db.Numeric(19, 4), default=0)
@@ -662,8 +662,8 @@ class JustificativaPonto(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "justificativas_ponto"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False)
-    aprovador_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    aprovador_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True, index=True)
     tipo = db.Column(db.String(30), nullable=False)
     data = db.Column(db.Date, nullable=False)
     motivo = db.Column(db.Text, nullable=False)
@@ -701,9 +701,9 @@ class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
     total_compras = db.Column(db.Integer, default=0)
     valor_total_gasto = db.Column(db.Numeric(19, 4), default=0)
     ativo = db.Column(db.Boolean, default=True)
-    tabela_preco_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id"), nullable=True)
-    rota_id = db.Column(db.Integer, db.ForeignKey("rotas.id"), nullable=True)
-    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
+    tabela_preco_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id"), nullable=True, index=True)
+    rota_id = db.Column(db.Integer, db.ForeignKey("rotas.id"), nullable=True, index=True)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True, index=True)
     observacoes = db.Column(db.Text)
     data_cadastro = db.Column(db.DateTime, default=utcnow)
     data_atualizacao = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
@@ -821,8 +821,8 @@ class Produto(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Au
 
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    categoria_id = db.Column(db.Integer, db.ForeignKey("categorias_produto.id"), nullable=False)
-    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
+    categoria_id = db.Column(db.Integer, db.ForeignKey("categorias_produto.id"), nullable=False, index=True)
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), index=True)
     codigo_barras = db.Column(db.String(50))
     codigo_interno = db.Column(db.String(50))
     nome = db.Column(db.String(100), nullable=False)
@@ -1056,9 +1056,9 @@ class ProdutoLote(db.Model, MultiTenantMixin):
     __tablename__ = "produto_lotes"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False)
-    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
-    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"))
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False, index=True)
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), index=True)
+    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"), index=True)
     numero_lote = db.Column(db.String(50), nullable=False)
     quantidade = db.Column(db.Numeric(10, 3), nullable=False)
     quantidade_inicial = db.Column(db.Numeric(10, 3), nullable=False)
@@ -1135,7 +1135,7 @@ class ProdutoFoco(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "produtos_foco"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False, index=True)
     data_inicio = db.Column(db.Date, nullable=False)
     data_fim = db.Column(db.Date, nullable=False)
     meta_quantidade = db.Column(db.Integer, default=0)
@@ -1151,7 +1151,7 @@ class MetaVendedor(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "metas_vendedor"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False, index=True)
     mes = db.Column(db.Integer, nullable=False)
     ano = db.Column(db.Integer, nullable=False)
     meta_faturamento = db.Column(db.Numeric(19, 4), default=0)
@@ -1178,8 +1178,8 @@ class TabelaPrecoItem(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "tabela_preco_itens"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    tabela_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id", ondelete="CASCADE"), nullable=False)
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False)
+    tabela_id = db.Column(db.Integer, db.ForeignKey("tabelas_preco.id", ondelete="CASCADE"), nullable=False, index=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False, index=True)
     preco_venda = db.Column(db.Numeric(19, 4), nullable=False)
     preco_minimo = db.Column(db.Numeric(19, 4), nullable=False) # Para range de negociação do vendedor
     
@@ -1192,7 +1192,7 @@ class Rota(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Audit
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
     nome = db.Column(db.String(100), nullable=False) # ex: Rota Segunda-feira
-    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True, index=True)
     dia_semana = db.Column(db.Integer, nullable=True) # 0=Segunda, 6=Domingo
     ativa = db.Column(db.Boolean, default=True)
     
@@ -1202,8 +1202,8 @@ class PedidoVenda(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin
     __tablename__ = "pedidos_venda"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), nullable=False)
-    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), nullable=False, index=True)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False, index=True)
     
     codigo = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default="pendente") # pendente, aprovado, faturado, cancelado
@@ -1224,8 +1224,8 @@ class PedidoVendaItem(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "pedido_venda_itens"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos_venda.id", ondelete="CASCADE"), nullable=False)
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
+    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos_venda.id", ondelete="CASCADE"), nullable=False, index=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False, index=True)
     
     quantidade = db.Column(db.Numeric(10, 3), nullable=False)
     preco_unitario = db.Column(db.Numeric(19, 4), nullable=False)
@@ -1240,9 +1240,9 @@ class Venda(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, Audi
     __tablename__ = "vendas"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
-    caixa_id = db.Column(db.Integer, db.ForeignKey("caixas.id"), nullable=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False, index=True)
+    caixa_id = db.Column(db.Integer, db.ForeignKey("caixas.id"), nullable=True, index=True)
     codigo = db.Column(db.String(50), nullable=False)
     subtotal = db.Column(db.Numeric(19, 4), nullable=False, default=0)
     desconto = db.Column(db.Numeric(19, 4), default=0)
@@ -1286,8 +1286,8 @@ class VendaItem(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "venda_itens"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False)
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False, index=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False, index=True)
     produto_nome = db.Column(db.String(100), nullable=False)
     produto_codigo = db.Column(db.String(50))
     produto_unidade = db.Column(db.String(20))
@@ -1312,7 +1312,7 @@ class Pagamento(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "pagamentos"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False)
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id", ondelete="CASCADE"), nullable=False, index=True)
     forma_pagamento = db.Column(db.String(30), nullable=False)
     valor = db.Column(db.Numeric(19, 4), nullable=False)
     bandeira = db.Column(db.String(20))
@@ -1337,11 +1337,11 @@ class MovimentacaoEstoque(db.Model, MultiTenantMixin, SerializableMixin, AuditMi
     __tablename__ = "movimentacoes_estoque"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
-    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"))
-    lote_id = db.Column(db.Integer, db.ForeignKey("produto_lotes.id"))
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False, index=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), index=True)
+    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"), index=True)
+    lote_id = db.Column(db.Integer, db.ForeignKey("produto_lotes.id"), index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), index=True)
     tipo = db.Column(db.String(20), nullable=False)
     quantidade = db.Column(db.Numeric(10, 3), nullable=False)
     quantidade_anterior = db.Column(db.Numeric(10, 3), nullable=False)
@@ -1361,8 +1361,8 @@ class HistoricoPrecos(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "historico_precos"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False)
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id", ondelete="CASCADE"), nullable=False, index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False, index=True)
     preco_custo_anterior = db.Column(db.Numeric(19, 4), nullable=False)
     preco_venda_anterior = db.Column(db.Numeric(19, 4), nullable=False)
     margem_anterior = db.Column(db.Numeric(19, 4), nullable=False)
@@ -1395,8 +1395,8 @@ class PedidoCompra(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "pedidos_compra"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), nullable=False)
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), nullable=False, index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False, index=True)
     numero_pedido = db.Column(db.String(50), nullable=False)
     data_pedido = db.Column(db.DateTime, default=utcnow, nullable=False)
     data_previsao_entrega = db.Column(db.Date)
@@ -1419,8 +1419,8 @@ class PedidoCompraItem(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "pedido_compra_itens"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id", ondelete="CASCADE"), nullable=False)
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
+    pedido_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id", ondelete="CASCADE"), nullable=False, index=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False, index=True)
     produto_nome = db.Column(db.String(100), nullable=False)
     produto_unidade = db.Column(db.String(20), default="UN")
     quantidade_solicitada = db.Column(db.Numeric(10, 3), nullable=False)
@@ -1437,8 +1437,8 @@ class ContaPagar(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "contas_pagar"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), nullable=False)
-    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"))
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), nullable=False, index=True)
+    pedido_compra_id = db.Column(db.Integer, db.ForeignKey("pedidos_compra.id"), index=True)
     numero_documento = db.Column(db.String(50), nullable=False)
     tipo_documento = db.Column(db.String(30), default="duplicata")
     valor_original = db.Column(db.Numeric(19, 4), nullable=False)
@@ -1459,8 +1459,8 @@ class ContaReceber(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "contas_receber"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), index=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), index=True)
     numero_documento = db.Column(db.String(50), nullable=False)
     tipo_documento = db.Column(db.String(30), default="duplicata")
     valor_original = db.Column(db.Numeric(19, 4), nullable=False)
@@ -1481,7 +1481,7 @@ class Despesa(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "despesas"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), index=True)
     descricao = db.Column(db.String(255), nullable=False)
     categoria = db.Column(db.String(50), default="geral")
     tipo = db.Column(db.String(20), default="variavel")
@@ -1505,8 +1505,8 @@ class NotaFiscalEntrada(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "notas_fiscais_entrada"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"))
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+    fornecedor_id = db.Column(db.Integer, db.ForeignKey("fornecedores.id"), index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), index=True)
     chave_acesso = db.Column(db.String(44), nullable=False)
     modelo = db.Column(db.String(2), default="55")
     numero = db.Column(db.String(15))
@@ -1550,8 +1550,8 @@ class DocumentoFiscal(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "documentos_fiscais"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), index=True)
     tipo = db.Column(db.String(10), default="nfce")        # nfce | nfe
     modelo = db.Column(db.String(2), default="65")          # 65 | 55
     ambiente = db.Column(db.String(15), default="homologacao")
@@ -1614,7 +1614,7 @@ class SyncHeartbeat(db.Model):
 class LoginHistory(db.Model):
     __tablename__ = "login_history"
     id = db.Column(db.Integer, primary_key=True)
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"))
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), index=True)
     username = db.Column(db.String(100), nullable=False)
     estabelecimento_id = db.Column(db.Integer, nullable=True)
     ip_address = db.Column(db.String(45), nullable=False)
@@ -1636,7 +1636,7 @@ class Caixa(db.Model, MultiTenantMixin, SerializableMixin, AuditMixin):
     __tablename__ = "caixas"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=False, index=True)
     numero_caixa = db.Column(db.String(20), nullable=False)
     saldo_inicial = db.Column(db.Numeric(19, 4), nullable=False)
     saldo_final = db.Column(db.Numeric(19, 4))
@@ -1653,11 +1653,11 @@ class MovimentacaoCaixa(db.Model, MultiTenantMixin, SerializableMixin, AuditMixi
     __tablename__ = "movimentacoes_caixa"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    caixa_id = db.Column(db.Integer, db.ForeignKey("caixas.id", ondelete="CASCADE"), nullable=False)
+    caixa_id = db.Column(db.Integer, db.ForeignKey("caixas.id", ondelete="CASCADE"), nullable=False, index=True)
     tipo = db.Column(db.String(20), nullable=False)
     valor = db.Column(db.Numeric(19, 4), nullable=False)
     forma_pagamento = db.Column(db.String(50))
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"))
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), index=True)
     descricao = db.Column(db.String(255), nullable=False)
     observacoes = db.Column(db.Text)
     estabelecimento = db.relationship("Estabelecimento", backref=db.backref("movimentacoes_caixa", lazy=True))
@@ -1748,7 +1748,7 @@ class RegistroPonto(db.Model, MultiTenantMixin):
     __tablename__ = "registros_ponto"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
     data = db.Column(db.Date, nullable=False, default=date.today)
     hora = db.Column(db.Time, nullable=False)
     tipo_registro = db.Column(db.String(20), nullable=False)
@@ -1816,7 +1816,7 @@ class Auditoria(db.Model, MultiTenantMixin):
     __tablename__ = "auditoria"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    usuario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id"), nullable=True, index=True)
     tipo_evento = db.Column(db.String(50), nullable=False)
     descricao = db.Column(db.String(500), nullable=False)
     valor = db.Column(db.Numeric(19, 4), nullable=True)
@@ -1907,7 +1907,7 @@ class Veiculo(db.Model, MultiTenantMixin):
     __tablename__ = "veiculos"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"))
+    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"), index=True)
     placa = db.Column(db.String(8), nullable=False)
     renavam = db.Column(db.String(20))
     tipo = db.Column(db.String(30), nullable=False)
@@ -1976,11 +1976,11 @@ class Entrega(db.Model, MultiTenantMixin, SoftDeleteMixin):
     __tablename__ = "entregas"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=False)
-    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"))
-    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"))
-    veiculo_id = db.Column(db.Integer, db.ForeignKey("veiculos.id"))
-    taxa_entrega_id = db.Column(db.Integer, db.ForeignKey("taxas_entrega.id"))
+    venda_id = db.Column(db.Integer, db.ForeignKey("vendas.id"), nullable=False, index=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey("clientes.id"), index=True)
+    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"), index=True)
+    veiculo_id = db.Column(db.Integer, db.ForeignKey("veiculos.id"), index=True)
+    taxa_entrega_id = db.Column(db.Integer, db.ForeignKey("taxas_entrega.id"), index=True)
     codigo_rastreamento = db.Column(db.String(20), unique=True)
     endereco_cep = db.Column(db.String(9), nullable=False)
     endereco_logradouro = db.Column(db.String(200), nullable=False)
@@ -2047,9 +2047,9 @@ class Entrega(db.Model, MultiTenantMixin, SoftDeleteMixin):
 class EntregaItem(db.Model):
     __tablename__ = "entrega_itens"
     id = db.Column(db.Integer, primary_key=True)
-    entrega_id = db.Column(db.Integer, db.ForeignKey("entregas.id"), nullable=False)
-    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False)
-    venda_item_id = db.Column(db.Integer, db.ForeignKey("venda_itens.id"))
+    entrega_id = db.Column(db.Integer, db.ForeignKey("entregas.id"), nullable=False, index=True)
+    produto_id = db.Column(db.Integer, db.ForeignKey("produtos.id"), nullable=False, index=True)
+    venda_item_id = db.Column(db.Integer, db.ForeignKey("venda_itens.id"), index=True)
     quantidade = db.Column(db.Numeric(10, 3), nullable=False)
     quantidade_entregue = db.Column(db.Numeric(10, 3), default=0)
     status = db.Column(db.String(20), default="pendente")
@@ -2068,7 +2068,7 @@ class EntregaItem(db.Model):
 class RastreamentoEntrega(db.Model):
     __tablename__ = "rastreamento_entregas"
     id = db.Column(db.Integer, primary_key=True)
-    entrega_id = db.Column(db.Integer, db.ForeignKey("entregas.id"), nullable=False)
+    entrega_id = db.Column(db.Integer, db.ForeignKey("entregas.id"), nullable=False, index=True)
     status = db.Column(db.String(30), nullable=False)
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
@@ -2088,8 +2088,8 @@ class CustoEntrega(db.Model, MultiTenantMixin):
     __tablename__ = "custos_entrega"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = TenantID()
-    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"))
-    veiculo_id = db.Column(db.Integer, db.ForeignKey("veiculos.id"))
+    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"), index=True)
+    veiculo_id = db.Column(db.Integer, db.ForeignKey("veiculos.id"), index=True)
     tipo = db.Column(db.String(30), nullable=False)
     descricao = db.Column(db.String(255), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)

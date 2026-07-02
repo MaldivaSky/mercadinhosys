@@ -1,0 +1,38 @@
+name: Keep-Alive Backend (Anti Cold Start)
+
+# Executa a cada 5 minutos para manter o servidor Render acordado.
+# O plano gratuito do Render hiberna após ~15 min de inatividade,
+# causando um "cold start" de 30-60s na próxima requisição.
+# Este ping mantém o serviço responsivo 24/7 sem custo adicional.
+
+on:
+  schedule:
+    # Cron: a cada 5 minutos, todos os dias
+    - cron: '*/5 * * * *'
+  # Permite rodar manualmente pelo GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  ping-backend:
+    name: Ping Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Ping MercadinhoSys Backend
+        run: |
+          echo "🏥 Verificando saúde do backend em $(date '+%Y-%m-%d %H:%M:%S UTC')..."
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            --retry 2 \
+            --retry-delay 5 \
+            "https://mercadinhosys-backend.onrender.com/api/auth/health")
+          
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Backend respondeu com HTTP 200 — serviço ativo!"
+          else
+            echo "⚠️  Backend respondeu com HTTP $RESPONSE — verifique o serviço."
+            # Não falha o workflow para não gerar notificações desnecessárias
+            exit 0
+          fi
