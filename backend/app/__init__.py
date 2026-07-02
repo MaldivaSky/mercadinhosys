@@ -125,35 +125,38 @@ def create_app(config_name=None):
             runtime_db_url = runtime_db_url.replace("postgres://", "postgresql://", 1)
         app.config["SQLALCHEMY_DATABASE_URI"] = runtime_db_url
         
-        # OTIMIZAÇÃO DE ELITE: Connection Pooling para Aiven (Postgres Cloud)
-        # OTIMIZAÇÃO DE ELITE: Connection Pooling (Somente para Postgres/Aiven)
-        # Se for SQLite (Local/Docker sem env), não aplica configs de pool do Postgres
+        # Connection Pooling para Neon/Aiven (Postgres Cloud)
+        # pool_recycle DEVE ser menor que o idle_timeout do Neon (~300s / 5min).
+        # 1800s (30min) causava SSL SYSCALL error: EOF detected — conexões mortas reutilizadas.
         if "postgres" in runtime_db_url or runtime_db_url.startswith("postgresql"):
-            # Detectar se é banco local (sem SSL) ou cloud (com SSL)
-            # CRÍTICO: usar urlparse no HOSTNAME real, não string contains no URL inteiro
-            # (defaultdb contém 'db', causando falso positivo)
             from urllib.parse import urlparse as _urlparse
             _parsed_host = _urlparse(runtime_db_url).hostname or ""
             _is_local_host = _parsed_host in ("localhost", "127.0.0.1", "::1", "postgres", "db", "mercadinhosys-db")
-            
+
+            # pool_size + max_overflow enxutos: Neon free = 20 conexões; 2 workers gunicorn × 5 = 10
+            _pool_size     = int(os.environ.get("DB_POOL_SIZE", "3"))
+            _max_overflow  = int(os.environ.get("DB_MAX_OVERFLOW", "2"))
+
             app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-                "pool_size": 5,      # Aiven tem limites estritos de conexão
-                "max_overflow": 10,
-                "pool_recycle": 1800,  # 30 minutos (Aiven free tier timeout)
+                "pool_size": _pool_size,
+                "max_overflow": _max_overflow,
+                # 240s < 300s (timeout idle do Neon) — recicla ANTES do banco fechar
+                "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", "240")),
+                "pool_timeout": 30,
+                # pool_pre_ping: testa SELECT 1 antes de cada uso — 2ª linha de defesa
                 "pool_pre_ping": True,
                 "connect_args": {
-                    "connect_timeout": 30,
+                    "connect_timeout": 10,
                     "application_name": "mercadinhosys_backend",
                     "keepalives": 1,
                     "keepalives_idle": 30,
                     "keepalives_interval": 10,
                     "keepalives_count": 5,
-                    # NUNCA colocar sslmode aqui — conflita com o ?sslmode= da URL.
-                    # Aiven já tem ?sslmode=require na URL.
-                    # Para banco local Docker, usamos ?sslmode=disable na URL se necessário.
+                    # sslmode NÃO entra aqui — conflita com ?sslmode= na URL.
+                    # Neon/Aiven: sslmode=require já vem na DATABASE_URL.
                 }
             }
-            logger.info(f"[DB] Postgres detectado. Host: {_parsed_host} | SSL: {'DESATIVADO (local)' if _is_local_host else 'via URL (cloud)'}")
+            logger.info(f"[DB] Postgres detectado. Host: {_parsed_host} | pool_recycle=240s | SSL: {'DESATIVADO (local)' if _is_local_host else 'via URL (cloud)'}")
 
         for key in ["DATABASE_URL_TARGET", "DB_PRIMARY", "DATABASE_URL", "POSTGRES_URL", "AIVEN_DATABASE_URL"]:
             if os.environ.get(key):
