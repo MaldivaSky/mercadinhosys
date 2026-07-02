@@ -269,6 +269,21 @@ def listar_clientes():
         total_gasto_geral = query_gasto.scalar() or 0
         total_devido_geral = query_devido.scalar() or 0
         
+        # Calcular faturamento apenas do MÊS ATUAL para Clientes Cadastrados
+        from datetime import date
+        hoje = date.today()
+        primeiro_dia_mes = hoje.replace(day=1)
+        
+        query_gasto_mes = db.session.query(db.func.sum(Venda.total)).filter(
+            Venda.status == 'finalizada',
+            Venda.cliente_id.isnot(None),
+            Venda.data_venda >= primeiro_dia_mes
+        )
+        if estabelecimento_id is not None and estabelecimento_id != 'all':
+             query_gasto_mes = query_gasto_mes.filter(Venda.estabelecimento_id == estabelecimento_id)
+        
+        total_gasto_mes = query_gasto_mes.scalar() or 0
+        
         query_melhor = Cliente.query
         query_maior = Cliente.query
         if estabelecimento_id is not None and estabelecimento_id != 'all':
@@ -296,6 +311,7 @@ def listar_clientes():
                         else 0
                     ),
                     "total_gasto": float(total_gasto_geral or 0),
+                    "total_gasto_mes": float(total_gasto_mes or 0),
                     "total_devido": float(total_devido_geral or 0),
                     "melhor_cliente_nome": melhor_cliente.nome if melhor_cliente and float(melhor_cliente.valor_total_gasto or 0) > 0 else "Nenhum",
                     "melhor_cliente_valor": float(melhor_cliente.valor_total_gasto if melhor_cliente and melhor_cliente.valor_total_gasto else 0),

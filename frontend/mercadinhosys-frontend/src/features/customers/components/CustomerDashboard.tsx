@@ -8,6 +8,7 @@ import StarIcon from '@mui/icons-material/Star';
 interface CustomerDashboardProps {
   total: number;
   total_gasto: number;
+  total_gasto_mes: number;
   total_devido: number;
   melhor_cliente_nome: string;
   melhor_cliente_valor: number;
@@ -28,6 +29,7 @@ const segmentColors: Record<string, string> = {
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   total,
   total_gasto,
+  total_gasto_mes,
   melhor_cliente_nome,
   melhor_cliente_valor,
   rfmData,
@@ -46,9 +48,16 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       icon: <PeopleAltIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
     {
-      label: 'FATURAMENTO TOTAL',
+      label: 'LTV DA BASE (ALL-TIME)',
       value: formatCurrency(total_gasto),
-      subtext: 'Soma de todas as compras',
+      subtext: 'Soma histórica dos clientes',
+      color: '#0f766e', // teal-700
+      icon: <AttachMoneyIcon sx={{ fontSize: 80, opacity: 0.15 }} />
+    },
+    {
+      label: 'RECEITA MENSAL',
+      value: formatCurrency(total_gasto_mes),
+      subtext: 'Compras de clientes neste mês',
       color: '#16a34a', // green-600
       icon: <AttachMoneyIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
@@ -110,7 +119,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   return (
     <Box sx={{ mb: 4 }}>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
         {metrics.map((m, index) => (
           <Card
             key={index}

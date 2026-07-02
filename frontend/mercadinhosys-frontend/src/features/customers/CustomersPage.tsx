@@ -57,6 +57,7 @@ type SegmentFilter = 'todos' | 'Campeão' | 'Fiel' | 'Regular' | 'Risco' | 'Perd
 type DashboardState = {
     total: number;
     total_gasto: number;
+    total_gasto_mes: number;
     total_devido: number;
     melhor_cliente_nome: string;
     melhor_cliente_valor: number;
@@ -93,6 +94,7 @@ type CampaignConfig = {
 const initialDashboard: DashboardState = {
     total: 0,
     total_gasto: 0,
+    total_gasto_mes: 0,
     total_devido: 0,
     melhor_cliente_nome: 'Nenhum',
     melhor_cliente_valor: 0,
@@ -342,6 +344,7 @@ const CustomersPage: React.FC = () => {
                 setDashboard({
                     total: clientesRes.data.estatisticas.total || 0,
                     total_gasto: clientesRes.data.estatisticas.total_gasto || 0,
+                    total_gasto_mes: clientesRes.data.estatisticas.total_gasto_mes || 0,
                     total_devido: clientesRes.data.estatisticas.total_devido || 0,
                     melhor_cliente_nome: clientesRes.data.estatisticas.melhor_cliente_nome || 'Nenhum',
                     melhor_cliente_valor: clientesRes.data.estatisticas.melhor_cliente_valor || 0,
