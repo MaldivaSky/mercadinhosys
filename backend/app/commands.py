@@ -62,3 +62,46 @@ def register_commands(app):
             gap = (l - a) if (isinstance(l, int) and isinstance(a, int)) else "—"
             click.echo(f"  {t:<24}{str(l):>8}{str(a):>8}{str(gap):>8}")
         click.echo("=" * 52)
+
+    @app.cli.command("limpar-pedidos-orfaos")
+    @click.option("--apply", is_flag=True, help="Aplica a exclusão (sem esta flag, apenas mostra — dry-run).")
+    @with_appcontext
+    def limpar_pedidos_orfaos(apply):
+        """Remove pedidos de compra SEM itens (dado órfão/legado que aparece como
+        '0 itens' na tela). Por segurança, só remove pedidos NÃO recebidos e a
+        Conta a Pagar vinculada apenas se ainda estiver 'aberto' (não paga).
+        Sem --apply é dry-run (não altera nada)."""
+        from app.models import db, PedidoCompra, PedidoCompraItem, ContaPagar, allow_all_tenants
+
+        with allow_all_tenants():
+            # Pedidos que não possuem nenhum item.
+            subq = db.session.query(PedidoCompraItem.pedido_id).distinct()
+            orfaos = (PedidoCompra.query
+                      .filter(~PedidoCompra.id.in_(subq))
+                      .all())
+
+            if not orfaos:
+                click.echo("✅ Nenhum pedido órfão (todos têm itens).")
+                return
+
+            click.echo(f"{'[DRY-RUN] ' if not apply else ''}Pedidos SEM itens encontrados: {len(orfaos)}")
+            removidos, contas_removidas, preservados = 0, 0, 0
+            for p in orfaos:
+                if str(p.status).lower() == "recebido":
+                    click.echo(f"  • {p.numero_pedido}: PRESERVADO (status=recebido)")
+                    preservados += 1
+                    continue
+                click.echo(f"  • {p.numero_pedido} (loja {p.estabelecimento_id}, total {p.total}) → remover")
+                if apply:
+                    conta = ContaPagar.query.filter_by(pedido_compra_id=p.id).first()
+                    if conta and str(conta.status).lower() == "aberto":
+                        db.session.delete(conta)
+                        contas_removidas += 1
+                    db.session.delete(p)
+                    removidos += 1
+
+            if apply:
+                db.session.commit()
+                click.echo(f"🗑️  Removidos: {removidos} pedidos, {contas_removidas} contas a pagar. Preservados: {preservados}.")
+            else:
+                click.echo("→ Rode com --apply para efetivar a limpeza.")
