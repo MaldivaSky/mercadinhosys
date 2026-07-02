@@ -154,7 +154,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
 
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center sm:justify-start gap-2 transition-colors text-sm"
+              className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center sm:justify-start gap-2 transition-colors text-sm"
             >
               <Filter className="w-4 h-4" />
               <span className="hidden sm:inline">Filtros</span>
