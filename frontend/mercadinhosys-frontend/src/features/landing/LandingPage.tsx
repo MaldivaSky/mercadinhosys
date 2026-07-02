@@ -175,7 +175,7 @@ const LandingPage: React.FC = () => {
     ];
 
     return (
-        <div className="h-screen overflow-y-auto overflow-x-hidden bg-[#0A1220] font-['Space_Grotesk',sans-serif] text-[#DCE8F7] selection:bg-[#2E9BFF] selection:text-[#06101F] custom-scrollbar relative">
+        <div className="min-h-screen bg-[#0A1220] font-['Space_Grotesk',sans-serif] text-[#DCE8F7] selection:bg-[#2E9BFF] selection:text-[#06101F] overflow-x-hidden custom-scrollbar">
             {/* WhatsApp Floating Button */}
             <a
                 href="https://wa.me/5511919889233"
@@ -284,24 +284,17 @@ const LandingPage: React.FC = () => {
                             transition={{ duration: 1, delay: 0.2 }}
                             className="relative lg:block hidden"
                         >
-                            <div className="relative w-full max-w-[500px] mx-auto rounded-[24px] shadow-[0_0_50px_rgba(46,155,255,0.15)] border border-[#24344F] overflow-hidden group bg-[#0A1220]">
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0A1220] via-transparent to-transparent z-10 pointer-events-none"></div>
-                                <video 
-                                    src="/assets/vídeo marketing.mp4" 
-                                    autoPlay 
-                                    loop 
-                                    muted 
-                                    playsInline 
-                                    className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
-                                />
-                                <div className="absolute bottom-6 left-6 right-6 z-20 flex justify-between items-end">
-                                    <div className="flex flex-col gap-2">
-                                        <div className="border border-[#2E9BFF]/50 text-[#6FCBFF] font-bold text-xs tracking-wider uppercase rounded-full px-4 py-1.5 w-max bg-[#101C31]/80 backdrop-blur-md">Veja na prática</div>
-                                        <div className="text-white font-bold text-2xl drop-shadow-md">A central de comando <br/>da sua loja.</div>
+                            <div className="relative w-full max-w-[500px] mx-auto bg-gradient-to-br from-[#0B3DA6] via-[#082e63] to-[#0A1220] p-10 rounded-[20px] shadow-2xl border border-[#24344F] flex flex-col justify-between h-[450px]">
+                                <div className="font-bold text-[32px] text-white leading-tight">Enquanto você atende,<br/>ele calcula.</div>
+                                <div className="flex flex-col gap-4 mt-auto">
+                                    <div className="border border-[#2E9BFF] text-[#6FCBFF] font-semibold text-base rounded-full px-6 py-2 w-max bg-[#101C31]/50 backdrop-blur-sm">R$ 99,90/mês · tudo incluso</div>
+                                    <div className="flex items-center gap-3">
+                                        <img src="/assets/logo.png" className="w-10 h-10 rounded-lg shadow-md" alt="logo" />
+                                        <div className="text-white font-semibold text-lg">MercadinhoSyS</div>
                                     </div>
-                                    <div className="w-12 h-12 rounded-full bg-[#2E9BFF] flex items-center justify-center shadow-lg shadow-[#2E9BFF]/50 animate-pulse">
-                                        <div className="w-0 h-0 border-t-8 border-t-transparent border-l-12 border-l-white border-b-8 border-b-transparent ml-1"></div>
-                                    </div>
+                                </div>
+                                <div className="absolute top-10 right-10 opacity-30 animate-pulse">
+                                    <TrendingUp className="w-24 h-24 text-[#2E9BFF]" />
                                 </div>
                             </div>
                         </motion.div>
