@@ -78,6 +78,7 @@ const ProductsPage: React.FC = () => {
   const [showMarkupCalculator, setShowMarkupCalculator] = useState(false);
   const [showProductHistory, setShowProductHistory] = useState(false);
   const [showPurchaseOrders, setShowPurchaseOrders] = useState(false);
+  const [pedidoInicialFornecedor, setPedidoInicialFornecedor] = useState<number | undefined>(undefined);
   const [showLotesModal, setShowLotesModal] = useState(false);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
@@ -235,6 +236,11 @@ const ProductsPage: React.FC = () => {
           // regra do botão de editar da lista (openEditModal). Antes abria direto.
           openEditModal(prod);
         }
+      } else if (state.abrirPedido) {
+        // Deep-link "Fazer Pedido" vindo do card de fornecedor no dashboard:
+        // abre o painel de pedidos já com o fornecedor selecionado.
+        setPedidoInicialFornecedor(state.fornecedorId);
+        setShowPurchaseOrders(true);
       }
       // Clear state so it doesn't reopen on reload
       window.history.replaceState({}, document.title);
@@ -850,7 +856,7 @@ const ProductsPage: React.FC = () => {
         <ProductHistoryModal produto={selectedProduct as any} onClose={() => { handleCloseModal(setShowProductHistory); setSelectedProduct(null); }} />
       )}
 
-      <PurchaseOrdersPanel isOpen={showPurchaseOrders} onClose={() => setShowPurchaseOrders(false)} fornecedores={fornecedores} />
+      <PurchaseOrdersPanel isOpen={showPurchaseOrders} onClose={() => { setShowPurchaseOrders(false); setPedidoInicialFornecedor(undefined); }} fornecedores={fornecedores} initialSupplierId={pedidoInicialFornecedor} />
 
       {selectedProductForOrder && (
         <PurchaseOrderModal

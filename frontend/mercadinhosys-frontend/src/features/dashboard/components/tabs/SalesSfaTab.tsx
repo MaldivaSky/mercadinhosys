@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Target, TrendingUp, Users, Award, AlertTriangle, PieChart as PieChartIcon, BarChart3, Activity, DollarSign, Package, ShoppingCart, Truck, CreditCard, Clock, Star } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, CartesianGrid, AreaChart, Area } from 'recharts';
 import { formatCurrency } from '../../../../utils/formatters';
@@ -9,6 +10,7 @@ interface SalesSfaTabProps {
 }
 
 export default function SalesSfaTab({ data }: SalesSfaTabProps) {
+  const navigate = useNavigate();
   // O centro das atenções agora é o PDV (Vendas de Loja/Varejo)
   const [activeSubTab, setActiveSubTab] = useState<'pdv' | 'produtos' | 'clientes' | 'fornecedores' | 'sfa'>('pdv');
   const [selectedRfmSegment, setSelectedRfmSegment] = useState<string | null>(null);
@@ -23,17 +25,18 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
   const vendasPorHora = data?.sales_by_hour || [];
   const vendasHistoricas = data?.timeseries || [];
   
-  // Dados simulados de Formas de Pagamento para enriquecer o PDV, 
-  // caso o backend não traga detalhado no DTO atual
+  // Formas de pagamento — SEMPRE dados reais do backend (sem fallback fictício).
+  // Rótulos legíveis para as chaves internas do PDV.
+  const LABEL_PGTO: Record<string, string> = {
+    pix: 'PIX', dinheiro: 'Dinheiro', cartao_credito: 'Cartão de Crédito',
+    cartao_debito: 'Cartão de Débito', vale_alimentacao: 'Vale Alimentação',
+    vale_refeicao: 'Vale Refeição', fiado: 'Fiado', boleto: 'Boleto',
+  };
   const paymentMetrics = data?.payment_methods?.metricas || [];
-  const formasPagamento = paymentMetrics.length > 0
-    ? paymentMetrics.map((p: any) => ({ name: p.forma_pagamento || 'Outro', value: Number(p.total_valor) }))
-    : [
-        { name: 'Cartão de Crédito', value: vendasMes * 0.45 },
-        { name: 'PIX', value: vendasMes * 0.30 },
-        { name: 'Dinheiro', value: vendasMes * 0.15 },
-        { name: 'Cartão de Débito', value: vendasMes * 0.10 }
-      ];
+  const formasPagamento = paymentMetrics.map((p: any) => ({
+    name: LABEL_PGTO[p.forma_pagamento] || p.forma_pagamento || 'Outro',
+    value: Number(p.total_valor || 0),
+  }));
 
   // --- DADOS PRODUTOS ---
   const abcProdutos = data?.abc?.produtos || data?.analise_produtos?.curva_abc?.produtos || [];
@@ -70,18 +73,19 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
   const maiorDevedorValor = data?.fiado?.maior_devedor_valor || 0;
   const bonsPagadores = data?.fiado?.bons_pagadores || [];
 
-  // --- DADOS FORNECEDORES (Agrupamento por Categoria) ---
-  const categoriasVendas = data?.hourly_sales_by_category && Object.keys(data.hourly_sales_by_category).length > 0
+  // --- DADOS POR CATEGORIA (real, sem fallback fictício) ---
+  const categoriasVendas = data?.hourly_sales_by_category
     ? Object.entries(data.hourly_sales_by_category).map(([cat, hours]: [string, any]) => {
         const total = Object.values(hours).reduce((acc: number, val: any) => acc + (val.faturamento || 0), 0);
         return { categoria: cat, total };
-      }).sort((a,b) => b.total - a.total).slice(0, 5)
-    : [
-        { categoria: 'Bebidas', total: vendasMes * 0.35 },
-        { categoria: 'Mercearia', total: vendasMes * 0.40 },
-        { categoria: 'Higiene & Limpeza', total: vendasMes * 0.15 },
-        { categoria: 'Açougue/Frios', total: vendasMes * 0.10 },
-      ];
+      }).sort((a, b) => b.total - a.total).slice(0, 8)
+    : [];
+
+  // --- DADOS FORNECEDORES (reais: faturamento gerado, compras, condição própria) ---
+  const fornecedores = data?.fornecedores_performance || [];
+  const fornTotalComprado = fornecedores.reduce((a: number, f: any) => a + (f.total_comprado || 0), 0);
+  const fornSaldoAberto = fornecedores.reduce((a: number, f: any) => a + (f.saldo_aberto || 0), 0);
+  const fornTotalPedidos = fornecedores.reduce((a: number, f: any) => a + (f.num_pedidos || 0), 0);
 
   // --- DADOS OPERADORES DE CAIXA (Vendedores / SFA) ---
   const vendedoresRaw = data?.sfa?.vendedores || [];
@@ -463,31 +467,96 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
       ========================================================================================= */}
       {activeSubTab === 'fornecedores' && (
         <div className="space-y-6 animate-in fade-in duration-500">
+          {/* KPIs reais de compras */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-slate-800/80 rounded-2xl border border-slate-700/60 p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Parceiros ativos</p>
+              <p className="text-3xl font-black text-white mt-1">{fornecedores.length}</p>
+            </div>
+            <div className="bg-slate-800/80 rounded-2xl border border-slate-700/60 p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total comprado (período)</p>
+              <p className="text-3xl font-black text-amber-400 mt-1">{formatCurrency(fornTotalComprado)}</p>
+            </div>
+            <div className="bg-slate-800/80 rounded-2xl border border-slate-700/60 p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">A pagar (em aberto)</p>
+              <p className="text-3xl font-black text-red-400 mt-1">{formatCurrency(fornSaldoAberto)}</p>
+            </div>
+            <div className="bg-slate-800/80 rounded-2xl border border-slate-700/60 p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pedidos no período</p>
+              <p className="text-3xl font-black text-white mt-1">{fornTotalPedidos}</p>
+            </div>
+          </div>
+
           <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6">
-            <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2"><Truck className="text-amber-400" /> Ranking de Fornecedores</h3>
-            <p className="text-sm text-slate-400 mb-6">Mapeamento de faturamento agrupado por fornecedor para identificar seus maiores parceiros comerciais.</p>
-            
-            <div className="h-[400px] w-full">
+            <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2"><Truck className="text-amber-400" /> Faturamento gerado por fornecedor</h3>
+            <p className="text-sm text-slate-400 mb-6">Quanto cada parceiro faz girar no seu PDV — identifica seus fornecedores estratégicos.</p>
+            <div className="h-[340px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data?.fornecedores_performance || []} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                <BarChart data={fornecedores} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                   <XAxis dataKey="fornecedor" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={60} />
                   <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
-                  <Tooltip 
-                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} 
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }}
                     itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
                     labelStyle={{ color: '#94a3b8' }}
-                    formatter={(value: number) => formatCurrency(value)} 
+                    formatter={(value: number) => formatCurrency(value)}
                   />
-                  <Bar dataKey="total" name="Faturamento (R$)" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={60}>
-                    {(data?.fornecedores_performance || []).map((_entry: any, index: number) => (
+                  <Bar dataKey="total" name="Faturamento gerado" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                    {fornecedores.map((_f: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+
+          {/* Tabela real: condição de pagamento POR fornecedor + ação de pedido */}
+          <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6 overflow-x-auto">
+            <h3 className="text-lg font-black text-white mb-4">Detalhe por fornecedor</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-700">
+                  <th className="py-3 pr-4 font-bold">Fornecedor</th>
+                  <th className="py-3 px-3 font-bold text-right">Comprado</th>
+                  <th className="py-3 px-3 font-bold text-right">A pagar</th>
+                  <th className="py-3 px-3 font-bold text-center">Pedidos</th>
+                  <th className="py-3 px-3 font-bold">Condição</th>
+                  <th className="py-3 px-3 font-bold text-center">Prazo</th>
+                  <th className="py-3 px-3 font-bold text-center">Pontualidade</th>
+                  <th className="py-3 pl-3 font-bold text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fornecedores.length > 0 ? fornecedores.map((f: any) => (
+                  <tr key={f.id} className="border-b border-slate-800 hover:bg-slate-700/20 transition-colors">
+                    <td className="py-3 pr-4 font-bold text-white">{f.fornecedor}</td>
+                    <td className="py-3 px-3 text-right text-slate-200">{formatCurrency(f.total_comprado)}</td>
+                    <td className={`py-3 px-3 text-right font-bold ${f.saldo_aberto > 0 ? 'text-red-400' : 'text-emerald-400'}`}>{formatCurrency(f.saldo_aberto)}</td>
+                    <td className="py-3 px-3 text-center text-slate-300">{f.num_pedidos}</td>
+                    <td className="py-3 px-3">
+                      <span className="text-xs font-bold text-blue-300 bg-blue-500/15 px-2 py-1 rounded-lg whitespace-nowrap">{f.condicao_pagamento}</span>
+                    </td>
+                    <td className="py-3 px-3 text-center text-slate-300">{f.prazo_entrega_dias}d</td>
+                    <td className="py-3 px-3 text-center">
+                      <span className={`font-bold ${f.pontualidade_pagamento >= 90 ? 'text-emerald-400' : f.pontualidade_pagamento >= 70 ? 'text-amber-400' : 'text-red-400'}`}>{f.pontualidade_pagamento}%</span>
+                    </td>
+                    <td className="py-3 pl-3 text-right">
+                      <button
+                        onClick={() => navigate('/produtos', { state: { abrirPedido: true, fornecedorId: f.id, fornecedorNome: f.fornecedor, condicaoPagamento: f.condicao_pagamento } })}
+                        className="px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-lg text-xs font-bold hover:bg-amber-500/40 transition-colors whitespace-nowrap"
+                      >
+                        Fazer Pedido
+                      </button>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={8} className="py-8 text-center text-slate-500">Nenhum fornecedor com movimentação no período.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

@@ -23,12 +23,16 @@ interface PurchaseOrdersPanelProps {
   isOpen: boolean;
   onClose: () => void;
   fornecedores: Fornecedor[];
+  // Deep-link "Fazer Pedido" a partir do card de fornecedor no dashboard:
+  // abre o modal de criação já com este fornecedor selecionado.
+  initialSupplierId?: number;
 }
 
 const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
   isOpen,
   onClose,
-  fornecedores
+  fornecedores,
+  initialSupplierId
 }) => {
   const [pedidos, setPedidos] = useState<PedidoCompra[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,6 +74,14 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
       loadPedidos();
     }
   }, [isOpen, page, filtros]);
+
+  // Deep-link: ao abrir o painel com fornecedor pré-selecionado, já abre o
+  // modal de novo pedido com ele. Dispara uma única vez por abertura.
+  useEffect(() => {
+    if (isOpen && initialSupplierId) {
+      setShowCreateModal(true);
+    }
+  }, [isOpen, initialSupplierId]);
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -343,6 +355,7 @@ const PurchaseOrdersPanel: React.FC<PurchaseOrdersPanelProps> = ({
           setShowCreateModal(false);
         }}
         fornecedores={fornecedores}
+        initialSupplierId={initialSupplierId}
       />
 
       {selectedPedido && (

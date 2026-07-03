@@ -476,40 +476,83 @@ class DataLayer:
     @provide_session
     def get_supplier_performance(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
         """
-        Retorna os fornecedores que mais geram faturamento no PDV.
+        Painel de fornecedores com dados REAIS: faturamento gerado no PDV,
+        total comprado (contas a pagar), pedidos, saldo em aberto e a
+        pontualidade de pagamento calculada (sem score inventado).
+        A condição de pagamento e o prazo vêm de cada fornecedor (não global).
         """
         try:
-            from app.models import Fornecedor
+            from app.models import Fornecedor, ContaPagar, PedidoCompra
             start_date = datetime.now(timezone.utc) - timedelta(days=days)
             start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            
-            query = db.session.query(
-                Fornecedor.nome_fantasia.label('fornecedor'),
+
+            def _tenant(q, col):
+                if str(estabelecimento_id).lower() != 'all':
+                    return q.filter(col == estabelecimento_id)
+                return q
+
+            # 1. Faturamento gerado no PDV por fornecedor (giro dos produtos dele)
+            vendas_q = db.session.query(
+                Produto.fornecedor_id.label('fid'),
                 func.sum(VendaItem.total_item).label('total_faturado'),
                 func.sum(VendaItem.quantidade).label('total_itens')
             ).select_from(VendaItem).join(
                 Venda, Venda.id == VendaItem.venda_id
             ).join(
                 Produto, Produto.id == VendaItem.produto_id
-            ).join(
-                Fornecedor, Fornecedor.id == Produto.fornecedor_id
-            ).filter(
-                Venda.data_venda >= start_date,
-                Venda.status == 'finalizada'
+            ).filter(Venda.data_venda >= start_date, Venda.status == 'finalizada')
+            vendas_q = _tenant(vendas_q, Venda.estabelecimento_id)
+            vendas_por_forn = {
+                r.fid: (float(r.total_faturado or 0), float(r.total_itens or 0))
+                for r in vendas_q.group_by(Produto.fornecedor_id).all()
+            }
+
+            # 2. Compras (contas a pagar) por fornecedor: total, aberto, pontualidade
+            compras_q = db.session.query(
+                ContaPagar.fornecedor_id.label('fid'),
+                func.sum(ContaPagar.valor_original).label('total_comprado'),
+                func.sum(case((ContaPagar.status == 'aberto', ContaPagar.valor_atual), else_=0)).label('aberto'),
+                func.count(func.distinct(ContaPagar.pedido_compra_id)).label('num_pedidos'),
+                func.count(ContaPagar.id).label('num_titulos'),
+                func.sum(case(
+                    (and_(ContaPagar.status == 'pago',
+                          ContaPagar.data_pagamento <= ContaPagar.data_vencimento), 1),
+                    else_=0)).label('pagos_em_dia'),
+                func.sum(case((ContaPagar.status == 'pago', 1), else_=0)).label('total_pagos'),
             )
-            
-            if str(estabelecimento_id).lower() != 'all':
-                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
-                
-            results = query.group_by(Fornecedor.nome_fantasia).order_by(desc('total_faturado')).limit(15).all()
-            
-            return [
-                {
-                    "fornecedor": r.fornecedor,
-                    "total": float(r.total_faturado or 0),
-                    "total_itens": float(r.total_itens or 0)
-                } for r in results
-            ]
+            compras_q = _tenant(compras_q, ContaPagar.estabelecimento_id)
+            compras_por_forn = {r.fid: r for r in compras_q.group_by(ContaPagar.fornecedor_id).all()}
+
+            # 3. Cadastro dos fornecedores (condição de pagamento é POR fornecedor)
+            forn_q = db.session.query(Fornecedor).filter(Fornecedor.ativo == True)
+            forn_q = _tenant(forn_q, Fornecedor.estabelecimento_id)
+
+            saida = []
+            for f in forn_q.all():
+                fat, itens = vendas_por_forn.get(f.id, (0.0, 0.0))
+                c = compras_por_forn.get(f.id)
+                total_comprado = float(c.total_comprado or 0) if c else 0.0
+                aberto = float(c.aberto or 0) if c else 0.0
+                num_pedidos = int(c.num_pedidos or 0) if c else 0
+                total_pagos = int(c.total_pagos or 0) if c else 0
+                pagos_em_dia = int(c.pagos_em_dia or 0) if c else 0
+                pontualidade = round(pagos_em_dia / total_pagos * 100, 1) if total_pagos > 0 else 100.0
+                saida.append({
+                    "id": f.id,
+                    "fornecedor": f.nome_fantasia,
+                    "total": fat,                       # faturamento gerado no PDV
+                    "total_itens": itens,
+                    "total_comprado": total_comprado,   # custo comprado dele
+                    "saldo_aberto": aberto,             # o que ainda devo a ele
+                    "num_pedidos": num_pedidos,
+                    "condicao_pagamento": f.forma_pagamento or "A definir",
+                    "prazo_entrega_dias": int(f.prazo_entrega or 0),
+                    "classificacao": f.classificacao or "REGULAR",
+                    "pontualidade_pagamento": pontualidade,
+                })
+
+            saida.sort(key=lambda x: x["total"], reverse=True)
+            return saida[:15]
         except Exception as e:
             logger.error(f"Erro em get_supplier_performance: {e}")
             return []
