@@ -201,7 +201,10 @@ export default function ProductHubPage() {
                             {produto.ativo ? 'Ativo' : 'Inativo'}
                         </span>
                         <span className="meta-badge" style={{ background: '#e0e7ff', color: '#3730a3' }}>
-                            {produto.categoria?.nome || 'Sem Categoria'}
+                            {/* O backend serializa `categoria` como STRING (o nome).
+                                Antes lia .nome de uma string -> undefined -> "Sem Categoria". */}
+                            {(typeof produto.categoria === 'string' ? produto.categoria : produto.categoria?.nome)
+                              || produto.categoria_nome || produto.subcategoria || 'Sem Categoria'}
                         </span>
                     </div>
                     <h1 className="product-title">{produto.nome}</h1>
