@@ -81,6 +81,31 @@ Thumbs.db
 seed_*.py
 verify_system_*.py
 
+# ── Seed v2 "Gêmeo Digital" e artefatos sensíveis (revelam o sistema) ──
+# Ficam APENAS locais; nunca sobem para o repositório.
+backend/app/simulation/v2/
+backend/app/simulation/realistic_generator.py
+backend/app/simulation/validated_seeder.py
+backend/app/simulation/validators.py
+backend/app/utils/filter_validator.py
+backend/generate_seed_audit_logs.py
+backend/restore_admin_access.py
+backend/RESTAURAR_DASHBOARD_AGORA.md
+docs/seed-v2-*.md
+old_dashboard.txt
+INICIAR_SISTEMA_COMPLETO.bat
+.kiro/
+
+# Testes experimentais/descartáveis (seed e metrics) — fora do repo.
+# A suíte curada de backend/tests/ CONTINUA versionada normalmente.
+backend/tests/test_filter_validator.py
+backend/tests/test_metrics_consistency.py
+backend/tests/test_metrics_integration.py
+backend/tests/test_metrics_properties.py
+backend/tests/test_realistic_generator.py
+backend/tests/test_realistic_seed_generation.py
+backend/tests/test_seed_validation.py
+
 # Docker
 *.dockerignore
 
