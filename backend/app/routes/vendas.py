@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from flask import Blueprint, request, jsonify, Response, current_app
 from app import db
-from app.utils.timezone import fmt_local
+from app.utils.timezone import fmt_local, local_date_to_utc_naive
 from app.models import (
     Venda,
     VendaItem,
@@ -80,30 +80,35 @@ def aplicar_filtros_avancados_vendas(query, filtros, estabelecimento_id):
     if not filtros.get("status"):
         query = query.filter(Venda.status == "finalizada")
 
-    # Filtro por data
+    # Filtro por data. Datas "puras" (YYYY-MM-DD, sem hora) vêm do frontend
+    # representando o dia LOCAL da loja (ex.: botões "Hoje"/"7 dias" do
+    # SalesPage) — precisam ser convertidas para o instante UTC equivalente
+    # antes de comparar com a coluna do banco (UTC naive). Sem essa conversão,
+    # a fronteira do dia ficava deslocada em 3h (perdia vendas do fim da noite
+    # local / bug relatado como "filtro de período não funciona direito").
+    # Timestamps completos (com T e hora) são tratados como já em UTC.
     for filtro_data in ["data_inicio", "data_fim"]:
         val = filtros.get(filtro_data)
         if val:
             try:
                 data_str = val.strip()
-                data_dt = None
-                try:
-                    data_dt = datetime.fromisoformat(data_str.replace('Z', '+00:00'))
-                except ValueError:
-                    try:
-                        data_dt = datetime.strptime(data_str.split('T')[0], "%Y-%m-%d")
-                    except ValueError:
-                        pass
-                if data_dt:
+                eh_dia_puro = len(data_str) <= 10
+                if eh_dia_puro:
                     campo = func.coalesce(Venda.data_venda, Venda.created_at)
                     if filtro_data == "data_inicio":
-                        if len(data_str) <= 10:
-                            data_dt = data_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                        query = query.filter(campo >= data_dt)
+                        query = query.filter(campo >= local_date_to_utc_naive(data_str))
                     else:
-                        if len(data_str) <= 10 or (data_dt.hour == 0 and data_dt.minute == 0):
-                            data_fim = data_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-                            query = query.filter(campo <= data_fim)
+                        query = query.filter(campo <= local_date_to_utc_naive(data_str, fim_do_dia=True))
+                else:
+                    data_dt = None
+                    try:
+                        data_dt = datetime.fromisoformat(data_str.replace('Z', '+00:00'))
+                    except ValueError:
+                        pass
+                    if data_dt:
+                        campo = func.coalesce(Venda.data_venda, Venda.created_at)
+                        if filtro_data == "data_inicio":
+                            query = query.filter(campo >= data_dt)
                         else:
                             query = query.filter(campo <= data_dt)
             except Exception:

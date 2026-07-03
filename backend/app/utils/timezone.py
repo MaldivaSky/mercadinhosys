@@ -35,3 +35,30 @@ def iso_local(dt):
     Assim o navegador (new Date(...)) exibe a hora local correta."""
     loc = to_local(dt)
     return loc.isoformat() if loc else None
+
+
+def local_date_to_utc_naive(date_or_str, fim_do_dia=False):
+    """
+    Converte uma data "do dia" (ex.: filtro de período vindo do frontend como
+    'YYYY-MM-DD', que representa a meia-noite LOCAL da loja) para o instante
+    UTC naive equivalente — coerente com as colunas do banco (utcnow naive).
+
+    Sem essa conversão, filtros de período (SalesPage, relatórios) comparavam
+    "00:00 local" contra a coluna UTC como se fossem a mesma referência,
+    deslocando a fronteira do dia em 3h (perdia vendas das 21h-23h59 locais
+    do dia anterior / incluía de menos as da madrugada seguinte). Efeito
+    invisível em lojas que não vendem de madrugada, mas real e sistemático.
+
+    fim_do_dia=True devolve o instante final (23:59:59.999999 local -> UTC).
+    """
+    if date_or_str is None:
+        return None
+    if isinstance(date_or_str, str):
+        s = date_or_str.strip().split("T")[0]
+        dt_local = datetime.strptime(s, "%Y-%m-%d")
+    else:
+        dt_local = datetime.combine(date_or_str, datetime.min.time())
+    if fim_do_dia:
+        dt_local = dt_local.replace(hour=23, minute=59, second=59, microsecond=999999)
+    aware_local = dt_local.replace(tzinfo=LOCAL_TZ)
+    return aware_local.astimezone(timezone.utc).replace(tzinfo=None)

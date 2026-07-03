@@ -177,7 +177,15 @@ export default function SalesPage() {
     const carregarAnalytics = useCallback(async (f = filtros) => {
         setLoadingA(true);
         try {
-            const { data } = await apiClient.get("/vendas/estatisticas", { params: { data_inicio: f.data_inicio, data_fim: f.data_fim } });
+            // Os cards/indicadores precisam refletir os MESMOS filtros da lista de
+            // vendas — antes só mandava data_inicio/data_fim, então filtrar por
+            // forma de pagamento (ou status) refiltrava a lista mas os cards
+            // ficavam parados mostrando o total geral (bug "cards não reagem").
+            const params: Record<string, unknown> = { data_inicio: f.data_inicio, data_fim: f.data_fim };
+            if (f.forma_pagamento) params.forma_pagamento = f.forma_pagamento;
+            if (f.status) params.status = f.status;
+            if (f.search) params.search = f.search;
+            const { data } = await apiClient.get("/vendas/estatisticas", { params });
             setAnalytics(data);
         } catch { setAnalytics(null); }
         finally { setLoadingA(false); }
@@ -188,11 +196,13 @@ export default function SalesPage() {
     const onSearch = (val: string) => {
         const novo = { ...filtros, search: val, page: 1 }; setFiltros(novo);
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => carregarVendas(novo), 400);
+        debounceRef.current = setTimeout(() => { carregarVendas(novo); carregarAnalytics(novo); }, 400);
     };
     const aplicar = (patch: Partial<typeof filtros>) => {
-        const novo = { ...filtros, ...patch, page: 1 }; setFiltros(novo); carregarVendas(novo);
-        if (patch.data_inicio || patch.data_fim) carregarAnalytics(novo);
+        const novo = { ...filtros, ...patch, page: 1 }; setFiltros(novo);
+        carregarVendas(novo);
+        // Cards/indicadores reagem a QUALQUER mudança de filtro, não só data.
+        carregarAnalytics(novo);
     };
     const irPara = (page: number) => { const novo = { ...filtros, page }; setFiltros(novo); carregarVendas(novo); };
 
