@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     Venda, VendaItem, Produto, Cliente,
     Funcionario, FuncionarioBeneficio, Beneficio, BancoHoras, RegistroPonto, ConfiguracaoHorario,
-    Despesa, ContaPagar, ContaReceber
+    Despesa, ContaPagar, ContaReceber, JustificativaPonto
 )
 from app.utils.query_helpers import _get_db
 import logging
@@ -285,7 +285,7 @@ class DataLayer:
             # Quantidade de produtos com estoque abaixo do mínimo
             query_baixo = db.session.query(func.count(Produto.id)).filter(
                 Produto.ativo == True,
-                Produto.quantidade <= Produto.quantidade_minima
+                Produto.quantidade <= func.coalesce(Produto.quantidade_minima, 0)
             )
             
             if str(estabelecimento_id).lower() != 'all':
@@ -318,11 +318,11 @@ class DataLayer:
                 query_clientes = query_clientes.filter(Venda.estabelecimento_id == estabelecimento_id)
             clientes_unicos = query_clientes.scalar()
 
-            # Ticket médio por cliente (não por venda)
-            # Aproximação: Total Faturado / Clientes Únicos
+            # Ticket médio por cliente (apenas vendas identificadas)
             query_faturado = db.session.query(func.sum(Venda.total)).filter(
                 Venda.data_venda >= start_date,
-                Venda.status == 'finalizada'
+                Venda.status == 'finalizada',
+                Venda.cliente_id.isnot(None)
             )
             if str(estabelecimento_id).lower() != 'all':
                 query_faturado = query_faturado.filter(Venda.estabelecimento_id == estabelecimento_id)
@@ -441,7 +441,11 @@ class DataLayer:
             ).outerjoin(
                 vendas_periodo, Produto.id == vendas_periodo.c.produto_id
             ).filter(
-                Produto.ativo == True
+                Produto.ativo == True,
+                ~Produto.nome.ilike('%teste%'),
+                ~Produto.nome.ilike('%qa%'),
+                ~Produto.nome.ilike('%estorno%'),
+                ~Produto.nome.ilike('%sem codigo%')
             )
             
             if str(estabelecimento_id).lower() != 'all':
@@ -458,7 +462,7 @@ class DataLayer:
                     "estoque_atual": float(r.estoque_atual or 0),
                     "quantidade_vendida": float(r.qtd or 0),
                     "faturamento": float(r.total or 0),
-                    "valor_total": float(r.total or 0), # Alias para compatibilidade ABC
+                    "valor_total": float(r.total or 0),
                     "margem": ((float(r.preco_venda or 0) - float(r.preco_custo or 0)) / float(r.preco_custo or 0) * 100) if r.preco_custo and r.preco_custo > 0 else 0
                 }
                 for r in results
@@ -466,6 +470,48 @@ class DataLayer:
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro em get_all_products_performance: {e}")
+            return []
+
+    @staticmethod
+    @provide_session
+    def get_supplier_performance(db, estabelecimento_id: int, days: int) -> List[Dict[str, Any]]:
+        """
+        Retorna os fornecedores que mais geram faturamento no PDV.
+        """
+        try:
+            from app.models import Fornecedor
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            query = db.session.query(
+                Fornecedor.nome_fantasia.label('fornecedor'),
+                func.sum(VendaItem.total_item).label('total_faturado'),
+                func.sum(VendaItem.quantidade).label('total_itens')
+            ).select_from(VendaItem).join(
+                Venda, Venda.id == VendaItem.venda_id
+            ).join(
+                Produto, Produto.id == VendaItem.produto_id
+            ).join(
+                Fornecedor, Fornecedor.id == Produto.fornecedor_id
+            ).filter(
+                Venda.data_venda >= start_date,
+                Venda.status == 'finalizada'
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query.group_by(Fornecedor.nome_fantasia).order_by(desc('total_faturado')).limit(15).all()
+            
+            return [
+                {
+                    "fornecedor": r.fornecedor,
+                    "total": float(r.total_faturado or 0),
+                    "total_itens": float(r.total_itens or 0)
+                } for r in results
+            ]
+        except Exception as e:
+            logger.error(f"Erro em get_supplier_performance: {e}")
             return []
 
     @staticmethod
@@ -894,9 +940,13 @@ class DataLayer:
 
             minuto_saida_ref = _time_to_minutes(hora_saida_ref) + tolerancia_saida
 
-            # Query todos os pontos do período de 30 dias em lote (aprox. 1800 registros)
+            # Query todos os pontos em lote. O limite inferior cobre tanto a janela
+            # do filtro (days) quanto o mês corrente, pois os blocos "_mes" abaixo
+            # sempre calculam sobre o mês calendário (inicio_mes) — independente do
+            # período selecionado no dashboard.
+            data_inicio_pontos = min(data_inicio_dia, inicio_mes)
             pontos_bulk_query = db.session.query(RegistroPonto).filter(
-                RegistroPonto.data >= data_inicio_dia
+                RegistroPonto.data >= data_inicio_pontos
             )
             if str(estabelecimento_id).lower() != 'all':
                 pontos_bulk_query = pontos_bulk_query.filter(RegistroPonto.estabelecimento_id == estabelecimento_id)
@@ -1110,7 +1160,7 @@ class DataLayer:
             # 12. Entradas Atrasadas no Mês (Python in-memory de pontos_bulk)
             atrasos_por_func_id = {}
             for p in pontos_bulk:
-                if p.data >= inicio_mes and p.tipo_registro == 'entrada' and p.status == 'atrasado':
+                if p.data >= inicio_mes and p.tipo_registro == 'entrada' and p.minutos_atraso and int(p.minutos_atraso) > 0:
                     fid = p.funcionario_id
                     if fid not in atrasos_por_func_id:
                         atrasos_por_func_id[fid] = {"qtd": 0, "minutos": 0}
@@ -1184,6 +1234,19 @@ class DataLayer:
                 for r in banco_horas_registros
             }
 
+            # Obter total de dias justificados (aprovados) por funcionário
+            from app.models import JustificativaPonto
+            
+            justificativas_aprov_query = db.session.query(
+                JustificativaPonto.funcionario_id,
+                func.count(func.distinct(func.date(JustificativaPonto.data))).label('dias')
+            ).filter(JustificativaPonto.status == 'aprovado')
+            
+            if str(estabelecimento_id).lower() != 'all':
+                justificativas_aprov_query = justificativas_aprov_query.filter(JustificativaPonto.estabelecimento_id == estabelecimento_id)
+                
+            justificativas_aprovadas = {r.funcionario_id: int(r.dias or 0) for r in justificativas_aprov_query.group_by(JustificativaPonto.funcionario_id).all()}
+
             atrasos_por_funcionario_mes = []
             horas_extras_por_funcionario_mes = []
             faltas_por_funcionario_mes = []
@@ -1195,11 +1258,21 @@ class DataLayer:
                 extras_min = int(extras_mes_por_func_id.get(f.id, 0))
                 beneficios_total = float(beneficios_por_func_id.get(f.id, 0))
                 dias_presenca = int(dias_com_entrada_mes_por_id.get(f.id, 0))
-                faltas = max(0, dias_uteis_mes - dias_presenca)
+                
+                # Descontar dias justificados do cálculo de faltas
+                dias_justificados = justificativas_aprovadas.get(f.id, 0)
+                faltas_calculadas = dias_uteis_mes - dias_presenca
+                faltas = max(0, faltas_calculadas - dias_justificados)
+                
                 banco = banco_horas_por_id.get(f.id, {"saldo_minutos": 0, "valor_hora_extra": 0.0, "horas_trabalhadas_minutos": 0, "horas_esperadas_minutos": 0})
 
                 custo_extras_func = round((extras_min / 60) * valor_hora_medio * 1.5, 2)
-                total_estimado = float(f.salario_base or 0) + beneficios_total + custo_extras_func
+                
+                # Desconto de faltas no holerite
+                valor_diario = float(f.salario_base or 0) / dias_uteis_mes if dias_uteis_mes > 0 else 0
+                desconto_faltas = faltas * valor_diario
+                
+                total_estimado = float(f.salario_base or 0) + beneficios_total + custo_extras_func - desconto_faltas
 
                 atrasos_por_funcionario_mes.append({
                     "funcionario_id": f.id,
@@ -1248,6 +1321,7 @@ class DataLayer:
                     "atrasos_minutos": int(atraso_info["minutos"]),
                     "faltas": int(faltas),
                     "banco_horas_saldo_horas": round(int(banco["saldo_minutos"]) / 60, 2),
+                    "desconto_faltas": float(desconto_faltas),
                     "total_estimado": round(float(total_estimado), 2)
                 })
 
@@ -1379,6 +1453,32 @@ class DataLayer:
                     "custo_extras": round((mins / 60) * valor_hora_medio * 1.5, 2)
                 })
 
+            from app.models import JustificativaPonto
+            
+            justificativas_pendentes_query = db.session.query(
+                JustificativaPonto.id,
+                JustificativaPonto.tipo,
+                JustificativaPonto.data,
+                JustificativaPonto.motivo,
+                Funcionario.nome
+            ).join(Funcionario, JustificativaPonto.funcionario_id == Funcionario.id).filter(JustificativaPonto.status == 'pendente')
+            
+            if str(estabelecimento_id).lower() != 'all':
+                justificativas_pendentes_query = justificativas_pendentes_query.filter(JustificativaPonto.estabelecimento_id == estabelecimento_id)
+                
+            jp_rows = justificativas_pendentes_query.all()
+            justificativas_pendentes = [
+                {
+                    "id": r.id,
+                    "funcionario": r.nome,
+                    "tipo": r.tipo,
+                    "data": r.data.strftime("%d/%m/%Y"),
+                    "motivo": r.motivo,
+                    "status": "pendente"
+                }
+                for r in jp_rows
+            ]
+
             return {
                 "total_beneficios_mensal": float(total_beneficios),
                 "total_salarios": float(total_salarios),
@@ -1413,6 +1513,7 @@ class DataLayer:
                 "faltas_por_funcionario_mes": faltas_por_funcionario_mes,
                 "banco_horas_por_funcionario_mes": banco_horas_por_funcionario_mes,
                 "espelho_pagamento_mes": espelho_pagamento_mes,
+                "justificativas_pendentes": justificativas_pendentes,
                 "resumo_mes": {
                     "inicio": inicio_mes.isoformat(),
                     "fim": hoje_dia.isoformat(),
@@ -1805,6 +1906,18 @@ class DataLayer:
                 query_novos = query_novos.filter(Venda.estabelecimento_id == estabelecimento_id)
             novos_fiados_30d = query_novos.scalar() or 0.0
 
+            # Quantidade de vendas no fiado (para ticket médio)
+            query_qtd_fiado = db.session.query(func.count(func.distinct(Venda.id))).join(PagamentoModel).filter(
+                PagamentoModel.forma_pagamento.ilike('%fiado%'),
+                PagamentoModel.status == 'aprovado',
+                Venda.status == 'finalizada',
+                Venda.data_venda >= trinta_dias_atras
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query_qtd_fiado = query_qtd_fiado.filter(Venda.estabelecimento_id == estabelecimento_id)
+            qtd_vendas_fiado = query_qtd_fiado.scalar() or 0
+            ticket_medio_fiado_30d = (float(novos_fiados_30d) / float(qtd_vendas_fiado)) if qtd_vendas_fiado > 0 else 0.0
+
             from app.models import MovimentacaoCaixa
             query_pag = db.session.query(func.coalesce(func.sum(MovimentacaoCaixa.valor), 0)).filter(
                 MovimentacaoCaixa.tipo == 'suprimento',
@@ -1831,7 +1944,8 @@ class DataLayer:
             ).filter(
                 PagamentoModel.forma_pagamento.ilike('%fiado%'),
                 PagamentoModel.status == 'aprovado',
-                Venda.status == 'finalizada'
+                Venda.status == 'finalizada',
+                Venda.data_venda >= trinta_dias_atras
             )
             
             if str(estabelecimento_id).lower() != 'all':
@@ -1861,7 +1975,15 @@ class DataLayer:
                 
             bons_pagadores_query = query_bons.group_by(Cliente.id, Cliente.nome, Cliente.celular).order_by(desc('volume_credito')).limit(5).all()
 
-            bons_pagadores = [{"id": c.id, "nome": c.nome, "celular": c.celular or "", "volume_credito": float(c.volume_credito)} for c in bons_pagadores_query]
+            bons_pagadores = []
+            for c in bons_pagadores_query:
+                # Sem "score" inventado: expomos apenas o volume real já quitado.
+                bons_pagadores.append({
+                    "id": c.id,
+                    "nome": c.nome,
+                    "celular": c.celular or "",
+                    "volume_credito": float(c.volume_credito or 0)
+                })
 
             # Maior devedor — busca separada por clareza
             query_maior = db.session.query(
@@ -1931,11 +2053,18 @@ class DataLayer:
                             if d.limite_credito and d.limite_credito > 0 else 0.0
                         ),
                         "ultima_compra": d.ultima_compra.isoformat() if d.ultima_compra else None,
+                        # Status factual derivado do uso REAL do limite (não é um "score" inventado)
+                        "recomendacao": (
+                            "Limite estourado" if (d.limite_credito and float(d.saldo_devedor or 0) >= float(d.limite_credito))
+                            else "Próximo do limite" if (d.limite_credito and float(d.saldo_devedor or 0) / float(d.limite_credito) >= 0.8)
+                            else "Dentro do limite"
+                        )
                     }
                     for d in top_devedores
                 ],
                 "tendencias": {
                     "novos_fiados_30d": float(novos_fiados_30d),
+                    "ticket_medio_fiado_30d": round(ticket_medio_fiado_30d, 2),
                     "pagamentos_fiado_30d": float(pagamentos_fiado_30d),
                     "taxa_recuperacao_percentual": round(taxa_recuperacao, 1),
                     "status": "saudavel" if taxa_recuperacao >= 80 else ("alerta" if taxa_recuperacao >= 50 else "critico")

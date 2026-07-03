@@ -24,10 +24,43 @@ class TemporalAnalysis:
         """
         try:
             start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            from app.models import CategoriaProduto
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+
+            query = db.session.query(
+                hour_extract.label('hora'),
+                func.coalesce(CategoriaProduto.nome, 'Sem Categoria').label('categoria'),
+                func.sum(VendaItem.total_item).label('faturamento')
+            ).join(
+                VendaItem, Venda.id == VendaItem.venda_id
+            ).outerjoin(
+                Produto, VendaItem.produto_id == Produto.id
+            ).outerjoin(
+                CategoriaProduto, Produto.categoria_id == CategoriaProduto.id
+            ).filter(
+                Venda.data_venda >= start_date,
+                Venda.status == 'finalizada'
+            )
             
-            # Simplificado: Retornar vazio por enquanto (dados complexos)
-            # Será implementado com cache em versão futura
-            return {}
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query.group_by(hour_extract, CategoriaProduto.nome).all()
+
+            hourly_cat = {}
+            for r in results:
+                if r.hora is None: continue
+                try: hora_str = f"{int(r.hora):02d}:00"
+                except: continue
+                cat = r.categoria
+                fat = float(r.faturamento or 0)
+                
+                if cat not in hourly_cat:
+                    hourly_cat[cat] = {}
+                hourly_cat[cat][hora_str] = {"faturamento": fat}
+                
+            return hourly_cat
             
         except Exception as e:
             db.session.rollback()
@@ -48,16 +81,20 @@ class TemporalAnalysis:
             from app.utils.query_helpers import get_hour_extract
             hour_extract = get_hour_extract(Venda.data_venda)
 
-            results = db.session.query(
+            query = db.session.query(
                 hour_extract.label('hora'),
                 func.count(Venda.id).label('qtd_vendas'),
                 func.sum(Venda.total).label('faturamento'),
                 func.avg(Venda.total).label('ticket_medio')
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query.group_by(
                 hour_extract
             ).order_by(
                 hour_extract
@@ -123,16 +160,20 @@ class TemporalAnalysis:
             from app.utils.query_helpers import get_dow_extract
             dow_extract = get_dow_extract(Venda.data_venda)
 
-            results = db.session.query(
+            query = db.session.query(
                 dow_extract.label('dia_semana'),
                 func.count(Venda.id).label('qtd_vendas'),
                 func.sum(Venda.total).label('faturamento'),
                 func.avg(Venda.total).label('ticket_medio')
             ).filter(
-                Venda.estabelecimento_id == estabelecimento_id,
                 Venda.data_venda >= start_date,
                 Venda.status == 'finalizada'
-            ).group_by(
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query.group_by(
                 dow_extract
             ).all()
             
@@ -164,32 +205,51 @@ class TemporalAnalysis:
         Responde: Aumentar pão amanhã? Caprichar em cerveja sexta/sábado?
         """
         try:
-            # Retornar recomendações genéricas por enquanto
-            # Será implementado com cache em versão futura
-            return [
-                {
-                    'hora': 18,
-                    'periodo': 'Noite',
-                    'categoria': 'Bebidas',
-                    'produto': 'Cerveja',
-                    'quantidade_vendida': 15,
-                    'faturamento': 450,
-                    'frequencia': 5,
-                    'recomendacao': 'Aumentar estoque de Cerveja para noite - produto top vendedor',
-                    'prioridade': 'alta'
-                },
-                {
-                    'hora': 8,
-                    'periodo': 'Manhã',
-                    'categoria': 'Padaria',
-                    'produto': 'Pão Francês',
-                    'quantidade_vendida': 20,
-                    'faturamento': 80,
-                    'frequencia': 6,
-                    'recomendacao': 'Aumentar estoque de Pão Francês para manhã - produto top vendedor',
-                    'prioridade': 'alta'
-                }
-            ]
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            from app.models import CategoriaProduto
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+            
+            query = db.session.query(
+                hour_extract.label('hora'),
+                func.coalesce(CategoriaProduto.nome, 'Geral').label('categoria'),
+                VendaItem.produto_nome.label('produto'),
+                func.sum(VendaItem.quantidade).label('quantidade_vendida'),
+                func.sum(VendaItem.total_item).label('faturamento'),
+                func.count(Venda.id).label('frequencia')
+            ).join(
+                VendaItem, Venda.id == VendaItem.venda_id
+            ).outerjoin(
+                Produto, VendaItem.produto_id == Produto.id
+            ).outerjoin(
+                CategoriaProduto, Produto.categoria_id == CategoriaProduto.id
+            ).filter(
+                Venda.data_venda >= start_date,
+                Venda.status == 'finalizada'
+            )
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query.group_by(hour_extract, CategoriaProduto.nome, VendaItem.produto_nome).order_by(func.sum(VendaItem.total_item).desc()).limit(10).all()
+            
+            recs = []
+            for r in results:
+                if r.hora is None: continue
+                try: hora = int(r.hora)
+                except: continue
+                periodo = 'Manhã' if 6 <= hora < 12 else ('Tarde' if 12 <= hora < 18 else 'Noite')
+                recs.append({
+                    'hora': hora,
+                    'periodo': periodo,
+                    'categoria': r.categoria,
+                    'produto': r.produto,
+                    'quantidade_vendida': float(r.quantidade_vendida or 0),
+                    'faturamento': float(r.faturamento or 0),
+                    'frequencia': int(r.frequencia or 0),
+                    'recomendacao': f"Aumentar estoque de {r.produto} para {periodo.lower()} - top vendas ({hora}h)",
+                    'prioridade': 'alta' if float(r.faturamento or 0) > 100 else 'media'
+                })
+            return recs
             
         except Exception as e:
             db.session.rollback()
@@ -203,9 +263,45 @@ class TemporalAnalysis:
         Responde: Cerveja vende mais à noite? Pão vende mais de manhã?
         """
         try:
-            # Simplificado: Retornar vazio por enquanto
-            # Será implementado com cache em versão futura
-            return {}
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            from app.models import CategoriaProduto
+            from app.utils.query_helpers import get_hour_extract
+            hour_extract = get_hour_extract(Venda.data_venda)
+
+            query = db.session.query(
+                hour_extract.label('hora'),
+                func.coalesce(CategoriaProduto.nome, 'Sem Categoria').label('categoria'),
+                func.sum(VendaItem.total_item).label('faturamento')
+            ).join(
+                VendaItem, Venda.id == VendaItem.venda_id
+            ).outerjoin(
+                Produto, VendaItem.produto_id == Produto.id
+            ).outerjoin(
+                CategoriaProduto, Produto.categoria_id == CategoriaProduto.id
+            ).filter(
+                Venda.data_venda >= start_date,
+                Venda.status == 'finalizada'
+            )
+            
+            if str(estabelecimento_id).lower() != 'all':
+                query = query.filter(Venda.estabelecimento_id == estabelecimento_id)
+                
+            results = query.group_by(hour_extract, CategoriaProduto.nome).all()
+
+            perf = {}
+            for r in results:
+                if r.hora is None: continue
+                try: hora = int(r.hora)
+                except: continue
+                periodo = 'manha' if 6 <= hora < 12 else ('tarde' if 12 <= hora < 18 else 'noite')
+                cat = r.categoria
+                fat = float(r.faturamento or 0)
+                
+                if cat not in perf:
+                    perf[cat] = {'manha': 0.0, 'tarde': 0.0, 'noite': 0.0}
+                perf[cat][periodo] += fat
+                
+            return perf
             
         except Exception as e:
             db.session.rollback()

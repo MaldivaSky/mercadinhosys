@@ -96,8 +96,10 @@ export default function ExecutiveTab({ data, onNavigateToTab }: ExecutiveTabProp
               <TrendingUp className="w-5 h-5 text-blue-400" />
             </div>
           </div>
-          <div className="text-3xl font-black text-white mb-2">{formatCurrency(faturamento)}</div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="text-xl lg:text-2xl xl:text-3xl font-black text-white mb-2 tracking-tighter break-words">
+            {formatCurrency(faturamento)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs xl:text-sm">
              <span className="text-emerald-400 flex items-center bg-emerald-400/10 px-2 py-0.5 rounded-full font-medium">
                 <TrendingUp size={14} className="mr-1" />
                 +12% vs mês ant.
@@ -120,8 +122,10 @@ export default function ExecutiveTab({ data, onNavigateToTab }: ExecutiveTabProp
               <Target className="w-5 h-5 text-emerald-400" />
             </div>
           </div>
-          <div className="text-3xl font-black text-white mb-2">{formatCurrency(lucroLiquido)}</div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="text-xl lg:text-2xl xl:text-3xl font-black text-white mb-2 tracking-tighter break-words">
+            {formatCurrency(lucroLiquido)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs xl:text-sm">
              <span className="text-slate-400">Margem Liquida: </span>
              <span className={`font-bold ${margemLiquida >= 10 ? 'text-emerald-400' : margemLiquida > 0 ? 'text-amber-400' : 'text-red-400'}`}>
                {margemLiquida.toFixed(1)}%
@@ -144,8 +148,10 @@ export default function ExecutiveTab({ data, onNavigateToTab }: ExecutiveTabProp
               <Shield className="w-5 h-5 text-purple-400" />
             </div>
           </div>
-          <div className="text-3xl font-black text-white mb-2">{formatCurrency(ticketMedio)}</div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="text-xl lg:text-2xl xl:text-3xl font-black text-white mb-2 tracking-tighter break-words">
+            {formatCurrency(ticketMedio)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs xl:text-sm text-slate-400">
              <span className="text-slate-400">Gasto médio por cliente</span>
           </div>
         </div>
@@ -165,13 +171,15 @@ export default function ExecutiveTab({ data, onNavigateToTab }: ExecutiveTabProp
               <AlertTriangle className="w-5 h-5 text-orange-400" />
             </div>
           </div>
-          <div className="text-3xl font-black text-white mb-2">{formatCurrency(data?.receivables?.total_recebivel || 0)}</div>
-          <div className="flex items-center gap-2 text-sm mb-4">
+          <div className="text-xl lg:text-2xl xl:text-3xl font-black text-white mb-2 tracking-tighter break-words">
+            {formatCurrency(data?.receivables?.total_recebivel || 0)}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs xl:text-sm mb-3">
              <span className="text-orange-400 flex items-center bg-orange-400/10 px-2 py-0.5 rounded-full font-medium">
                 Fiado: {formatCurrency(data?.fiado?.total_aberto || 0)}
              </span>
           </div>
-          <p className="text-slate-400 text-sm font-semibold mb-3">
+          <p className="text-slate-400 text-xs xl:text-sm font-semibold mb-3">
             <span className="text-red-400 font-bold">{formatCurrency(data?.receivables?.total_vencido || 0)}</span> atrasados
           </p>
           {onNavigateToTab && (
@@ -334,6 +342,72 @@ export default function ExecutiveTab({ data, onNavigateToTab }: ExecutiveTabProp
                <p className="text-slate-500 mt-2">Nenhum risco crítico ou anomalia detectada hoje.</p>
              </div>
            )}
+        </div>
+      </div>
+
+      {/* Seção Científica: Anomalias e Previsões */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Anomalias e Alertas */}
+        <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden">
+          <div className="p-6 border-b border-slate-700/60 bg-slate-800/80">
+             <h2 className="text-lg font-bold text-white flex items-center gap-2">
+               <AlertTriangle className="text-amber-400" /> Anomalias Detectadas
+             </h2>
+          </div>
+          <div className="p-4 space-y-3 h-64 overflow-y-auto hide-scrollbar">
+             {(data?.anomalies || data?.alertas_cientificos) && (data?.anomalies || data?.alertas_cientificos).length > 0 ? (
+               (data?.anomalies || data?.alertas_cientificos).map((alerta: any, i: number) => (
+                 <div key={i} className="p-4 bg-slate-900/40 rounded-xl border border-slate-700/50 hover:border-amber-500/30 transition-colors">
+                   <div className="flex items-center gap-2 mb-2">
+                     <div className={`w-2 h-2 rounded-full ${(alerta.gravidade || alerta.impacto) > 7 ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                     <h4 className="font-bold text-slate-200">{alerta.titulo || alerta.tipo || 'Anomalia Detectada'}</h4>
+                   </div>
+                   <p className="text-sm text-slate-400 mb-2">{alerta.descricao}</p>
+                   {alerta.acao_recomendada && (
+                     <p className="text-xs text-amber-400 font-bold flex items-center gap-1 cursor-pointer">
+                       Ação recomendada: {alerta.acao_recomendada} <ArrowRight size={12} />
+                     </p>
+                   )}
+                 </div>
+               ))
+             ) : (
+               <p className="text-slate-500 text-center pt-10">Nenhuma anomalia estatística detectada no comportamento de vendas ou clientes.</p>
+             )}
+          </div>
+        </div>
+
+        {/* Previsões Estratégicas */}
+        <div className="bg-slate-800/60 rounded-3xl border border-slate-700/60 overflow-hidden">
+          <div className="p-6 border-b border-slate-700/60 bg-slate-800/80">
+             <h2 className="text-lg font-bold text-white flex items-center gap-2">
+               <Target className="text-blue-400" /> Previsões Estratégicas (Próximos 30 dias)
+             </h2>
+          </div>
+          <div className="p-4 space-y-3 h-64 overflow-y-auto hide-scrollbar">
+             {(data?.previsoes || data?.insights_cientificos?.previsoes) && (data?.previsoes || data?.insights_cientificos?.previsoes).length > 0 ? (
+               (data?.previsoes || data?.insights_cientificos?.previsoes).map((prev: any, i: number) => (
+                 <div key={i} className="p-4 bg-slate-900/40 rounded-xl border border-slate-700/50 hover:border-blue-500/30 transition-colors">
+                   <div className="flex justify-between items-center mb-2">
+                     <h4 className="font-bold text-slate-200">{prev.variavel}</h4>
+                     <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-bold">Confiança: {prev.confianca}%</span>
+                   </div>
+                   <div className="flex items-end justify-between">
+                     <div>
+                       <p className="text-xs text-slate-500">Valor Atual</p>
+                       <p className="font-medium text-slate-300">{typeof prev.valor_atual === 'number' ? formatCurrency(prev.valor_atual) : prev.valor_atual}</p>
+                     </div>
+                     <ArrowRight className="text-slate-600 w-4 h-4 mb-1" />
+                     <div className="text-right">
+                       <p className="text-xs text-slate-500">Previsão</p>
+                       <p className="font-bold text-blue-400">{typeof prev.previsao_30d === 'number' ? formatCurrency(prev.previsao_30d) : prev.previsao_30d}</p>
+                     </div>
+                   </div>
+                 </div>
+               ))
+             ) : (
+               <p className="text-slate-500 text-center pt-10">Dados insuficientes para gerar previsões confiáveis neste período.</p>
+             )}
+          </div>
         </div>
       </div>
 

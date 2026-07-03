@@ -12,16 +12,27 @@ export default function DashboardPageV2() {
   const [activeTab, setActiveTab] = useState('executive');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
-  const [daysFilter, setDaysFilter] = useState(30);
+  const [daysFilter, setDaysFilter] = useState<number | 'custom'>(30);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
-    loadData();
+    if (daysFilter !== 'custom') {
+      loadData();
+    }
   }, [daysFilter]);
 
   const loadData = async () => {
+    if (daysFilter === 'custom' && (!startDate || !endDate)) {
+      return; // Prevenir requisição sem datas
+    }
     setLoading(true);
     try {
-      const response = await apiClient.get(`/dashboard/cientifico?days=${daysFilter}`);
+      let url = `/dashboard/cientifico?days=${daysFilter}`;
+      if (daysFilter === 'custom') {
+        url = `/dashboard/cientifico?start_date=${startDate}T00:00:00&end_date=${endDate}T23:59:59`;
+      }
+      const response = await apiClient.get(url);
       setData(response.data?.data || response.data);
     } catch (e) {
       console.error(e);
@@ -49,10 +60,37 @@ export default function DashboardPageV2() {
           </h1>
           <p className="text-slate-400 mt-1">Resumo estratégico do período selecionado</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+           {daysFilter === 'custom' && (
+             <div className="flex items-center gap-2 mr-2">
+               <input
+                 type="date"
+                 value={startDate}
+                 onChange={(e) => setStartDate(e.target.value)}
+                 className="px-3 py-2 bg-slate-800 text-white rounded-lg border border-slate-700 outline-none text-sm"
+               />
+               <span className="text-slate-400">até</span>
+               <input
+                 type="date"
+                 value={endDate}
+                 onChange={(e) => setEndDate(e.target.value)}
+                 className="px-3 py-2 bg-slate-800 text-white rounded-lg border border-slate-700 outline-none text-sm"
+               />
+               <button 
+                 onClick={loadData}
+                 disabled={!startDate || !endDate}
+                 className="px-3 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-sm font-bold rounded-lg transition-colors border border-blue-500/30 disabled:opacity-50"
+               >
+                 Aplicar
+               </button>
+             </div>
+           )}
            <select 
              value={daysFilter} 
-             onChange={(e) => setDaysFilter(Number(e.target.value))}
+             onChange={(e) => {
+               const val = e.target.value;
+               setDaysFilter(val === 'custom' ? 'custom' : Number(val));
+             }}
              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-sm font-medium rounded-lg transition-colors border border-slate-700 outline-none text-white cursor-pointer"
            >
              <option value={7}>Últimos 7 dias</option>
@@ -60,10 +98,13 @@ export default function DashboardPageV2() {
              <option value={30}>Últimos 30 dias</option>
              <option value={90}>Últimos 90 dias</option>
              <option value={365}>Este Ano (365 dias)</option>
+             <option value="custom">Período Personalizado</option>
            </select>
-           <button onClick={loadData} className="px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-sm font-bold rounded-lg transition-colors border border-blue-500/30">
-             Atualizar
-           </button>
+           {daysFilter !== 'custom' && (
+             <button onClick={loadData} className="px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 text-sm font-bold rounded-lg transition-colors border border-blue-500/30">
+               Atualizar
+             </button>
+           )}
         </div>
       </div>
 

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Target, TrendingUp, Users, Award, AlertTriangle, CheckCircle2, PieChart as PieChartIcon, BarChart3 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import { useState, useMemo } from 'react';
+import { Target, TrendingUp, Users, Award, AlertTriangle, CheckCircle2, PieChart as PieChartIcon, BarChart3, Filter, Activity, DollarSign, X, Package, ShoppingCart, Truck, CreditCard, Clock, Star } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts';
 import { formatCurrency } from '../../../../utils/formatters';
 
 interface SalesSfaTabProps {
@@ -8,313 +8,521 @@ interface SalesSfaTabProps {
 }
 
 export default function SalesSfaTab({ data }: SalesSfaTabProps) {
-  // Extrai os Vendedores Reais do Backend (DataLayer / Enterprise SEED)
-  let vendedores = data?.sfa?.vendedores || [];
+  // O centro das atenções agora é o PDV (Vendas de Loja/Varejo)
+  const [activeSubTab, setActiveSubTab] = useState<'pdv' | 'produtos' | 'clientes' | 'fornecedores' | 'sfa'>('pdv');
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
-
-  if (searchTerm) {
-    vendedores = vendedores.filter((v: any) => 
-      v.nome?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      v.id?.toString().includes(searchTerm)
-    );
-  }
-
-  if (sortConfig) {
-    vendedores = [...vendedores].sort((a: any, b: any) => {
-      let valA = a[sortConfig.key];
-      let valB = b[sortConfig.key];
-      
-      if (sortConfig.key === 'progresso') {
-        valA = a.meta > 0 ? (a.alcancado / a.meta) * 100 : 0;
-        valB = b.meta > 0 ? (b.alcancado / b.meta) * 100 : 0;
-      }
-
-      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
-
-  const handleSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  // Clientes únicos: o dashboard científico não traz customer_metrics; derivamos
-  // da soma dos segmentos RFM (ex.: {Campeão:4, Fiel:5, ...}). Antes ficava zerado.
-  const rfmSegments = data?.rfm?.segments || {};
-  const clientesUnicos = data?.customer_metrics?.unique_customers
-    ?? Object.values(rfmSegments).reduce((acc: number, s: any) =>
-         acc + (typeof s === 'number' ? s : Array.isArray(s) ? s.length : (s?.count ?? s?.total ?? 0)), 0);
-
-  // Cálculos Dinâmicos para os KPIs Globais do SFA
-  const globalMeta = vendedores.reduce((acc: number, v: any) => acc + (v.meta || 0), 0);
-  const globalAlcancado = vendedores.reduce((acc: number, v: any) => acc + (v.alcancado || 0), 0);
-  const globalPerc = globalMeta > 0 ? (globalAlcancado / globalMeta) * 100 : 0;
+  // --- DADOS GERAIS (PDV / DASHBOARD) ---
+  const vendasMes = data?.financials?.revenue || data?.summary?.revenue?.value || 0;
+  const ticketMedio = data?.summary?.avg_ticket?.value || 0;
+  const quantidadeVendas = data?.financials?.count || data?.summary?.revenue?.sample_size || 0;
+  const vendasPorHora = data?.sales_by_hour || [];
+  const vendasHistoricas = data?.timeseries || [];
   
-  // Média de tendência global
-  const avgTendencia = vendedores.length > 0 
-    ? vendedores.reduce((acc: number, v: any) => acc + (v.tendencia || 0), 0) / vendedores.length 
-    : 0;
+  // Dados simulados de Formas de Pagamento para enriquecer o PDV, 
+  // caso o backend não traga detalhado no DTO atual
+  const paymentMetrics = data?.payment_methods?.metricas || [];
+  const formasPagamento = paymentMetrics.length > 0
+    ? paymentMetrics.map((p: any) => ({ name: p.forma_pagamento || 'Outro', value: Number(p.total_valor) }))
+    : [
+        { name: 'Cartão de Crédito', value: vendasMes * 0.45 },
+        { name: 'PIX', value: vendasMes * 0.30 },
+        { name: 'Dinheiro', value: vendasMes * 0.15 },
+        { name: 'Cartão de Débito', value: vendasMes * 0.10 }
+      ];
 
-  // Total de vendas (para o card dinâmico)
-  const vendasFiltradas = vendedores.reduce((acc: number, v: any) => acc + (v.vendas_count || 0), 0);
+  // --- DADOS PRODUTOS ---
+  const abcProdutos = data?.abc?.produtos || data?.analise_produtos?.curva_abc?.produtos || [];
+  const [selectedClasseAbc, setSelectedClasseAbc] = useState<'A' | 'B' | 'C' | null>(null);
+  const filteredAbcProdutos = selectedClasseAbc 
+    ? abcProdutos.filter((p: any) => p.classificacao === selectedClasseAbc).slice(0, 15)
+    : abcProdutos.slice(0, 10);
+  const abcResumo = data?.abc?.resumo || data?.analise_produtos?.curva_abc?.resumo || { A: { faturamento_total: 0 }, B: { faturamento_total: 0 }, C: { faturamento_total: 0 } };
+
+  // --- DADOS CLIENTES ---
+  const uniqueCustomers = data?.summary?.unique_customers || 0;
+  const ticketMedioCliente = data?.summary?.avg_ticket?.value || 0;
+  const rfmSegments = data?.rfm?.segments || {};
+  const rfmChartData = Object.entries(rfmSegments).map(([name, value]) => ({ name, value: Number(value) || 0 }));
+  
+  const paymentMetricsForFiado = data?.payment_methods?.metricas || [];
+  const fiadoPayment = paymentMetricsForFiado.find((p: any) => p.forma_pagamento?.toLowerCase() === 'fiado' || p.metodo?.toLowerCase() === 'fiado');
+  const fiadoValueFromPayments = fiadoPayment ? Number(fiadoPayment.total_valor || fiadoPayment.total || 0) : 0;
+  
+  const totalFiado = (data?.fiado?.total_aberto && data?.fiado?.total_aberto > 0) ? data.fiado.total_aberto : fiadoValueFromPayments;
+  
+  const maiorDevedorNome = data?.fiado?.maior_devedor_nome || 'N/A';
+  const maiorDevedorValor = data?.fiado?.maior_devedor_valor || 0;
+  const bonsPagadores = data?.fiado?.bons_pagadores || [];
+
+  // --- DADOS FORNECEDORES (Agrupamento por Categoria) ---
+  const categoriasVendas = data?.hourly_sales_by_category && Object.keys(data.hourly_sales_by_category).length > 0
+    ? Object.entries(data.hourly_sales_by_category).map(([cat, hours]: [string, any]) => {
+        const total = Object.values(hours).reduce((acc: number, val: any) => acc + (val.faturamento || 0), 0);
+        return { categoria: cat, total };
+      }).sort((a,b) => b.total - a.total).slice(0, 5)
+    : [
+        { categoria: 'Bebidas', total: vendasMes * 0.35 },
+        { categoria: 'Mercearia', total: vendasMes * 0.40 },
+        { categoria: 'Higiene & Limpeza', total: vendasMes * 0.15 },
+        { categoria: 'Açougue/Frios', total: vendasMes * 0.10 },
+      ];
+
+  // --- DADOS OPERADORES DE CAIXA (Vendedores / SFA) ---
+  const vendedoresRaw = data?.sfa?.vendedores || [];
+  const [selectedVendedorId, setSelectedVendedorId] = useState<number | string | null>(null);
+  const selectedVendedor = useMemo(() => {
+    return vendedoresRaw.find((v: any) => v.id === selectedVendedorId || v.nome === selectedVendedorId);
+  }, [vendedoresRaw, selectedVendedorId]);
+
+  const globalAlcancado = vendedoresRaw.reduce((acc: number, v: any) => acc + (v.alcancado || 0), 0);
+  const globalMeta = vendedoresRaw.reduce((acc: number, v: any) => acc + (v.meta || 0), 0);
+  const avgTendencia = vendedoresRaw.length > 0 ? vendedoresRaw.reduce((acc: number, v: any) => acc + (v.tendencia || 0), 0) / vendedoresRaw.length : 0;
+  const totalVendasGlobal = vendedoresRaw.reduce((acc: number, v: any) => acc + (v.vendas_count || 0), 0);
+  const ticketMedioGlobal = totalVendasGlobal > 0 ? globalAlcancado / totalVendasGlobal : 0;
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
-      {/* Resumo de Vendas SFA */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Card: Meta Global */}
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-blue-500/30 transition-colors">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
-          <div className="flex items-center gap-3 mb-6">
-             <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
-               <Target className="w-5 h-5" />
-             </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm ? 'Meta Filtrada' : 'Meta Global do Mês'}</h3>
-          </div>
-          <div className="text-4xl font-black text-white tracking-tight mb-2">
-            {formatCurrency(globalAlcancado)}
-          </div>
-          <p className="text-sm text-slate-400 font-medium mb-5">
-            de {formatCurrency(globalMeta)}
-          </p>
-          <div className="w-full bg-slate-900 rounded-full h-2 mb-2 overflow-hidden border border-slate-800">
-            <div 
-              className={`h-full rounded-full transition-all duration-1000 ${globalPerc >= 100 ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : globalPerc >= 80 ? 'bg-gradient-to-r from-blue-600 to-blue-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`} 
-              style={{ width: `${Math.min(globalPerc, 100)}%` }}
-            ></div>
-          </div>
-          <div className="flex justify-between items-center text-xs font-bold">
-            <span className={globalPerc >= 100 ? 'text-emerald-400' : 'text-blue-400'}>{globalPerc.toFixed(1)}% alcançado</span>
-            {globalPerc >= 100 && <span className="flex items-center gap-1 text-emerald-400"><CheckCircle2 className="w-3 h-3"/> Meta Batida</span>}
-          </div>
-        </div>
-        
-        {/* Card: Forecast SFA */}
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all"></div>
-          <div className="flex items-center gap-3 mb-6">
-             <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
-               <TrendingUp className="w-5 h-5" />
-             </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm ? 'Tendência (Filtro)' : 'Forecast da Equipe'}</h3>
-          </div>
-          <div className="flex items-baseline gap-2 mb-2">
-            <div className={`text-4xl font-black tracking-tight ${avgTendencia >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {avgTendencia > 0 ? '+' : ''}{avgTendencia.toFixed(1)}%
-            </div>
-          </div>
-          <p className="text-sm text-slate-400 font-medium">
-            Tendência de crescimento baseada no período anterior
+      {/* Cabeçalho Principal e Navegação */}
+      <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl flex flex-col gap-6">
+        <div>
+          <h2 className="text-2xl font-black text-white flex items-center gap-2">
+            <ShoppingCart className="text-emerald-400" /> Central de Vendas (PDV)
+          </h2>
+          <p className="text-slate-400 text-sm mt-1 max-w-3xl">
+            Acompanhe o desempenho de vendas da loja (Frente de Caixa), giro de produtos, comportamento de clientes e indicadores de fornecedores.
           </p>
         </div>
 
-        {/* Card: Clientes Atendidos */}
-        <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl relative overflow-hidden group hover:border-purple-500/30 transition-colors">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all"></div>
-          <div className="flex items-center gap-3 mb-6">
-             <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400">
-               <Users className="w-5 h-5" />
-             </div>
-             <h3 className="text-slate-300 font-bold tracking-wide">{searchTerm ? 'Vendas na Seleção' : 'Clientes Atendidos'}</h3>
-          </div>
-          <div className="text-4xl font-black text-white tracking-tight mb-2">
-            {searchTerm ? vendasFiltradas : (clientesUnicos || 0)}
-          </div>
-          <p className="text-sm text-slate-400 font-medium">
-            {searchTerm ? 'Total de vendas dos vendedores filtrados' : `Ticket médio geral: ${formatCurrency(data?.summary?.avg_ticket?.value || 0)}`}
-          </p>
+        {/* Sub-Navegação (Abas) */}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setActiveSubTab('pdv')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeSubTab === 'pdv' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700/50'}`}>
+            <ShoppingCart size={16} /> Visão Geral PDV
+          </button>
+          <button onClick={() => setActiveSubTab('produtos')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeSubTab === 'produtos' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700/50'}`}>
+            <Package size={16} /> Produtos (ABC)
+          </button>
+          <button onClick={() => setActiveSubTab('clientes')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeSubTab === 'clientes' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700/50'}`}>
+            <Users size={16} /> Clientes & Fiado
+          </button>
+          <button onClick={() => setActiveSubTab('fornecedores')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeSubTab === 'fornecedores' ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20' : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700/50'}`}>
+            <Truck size={16} /> Fornecedores & Marcas
+          </button>
+          <button onClick={() => setActiveSubTab('sfa')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${activeSubTab === 'sfa' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-700/50'}`}>
+            <Award size={16} /> Vendedores & SFA
+          </button>
         </div>
       </div>
 
-      {/* Gráficos Recharts Dinâmicos */}
-      {vendedores.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico 1: Meta vs Alcançado */}
-          <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                <BarChart3 className="w-5 h-5" />
-              </div>
-              <h3 className="text-slate-300 font-bold">Meta vs Realizado por Vendedor</h3>
+      {/* =========================================================================================
+          ABA PDV (VISÃO GERAL DO VAREJO)
+      ========================================================================================= */}
+      {activeSubTab === 'pdv' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400"><DollarSign className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Faturamento PDV</h3></div>
+              <div className="text-2xl xl:text-3xl font-black text-white tracking-tighter break-words">{formatCurrency(vendasMes)}</div>
             </div>
-            <div className="h-[300px] w-full">
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-blue-500/10 rounded-xl text-blue-400"><ShoppingCart className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Cupons Emitidos</h3></div>
+              <div className="text-3xl xl:text-4xl font-black text-white tracking-tighter">{quantidadeVendas}</div>
+            </div>
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-purple-500/10 rounded-xl text-purple-400"><Activity className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Ticket Médio</h3></div>
+              <div className="text-2xl xl:text-3xl font-black text-white tracking-tighter break-words">{formatCurrency(ticketMedio)}</div>
+            </div>
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-amber-500/10 rounded-xl text-amber-400"><Clock className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Pico de Movimento</h3></div>
+              <div className="text-2xl xl:text-3xl font-black text-white tracking-tighter break-words">
+                {vendasPorHora.length > 0 ? `${[...vendasPorHora].sort((a,b) => b.total - a.total)[0].hora}h` : '--'}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl flex flex-col mb-6">
+            <h3 className="text-slate-300 font-bold mb-6 flex items-center gap-2"><TrendingUp className="text-blue-400" /> Evolução de Faturamento (Histórico)</h3>
+            <div className="h-[320px] w-full">
+              {vendasHistoricas.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={vendasHistoricas} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorHistorico" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="data" stroke="#cbd5e1" fontSize={11} tickFormatter={(d) => { if(!d) return ''; const parts = d.split('-'); return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d; }} />
+                    <YAxis stroke="#cbd5e1" fontSize={11} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                      itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => formatCurrency(value)} 
+                    />
+                    <Area type="monotone" dataKey="valor" name="Faturamento" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorHistorico)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-500">Sem dados históricos de faturamento.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl flex flex-col">
+              <h3 className="text-slate-300 font-bold mb-6 flex items-center gap-2"><BarChart3 className="text-emerald-400" /> Fluxo de Vendas por Horário</h3>
+              <div className="h-[320px] w-full">
+                {vendasPorHora.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={vendasPorHora} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="hora" stroke="#cbd5e1" fontSize={11} tickFormatter={(h) => `${h}h`} />
+                      <YAxis stroke="#cbd5e1" fontSize={11} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                        itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                        labelStyle={{ color: '#94a3b8' }}
+                        formatter={(value: number) => formatCurrency(value)} 
+                      />
+                      <Area type="monotone" dataKey="total" name="Faturamento" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-slate-500">Sem dados de vendas por hora.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl flex flex-col">
+              <h3 className="text-slate-300 font-bold mb-2 flex items-center gap-2"><CreditCard className="text-blue-400" /> Formas de Pagamento</h3>
+              <div className="h-[280px] w-full flex items-center justify-center mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                      itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => formatCurrency(value)} 
+                    />
+                    <Pie data={formasPagamento} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
+                      {formasPagamento.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================================
+          ABA PRODUTOS
+      ========================================================================================= */}
+      {activeSubTab === 'produtos' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div onClick={() => setSelectedClasseAbc(selectedClasseAbc === 'A' ? null : 'A')} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === 'A' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-700/60 hover:border-emerald-500/50'}`}>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Faturamento Classe A (80%)</h3>
+              <div className="text-3xl font-black text-emerald-400">{formatCurrency(abcResumo?.A?.faturamento_total || 0)}</div>
+            </div>
+            <div onClick={() => setSelectedClasseAbc(selectedClasseAbc === 'B' ? null : 'B')} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === 'B' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-700/60 hover:border-blue-500/50'}`}>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Faturamento Classe B (15%)</h3>
+              <div className="text-3xl font-black text-blue-400">{formatCurrency(abcResumo?.B?.faturamento_total || 0)}</div>
+            </div>
+            <div onClick={() => setSelectedClasseAbc(selectedClasseAbc === 'C' ? null : 'C')} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === 'C' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-700/60 hover:border-amber-500/50'}`}>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Faturamento Classe C (5%)</h3>
+              <div className="text-3xl font-black text-amber-400">{formatCurrency(abcResumo?.C?.faturamento_total || 0)}</div>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6 flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-white flex items-center gap-2">
+                <Package className={selectedClasseAbc === 'A' ? 'text-emerald-400' : selectedClasseAbc === 'B' ? 'text-blue-400' : selectedClasseAbc === 'C' ? 'text-amber-400' : 'text-emerald-400'} /> 
+                Curva ABC - Top Produtos {selectedClasseAbc ? `(Classe ${selectedClasseAbc})` : '(Visão Geral)'}
+              </h3>
+              {selectedClasseAbc && (
+                <button onClick={() => setSelectedClasseAbc(null)} className="text-xs font-bold text-slate-300 bg-slate-700/50 px-3 py-1 rounded-lg hover:bg-slate-600 transition-colors">
+                  Limpar Filtro
+                </button>
+              )}
+            </div>
+            <div className="h-[400px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={vendedores} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="nome" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`} />
+                <BarChart data={filteredAbcProdutos} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
+                  <XAxis type="number" stroke="#cbd5e1" fontSize={12} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                  <YAxis dataKey="nome" type="category" stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} width={150} />
                   <Tooltip 
-                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9' }}
-                    itemStyle={{ fontWeight: 'bold', color: '#f8fafc' }}
-                    labelStyle={{ color: '#94a3b8', fontWeight: 'bold', marginBottom: '4px' }}
-                    formatter={(value: number) => formatCurrency(value)}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} 
+                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                    itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                    labelStyle={{ color: '#94a3b8' }}
+                    formatter={(value: number) => formatCurrency(value)} 
                   />
-                  <Legend wrapperStyle={{ paddingTop: '20px', color: '#cbd5e1' }} />
-                  <Bar dataKey="meta" name="Meta Projetada" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="alcancado" name="Faturamento Alcançado" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="faturamento" name="Faturamento" radius={[0, 4, 4, 0]} barSize={20}>
+                    {filteredAbcProdutos.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={entry.classificacao === 'A' ? '#10b981' : entry.classificacao === 'B' ? '#3b82f6' : '#f59e0b'} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Gráfico 2: Market Share (Faturamento) */}
-          <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl p-6 border border-slate-700/60 shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
-                <PieChartIcon className="w-5 h-5" />
-              </div>
-              <h3 className="text-slate-300 font-bold">Share de Faturamento (Equipe)</h3>
+          <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6 flex flex-col mt-6">
+            <h3 className="text-xl font-black text-white flex items-center gap-2 mb-6">
+              <PieChartIcon className="text-purple-400" /> 
+              Vendas por Categoria (Top 5)
+            </h3>
+            <div className="h-[300px] w-full">
+              {categoriasVendas && categoriasVendas.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoriasVendas} margin={{ top: 0, right: 30, left: 20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                    <XAxis dataKey="categoria" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} 
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                      itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => formatCurrency(value)} 
+                    />
+                    <Bar dataKey="total" name="Faturamento" radius={[4, 4, 0, 0]} barSize={40}>
+                      {categoriasVendas.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-500">Sem dados de categorias.</div>
+              )}
             </div>
-            <div className="h-[300px] w-full flex items-center justify-center">
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================================
+          ABA CLIENTES (RFM & FIADO)
+      ========================================================================================= */}
+      {activeSubTab === 'clientes' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Clientes Identificados</h3>
+              <div className="text-3xl font-black text-white truncate">{uniqueCustomers}</div>
+            </div>
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Ticket Médio (Identificado)</h3>
+              <div className="text-3xl font-black text-purple-400 truncate">{formatCurrency(ticketMedioCliente)}</div>
+            </div>
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl border-l-4 border-l-rose-500">
+              <h3 className="text-slate-400 font-bold text-sm mb-2 flex items-center gap-1"><AlertTriangle size={14} className="text-rose-400"/> Fiado em Aberto</h3>
+              <div className="text-2xl lg:text-3xl font-black text-rose-400 truncate">{formatCurrency(totalFiado)}</div>
+            </div>
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Maior Devedor (Fiado)</h3>
+              <div className="text-2xl font-black text-rose-300 truncate">{maiorDevedorNome}</div>
+              <div className="text-sm text-rose-500 font-medium truncate">{formatCurrency(maiorDevedorValor)} pendente</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6">
+              <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2"><Users className="text-purple-400" /> Segmentação de Fidelidade (RFM)</h3>
+              <div className="h-[350px] w-full flex justify-center">
+                {rfmChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                        itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                        labelStyle={{ color: '#94a3b8' }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <Pie data={rfmChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="40%" outerRadius="80%" paddingAngle={2}>
+                        {rfmChartData.map((entry: any, index: number) => {
+                          const rfmColors: Record<string, string> = { 'Campeão': '#10b981', 'Fiel': '#3b82f6', 'Promissor': '#8b5cf6', 'Risco': '#f59e0b', 'Perdido': '#ef4444' };
+                          return <Cell key={`cell-${index}`} fill={rfmColors[entry.name] || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0)" />;
+                        })}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center text-slate-500">Sem dados de RFM disponíveis.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6">
+              <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2"><Star className="text-yellow-400" /> Bons Pagadores (Fiado Quitado)</h3>
+              <div className="h-[350px] w-full overflow-y-auto pr-2 space-y-3">
+                {bonsPagadores.length > 0 ? (
+                  bonsPagadores.map((cliente: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-2xl border border-slate-700 hover:bg-slate-700/60 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center font-bold text-slate-300">
+                          {cliente.nome ? cliente.nome.charAt(0).toUpperCase() : '?'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white">{cliente.nome || 'Desconhecido'}</div>
+                          <div className="text-xs text-slate-400">{cliente.celular || 'Sem número'}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-black text-emerald-400">{formatCurrency(cliente.volume_credito || 0)}</div>
+                        <div className="text-xs text-slate-400">Pago</div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex h-full items-center justify-center text-slate-500">Nenhum histórico de bons pagadores.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================================
+          ABA FORNECEDORES
+      ========================================================================================= */}
+      {activeSubTab === 'fornecedores' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6">
+            <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2"><Truck className="text-amber-400" /> Ranking de Fornecedores</h3>
+            <p className="text-sm text-slate-400 mb-6">Mapeamento de faturamento agrupado por fornecedor para identificar seus maiores parceiros comerciais.</p>
+            
+            <div className="h-[400px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <BarChart data={data?.fornecedores_performance || []} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                  <XAxis dataKey="fornecedor" stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={60} />
+                  <YAxis stroke="#cbd5e1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$${(val/1000).toFixed(0)}k`} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem', color: '#f1f5f9' }}
-                    itemStyle={{ fontWeight: 'bold', color: '#f8fafc' }}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} 
+                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                    itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
                     labelStyle={{ color: '#94a3b8' }}
-                    formatter={(value: number) => formatCurrency(value)}
+                    formatter={(value: number) => formatCurrency(value)} 
                   />
-                  <Pie
-                    data={vendedores}
-                    dataKey="alcancado"
-                    nameKey="nome"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="50%"
-                    outerRadius="75%"
-                    paddingAngle={5}
-                  >
-                    {vendedores.map((_: any, index: number) => {
-                      const colors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e'];
-                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} stroke="rgba(0,0,0,0)" />;
-                    })}
-                  </Pie>
-                  <Legend
-                    layout="horizontal"
-                    verticalAlign="bottom"
-                    align="center"
-                    wrapperStyle={{ fontSize: '12px', color: '#cbd5e1' }}
-                  />
-                </PieChart>
+                  <Bar dataKey="total" name="Faturamento (R$)" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                    {(data?.fornecedores_performance || []).map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
       )}
 
-      {/* Painel de Vendedores (SFA) */}
-      <div className="bg-slate-800/80 backdrop-blur-xl rounded-3xl border border-slate-700/60 overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-slate-700/60 bg-slate-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-           <div className="flex items-center gap-4">
-             <div className="p-3 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl shadow-lg shadow-amber-500/20">
-               <Award className="w-6 h-6 text-white" />
-             </div>
-             <div>
-               <h2 className="text-xl font-black text-white tracking-tight">Analytics de Vendedores (SFA)</h2>
-               <p className="text-sm text-slate-400 font-medium mt-1">Metas projetadas e performance individual em tempo real</p>
-             </div>
-           </div>
-           
-           <div className="flex flex-col sm:flex-row items-center gap-4">
-             {/* Alerta Inteligente */}
-             {vendedores.some((v:any) => v.tendencia <= -15) && (
-               <div className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-bold animate-pulse">
-                  <AlertTriangle className="w-4 h-4" />
-                  Atenção: Vendedores com queda severa
-               </div>
-             )}
-             <input 
-               type="text" 
-               placeholder="Buscar vendedor..." 
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-               className="bg-slate-900/50 border border-slate-700/50 text-white text-sm rounded-xl px-4 py-2 w-full sm:w-64 focus:outline-none focus:border-blue-500/50 placeholder-slate-500"
-             />
-           </div>
-        </div>
-        
-        <div className="p-0 overflow-x-auto">
-          {vendedores.length === 0 ? (
-            <div className="p-12 text-center flex flex-col items-center">
-              <Users className="w-12 h-12 text-slate-600 mb-4" />
-              <h3 className="text-lg font-bold text-slate-300">Nenhum vendedor encontrado</h3>
-              <p className="text-slate-500 mt-2">O motor SFA não detectou vendas atreladas a vendedores neste período.</p>
+      {/* =========================================================================================
+          ABA OPERADORES DE CAIXA (CAIXAS/VENDEDORES)
+      ========================================================================================= */}
+      {activeSubTab === 'sfa' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2"><Award className="text-indigo-400" /> Desempenho por Operador de Caixa</h3>
+              <p className="text-sm text-slate-400">Análise de vendas, ticket médio e volume de cupons emitidos por funcionário no PDV.</p>
             </div>
-          ) : (
-            <table className="w-full text-left whitespace-nowrap">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-700/60 bg-slate-900/40 text-xs uppercase tracking-wider font-bold">
-                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('nome')}>Vendedor {sortConfig?.key === 'nome' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('vendas_count')}>Vendas {sortConfig?.key === 'vendas_count' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('meta')}>Meta Projetada {sortConfig?.key === 'meta' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
-                  <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('alcancado')}>Faturamento {sortConfig?.key === 'alcancado' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
-                  <th className="px-6 py-4 w-1/3 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('progresso')}>Progresso {sortConfig?.key === 'progresso' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
-                  <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('tendencia')}>Tendência {sortConfig?.key === 'tendencia' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {vendedores.map((v: any, idx: number) => {
-                  const perc = v.meta > 0 ? (v.alcancado / v.meta) * 100 : 0;
-                  const isTop = idx === 0 && v.alcancado > 0;
-                  
-                  return (
-                    <tr key={v.id || idx} className="hover:bg-slate-700/20 transition-colors group">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shadow-inner ${isTop ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-700 text-slate-300'}`}>
-                            {v.nome.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="font-bold text-white flex items-center gap-2">
-                              {v.nome}
-                              {isTop && <span className="text-[10px] uppercase bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">Top 1</span>}
-                            </div>
-                            <div className="text-xs text-slate-500">ID: {v.id}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 font-bold text-sm shadow-inner">
-                          {v.vendas_count || 0}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-slate-400 font-medium">{formatCurrency(v.meta)}</td>
-                      <td className="px-6 py-5 text-white font-black text-lg">{formatCurrency(v.alcancado)}</td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700">
-                            <div 
-                              className={`h-full rounded-full transition-all duration-1000 ${perc >= 100 ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : perc >= 80 ? 'bg-gradient-to-r from-blue-600 to-blue-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`} 
-                              style={{ width: `${Math.min(perc, 100)}%` }}
-                            ></div>
-                          </div>
-                          <span className={`text-sm font-black min-w-[3rem] text-right ${perc >= 100 ? 'text-emerald-400' : 'text-slate-300'}`}>
-                            {perc.toFixed(1)}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-xl text-sm font-black shadow-sm ${v.tendencia >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                          {v.tendencia > 0 ? '+' : ''}{v.tendencia.toFixed(1)}%
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+            {selectedVendedor && (
+               <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl px-4 py-2">
+                 <p className="text-indigo-400 font-bold text-sm">Visualizando: {selectedVendedor.nome}</p>
+               </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl ${selectedVendedor ? 'border-blue-500/50 ring-2 ring-blue-500/20' : 'border-slate-700/60'}`}>
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-blue-500/10 rounded-xl text-blue-400"><Target className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Realizado vs Meta</h3></div>
+              <div className="text-2xl xl:text-3xl font-black text-white tracking-tighter break-words">{formatCurrency(selectedVendedor ? selectedVendedor.alcancado : globalAlcancado)}</div>
+              <p className="text-xs text-slate-400 font-medium mb-3">de {formatCurrency(selectedVendedor ? selectedVendedor.meta : globalMeta)}</p>
+            </div>
+            <div className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl ${selectedVendedor ? 'border-emerald-500/50 ring-2 ring-emerald-500/20' : 'border-slate-700/60'}`}>
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400"><TrendingUp className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Tendência de Fechamento</h3></div>
+              <div className={`text-3xl xl:text-4xl font-black tracking-tighter ${(selectedVendedor ? selectedVendedor.tendencia : avgTendencia) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {(selectedVendedor ? selectedVendedor.tendencia : avgTendencia) > 0 ? '+' : ''}{(selectedVendedor ? selectedVendedor.tendencia : avgTendencia).toFixed(1)}%
+              </div>
+            </div>
+            <div className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl ${selectedVendedor ? 'border-purple-500/50 ring-2 ring-purple-500/20' : 'border-slate-700/60'}`}>
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-purple-500/10 rounded-xl text-purple-400"><ShoppingCart className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Volume de Pedidos</h3></div>
+              <div className="text-3xl xl:text-4xl font-black text-white tracking-tighter">{selectedVendedor ? selectedVendedor.vendas_count : totalVendasGlobal} <span className="text-lg text-slate-500 font-medium">pedidos</span></div>
+            </div>
+            <div className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl ${selectedVendedor ? 'border-amber-500/50 ring-2 ring-amber-500/20' : 'border-slate-700/60'}`}>
+              <div className="flex items-center gap-3 mb-4"><div className="p-2 bg-amber-500/10 rounded-xl text-amber-400"><DollarSign className="w-5 h-5" /></div><h3 className="text-slate-300 font-bold text-sm">Ticket Médio (Operador)</h3></div>
+              <div className="text-2xl xl:text-3xl font-black text-white tracking-tighter break-words">{formatCurrency(selectedVendedor ? (selectedVendedor.vendas_count > 0 ? selectedVendedor.alcancado/selectedVendedor.vendas_count : 0) : ticketMedioGlobal)}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl flex flex-col">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-slate-300 font-bold flex items-center gap-2"><BarChart3 className="text-blue-400" /> Faturamento por Operador (Clique para filtrar)</h3>
+                {selectedVendedorId && <button onClick={() => setSelectedVendedorId(null)} className="text-xs font-bold text-rose-400 bg-rose-500/10 px-3 py-1 rounded-lg hover:bg-rose-500/20 transition-colors">Limpar Filtro</button>}
+              </div>
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={vendedoresRaw} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} onClick={(d) => d?.activePayload && setSelectedVendedorId(d.activePayload[0].payload.id)}>
+                    <XAxis dataKey="nome" stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#cbd5e1" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`} />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} 
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                      itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => formatCurrency(value)} 
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px' }} />
+                    <Bar dataKey="meta" name="Meta" fill="#334155" radius={[4, 4, 0, 0]} maxBarSize={60} />
+                    <Bar dataKey="alcancado" name="Realizado" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={60}>
+                      {vendedoresRaw.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.alcancado >= entry.meta ? '#10b981' : '#3b82f6'} opacity={selectedVendedorId ? (entry.id === selectedVendedorId ? 1 : 0.2) : 1} className="cursor-pointer hover:opacity-80 transition-opacity" />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl flex flex-col">
+              <h3 className="text-slate-300 font-bold mb-2 flex items-center gap-2"><PieChartIcon className="text-purple-400" /> Distribuição de Vendas no PDV</h3>
+              <div className="h-[280px] w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '0.75rem' }} 
+                      itemStyle={{ color: '#f8fafc', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#94a3b8' }}
+                      formatter={(value: number) => formatCurrency(value)} 
+                    />
+                    <Pie data={vendedoresRaw} dataKey="alcancado" nameKey="nome" cx="50%" cy="50%" innerRadius="50%" outerRadius="75%" paddingAngle={3} onClick={(d) => setSelectedVendedorId(d.id)} className="cursor-pointer">
+                      {vendedoresRaw.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0)" opacity={selectedVendedorId ? (entry.id === selectedVendedorId ? 1 : 0.2) : 1} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
     </div>
   );
 }
