@@ -531,6 +531,41 @@ const CustomersPage: React.FC = () => {
         setCampaignCustomerId(campaignTargets[0]?.id || null);
     }, [selectedCampaign, campaignTargets]);
 
+    // Mensagem sugerida é EDITÁVEL: null = usa o texto gerado automaticamente
+    // pelo template; ao digitar, o funcionário sobrescreve para personalizar
+    // antes de enviar. Reseta ao trocar de cliente ou de campanha (a edição
+    // de uma pessoa não deve "vazar" para a próxima).
+    const [editedMessage, setEditedMessage] = useState<string | null>(null);
+    useEffect(() => {
+        setEditedMessage(null);
+    }, [selectedCampaignCustomer?.id, selectedCampaign]);
+
+    const suggestedMessage = selectedCampaignCustomer
+        ? buildCampaignMessage(selectedCampaign, selectedCampaignCustomer)
+        : '';
+    const currentMessage = editedMessage ?? suggestedMessage;
+    const mensagemFoiEditada = editedMessage !== null && editedMessage !== suggestedMessage;
+    const [iaLoading, setIaLoading] = useState(false);
+
+    const handleGerarMensagemIA = async () => {
+        if (!selectedCampaignCustomer) return;
+        setIaLoading(true);
+        try {
+            const res = await apiClient.post(`/clientes/${selectedCampaignCustomer.id}/mensagem_ia`, {
+                campaign: selectedCampaign,
+            });
+            if (res.data?.mensagem) {
+                setEditedMessage(res.data.mensagem);
+                showToast.success('Mensagem gerada pela IA — revise antes de enviar');
+            }
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || 'Não foi possível gerar a mensagem com IA';
+            showToast.error(msg);
+        } finally {
+            setIaLoading(false);
+        }
+    };
+
     const crmStats = useMemo(() => {
         const vip = clientesVip.length;
         const inRisk = crmClientes.filter((cliente) => cliente.lifecycle === 'em_risco').length;
@@ -845,8 +880,8 @@ const CustomersPage: React.FC = () => {
         showToast.success('PDF CRM exportado com sucesso');
     };
 
-    const handleCampaignAction = async (cliente: CRMCustomer, action: 'open' | 'copy') => {
-        const message = buildCampaignMessage(selectedCampaign, cliente);
+    const handleCampaignAction = async (cliente: CRMCustomer, action: 'open' | 'copy', mensagemCustomizada?: string) => {
+        const message = mensagemCustomizada ?? buildCampaignMessage(selectedCampaign, cliente);
         const whatsappUrl = buildWhatsAppUrl(cliente, message);
 
         if (action === 'copy') {
@@ -1351,15 +1386,49 @@ const CustomersPage: React.FC = () => {
                                         </Box>
                                     </Box>
 
-                                    {/* Message Bubble */}
+                                    {/* Message Bubble — EDITÁVEL, com botão de IA (Groq) que reescreve
+                                        usando o contexto real do cliente (histórico, saldo, produtos,
+                                        desconto máximo permitido). Sem GROQ_API_KEY configurada no
+                                        servidor, o botão mostra um aviso claro em vez de quebrar. */}
                                     <Box className="relative p-6 rounded-3xl rounded-tl-sm bg-slate-900 dark:bg-slate-950 text-white border border-slate-800 shadow-xl">
-                                        <Typography variant="overline" className="opacity-80 tracking-widest font-bold flex items-center gap-2">
-                                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                            Mensagem sugerida
-                                        </Typography>
-                                        <Typography className="mt-4 whitespace-pre-wrap leading-relaxed text-slate-100 text-[15px]">
-                                            {buildCampaignMessage(selectedCampaign, selectedCampaignCustomer)}
-                                        </Typography>
+                                        <Box className="flex items-center justify-between flex-wrap gap-2">
+                                            <Typography variant="overline" className="opacity-80 tracking-widest font-bold flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                                Mensagem sugerida {mensagemFoiEditada && '(editada)'}
+                                            </Typography>
+                                            <Box className="flex items-center gap-2">
+                                                <Button
+                                                    size="small"
+                                                    onClick={handleGerarMensagemIA}
+                                                    disabled={iaLoading}
+                                                    startIcon={iaLoading ? <CircularProgress size={14} sx={{ color: '#93c5fd' }} /> : <AutorenewIcon sx={{ fontSize: 16 }} />}
+                                                    sx={{ color: '#93c5fd', fontSize: '0.7rem', textTransform: 'none', fontWeight: 700, minWidth: 0 }}
+                                                >
+                                                    {iaLoading ? 'Gerando...' : 'Gerar com IA'}
+                                                </Button>
+                                                {mensagemFoiEditada && (
+                                                    <Button size="small" onClick={() => setEditedMessage(null)} className="text-slate-400 hover:text-white" sx={{ minWidth: 0, fontSize: '0.7rem', textTransform: 'none' }}>
+                                                        Restaurar
+                                                    </Button>
+                                                )}
+                                            </Box>
+                                        </Box>
+                                        <TextField
+                                            value={currentMessage}
+                                            onChange={(e) => setEditedMessage(e.target.value)}
+                                            multiline
+                                            minRows={3}
+                                            fullWidth
+                                            variant="standard"
+                                            InputProps={{ disableUnderline: true }}
+                                            sx={{
+                                                mt: 2,
+                                                '& .MuiInputBase-input': {
+                                                    color: '#f1f5f9', fontSize: '15px', lineHeight: 1.6,
+                                                    fontFamily: 'inherit',
+                                                },
+                                            }}
+                                        />
                                     </Box>
 
                                     {/* Action Buttons */}
@@ -1368,11 +1437,11 @@ const CustomersPage: React.FC = () => {
                                             variant="contained"
                                             className="bg-green-500 hover:bg-green-600 shadow-lg shadow-green-500/30 text-white rounded-xl px-6 py-2.5 font-bold transition-all hover:-translate-y-0.5 active:scale-95"
                                             startIcon={<WhatsAppIcon />}
-                                            onClick={() => handleCampaignAction(selectedCampaignCustomer, 'open')}
+                                            onClick={() => handleCampaignAction(selectedCampaignCustomer, 'open', currentMessage)}
                                         >
                                             Abrir WhatsApp
                                         </Button>
-                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy')} className="rounded-xl px-6 py-2.5 font-bold border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">
+                                        <Button variant="outlined" onClick={() => handleCampaignAction(selectedCampaignCustomer, 'copy', currentMessage)} className="rounded-xl px-6 py-2.5 font-bold border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">
                                             Copiar mensagem
                                         </Button>
                                         <Button variant="text" onClick={() => handleRowClick(selectedCampaignCustomer)} className="rounded-xl px-6 py-2.5 font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95">

@@ -14,6 +14,7 @@ from sqlalchemy import func
 import re
 from app.models import db, Cliente, Estabelecimento, Venda, VendaItem, ContaReceber, Funcionario
 from app.utils import validar_cpf, validar_email, formatar_telefone, calcular_idade
+from app.utils.ia_copiloto import gerar_texto, ia_disponivel
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import quota_required, permission_required
 
@@ -1084,6 +1085,106 @@ def listar_contas_fiado(id):
     except Exception as e:
         current_app.logger.error(f"Erro ao listar contas fiado do cliente {id}: {str(e)}")
         return jsonify({"success": False, "message": "Erro ao listar contas de fiado"}), 500
+
+
+_CAMPANHA_OBJETIVO = {
+    "reactivation": "trazer o cliente de volta depois de um tempo sem comprar (reativação)",
+    "vip": "fidelizar e valorizar um cliente que já gasta muito na loja (VIP)",
+    "debt": "cobrar de forma educada e profissional um saldo em aberto (fiado)",
+    "promotion": "divulgar uma promoção ou oferta para gerar uma nova compra",
+}
+
+
+@clientes_bp.route("/<int:id>/mensagem_ia", methods=["POST"])
+@funcionario_required
+def gerar_mensagem_ia(id):
+    """Gera uma mensagem de WhatsApp personalizada via IA (Groq), usando
+    contexto REAL do cliente: histórico de compras, saldo devedor, produtos
+    que ele já comprou, produtos com desconto disponível (vencendo/parados)
+    e o desconto máximo que a loja permite (nunca inventa um valor maior).
+
+    Sem GROQ_API_KEY configurada, retorna 503 com aviso claro — o frontend
+    mantém a mensagem por template como estava antes."""
+    if not ia_disponivel():
+        return jsonify({
+            "success": False,
+            "message": "IA não configurada. Peça ao administrador do sistema para configurar a chave da Groq (gratuita) no servidor.",
+        }), 503
+
+    try:
+        estabelecimento_id = get_authorized_establishment_id()
+        cliente = Cliente.query.filter_by(id=id, estabelecimento_id=estabelecimento_id).first_or_404()
+
+        data = request.get_json() or {}
+        campaign = data.get("campaign", "promotion")
+        instrucao_extra = (data.get("instrucao_extra") or "").strip()
+
+        # ── Contexto: produtos que o cliente mais comprou ──
+        from app.models import Produto, Configuracao
+        top_produtos = (
+            db.session.query(VendaItem.produto_nome, func.sum(VendaItem.quantidade).label("qtd"))
+            .join(Venda, Venda.id == VendaItem.venda_id)
+            .filter(Venda.cliente_id == id, Venda.status == "finalizada")
+            .group_by(VendaItem.produto_nome)
+            .order_by(func.sum(VendaItem.quantidade).desc())
+            .limit(5)
+            .all()
+        )
+        produtos_favoritos = [p[0] for p in top_produtos] or ["ainda sem histórico de compras"]
+
+        # ── Contexto: produtos com desconto real disponível (parados/vencendo) ──
+        produtos_promo = (
+            Produto.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True)
+            .filter(Produto.quantidade > 0)
+            .order_by(Produto.data_validade.asc().nullslast())
+            .limit(5)
+            .all()
+        )
+        produtos_disponiveis = [f"{p.nome} (R$ {float(p.preco_venda or 0):.2f})" for p in produtos_promo]
+
+        # ── Contexto: limite de desconto que a loja PERMITE (a IA não pode inventar mais que isso) ──
+        config = Configuracao.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+        desconto_max = float(config.desconto_maximo_percentual) if config and config.desconto_maximo_percentual else 10.0
+
+        dias_sem_comprar = None
+        if cliente.ultima_compra:
+            dias_sem_comprar = (datetime.utcnow() - cliente.ultima_compra).days
+
+        objetivo = _CAMPANHA_OBJETIVO.get(campaign, _CAMPANHA_OBJETIVO["promotion"])
+
+        contexto = f"""Dados REAIS do cliente (use apenas o que está aqui, não invente valores):
+- Nome: {cliente.nome}
+- Já gastou no total: R$ {float(cliente.valor_total_gasto or 0):.2f}
+- Saldo devedor (fiado) atual: R$ {float(cliente.saldo_devedor or 0):.2f}
+- Dias desde a última compra: {dias_sem_comprar if dias_sem_comprar is not None else "sem registro"}
+- Produtos que ele mais compra: {", ".join(produtos_favoritos)}
+- Produtos disponíveis na loja hoje para sugerir: {", ".join(produtos_disponiveis) or "catálogo geral"}
+- Desconto MÁXIMO que a loja autoriza dar: {desconto_max:.0f}% (NUNCA ofereça mais que isso)
+"""
+        if instrucao_extra:
+            contexto += f"\nInstrução adicional do lojista: {instrucao_extra}\n"
+
+        system_prompt = (
+            "Você é um assistente de um mercadinho de bairro brasileiro, escrevendo mensagens de "
+            "WhatsApp curtas, calorosas e informais (não corporativas) para os clientes, em nome do "
+            "dono da loja. Use os dados reais fornecidos — nunca invente valores de desconto acima do "
+            "máximo informado, nem produtos que não estejam na lista. Máximo 3-4 frases. Sem emojis em "
+            "excesso (no máximo 1-2). Retorne APENAS o texto da mensagem, sem aspas, sem explicações."
+        )
+        user_prompt = f"Objetivo desta mensagem: {objetivo}.\n\n{contexto}\nEscreva a mensagem agora."
+
+        mensagem = gerar_texto(system_prompt, user_prompt)
+        if not mensagem:
+            return jsonify({
+                "success": False,
+                "message": "Não foi possível gerar a mensagem agora (serviço de IA indisponível). Tente novamente em instantes.",
+            }), 502
+
+        return jsonify({"success": True, "mensagem": mensagem}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar mensagem IA para cliente {id}: {str(e)}")
+        return jsonify({"success": False, "message": "Erro ao gerar mensagem com IA"}), 500
 
 
 @clientes_bp.route("/<int:id>/pagar_fiado", methods=["POST"])
