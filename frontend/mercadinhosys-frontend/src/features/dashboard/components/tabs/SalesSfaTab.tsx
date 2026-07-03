@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Target, TrendingUp, Users, Award, AlertTriangle, PieChart as PieChartIcon, BarChart3, Activity, DollarSign, Package, ShoppingCart, Truck, CreditCard, Clock, Star } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, CartesianGrid, AreaChart, Area } from 'recharts';
 import { formatCurrency } from '../../../../utils/formatters';
+import DetailsModal from '../DetailsModal';
 
 interface SalesSfaTabProps {
   data: any;
@@ -10,6 +11,10 @@ interface SalesSfaTabProps {
 export default function SalesSfaTab({ data }: SalesSfaTabProps) {
   // O centro das atenções agora é o PDV (Vendas de Loja/Varejo)
   const [activeSubTab, setActiveSubTab] = useState<'pdv' | 'produtos' | 'clientes' | 'fornecedores' | 'sfa'>('pdv');
+  const [selectedRfmSegment, setSelectedRfmSegment] = useState<string | null>(null);
+  const [selectedCustomerDetails, setSelectedCustomerDetails] = useState<any | null>(null);
+  const [selectedProductDetails, setSelectedProductDetails] = useState<any | null>(null);
+  const [selectedCategoryDetails, setSelectedCategoryDetails] = useState<any | null>(null);
 
   // --- DADOS GERAIS (PDV / DASHBOARD) ---
   const vendasMes = data?.financials?.revenue || data?.summary?.revenue?.value || 0;
@@ -39,8 +44,19 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
   const abcResumo = data?.abc?.resumo || data?.analise_produtos?.curva_abc?.resumo || { A: { faturamento_total: 0 }, B: { faturamento_total: 0 }, C: { faturamento_total: 0 } };
 
   // --- DADOS CLIENTES ---
-  const uniqueCustomers = data?.summary?.unique_customers || 0;
-  const ticketMedioCliente = data?.summary?.avg_ticket?.value || 0;
+  const rfmCustomers = data?.rfm?.customers || [];
+  const filteredRfmCustomers = selectedRfmSegment 
+    ? rfmCustomers.filter((c: any) => c.segmento === selectedRfmSegment || c.segment === selectedRfmSegment)
+    : rfmCustomers;
+
+  const uniqueCustomers = selectedRfmSegment 
+    ? filteredRfmCustomers.length 
+    : (data?.summary?.unique_customers || rfmCustomers.length || 0);
+
+  const ticketMedioCliente = selectedRfmSegment
+    ? (filteredRfmCustomers.length > 0 ? filteredRfmCustomers.reduce((acc: number, c: any) => acc + (c.monetary || 0), 0) / filteredRfmCustomers.length : 0)
+    : (data?.summary?.avg_ticket?.value || 0);
+
   const rfmSegments = data?.rfm?.segments || {};
   const rfmChartData = Object.entries(rfmSegments).map(([name, value]) => ({ name, value: Number(value) || 0 }));
   
@@ -231,17 +247,21 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
       ========================================================================================= */}
       {activeSubTab === 'produtos' && (
         <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div onClick={() => setSelectedClasseAbc(null)} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === null ? 'border-white ring-2 ring-white/20' : 'border-slate-700/60 hover:border-white/50'}`}>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Total Acumulado (ABC)</h3>
+              <div className="text-3xl font-black text-white">{formatCurrency((abcResumo?.A?.faturamento_total || 0) + (abcResumo?.B?.faturamento_total || 0) + (abcResumo?.C?.faturamento_total || 0))}</div>
+            </div>
             <div onClick={() => setSelectedClasseAbc(selectedClasseAbc === 'A' ? null : 'A')} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === 'A' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-700/60 hover:border-emerald-500/50'}`}>
-              <h3 className="text-slate-400 font-bold text-sm mb-2">Faturamento Classe A (80%)</h3>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Classe A (80%)</h3>
               <div className="text-3xl font-black text-emerald-400">{formatCurrency(abcResumo?.A?.faturamento_total || 0)}</div>
             </div>
             <div onClick={() => setSelectedClasseAbc(selectedClasseAbc === 'B' ? null : 'B')} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === 'B' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-700/60 hover:border-blue-500/50'}`}>
-              <h3 className="text-slate-400 font-bold text-sm mb-2">Faturamento Classe B (15%)</h3>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Classe B (15%)</h3>
               <div className="text-3xl font-black text-blue-400">{formatCurrency(abcResumo?.B?.faturamento_total || 0)}</div>
             </div>
             <div onClick={() => setSelectedClasseAbc(selectedClasseAbc === 'C' ? null : 'C')} className={`bg-slate-800/80 rounded-3xl p-6 border shadow-xl cursor-pointer transition-all ${selectedClasseAbc === 'C' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-700/60 hover:border-amber-500/50'}`}>
-              <h3 className="text-slate-400 font-bold text-sm mb-2">Faturamento Classe C (5%)</h3>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Classe C (5%)</h3>
               <div className="text-3xl font-black text-amber-400">{formatCurrency(abcResumo?.C?.faturamento_total || 0)}</div>
             </div>
           </div>
@@ -270,10 +290,19 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                     labelStyle={{ color: '#94a3b8' }}
                     formatter={(value: number) => formatCurrency(value)} 
                   />
-                  <Bar dataKey="faturamento" name="Faturamento" radius={[0, 4, 4, 0]} barSize={20}>
-                    {filteredAbcProdutos.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.classificacao === 'A' ? '#10b981' : entry.classificacao === 'B' ? '#3b82f6' : '#f59e0b'} />
-                    ))}
+                  <Bar 
+                    dataKey="faturamento" 
+                    name="Faturamento" 
+                    radius={[0, 4, 4, 0]} 
+                    barSize={20}
+                    onClick={(entry) => setSelectedProductDetails({ ...entry, tipo: 'produto' })}
+                  >
+                    {filteredAbcProdutos.map((entry: any, index: number) => {
+                      const baseColor = entry.classificacao === 'A' ? '#10b981' : entry.classificacao === 'B' ? '#3b82f6' : '#f59e0b';
+                      const isSelected = selectedProductDetails?.nome === entry.nome;
+                      const opacity = selectedProductDetails && !isSelected ? 0.4 : 1;
+                      return <Cell key={`cell-${index}`} fill={baseColor} opacity={opacity} className="cursor-pointer transition-opacity duration-300" />;
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -299,10 +328,18 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                       labelStyle={{ color: '#94a3b8' }}
                       formatter={(value: number) => formatCurrency(value)} 
                     />
-                    <Bar dataKey="total" name="Faturamento" radius={[4, 4, 0, 0]} barSize={40}>
-                      {categoriasVendas.map((_entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
-                      ))}
+                    <Bar 
+                      dataKey="total" 
+                      name="Faturamento" 
+                      radius={[4, 4, 0, 0]} 
+                      barSize={40}
+                      onClick={(entry) => setSelectedCategoryDetails({ ...entry, tipo: 'categoria' })}
+                    >
+                      {categoriasVendas.map((entry: any, index: number) => {
+                        const isSelected = selectedCategoryDetails?.categoria === entry.categoria;
+                        const opacity = selectedCategoryDetails && !isSelected ? 0.4 : 1;
+                        return <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} opacity={opacity} className="cursor-pointer transition-opacity duration-300" />;
+                      })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -321,18 +358,18 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
-              <h3 className="text-slate-400 font-bold text-sm mb-2">Clientes Identificados</h3>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Clientes Identificados {selectedRfmSegment && `(${selectedRfmSegment})`}</h3>
               <div className="text-3xl font-black text-white truncate">{uniqueCustomers}</div>
             </div>
             <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
-              <h3 className="text-slate-400 font-bold text-sm mb-2">Ticket Médio (Identificado)</h3>
+              <h3 className="text-slate-400 font-bold text-sm mb-2">Ticket Médio {selectedRfmSegment && `(${selectedRfmSegment})`}</h3>
               <div className="text-3xl font-black text-purple-400 truncate">{formatCurrency(ticketMedioCliente)}</div>
             </div>
             <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl border-l-4 border-l-rose-500">
               <h3 className="text-slate-400 font-bold text-sm mb-2 flex items-center gap-1"><AlertTriangle size={14} className="text-rose-400"/> Fiado em Aberto</h3>
               <div className="text-2xl lg:text-3xl font-black text-rose-400 truncate">{formatCurrency(totalFiado)}</div>
             </div>
-            <div className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl">
+            <div onClick={() => setSelectedCustomerDetails({ nome: maiorDevedorNome, valor: maiorDevedorValor, tipo: 'devedor' })} className="bg-slate-800/80 rounded-3xl p-6 border border-slate-700/60 shadow-xl cursor-pointer hover:bg-slate-800 hover:border-rose-500/50 transition-colors">
               <h3 className="text-slate-400 font-bold text-sm mb-2">Maior Devedor (Fiado)</h3>
               <div className="text-2xl font-black text-rose-300 truncate">{maiorDevedorNome}</div>
               <div className="text-sm text-rose-500 font-medium truncate">{formatCurrency(maiorDevedorValor)} pendente</div>
@@ -352,10 +389,24 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                         labelStyle={{ color: '#94a3b8' }}
                       />
                       <Legend wrapperStyle={{ fontSize: '12px' }} />
-                      <Pie data={rfmChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="40%" outerRadius="80%" paddingAngle={2}>
+                      <Pie 
+                        data={rfmChartData} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        innerRadius="40%" 
+                        outerRadius="80%" 
+                        paddingAngle={2}
+                        onClick={(entry) => {
+                          setSelectedRfmSegment(selectedRfmSegment === entry.name ? null : entry.name);
+                        }}
+                      >
                         {rfmChartData.map((entry: any, index: number) => {
                           const rfmColors: Record<string, string> = { 'Campeão': '#10b981', 'Fiel': '#3b82f6', 'Promissor': '#8b5cf6', 'Risco': '#f59e0b', 'Perdido': '#ef4444' };
-                          return <Cell key={`cell-${index}`} fill={rfmColors[entry.name] || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0)" />;
+                          const isSelected = selectedRfmSegment === entry.name;
+                          const opacity = selectedRfmSegment && !isSelected ? 0.3 : 1;
+                          return <Cell key={`cell-${index}`} fill={rfmColors[entry.name] || COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0)" opacity={opacity} className="cursor-pointer transition-opacity duration-300" />;
                         })}
                       </Pie>
                     </PieChart>
@@ -364,6 +415,13 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                   <div className="flex items-center justify-center text-slate-500">Sem dados de RFM disponíveis.</div>
                 )}
               </div>
+              {selectedRfmSegment && (
+                <div className="mt-4 flex justify-end">
+                  <button onClick={() => setSelectedRfmSegment(null)} className="text-xs font-bold text-slate-300 bg-slate-700/50 px-3 py-1 rounded-lg hover:bg-slate-600 transition-colors">
+                    Limpar Filtro
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="bg-slate-800/80 rounded-3xl border border-slate-700/60 shadow-2xl p-6">
@@ -371,7 +429,11 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
               <div className="h-[350px] w-full overflow-y-auto pr-2 space-y-3">
                 {bonsPagadores.length > 0 ? (
                   bonsPagadores.map((cliente: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-2xl border border-slate-700 hover:bg-slate-700/60 transition-colors">
+                    <div 
+                      key={idx} 
+                      onClick={() => setSelectedCustomerDetails({ nome: cliente.nome, valor: cliente.volume_credito, celular: cliente.celular, tipo: 'bom_pagador' })}
+                      className="flex items-center justify-between p-4 bg-slate-700/30 rounded-2xl border border-slate-700 hover:bg-slate-700/60 hover:border-emerald-500/30 cursor-pointer transition-all"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center font-bold text-slate-300">
                           {cliente.nome ? cliente.nome.charAt(0).toUpperCase() : '?'}
@@ -522,6 +584,93 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
           </div>
         </div>
       )}
+
+      {/* =========================================================================================
+          MODAIS UNIFICADOS (DETALHAMENTO INTERATIVO)
+      ========================================================================================= */}
+      
+      {/* Modal: Cliente (Devedor ou Bom Pagador) */}
+      <DetailsModal 
+        isOpen={!!selectedCustomerDetails} 
+        onClose={() => setSelectedCustomerDetails(null)} 
+        title={`Ficha de Cliente: ${selectedCustomerDetails?.nome}`}
+      >
+        <div className="space-y-4">
+          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700/50">
+            <h4 className="text-sm font-bold text-slate-400 mb-4">Informações de Fiado</h4>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-slate-400">Cliente</span>
+              <span className="font-bold text-white">{selectedCustomerDetails?.nome}</span>
+            </div>
+            {selectedCustomerDetails?.celular && (
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Contato</span>
+                <span className="font-bold text-white">{selectedCustomerDetails?.celular}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-700/50">
+              <span className="text-slate-400">{selectedCustomerDetails?.tipo === 'devedor' ? 'Dívida em Aberto' : 'Volume Quitado'}</span>
+              <span className={`font-black text-xl ${selectedCustomerDetails?.tipo === 'devedor' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {formatCurrency(selectedCustomerDetails?.valor || 0)}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-4 mt-6">
+            <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl transition-colors">
+              Abrir Cadastro
+            </button>
+            <button className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-xl transition-colors">
+              Histórico de Vendas
+            </button>
+          </div>
+        </div>
+      </DetailsModal>
+
+      {/* Modal: Produto (Curva ABC) */}
+      <DetailsModal 
+        isOpen={!!selectedProductDetails} 
+        onClose={() => setSelectedProductDetails(null)} 
+        title={`Detalhes do Produto (ABC)`}
+      >
+        <div className="space-y-4 text-slate-300 p-2">
+          <p className="text-lg">Produto selecionado: <strong className="text-white">{selectedProductDetails?.nome}</strong></p>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+              <span className="text-xs text-slate-400 font-bold">Faturamento (Período)</span>
+              <div className="text-xl font-black text-blue-400 mt-1">{formatCurrency(selectedProductDetails?.faturamento || 0)}</div>
+            </div>
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+              <span className="text-xs text-slate-400 font-bold">Classificação ABC</span>
+              <div className={`text-xl font-black mt-1 ${selectedProductDetails?.classificacao === 'A' ? 'text-emerald-400' : selectedProductDetails?.classificacao === 'B' ? 'text-blue-400' : 'text-amber-400'}`}>
+                Classe {selectedProductDetails?.classificacao}
+              </div>
+            </div>
+          </div>
+          <p className="text-sm mt-4">Essa visão permite analisar giro de estoque, margem de contribuição e prever quebras. O botão abaixo abriria o inventário completo do item.</p>
+          <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl transition-colors mt-4">
+            Analisar Estoque
+          </button>
+        </div>
+      </DetailsModal>
+
+      {/* Modal: Categoria */}
+      <DetailsModal 
+        isOpen={!!selectedCategoryDetails} 
+        onClose={() => setSelectedCategoryDetails(null)} 
+        title={`Análise de Categoria`}
+      >
+        <div className="space-y-4 text-slate-300 p-2">
+          <p className="text-lg">Categoria selecionada: <strong className="text-white">{selectedCategoryDetails?.categoria}</strong></p>
+          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 mt-4">
+            <span className="text-xs text-slate-400 font-bold">Total Arrecadado</span>
+            <div className="text-2xl font-black text-purple-400 mt-1">{formatCurrency(selectedCategoryDetails?.total || 0)}</div>
+          </div>
+          <p className="text-sm mt-4">Use este atalho para consultar o sub-relatório de vendas por segmento e entender os produtos líderes desta categoria.</p>
+          <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-xl transition-colors mt-4">
+            Explorar Sub-Categoria
+          </button>
+        </div>
+      </DetailsModal>
 
     </div>
   );

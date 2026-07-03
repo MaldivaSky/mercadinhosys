@@ -86,3 +86,4 @@ pytest-cov==4.1.0
 sentry-sdk[flask]==1.39.1
 psutil==6.1.0
 cloudinary>=1.40,<2  # armazenamento persistente de imagens (fotos de ponto) — disco do Render é efêmero
+hypothesis==6.102.3

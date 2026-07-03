@@ -1,11 +1,41 @@
+import { useState } from 'react';
 import { Users, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '../../../../utils/formatters';
+import DetailsModal from '../DetailsModal';
 
 interface RHTabProps {
   data: any;
+  onRefresh?: () => void;
 }
 
-export default function RHTab({ data }: RHTabProps) {
+export default function RHTab({ data, onRefresh }: RHTabProps) {
+  const [loadingApprove, setLoadingApprove] = useState<number | null>(null);
+  const [selectedDetails, setSelectedDetails] = useState<any | null>(null);
+  
+  const handleApprove = async (id: number) => {
+    try {
+      setLoadingApprove(id);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/rh/justificativas/${id}/responder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'aprovado' })
+      });
+      if (res.ok) {
+        if (onRefresh) onRefresh();
+      } else {
+        alert('Falha ao aprovar justificativa.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao aprovar justificativa.');
+    } finally {
+      setLoadingApprove(null);
+    }
+  };
   const rh = data?.rh || {};
   // O backend (cientifico) entrega custo_folha_estimado, benefits_breakdown[] e
   // listas por funcionário; os nomes antigos (total_salarios/resumo_mes) não existem
@@ -111,9 +141,11 @@ export default function RHTab({ data }: RHTabProps) {
                             </button>
                           )}
                           <button 
-                            className="px-3 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded-md transition-colors font-semibold text-xs"
+                            onClick={() => handleApprove(just.id)}
+                            disabled={loadingApprove === just.id}
+                            className="px-3 py-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 rounded-md transition-colors font-semibold text-xs disabled:opacity-50"
                           >
-                            Aprovar
+                            {loadingApprove === just.id ? 'Aprovando...' : 'Aprovar'}
                           </button>
                         </td>
                       </tr>
@@ -166,7 +198,10 @@ export default function RHTab({ data }: RHTabProps) {
                     </td>
                     <td className="p-4 text-right font-black text-white">{formatCurrency(emp.total_estimado || 0)}</td>
                     <td className="p-4 text-center">
-                      <button className="px-3 py-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 rounded-md transition-colors font-semibold">
+                      <button 
+                        onClick={() => setSelectedDetails({ type: 'pagamento', data: emp })}
+                        className="px-3 py-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 rounded-md transition-colors font-semibold"
+                      >
                         Ver Detalhes
                       </button>
                     </td>
@@ -234,8 +269,11 @@ export default function RHTab({ data }: RHTabProps) {
                     <p className="text-emerald-400 font-bold">{(emp.minutos_extras / 60).toFixed(1)}h</p>
                     <p className="text-xs text-slate-500">{formatCurrency(emp.custo_extras)} (est.)</p>
                   </div>
-                  <button className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400 rounded-lg text-xs font-bold transition-colors">
-                    Aprovar
+                  <button 
+                    onClick={() => setSelectedDetails({ type: 'hora_extra', data: emp })}
+                    className="px-2 py-1 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    Ver
                   </button>
                 </div>
               </div>
@@ -247,6 +285,50 @@ export default function RHTab({ data }: RHTabProps) {
         </div>
 
       </div>
+
+      {/* MODAL UNIFICADO */}
+      <DetailsModal 
+        isOpen={!!selectedDetails} 
+        onClose={() => setSelectedDetails(null)} 
+        title={
+          selectedDetails?.type === 'pagamento' ? `Holerite Estimado: ${selectedDetails?.data?.nome}` :
+          selectedDetails?.type === 'hora_extra' ? `Horas Extras: ${selectedDetails?.data?.nome}` :
+          'Detalhes'
+        }
+      >
+        {selectedDetails?.type === 'pagamento' && (
+          <div className="space-y-4">
+            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Salário Base</span>
+                <span className="font-bold text-white">{formatCurrency(selectedDetails.data.salario_base || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Benefícios</span>
+                <span className="font-bold text-emerald-400">+{formatCurrency(selectedDetails.data.beneficios || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-slate-400">Horas Extras ({selectedDetails.data.horas_extras_horas}h)</span>
+                <span className="font-bold text-emerald-400">+{formatCurrency(selectedDetails.data.custo_horas_extras || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-700/50">
+                <span className="text-slate-400">Faltas Injustificadas ({selectedDetails.data.faltas} dias)</span>
+                <span className="font-bold text-rose-400">-{formatCurrency(selectedDetails.data.desconto_faltas || 0)}</span>
+              </div>
+            </div>
+            <div className="bg-blue-500/10 p-4 rounded-xl border border-blue-500/20 flex justify-between items-center">
+              <span className="text-blue-400 font-bold">Total Líquido Estimado</span>
+              <span className="font-black text-2xl text-blue-400">{formatCurrency(selectedDetails.data.total_estimado || 0)}</span>
+            </div>
+          </div>
+        )}
+        {selectedDetails?.type === 'hora_extra' && (
+          <div className="space-y-4 text-center p-6 text-slate-300">
+            <p><strong>{selectedDetails.data.nome}</strong> acumulou <strong>{(selectedDetails.data.minutos_extras / 60).toFixed(1)}h</strong> de horas extras neste mês.</p>
+            <p className="text-sm">O custo estimado projetado no holerite é de {formatCurrency(selectedDetails.data.custo_extras)}.</p>
+          </div>
+        )}
+      </DetailsModal>
     </div>
   );
 }

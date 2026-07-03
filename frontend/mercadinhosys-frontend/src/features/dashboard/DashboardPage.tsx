@@ -28,6 +28,7 @@ export default function DashboardPageV2() {
     }
     setLoading(true);
     try {
+      // apiClient já inclui /api no baseURL — prefixar aqui viraria /api/api/... (404)
       let url = `/dashboard/cientifico?days=${daysFilter}`;
       if (daysFilter === 'custom') {
         url = `/dashboard/cientifico?start_date=${startDate}T00:00:00&end_date=${endDate}T23:59:59`;
@@ -155,7 +156,7 @@ export default function DashboardPageV2() {
             {activeTab === 'sales' && <SalesSfaTab data={data} />}
             {activeTab === 'inventory' && <InventoryTab data={data} />}
             {activeTab === 'financial' && <FinancialTab data={data} />}
-            {activeTab === 'rh' && <RHTab data={data} />}
+            {activeTab === 'rh' && <RHTab data={data} onRefresh={loadData} />}
           </div>
         )}
       </div>

@@ -39,6 +39,7 @@ from app.decorators.decorator_jwt import funcionario_required, gerente_ou_admin_
 from app.decorators.plan_guards import plan_required
 from collections import defaultdict
 from typing import Dict, List, Any, Tuple
+from app.utils.metrics_calculator import MetricsCalculator
 
 relatorios_bp = Blueprint("relatorios", __name__)
 

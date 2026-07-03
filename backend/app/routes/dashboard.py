@@ -66,6 +66,8 @@ def dashboard_cientifico():
         # 🔥 NOVO: Suportar filtro por datas específicas
         start_date_str = request.args.get('start_date', default=None, type=str)
         end_date_str = request.args.get('end_date', default=None, type=str)
+        category_ids = request.args.getlist('category_ids', type=int)
+        segment = request.args.get('segment', default=None, type=str)
         days = request.args.get('days', default=30, type=int)
         
         start_date_obj = None
@@ -105,7 +107,9 @@ def dashboard_cientifico():
         from app import cache
         cache_key = (
             f"dash_cient:v2:{estabelecimento_id}:{days}:"
-            f"{start_date_str or ''}:{end_date_str or ''}"
+            f"{start_date_str or ''}:{end_date_str or ''}:"
+            f"{','.join(map(str, category_ids)) if category_ids else ''}:"
+            f"{segment or ''}"
         )
         try:
             cached_payload = cache.get(cache_key)
@@ -125,7 +129,9 @@ def dashboard_cientifico():
         data = orchestrator.get_scientific_dashboard(
             days=days,
             start_date=start_date_obj,
-            end_date=end_date_obj
+            end_date=end_date_obj,
+            category_ids=category_ids if category_ids else None,
+            segment=segment if segment else None
         )
 
         if not data.get("success", True):
