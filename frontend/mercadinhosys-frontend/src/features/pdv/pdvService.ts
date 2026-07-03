@@ -468,11 +468,12 @@ export const pdvService = {
         return response.data;
     },
 
-    pagarFiado: async (clienteId: number, valor: number, forma_pagamento: string, observacoes?: string): Promise<any> => {
+    pagarFiado: async (clienteId: number, valor: number, forma_pagamento: string, observacoes?: string, conta_receber_id?: number): Promise<any> => {
         const response = await apiClient.post<any>(`/clientes/${clienteId}/pagar_fiado`, {
             valor,
             forma_pagamento,
-            observacoes
+            observacoes,
+            conta_receber_id,
         });
         return response.data;
     },

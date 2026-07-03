@@ -1022,36 +1022,129 @@ def recalcular_metricas_clientes():
 
 
 
+@clientes_bp.route("/<int:id>/contas_fiado", methods=["GET"])
+@funcionario_required
+def listar_contas_fiado(id):
+    """Lista as vendas fiado EM ABERTO do cliente, para o funcionário conseguir
+    justificar o saldo devedor ("essas 3 compras somam R$100") em vez de mostrar
+    só um número solto sem explicação — o que gera questionamento do cliente."""
+    try:
+        estabelecimento_id = get_authorized_establishment_id()
+        cliente = Cliente.query.filter_by(
+            id=id, estabelecimento_id=estabelecimento_id
+        ).first_or_404()
+
+        hoje = date.today()
+        contas = (
+            ContaReceber.query.filter_by(
+                cliente_id=id, estabelecimento_id=estabelecimento_id, status="aberto"
+            )
+            .order_by(ContaReceber.data_emissao.asc())  # mais antiga primeiro (FIFO)
+            .all()
+        )
+
+        itens = []
+        for c in contas:
+            venda = c.venda
+            itens.append({
+                "conta_receber_id": c.id,
+                "numero_documento": c.numero_documento,
+                "venda_id": c.venda_id,
+                "venda_codigo": venda.codigo if venda else None,
+                "data_emissao": c.data_emissao.isoformat() if c.data_emissao else None,
+                "data_vencimento": c.data_vencimento.isoformat() if c.data_vencimento else None,
+                "valor_original": float(c.valor_original or 0),
+                "valor_atual": float(c.valor_atual or 0),
+                "dias_em_aberto": (hoje - c.data_emissao).days if c.data_emissao else None,
+                "vencida": bool(c.data_vencimento and c.data_vencimento < hoje),
+                "itens_venda": [
+                    {"produto_nome": vi.produto_nome, "quantidade": float(vi.quantidade or 0), "total_item": float(vi.total_item or 0)}
+                    for vi in (venda.itens if venda else [])
+                ],
+            })
+
+        total_contas = round(sum(i["valor_atual"] for i in itens), 2)
+        saldo_cliente = round(float(cliente.saldo_devedor or 0), 2)
+
+        return jsonify({
+            "success": True,
+            "cliente_id": id,
+            "cliente_nome": cliente.nome,
+            "saldo_devedor": saldo_cliente,
+            "total_contas_abertas": total_contas,
+            # Se divergir, é sinal de dado legado a reconciliar — melhor expor
+            # do que esconder (mesma lição do bug de cancelamento de venda).
+            "consistente": abs(total_contas - saldo_cliente) < 0.01,
+            "contas": itens,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Erro ao listar contas fiado do cliente {id}: {str(e)}")
+        return jsonify({"success": False, "message": "Erro ao listar contas de fiado"}), 500
+
+
 @clientes_bp.route("/<int:id>/pagar_fiado", methods=["POST"])
 @funcionario_required
 def pagar_fiado(id):
     """Registra pagamento (parcial ou total) de dívida de fiado do cliente.
-    Gera automaticamente um Suprimento no caixa aberto."""
+    Gera automaticamente um Suprimento no caixa aberto.
+
+    Dois modos:
+    - conta_receber_id informado: quita ESSA venda específica (o cliente
+      questionou "por que devo X" e o funcionário resolve quitar aquela
+      compra pontual).
+    - sem conta_receber_id: abatimento livre — distribui o valor nas
+      contas em aberto por ordem FIFO (mais antiga primeiro), igual ao
+      caderninho tradicional.
+
+    Em ambos os casos, Cliente.saldo_devedor é RECONCILIADO ao final (não
+    apenas decrementado) para nunca divergir da soma real das ContaReceber
+    em aberto — essa divergência já causou bug real (ver bug de cancelamento
+    de venda que não revertia denormalizações)."""
     try:
         jwt_data = get_jwt()
         funcionario_id = int(get_jwt_identity())
+        estabelecimento_id = jwt_data.get("estabelecimento_id")
 
         cliente = Cliente.query.filter_by(
-            id=id, estabelecimento_id=jwt_data.get("estabelecimento_id")
+            id=id, estabelecimento_id=estabelecimento_id
         ).first_or_404()
 
         data = request.get_json()
         valor_pago = float(data.get("valor", 0))
         forma_pagamento = data.get("forma_pagamento", "Dinheiro")
+        conta_receber_id = data.get("conta_receber_id")
         observacoes = data.get("observacoes", f"Pagamento de fiado - Cliente {cliente.nome}")
 
         if valor_pago <= 0:
             return jsonify({"success": False, "message": "O valor deve ser maior que zero"}), 400
 
         saldo_atual = float(cliente.saldo_devedor or 0)
-        if valor_pago > saldo_atual:
+        if valor_pago > saldo_atual + 0.01:
             return jsonify({
                 "success": False,
                 "message": f"Valor informado (R$ {valor_pago:.2f}) é maior que o saldo devedor (R$ {saldo_atual:.2f})"
             }), 400
 
+        # Trava de integridade: o abatimento livre só pode quitar o que existe
+        # de fato em ContaReceber. Sem isso, um Cliente.saldo_devedor
+        # desatualizado (dado legado sem conta correspondente) "engoliria"
+        # o pagamento sem lastro em nenhuma venda real.
+        if not conta_receber_id:
+            total_aberto_antes = float(db.session.query(
+                func.coalesce(func.sum(ContaReceber.valor_atual), 0)
+            ).filter_by(cliente_id=id, estabelecimento_id=estabelecimento_id, status="aberto").scalar() or 0)
+            if valor_pago > total_aberto_antes + 0.01:
+                return jsonify({
+                    "success": False,
+                    "message": (
+                        f"O saldo devedor (R$ {saldo_atual:.2f}) não corresponde a nenhuma venda "
+                        f"em aberto encontrada (R$ {total_aberto_antes:.2f}). Contate o suporte para "
+                        f"reconciliar o cadastro deste cliente antes de registrar o recebimento."
+                    ),
+                }), 409
+
         # Buscar caixa aberto para o funcionário logado
-        from app.models import Caixa, MovimentacaoCaixa
+        from app.models import Caixa, MovimentacaoCaixa, Auditoria
         caixa_aberto = Caixa.query.filter_by(
             funcionario_id=funcionario_id,
             status="aberto"
@@ -1063,13 +1156,57 @@ def pagar_fiado(id):
                 "message": "É necessário ter um caixa aberto para registrar o recebimento de fiado."
             }), 403
 
-        # Abater do saldo devedor do cliente
-        cliente.saldo_devedor = max(0, saldo_atual - valor_pago)
+        # ── Quitação de venda específica (o cliente pediu detalhamento) ──
+        if conta_receber_id:
+            conta = ContaReceber.query.filter_by(
+                id=conta_receber_id, cliente_id=id,
+                estabelecimento_id=estabelecimento_id, status="aberto",
+            ).first()
+            if not conta:
+                return jsonify({"success": False, "message": "Conta de fiado não encontrada ou já quitada"}), 404
+            if valor_pago > float(conta.valor_atual or 0) + 0.01:
+                return jsonify({
+                    "success": False,
+                    "message": f"Valor informado (R$ {valor_pago:.2f}) é maior que o valor desta venda (R$ {float(conta.valor_atual):.2f})",
+                }), 400
+            conta.valor_recebido = float(conta.valor_recebido or 0) + valor_pago
+            conta.valor_atual = round(max(0, float(conta.valor_atual or 0) - valor_pago), 2)
+            if conta.valor_atual <= 0.01:
+                conta.status = "pago"
+                conta.data_recebimento = date.today()
+            descricao_auditoria = f"Quitação da venda {conta.venda.codigo if conta.venda else conta.numero_documento}"
+        else:
+            # ── Abatimento livre: distribui nas contas mais antigas (FIFO) ──
+            restante = valor_pago
+            contas_abertas = (
+                ContaReceber.query.filter_by(
+                    cliente_id=id, estabelecimento_id=estabelecimento_id, status="aberto"
+                ).order_by(ContaReceber.data_emissao.asc()).all()
+            )
+            for conta in contas_abertas:
+                if restante <= 0.005:
+                    break
+                valor_atual_conta = float(conta.valor_atual or 0)
+                abatimento = min(restante, valor_atual_conta)
+                conta.valor_recebido = float(conta.valor_recebido or 0) + abatimento
+                conta.valor_atual = round(max(0, valor_atual_conta - abatimento), 2)
+                if conta.valor_atual <= 0.01:
+                    conta.status = "pago"
+                    conta.data_recebimento = date.today()
+                restante = round(restante - abatimento, 2)
+            descricao_auditoria = "Abatimento geral do saldo em aberto"
+
+        # Reconciliar saldo do cliente com a soma REAL das contas ainda abertas
+        # (não decrementar às cegas — evita drift se houver dado legado).
+        total_aberto_real = db.session.query(
+            func.coalesce(func.sum(ContaReceber.valor_atual), 0)
+        ).filter_by(cliente_id=id, estabelecimento_id=estabelecimento_id, status="aberto").scalar()
+        cliente.saldo_devedor = round(float(total_aberto_real or 0), 2)
 
         # Registrar como Suprimento no Caixa (dinheiro entrou na gaveta)
         mov_caixa = MovimentacaoCaixa(
             caixa_id=caixa_aberto.id,
-            estabelecimento_id=jwt_data.get("estabelecimento_id"),
+            estabelecimento_id=estabelecimento_id,
             tipo="suprimento",
             valor=valor_pago,
             forma_pagamento=forma_pagamento,
@@ -1081,6 +1218,14 @@ def pagar_fiado(id):
         # Atualizar saldo do caixa se for dinheiro
         if forma_pagamento.lower() == "dinheiro":
             caixa_aberto.saldo_atual = float(caixa_aberto.saldo_atual or 0) + valor_pago
+
+        Auditoria.registrar(
+            estabelecimento_id=estabelecimento_id,
+            tipo_evento="recebimento_fiado",
+            descricao=f"{descricao_auditoria} — {cliente.nome} pagou R$ {valor_pago:.2f} via {forma_pagamento}",
+            usuario_id=funcionario_id,
+            valor=valor_pago,
+        )
 
         db.session.commit()
 

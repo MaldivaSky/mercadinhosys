@@ -306,6 +306,19 @@ const CustomersPage: React.FC = () => {
     const [fiadoValor, setFiadoValor] = useState('');
     const [fiadoForma, setFiadoForma] = useState('Dinheiro');
     const [fiadoLoading, setFiadoLoading] = useState(false);
+    // Rastreabilidade do fiado: lista as vendas que compõem o saldo devedor,
+    // para o funcionário justificar o valor ao cliente (e não só um número solto).
+    interface ContaFiado {
+        conta_receber_id: number; venda_id: number | null; venda_codigo: string | null;
+        data_emissao: string | null; data_vencimento: string | null;
+        valor_original: number; valor_atual: number; dias_em_aberto: number | null; vencida: boolean;
+        itens_venda: { produto_nome: string; quantidade: number; total_item: number }[];
+    }
+    const [fiadoContas, setFiadoContas] = useState<ContaFiado[]>([]);
+    const [fiadoContasLoading, setFiadoContasLoading] = useState(false);
+    // null = abatimento livre (distribui nas mais antigas); número = quitar só essa venda
+    const [fiadoContaSelecionada, setFiadoContaSelecionada] = useState<number | null>(null);
+    const [fiadoContaExpandida, setFiadoContaExpandida] = useState<number | null>(null);
     const [recalcLoading, setRecalcLoading] = useState(false);
     const [rfmData, setRfmData] = useState<{ customers?: RfmCustomer[]; segments?: Record<string, number>; window_days?: number } | null>(null);
     const [activeTab, setActiveTab] = useState<CRMTab>('overview');
@@ -546,10 +559,34 @@ const CustomersPage: React.FC = () => {
         }
     };
 
-    const handleAbrirModalFiado = (cliente: Cliente) => {
+    const handleAbrirModalFiado = async (cliente: Cliente) => {
         setFiadoModal({ open: true, cliente });
         setFiadoValor('');
         setFiadoForma('Dinheiro');
+        setFiadoContaSelecionada(null);
+        setFiadoContaExpandida(null);
+        setFiadoContas([]);
+        setFiadoContasLoading(true);
+        try {
+            const res = await apiClient.get(`/clientes/${cliente.id}/contas_fiado`);
+            setFiadoContas(res.data?.contas || []);
+        } catch {
+            showToast.error('Não foi possível carregar as vendas em aberto deste cliente');
+        } finally {
+            setFiadoContasLoading(false);
+        }
+    };
+
+    // Selecionar uma venda específica preenche o valor com o que falta dela
+    // (o funcionário pode editar para quitar parcialmente essa mesma venda).
+    const handleSelecionarContaFiado = (conta: ContaFiado | null) => {
+        if (!conta) {
+            setFiadoContaSelecionada(null);
+            setFiadoValor('');
+            return;
+        }
+        setFiadoContaSelecionada(conta.conta_receber_id);
+        setFiadoValor(String(conta.valor_atual));
     };
 
     const handlePagarFiado = async () => {
@@ -564,9 +601,13 @@ const CustomersPage: React.FC = () => {
 
         setFiadoLoading(true);
         try {
-            const res = await pdvService.pagarFiado(cliente.id, valor, fiadoForma);
+            const res = await pdvService.pagarFiado(
+                cliente.id, valor, fiadoForma, undefined, fiadoContaSelecionada ?? undefined
+            );
             showToast.success(res.message || 'Pagamento registrado!');
             setFiadoModal({ open: false, cliente: null });
+            setFiadoContas([]);
+            setFiadoContaSelecionada(null);
             await refreshAll();
         } catch (err: any) {
             const msg = err?.response?.data?.message || 'Erro ao registrar pagamento';
@@ -1449,7 +1490,7 @@ const CustomersPage: React.FC = () => {
                 rfmData={rfmData}
             />
 
-            <Dialog open={fiadoModal.open} onClose={() => setFiadoModal({ open: false, cliente: null })} maxWidth="xs" fullWidth>
+            <Dialog open={fiadoModal.open} onClose={() => setFiadoModal({ open: false, cliente: null })} maxWidth="sm" fullWidth>
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#b45309', fontWeight: 800 }}>
                     <AttachMoneyIcon /> Receber fiado
                 </DialogTitle>
@@ -1468,6 +1509,94 @@ const CustomersPage: React.FC = () => {
                                 </Box>
                             </Box>
 
+                            {/* Rastreabilidade: lista as vendas no fiado que compõem o saldo,
+                                para justificar o valor ao cliente e permitir quitar uma venda
+                                específica em vez de só um número solto. */}
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'text.secondary' }}>
+                                Vendas em aberto (fiado)
+                            </Typography>
+                            {fiadoContasLoading ? (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                                    <CircularProgress size={24} />
+                                </Box>
+                            ) : fiadoContas.length === 0 ? (
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                                    Nenhuma venda fiado individualizada encontrada para este cliente.
+                                </Typography>
+                            ) : (
+                                <Box sx={{ maxHeight: 260, overflowY: 'auto', mb: 2, border: '1px solid #e5e7eb', borderRadius: 2 }}>
+                                    {/* Opção "abatimento livre" — distribui o valor nas mais antigas primeiro */}
+                                    <Box
+                                        onClick={() => handleSelecionarContaFiado(null)}
+                                        sx={{
+                                            p: 1.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
+                                            bgcolor: fiadoContaSelecionada === null ? '#fef3c7' : 'transparent',
+                                            borderBottom: '1px solid #f3f4f6',
+                                        }}
+                                    >
+                                        <input type="radio" checked={fiadoContaSelecionada === null} onChange={() => handleSelecionarContaFiado(null)} />
+                                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                            Abatimento livre (quita as vendas mais antigas primeiro)
+                                        </Typography>
+                                    </Box>
+
+                                    {fiadoContas.map((conta) => (
+                                        <Box key={conta.conta_receber_id} sx={{ borderBottom: '1px solid #f3f4f6' }}>
+                                            <Box
+                                                onClick={() => handleSelecionarContaFiado(conta)}
+                                                sx={{
+                                                    p: 1.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
+                                                    bgcolor: fiadoContaSelecionada === conta.conta_receber_id ? '#fef3c7' : 'transparent',
+                                                }}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    checked={fiadoContaSelecionada === conta.conta_receber_id}
+                                                    onChange={() => handleSelecionarContaFiado(conta)}
+                                                />
+                                                <Box sx={{ flex: 1 }}>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                                            {conta.venda_codigo || conta.conta_receber_id}
+                                                            {conta.vencida && (
+                                                                <Box component="span" sx={{ ml: 1, fontSize: '0.65rem', fontWeight: 800, color: '#b91c1c', bgcolor: '#fee2e2', px: 0.8, py: 0.2, borderRadius: 1 }}>
+                                                                    VENCIDA
+                                                                </Box>
+                                                            )}
+                                                        </Typography>
+                                                        <Typography variant="body2" sx={{ fontWeight: 800, color: '#b45309' }}>
+                                                            {formatCurrency(conta.valor_atual)}
+                                                        </Typography>
+                                                    </Box>
+                                                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                                        {conta.data_emissao ? new Date(conta.data_emissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                                                        {conta.dias_em_aberto != null && ` · há ${conta.dias_em_aberto} dia(s)`}
+                                                    </Typography>
+                                                </Box>
+                                                {conta.itens_venda.length > 0 && (
+                                                    <Button
+                                                        size="small"
+                                                        onClick={(e) => { e.stopPropagation(); setFiadoContaExpandida(fiadoContaExpandida === conta.conta_receber_id ? null : conta.conta_receber_id); }}
+                                                        sx={{ minWidth: 0, fontSize: '0.7rem' }}
+                                                    >
+                                                        {fiadoContaExpandida === conta.conta_receber_id ? 'Ocultar' : 'Ver itens'}
+                                                    </Button>
+                                                )}
+                                            </Box>
+                                            {fiadoContaExpandida === conta.conta_receber_id && (
+                                                <Box sx={{ px: 4, pb: 1.5, pt: 0 }}>
+                                                    {conta.itens_venda.map((it, idx) => (
+                                                        <Typography key={idx} variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                            {it.quantidade}x {it.produto_nome} — {formatCurrency(it.total_item)}
+                                                        </Typography>
+                                                    ))}
+                                                </Box>
+                                            )}
+                                        </Box>
+                                    ))}
+                                </Box>
+                            )}
+
                             <TextField
                                 label="Valor a pagar (R$)"
                                 value={fiadoValor}
@@ -1476,7 +1605,11 @@ const CustomersPage: React.FC = () => {
                                 type="number"
                                 inputProps={{ min: 0, step: '0.01', max: fiadoModal.cliente.saldo_devedor ?? 0 }}
                                 sx={{ mb: 2, mt: 1 }}
-                                helperText={`Máximo: ${formatCurrency(Number(fiadoModal.cliente.saldo_devedor || 0))}`}
+                                helperText={
+                                    fiadoContaSelecionada != null
+                                        ? 'Quitando a venda selecionada — edite para pagar só uma parte dela.'
+                                        : `Máximo: ${formatCurrency(Number(fiadoModal.cliente.saldo_devedor || 0))}`
+                                }
                             />
 
                             <FormControl fullWidth sx={{ mb: 1 }}>
