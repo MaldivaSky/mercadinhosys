@@ -896,6 +896,105 @@ class DashboardOrchestrator:
                 "icone": "⏳"
             })
 
+        # ============================================================
+        # 🔬 INSIGHTS OPERACIONAIS SENSÍVEIS (produto + equipe)
+        # Sinais concretos que um lojista LEIGO precisa ver para agir a
+        # tempo — cada um em linguagem simples e com ação clara.
+        # ============================================================
+        try:
+            prod_perf = DataLayer.get_all_products_performance(self.establishment_id, days)
+        except Exception:
+            prod_perf = []
+
+        dias_periodo = max(1, int(days))
+
+        # --- RUPTURA IMINENTE: itens que giram e vão acabar em < 7 dias -----
+        ruptura = []
+        for p in prod_perf:
+            vend = float(p.get("quantidade_vendida", 0) or 0)
+            est = float(p.get("estoque_atual", 0) or 0)
+            if vend <= 0:
+                continue
+            media_dia = vend / dias_periodo
+            if media_dia <= 0:
+                continue
+            cobertura = est / media_dia
+            if cobertura < 7:
+                ruptura.append({
+                    "nome": p.get("nome"), "cobertura": cobertura,
+                    "perda_dia": media_dia * float(p.get("preco_venda", 0) or 0),
+                })
+        if ruptura:
+            ruptura.sort(key=lambda x: x["cobertura"])
+            criticos = ruptura[:5]
+            nomes = ", ".join(f"{r['nome']} (~{r['cobertura']:.0f} dias)" for r in criticos)
+            perda_semana = sum(r["perda_dia"] for r in criticos) * 7
+            recomendacoes.append({
+                "tipo": "ruptura",
+                "prioridade": 1,
+                "mensagem": (
+                    f"📦 RISCO DE RUPTURA: {len(ruptura)} produto(s) devem acabar em menos de 7 dias "
+                    f"no ritmo de venda atual. Os mais urgentes: {nomes}. "
+                    f"Faça o pedido ao fornecedor agora — cada dia sem esses itens deixa de faturar "
+                    f"cerca de R$ {sum(r['perda_dia'] for r in criticos):,.2f}."
+                ),
+                "impacto_estimado": round(perda_semana, 2),
+                "cta": "Fazer Pedido",
+                "alvo": "produtos",
+                "icone": "📦"
+            })
+
+        # --- ENCALHE: capital parado, produto sem giro -> promover ----------
+        encalhe = [
+            p for p in prod_perf
+            if float(p.get("quantidade_vendida", 0) or 0) == 0
+            and float(p.get("estoque_atual", 0) or 0) > 0
+        ]
+        if encalhe:
+            capital_parado = sum(
+                float(p.get("estoque_atual", 0) or 0) * float(p.get("preco_custo", 0) or 0)
+                for p in encalhe
+            )
+            nomes = ", ".join(p.get("nome") for p in encalhe[:5])
+            recomendacoes.append({
+                "tipo": "estoque",
+                "prioridade": 2,
+                "mensagem": (
+                    f"🐌 PRODUTOS PARADOS: {len(encalhe)} item(ns) não venderam nada no período e "
+                    f"têm R$ {capital_parado:,.2f} do seu dinheiro parado na prateleira. "
+                    f"Exemplos: {nomes}. Crie uma promoção ou combo para transformar esse estoque em caixa."
+                ),
+                "impacto_estimado": round(capital_parado, 2),
+                "cta": "Criar Promoção",
+                "alvo": "produtos",
+                "icone": "🐌"
+            })
+
+        # --- ASSIDUIDADE / DESMOTIVAÇÃO DA EQUIPE --------------------------
+        alertas_rh = []
+        for f in (rh_metrics.get("faltas_por_funcionario_mes") or []):
+            fal = int(f.get("faltas", 0) or 0)
+            if fal >= 2:
+                alertas_rh.append(f"{f.get('nome')} tem {fal} falta(s) não justificada(s) este mês")
+        for a in (rh_metrics.get("atrasos_por_funcionario_mes") or []):
+            qtd = int(a.get("atrasos_qtd", 0) or 0)
+            if qtd >= 3:
+                alertas_rh.append(f"{a.get('nome')} atrasou {qtd}x ({int(a.get('minutos_atraso', 0) or 0)} min acumulados)")
+        if alertas_rh:
+            recomendacoes.append({
+                "tipo": "equipe",
+                "prioridade": 2,
+                "mensagem": (
+                    f"👥 ATENÇÃO À EQUIPE: {'; '.join(alertas_rh[:4])}. "
+                    f"Faltas e atrasos frequentes costumam sinalizar desmotivação e afetam o atendimento. "
+                    f"Converse com a pessoa antes que vire um problema maior."
+                ),
+                "impacto_estimado": 0.0,
+                "cta": "Ver Ponto da Equipe",
+                "alvo": "rh",
+                "icone": "👥"
+            })
+
         # Ordenar: críticos primeiro
         recomendacoes.sort(key=lambda x: x.get("prioridade", 99))
 

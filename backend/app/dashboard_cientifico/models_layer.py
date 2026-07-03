@@ -820,73 +820,65 @@ class PracticalModels:
     ) -> List[Dict[str, Any]]:
         anomalies: List[Dict[str, Any]] = []
 
-        # Função auxiliar para adicionar fallbacks caso não haja anomalias
-        def add_fallbacks():
-            anomalies.append({
-                "tipo": "Oportunidade",
-                "descricao": "Pico de vendas não usual na última terça-feira, muito acima da média histórica.",
-                "data": "Última Terça",
-                "valor": 4500.0,
-                "media_esperada": 2100.0,
-                "impacto": 1.5,
-                "impacto_estimado": 2400.0,
-                "severidade": "alta",
-            })
-            anomalies.append({
-                "tipo": "Anomalia (Custo)",
-                "descricao": "Gasto com 'Manutenção' 300% maior do que a média dos últimos meses.",
-                "data": "Este Mês",
-                "valor": 1200.0,
-                "media_esperada": 300.0,
-                "impacto": -3.0,
-                "impacto_estimado": -900.0,
-                "severidade": "media",
-            })
-
-        if not sales_timeseries or len(sales_timeseries) < 5:
-            add_fallbacks()
+        # Sem dados suficientes: retornamos vazio. NUNCA inventamos anomalias
+        # (o fallback fake anterior — "pico na terça / manutenção 300%" — tirava
+        # a credibilidade do indicador).
+        if not sales_timeseries or len(sales_timeseries) < 7:
             return anomalies
 
         try:
             import numpy as np
 
-            # Anomalias em VENDAS (Z-Score)
-            vendas_validas = [s for s in sales_timeseries if s.get('total') is not None]
-            if len(vendas_validas) >= 5:
+            # IMPORTANTE: só analisar DIAS ABERTOS. Dia com faturamento ~0 é loja
+            # fechada (domingo/feriado), não uma "queda brusca" — era isso que
+            # enchia o painel de falsos alertas de domingos passados.
+            def _dia_aberto(s):
+                v = s.get('total')
+                return v is not None and float(v) > 1.0
+
+            vendas_validas = [s for s in sales_timeseries if _dia_aberto(s)]
+            if len(vendas_validas) >= 7:
                 vals = np.array([float(s['total']) for s in vendas_validas])
-                mediana = np.median(vals)
-                mad = np.median(np.abs(vals - mediana))
-                
+                mediana = float(np.median(vals))
+                mad = float(np.median(np.abs(vals - mediana)))
+
                 if mad > 0:
                     z_scores = 0.6745 * (vals - mediana) / mad
-                    
                     for idx, z in enumerate(z_scores):
-                        if abs(z) > 2.0:
+                        # Só desvios REALMENTE fortes entre dias abertos
+                        if abs(z) > 2.5:
                             s = vendas_validas[idx]
                             valor = float(s['total'])
-                            tipo = "Pico de Vendas" if z > 0 else "Queda Brusca"
+                            data_str = s.get('data', 'N/D')
+                            tipo = "Pico de Vendas" if z > 0 else "Queda de Vendas"
+                            var_pct = ((valor - mediana) / mediana * 100) if mediana > 0 else 0
+                            if z > 0:
+                                desc = (f"Em {data_str} você vendeu R$ {valor:,.2f} "
+                                        f"({var_pct:+.0f}% vs. um dia normal). "
+                                        f"Veja o que deu certo e repita.")
+                            else:
+                                desc = (f"Em {data_str} as vendas caíram para R$ {valor:,.2f} "
+                                        f"({var_pct:.0f}% vs. um dia normal). "
+                                        f"Verifique falta de produto, troco ou equipe reduzida.")
                             anomalies.append({
                                 "tipo": f"Vendas: {tipo}",
-                                "descricao": f"{tipo} detectado no dia {s.get('data', 'N/D')}. Valor R$ {valor:.2f}",
-                                "data": s.get('data', 'N/D'),
+                                "descricao": desc,
+                                "data": data_str,
                                 "valor": valor,
-                                "media_esperada": float(mediana),
+                                "media_esperada": mediana,
                                 "impacto": float(z),
-                                "impacto_estimado": valor - float(mediana),
-                                "severidade": "alta" if abs(z) > 3.0 else "media",
-                                "causa_provavel": "Variação brusca de demanda"
+                                "impacto_estimado": valor - mediana,
+                                "severidade": "alta" if abs(z) > 3.5 else "media",
+                                "causa_provavel": "Variação atípica de demanda"
                             })
 
-            if len(anomalies) == 0:
-                add_fallbacks()
-
+            # Mais RECENTES primeiro (o lojista quer ver o que acabou de acontecer,
+            # não um domingo de 3 meses atrás).
+            anomalies.sort(key=lambda x: x.get("data", ""), reverse=True)
         except Exception as e:
             logger.error(f"Erro ao detectar anomalias: {e}")
-            if len(anomalies) == 0:
-                 add_fallbacks()
 
-        anomalies.sort(key=lambda x: abs(x.get("impacto", 0)), reverse=True)
-        return anomalies[:5]
+        return anomalies[:6]
 
     @staticmethod
     def calculate_health_score(financas: Any) -> float:
