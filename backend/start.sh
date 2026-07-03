@@ -28,11 +28,20 @@ fi
 # Sincronização de schema removida (redundante com migrations)
 
 # Iniciar servidor
+# MEMÓRIA (Render Starter ~512MB): 1 worker em vez de 2 — a app é I/O-bound
+# (queries ao Postgres), então +threads compensa a concorrência sem duplicar
+# o interpretador Python inteiro (~200MB+ por worker com as libs carregadas).
+# --max-requests recicla o worker periodicamente e devolve memória de qualquer
+# vazamento lento; o jitter evita reciclagens sincronizadas em pico.
+# --worker-tmp-dir /dev/shm evita heartbeat em disco (recomendação Render).
 echo "🚀 Starting Gunicorn server..."
 exec gunicorn run:app \
     --bind 0.0.0.0:$PORT \
-    --workers 2 \
-    --threads 4 \
+    --workers 1 \
+    --threads 8 \
+    --max-requests 300 \
+    --max-requests-jitter 60 \
+    --worker-tmp-dir /dev/shm \
     --timeout 120 \
     --access-logfile - \
     --error-logfile - \

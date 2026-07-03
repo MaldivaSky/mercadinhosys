@@ -18,6 +18,11 @@ class SmartCache:
     _cache = {}
     _lock = threading.Lock()
 
+    # Teto de entradas. Cada entrada pode ser um payload inteiro de dashboard
+    # (centenas de KB); com o teto antigo de 1000, o cache sozinho podia passar
+    # de centenas de MB por worker e derrubar o Render Starter (512MB).
+    MAX_ENTRIES = 64
+
     @classmethod
     def clear(cls):
         """Limpa todo o cache"""
@@ -46,15 +51,21 @@ class SmartCache:
         Armazena valor no cache com TTL
         """
         with cls._lock:
+            now = time.time()
             cls._cache[key] = {
                 "data": data,
-                "timestamp": time.time(),
-                "expires_at": time.time() + ttl_seconds,
+                "timestamp": now,
+                "expires_at": now + ttl_seconds,
             }
 
+            # Faxina: remover entradas expiradas (antes só saíam se a MESMA
+            # chave fosse relida — chaves órfãs ficavam na RAM para sempre)
+            expired = [k for k, v in cls._cache.items() if v.get("expires_at", 0) <= now]
+            for k in expired:
+                del cls._cache[k]
+
             # Limitar tamanho do cache (LRU simples)
-            if len(cls._cache) > 1000:
-                # Remover o mais antigo
+            while len(cls._cache) > cls.MAX_ENTRIES:
                 oldest_key = min(
                     cls._cache.keys(), key=lambda k: cls._cache[k]["timestamp"]
                 )

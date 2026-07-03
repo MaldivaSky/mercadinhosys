@@ -27,7 +27,10 @@ from app.models import (
 )
 from datetime import datetime, timedelta, date
 from decimal import Decimal
-import pandas as pd
+# NOTA: pandas é importado localmente apenas nas funções de exportação que o
+# usam (exportar_clientes_em_risco / exportar_backup_local). Import no nível do
+# módulo carregava pandas+numpy (~120MB) no boot de CADA worker gunicorn e
+# contribuía para o estouro de memória no Render Starter (512MB).
 import io
 import json
 import zipfile
@@ -520,14 +523,15 @@ def exportar_clientes_em_risco():
     Exporta lista de clientes em risco para campanhas de marketing (CSV).
     """
     try:
+        import pandas as pd  # lazy: só carrega quando alguém exporta
         from app.utils.query_helpers import get_authorized_establishment_id
         estabelecimento_id = get_authorized_establishment_id()
-        
+
         if not estabelecimento_id:
             return jsonify({"error": "Estabelecimento não identificado"}), 400
-        
+
         days = request.args.get('days', 180, type=int)
-        
+
         # Análise RFM
         clientes_rfm = analise_rfm_clientes(estabelecimento_id, days)
         clientes_em_risco = [c for c in clientes_rfm if c['em_risco']]
@@ -798,6 +802,7 @@ def exportar_backup_local():
         }
         
         # Exportar dados usando Pandas (otimizado)
+        import pandas as pd  # lazy: só carrega quando alguém exporta backup
         current_app.logger.info("Iniciando exportação de backup...")
         
         # Produtos
