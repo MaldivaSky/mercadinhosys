@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Target, TrendingUp, Users, Award, AlertTriangle, CheckCircle2, PieChart as PieChartIcon, BarChart3, Filter, Activity, DollarSign, X, Package, ShoppingCart, Truck, CreditCard, Clock, Star } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts';
+import { Target, TrendingUp, Users, Award, AlertTriangle, PieChart as PieChartIcon, BarChart3, Activity, DollarSign, Package, ShoppingCart, Truck, CreditCard, Clock, Star } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, CartesianGrid, AreaChart, Area } from 'recharts';
 import { formatCurrency } from '../../../../utils/formatters';
 
 interface SalesSfaTabProps {
@@ -213,7 +213,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                       formatter={(value: number) => formatCurrency(value)} 
                     />
                     <Pie data={formasPagamento} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
-                      {formasPagamento.map((entry: any, index: number) => (
+                      {formasPagamento.map((_entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -300,7 +300,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                       formatter={(value: number) => formatCurrency(value)} 
                     />
                     <Bar dataKey="total" name="Faturamento" radius={[4, 4, 0, 0]} barSize={40}>
-                      {categoriasVendas.map((entry: any, index: number) => (
+                      {categoriasVendas.map((_entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
                       ))}
                     </Bar>
@@ -419,7 +419,7 @@ export default function SalesSfaTab({ data }: SalesSfaTabProps) {
                     formatter={(value: number) => formatCurrency(value)} 
                   />
                   <Bar dataKey="total" name="Faturamento (R$)" fill="#f59e0b" radius={[6, 6, 0, 0]} maxBarSize={60}>
-                    {(data?.fornecedores_performance || []).map((entry: any, index: number) => (
+                    {(data?.fornecedores_performance || []).map((_entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Bar>

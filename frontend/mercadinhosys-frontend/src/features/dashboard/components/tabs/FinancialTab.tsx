@@ -16,9 +16,6 @@ export default function FinancialTab({ data }: FinancialTabProps) {
   // Receivables Data
   const receivables = data?.receivables || {};
   const totalRecebivel = receivables.total_recebivel || 0;
-  const totalVencido = receivables.total_vencido || 0;
-  const totalAVencer = receivables.total_a_vencer || 0;
-  const rankingAtraso = receivables.ranking_atraso || [];
   
   return (
     <div className="space-y-8">
