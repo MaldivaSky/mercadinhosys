@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatters';
 import { Produto } from '../../../types';
-import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend as RechartsLegend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 interface ProductAnalyticsDashboardProps {
     produtos: Produto[];
@@ -903,14 +903,28 @@ const ProductAnalyticsDashboard: React.FC<ProductAnalyticsDashboardProps> = ({
                                                         outerRadius={80}
                                                         paddingAngle={5}
                                                         dataKey="value"
+                                                        label={({ percent }) => `${((percent || 0) * 100).toFixed(0)}%`}
+                                                        labelLine={false}
                                                     >
                                                         {getModalChartData().map((_, index) => (
                                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                                         ))}
                                                     </Pie>
-                                                    <RechartsTooltip 
-                                                        formatter={(value: any) => [value, 'Produtos']}
+                                                    <RechartsTooltip
+                                                        formatter={(value: any, _name: any, item: any) => [`${value} produto(s)`, item?.payload?.name]}
                                                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    />
+                                                    <RechartsLegend
+                                                        verticalAlign="bottom"
+                                                        align="center"
+                                                        iconType="circle"
+                                                        formatter={(value: string, entry: any) => {
+                                                            const total = getModalChartData().reduce((acc, d) => acc + d.value, 0) || 1;
+                                                            const v = entry?.payload?.value ?? 0;
+                                                            const pct = (v / total * 100).toFixed(0);
+                                                            return `${value} — ${v} (${pct}%)`;
+                                                        }}
+                                                        wrapperStyle={{ fontSize: '0.8rem', fontWeight: 600, paddingTop: '12px' }}
                                                     />
                                                 </RechartsPieChart>
                                             )}
