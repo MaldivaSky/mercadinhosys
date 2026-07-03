@@ -37,6 +37,7 @@ import zipfile
 from sqlalchemy import func, extract, and_, or_, cast, String, desc
 from app.decorators.decorator_jwt import funcionario_required, gerente_ou_admin_required
 from app.decorators.plan_guards import plan_required
+from app.utils.timezone import fmt_local, iso_local
 from collections import defaultdict
 from typing import Dict, List, Any, Tuple
 from app.utils.metrics_calculator import MetricsCalculator
@@ -122,12 +123,15 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: 
     
     OTIMIZAÇÃO: Usa SQLAlchemy aggregations para processar no banco.
     """
+    # O banco grava datetimes UTC "naive" (utcnow). Usar datetime.now(timezone.utc)
+    # (aware) quebrava a subtração `now - ultima_compra` com o erro
+    # "can't subtract offset-naive and offset-aware datetimes" (RFM e resumo davam 500).
     if data_inicio:
         if not data_fim:
-            data_fim = datetime.now(timezone.utc)
+            data_fim = datetime.utcnow()
     else:
         # Padrão: últimos X dias
-        data_fim = datetime.now(timezone.utc)
+        data_fim = datetime.utcnow()
         data_inicio = data_fim - timedelta(days=days)
     
     # Query otimizada: agrupa no banco de dados
@@ -157,10 +161,10 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: 
     if not resultados:
         return []
     
-    # Processar resultados
-    now = datetime.now(timezone.utc)
+    # Processar resultados (now naive UTC, coerente com o banco)
+    now = datetime.utcnow()
     clientes_rfm = []
-    
+
     for row in resultados:
         recency_days = (now - row.ultima_compra).days if row.ultima_compra else days
         frequency = int(row.frequency or 0)
@@ -188,7 +192,8 @@ def analise_rfm_clientes(estabelecimento_id: int, days: int = 180, data_inicio: 
             "monetary_score": m_score,
             "segmento": segmento,
             "em_risco": em_risco,
-            "ultima_compra": row.ultima_compra.isoformat() if row.ultima_compra else None,
+            "ultima_compra": iso_local(row.ultima_compra),
+            "ultima_compra_fmt": fmt_local(row.ultima_compra, "%d/%m/%Y"),
             "rfm_score": f"{r_score}{f_score}{m_score}"
         })
     

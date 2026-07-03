@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from flask import Blueprint, request, jsonify, Response, current_app
 from app import db
+from app.utils.timezone import fmt_local
 from app.models import (
     Venda,
     VendaItem,
@@ -313,8 +314,10 @@ def listar_vendas():
                 "valor_recebido": float(v.valor_recebido),
                 "troco": float(v.troco),
                 "status": v.status,
-                "data_venda": ((v.data_venda or v.created_at).isoformat() + "Z") if (v.data_venda or v.created_at) else None,
-                "data_formatada": (v.data_venda if v.data_venda else v.created_at).strftime("%d/%m/%Y %H:%M"),
+                "data_venda": ((v.data_venda or v.created_at).replace(tzinfo=timezone.utc).isoformat()) if (v.data_venda or v.created_at) else None,
+                # data_formatada já convertida para o fuso LOCAL da loja (era exibido
+                # em UTC — 3h adiantado — porque fazia strftime no valor UTC cru).
+                "data_formatada": fmt_local(v.data_venda if v.data_venda else v.created_at),
                 "quantidade_itens": len(v.itens),
                 "observacoes": v.observacoes or "",
                 "detalhes_url": f"/api/vendas/{v.id}",
