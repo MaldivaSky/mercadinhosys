@@ -1,0 +1,4 @@
+# Força quebras de linha LF nos scripts (rodam no Linux do Render)
+*.sh text eol=lf
+start.sh text eol=lf
+build.sh text eol=lf
