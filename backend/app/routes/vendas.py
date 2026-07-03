@@ -1137,6 +1137,15 @@ def cancelar_venda(venda_id):
                 if produto:
                     qtd_anterior = float(produto.quantidade or 0)
                     produto.quantidade = qtd_anterior + float(item.quantidade)
+                    # Reverter denormalizações do produto — sem isso, giro/curva
+                    # ABC/ranking de mais vendidos ficavam inflados por vendas
+                    # que na verdade foram desfeitas.
+                    produto.quantidade_vendida = max(
+                        0.0, float(produto.quantidade_vendida or 0) - float(item.quantidade)
+                    )
+                    produto.total_vendido = max(
+                        0.0, float(produto.total_vendido or 0) - float(item.total_item or 0)
+                    )
                     mov = MovimentacaoEstoque(
                         estabelecimento_id=estabelecimento_id,
                         produto_id=item.produto_id,
@@ -1151,6 +1160,32 @@ def cancelar_venda(venda_id):
                     )
                     db.session.add(mov)
 
+            # Reverter denormalizações do CLIENTE — sem isso, "melhor cliente"
+            # e o histórico de gasto ficavam inflados com vendas desfeitas
+            # (bug real detectado: valor_total_gasto > soma das vendas finalizadas).
+            cliente = None
+            if venda.cliente_id:
+                cliente = Cliente.query.filter_by(
+                    id=venda.cliente_id, estabelecimento_id=estabelecimento_id
+                ).first()
+                if cliente:
+                    cliente.valor_total_gasto = max(
+                        0, float(cliente.valor_total_gasto or 0) - float(venda.total or 0)
+                    )
+                    cliente.total_compras = max(0, int(cliente.total_compras or 0) - 1)
+
+            # Estornar pagamentos e reverter fiado em aberto vinculado a esta venda
+            for pag in Pagamento.query.filter_by(venda_id=venda.id).all():
+                pag.status = "estornado"
+
+            conta = ContaReceber.query.filter_by(venda_id=venda.id, status="aberto").first()
+            if conta:
+                conta.status = "cancelado"
+                if cliente:
+                    cliente.saldo_devedor = max(
+                        0, float(cliente.saldo_devedor or 0) - float(conta.valor_atual or 0)
+                    )
+
             venda.status = "cancelada"
             agora = datetime.now()
             venda.data_cancelamento = agora
@@ -1158,6 +1193,18 @@ def cancelar_venda(venda_id):
             autorizado_por = f" | Autorizado por: {autorizador.nome}" if autorizador else ""
             venda.observacoes = f"{venda.observacoes or ''}\n[Cancelada em {agora.strftime('%d/%m/%Y %H:%M')}] Motivo: {motivo}{autorizado_por}".strip()
             venda.updated_at = agora
+
+            from app.models import Auditoria
+            Auditoria.registrar(
+                estabelecimento_id=estabelecimento_id,
+                tipo_evento="venda_cancelada",
+                descricao=f"Venda {venda.codigo} cancelada — {motivo}" + (
+                    f" (autorizado por {autorizador.nome})" if autorizador else ""
+                ),
+                usuario_id=autorizador.id if autorizador else funcionario_id,
+                valor=float(venda.total or 0),
+            )
+
             db.session.commit()
             return jsonify({"success": True, "message": "Venda cancelada com sucesso"}), 200
         except Exception as e:
