@@ -48,23 +48,28 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       icon: <PeopleAltIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
     {
-      label: 'LTV DA BASE (ALL-TIME)',
+      // "LTV" é jargão de marketing que o lojista não usa no dia a dia —
+      // aqui é simplesmente tudo que a base de clientes já deixou na loja.
+      label: 'TOTAL GASTO PELOS CLIENTES (DESDE SEMPRE)',
       value: formatCurrency(total_gasto),
-      subtext: 'Soma histórica dos clientes',
+      subtext: 'Soma de tudo que seus clientes já compraram, na história da loja',
       color: '#0f766e', // teal-700
       icon: <AttachMoneyIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
     {
-      label: 'RECEITA MENSAL',
+      // Antes era "mês calendário desde o dia 1" — no início de cada mês o
+      // card parecia "quebrado" (dia 3 só somava 3 dias de venda). Últimos
+      // 30 dias corridos dá uma leitura sempre justa, todo dia do mês.
+      label: 'RECEITA DOS ÚLTIMOS 30 DIAS',
       value: formatCurrency(total_gasto_mes),
-      subtext: 'Compras de clientes neste mês',
+      subtext: 'Compras de clientes identificados nos últimos 30 dias',
       color: '#16a34a', // green-600
       icon: <AttachMoneyIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     },
     {
-      label: 'MELHOR CLIENTE',
+      label: 'MELHOR CLIENTE (DESDE SEMPRE)',
       value: melhor_cliente_nome,
-      subtext: `Gasto: ${formatCurrency(melhor_cliente_valor)}`,
+      subtext: `Já gastou ${formatCurrency(melhor_cliente_valor)} na loja, no total`,
       color: '#ea580c', // orange-600
       icon: <StarIcon sx={{ fontSize: 80, opacity: 0.15 }} />
     }

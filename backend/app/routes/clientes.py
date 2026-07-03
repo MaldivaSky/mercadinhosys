@@ -269,15 +269,19 @@ def listar_clientes():
         total_gasto_geral = query_gasto.scalar() or 0
         total_devido_geral = query_devido.scalar() or 0
         
-        # Calcular faturamento apenas do MÊS ATUAL para Clientes Cadastrados
+        # Janela ROLANTE de 30 dias (não "mês calendário desde o dia 1") para
+        # Clientes Cadastrados. Com o mês calendário, o card sempre parecia
+        # "quebrado" nos primeiros dias do mês (ex.: dia 3 só soma 3 dias de
+        # vendas) — enganoso para o lojista, que lia como "receita mensal
+        # típica". 30 dias corridos dá uma leitura sempre justa.
         from datetime import date
         hoje = date.today()
-        primeiro_dia_mes = hoje.replace(day=1)
-        
+        trinta_dias_atras = hoje - timedelta(days=30)
+
         query_gasto_mes = db.session.query(db.func.sum(Venda.total)).filter(
             Venda.status == 'finalizada',
             Venda.cliente_id.isnot(None),
-            Venda.data_venda >= primeiro_dia_mes
+            Venda.data_venda >= trinta_dias_atras
         )
         if estabelecimento_id is not None and estabelecimento_id != 'all':
              query_gasto_mes = query_gasto_mes.filter(Venda.estabelecimento_id == estabelecimento_id)
