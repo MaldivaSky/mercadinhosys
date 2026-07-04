@@ -1,0 +1,158 @@
+"""
+Camada global de controle de acesso por URL (RBAC + Plano).
+
+A maioria das rotas do sistema só exige autenticação (@jwt_required),
+sem verificar cargo nem plano. Em vez de decorar centenas de endpoints,
+este middleware mapeia o prefixo da URL para um recurso da RBAC_MATRIX
+e para as regras do plano, aplicando as Regras de Acesso do produto em
+um único lugar:
+
+  1 Admin ......... tudo
+  2 Gerente ....... tudo, exceto auditoria e configurações sensíveis
+  3 RH ............ sem venda/PDV (pdv, vendas, despesas, logística,
+                    sfa, produtos, clientes, auditoria)
+  4 Estoque/Caixa . PDV/caixa, produtos, fornecedores, clientes, logística
+  5 Vendedor ...... SFA, clientes, produtos, logística, fornecedores
+  6 Entregador .... só logística
+  Ponto: todos os níveis registram o próprio ponto.
+
+Prefixos NÃO mapeados (ex.: /api/ponto, /api/rh, /api/configuracao)
+são intencionais: servem dados self-service a todos os níveis e fazem
+a filtragem por usuário dentro da própria rota.
+"""
+from flask import request, jsonify, current_app, g
+from flask_jwt_extended import verify_jwt_in_request, get_jwt
+
+from app.decorators.rbac import RBAC_MATRIX, NIVEL_LABELS, nivel_do_role
+from app.decorators.plan_guards import normalize_plan
+
+# (prefixo, recurso) — o mais específico deve vir antes do genérico.
+PREFIX_RESOURCE: list[tuple[str, str]] = [
+    ("/api/vendas/pdv", "pdv"),          # fluxo de venda do PDV mora no blueprint de vendas
+    ("/api/vendas", "vendas"),
+    ("/api/pdv", "pdv"),
+    ("/api/caixas", "gestao_caixa"),
+    ("/api/produtos", "produtos"),
+    ("/api/fornecedores", "fornecedores"),
+    ("/api/clientes", "clientes"),
+    ("/api/despesas", "despesas"),
+    ("/api/relatorios", "relatorios"),
+    ("/api/funcionarios", "funcionarios"),
+    ("/api/fiscal/vendas", "pdv"),       # emissão de NFC-e faz parte da venda no caixa
+    ("/api/fiscal", "fiscal"),
+    ("/api/auditoria", "auditoria"),
+    ("/api/delivery", "delivery"),
+    ("/api/sfa/admin", "sfa_gestao"),
+    ("/api/sfa", "sfa"),
+    ("/api/dashboard", "dashboard"),
+    ("/api/pedidos-compra", "pedidos_compra"),
+    ("/api/boletos-fornecedores", "contas_pagar"),
+    ("/api/boletos", "contas_pagar"),
+]
+
+# Sub-rotas self-service que vivem sob um prefixo gerencial (ex.: /api/funcionarios
+# e /api/dashboard são restritos por nível), mas devolvem/gravam apenas os
+# PRÓPRIOS dados do usuário — checadas ANTES de PREFIX_RESOURCE, então todo
+# nível chega até a rota (que aplica o filtro "próprio vs. terceiro").
+SELF_SERVICE_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/api/funcionarios/me",
+    "/api/dashboard/rh/ponto/espelho",
+)
+
+# Módulos VEDADOS ao plano Grátis. O plano Grátis acessa: Dashboard (visão
+# executiva), PDV/caixa, Vendas, Produtos, Fornecedores, Despesas,
+# Funcionários e Configurações. Sem fiscal (não emite nota nem lê XML),
+# sem SFA, RH & Ponto, logística, relatórios e auditoria.
+# /api/clientes fica acessível porque o PDV depende dele (busca de cliente
+# na venda); a página de Clientes é bloqueada no frontend.
+FREE_PLAN_BLOCKED_PREFIXES: tuple[str, ...] = (
+    "/api/fiscal",
+    "/api/sfa",
+    "/api/rh",
+    "/api/ponto",
+    "/api/delivery",
+    "/api/relatorios",
+    "/api/auditoria",
+)
+
+
+def _plano_do_estabelecimento(tid):
+    """Plano atual do tenant, com cache de 60s (mesmo padrão do plano_status)."""
+    from app import cache
+    key = f"plano:{tid}"
+    plano = cache.get(key)
+    if plano is None:
+        from app.models import Estabelecimento
+        est = Estabelecimento.query.get(tid)
+        plano = (est.plano if est else "Gratuito") or "Gratuito"
+        cache.set(key, plano, timeout=60)
+    return plano
+
+
+def init_access_control(app):
+    @app.before_request
+    def enforce_access_rules():
+        if request.method == "OPTIONS":
+            return None
+        path = request.path
+        if not path.startswith("/api/"):
+            return None
+
+        # Claims já validadas (ou não) — mesmo tratamento do load_tenant_context:
+        # sem token, deixa a própria rota devolver 401.
+        try:
+            verify_jwt_in_request(optional=True)
+            claims = get_jwt()
+        except Exception:
+            claims = None
+        if not claims:
+            return None
+        if claims.get("is_super_admin"):
+            return None  # bypass total (modo espelho já é tratado no tenant context)
+
+        # ---- Gate de PLANO (Grátis x Premium) ----
+        tid = getattr(g, "estabelecimento_id", None) or claims.get("estabelecimento_id")
+        if tid and str(tid).lower() != "all":
+            try:
+                plano = _plano_do_estabelecimento(tid)
+            except Exception:
+                plano = claims.get("plano", "Gratuito")
+            if normalize_plan(plano) == "Gratuito" and path.startswith(FREE_PLAN_BLOCKED_PREFIXES):
+                return jsonify({
+                    "success": False,
+                    "error": "Este módulo não está incluído no Plano Grátis. Faça upgrade para desbloquear.",
+                    "code": "PLAN_RESTRICTED",
+                }), 403
+
+        # ---- Gate de NÍVEL (RBAC por módulo) ----
+        if path.startswith(SELF_SERVICE_EXEMPT_PREFIXES):
+            return None
+        resource = next((r for p, r in PREFIX_RESOURCE if path.startswith(p)), None)
+        if not resource:
+            return None  # prefixo self-service ou não mapeado: a rota decide
+
+        role = claims.get("role")
+        if not role:
+            # Token antigo sem claim de role: buscar no banco em vez de
+            # rebaixar um admin para o nível de fallback.
+            try:
+                from flask_jwt_extended import get_jwt_identity
+                from app.models import Funcionario
+                user = Funcionario.query.get(int(get_jwt_identity()))
+                role = user.role if user else None
+            except Exception:
+                role = None
+        nivel = nivel_do_role(role)
+        allowed = RBAC_MATRIX.get(resource, set())
+        if nivel not in allowed:
+            label = NIVEL_LABELS.get(nivel, str(nivel))
+            current_app.logger.info(
+                "🔐 RBAC negou %s %s para nível %s (%s)", request.method, path, nivel, label
+            )
+            return jsonify({
+                "success": False,
+                "error": f"Acesso negado. O cargo '{label}' não tem permissão para este módulo.",
+                "code": "RBAC_RESTRICTED",
+            }), 403
+
+        return None

@@ -11,6 +11,8 @@ import { apiClient } from '../../../api/apiClient';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import HoleriteModal from './HoleriteModal';
+import folhaService, { HoleriteBreakdown } from '../folhaService';
+import { showToast } from '../../../components/elements/Toast';
 
 interface RHMetrics {
   total_beneficios_mensal: number;
@@ -56,7 +58,7 @@ export default function RHDashboard() {
 
   // Holerite Modal State
   const [holeriteModalOpen, setHoleriteModalOpen] = useState(false);
-  const [selectedFuncionarioHolerite, setSelectedFuncionarioHolerite] = useState<any>(null);
+  const [holeriteBreakdown, setHoleriteBreakdown] = useState<HoleriteBreakdown | null>(null);
 
   useEffect(() => {
     loadRHData();
@@ -89,9 +91,19 @@ export default function RHDashboard() {
     }));
   };
 
-  const openHolerite = (funcionario: any) => {
-    setSelectedFuncionarioHolerite(funcionario);
-    setHoleriteModalOpen(true);
+  const openHolerite = async (row: any) => {
+    const funcionarioId = row?.funcionario_id ?? row?.id;
+    if (!funcionarioId) { showToast.error('Funcionário não identificado'); return; }
+    // Deriva a competência (YYYY-MM) do período do dashboard
+    const inicio = rhData?.resumo_mes?.inicio;
+    const mes_referencia = inicio ? String(inicio).slice(0, 7) : undefined;
+    try {
+      const holerite = await folhaService.getHolerite({ funcionario_id: funcionarioId, mes_referencia });
+      setHoleriteBreakdown(holerite);
+      setHoleriteModalOpen(true);
+    } catch (e: any) {
+      showToast.error(e?.response?.data?.message || 'Erro ao gerar holerite');
+    }
   };
 
   const exportarFolhaPagamentoPDF = () => {
@@ -376,12 +388,11 @@ export default function RHDashboard() {
       </div>
 
       {/* Modal Holerite */}
-      {selectedFuncionarioHolerite && rhData?.resumo_mes && (
+      {holeriteBreakdown && (
         <HoleriteModal
           isOpen={holeriteModalOpen}
           onClose={() => setHoleriteModalOpen(false)}
-          funcionario={selectedFuncionarioHolerite}
-          periodo={`${rhData.resumo_mes.inicio || ''} - ${rhData.resumo_mes.fim || ''}`}
+          holerite={holeriteBreakdown}
         />
       )}
     </div>

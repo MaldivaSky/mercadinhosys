@@ -230,7 +230,7 @@ def registrar_movimentacao():
 
         if tipo not in ["sangria", "suprimento"]:
             return jsonify({"success": False, "error": "Tipo inválido. Use 'sangria' ou 'suprimento'"}), 400
-            
+
         if valor <= 0:
             return jsonify({"success": False, "error": "O valor deve ser maior que zero"}), 400
 
@@ -241,6 +241,21 @@ def registrar_movimentacao():
 
         if not caixa:
             return jsonify({"success": False, "error": "Nenhum caixa aberto encontrado"}), 404
+
+        # Regra de Acesso: SANGRIA exige o PIN de segurança da loja (conferência
+        # do valor exato junto com o caixa). Suprimento não exige.
+        if tipo == "sangria":
+            from app.routes.configuracao import autorizar_por_pin
+            autorizador = autorizar_por_pin(caixa.estabelecimento_id, data.get("pin"))
+            if not autorizador:
+                return jsonify({
+                    "success": False,
+                    "error": "Sangria exige o PIN de segurança de um Admin ou Gerente.",
+                    "code": "PIN_REQUIRED",
+                }), 403
+            # Rastreabilidade: registra quem autorizou a sangria
+            autoria = f"Sangria autorizada por {autorizador.nome} (PIN)"
+            observacoes = f"{observacoes} | {autoria}" if observacoes else autoria
 
         mov = MovimentacaoCaixa(
             caixa_id=caixa.id,

@@ -48,12 +48,14 @@ const CARGOS = [
     "Outros"
 ];
 
+// Cargos canônicos das Regras de Acesso (1=Admin … 6=Entregador)
 const NIVEIS_ACESSO = [
-    { value: "admin", label: "Administrador" },
-    { value: "gerente", label: "Gerente" },
-    { value: "atendente", label: "Atendente" },
-    { value: "caixa", label: "Caixa" },
-    { value: "vendedor", label: "Vendedor Externo" },
+    { value: "ADMIN", label: "Administrador (acesso total)" },
+    { value: "GERENTE", label: "Gerente" },
+    { value: "RH", label: "RH" },
+    { value: "CAIXA", label: "Estoque/Caixa" },
+    { value: "VENDEDOR", label: "Vendedor Externo (SFA)" },
+    { value: "ENTREGADOR", label: "Entregador" },
 ];
 
 function formatCurrency(value: number) {
@@ -125,7 +127,7 @@ export default function EmployeesPage() {
         data_admissao: new Date().toISOString().split('T')[0],
         usuario: "",
         senha: "",
-        nivel_acesso: "atendente",
+        nivel_acesso: "CAIXA",
         ativo: true,
         pin_cancelamento: "",
     });
@@ -291,7 +293,7 @@ export default function EmployeesPage() {
             data_admissao: new Date().toISOString().split('T')[0],
             usuario: "",
             senha: "",
-            nivel_acesso: "atendente",
+            nivel_acesso: "CAIXA",
             ativo: true,
             pin_cancelamento: "",
         });

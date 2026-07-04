@@ -11,6 +11,35 @@ from app.decorators.plan_guards import quota_required, permission_required
 
 funcionarios_bp = Blueprint("funcionarios", __name__, url_prefix="/api/funcionarios")
 
+# ==================== SELF-SERVICE: MEU HOLERITE ====================
+# Regra de Acesso: TODO funcionário acessa apenas o PRÓPRIO holerite,
+# independente do nível de acesso. Não usa @permission_required('funcionarios')
+# (que é restrito a Admin/Gerente/RH) — o middleware libera este prefixo
+# explicitamente (ver access_control.py: SELF_SERVICE_EXEMPT_PATHS).
+
+
+@funcionarios_bp.route("/me/holerite", methods=["GET"])
+@funcionario_required
+def meu_holerite():
+    """Dados do PRÓPRIO holerite do mês corrente (ou mes_referencia informado)."""
+    try:
+        from flask_jwt_extended import get_jwt_identity
+        from app.services.rh_calculator_service import calcular_holerite
+        funcionario = Funcionario.query.get(int(get_jwt_identity()))
+        if not funcionario:
+            return jsonify({"success": False, "error": "Funcionário não encontrado"}), 404
+
+        mes_referencia = request.args.get("mes_referencia") or date.today().strftime("%Y-%m")
+
+        # Holerite calculado 100% no BACKEND, lendo a ConfiguracaoFolha
+        # (INSS/IRRF progressivos, % hora extra, FGTS, VT). Nada hardcoded.
+        holerite = calcular_holerite(funcionario, mes_referencia)
+        return jsonify({"success": True, "data": holerite}), 200
+    except Exception as e:
+        current_app.logger.error(f"Erro em meu_holerite: {e}")
+        return jsonify({"success": False, "error": "Falha ao carregar holerite"}), 500
+
+
 # ==================== CRUD FUNCIONÁRIOS COM FILTROS AVANÇADOS ====================
 
 
@@ -1101,9 +1130,8 @@ def criar_funcionario():
         )
 
         # Sincronizar nivel_acesso inteiro com o role
-        from app.decorators.rbac import ROLE_TO_NIVEL
-        role_upper = (novo_funcionario.role or "FUNCIONARIO").upper()
-        novo_funcionario.nivel_acesso = ROLE_TO_NIVEL.get(role_upper, 3)
+        from app.decorators.rbac import nivel_do_role
+        novo_funcionario.nivel_acesso = nivel_do_role(novo_funcionario.role)
 
         # Definir senha
         novo_funcionario.set_senha(data["senha"])
@@ -1260,6 +1288,11 @@ def atualizar_funcionario(id):
             if campo_req == "endereco" and isinstance(valor, str) and valor:
                 # Tenta colocar no logradouro se não tiver estrutura
                 funcionario.logradouro = valor
+
+        # Manter nivel_acesso numérico sincronizado com o role
+        if "role" in data or "nivel_acesso" in data:
+            from app.decorators.rbac import nivel_do_role
+            funcionario.nivel_acesso = nivel_do_role(funcionario.role)
 
         # Atualizar senha se fornecida
         if "senha" in data and data["senha"]:

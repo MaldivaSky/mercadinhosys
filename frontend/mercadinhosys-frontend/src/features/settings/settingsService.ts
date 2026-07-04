@@ -75,6 +75,27 @@ export interface Configuracao {
     tolerancia_atraso_minutos?: number;
 }
 
+/**
+ * Configuração REAL de ponto (tabela ConfiguracaoHorario no backend).
+ * Diferente do objeto `Configuracao` acima: estes campos são lidos e usados
+ * pelo motor de ponto (cálculo de atraso, hora extra e espelho de ponto).
+ */
+export interface PontoConfig {
+    hora_entrada?: string;
+    hora_saida_almoco?: string;
+    hora_retorno_almoco?: string;
+    hora_saida?: string;
+    tolerancia_entrada?: number;
+    tolerancia_saida_almoco?: number;
+    tolerancia_retorno_almoco?: number;
+    tolerancia_saida?: number;
+    jornada_diaria_minutos?: number;
+    jornada_diaria_horas?: number;
+    exigir_foto?: boolean;
+    exigir_localizacao?: boolean;
+    raio_permitido_metros?: number;
+}
+
 export interface SubscriptionStatus {
     plano: string;
     status: string;
@@ -149,6 +170,17 @@ const settingsService = {
     openPortal: async () => {
         const response = await apiClient.post<{ success: boolean; portal_url: string }>('/billing/portal', {});
         return response.data;
+    },
+
+    // ----- Configuração de ponto (motor real: ConfiguracaoHorario) -----
+    getPontoConfig: async () => {
+        const response = await apiClient.get<{ success: boolean; data: PontoConfig }>('/ponto/configuracao');
+        return response.data.data;
+    },
+
+    updatePontoConfig: async (data: Partial<PontoConfig>) => {
+        const response = await apiClient.put<{ success: boolean; data: PontoConfig }>('/ponto/configuracao', data);
+        return response.data.data;
     },
 
     // ----- PIN de segurança (autorização de operações sensíveis) -----

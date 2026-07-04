@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatters';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
+import PinDialog from '../../../components/modals/PinDialog';
 
 interface CaixaManagerProps {
     caixaAtual: CaixaPDV | null;
@@ -38,6 +39,7 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
     const [loadingAuditoria, setLoadingAuditoria] = useState(false);
     const [resumoCaixa, setResumoCaixa] = useState<any>(null);
     const [loadingResumo, setLoadingResumo] = useState(false);
+    const [pinSangriaOpen, setPinSangriaOpen] = useState(false);
 
     useEffect(() => {
         if (activeTab === 'auditoria' && caixaAtual) carregarAuditoria();
@@ -162,9 +164,20 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
         const val = parseFloat(valorMovimentacao.replace(',', '.'));
         if (isNaN(val) || val <= 0) return showToast.error('Informe um valor válido.');
         if (!descricaoMovimentacao.trim()) return showToast.error('A descrição é obrigatória.');
+        // Regra de Acesso: sangria exige PIN de Admin/Gerente (conferência do
+        // valor exato junto com o caixa). O submit real acontece em confirmarMovimentacao.
+        if (tipoMovimentacao === 'sangria') {
+            setPinSangriaOpen(true);
+            return;
+        }
+        await confirmarMovimentacao();
+    };
+
+    const confirmarMovimentacao = async (pin?: string) => {
+        const val = parseFloat(valorMovimentacao.replace(',', '.'));
         try {
             setLoading(true);
-            await pdvService.registrarMovimentacao({ tipo: tipoMovimentacao, valor: val, descricao: descricaoMovimentacao });
+            await pdvService.registrarMovimentacao({ tipo: tipoMovimentacao, valor: val, descricao: descricaoMovimentacao, pin });
             const delta = tipoMovimentacao === 'suprimento' ? val : -val;
             if (caixaAtual) setCaixaAtual({ ...caixaAtual, saldo_atual: parseFloat(caixaAtual.saldo_atual as any) + delta });
             showToast.success(`${tipoMovimentacao === 'sangria' ? 'Sangria' : 'Suprimento'} registrado!`);
@@ -552,6 +565,15 @@ const CaixaManager: React.FC<CaixaManagerProps> = ({ caixaAtual, setCaixaAtual, 
                     )}
                 </div>{/* /scroll area */}
             </div>
+
+            {/* PIN obrigatório para sangria (Regra de Acesso) */}
+            <PinDialog
+                open={pinSangriaOpen}
+                title="Autorizar Sangria"
+                description="A sangria exige o PIN de segurança de um Admin ou Gerente. Confira o valor exato junto com o caixa antes de autorizar."
+                onSuccess={(pin) => { setPinSangriaOpen(false); confirmarMovimentacao(pin); }}
+                onClose={() => setPinSangriaOpen(false)}
+            />
         </div>,
         document.body
     );

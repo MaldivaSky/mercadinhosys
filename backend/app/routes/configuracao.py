@@ -108,7 +108,12 @@ def atualizar_configuracoes():
                 val = data[field]
                 if field in ("formas_pagamento", "motivos_estorno") and isinstance(val, list):
                     val = json.dumps(val, ensure_ascii=False)
-                
+                # logo_url é VARCHAR(500) e a logo é gerenciada pelo endpoint
+                # dedicado (/logo). Um data-URI base64 aqui estoura a coluna e
+                # derruba o save inteiro — ignora valores longos por segurança.
+                if field == "logo_url" and isinstance(val, str) and (val.startswith("data:") or len(val) > 500):
+                    continue
+
                 params[field] = val
                 set_clauses.append(f"{field} = :{field}")
 

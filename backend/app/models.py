@@ -530,8 +530,8 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
     pin_cancelamento = db.Column(db.String(255))  # Hash do PIN numérico (4 a 6 dígitos) para cancelamentos/estornos
     foto_url = db.Column(db.String(500))
     role = db.Column(db.String(30), default="FUNCIONARIO")
-    # nivel_acesso: 1=Admin, 2=Gerente, 3=Caixa, 4=Estoque, 5=RH, 6=Entregador, 7=Vendedor
-    nivel_acesso = db.Column(db.Integer, default=3)
+    # nivel_acesso: 1=Admin, 2=Gerente, 3=RH, 4=Estoque/Caixa, 5=Vendedor, 6=Entregador
+    nivel_acesso = db.Column(db.Integer, default=4)
     status = db.Column(db.String(20), default="ativo")
     is_super_admin = db.Column(db.Boolean, default=False)
     permissoes = db.Column(db.JSON, default=lambda: {"pdv": True, "estoque": True, "compras": False, "financeiro": False, "configuracoes": False})
@@ -596,7 +596,11 @@ class Funcionario(db.Model, MultiTenantMixin, UserMixin, SoftDeleteMixin, Serial
         data.pop("pin_cancelamento", None)
         data["tem_pin"] = self.tem_pin
         data["usuario"] = self.username
+        # Compat: telas antigas leem "nivel_acesso" como string do cargo.
+        # "nivel" é o número canônico (1=Admin … 6=Entregador) usado nos gates.
         data["nivel_acesso"] = self.role
+        from app.decorators.rbac import nivel_do_role
+        data["nivel"] = 0 if self.is_super_admin else nivel_do_role(self.role)
         data["salario"] = float(self.salario) if self.salario else (float(self.salario_base) if self.salario_base else 0.0)
         return data
 
@@ -658,6 +662,112 @@ class BancoHoras(db.Model, MultiTenantMixin):
     funcionario = db.relationship("Funcionario", backref=db.backref("banco_horas", lazy=True))
     __table_args__ = (db.UniqueConstraint("funcionario_id", "mes_referencia", name="uq_banco_func_mes"),)
 
+
+class EspelhoAssinatura(db.Model, MultiTenantMixin):
+    """Confirmação do funcionário de que conferiu seu espelho de ponto do período
+    (Regra de Acesso: todo funcionário deve poder assinar seu próprio espelho)."""
+    __tablename__ = "espelho_assinaturas"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=False)
+    assinado_em = db.Column(db.DateTime, default=utcnow)
+    funcionario = db.relationship("Funcionario", backref=db.backref("espelhos_assinados", lazy=True))
+    __table_args__ = (db.UniqueConstraint("funcionario_id", "data_inicio", "data_fim", name="uq_espelho_func_periodo"),)
+
+
+# Tipos de rescisão (CLT) — string simples p/ evitar enum nativo no Postgres
+TIPOS_RESCISAO = ("PEDIDO", "S_JUSTA", "C_JUSTA", "ACORDO")
+
+
+class Rescisao(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
+    """Rescisão de contrato com a memória de cálculo das verbas rescisórias.
+    O `verbas_rescisorias_json` guarda o detalhamento verba a verba para o
+    lojista entregar ao contador (estimativa — não substitui o TRCT oficial)."""
+    __tablename__ = "rescisoes"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    data_demissao = db.Column(db.Date, nullable=False)
+    tipo_rescisao = db.Column(db.String(20), nullable=False)  # ver TIPOS_RESCISAO
+    verbas_rescisorias_json = db.Column(db.JSON, default=dict)
+    total_proventos = db.Column(db.Numeric(19, 4), default=0)
+    total_descontos = db.Column(db.Numeric(19, 4), default=0)
+    total_liquido = db.Column(db.Numeric(19, 4), default=0)
+    funcionario = db.relationship("Funcionario", backref=db.backref("rescisoes", lazy=True))
+    __table_args__ = (db.Index("ix_rescisao_funcionario", "funcionario_id"),)
+
+    def to_dict(self, include_relationships: bool = False, depth: int = 0):
+        data = super().to_dict(include_relationships=include_relationships, depth=depth)
+        data["funcionario_nome"] = self.funcionario.nome if self.funcionario else None
+        return data
+
+
+class ProvisaoTrabalhista(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
+    """Provisão mensal (1/12 avos) de férias, 13º e encargos — permite exibir o
+    'Custo Real' do funcionário, não apenas o salário nominal."""
+    __tablename__ = "provisoes_trabalhistas"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    funcionario_id = db.Column(db.Integer, db.ForeignKey("funcionarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    ano_mes = db.Column(db.String(7), nullable=False)  # 'YYYY-MM'
+    valor_ferias = db.Column(db.Numeric(19, 4), default=0)
+    valor_decimo_terceiro = db.Column(db.Numeric(19, 4), default=0)
+    encargos_provisionados = db.Column(db.Numeric(19, 4), default=0)
+    custo_real = db.Column(db.Numeric(19, 4), default=0)
+    funcionario = db.relationship("Funcionario", backref=db.backref("provisoes", lazy=True))
+    __table_args__ = (db.UniqueConstraint("funcionario_id", "ano_mes", name="uq_provisao_func_mes"),)
+
+    def to_dict(self, include_relationships: bool = False, depth: int = 0):
+        data = super().to_dict(include_relationships=include_relationships, depth=depth)
+        data["funcionario_nome"] = self.funcionario.nome if self.funcionario else None
+        return data
+
+
+# Defaults CLT (tabelas 2024/2025) — editáveis por tenant via ConfiguracaoFolha
+INSS_FAIXAS_PADRAO = [
+    {"ate": 1412.00, "aliquota": 7.5},
+    {"ate": 2666.68, "aliquota": 9.0},
+    {"ate": 4000.03, "aliquota": 12.0},
+    {"ate": 7786.02, "aliquota": 14.0},
+]
+IRRF_FAIXAS_PADRAO = [
+    {"ate": 2259.20, "aliquota": 0.0, "deducao": 0.0},
+    {"ate": 2826.65, "aliquota": 7.5, "deducao": 169.44},
+    {"ate": 3751.05, "aliquota": 15.0, "deducao": 381.44},
+    {"ate": 4664.68, "aliquota": 22.5, "deducao": 662.77},
+    {"ate": None, "aliquota": 27.5, "deducao": 896.00},
+]
+
+
+class ConfiguracaoFolha(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
+    """Parâmetros de folha 100% configuráveis por loja (nada hardcoded):
+    hora extra, adicional noturno, divisor de horas, FGTS, multa rescisória,
+    desconto de VT e as tabelas progressivas de INSS/IRRF."""
+    __tablename__ = "configuracoes_folha"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    divisor_horas_mensais = db.Column(db.Integer, default=220)         # jornada mensal p/ valor-hora
+    percentual_hora_extra = db.Column(db.Numeric(6, 2), default=50)    # % adicional de hora extra
+    percentual_adicional_noturno = db.Column(db.Numeric(6, 2), default=20)
+    fgts_percentual = db.Column(db.Numeric(6, 2), default=8)
+    multa_fgts_dispensa = db.Column(db.Numeric(6, 2), default=40)
+    multa_fgts_acordo = db.Column(db.Numeric(6, 2), default=20)
+    desconto_vt_percentual = db.Column(db.Numeric(6, 2), default=6)    # teto legal de desconto de VT
+    deducao_por_dependente = db.Column(db.Numeric(19, 4), default=189.59)  # IRRF
+    inss_faixas = db.Column(db.JSON, default=lambda: list(INSS_FAIXAS_PADRAO))
+    irrf_faixas = db.Column(db.JSON, default=lambda: list(IRRF_FAIXAS_PADRAO))
+    __table_args__ = (db.UniqueConstraint("estabelecimento_id", name="uq_config_folha_estab"),)
+
+    def to_dict(self, include_relationships: bool = False, depth: int = 0):
+        data = super().to_dict(include_relationships=include_relationships, depth=depth)
+        # Garante as tabelas mesmo em registros antigos
+        data["inss_faixas"] = self.inss_faixas or list(INSS_FAIXAS_PADRAO)
+        data["irrf_faixas"] = self.irrf_faixas or list(IRRF_FAIXAS_PADRAO)
+        return data
+
+
 class JustificativaPonto(db.Model, MultiTenantMixin, SerializableMixin):
     __tablename__ = "justificativas_ponto"
     id = db.Column(db.Integer, primary_key=True)
@@ -682,7 +792,11 @@ class JustificativaPonto(db.Model, MultiTenantMixin, SerializableMixin):
         return {"id": self.id, "funcionario_id": self.funcionario_id, "funcionario_nome": self.funcionario.nome if self.funcionario else None,
                 "aprovador_id": self.aprovador_id, "aprovador_nome": self.aprovador.nome if self.aprovador else None,
                 "tipo": self.tipo, "data": self.data.isoformat() if self.data else None, "motivo": self.motivo,
-                "status": self.status, "created_at": self.created_at.isoformat() if self.created_at else None}
+                "documento_url": self.documento_url,
+                "status": self.status,
+                "motivo_rejeicao": self.motivo_rejeicao,
+                "data_resposta": self.data_resposta.isoformat() if self.data_resposta else None,
+                "created_at": self.created_at.isoformat() if self.created_at else None}
 
 class Cliente(db.Model, MultiTenantMixin, SoftDeleteMixin, SerializableMixin, AuditMixin, EnderecoMixin):
     __tablename__ = "clientes"
@@ -1802,6 +1916,11 @@ class ConfiguracaoHorario(db.Model, MultiTenantMixin):
     tolerancia_saida_almoco = db.Column(db.Integer, default=5)
     tolerancia_retorno_almoco = db.Column(db.Integer, default=10)
     tolerancia_saida = db.Column(db.Integer, default=5)
+    # Jornada normal diária (CLT: 8h/dia, 44h/semana). Horas trabalhadas ALÉM
+    # deste limite viram hora extra — não apenas "saiu depois do horário
+    # configurado", que subestima a extra quando a jornada configurada já
+    # excede o limite legal (ex.: 07:30–19:00 com 1h de almoço = 10h30).
+    jornada_diaria_minutos = db.Column(db.Integer, default=480)
     exigir_foto = db.Column(db.Boolean, default=True)
     exigir_localizacao = db.Column(db.Boolean, default=True)
     raio_permitido_metros = db.Column(db.Integer, default=100)
@@ -1819,7 +1938,9 @@ class ConfiguracaoHorario(db.Model, MultiTenantMixin):
                 'tolerancia_entrada': self.tolerancia_entrada, 'tolerancia_saida_almoco': self.tolerancia_saida_almoco,
                 'tolerancia_retorno_almoco': self.tolerancia_retorno_almoco, 'tolerancia_saida': self.tolerancia_saida,
                 'exigir_foto': self.exigir_foto, 'exigir_localizacao': self.exigir_localizacao,
-                'raio_permitido_metros': self.raio_permitido_metros}
+                'raio_permitido_metros': self.raio_permitido_metros,
+                'jornada_diaria_minutos': self.jornada_diaria_minutos or 480,
+                'jornada_diaria_horas': round((self.jornada_diaria_minutos or 480) / 60, 2)}
 
 class Auditoria(db.Model, MultiTenantMixin):
     __tablename__ = "auditoria"

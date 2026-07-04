@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, ShoppingCart, Users, Package, Menu as MenuIcon, X, LogOut, Settings, CreditCard, BarChart3, Navigation, FileText, Briefcase, UserCog, Clock, Truck, Receipt, DollarSign, Building2, Activity, Target, MapPin } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import EstablishmentSelector from '../EstablishmentSelector';
+import { authService } from '../../features/auth/authService';
+import { canAccessRoute } from '../../utils/permissions';
 
 const mainTabs = [
     { to: '/dashboard', icon: Home, label: 'Início' },
@@ -38,6 +40,13 @@ const BottomNavigation: React.FC = () => {
     const { logout, user } = useAuth();
     const navigate = useNavigate();
 
+    // Regras de Acesso centralizadas (mesma fonte da Sidebar)
+    const currentUser = authService.getCurrentUser();
+    const podeVer = (rota: string) =>
+        currentUser?.is_super_admin || canAccessRoute(rota, currentUser);
+    const visibleMainTabs = mainTabs.filter(tab => podeVer(tab.to));
+    const visibleMenuItems = allMenuItems.filter(item => podeVer(item.to));
+
     const handleLogout = () => {
         setMenuOpen(false);
         logout();
@@ -51,7 +60,7 @@ const BottomNavigation: React.FC = () => {
             {/* Bottom Nav Bar */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-40 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]">
                 <div className="flex justify-around items-center h-16">
-                    {mainTabs.map((tab) => (
+                    {visibleMainTabs.map((tab) => (
                         <NavLink
                             key={tab.to}
                             to={tab.to}
@@ -115,11 +124,7 @@ const BottomNavigation: React.FC = () => {
                         )}
 
                         <div className="grid grid-cols-4 gap-y-6 gap-x-2 mb-6">
-                            {(user?.is_super_admin ? [...allMenuItems, ...superAdminItems] : allMenuItems).map((item) => {
-                                // Verifica permissão do Caixa
-                                const role = user?.role?.toLowerCase();
-                                if (role === 'caixa' && !['/sales', '/delivery'].includes(item.to)) return null;
-
+                            {(user?.is_super_admin ? [...visibleMenuItems, ...superAdminItems] : visibleMenuItems).map((item) => {
                                 return (
                                     <NavLink
                                         key={item.to}

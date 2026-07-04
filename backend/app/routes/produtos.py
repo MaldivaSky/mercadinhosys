@@ -1013,6 +1013,7 @@ def listar_produtos():
 
                 for l in lotes:
                     preco_lote = getattr(l, "preco_venda", None)
+                    custo_lote = getattr(l, "preco_custo_unitario", None)
                     produto_dict["lotes_no_periodo"].append({
                         "id": l.id,
                         "numero_lote": l.numero_lote,
@@ -1020,6 +1021,9 @@ def listar_produtos():
                         "quantidade": l.quantidade,
                         "preco_venda": float(preco_lote) if preco_lote is not None else None,
                         "preco_produto": float(produto.preco_venda or 0),
+                        # Custo do LOTE específico (pode variar de compra pra compra);
+                        # cai para o custo atual do produto se o lote não tiver o próprio.
+                        "preco_custo": float(custo_lote) if custo_lote is not None else float(produto.preco_custo or 0),
                     })
 
                 if not produto_dict["lotes_no_periodo"] and (
@@ -1033,6 +1037,7 @@ def listar_produtos():
                         "quantidade": produto.quantidade,
                         "preco_venda": None,
                         "preco_produto": float(produto.preco_venda or 0),
+                        "preco_custo": float(produto.preco_custo or 0),
                     })
 
                 if precisa_consultar_lotes:

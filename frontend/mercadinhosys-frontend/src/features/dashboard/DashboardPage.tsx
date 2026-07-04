@@ -7,6 +7,8 @@ import SalesSfaTab from './components/tabs/SalesSfaTab';
 import InventoryTab from './components/tabs/InventoryTab';
 import FinancialTab from './components/tabs/FinancialTab';
 import RHTab from './components/tabs/RHTab';
+import { authService } from '../auth/authService';
+import { isPlanoGratis } from '../../utils/permissions';
 
 export default function DashboardPageV2() {
   const [activeTab, setActiveTab] = useState('executive');
@@ -42,13 +44,17 @@ export default function DashboardPageV2() {
     }
   };
 
-  const tabs = [
-    { id: 'executive', label: 'Visão Executiva', icon: Activity },
-    { id: 'sales', label: 'Vendas & SFA', icon: Target },
-    { id: 'inventory', label: 'Estoque Inteligente', icon: Package },
-    { id: 'financial', label: 'Financeiro', icon: DollarSign },
-    { id: 'rh', label: 'Equipe & RH', icon: Users },
-  ];
+  // Plano Grátis: apenas a Visão Executiva (Regras do Plano Grátis)
+  const planoGratis = isPlanoGratis(authService.getCurrentUser());
+  const tabs = planoGratis
+    ? [{ id: 'executive', label: 'Visão Executiva', icon: Activity }]
+    : [
+        { id: 'executive', label: 'Visão Executiva', icon: Activity },
+        { id: 'sales', label: 'Vendas & SFA', icon: Target },
+        { id: 'inventory', label: 'Estoque Inteligente', icon: Package },
+        { id: 'financial', label: 'Financeiro', icon: DollarSign },
+        { id: 'rh', label: 'Equipe & RH', icon: Users },
+      ];
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-900 text-slate-100 p-4 md:p-6 lg:p-8 animate-in fade-in duration-500">

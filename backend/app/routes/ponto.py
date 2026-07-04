@@ -38,6 +38,26 @@ def get_funcionario_logado():
     return Funcionario.query.get(user_id)
 
 
+def pode_ver_tudo_ponto(funcionario):
+    """Regra de Acesso: só Admin (1), Gerente (2) e RH (3) veem os registros
+    de TODOS os funcionários; os demais níveis veem apenas os próprios."""
+    from app.decorators.rbac import _get_nivel
+    return _get_nivel(funcionario) <= 3
+
+
+def eh_admin_loja(funcionario):
+    """Admin da loja (nível 1) ou super admin (nível 0)."""
+    from app.decorators.rbac import _get_nivel
+    return _get_nivel(funcionario) <= 1
+
+
+def pode_configurar_ponto(funcionario):
+    """Configurar horários/jornada do ponto: Admin (1) e Gerente (2).
+    (A aba Ponto & RH das Configurações fica visível para o Gerente.)"""
+    from app.decorators.rbac import _get_nivel
+    return _get_nivel(funcionario) <= 2
+
+
 def calcular_minutos_atraso(hora_registro, hora_esperada, tolerancia):
     """Calcula minutos de atraso considerando tolerância"""
     if not hora_registro or not hora_esperada:
@@ -426,16 +446,13 @@ def historico_pontos():
         per_page = int(request.args.get('per_page', 30))
         target_funcionario_id = request.args.get('funcionario_id')
 
-        # Normalizar role para comparação
-        user_role = current_user.role.lower() if current_user.role else ''
-
-        # Se for admin/gerente
-        if user_role in ['admin', 'gerente']:
+        # Admin/Gerente/RH veem tudo; os demais só os próprios registros
+        if pode_ver_tudo_ponto(current_user):
             if target_funcionario_id:
-                # Admin vendo funcionário específico
+                # Vendo funcionário específico
                 query = RegistroPonto.query.filter_by(funcionario_id=int(target_funcionario_id))
             else:
-                # Admin vê TODOS (Visão Geral)
+                # Visão Geral (todos)
                 query = RegistroPonto.query
         else:
             # Padrão: ver os próprios pontos
@@ -489,7 +506,7 @@ def admin_todos_pontos():
     """
     try:
         current_user = get_funcionario_logado()
-        if not current_user or current_user.role not in ['admin', 'gerente']:
+        if not current_user or not pode_ver_tudo_ponto(current_user):
             return jsonify({'success': False, 'message': 'Acesso não autorizado'}), 403
             
         # Parâmetros
@@ -706,14 +723,14 @@ def obter_configuracao():
 @jwt_required()
 @permission_required('ponto')
 def atualizar_configuracao():
-    """Atualiza configuração de horários (apenas admin)"""
+    """Atualiza configuração de horários (Admin ou Gerente)"""
     try:
         funcionario = get_funcionario_logado()
-        if not funcionario or funcionario.role != 'ADMIN':
+        if not funcionario or not pode_configurar_ponto(funcionario):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
-        
+
         data = request.get_json()
-        
+
         config = ConfiguracaoHorario.query.filter_by(
             estabelecimento_id=funcionario.estabelecimento_id
         ).first()
@@ -740,7 +757,15 @@ def atualizar_configuracao():
             config.tolerancia_retorno_almoco = data['tolerancia_retorno_almoco']
         if 'tolerancia_saida' in data:
             config.tolerancia_saida = data['tolerancia_saida']
-        
+
+        # Jornada diária normal (CLT: 8h/dia por padrão). Contratos com
+        # jornada diferente (ex.: 9h para bater 44h/semana na escala 6x1)
+        # configuram aqui — o que passar disso vira hora extra no dia.
+        if 'jornada_diaria_minutos' in data:
+            config.jornada_diaria_minutos = int(data['jornada_diaria_minutos'])
+        elif 'jornada_diaria_horas' in data:
+            config.jornada_diaria_minutos = int(round(float(data['jornada_diaria_horas']) * 60))
+
         if 'exigir_foto' in data:
             config.exigir_foto = data['exigir_foto']
         if 'exigir_localizacao' in data:
@@ -770,8 +795,8 @@ def ajustar_ponto(registro_id):
     """Ajusta um registro de ponto existente (apenas admin)"""
     try:
         funcionario = get_funcionario_logado()
-        if not funcionario or funcionario.role != 'ADMIN':
-            return jsonify({'success': False, 'message': 'Apenas administrador pode ajustar pontos'}), 403
+        if not funcionario or not pode_ver_tudo_ponto(funcionario):
+            return jsonify({'success': False, 'message': 'Apenas Admin, Gerente ou RH podem ajustar pontos'}), 403
         
         registro = RegistroPonto.query.get(registro_id)
         if not registro:
@@ -860,10 +885,10 @@ def ajustar_ponto(registro_id):
 @jwt_required()
 @permission_required('ponto')
 def relatorio_funcionarios():
-    """Relatório consolidado de todos os funcionários (admin)"""
+    """Relatório consolidado de todos os funcionários (Admin/Gerente/RH)"""
     try:
         funcionario = get_funcionario_logado()
-        if not funcionario or funcionario.role != 'ADMIN':
+        if not funcionario or not pode_ver_tudo_ponto(funcionario):
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         # Parâmetros
@@ -952,8 +977,8 @@ def relatorio_detalhado_funcionario(funcionario_id):
         if not funcionario_logado:
             return jsonify({'success': False, 'message': 'Funcionário não encontrado'}), 404
         
-        # Verificar permissão (admin ou próprio funcionário)
-        if funcionario_logado.role != 'ADMIN' and funcionario_logado.id != funcionario_id:
+        # Verificar permissão (Admin/Gerente/RH ou o próprio funcionário)
+        if not pode_ver_tudo_ponto(funcionario_logado) and funcionario_logado.id != funcionario_id:
             return jsonify({'success': False, 'message': 'Acesso negado'}), 403
         
         # Parâmetros
@@ -1058,6 +1083,8 @@ def limpar_registros_teste():
         funcionario = get_funcionario_logado()
         if not funcionario:
             return jsonify({'success': False, 'message': 'Funcionário não encontrado'}), 404
+        if not eh_admin_loja(funcionario):
+            return jsonify({'success': False, 'message': 'Apenas o administrador pode limpar registros de teste'}), 403
         
         hoje = date.today()
         

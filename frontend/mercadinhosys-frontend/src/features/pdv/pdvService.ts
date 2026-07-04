@@ -166,6 +166,8 @@ export interface MovimentacaoCaixaRequest {
     valor: number;
     descricao: string;
     forma_pagamento?: string;
+    /** PIN de segurança de Admin/Gerente — obrigatório para sangria. */
+    pin?: string;
 }
 
 export const pdvService = {

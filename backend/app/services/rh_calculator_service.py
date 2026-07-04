@@ -1,0 +1,675 @@
+"""
+Serviço de cálculo de RH & Folha — FONTE ÚNICA DE VERDADE.
+
+Toda a matemática de ponto (atraso, hora extra), holerite (proventos/descontos)
+e rescisão vive aqui, para que espelho de ponto, holerite e folha nunca
+divirjam. As rotas apenas orquestram; a lógica de negócio mora neste módulo.
+
+Convenções:
+- Horas extras seguem a jornada legal (CLT): o que exceder a jornada diária
+  normal (ConfiguracaoHorario.jornada_diaria_minutos, padrão 8h) vira extra.
+- Atraso vem do minutos_atraso gravado em cada RegistroPonto no momento da
+  batida (respeita a tolerância configurada).
+- Valores monetários usam Decimal e são arredondados a 2 casas (ROUND_HALF_UP).
+"""
+from collections import defaultdict
+from datetime import datetime, date
+from decimal import Decimal, ROUND_HALF_UP
+import calendar
+
+JORNADA_PADRAO_MIN = 480  # 8h/dia (CLT)
+
+
+def _q2(valor) -> float:
+    """Arredonda para 2 casas decimais (dinheiro), retornando float p/ JSON."""
+    return float(Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _fmt_hora(t):
+    return t.strftime("%H:%M") if t else None
+
+
+def _D(v) -> Decimal:
+    return Decimal(str(v if v is not None else 0))
+
+
+def obter_config_folha(estabelecimento_id):
+    """Retorna a ConfiguracaoFolha da loja, criando com defaults CLT se faltar.
+    Fonte única dos parâmetros de folha — nada de valores fixos no cálculo."""
+    from app.models import db, ConfiguracaoFolha
+    cfg = ConfiguracaoFolha.query.filter_by(estabelecimento_id=estabelecimento_id).first()
+    if not cfg:
+        cfg = ConfiguracaoFolha(estabelecimento_id=estabelecimento_id)
+        db.session.add(cfg)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            cfg = ConfiguracaoFolha.query.filter_by(estabelecimento_id=estabelecimento_id).first() or cfg
+    return cfg
+
+
+def calcular_inss(base, faixas) -> Decimal:
+    """INSS progressivo por faixas (aplica a alíquota sobre a parte do salário
+    dentro de cada faixa, respeitando o teto da última)."""
+    base = _D(base)
+    total = Decimal(0)
+    anterior = Decimal(0)
+    for f in faixas or []:
+        teto = _D(f["ate"]) if f.get("ate") is not None else base
+        if base <= anterior:
+            break
+        tributavel = min(base, teto) - anterior
+        if tributavel > 0:
+            total += tributavel * _D(f["aliquota"]) / Decimal(100)
+        anterior = teto
+    return total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def calcular_irrf(base, faixas) -> Decimal:
+    """IRRF pelo método da dedução: encontra a faixa e aplica alíquota × base −
+    parcela a deduzir."""
+    base = _D(base)
+    for f in faixas or []:
+        teto = f.get("ate")
+        if teto is None or base <= _D(teto):
+            imposto = base * _D(f["aliquota"]) / Decimal(100) - _D(f.get("deducao", 0))
+            return max(Decimal(0), imposto).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return Decimal(0)
+
+
+def limites_do_mes(ano_mes: str):
+    """'YYYY-MM' -> (date primeiro dia, date último dia)."""
+    ano, mes = (int(x) for x in ano_mes.split("-"))
+    ultimo = calendar.monthrange(ano, mes)[1]
+    return date(ano, mes, 1), date(ano, mes, ultimo)
+
+
+# ---------------------------------------------------------------------------
+# ESPELHO DE PONTO (consumido pelo endpoint de espelho E pelo holerite)
+# ---------------------------------------------------------------------------
+
+def calcular_espelho_ponto(funcionario, data_inicio, data_fim, config=None):
+    """
+    Agrega os RegistroPonto do período em registros diários + resumo.
+
+    Tipos reais gravados por registrar_ponto: entrada, saida_almoco (início da
+    pausa), retorno_almoco (fim da pausa), saida (saída final). Horas extras =
+    minutos trabalhados no dia além da jornada normal (CLT).
+
+    Retorna dict pronto para serialização (sem dados de assinatura, que são
+    responsabilidade do endpoint).
+    """
+    from sqlalchemy import and_
+    from app.models import RegistroPonto, ConfiguracaoHorario
+
+    if config is None:
+        config = ConfiguracaoHorario.query.filter_by(
+            estabelecimento_id=funcionario.estabelecimento_id
+        ).first()
+
+    jornada_normal = (config.jornada_diaria_minutos if config and config.jornada_diaria_minutos
+                      else JORNADA_PADRAO_MIN)
+
+    registros = (RegistroPonto.query
+                 .filter(and_(
+                     RegistroPonto.funcionario_id == funcionario.id,
+                     RegistroPonto.data >= data_inicio,
+                     RegistroPonto.data <= data_fim,
+                 ))
+                 .order_by(RegistroPonto.data, RegistroPonto.hora)
+                 .all())
+
+    registros_por_dia = defaultdict(list)
+    for r in registros:
+        registros_por_dia[r.data].append(r)
+
+    registros_diarios = []
+    total_dias = total_atrasos = total_min_atraso = 0
+    total_min_extras = 0
+    total_min_trabalhados = 0
+
+    for dia, regs in sorted(registros_por_dia.items()):
+        entrada = saida = intervalo_inicio = intervalo_fim = None
+        minutos_atraso = 0
+        observacao = None
+        tem_saida = False
+
+        for r in regs:
+            if r.tipo_registro == "entrada":
+                entrada = _fmt_hora(r.hora)
+                minutos_atraso += r.minutos_atraso or 0
+            elif r.tipo_registro == "saida_almoco":
+                intervalo_inicio = _fmt_hora(r.hora)
+                minutos_atraso += r.minutos_atraso or 0
+            elif r.tipo_registro == "retorno_almoco":
+                intervalo_fim = _fmt_hora(r.hora)
+                minutos_atraso += r.minutos_atraso or 0
+            elif r.tipo_registro == "saida":
+                saida = _fmt_hora(r.hora)
+                tem_saida = True
+            if r.observacao:
+                observacao = r.observacao
+
+        # Minutos trabalhados no dia, descontando a pausa de almoço
+        minutos_trabalhados = 0
+        if entrada and saida:
+            try:
+                e = datetime.strptime(entrada, "%H:%M")
+                s = datetime.strptime(saida, "%H:%M")
+                diff = (s - e).total_seconds() / 60
+                if intervalo_inicio and intervalo_fim:
+                    ii = datetime.strptime(intervalo_inicio, "%H:%M")
+                    iff = datetime.strptime(intervalo_fim, "%H:%M")
+                    diff -= (iff - ii).total_seconds() / 60
+                minutos_trabalhados = max(0, diff)
+            except Exception:
+                minutos_trabalhados = 0
+
+        # Hora extra (CLT): o que passar da jornada normal do dia
+        minutos_extras = 0
+        if tem_saida and entrada and saida:
+            minutos_extras = max(0, int(minutos_trabalhados - jornada_normal))
+
+        registros_diarios.append({
+            "data": dia.isoformat(),
+            "entrada": entrada,
+            "saida": saida,
+            "intervalo_inicio": intervalo_inicio,
+            "intervalo_fim": intervalo_fim,
+            "minutos_atraso": minutos_atraso,
+            "minutos_extras": minutos_extras,
+            "horas_trabalhadas": minutos_trabalhados,
+            "observacao": observacao,
+        })
+
+        if entrada or saida:
+            total_dias += 1
+        if minutos_atraso > 0:
+            total_atrasos += 1
+            total_min_atraso += minutos_atraso
+        total_min_extras += minutos_extras
+        total_min_trabalhados += minutos_trabalhados
+
+    media_horas_dia = (total_min_trabalhados / 60 / total_dias) if total_dias else 0
+
+    return {
+        "funcionario_id": funcionario.id,
+        "nome": funcionario.nome,
+        "cargo": funcionario.cargo,
+        "registros_diarios": registros_diarios,
+        "resumo": {
+            "total_dias_trabalhados": total_dias,
+            "total_atrasos": total_atrasos,
+            "total_minutos_atraso": total_min_atraso,
+            "total_minutos_extras": total_min_extras,
+            "total_horas_extras": round(total_min_extras / 60, 2),
+            "total_horas_trabalhadas": round(total_min_trabalhados / 60, 2),
+            "media_horas_dia": round(media_horas_dia, 2),
+            "jornada_diaria_minutos": jornada_normal,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# HOLERITE (folha mensal) — 100% no backend, lendo ConfiguracaoFolha
+# ---------------------------------------------------------------------------
+
+def calcular_holerite(funcionario, mes_referencia: str, config_folha=None) -> dict:
+    """
+    Holerite do mês com proventos/descontos/líquido e memória de cálculo,
+    lendo TODOS os parâmetros da ConfiguracaoFolha (divisor de horas, % hora
+    extra, tabelas de INSS/IRRF, FGTS, desconto de VT). Hora extra e atraso
+    vêm da engine do espelho (dados reais de ponto).
+    """
+    from app.models import db, FuncionarioBeneficio, Beneficio
+
+    if config_folha is None:
+        config_folha = obter_config_folha(funcionario.estabelecimento_id)
+
+    salario = _D(funcionario.salario_base)
+    inicio, fim = limites_do_mes(mes_referencia)
+    espelho = calcular_espelho_ponto(funcionario, inicio, fim)
+    horas_extras = _D(espelho["resumo"]["total_horas_extras"])
+    horas_atraso = _D(espelho["resumo"]["total_minutos_atraso"]) / Decimal(60)
+
+    divisor = Decimal(config_folha.divisor_horas_mensais or 220)
+    valor_hora = (salario / divisor) if divisor else Decimal(0)
+    pct_he = _D(config_folha.percentual_hora_extra)
+    valor_hora_extra = valor_hora * (Decimal(1) + pct_he / Decimal(100))
+
+    vencimentos, descontos, memoria = [], [], []
+
+    vencimentos.append({"descricao": "Salário base", "referencia": "30 dias", "valor": _q2(salario)})
+
+    valor_he = horas_extras * valor_hora_extra
+    if valor_he > 0:
+        vencimentos.append({"descricao": f"Horas extras ({int(pct_he)}%)",
+                            "referencia": f"{float(horas_extras):.2f}h", "valor": _q2(valor_he)})
+        memoria.append(f"Hora extra: {float(horas_extras):.2f}h × (R${_q2(salario)}/{int(divisor)}) × (1+{int(pct_he)}%) = R${_q2(valor_he)}")
+
+    # Benefícios ativos (VT/VA etc.) entram como provento
+    beneficios = (db.session.query(FuncionarioBeneficio)
+                  .join(Beneficio, FuncionarioBeneficio.beneficio_id == Beneficio.id)
+                  .filter(FuncionarioBeneficio.funcionario_id == funcionario.id,
+                          FuncionarioBeneficio.ativo == True).all())
+    tem_vt = False
+    for fb in beneficios:
+        nome = (fb.beneficio.nome if fb.beneficio else "Benefício")
+        vencimentos.append({"descricao": nome, "referencia": "Benefício", "valor": _q2(fb.valor or 0)})
+        if "transp" in nome.lower() or nome.strip().upper() in ("VT", "VALE TRANSPORTE"):
+            tem_vt = True
+
+    # Descontos legais (base: salário + horas extras)
+    base_inss = salario + valor_he
+    inss = calcular_inss(base_inss, config_folha.inss_faixas)
+    descontos.append({"descricao": "INSS", "referencia": "tabela progressiva", "valor": _q2(inss)})
+    memoria.append(f"INSS: tabela progressiva sobre R${_q2(base_inss)} = R${_q2(inss)}")
+
+    base_irrf = base_inss - inss  # dependentes: 0 (não rastreado ainda)
+    irrf = calcular_irrf(base_irrf, config_folha.irrf_faixas)
+    if irrf > 0:
+        descontos.append({"descricao": "IRRF", "referencia": "tabela progressiva", "valor": _q2(irrf)})
+        memoria.append(f"IRRF: sobre base R${_q2(base_irrf)} (após INSS) = R${_q2(irrf)}")
+
+    if horas_atraso > 0:
+        desc_atraso = horas_atraso * valor_hora
+        descontos.append({"descricao": "Atrasos / faltas", "referencia": f"{float(horas_atraso):.2f}h", "valor": _q2(desc_atraso)})
+        memoria.append(f"Atrasos: {float(horas_atraso):.2f}h × R${_q2(valor_hora)} = R${_q2(desc_atraso)}")
+
+    pct_vt = _D(config_folha.desconto_vt_percentual)
+    if tem_vt and pct_vt > 0:
+        desc_vt = salario * pct_vt / Decimal(100)
+        descontos.append({"descricao": f"Vale-transporte ({int(pct_vt)}%)", "referencia": "sobre salário", "valor": _q2(desc_vt)})
+        memoria.append(f"Desconto VT: {int(pct_vt)}% × R${_q2(salario)} = R${_q2(desc_vt)}")
+
+    total_venc = sum(_D(v["valor"]) for v in vencimentos)
+    total_desc = sum(_D(d["valor"]) for d in descontos)
+    liquido = total_venc - total_desc
+
+    fgts = base_inss * _D(config_folha.fgts_percentual) / Decimal(100)
+
+    return {
+        "funcionario_id": funcionario.id,
+        "nome": funcionario.nome,
+        "cargo": funcionario.cargo,
+        "cpf": funcionario.cpf,
+        "data_admissao": funcionario.data_admissao.isoformat() if funcionario.data_admissao else None,
+        "mes_referencia": mes_referencia,
+        "salario_base": _q2(salario),
+        "horas_extras_horas": float(horas_extras),
+        "atrasos_horas": float(horas_atraso),
+        "vencimentos": vencimentos,
+        "descontos": descontos,
+        "totais": {
+            "vencimentos": _q2(total_venc),
+            "descontos": _q2(total_desc),
+            "liquido": _q2(liquido),
+            "base_inss": _q2(base_inss),
+            "fgts_mes": _q2(fgts),
+        },
+        "memoria_calculo": memoria,
+    }
+
+
+# ---------------------------------------------------------------------------
+# RESCISÃO (verbas rescisórias CLT) e PROVISÕES (custo real)
+# ---------------------------------------------------------------------------
+
+TIPOS_RESCISAO = ("PEDIDO", "S_JUSTA", "C_JUSTA", "ACORDO")
+TERCO = Decimal(1) / Decimal(3)  # 1/3 constitucional de férias
+
+
+def _avos(inicio: date, fim: date) -> int:
+    """Conta 'avos': meses no intervalo [inicio, fim] com >= 15 dias (regra CLT
+    de 13º/férias proporcionais)."""
+    if not inicio or not fim or fim < inicio:
+        return 0
+    avos = 0
+    y, m = inicio.year, inicio.month
+    while (y, m) <= (fim.year, fim.month):
+        primeiro = date(y, m, 1)
+        ultimo = date(y, m, calendar.monthrange(y, m)[1])
+        ini = max(inicio, primeiro)
+        fi = min(fim, ultimo)
+        if (fi - ini).days + 1 >= 15:
+            avos += 1
+        m += 1
+        if m > 12:
+            m, y = 1, y + 1
+    return avos
+
+
+def _ultimo_aniversario(admissao: date, referencia: date) -> date:
+    """Início do período aquisitivo de férias vigente: aniversário de admissão
+    mais recente <= referência."""
+    ano = referencia.year
+    try:
+        aniv = admissao.replace(year=ano)
+    except ValueError:  # 29/02 em ano não bissexto
+        aniv = admissao.replace(year=ano, day=28)
+    if aniv > referencia:
+        try:
+            aniv = admissao.replace(year=ano - 1)
+        except ValueError:
+            aniv = admissao.replace(year=ano - 1, day=28)
+    return max(aniv, admissao)
+
+
+def calcular_rescisao(funcionario, data_demissao: date, tipo_rescisao: str,
+                      saldo_fgts=None, ferias_vencidas_dias: int = 0, config_folha=None) -> dict:
+    """
+    Calcula as verbas rescisórias (CLT) com memória de cálculo para o contador.
+
+    tipo_rescisao ∈ {PEDIDO, S_JUSTA (dispensa sem justa causa),
+    C_JUSTA (com justa causa), ACORDO (distrato 484-A)}.
+
+    Percentuais de FGTS/multa vêm da ConfiguracaoFolha (nada hardcoded).
+    Estimativa para conferência — NÃO substitui o TRCT oficial.
+    """
+    tipo = (tipo_rescisao or "").upper()
+    if tipo not in TIPOS_RESCISAO:
+        raise ValueError(f"tipo_rescisao inválido. Use um de: {', '.join(TIPOS_RESCISAO)}")
+
+    if config_folha is None:
+        config_folha = obter_config_folha(funcionario.estabelecimento_id)
+    fgts_pct = _D(config_folha.fgts_percentual) / Decimal(100)
+    multa_dispensa = _D(config_folha.multa_fgts_dispensa) / Decimal(100)
+    multa_acordo = _D(config_folha.multa_fgts_acordo) / Decimal(100)
+
+    salario = Decimal(str(funcionario.salario_base or 0))
+    admissao = funcionario.data_admissao
+    if not admissao:
+        raise ValueError("Funcionário sem data de admissão — impossível calcular rescisão")
+    if data_demissao < admissao:
+        raise ValueError("Data de demissão anterior à admissão")
+
+    salario_dia = salario / Decimal(30)
+    anos_completos = (data_demissao - admissao).days // 365
+
+    # Aviso prévio: 30 dias + 3/ano trabalhado, teto de 90 dias (Lei 12.506/2011)
+    dias_aviso = min(30 + 3 * anos_completos, 90)
+
+    # Avos de 13º (ano da demissão) e de férias (período aquisitivo vigente)
+    inicio_13 = max(admissao, date(data_demissao.year, 1, 1))
+    avos_13 = min(_avos(inicio_13, data_demissao), 12)
+    avos_ferias = min(_avos(_ultimo_aniversario(admissao, data_demissao), data_demissao), 12)
+
+    # Saldo FGTS: se não informado, estima 8% do salário por mês trabalhado
+    meses_totais = _avos(admissao, data_demissao)
+    if saldo_fgts is None:
+        saldo_fgts = salario * fgts_pct * Decimal(meses_totais)
+        fgts_estimado = True
+    else:
+        saldo_fgts = Decimal(str(saldo_fgts))
+        fgts_estimado = False
+
+    proventos = []
+    memoria = []
+
+    # 1) Saldo de salário — todas as modalidades
+    saldo_salario = salario_dia * Decimal(data_demissao.day)
+    proventos.append({"codigo": "SALDO_SALARIO", "descricao": "Saldo de salário",
+                      "referencia": f"{data_demissao.day} dia(s)", "valor": _q2(saldo_salario)})
+    memoria.append(f"Saldo de salário: (R${_q2(salario)}/30) × {data_demissao.day} dia(s) = R${_q2(saldo_salario)}")
+
+    inclui_prop = tipo in ("PEDIDO", "S_JUSTA", "ACORDO")   # 13º e férias proporcionais
+    inclui_aviso = tipo in ("S_JUSTA", "ACORDO")
+    inclui_multa = tipo in ("S_JUSTA", "ACORDO")
+
+    # 2) Aviso prévio indenizado (integral na dispensa; metade no acordo)
+    if inclui_aviso:
+        fator = Decimal("0.5") if tipo == "ACORDO" else Decimal(1)
+        valor_aviso = salario_dia * Decimal(dias_aviso) * fator
+        rotulo = "Aviso prévio indenizado" + (" (50% - acordo)" if tipo == "ACORDO" else "")
+        proventos.append({"codigo": "AVISO_PREVIO", "descricao": rotulo,
+                          "referencia": f"{dias_aviso} dia(s)", "valor": _q2(valor_aviso)})
+        memoria.append(f"{rotulo}: (R${_q2(salario)}/30) × {dias_aviso} × {fator} = R${_q2(valor_aviso)}")
+
+    # 3) 13º proporcional
+    if inclui_prop and avos_13 > 0:
+        valor_13 = (salario / Decimal(12)) * Decimal(avos_13)
+        proventos.append({"codigo": "DECIMO_TERCEIRO_PROP", "descricao": "13º salário proporcional",
+                          "referencia": f"{avos_13}/12", "valor": _q2(valor_13)})
+        memoria.append(f"13º proporcional: (R${_q2(salario)}/12) × {avos_13} avos = R${_q2(valor_13)}")
+
+    # 4) Férias proporcionais + 1/3
+    if inclui_prop and avos_ferias > 0:
+        ferias_prop = (salario / Decimal(12)) * Decimal(avos_ferias)
+        terco_prop = ferias_prop * TERCO
+        proventos.append({"codigo": "FERIAS_PROP", "descricao": "Férias proporcionais",
+                          "referencia": f"{avos_ferias}/12", "valor": _q2(ferias_prop)})
+        proventos.append({"codigo": "TERCO_FERIAS_PROP", "descricao": "1/3 sobre férias proporcionais",
+                          "referencia": "1/3", "valor": _q2(terco_prop)})
+        memoria.append(f"Férias proporcionais: (R${_q2(salario)}/12) × {avos_ferias} avos = R${_q2(ferias_prop)} (+1/3 = R${_q2(terco_prop)})")
+
+    # 5) Férias vencidas + 1/3 (todas as modalidades, inclusive justa causa)
+    if ferias_vencidas_dias and ferias_vencidas_dias > 0:
+        ferias_venc = salario_dia * Decimal(ferias_vencidas_dias)
+        terco_venc = ferias_venc * TERCO
+        proventos.append({"codigo": "FERIAS_VENCIDAS", "descricao": "Férias vencidas",
+                          "referencia": f"{ferias_vencidas_dias} dia(s)", "valor": _q2(ferias_venc)})
+        proventos.append({"codigo": "TERCO_FERIAS_VENCIDAS", "descricao": "1/3 sobre férias vencidas",
+                          "referencia": "1/3", "valor": _q2(terco_venc)})
+        memoria.append(f"Férias vencidas: (R${_q2(salario)}/30) × {ferias_vencidas_dias} = R${_q2(ferias_venc)} (+1/3 = R${_q2(terco_venc)})")
+
+    # 6) Multa FGTS (percentuais configuráveis: dispensa vs acordo)
+    if inclui_multa:
+        pct = multa_acordo if tipo == "ACORDO" else multa_dispensa
+        multa = saldo_fgts * pct
+        proventos.append({"codigo": "MULTA_FGTS", "descricao": f"Multa FGTS ({int(pct*100)}%)",
+                          "referencia": f"sobre R${_q2(saldo_fgts)}", "valor": _q2(multa)})
+        origem = "estimado" if fgts_estimado else "informado"
+        memoria.append(f"Multa FGTS: {int(pct*100)}% × saldo FGTS {origem} R${_q2(saldo_fgts)} = R${_q2(multa)}")
+
+    total_proventos = sum(Decimal(str(p["valor"])) for p in proventos)
+
+    aviso_legal = ("Estimativa das verbas rescisórias para conferência do contador. "
+                   "NÃO substitui o TRCT oficial. Retenções legais (INSS/IRRF) e "
+                   "eventuais descontos devem ser apuradas separadamente.")
+    if fgts_estimado:
+        aviso_legal += (" O saldo de FGTS foi ESTIMADO (8% do salário por mês trabalhado); "
+                        "informe o saldo real para precisão da multa.")
+
+    return {
+        "tipo_rescisao": tipo,
+        "data_admissao": admissao.isoformat(),
+        "data_demissao": data_demissao.isoformat(),
+        "anos_completos": anos_completos,
+        "salario_base": _q2(salario),
+        "saldo_fgts": _q2(saldo_fgts),
+        "saldo_fgts_estimado": fgts_estimado,
+        "proventos": proventos,
+        "descontos": [],
+        "total_proventos": _q2(total_proventos),
+        "total_descontos": 0.0,
+        "total_liquido_estimado": _q2(total_proventos),
+        "memoria_calculo": memoria,
+        "aviso_legal": aviso_legal,
+    }
+
+
+def calcular_retrospectiva(funcionario, data_inicio: date, data_fim: date) -> dict:
+    """
+    'Retrospectiva' (estilo Spotify Wrapped) do funcionário no período, com
+    dados 100% REAIS do sistema:
+      - horas trabalhadas / hora extra / dias / atrasos (engine do espelho)
+      - vendas realizadas, faturamento, ticket médio, clientes atendidos
+      - produtos passados (itens de venda) e mercadorias conferidas (entradas)
+    Cada métrica só aparece se houver dado real; nada é inventado.
+    """
+    import re
+    from sqlalchemy import func as sqlfunc, and_, case
+    from app.models import db, Venda, VendaItem, MovimentacaoEstoque, Motorista, Entrega, EntregaItem
+
+    # --- Ponto (reaproveita a engine única) ---
+    espelho = calcular_espelho_ponto(funcionario, data_inicio, data_fim)
+    resumo_ponto = espelho["resumo"]
+
+    escopo_venda = and_(
+        Venda.funcionario_id == funcionario.id,
+        Venda.status == "finalizada",
+        sqlfunc.date(Venda.data_venda) >= data_inicio,
+        sqlfunc.date(Venda.data_venda) <= data_fim,
+    )
+
+    # --- Vendas / faturamento / clientes ---
+    total_vendas, faturamento = db.session.query(
+        sqlfunc.count(Venda.id), sqlfunc.coalesce(sqlfunc.sum(Venda.total), 0)
+    ).filter(escopo_venda).first()
+    total_vendas = int(total_vendas or 0)
+    faturamento = float(faturamento or 0)
+    ticket_medio = round(faturamento / total_vendas, 2) if total_vendas else 0.0
+
+    clientes_atendidos = (db.session.query(sqlfunc.count(sqlfunc.distinct(Venda.cliente_id)))
+                          .filter(escopo_venda, Venda.cliente_id.isnot(None)).scalar()) or 0
+
+    # --- Produtos passados (soma de itens das vendas do funcionário) ---
+    produtos_passados = (db.session.query(sqlfunc.coalesce(sqlfunc.sum(VendaItem.quantidade), 0))
+                         .join(Venda, VendaItem.venda_id == Venda.id)
+                         .filter(escopo_venda).scalar()) or 0
+
+    # --- Mercadorias conferidas (entradas de estoque registradas pelo funcionário) ---
+    mercadorias_conferidas, itens_conferidos = db.session.query(
+        sqlfunc.count(MovimentacaoEstoque.id),
+        sqlfunc.coalesce(sqlfunc.sum(MovimentacaoEstoque.quantidade), 0),
+    ).filter(
+        MovimentacaoEstoque.funcionario_id == funcionario.id,
+        MovimentacaoEstoque.tipo.in_(["entrada", "ENTRADA", "compra", "recebimento"]),
+        sqlfunc.date(MovimentacaoEstoque.created_at) >= data_inicio,
+        sqlfunc.date(MovimentacaoEstoque.created_at) <= data_fim,
+    ).first()
+
+    # --- Entregas (motoboy/entregador): vincula Funcionário → Motorista por CPF ---
+    entregas_realizadas = 0
+    km_percorridos = 0.0
+    clientes_entrega = 0
+    bairros_visitados = 0
+    produtos_transportados = 0
+    cpf_digits = re.sub(r"\D", "", funcionario.cpf or "")
+    motorista = None
+    if cpf_digits:
+        for m in Motorista.query.filter_by(estabelecimento_id=funcionario.estabelecimento_id).all():
+            if re.sub(r"\D", "", m.cpf or "") == cpf_digits:
+                motorista = m
+                break
+    if motorista:
+        data_ref = sqlfunc.coalesce(Entrega.data_entrega, Entrega.data_saida, Entrega.created_at)
+        escopo_entrega = and_(
+            Entrega.motorista_id == motorista.id,
+            Entrega.status.notin_(["cancelada", "cancelado"]),
+            sqlfunc.date(data_ref) >= data_inicio,
+            sqlfunc.date(data_ref) <= data_fim,
+        )
+        # km: usa km_percorridos quando registrado (>0), senão a distância da entrega
+        km_expr = sqlfunc.sum(case((Entrega.km_percorridos > 0, Entrega.km_percorridos), else_=Entrega.distancia_km))
+        entregas_realizadas, km_percorridos = db.session.query(
+            sqlfunc.count(Entrega.id), sqlfunc.coalesce(km_expr, 0)
+        ).filter(escopo_entrega).first()
+        entregas_realizadas = int(entregas_realizadas or 0)
+        km_percorridos = round(float(km_percorridos or 0), 1)
+        clientes_entrega = int((db.session.query(sqlfunc.count(sqlfunc.distinct(Entrega.cliente_id)))
+                                .filter(escopo_entrega, Entrega.cliente_id.isnot(None)).scalar()) or 0)
+        bairros_visitados = int((db.session.query(sqlfunc.count(sqlfunc.distinct(Entrega.endereco_bairro)))
+                                 .filter(escopo_entrega, Entrega.endereco_bairro.isnot(None)).scalar()) or 0)
+        produtos_transportados = int(round(float((db.session.query(sqlfunc.coalesce(sqlfunc.sum(EntregaItem.quantidade), 0))
+                                                  .join(Entrega, EntregaItem.entrega_id == Entrega.id)
+                                                  .filter(escopo_entrega).scalar()) or 0)))
+
+    horas_trab = resumo_ponto["total_horas_trabalhadas"]
+    horas_extras = resumo_ponto["total_horas_extras"]
+    dias = resumo_ponto["total_dias_trabalhados"]
+
+    # --- Persona: pelo que a pessoa mais FEZ (contagem de atividades, não horas,
+    # para não deixar a jornada dominar sempre). Horas é só fallback. ---
+    candidatos_atividade = [
+        ("🛒 Mestre do Caixa", total_vendas),
+        ("🛵 Rei da Estrada", entregas_realizadas),
+        ("📦 Guardião do Estoque", int(mercadorias_conferidas or 0)),
+        ("🗺️ Desbravador de Bairros", bairros_visitados),
+        ("🤝 Encantador de Clientes", int(clientes_atendidos or 0) + clientes_entrega),
+    ]
+    melhor = max(candidatos_atividade, key=lambda x: x[1])
+    if melhor[1] > 0:
+        persona = melhor[0]
+    elif horas_trab > 0:
+        persona = "⏱️ Maratonista da Jornada"
+    else:
+        persona = "🌟 Estrela em Ascensão"
+
+    return {
+        "funcionario_id": funcionario.id,
+        "nome": funcionario.nome,
+        "cargo": funcionario.cargo,
+        "periodo": {"inicio": data_inicio.isoformat(), "fim": data_fim.isoformat()},
+        "persona": persona,
+        "ponto": {
+            "horas_trabalhadas": horas_trab,
+            "horas_extras": horas_extras,
+            "dias_trabalhados": dias,
+            "total_atrasos": resumo_ponto["total_atrasos"],
+        },
+        "vendas": {
+            "total_vendas": total_vendas,
+            "faturamento": round(faturamento, 2),
+            "ticket_medio": ticket_medio,
+            "clientes_atendidos": int(clientes_atendidos or 0),
+            "produtos_passados": int(round(float(produtos_passados or 0))),
+        },
+        "estoque": {
+            "mercadorias_conferidas": int(mercadorias_conferidas or 0),
+            "itens_conferidos": int(round(float(itens_conferidos or 0))),
+        },
+        "entrega": {
+            "entregas_realizadas": entregas_realizadas,
+            "km_percorridos": km_percorridos,
+            "clientes_atendidos": clientes_entrega,
+            "bairros_visitados": bairros_visitados,
+            "produtos_transportados": produtos_transportados,
+        },
+    }
+
+
+def calcular_provisoes(funcionario, ano_mes: str, regime_tributario: str = None, config_folha=None) -> dict:
+    """
+    Provisão mensal (1/12 avos) de férias (+1/3), 13º e encargos de FGTS,
+    revelando o CUSTO REAL do funcionário além do salário nominal.
+    O % de FGTS vem da ConfiguracaoFolha (nada hardcoded).
+
+    Nota: INSS patronal (~20%) não entra por padrão — no Simples Nacional é
+    recolhido via DAS. Ajuste conforme o regime tributário da loja.
+    """
+    if config_folha is None:
+        config_folha = obter_config_folha(funcionario.estabelecimento_id)
+    fgts_pct = _D(config_folha.fgts_percentual) / Decimal(100)
+
+    salario = Decimal(str(funcionario.salario_base or 0))
+
+    provisao_ferias = (salario * (Decimal(1) + TERCO)) / Decimal(12)  # férias + 1/3, em 12 avos
+    provisao_13 = salario / Decimal(12)
+    fgts_salario = salario * fgts_pct
+    fgts_provisoes = (provisao_ferias + provisao_13) * fgts_pct
+    encargos = fgts_salario + fgts_provisoes
+    custo_real = salario + provisao_ferias + provisao_13 + encargos
+
+    return {
+        "funcionario_id": funcionario.id,
+        "funcionario_nome": funcionario.nome,
+        "cargo": funcionario.cargo,
+        "ano_mes": ano_mes,
+        "salario_base": _q2(salario),
+        "valor_ferias": _q2(provisao_ferias),
+        "valor_decimo_terceiro": _q2(provisao_13),
+        "encargos_provisionados": _q2(encargos),
+        "custo_real": _q2(custo_real),
+        "memoria_calculo": [
+            f"Provisão de férias (com 1/3): R${_q2(salario)} × (1 + 1/3) / 12 = R${_q2(provisao_ferias)}",
+            f"Provisão de 13º: R${_q2(salario)} / 12 = R${_q2(provisao_13)}",
+            f"FGTS sobre salário: 8% × R${_q2(salario)} = R${_q2(fgts_salario)}",
+            f"FGTS sobre provisões: 8% × (férias + 13º) = R${_q2(fgts_provisoes)}",
+            f"Custo real mensal: salário + provisões + encargos = R${_q2(custo_real)}",
+        ],
+        "aviso_legal": ("Encargos consideram apenas FGTS (8%). INSS patronal e outros "
+                        "tributos variam conforme o regime tributário da loja "
+                        f"(atual: {regime_tributario or 'não informado'})."),
+    }

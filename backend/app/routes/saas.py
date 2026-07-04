@@ -23,6 +23,7 @@ def _invalidar_cache_plano(tenant_id):
     try:
         from app import cache
         cache.delete(f"plano_status:{tenant_id}")
+        cache.delete(f"plano:{tenant_id}")  # gate Grátis x Premium do access_control
     except Exception:
         pass
 

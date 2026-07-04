@@ -1,15 +1,34 @@
 import { useState } from 'react';
-import { Users, Clock, FileText, BarChart, Timer, AlertTriangle } from 'lucide-react';
+import { Users, Clock, FileText, BarChart, Timer, AlertTriangle, Wallet, UserMinus, Settings2, Sparkles } from 'lucide-react';
 import RHDashboard from './components/RHDashboard';
 import PontoHistoricoRH from './components/PontoHistoricoRH';
 import EspelhoPonto from './components/EspelhoPonto';
 import BancoHorasRH from './components/BancoHorasRH';
 import JustificativasRH from './components/JustificativasRH';
+import FolhaCustoReal from './components/FolhaCustoReal';
+import RescisaoWizard from './components/RescisaoWizard';
+import ConfigFolhaSettings from './components/ConfigFolhaSettings';
+import RetrospectivaGestao from './components/RetrospectivaGestao';
+import MeuRH from './components/MeuRH';
+import { authService } from '../auth/authService';
+import { getNivel } from '../../utils/permissions';
 
-type TabType = 'dashboard' | 'historico' | 'espelho' | 'banco-horas' | 'justificativas';
+type TabType = 'dashboard' | 'historico' | 'espelho' | 'banco-horas' | 'justificativas' | 'folha' | 'rescisao' | 'parametros' | 'retrospectiva';
 
 export default function RHPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+
+  // Regra de Acesso: apenas Admin, Gerente e RH (nível <= 3) veem a gestão
+  // completa (todos os funcionários). Os demais níveis usam o autoatendimento
+  // — próprio holerite, próprio espelho de ponto e justificativas.
+  const nivel = getNivel(authService.getCurrentUser());
+  if (nivel > 3) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto bg-gray-50/50 dark:bg-gray-900/50 min-h-screen">
+        <MeuRH />
+      </div>
+    );
+  }
 
   const tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard RH', icon: BarChart, description: 'Métricas e análises' },
@@ -17,6 +36,10 @@ export default function RHPage() {
     { id: 'espelho' as TabType, label: 'Espelho de Ponto', icon: FileText, description: 'Relatório individual' },
     { id: 'banco-horas' as TabType, label: 'Banco de Horas', icon: Timer, description: 'Saldos e créditos' },
     { id: 'justificativas' as TabType, label: 'Justificativas', icon: AlertTriangle, description: 'Atrasos e ausências' },
+    { id: 'folha' as TabType, label: 'Folha & Custo Real', icon: Wallet, description: 'Provisões e custo da equipe' },
+    { id: 'rescisao' as TabType, label: 'Demissão', icon: UserMinus, description: 'Rescisão e verbas' },
+    { id: 'retrospectiva' as TabType, label: 'Retrospectiva', icon: Sparkles, description: 'Desempenho por colaborador' },
+    { id: 'parametros' as TabType, label: 'Parâmetros de Folha', icon: Settings2, description: 'INSS, IRRF, hora extra, FGTS' },
   ];
 
   return (
@@ -73,6 +96,10 @@ export default function RHPage() {
         {activeTab === 'espelho' && <EspelhoPonto />}
         {activeTab === 'banco-horas' && <BancoHorasRH />}
         {activeTab === 'justificativas' && <JustificativasRH />}
+        {activeTab === 'folha' && <FolhaCustoReal />}
+        {activeTab === 'rescisao' && <RescisaoWizard />}
+        {activeTab === 'retrospectiva' && <RetrospectivaGestao />}
+        {activeTab === 'parametros' && <ConfigFolhaSettings />}
       </div>
     </div>
   );

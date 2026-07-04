@@ -24,6 +24,7 @@ import {
     MapPin
 } from 'lucide-react';
 import { authService } from '../../features/auth/authService';
+import { canAccessRoute } from '../../utils/permissions';
 
 const menuItems = [
     { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -70,41 +71,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, setIsCollapsed }) => {
                 <ul className="space-y-2">
                     {menuItems.filter(item => {
                         const user = authService.getCurrentUser();
-                        const role = user?.role?.toLowerCase();
                         const isSuperAdmin = user?.is_super_admin || false;
 
-                        // ====================================================================
-                        // BARRARIA DE SEGURANÇA SaaS: Apenas Super Admins podem ver
-                        // rotas de administração global do sistema (Leads, Estabelecimentos, Monitor)
-                        // Tenant Admins (role='admin') NÃO devem ver estas opções
-                        // ====================================================================
-                        if (['/estabelecimentos', '/leads', '/monitor'].includes(item.to) && !isSuperAdmin) {
-                            return false;
+                        // Rotas de administração global do SaaS: só Super Admin
+                        if (['/estabelecimentos', '/leads', '/monitor'].includes(item.to)) {
+                            return isSuperAdmin;
                         }
 
-                        // Se for caixa ou estoquista, aplicamos o filtro seletivo a áreas estritas
-                        if (role === 'caixa') {
-                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/customers', '/ponto', '/settings', '/delivery'];
-                            return permitidos.includes(item.to);
-                        }
-
-                        if (role === 'estoquista') {
-                            const permitidos = ['/dashboard', '/pdv', '/pdv?manage=true', '/products', '/suppliers', '/customers', '/ponto', '/settings', '/delivery'];
-                            return permitidos.includes(item.to);
-                        }
-
-                        if (role === 'vendedor') {
-                            const permitidos = ['/sfa'];
-                            return permitidos.includes(item.to);
-                        }
-
-                        // Funcionário genérico?
-                        if (role === 'funcionario') {
-                            const bloqueados = ['/sales', '/expenses', '/employees', '/rh', '/ponto-relatorios', '/ponto-diagnostico', '/reports', '/sfa/gestao'];
-                            return !bloqueados.includes(item.to);
-                        }
-
-                        return true;
+                        // Regras de Acesso centralizadas (nível do cargo + plano)
+                        return isSuperAdmin || canAccessRoute(item.to, user);
                     }).map((item) => (
                         <li key={item.to}>
                             <NavLink

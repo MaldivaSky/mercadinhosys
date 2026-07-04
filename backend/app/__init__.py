@@ -288,6 +288,11 @@ def create_app(config_name=None):
             )
             abort(403, description="Contexto de estabelecimento ausente no token.")
 
+    # RBAC + plano por prefixo de URL. Registrado DEPOIS do load_tenant_context
+    # para reaproveitar g.estabelecimento_id (before_request roda em ordem).
+    from app.middleware.access_control import init_access_control
+    init_access_control(app)
+
     @app.errorhandler(404)
     def handle_404_error(e):
         return jsonify({

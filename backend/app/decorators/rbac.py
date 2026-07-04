@@ -15,40 +15,44 @@ from app.models import Funcionario
 NIVEL_LABELS = {
     1: "Admin",
     2: "Gerente",
-    3: "Caixa",
-    4: "Estoque",
-    5: "RH",
+    3: "RH",
+    4: "Estoque/Caixa",
+    5: "Vendedor",
     6: "Entregador",
-    7: "Vendedor",
 }
 
 ROLE_TO_NIVEL = {
     "ADMIN":       1, "ADMINISTRADOR": 1, "PROPRIETARIO": 1, "DONO": 1, "MASTER": 1,
     "GERENTE":     2, "SUPERVISOR":    2,
-    "CAIXA":       3, "OPERADOR":      3,
-    "ESTOQUE":     4, "ALMOXARIFE":    4,
-    "RH":          5, "RECURSOS_HUMANOS": 5,
+    "RH":          3, "RECURSOS_HUMANOS": 3,
+    "CAIXA":       4, "OPERADOR":      4, "ESTOQUE": 4, "ESTOQUISTA": 4,
+    "ALMOXARIFE":  4, "ATENDENTE":     4,
+    "VENDEDOR":    5, "SFA":           5, "SAF": 5,
     "ENTREGADOR":  6, "MOTOBOY":       6, "MOTORISTA": 6,
-    "VENDEDOR":    7, "SAF":           7,
-    "FUNCIONARIO": 3,  # fallback: trata como caixa
+    "FUNCIONARIO": 4,  # fallback: trata como estoque/caixa
 }
 
 # Mapa: recurso → conjunto de níveis que têm acesso
+# Espelha as Regras de Acesso do produto:
+#   1 Admin: tudo | 2 Gerente: tudo exceto auditoria e config sensível
+#   3 RH: nada de venda/PDV | 4 Estoque/Caixa: PDV, produtos, fornecedores,
+#   clientes, logística | 5 Vendedor: SFA, clientes, produtos, logística,
+#   fornecedores | 6 Entregador: só logística. Ponto: todos.
 RBAC_MATRIX: dict[str, set[int]] = {
     # PDV e vendas
-    "pdv":           {1, 2, 3},
-    "gestao_caixa":  {1, 2, 3},
-    "vendas":        {1, 2, 3},
+    "pdv":           {1, 2, 4},
+    "gestao_caixa":  {1, 2, 4},
+    "vendas":        {1, 2},
     "cancelar_venda":{1, 2},
     # Clientes
-    "clientes":      {1, 2, 3, 4, 7},
+    "clientes":      {1, 2, 4, 5},
     # Estoque / Produtos
     "estoque":       {1, 2, 4},
-    "produtos":      {1, 2, 4, 7},
+    "produtos":      {1, 2, 4, 5},
     "entrada_xml":   {1, 2, 4},
     "lotes":         {1, 2, 4},
     # Compras / Fornecedores
-    "fornecedores":  {1, 2, 4},
+    "fornecedores":  {1, 2, 4, 5},
     "compras":       {1, 2, 4},
     "pedidos_compra":{1, 2, 4},
     # Financeiro
@@ -56,19 +60,25 @@ RBAC_MATRIX: dict[str, set[int]] = {
     "financeiro":    {1, 2},
     "contas_pagar":  {1, 2},
     "relatorios":    {1, 2},
-    # RH e Funcionários
-    "funcionarios":  {1, 2},
-    "rh":            {1, 5},
-    "folha":         {1, 5},
-    "beneficios":    {1, 5},
-    "ponto":         {1, 2, 3, 4, 5, 6, 7},  # todos registram ponto
-    # Delivery
-    "delivery":      {1, 2, 6},
+    # RH e Funcionários — visão COMPLETA (sem filtro por usuário).
+    # Os demais níveis acessam RH/ponto só com dados próprios (self-service),
+    # o que é tratado dentro das rotas, não por este mapa.
+    "funcionarios":  {1, 2, 3},
+    "rh":            {1, 2, 3},
+    "folha":         {1, 2, 3},
+    "beneficios":    {1, 2, 3},
+    "ponto":         {1, 2, 3, 4, 5, 6},  # todos registram ponto
+    # Delivery / Logística
+    "delivery":      {1, 2, 4, 5, 6},
+    # SFA
+    "sfa":           {1, 2, 5},
+    "sfa_gestao":    {1, 2},
     # Dashboard
-    "dashboard":     {1, 2, 3, 4, 5},
+    "dashboard":     {1, 2, 3},
     # Configurações do sistema
     "configuracoes": {1},
     "fiscal":        {1, 2},
+    "auditoria":     {1},
 }
 
 
@@ -77,7 +87,12 @@ def _get_nivel(user: Funcionario) -> int:
     if getattr(user, "is_super_admin", False):
         return 0  # acesso total
     role = (getattr(user, "role", "") or "FUNCIONARIO").upper()
-    return ROLE_TO_NIVEL.get(role, 3)
+    return ROLE_TO_NIVEL.get(role, 4)
+
+
+def nivel_do_role(role: str) -> int:
+    """Mapeia uma string de role (qualquer casing) para o nível canônico."""
+    return ROLE_TO_NIVEL.get((role or "FUNCIONARIO").upper(), 4)
 
 
 def _check_resource(user: Funcionario, resource: str) -> bool:

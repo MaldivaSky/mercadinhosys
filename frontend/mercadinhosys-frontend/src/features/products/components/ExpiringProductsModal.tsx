@@ -13,7 +13,10 @@ export interface LoteNoPeriodo {
     quantidade: number;
     preco_venda: number | null;
     preco_produto: number;
+    preco_custo?: number | null;
 }
+
+type Ordenacao = 'dias_asc' | 'dias_desc' | 'nome_asc';
 
 export type ProdutoComLotes = Produto & { lotes_no_periodo?: LoteNoPeriodo[] };
 
@@ -30,13 +33,20 @@ interface ExpiringProductsModalProps {
     onDiscard?: (produto: Produto, loteId?: number) => void;
 }
 
+/** Desconto sugerido por padrão para cada janela — ponto de partida editável,
+    não mais um valor travado (Rafael pediu para poder ajustar a % aplicada). */
+const DESCONTO_PADRAO: Record<string, number> = { vencidos: 0, '15': 30, '30': 15, '90': 0 };
+
 const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, onClose, timeframe, onDiscard }) => {
     const [loading, setLoading] = useState(false);
     const [produtos, setProdutos] = useState<ProdutoComLotes[]>([]);
+    const [descontoPercentual, setDescontoPercentual] = useState(DESCONTO_PADRAO[timeframe] ?? 0);
+    const [ordenacao, setOrdenacao] = useState<Ordenacao>('dias_asc');
 
     useEffect(() => {
         if (isOpen) {
             carregarProdutos();
+            setDescontoPercentual(DESCONTO_PADRAO[timeframe] ?? 0);
         }
     }, [isOpen, timeframe]);
 
@@ -63,13 +73,21 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
     };
 
     const getSugestao = () => {
+        // O percentual agora vem do estado editável (descontoPercentual), não mais
+        // travado em 30%/15% — o rótulo e a cor seguem indicando a urgência da janela.
         if (timeframe === 'vencidos') return { acao: 'Descarte', cor: 'text-red-600', desconto: 0 };
-        if (timeframe === '15') return { acao: 'Queima de Estoque', cor: 'text-orange-600', desconto: 0.3 };
-        if (timeframe === '30') return { acao: 'Promoção', cor: 'text-yellow-600', desconto: 0.15 };
+        if (timeframe === '15') return { acao: 'Queima de Estoque', cor: 'text-orange-600', desconto: descontoPercentual / 100 };
+        if (timeframe === '30') return { acao: 'Promoção', cor: 'text-yellow-600', desconto: descontoPercentual / 100 };
         return { acao: 'Monitorar', cor: 'text-blue-600', desconto: 0 };
     };
 
-    /** Linhas para exibição: uma por lote (ou uma por produto quando não há lotes) */
+    const diasRestantesDe = (dataValidade: string | null | undefined): number | null => {
+        if (!dataValidade) return null;
+        return Math.ceil((new Date(dataValidade).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    };
+
+    /** Linhas para exibição: uma por lote (ou uma por produto quando não há lotes),
+        ordenadas conforme o filtro rápido escolhido (dias faltantes ou nome). */
     const linhas = useMemo((): LinhaValidade[] => {
         const out: LinhaValidade[] = [];
         for (const p of produtos) {
@@ -82,8 +100,19 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                 out.push({ produto: p, lote: null });
             }
         }
-        return out;
-    }, [produtos]);
+        const comDias = out.map((linha) => ({
+            linha,
+            dias: diasRestantesDe(linha.lote?.data_validade ?? linha.produto.data_validade) ?? Infinity,
+        }));
+        if (ordenacao === 'nome_asc') {
+            comDias.sort((a, b) => a.linha.produto.nome.localeCompare(b.linha.produto.nome, 'pt-BR'));
+        } else if (ordenacao === 'dias_desc') {
+            comDias.sort((a, b) => b.dias - a.dias);
+        } else {
+            comDias.sort((a, b) => a.dias - b.dias);
+        }
+        return comDias.map((x) => x.linha);
+    }, [produtos, ordenacao]);
 
     const handleApplyPromotions = async () => {
         const sugestao = getSugestao();
@@ -165,6 +194,40 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                     </button>
                 </div>
 
+                {/* Barra de controles: ordenação + desconto ajustável (quando aplicável) */}
+                {!loading && linhas.length > 0 && (
+                    <div className="px-6 py-3 border-b dark:border-gray-700 flex flex-wrap items-center gap-3 bg-gray-50/60 dark:bg-gray-900/30">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ordenar por:</span>
+                        <select
+                            value={ordenacao}
+                            onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+                            className="text-xs font-semibold rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 px-2 py-1.5"
+                        >
+                            <option value="dias_asc">Dias faltantes (menor → maior)</option>
+                            <option value="dias_desc">Dias faltantes (maior → menor)</option>
+                            <option value="nome_asc">Nome (A → Z)</option>
+                        </select>
+
+                        {(timeframe === '15' || timeframe === '30') && (
+                            <div className="flex items-center gap-2 ml-auto">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Desconto a aplicar:</span>
+                                <div className="flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={90}
+                                        step={1}
+                                        value={descontoPercentual}
+                                        onChange={(e) => setDescontoPercentual(Math.max(0, Math.min(90, Number(e.target.value) || 0)))}
+                                        className="w-14 text-sm font-bold text-right bg-transparent outline-none text-gray-900 dark:text-white"
+                                    />
+                                    <span className="text-sm font-bold text-gray-500">%</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6">
                     {loading ? (
@@ -184,27 +247,31 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                         <div className="space-y-3">
                             {/* Cabeçalho de tabela — só no desktop. No mobile cada linha vira
                                 um card com rótulos, evitando colunas espremidas/sobrepostas. */}
-                            <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
-                                <div className="col-span-4">Produto / Lote</div>
+                            <div className="hidden sm:grid grid-cols-[repeat(14,minmax(0,1fr))] gap-3 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b dark:border-gray-700">
+                                <div className="col-span-3">Produto / Lote</div>
                                 <div className="col-span-2">Validade</div>
+                                <div className="col-span-2 text-right">Custo</div>
                                 <div className="col-span-2 text-right">Preço Atual</div>
-                                <div className="col-span-2 text-right">Sugestão</div>
+                                <div className="col-span-3 text-right">Sugestão</div>
                                 <div className="col-span-2 text-right">Ação</div>
                             </div>
                             {linhas.map(({ produto: p, lote }, idx) => {
                                 const sugestao = getSugestao();
                                 const precoAtual = lote ? (lote.preco_venda ?? lote.preco_produto) : p.preco_venda;
+                                const precoCusto = lote?.preco_custo ?? p.preco_custo ?? 0;
                                 const precoSugerido = precoAtual * (1 - sugestao.desconto);
+                                // Alerta visual: se o desconto ajustado deixar o preço abaixo do
+                                // custo, o funcionário estaria vendendo no prejuízo — mostrar em
+                                // vermelho para não passar despercebido.
+                                const abaixoDoCusto = sugestao.desconto > 0 && precoCusto > 0 && precoSugerido < precoCusto;
                                 const dataValidade = lote?.data_validade ?? p.data_validade;
                                 const key = lote && lote.id != null ? `p-${p.id}-l-${lote.id}` : `p-${p.id}-${idx}`;
-                                const diasRestantes = dataValidade
-                                    ? Math.ceil((new Date(dataValidade).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-                                    : null;
+                                const diasRestantes = diasRestantesDe(dataValidade);
 
                                 return (
-                                    <div key={key} className="flex flex-col gap-3 sm:grid sm:grid-cols-12 sm:gap-4 sm:items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
+                                    <div key={key} className="flex flex-col gap-3 sm:grid sm:grid-cols-[repeat(14,minmax(0,1fr))] sm:gap-3 sm:items-center p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
                                         {/* Produto / Lote */}
-                                        <div className="sm:col-span-4 min-w-0">
+                                        <div className="sm:col-span-3 min-w-0">
                                             <p className="font-bold text-gray-900 dark:text-white truncate">{p.nome}</p>
                                             <p className="text-xs text-gray-500 truncate">
                                                 {p.categoria}
@@ -223,18 +290,26 @@ const ExpiringProductsModal: React.FC<ExpiringProductsModalProps> = ({ isOpen, o
                                                 )}
                                             </div>
                                         </div>
+                                        {/* Custo — para não haver dúvida quanto ao desconto a aplicar
+                                            (Rafael pediu para ver o custo antes de decidir a %) */}
+                                        <div className="flex items-center justify-between sm:block sm:col-span-2 sm:text-right">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider sm:hidden">Custo</span>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{formatCurrency(precoCusto)}</p>
+                                        </div>
                                         {/* Preço Atual */}
                                         <div className="flex items-center justify-between sm:block sm:col-span-2 sm:text-right">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider sm:hidden">Preço Atual</span>
                                             <p className="text-sm font-medium">{formatCurrency(precoAtual)}</p>
                                         </div>
                                         {/* Sugestão */}
-                                        <div className="flex items-center justify-between sm:block sm:col-span-2 sm:text-right">
+                                        <div className="flex items-center justify-between sm:block sm:col-span-3 sm:text-right">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider sm:hidden">Sugestão</span>
                                             {sugestao.desconto > 0 ? (
                                                 <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                                                    <span className="text-sm font-bold text-green-600">{formatCurrency(precoSugerido)}</span>
-                                                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">-{sugestao.desconto * 100}%</span>
+                                                    <span className={`text-sm font-bold ${abaixoDoCusto ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(precoSugerido)}</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${abaixoDoCusto ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                                        -{Math.round(sugestao.desconto * 100)}%{abaixoDoCusto ? ' · abaixo do custo!' : ''}
+                                                    </span>
                                                 </div>
                                             ) : (
                                                 <span className="text-sm text-gray-400">---</span>

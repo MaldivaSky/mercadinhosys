@@ -8,6 +8,14 @@
       "cwd": "frontend/mercadinhosys-frontend",
       "autoPort": false,
       "port": 5173
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["run.py"],
+      "cwd": "backend",
+      "autoPort": false,
+      "port": 5000
     }
   ]
 }

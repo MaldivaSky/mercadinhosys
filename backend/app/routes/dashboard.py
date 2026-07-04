@@ -231,35 +231,47 @@ def rh_ponto_historico():
 
 
 @dashboard_bp.route("/rh/ponto/espelho", methods=["GET"])
-@gerente_ou_admin_required
+@jwt_required()
 @plan_required('Pro')
 def rh_ponto_espelho():
     """
     Endpoint para gerar espelho de ponto de um funcionário específico.
     Retorna registros diários agrupados com resumo do período.
+
+    Regra de Acesso: todo funcionário pode ver o PRÓPRIO espelho
+    (funcionario_id omitido = self). Ver o espelho de OUTRO funcionário
+    exige Admin, Gerente ou RH (nível <= 3).
     """
     try:
-        from collections import defaultdict
-        from sqlalchemy import func
-        
+        from app.decorators.rbac import _get_nivel
+
         estabelecimento_id = get_establishment_id()
-        
-        funcionario_id = request.args.get("funcionario_id", type=int)
+        usuario_logado = Funcionario.query.get(int(get_jwt_identity()))
+        if not usuario_logado:
+            return jsonify({"success": False, "message": "Funcionário não encontrado"}), 404
+
+        funcionario_id = request.args.get("funcionario_id", type=int) or usuario_logado.id
         data_inicio = request.args.get("data_inicio")
         data_fim = request.args.get("data_fim")
-        
-        if not funcionario_id or not data_inicio or not data_fim:
+
+        if funcionario_id != usuario_logado.id and _get_nivel(usuario_logado) > 3:
             return jsonify({
                 "success": False,
-                "message": "Parâmetros obrigatórios: funcionario_id, data_inicio, data_fim"
+                "message": "Você só pode ver o próprio espelho de ponto",
+            }), 403
+
+        if not data_inicio or not data_fim:
+            return jsonify({
+                "success": False,
+                "message": "Parâmetros obrigatórios: data_inicio, data_fim"
             }), 400
-        
+
         # Buscar funcionário
         funcionario = Funcionario.query.filter_by(
             id=funcionario_id,
             estabelecimento_id=estabelecimento_id
         ).first()
-        
+
         if not funcionario:
             return jsonify({
                 "success": False,
@@ -269,117 +281,75 @@ def rh_ponto_espelho():
         # Converter datas
         data_inicio_obj = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         data_fim_obj = datetime.strptime(data_fim, "%Y-%m-%d").date()
-        
-        # Buscar registros
-        filters = [
-            RegistroPonto.funcionario_id == funcionario_id,
-            RegistroPonto.data >= data_inicio_obj,
-            RegistroPonto.data <= data_fim_obj
-        ]
-        if str(estabelecimento_id).lower() != 'all':
-            filters.append(RegistroPonto.estabelecimento_id == estabelecimento_id)
-            
-        registros = RegistroPonto.query.filter(and_(*filters)).order_by(RegistroPonto.data, RegistroPonto.hora).all()
-        
-        # Agrupar por dia
-        registros_por_dia = defaultdict(list)
-        for r in registros:
-            registros_por_dia[r.data].append(r)
-        
-        # Processar registros diários
-        registros_diarios = []
-        total_dias_trabalhados = 0
-        total_atrasos = 0
-        total_minutos_atraso = 0
-        total_horas_extras = 0
-        total_horas_trabalhadas = 0
-        
-        for data, regs in sorted(registros_por_dia.items()):
-            entrada = None
-            saida = None
-            intervalo_inicio = None
-            intervalo_fim = None
-            minutos_atraso = 0
-            minutos_extras = 0
-            observacao = None
-            
-            for r in regs:
-                if r.tipo_registro == 'entrada':
-                    entrada = r.hora.strftime('%H:%M') if r.hora else None
-                    minutos_atraso = r.minutos_atraso or 0
-                elif r.tipo_registro == 'saida_almoco' or r.tipo_registro == 'saida':
-                    saida = r.hora.strftime('%H:%M') if r.hora else None
-                    minutos_extras = r.minutos_extras or 0 if hasattr(r, 'minutos_extras') else 0
-                elif r.tipo_registro == 'retorno_almoco' or r.tipo_registro == 'intervalo_inicio':
-                    intervalo_inicio = r.hora.strftime('%H:%M') if r.hora else None
-                elif r.tipo_registro == 'intervalo_fim':
-                    intervalo_fim = r.hora.strftime('%H:%M') if r.hora else None
-                
-                if r.observacao:
-                    observacao = r.observacao
-            
-            # Calcular horas trabalhadas (simplificado)
-            horas_trabalhadas = 0
-            if entrada and saida:
-                try:
-                    entrada_time = datetime.strptime(entrada, '%H:%M')
-                    saida_time = datetime.strptime(saida, '%H:%M')
-                    diff = (saida_time - entrada_time).total_seconds() / 60
-                    
-                    # Descontar intervalo se houver
-                    if intervalo_inicio and intervalo_fim:
-                        intervalo_inicio_time = datetime.strptime(intervalo_inicio, '%H:%M')
-                        intervalo_fim_time = datetime.strptime(intervalo_fim, '%H:%M')
-                        intervalo_minutos = (intervalo_fim_time - intervalo_inicio_time).total_seconds() / 60
-                        diff -= intervalo_minutos
-                    
-                    horas_trabalhadas = max(0, diff)
-                except:
-                    horas_trabalhadas = 0
-            
-            registros_diarios.append({
-                "data": data.isoformat(),
-                "entrada": entrada,
-                "saida": saida,
-                "intervalo_inicio": intervalo_inicio,
-                "intervalo_fim": intervalo_fim,
-                "minutos_atraso": minutos_atraso,
-                "minutos_extras": minutos_extras,
-                "horas_trabalhadas": horas_trabalhadas,
-                "observacao": observacao
-            })
-            
-            if entrada or saida:
-                total_dias_trabalhados += 1
-            if minutos_atraso > 0:
-                total_atrasos += 1
-                total_minutos_atraso += minutos_atraso
-            total_horas_extras += minutos_extras / 60
-            total_horas_trabalhadas += horas_trabalhadas / 60
-        
-        # Calcular média
-        media_horas_dia = total_horas_trabalhadas / total_dias_trabalhados if total_dias_trabalhados > 0 else 0
-        
-        return jsonify({
-            "success": True,
-            "data": {
-                "funcionario_id": funcionario.id,
-                "nome": funcionario.nome,
-                "cargo": funcionario.cargo,
-                "registros_diarios": registros_diarios,
-                "resumo": {
-                    "total_dias_trabalhados": total_dias_trabalhados,
-                    "total_atrasos": total_atrasos,
-                    "total_minutos_atraso": total_minutos_atraso,
-                    "total_horas_extras": round(total_horas_extras, 2),
-                    "total_horas_trabalhadas": round(total_horas_trabalhadas, 2),
-                    "media_horas_dia": round(media_horas_dia, 2)
-                }
-            }
-        }), 200
-        
+
+        # Fonte única de verdade: mesma engine de ponto do holerite
+        from app.services.rh_calculator_service import calcular_espelho_ponto
+        from app.models import EspelhoAssinatura
+
+        espelho = calcular_espelho_ponto(funcionario, data_inicio_obj, data_fim_obj)
+
+        assinatura = EspelhoAssinatura.query.filter_by(
+            funcionario_id=funcionario.id,
+            data_inicio=data_inicio_obj,
+            data_fim=data_fim_obj,
+        ).first()
+
+        espelho["assinatura"] = {
+            "assinado": assinatura is not None,
+            "assinado_em": assinatura.assinado_em.isoformat() if assinatura and assinatura.assinado_em else None,
+        }
+
+        return jsonify({"success": True, "data": espelho}), 200
+
     except Exception as e:
         logger.error(f"Erro rh_ponto_espelho: {e}", exc_info=True)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@dashboard_bp.route("/rh/ponto/espelho/assinar", methods=["POST"])
+@jwt_required()
+@plan_required('Pro')
+def assinar_espelho_ponto():
+    """Funcionário confirma que conferiu o PRÓPRIO espelho de ponto do período."""
+    try:
+        from app.models import EspelhoAssinatura
+
+        usuario_logado = Funcionario.query.get(int(get_jwt_identity()))
+        if not usuario_logado:
+            return jsonify({"success": False, "message": "Funcionário não encontrado"}), 404
+
+        data = request.get_json() or {}
+        data_inicio = data.get("data_inicio")
+        data_fim = data.get("data_fim")
+        if not data_inicio or not data_fim:
+            return jsonify({"success": False, "message": "Parâmetros obrigatórios: data_inicio, data_fim"}), 400
+
+        data_inicio_obj = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        data_fim_obj = datetime.strptime(data_fim, "%Y-%m-%d").date()
+
+        assinatura = EspelhoAssinatura.query.filter_by(
+            funcionario_id=usuario_logado.id,
+            data_inicio=data_inicio_obj,
+            data_fim=data_fim_obj,
+        ).first()
+        if not assinatura:
+            from app import db
+            assinatura = EspelhoAssinatura(
+                estabelecimento_id=usuario_logado.estabelecimento_id,
+                funcionario_id=usuario_logado.id,
+                data_inicio=data_inicio_obj,
+                data_fim=data_fim_obj,
+            )
+            db.session.add(assinatura)
+            db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Espelho de ponto assinado com sucesso",
+            "data": {"assinado": True, "assinado_em": assinatura.assinado_em.isoformat() if assinatura.assinado_em else None},
+        }), 200
+    except Exception as e:
+        logger.error(f"Erro assinar_espelho_ponto: {e}", exc_info=True)
         return jsonify({"success": False, "message": str(e)}), 500
 
 

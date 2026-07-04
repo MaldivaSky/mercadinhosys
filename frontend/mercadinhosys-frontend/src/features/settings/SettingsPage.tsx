@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Store, Settings, CreditCard, Printer,
     Shield, Bell, Upload, MapPin,
@@ -6,7 +6,7 @@ import {
     ShoppingCart, Package, X, XCircle, Edit2, RefreshCw,
     Database, HardDrive, Keyboard, DollarSign, User
 } from 'lucide-react';
-import settingsService, { Configuracao, Estabelecimento } from './settingsService';
+import settingsService, { Configuracao, Estabelecimento, PontoConfig } from './settingsService';
 import ShortcutsHelp from '../../shortcuts/ShortcutsHelp';
 import AccountSettings from './AccountSettings';
 import { showToast } from '../../components/elements/Toast';
@@ -18,6 +18,8 @@ import SubscriptionSettings from './SubscriptionSettings';
 import SyncManager from '../../components/sync/SyncManager';
 import { SyncDataButton } from './SyncDataButton';
 import { useTheme } from '../../theme/useTheme';
+import { authService } from '../auth/authService';
+import { getSettingsTabs } from '../../utils/permissions';
 
 // Componentes de UI reutilizáveis (poderiam estar em arquivos separados)
 type SectionTitleProps = {
@@ -41,6 +43,57 @@ type SwitchFieldProps = {
     checked: boolean;
     onChange: (checked: boolean) => void;
     description?: string;
+};
+
+/**
+ * PIN de segurança em 4 quadrados: cada dígito preenche um quadrado e,
+ * com os 4 preenchidos, o botão Salvar é autorizado.
+ */
+const PinQuadrados = ({ value, onChange, disabled = false }: {
+    value: string;
+    onChange: (v: string) => void;
+    disabled?: boolean;
+}) => {
+    const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+    const setDigito = (idx: number, char: string) => {
+        const d = char.replace(/\D/g, '').slice(-1);
+        const arr = Array.from({ length: 4 }, (_, i) => value[i] || '');
+        arr[idx] = d;
+        onChange(arr.join('').slice(0, 4));
+        if (d && idx < 3) refs.current[idx + 1]?.focus();
+    };
+
+    const onKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace' && !value[idx] && idx > 0) {
+            refs.current[idx - 1]?.focus();
+        }
+    };
+
+    return (
+        <div className="flex gap-3">
+            {[0, 1, 2, 3].map(i => (
+                <input
+                    key={i}
+                    ref={el => { refs.current[i] = el; }}
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={1}
+                    disabled={disabled}
+                    value={value[i] || ''}
+                    onChange={e => setDigito(i, e.target.value)}
+                    onKeyDown={e => onKeyDown(i, e)}
+                    aria-label={`Dígito ${i + 1} do PIN`}
+                    className={`w-12 h-12 text-center text-2xl font-bold rounded-lg border-2 outline-none transition-colors
+                        ${value[i]
+                            ? 'border-amber-500 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white'}
+                        focus:border-amber-500 focus:ring-2 focus:ring-amber-300 disabled:opacity-50`}
+                />
+            ))}
+        </div>
+    );
 };
 
 const SectionTitle = ({ title, icon: Icon }: SectionTitleProps) => (
@@ -271,6 +324,17 @@ const SettingsPage: React.FC = () => {
     const [temPin, setTemPin] = useState(false);
     const [savingPin, setSavingPin] = useState(false);
 
+    // Configuração REAL de ponto (tabela ConfiguracaoHorario). Vive separada do
+    // objeto `config` genérico porque é o que o motor de ponto de fato lê/usa.
+    const [pontoConfig, setPontoConfig] = useState<PontoConfig>({});
+    const [pontoConfigCarregada, setPontoConfigCarregada] = useState(false);
+
+    useEffect(() => {
+        settingsService.getPontoConfig()
+            .then(cfg => { setPontoConfig(cfg || {}); setPontoConfigCarregada(true); })
+            .catch(() => {});
+    }, []);
+
     useEffect(() => {
         if (!isTenantAdmin) return;
         settingsService.getPinStatus()
@@ -279,7 +343,7 @@ const SettingsPage: React.FC = () => {
     }, [isTenantAdmin]);
 
     const salvarPin = async () => {
-        if (pinForm.length < 4) { showToast.error('O PIN deve ter de 4 a 6 dígitos'); return; }
+        if (pinForm.length !== 4) { showToast.error('Preencha os 4 quadrados do PIN'); return; }
         setSavingPin(true);
         try {
             await settingsService.setPin(pinForm);
@@ -394,11 +458,21 @@ const SettingsPage: React.FC = () => {
             const configToUpdate = { ...config };
             delete (configToUpdate as any).tema_escuro; // Não sobrescrever tema pessoal via config geral
             delete (configToUpdate as any).logo_base64;
+            // A logo é gerenciada pelo endpoint dedicado (uploadLogo). Reenviá-la
+            // aqui quebrava o save: um data-URI base64 estoura o VARCHAR(500) de
+            // logo_url (erro 500 StringDataRightTruncation).
+            delete (configToUpdate as any).logo_url;
 
-            await Promise.all([
+            const tarefas: Promise<unknown>[] = [
                 updateGlobalConfig(configToUpdate),
-                settingsService.updateEstabelecimento(estab)
-            ]);
+                settingsService.updateEstabelecimento(estab),
+            ];
+            // Persiste a config REAL de ponto (motor de ponto) somente se ela foi
+            // carregada — evita sobrescrever a config do backend com um objeto vazio.
+            if (pontoConfigCarregada) {
+                tarefas.push(settingsService.updatePontoConfig(pontoConfig));
+            }
+            await Promise.all(tarefas);
 
             showToast.success('Configurações salvas!');
         } catch (error) {
@@ -440,7 +514,7 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const tabs = [
+    const todasAsTabs = [
         { id: 'geral', label: 'Geral', icon: Settings },
         { id: 'conta', label: 'Minha Conta', icon: User },
         { id: 'estabelecimento', label: 'Estabelecimento', icon: Building2 },
@@ -451,8 +525,20 @@ const SettingsPage: React.FC = () => {
         { id: 'sistema', label: 'Sistema & Segurança', icon: Shield },
         { id: 'sincronizacao', label: 'Sincronização Híbrida', icon: HardDrive },
         { id: 'assinatura', label: 'Assinatura', icon: CreditCard },
-        ...(isSuperAdmin ? [{ id: 'lojas', label: 'Meus Clientes', icon: Building2 }] : []),
+        { id: 'lojas', label: 'Meus Clientes', icon: Building2 },
     ];
+    // Regras de Acesso: Gerente sem Estabelecimento/Sistema/Fiscal; níveis 3-6
+    // só Geral e Minha Conta; plano Grátis limitado às abas do plano.
+    const tabsVisiveis = getSettingsTabs(authService.getCurrentUser());
+    const tabs = todasAsTabs.filter(t => tabsVisiveis.includes(t.id));
+
+    // Se a aba ativa ficou fora da lista (troca de usuário/plano), volta para a primeira
+    useEffect(() => {
+        if (!tabs.some(t => t.id === activeTab)) {
+            setActiveTab(tabs[0]?.id || 'geral');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tabsVisiveis.join(',')]);
 
     const loading = configLoading || loadingEstab;
     if (loading) {
@@ -887,26 +973,26 @@ const SettingsPage: React.FC = () => {
                                 <SwitchField
                                     label="Exigir Foto no Ponto"
                                     description="Obrigatório tirar foto no registro de entrada/saída"
-                                    checked={config.exigir_foto_ponto ?? false}
-                                    onChange={(val: boolean) => setConfig({ ...config, exigir_foto_ponto: val })}
+                                    checked={pontoConfig.exigir_foto ?? false}
+                                    onChange={(val: boolean) => setPontoConfig({ ...pontoConfig, exigir_foto: val })}
                                 />
 
                                 <SwitchField
                                     label="Exigir Localização no Ponto"
                                     description="Validar localização do funcionário via GPS"
-                                    checked={config.exigir_localizacao_ponto ?? false}
-                                    onChange={(val: boolean) => setConfig({ ...config, exigir_localizacao_ponto: val })}
+                                    checked={pontoConfig.exigir_localizacao ?? false}
+                                    onChange={(val: boolean) => setPontoConfig({ ...pontoConfig, exigir_localizacao: val })}
                                 />
 
                                 <InputField
                                     label="Tolerância de Atraso (minutos)"
                                     type="number"
-                                    value={config.tolerancia_atraso_minutos || 5}
-                                    onChange={(e) => setConfig({ ...config, tolerancia_atraso_minutos: parseInt(e.target.value) })}
+                                    value={pontoConfig.tolerancia_entrada ?? 5}
+                                    onChange={(e) => setPontoConfig({ ...pontoConfig, tolerancia_entrada: parseInt(e.target.value) || 0 })}
                                 />
                             </div>
 
-                            {config.exigir_localizacao_ponto && (
+                            {pontoConfig.exigir_localizacao && (
                                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                                     <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-4 flex items-center gap-2">
                                         <MapPin className="w-4 h-4" />
@@ -932,8 +1018,8 @@ const SettingsPage: React.FC = () => {
                                         <InputField
                                             label="Raio de Validação (metros)"
                                             type="number"
-                                            value={config.raio_validacao_metros || 100}
-                                            onChange={(e) => setConfig({ ...config, raio_validacao_metros: parseInt(e.target.value) })}
+                                            value={pontoConfig.raio_permitido_metros ?? 100}
+                                            onChange={(e) => setPontoConfig({ ...pontoConfig, raio_permitido_metros: parseInt(e.target.value) || 0 })}
                                             placeholder="100"
                                         />
                                     </div>
@@ -967,8 +1053,8 @@ const SettingsPage: React.FC = () => {
                                         </div>
                                         <input
                                             type="time"
-                                            value={config.hora_entrada_ponto || '08:00'}
-                                            onChange={(e) => setConfig({ ...config, hora_entrada_ponto: e.target.value })}
+                                            value={pontoConfig.hora_entrada || '08:00'}
+                                            onChange={(e) => setPontoConfig({ ...pontoConfig, hora_entrada: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -982,8 +1068,8 @@ const SettingsPage: React.FC = () => {
                                         </div>
                                         <input
                                             type="time"
-                                            value={config.hora_saida_almoco_ponto || '12:00'}
-                                            onChange={(e) => setConfig({ ...config, hora_saida_almoco_ponto: e.target.value })}
+                                            value={pontoConfig.hora_saida_almoco || '12:00'}
+                                            onChange={(e) => setPontoConfig({ ...pontoConfig, hora_saida_almoco: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -997,8 +1083,8 @@ const SettingsPage: React.FC = () => {
                                         </div>
                                         <input
                                             type="time"
-                                            value={config.hora_retorno_almoco_ponto || '13:00'}
-                                            onChange={(e) => setConfig({ ...config, hora_retorno_almoco_ponto: e.target.value })}
+                                            value={pontoConfig.hora_retorno_almoco || '13:00'}
+                                            onChange={(e) => setPontoConfig({ ...pontoConfig, hora_retorno_almoco: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
@@ -1012,9 +1098,31 @@ const SettingsPage: React.FC = () => {
                                         </div>
                                         <input
                                             type="time"
-                                            value={config.hora_saida_ponto || '18:00'}
-                                            onChange={(e) => setConfig({ ...config, hora_saida_ponto: e.target.value })}
+                                            value={pontoConfig.hora_saida || '18:00'}
+                                            onChange={(e) => setPontoConfig({ ...pontoConfig, hora_saida: e.target.value })}
                                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Jornada diária normal (CLT). O que passar disso vira hora extra no espelho de ponto. */}
+                                <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-gray-100">Jornada Diária (horas)</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400">Limite legal por dia — CLT: 8h (até 44h/semana na escala 6x1). O que exceder vira hora extra.</p>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={12}
+                                            step={0.5}
+                                            value={((pontoConfig.jornada_diaria_minutos ?? 480) / 60)}
+                                            onChange={(e) => {
+                                                const horas = parseFloat(e.target.value);
+                                                setPontoConfig({ ...pontoConfig, jornada_diaria_minutos: Number.isFinite(horas) ? Math.round(horas * 60) : 480 });
+                                            }}
+                                            className="w-28 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-lg"
                                         />
                                     </div>
                                 </div>
@@ -1022,7 +1130,7 @@ const SettingsPage: React.FC = () => {
 
                             <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
                                 <p className="font-semibold mb-2">💡 Dica</p>
-                                <p>Estes horários serão validados automaticamente para todos os funcionários. Atrasos além da tolerância configurada serão registrados.</p>
+                                <p>Estes horários e a jornada diária são usados pelo motor de ponto para calcular atrasos e horas extras no espelho de ponto de cada funcionário.</p>
                             </div>
                         </div>
                     )}
@@ -1035,7 +1143,7 @@ const SettingsPage: React.FC = () => {
                             {isTenantAdmin && (
                                 <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <label className="text-sm font-bold text-gray-900 dark:text-white">PIN de Segurança (4 a 6 dígitos)</label>
+                                        <label className="text-sm font-bold text-gray-900 dark:text-white">PIN de Segurança (4 dígitos)</label>
                                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${temPin ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
                                             {temPin ? 'Configurado' : 'Não configurado'}
                                         </span>
@@ -1044,17 +1152,11 @@ const SettingsPage: React.FC = () => {
                                         Autoriza operações sensíveis: estorno de venda, editar e descartar produtos.
                                         Somente administradores definem ou alteram este PIN.
                                     </p>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="password" inputMode="numeric" autoComplete="off" maxLength={6}
-                                            value={pinForm}
-                                            onChange={(e) => setPinForm(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                            placeholder={temPin ? 'Digite um novo PIN para alterar' : 'Defina um PIN'}
-                                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
-                                        />
-                                        <button onClick={salvarPin} disabled={savingPin || pinForm.length < 4}
-                                            className="px-4 py-2 rounded-lg bg-amber-600 text-white font-bold text-sm hover:bg-amber-700 disabled:opacity-60">
-                                            {savingPin ? 'Salvando...' : (temPin ? 'Alterar' : 'Salvar')}
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        <PinQuadrados value={pinForm} onChange={setPinForm} disabled={savingPin} />
+                                        <button onClick={salvarPin} disabled={savingPin || pinForm.length !== 4}
+                                            className="px-4 py-2 rounded-lg bg-amber-600 text-white font-bold text-sm hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                                            {savingPin ? 'Salvando...' : (temPin ? 'Alterar PIN' : 'Salvar PIN')}
                                         </button>
                                     </div>
                                 </div>

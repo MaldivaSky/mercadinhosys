@@ -165,7 +165,7 @@ def permission_required(resource):
                 if not user:
                     return jsonify({"success": False, "error": "Usuário não encontrado"}), 401
 
-                nivel = ROLE_TO_NIVEL.get((user.role or 'FUNCIONARIO').upper(), 3)
+                nivel = ROLE_TO_NIVEL.get((user.role or 'FUNCIONARIO').upper(), 4)
                 allowed = RBAC_MATRIX.get(resource, set())
 
                 if nivel not in allowed and 0 not in allowed:
