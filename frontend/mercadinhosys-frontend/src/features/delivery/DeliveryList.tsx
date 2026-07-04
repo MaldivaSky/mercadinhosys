@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Search, User, Clock, MapPin, Hash, Truck, CheckCircle2, XCircle,
-    Package, Loader2, Receipt, DollarSign,
+    Package, Loader2, DollarSign, Eye,
 } from 'lucide-react';
 import { deliveryService, Entrega } from './deliveryService';
+import DetalheEntregaModal from './DetalheEntregaModal';
 import toast from 'react-hot-toast';
 
 // Configuração visual e de fluxo por status (paleta oficial do app)
@@ -26,12 +27,21 @@ const FILTROS: Array<{ key: string; label: string }> = [
 const formatCurrency = (v: number) =>
     (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/** Tempo real da entrega (minutos) → "45 min" / "1h 05min". */
+const duracaoEntrega = (min?: number | null): string | null => {
+    if (min == null || min < 0) return null;
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60), m = min % 60;
+    return m ? `${h}h ${String(m).padStart(2, '0')}min` : `${h}h`;
+};
+
 const DeliveryList: React.FC = () => {
     const [entregas, setEntregas] = useState<Entrega[]>([]);
     const [loading, setLoading] = useState(true);
     const [filtroStatus, setFiltroStatus] = useState('todos');
     const [busca, setBusca] = useState('');
     const [acaoId, setAcaoId] = useState<number | null>(null);
+    const [detalheId, setDetalheId] = useState<number | null>(null);
 
     useEffect(() => {
         carregarEntregas();
@@ -147,27 +157,33 @@ const DeliveryList: React.FC = () => {
                                     <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                                     {cfg.label}
                                 </span>
-                                {vendaId && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-400">
-                                        <Receipt className="w-3.5 h-3.5" /> Venda #{vendaId}
-                                    </span>
-                                )}
+                                <button
+                                    onClick={() => setDetalheId(entrega.id)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary-600 hover:text-primary-700 hover:underline"
+                                    title="Abrir pedido"
+                                >
+                                    <Eye className="w-3.5 h-3.5" /> {vendaId ? `Venda #${vendaId}` : 'Ver pedido'}
+                                </button>
                             </div>
 
-                            {/* Cliente em destaque (corrige a confusão de classificação) */}
-                            <div className="flex items-center gap-3 mb-4">
+                            {/* Cliente em destaque — clique abre o pedido completo */}
+                            <button
+                                type="button"
+                                onClick={() => setDetalheId(entrega.id)}
+                                className="flex items-center gap-3 mb-4 text-left w-full group"
+                            >
                                 <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center text-primary-600 shrink-0">
                                     <User className="w-5 h-5" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 className="font-bold text-gray-900 dark:text-white text-base truncate">
+                                    <h3 className="font-bold text-gray-900 dark:text-white text-base truncate group-hover:text-primary-600">
                                         {entrega.cliente_nome || 'Cliente não identificado'}
                                     </h3>
                                     <p className="text-xs text-gray-400 font-mono flex items-center gap-1">
                                         <Hash className="w-3 h-3" /> {entrega.codigo_rastreamento}
                                     </p>
                                 </div>
-                            </div>
+                            </button>
 
                             {/* Infos */}
                             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -199,14 +215,21 @@ const DeliveryList: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Taxa */}
+                            {/* Taxa + tempo real de entrega */}
                             <div className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 dark:bg-gray-900/40 px-3 py-2">
                                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
                                     <DollarSign className="w-3.5 h-3.5" /> Taxa de entrega
                                 </span>
-                                <span className="font-black text-gray-800 dark:text-white">
-                                    {formatCurrency(Number(entrega.taxa_entrega || 0))}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    {duracaoEntrega((entrega as any).tempo_entrega_minutos) && (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 px-2 py-0.5 text-[11px] font-bold">
+                                            <Clock className="w-3 h-3" /> {duracaoEntrega((entrega as any).tempo_entrega_minutos)}
+                                        </span>
+                                    )}
+                                    <span className="font-black text-gray-800 dark:text-white">
+                                        {formatCurrency(Number(entrega.taxa_entrega || 0))}
+                                    </span>
+                                </div>
                             </div>
 
                             {/* Ações que FUNCIONAM */}
@@ -253,6 +276,8 @@ const DeliveryList: React.FC = () => {
                     </p>
                 </div>
             )}
+
+            <DetalheEntregaModal entregaId={detalheId} onClose={() => setDetalheId(null)} />
         </div>
     );
 };

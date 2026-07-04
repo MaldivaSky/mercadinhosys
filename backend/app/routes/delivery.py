@@ -579,3 +579,155 @@ def get_stats():
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== DETALHE DO PEDIDO (venda + itens + rastreio) ====================
+
+@delivery_bp.route("/entregas/<int:id>/detalhe", methods=["GET"])
+@tenant_or_super_admin_required
+def detalhe_entrega(id):
+    """Abre o pedido de venda vinculado à entrega: itens, data, valores e
+    a linha do tempo de rastreamento (eventos com posição)."""
+    try:
+        entrega = Entrega.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first()
+        if not entrega:
+            return jsonify({"success": False, "error": "Entrega não encontrada"}), 404
+
+        venda = entrega.venda
+        venda_data = None
+        itens = []
+        if venda:
+            venda_data = {
+                "id": venda.id,
+                "codigo": venda.codigo,
+                "data_venda": venda.data_venda.isoformat() if venda.data_venda else None,
+                "tipo_venda": venda.tipo_venda,
+                "status": venda.status,
+                "subtotal": float(venda.subtotal or 0),
+                "desconto": float(venda.desconto or 0),
+                "total": float(venda.total or 0),
+                "cliente_nome": venda.cliente.nome if venda.cliente else "Não informado",
+                "funcionario_nome": venda.funcionario.nome if venda.funcionario else None,
+            }
+            itens = [{
+                "produto_nome": it.produto_nome,
+                "produto_codigo": it.produto_codigo,
+                "quantidade": float(it.quantidade or 0),
+                "produto_unidade": it.produto_unidade,
+                "preco_unitario": float(it.preco_unitario or 0),
+                "total_item": float(it.total_item or 0),
+            } for it in (venda.itens or [])]
+
+        rastreamento = sorted(
+            (entrega.rastreamentos or []),
+            key=lambda r: r.data_hora or datetime.min,
+        )
+        return jsonify({
+            "success": True,
+            "entrega": entrega.to_dict(),
+            "venda": venda_data,
+            "itens": itens,
+            "rastreamento": [r.to_dict() for r in rastreamento],
+        })
+    except Exception as e:
+        logger.error(f"Erro no detalhe da entrega {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== CENTRAL LOGÍSTICA (dashboard com filtros) ====================
+
+@delivery_bp.route("/dashboard", methods=["GET"])
+@tenant_or_super_admin_required
+def dashboard_logistica():
+    """Métricas logísticas ricas com filtros (período, entregador, veículo):
+    entregas, km, saldo de taxa de entrega, combustível, comissão, top
+    clientes/bairros/produtos e distribuição por status."""
+    try:
+        est_id = request.allowed_estabelecimento_id
+        di = request.args.get("data_inicio")
+        df = request.args.get("data_fim")
+        motorista_id = request.args.get("motorista_id", type=int)
+        veiculo_id = request.args.get("veiculo_id", type=int)
+
+        data_ref = func.coalesce(Entrega.data_entrega, Entrega.data_saida, Entrega.created_at)
+        filtros = [Entrega.estabelecimento_id == est_id, Entrega.deleted_at.is_(None)]
+        if di:
+            filtros.append(func.date(data_ref) >= datetime.strptime(di, "%Y-%m-%d").date())
+        if df:
+            filtros.append(func.date(data_ref) <= datetime.strptime(df, "%Y-%m-%d").date())
+        if motorista_id:
+            filtros.append(Entrega.motorista_id == motorista_id)
+        if veiculo_id:
+            filtros.append(Entrega.veiculo_id == veiculo_id)
+        escopo = and_(*filtros)
+        escopo_entregue = and_(escopo, Entrega.status == "entregue")
+
+        # KPIs
+        km_expr = func.sum(func.coalesce(
+            func.nullif(Entrega.km_percorridos, 0), Entrega.distancia_km))
+        agg = db.session.query(
+            func.count(Entrega.id),
+            func.coalesce(func.sum(Entrega.taxa_entrega), 0),
+            func.coalesce(func.sum(Entrega.custo_combustivel), 0),
+            func.coalesce(func.sum(Entrega.comissao_motorista), 0),
+            func.coalesce(km_expr, 0),
+            func.coalesce(func.avg(Entrega.tempo_real_minutos), 0),
+        ).filter(escopo).first()
+        total_entregas = int(agg[0] or 0)
+        taxa_total = float(agg[1] or 0)
+        combustivel_total = float(agg[2] or 0)
+        comissao_total = float(agg[3] or 0)
+        km_total = float(agg[4] or 0)
+        tempo_medio = round(float(agg[5] or 0), 1)
+
+        por_status = dict(db.session.query(Entrega.status, func.count(Entrega.id))
+                          .filter(escopo).group_by(Entrega.status).all())
+
+        # Top clientes (por nº de entregas e taxa gerada)
+        top_clientes = db.session.query(
+            Cliente.nome, func.count(Entrega.id), func.coalesce(func.sum(Entrega.taxa_entrega), 0)
+        ).join(Cliente, Entrega.cliente_id == Cliente.id).filter(escopo).group_by(
+            Cliente.id).order_by(func.count(Entrega.id).desc()).limit(5).all()
+
+        # Top bairros
+        top_bairros = db.session.query(
+            Entrega.endereco_bairro, func.count(Entrega.id)
+        ).filter(escopo, Entrega.endereco_bairro.isnot(None)).group_by(
+            Entrega.endereco_bairro).order_by(func.count(Entrega.id).desc()).limit(5).all()
+
+        # Top produtos entregues (quantidade)
+        top_produtos = db.session.query(
+            Produto.nome, func.sum(EntregaItem.quantidade)
+        ).join(Entrega, EntregaItem.entrega_id == Entrega.id).join(
+            Produto, EntregaItem.produto_id == Produto.id
+        ).filter(escopo).group_by(Produto.id).order_by(
+            func.sum(EntregaItem.quantidade).desc()).limit(5).all()
+
+        # Faturamento delivery (vendas vinculadas às entregas do escopo)
+        fat_delivery = db.session.query(func.coalesce(func.sum(Venda.total), 0)).join(
+            Entrega, Entrega.venda_id == Venda.id).filter(escopo).scalar() or 0
+        ticket_medio = round(float(fat_delivery) / total_entregas, 2) if total_entregas else 0.0
+
+        return jsonify({
+            "success": True,
+            "kpis": {
+                "total_entregas": total_entregas,
+                "km_total": round(km_total, 1),
+                "taxa_entrega_total": round(taxa_total, 2),
+                "combustivel_total": round(combustivel_total, 2),
+                "comissao_total": round(comissao_total, 2),
+                "faturamento_delivery": round(float(fat_delivery), 2),
+                "ticket_medio": ticket_medio,
+                "tempo_medio_minutos": tempo_medio,
+                "saldo_taxa": round(taxa_total - combustivel_total - comissao_total, 2),
+            },
+            "por_status": {k: int(v) for k, v in por_status.items()},
+            "top_clientes": [{"nome": c[0], "entregas": int(c[1]), "taxa": float(c[2] or 0)} for c in top_clientes],
+            "top_bairros": [{"bairro": b[0], "entregas": int(b[1])} for b in top_bairros],
+            "top_produtos": [{"produto": p[0], "quantidade": float(p[1] or 0)} for p in top_produtos],
+        })
+    except Exception as e:
+        logger.error(f"Erro no dashboard logística: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500

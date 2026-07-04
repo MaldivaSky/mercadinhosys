@@ -2165,6 +2165,11 @@ class Entrega(db.Model, MultiTenantMixin, SoftDeleteMixin):
                 "endereco_cep": self.endereco_cep, "endereco_bairro": self.endereco_bairro,
                 "distancia_km": float(self.distancia_km) if self.distancia_km else 0.0,
                 "km_percorridos": float(self.km_percorridos) if self.km_percorridos else 0.0,
+                # Tempo real da entrega (da saída até a conclusão), em minutos
+                "tempo_entrega_minutos": (
+                    round((self.data_entrega - self.data_saida).total_seconds() / 60)
+                    if self.data_saida and self.data_entrega else None
+                ),
                 "taxa_entrega": float(self.taxa_entrega) if self.taxa_entrega else 0.0,
                 "custo_entrega": float(self.custo_entrega) if self.custo_entrega else 0.0,
                 "custo_combustivel": float(self.custo_combustivel) if self.custo_combustivel else 0.0,

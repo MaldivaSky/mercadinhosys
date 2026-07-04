@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Plus, Package, Truck, LayoutDashboard } from 'lucide-react';
+import { Plus, Package, Truck, LayoutDashboard, BarChart3 } from 'lucide-react';
 import DeliveryDashboard from './DeliveryDashboard';
 import DeliveryList from './DeliveryList';
 import DriverManagement from './DriverManagement';
 import CreateDeliveryModal from './CreateDeliveryModal';
+import CentralLogistica from './CentralLogistica';
 
-type DeliveryTab = 'dashboard' | 'entregas' | 'frota';
+type DeliveryTab = 'dashboard' | 'central' | 'entregas' | 'frota';
 
 const tabs: Array<{
     id: DeliveryTab;
@@ -18,6 +19,12 @@ const tabs: Array<{
         label: 'Dashboard',
         description: 'KPIs operacionais e visão executiva',
         icon: LayoutDashboard,
+    },
+    {
+        id: 'central',
+        label: 'Central Logística',
+        description: 'Métricas com filtros por período, entregador e veículo',
+        icon: BarChart3,
     },
     {
         id: 'entregas',
@@ -127,6 +134,7 @@ const DeliveryPage: React.FC = () => {
 
             <section key={`${activeTab}-${refreshKey}`}>
                 {activeTab === 'dashboard' && <DeliveryDashboard />}
+                {activeTab === 'central' && <CentralLogistica />}
                 {activeTab === 'entregas' && <DeliveryList />}
                 {activeTab === 'frota' && <DriverManagement />}
             </section>

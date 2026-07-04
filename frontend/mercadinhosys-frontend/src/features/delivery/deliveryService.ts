@@ -120,7 +120,68 @@ export const deliveryService = {
     getRastreamento: async (id: number) => {
         const response = await apiClient.get(`/delivery/rastreamento/${id}`);
         return response.data;
-    }
+    },
+
+    getDetalheEntrega: async (id: number) => {
+        const response = await apiClient.get<DetalheEntregaResposta>(`/delivery/entregas/${id}/detalhe`);
+        return response.data;
+    },
+
+    getDashboard: async (filtros: DashboardFiltros = {}) => {
+        const response = await apiClient.get<DashboardLogistica>('/delivery/dashboard', { params: filtros });
+        return response.data;
+    },
 };
+
+export interface DashboardFiltros {
+    data_inicio?: string;
+    data_fim?: string;
+    motorista_id?: number;
+    veiculo_id?: number;
+}
+
+export interface DashboardLogistica {
+    success: boolean;
+    kpis: {
+        total_entregas: number;
+        km_total: number;
+        taxa_entrega_total: number;
+        combustivel_total: number;
+        comissao_total: number;
+        faturamento_delivery: number;
+        ticket_medio: number;
+        tempo_medio_minutos: number;
+        saldo_taxa: number;
+    };
+    por_status: Record<string, number>;
+    top_clientes: { nome: string; entregas: number; taxa: number }[];
+    top_bairros: { bairro: string; entregas: number }[];
+    top_produtos: { produto: string; quantidade: number }[];
+}
+
+export interface ItemPedido {
+    produto_nome: string; produto_codigo?: string; quantidade: number;
+    produto_unidade?: string; preco_unitario: number; total_item: number;
+}
+
+export interface EventoRastreio {
+    id: number; status: string; latitude?: number | null; longitude?: number | null;
+    observacao?: string | null; data_hora: string | null;
+}
+
+export interface DetalheEntregaResposta {
+    success: boolean;
+    entrega: Entrega & {
+        km_percorridos?: number; distancia_km?: number; custo_combustivel?: number;
+        data_saida?: string | null; data_entrega?: string | null; nota_cliente?: number | null;
+        veiculo_placa?: string | null; endereco_cep?: string; tempo_entrega_minutos?: number | null;
+    };
+    venda: {
+        id: number; codigo: string; data_venda: string | null; tipo_venda: string; status: string;
+        subtotal: number; desconto: number; total: number; cliente_nome: string; funcionario_nome?: string;
+    } | null;
+    itens: ItemPedido[];
+    rastreamento: EventoRastreio[];
+}
 
 export default deliveryService;
