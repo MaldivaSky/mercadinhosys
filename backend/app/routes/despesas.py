@@ -489,7 +489,7 @@ def obter_estatisticas_despesas():
                     )
                 if estabelecimento_id != 'all':
                      query_mes = query_mes.filter(Despesa.estabelecimento_id == estabelecimento_id)
-                total_mes = Decimal(str(query_mes.scalar() or 0))
+                total_mes = Decimal(str(query_mes.scalar() or 0)) + _get_folha(mes_data, mes_fim)
             except Exception as e_inner:
                 current_app.logger.error(f"Erro ao calcular mês {mes_data}: {e_inner}")
                 total_mes = Decimal('0')
@@ -507,7 +507,24 @@ def obter_estatisticas_despesas():
 
         # ── Montar lista de categorias com percentual ─────────────────────────
         despesas_por_categoria_list = []
+        
+        if folha_periodo > 0:
+            percentual_folha = (
+                (folha_periodo / soma_periodo * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if soma_periodo > 0 else Decimal('0')
+            )
+            despesas_por_categoria_list.append({
+                "categoria": "Folha de Pagamento",
+                "total": float(folha_periodo),
+                "quantidade": 1,
+                "percentual": float(percentual_folha),
+            })
+            
         for categoria, total, quantidade in despesas_por_categoria_raw:
+            if categoria and categoria.strip().lower() == "folha de pagamento":
+                # Ignora a manual para dar preferência ao cálculo dinâmico da inteligência
+                continue
+                
             total_d = Decimal(str(total)) if total else Decimal('0')
             percentual = (
                 (total_d / soma_periodo * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -519,6 +536,9 @@ def obter_estatisticas_despesas():
                 "quantidade": quantidade or 0,
                 "percentual": float(percentual),
             })
+            
+        # Ordena a lista pelas maiores despesas para o gráfico ficar coerente
+        despesas_por_categoria_list.sort(key=lambda x: x["total"], reverse=True)
 
         return (
             jsonify({
@@ -879,7 +899,11 @@ def resumo_financeiro():
         obrigacoes_30d = cp['vence_30d'] + dav['vence_30d']
 
         # 1. Índice de Comprometimento: dívida em aberto + obrigações a vencer (30d) vs faturamento do período.
-        total_obrigacoes = total_pagar_aberto + dav['vence_30d'] + dav['vencidas']
+        # Adiciona também a provisão da folha de pagamento do período como uma obrigação real.
+        folha_detalhada = calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim)
+        custo_folha_total = folha_detalhada.get("custo_folha", {}).get("custo_real_total", 0.0)
+        
+        total_obrigacoes = total_pagar_aberto + dav['vence_30d'] + dav['vencidas'] + custo_folha_total
         if receita_bruta > 0:
             indice_comprometimento = total_obrigacoes / receita_bruta * 100
         else:
@@ -913,12 +937,11 @@ def resumo_financeiro():
             })
 
         # Fluxo de Caixa Real: inclui receita de vendas + suprimentos de caixa (entradas)
-        # e pagamentos de contas + despesas cadastradas + sangrias de caixa + custo da folha (saídas)
-        folha_detalhada = _calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim)
-        custo_folha_total = folha_detalhada.get("custo_folha", {}).get("custo_real_total", 0.0)
+        # e pagamentos de contas + despesas cadastradas + sangrias de caixa (saídas).
+        # (O custo da folha já está embutido em desp['total'] pelo DataLayer)
         
         entradas_reais = vendas.get("total_recebido", 0.0) + caixa_pdv['suprimentos']
-        saidas_reais = cp['pago_periodo'] + desp['total'] + caixa_pdv['sangrias'] + custo_folha_total
+        saidas_reais = cp['pago_periodo'] + desp['total'] + caixa_pdv['sangrias']
 
         return jsonify({
             "success": True,
