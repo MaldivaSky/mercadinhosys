@@ -29,7 +29,7 @@ services:
         value: https://mercadinhosys-frontend.vercel.app,https://mercadinhosys.vercel.app,https://*.vercel.app
       - key: PYTHON_VERSION
         value: 3.11.0
-    healthCheckPath: /api/auth/health
+    healthCheckPath: /api/health
 
   # Frontend
   - type: web
