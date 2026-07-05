@@ -971,12 +971,18 @@ class DataLayer:
             hoje_dia = datetime.now().date()
             inicio_mes = hoje_dia.replace(day=1)
 
-            config_query = ConfiguracaoHorario.query
-            if str(estabelecimento_id).lower() != 'all':
-                config_query = config_query.filter_by(estabelecimento_id=estabelecimento_id)
-            config = config_query.first()
-            hora_saida_ref = config.hora_saida if config and config.hora_saida else datetime.strptime('18:00', '%H:%M').time()
-            tolerancia_saida = int(config.tolerancia_saida) if config and config.tolerancia_saida is not None else 5
+            try:
+                config_query = ConfiguracaoHorario.query
+                if str(estabelecimento_id).lower() != 'all':
+                    config_query = config_query.filter_by(estabelecimento_id=estabelecimento_id)
+                config = config_query.first()
+            except Exception as e:
+                logger.error(f"Erro ao buscar ConfiguracaoHorario (possível falta de migração): {e}")
+                config = None
+
+            hora_saida_ref = config.hora_saida if config and getattr(config, 'hora_saida', None) else datetime.strptime('18:00', '%H:%M').time()
+            tolerancia_saida = int(getattr(config, 'tolerancia_saida', 5) or 5)
+            jornada = int(getattr(config, 'jornada_diaria_minutos', 480) or 480)
 
             def _time_to_minutes(t):
                 return int(t.hour) * 60 + int(t.minute)
