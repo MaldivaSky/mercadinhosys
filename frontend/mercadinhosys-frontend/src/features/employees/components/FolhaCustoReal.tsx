@@ -76,7 +76,7 @@ export default function FolhaCustoReal() {
         autoTable(doc, {
             startY: 40,
             head: [['Funcionário', 'Salário', 'Benefícios', 'Prov. Férias', 'Prov. 13º', 'Encargos', 'Custo Real']],
-            body: dados.map(d => [d.funcionario_nome, fmt(d.salario_base), fmt(d.beneficios), fmt(d.valor_ferias), fmt(d.valor_decimo_terceiro), fmt(d.encargos_provisionados), fmt(d.custo_real)]),
+            body: dados.map(d => [d.funcionario_nome, fmt(d.salario_base || 0), fmt(d.beneficios || 0), fmt(d.valor_ferias || 0), fmt(d.valor_decimo_terceiro || 0), fmt(d.encargos_provisionados || 0), fmt(d.custo_real || 0)]),
             theme: 'grid',
             headStyles: { fillColor: [31, 41, 55], textColor: [255, 255, 255], fontSize: 8 },
             styles: { fontSize: 8, cellPadding: 2 },
