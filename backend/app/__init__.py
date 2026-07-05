@@ -357,12 +357,40 @@ def create_app(config_name=None):
     # ==================== BOOTSTRAP: CRIAR TABELAS E COLUNAS CRÍTICAS ====================
     # Otimização para Vercel/Render: Pular setup se SKIP_DB_SETUP=true ou se em produção após primeiro deploy
     skip_db_setup = os.environ.get("SKIP_DB_SETUP", "false").lower() == "true"
-    
+
     # Em produção, o setup pesado em cada requisição causa timeouts (Render/Vercel).
     is_production = config_name == "production"
     is_cloud = os.environ.get("VERCEL") == "1" or os.environ.get("RENDER") == "1"
-    
+
+    # create_app() roda em TODO boot do processo (flask db upgrade, cada worker do
+    # gunicorn, etc.) porque run.py chama create_app() no import do módulo. Rodar
+    # db.create_all() incondicionalmente aqui cria tabelas "adiantado" a partir do
+    # models.py atual, antes do Alembic aplicar a migração correspondente — quando
+    # essa migração roda depois, o CREATE TABLE dela colide (DuplicateTable), a
+    # migração falha, e o alembic_version trava ali para sempre (mesmo as
+    # migrações aditivas seguintes, inofensivas, nunca mais são aplicadas). Isso já
+    # causou schema drift real em produção (Aiven) mais de uma vez.
+    #
+    # Não dá para simplesmente remover o create_all(): a primeira migração da
+    # cadeia (366b766bc135, down_revision=None) é aditiva sobre tabelas "core" que
+    # já existiam — ou seja, o Alembic foi retrofitado num schema que só o
+    # create_all() sabe construir do zero. Um banco vazio precisa do create_all()
+    # para ter as tabelas-base antes de `flask db upgrade` rodar.
+    #
+    # Fix: só rodar esse bootstrap legado se o Alembic ainda não estiver
+    # controlando o schema (tabela alembic_version não existe = banco vazio /
+    # primeiro boot). Uma vez que alembic_version existe, as migrações são a
+    # única fonte de verdade do schema.
+    alembic_ja_controla_schema = False
     if not skip_db_setup:
+        try:
+            with app.app_context():
+                from sqlalchemy import inspect as _boot_insp
+                alembic_ja_controla_schema = "alembic_version" in _boot_insp(db.engine).get_table_names()
+        except Exception as e:
+            logger.warning(f"⚠️ Não foi possível checar alembic_version (assumindo banco novo): {e}")
+
+    if not skip_db_setup and not alembic_ja_controla_schema:
         with app.app_context():
             try:
                 # Testar conexão se for Postgres
@@ -411,8 +439,10 @@ def create_app(config_name=None):
                 else:
                     logger.error(f"ERRO: Criar tabelas no bootstrap: {e}")
 
-    else:
+    elif skip_db_setup:
         logger.info("INFO: db.create_all() pulado (SKIP_DB_SETUP=true). Schema sync ainda sera executado.")
+    else:
+        logger.info("INFO: db.create_all() pulado (alembic_version já existe — schema é responsabilidade só das migrações). Schema sync ainda sera executado.")
 
     # ==================== SCHEMA SYNC ====================
     # Pode ser pulado com SKIP_SCHEMA_SYNC=true (ex: durante seed que já fez drop_all+create_all)

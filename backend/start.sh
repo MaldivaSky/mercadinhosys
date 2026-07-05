@@ -14,10 +14,16 @@ export FLASK_APP=run:app
 echo "📋 Applying database migrations (flask db upgrade)..."
 python -m flask db upgrade || echo "⚠️ Migration falhou — seguindo (não fatal)."
 
-# 2) Garantir tabelas (create_all não altera tabelas existentes) — best-effort
-echo "📋 Ensuring database tables exist..."
-python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all(); print('✅ Tables OK')" \
-    || echo "⚠️ create_all falhou — seguindo (não fatal)."
+# 2) NÃO chamamos db.create_all() aqui de propósito: create_app() (chamada por
+# qualquer import de run:app, inclusive o próprio `flask db upgrade` acima) já
+# decide sozinha se precisa rodar create_all() — só roda em banco vazio (sem
+# alembic_version ainda). Chamar de novo aqui era 100% redundante e, pior,
+# escondia o caso em que uma migração cria uma tabela ANTES do create_all()
+# rodar: create_all() adiantava a criação da tabela a partir do models.py atual,
+# e quando a migração correspondente rodava (aqui ou num deploy seguinte) o
+# CREATE TABLE dela colidia (DuplicateTable), travando o alembic_version e
+# impedindo todas as migrações seguintes de sempre aplicarem. Ver app/__init__.py
+# (bootstrap gateado por alembic_version) para o detalhe da correção.
 
 # 3) Seed só se o banco estiver vazio. Se a checagem falhar por qualquer motivo,
 #    assume 'no' e segue (nunca derruba o boot).
