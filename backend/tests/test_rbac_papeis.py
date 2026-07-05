@@ -17,11 +17,15 @@ class _FakeUser:
 
 
 def test_mapa_role_para_nivel_dos_usuarios_da_demo():
+    # Numeração CANÔNICA (migração c7d9e1f2a3b4, 2026-07-03): 1 Admin, 2 Gerente,
+    # 3 RH, 4 Estoque/Caixa (papéis fundidos), 5 Vendedor, 6 Entregador.
     assert _get_nivel(_FakeUser("ADMIN")) == 1
-    assert _get_nivel(_FakeUser("CAIXA")) == 3
+    assert _get_nivel(_FakeUser("GERENTE")) == 2
+    assert _get_nivel(_FakeUser("RH")) == 3
+    assert _get_nivel(_FakeUser("CAIXA")) == 4
     assert _get_nivel(_FakeUser("ESTOQUE")) == 4
-    assert _get_nivel(_FakeUser("RH")) == 5
-    assert _get_nivel(_FakeUser("VENDEDOR")) == 7
+    assert _get_nivel(_FakeUser("VENDEDOR")) == 5
+    assert _get_nivel(_FakeUser("ENTREGADOR")) == 6
     # Super admin tem bypass total (nível 0)
     assert _get_nivel(_FakeUser("ADMIN", is_super_admin=True)) == 0
 
@@ -32,23 +36,27 @@ def test_admin_acessa_tudo_da_loja():
         assert _check_resource(admin, recurso), f"admin deveria acessar {recurso}"
 
 
-def test_caixa_opera_pdv_mas_nao_financeiro_nem_rh():
+def test_caixa_opera_pdv_mas_nao_vendas_financeiro_ou_rh():
+    # "vendas" (gestão/relatório de vendas) é diferente de "pdv" (operar o
+    # caixa) — nivel 4 (Estoque/Caixa) só tem pdv, "vendas" é 1/2 (Admin/Gerente).
     caixa = _FakeUser("CAIXA")
     assert _check_resource(caixa, "pdv")
-    assert _check_resource(caixa, "vendas")
     assert _check_resource(caixa, "ponto")
+    assert not _check_resource(caixa, "vendas")
     assert not _check_resource(caixa, "financeiro")
     assert not _check_resource(caixa, "rh")
     assert not _check_resource(caixa, "configuracoes")
 
 
-def test_estoque_gerencia_produtos_mas_nao_caixa_nem_financeiro():
+def test_estoque_gerencia_produtos_e_opera_pdv_mas_nao_financeiro_nem_rh():
+    # Numeração canônica funde Estoque e Caixa no mesmo nível (4) — por design,
+    # ver migração c7d9e1f2a3b4: quem é "Estoque" também opera o PDV.
     estoque = _FakeUser("ESTOQUE")
     assert _check_resource(estoque, "estoque")
     assert _check_resource(estoque, "produtos")
     assert _check_resource(estoque, "entrada_xml")
     assert _check_resource(estoque, "fornecedores")
-    assert not _check_resource(estoque, "pdv")
+    assert _check_resource(estoque, "pdv")
     assert not _check_resource(estoque, "financeiro")
     assert not _check_resource(estoque, "rh")
 
