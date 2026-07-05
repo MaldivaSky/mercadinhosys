@@ -130,11 +130,22 @@ export default function DetalheEntregaModal({ entregaId, onClose }: Props) {
                                         <tfoot className="bg-gray-50 dark:bg-gray-800/60 border-t-2 border-gray-200 dark:border-gray-700">
                                             <tr className="text-xs"><td className="px-3 py-2 text-right text-gray-500" colSpan={2}>Subtotal</td><td className="px-3 py-2 text-right font-semibold">{fmt(v.subtotal)}</td></tr>
                                             {v.desconto > 0 && <tr className="text-xs"><td className="px-3 py-2 text-right text-gray-500" colSpan={2}>Desconto</td><td className="px-3 py-2 text-right text-rose-500">- {fmt(v.desconto)}</td></tr>}
-                                            <tr><td className="px-3 py-2 text-right font-black uppercase text-xs" colSpan={2}>Total do pedido</td><td className="px-3 py-2 text-right font-black text-base text-gray-900 dark:text-white">{fmt(v.total)}</td></tr>
+                                            <tr className="text-xs"><td className="px-3 py-2 text-right text-gray-500" colSpan={2}>Total dos produtos</td><td className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">{fmt(v.total)}</td></tr>
+                                            <tr className="text-xs"><td className="px-3 py-2 text-right text-gray-500" colSpan={2}>Taxa de entrega</td><td className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">+ {fmt(e?.taxa_entrega)}</td></tr>
                                         </tfoot>
                                     )}
                                 </table>
                             </div>
+                            {/* Total a cobrar em destaque — inclui a taxa, para o entregador nunca cobrar errado */}
+                            {v && (
+                                <div className="mt-3 rounded-xl bg-emerald-600 dark:bg-emerald-700 text-white p-4 flex items-center justify-between shadow-lg shadow-emerald-600/20">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Total a cobrar do cliente</p>
+                                        <p className="text-[10px] text-emerald-100/80">Produtos + taxa de entrega</p>
+                                    </div>
+                                    <p className="text-2xl font-black">{fmt(v.total_com_taxa)}</p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Linha do tempo de rastreamento */}
