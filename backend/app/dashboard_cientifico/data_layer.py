@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
-from sqlalchemy import func, desc, extract, case, and_
+from sqlalchemy import func, desc, extract, case, and_, or_
 from decimal import Decimal, ROUND_HALF_UP
 from app.models import (
     Venda, VendaItem, Produto, Cliente,
@@ -9,8 +9,8 @@ from app.models import (
 )
 from app.utils.query_helpers import _get_db
 import logging
-
 from functools import wraps
+from app.services.rh_calculator_service import calcular_custo_folha_detalhado
 
 logger = logging.getLogger(__name__)
 
@@ -1820,11 +1820,23 @@ class DataLayer:
                 if estabelecimento_id != 'all': q_desp = q_desp.filter(Despesa.estabelecimento_id == estabelecimento_id)
                 despesas_query = q_desp.first()
                 
-                if despesas_query:
-                    result["despesas"] = {
-                        "total": float(despesas_query.total or 0),
-                        "recorrentes": float(despesas_query.recorrentes or 0)
-                    }
+                # Buscar o custo da folha de pagamento e somá-lo
+                try:
+                    folha_dados = calcular_custo_folha_detalhado(estabelecimento_id, start_dt, end_dt)
+                    despesas_pessoal = float(folha_dados.get("custo_folha", {}).get("custo_real_total", 0.0))
+                except Exception as e_folha:
+                    logger.error(f"Erro calculando folha no DRE: {e_folha}")
+                    despesas_pessoal = 0.0
+                
+                total_despesas_operacionais = float(despesas_query.total or 0) if despesas_query else 0.0
+                total_recorrentes = float(despesas_query.recorrentes or 0) if despesas_query else 0.0
+                
+                result["despesas"] = {
+                    "total": total_despesas_operacionais + despesas_pessoal,
+                    "recorrentes": total_recorrentes,
+                    "despesas_pessoal": despesas_pessoal,
+                    "despesas_operacionais": total_despesas_operacionais
+                }
             except Exception as e:
                 logger.error(f"Erro processando DESPESAS em get_consolidated_financial_summary: {e}")
 

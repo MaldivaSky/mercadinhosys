@@ -12,83 +12,7 @@ from app.models import Despesa, Funcionario, Rescisao
 from app.dashboard_cientifico.data_layer import DataLayer
 from sqlalchemy import func, or_
 from app.services.rh_calculator_service import calcular_provisoes
-
-def _calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
-    """Calcula o custo real da folha (ativos, demitidos e rescisões) no período"""
-    dias_periodo = (dt_fim - dt_inicio).days + 1
-    if dias_periodo <= 0:
-        return {"custo_folha": {"custo_real_total": 0.0}, "funcionarios": []}
-    
-    query_func = db.session.query(Funcionario).filter(
-        Funcionario.data_admissao <= dt_fim,
-        or_(Funcionario.data_demissao == None, Funcionario.data_demissao >= dt_inicio)
-    )
-    if str(estabelecimento_id).lower() != 'all':
-        query_func = query_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
-        
-    funcionarios = query_func.all()
-    mes_ref = dt_fim.strftime("%Y-%m")
-    
-    total_custo_real = 0.0
-    total_salarios = 0.0
-    total_provisoes = 0.0
-    total_encargos = 0.0
-    
-    lista_funcs = []
-    
-    for f in funcionarios:
-        prov = calcular_provisoes(f, mes_ref)
-        custo_mensal = float(prov.get("custo_real", 0))
-        salario = float(prov.get("salario_base", 0))
-        provisoes = float(prov.get("valor_ferias", 0)) + float(prov.get("valor_decimo_terceiro", 0))
-        encargos = float(prov.get("encargos_provisionados", 0))
-        
-        inicio_trab = max(dt_inicio, f.data_admissao) if f.data_admissao else dt_inicio
-        fim_trab = min(dt_fim, f.data_demissao) if f.data_demissao else dt_fim
-        dias_trab = (fim_trab - inicio_trab).days + 1
-        
-        if dias_trab > 0:
-            prop = dias_trab / 30.0
-            
-            total_custo_real += (custo_mensal * prop)
-            total_salarios += (salario * prop)
-            total_provisoes += (provisoes * prop)
-            total_encargos += (encargos * prop)
-            
-            lista_funcs.append({
-                "id": f.id,
-                "nome": f.nome,
-                "cargo": f.cargo,
-                "dias_trabalhados": dias_trab,
-                "custo_real_proporcional": round(custo_mensal * prop, 2)
-            })
-            
-    query_resc = db.session.query(func.sum(Rescisao.total_liquido)).filter(
-        Rescisao.data_demissao >= dt_inicio,
-        Rescisao.data_demissao <= dt_fim
-    )
-    if str(estabelecimento_id).lower() != 'all':
-        query_resc = query_resc.filter(Rescisao.estabelecimento_id == estabelecimento_id)
-        
-    total_rescisao = float(query_resc.scalar() or 0.0)
-    total_custo_real += total_rescisao
-    
-    return {
-        "custo_folha": {
-            "total_salarios": round(total_salarios, 2),
-            "total_provisoes": round(total_provisoes, 2),
-            "total_encargos": round(total_encargos, 2),
-            "total_rescisoes": round(total_rescisao, 2),
-            "custo_real_total": round(total_custo_real, 2),
-            "total_funcionarios_ativos": len([f for f in funcionarios if not f.data_demissao]),
-            "total_funcionarios_demitidos_periodo": len([f for f in funcionarios if f.data_demissao])
-        },
-        "funcionarios": lista_funcs
-    }
-
-
-
-
+from app.services.rh_calculator_service import calcular_custo_folha_detalhado, calcular_provisoes
 despesas_bp = Blueprint("despesas", __name__)
 
 
@@ -401,10 +325,8 @@ def obter_custo_folha():
             dt_inicio = hoje.replace(day=1)
             dt_fim = hoje
 
-        resultado = _calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim)
-        resultado["success"] = True
-        resultado["periodo"] = {"inicio": dt_inicio.isoformat(), "fim": dt_fim.isoformat()}
-        return jsonify(resultado)
+        dados = calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim)
+        return jsonify(dados), 200
 
     except Exception as e:
         current_app.logger.error(f"Erro ao calcular custo folha: {str(e)}")
@@ -420,6 +342,7 @@ def obter_custo_folha():
 def obter_estatisticas_despesas():
     """Obtém estatísticas de despesas para o dashboard, com suporte a filtros de data."""
     from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
+    from app.services.folha_service import calcular_custo_folha_detalhado
     estabelecimento_id = get_authorized_establishment_id()
     if not estabelecimento_id:
         return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
@@ -447,6 +370,15 @@ def obter_estatisticas_despesas():
         cat_inicio = filtro_inicio if filtro_inicio else (hoje - timedelta(days=30))
         cat_fim = filtro_fim if filtro_fim else hoje
 
+        def _get_folha(start_date, end_date):
+            if not start_date or not end_date:
+                return Decimal('0')
+            try:
+                dados_folha = calcular_custo_folha_detalhado(estabelecimento_id, start_date, end_date)
+                return Decimal(str(dados_folha.get("custo_folha", {}).get("custo_real_total", 0.0)))
+            except Exception:
+                return Decimal('0')
+
         # ── Totais gerais (todos os registros do estabelecimento) ─────────────
         query_total = Despesa.query
         if estabelecimento_id != 'all':
@@ -466,7 +398,7 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_atual = query_atual.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_mes_atual = Decimal(str(query_atual.scalar() or 0))
+        despesas_mes_atual = Decimal(str(query_atual.scalar() or 0)) + _get_folha(mes_atual_inicio, hoje)
 
         query_anterior = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= mes_anterior_inicio,
@@ -474,7 +406,7 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_anterior = query_anterior.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_mes_anterior = Decimal(str(query_anterior.scalar() or 0))
+        despesas_mes_anterior = Decimal(str(query_anterior.scalar() or 0)) + _get_folha(mes_anterior_inicio, mes_anterior_fim)
 
         # ── Variação — todos os operandos já são Decimal ─────────────────────
         if despesas_mes_anterior > 0:
@@ -491,12 +423,12 @@ def obter_estatisticas_despesas():
         query_hoje = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == hoje)
         if estabelecimento_id != 'all':
             query_hoje = query_hoje.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_hoje = Decimal(str(query_hoje.scalar() or 0))
+        despesas_hoje = Decimal(str(query_hoje.scalar() or 0)) + _get_folha(hoje, hoje)
 
         query_ontem = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == ontem)
         if estabelecimento_id != 'all':
              query_ontem = query_ontem.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_ontem = Decimal(str(query_ontem.scalar() or 0))
+        despesas_ontem = Decimal(str(query_ontem.scalar() or 0)) + _get_folha(ontem, ontem)
 
         query_semana = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= semana_inicio,
@@ -504,7 +436,7 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_semana = query_semana.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_semana = Decimal(str(query_semana.scalar() or 0))
+        despesas_semana = Decimal(str(query_semana.scalar() or 0)) + _get_folha(semana_inicio, hoje)
 
         # ── Período filtrado: total e por categoria ───────────────────────────
         query_periodo = db.session.query(func.sum(Despesa.valor)).filter(
@@ -513,7 +445,9 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
              query_periodo = query_periodo.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        soma_periodo = Decimal(str(query_periodo.scalar() or 0))
+        
+        folha_periodo = _get_folha(cat_inicio, cat_fim)
+        soma_periodo = Decimal(str(query_periodo.scalar() or 0)) + folha_periodo
 
         query_cats = db.session.query(
                 Despesa.categoria,

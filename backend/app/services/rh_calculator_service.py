@@ -673,3 +673,79 @@ def calcular_provisoes(funcionario, ano_mes: str, regime_tributario: str = None,
                         "tributos variam conforme o regime tributário da loja "
                         f"(atual: {regime_tributario or 'não informado'})."),
     }
+
+def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
+    """Calcula o custo real da folha (ativos, demitidos e rescisões) no período"""
+    from app.models import db, Funcionario, Rescisao
+    from sqlalchemy import func, or_
+    
+    dias_periodo = (dt_fim - dt_inicio).days + 1
+    if dias_periodo <= 0:
+        return {"custo_folha": {"custo_real_total": 0.0}, "funcionarios": []}
+    
+    query_func = db.session.query(Funcionario).filter(
+        Funcionario.data_admissao <= dt_fim,
+        or_(Funcionario.data_demissao == None, Funcionario.data_demissao >= dt_inicio)
+    )
+    if str(estabelecimento_id).lower() != 'all':
+        query_func = query_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+        
+    funcionarios = query_func.all()
+    mes_ref = dt_fim.strftime("%Y-%m")
+    
+    total_custo_real = 0.0
+    total_salarios = 0.0
+    total_provisoes = 0.0
+    total_encargos = 0.0
+    
+    lista_funcs = []
+    
+    for f in funcionarios:
+        prov = calcular_provisoes(f, mes_ref)
+        custo_mensal = float(prov.get("custo_real", 0))
+        salario = float(prov.get("salario_base", 0))
+        provisoes = float(prov.get("valor_ferias", 0)) + float(prov.get("valor_decimo_terceiro", 0))
+        encargos = float(prov.get("encargos_provisionados", 0))
+        
+        inicio_trab = max(dt_inicio, f.data_admissao) if f.data_admissao else dt_inicio
+        fim_trab = min(dt_fim, f.data_demissao) if f.data_demissao else dt_fim
+        dias_trab = (fim_trab - inicio_trab).days + 1
+        
+        if dias_trab > 0:
+            prop = dias_trab / 30.0
+            
+            total_custo_real += (custo_mensal * prop)
+            total_salarios += (salario * prop)
+            total_provisoes += (provisoes * prop)
+            total_encargos += (encargos * prop)
+            
+            lista_funcs.append({
+                "id": f.id,
+                "nome": f.nome,
+                "cargo": f.cargo,
+                "dias_trabalhados": dias_trab,
+                "custo_real_proporcional": round(custo_mensal * prop, 2)
+            })
+            
+    query_resc = db.session.query(func.sum(Rescisao.total_liquido)).filter(
+        Rescisao.data_demissao >= dt_inicio,
+        Rescisao.data_demissao <= dt_fim
+    )
+    if str(estabelecimento_id).lower() != 'all':
+        query_resc = query_resc.filter(Rescisao.estabelecimento_id == estabelecimento_id)
+        
+    total_rescisao = float(query_resc.scalar() or 0.0)
+    total_custo_real += total_rescisao
+    
+    return {
+        "custo_folha": {
+            "total_salarios": round(total_salarios, 2),
+            "total_provisoes": round(total_provisoes, 2),
+            "total_encargos": round(total_encargos, 2),
+            "total_rescisoes": round(total_rescisao, 2),
+            "custo_real_total": round(total_custo_real, 2),
+            "total_funcionarios_ativos": len([f for f in funcionarios if not f.data_demissao]),
+            "total_funcionarios_demitidos_periodo": len([f for f in funcionarios if f.data_demissao])
+        },
+        "funcionarios": lista_funcs
+    }
