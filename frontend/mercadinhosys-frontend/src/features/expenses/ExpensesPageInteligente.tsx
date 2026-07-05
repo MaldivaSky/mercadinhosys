@@ -122,9 +122,9 @@ const ExpensesPageInteligente: React.FC = () => {
 
         const { dre_consolidado, indicadores_gestao, fluxo_caixa_real, despesas_mes, alertas } = resumo;
 
-        const total_despesas = despesas_mes.total || 0;
+        const total_despesas = dre_consolidado.total_despesas || despesas_mes.total || 0;
         const total_receitas = dre_consolidado.receita_bruta || 0;
-        const lucro_liquido = dre_consolidado.lucro_liquido || (total_receitas - total_despesas);
+        const lucro_liquido = dre_consolidado.lucro_liquido !== undefined ? dre_consolidado.lucro_liquido : (total_receitas - total_despesas);
 
         const mes_atual = {
             total_despesas,

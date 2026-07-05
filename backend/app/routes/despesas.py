@@ -8,8 +8,85 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 from app import db
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import plan_required
-from app.models import Despesa, Funcionario
+from app.models import Despesa, Funcionario, Rescisao
 from app.dashboard_cientifico.data_layer import DataLayer
+from sqlalchemy import func, or_
+from app.services.rh_calculator_service import calcular_provisoes
+
+def _calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
+    """Calcula o custo real da folha (ativos, demitidos e rescisões) no período"""
+    dias_periodo = (dt_fim - dt_inicio).days + 1
+    if dias_periodo <= 0:
+        return {"custo_folha": {"custo_real_total": 0.0}, "funcionarios": []}
+    
+    query_func = db.session.query(Funcionario).filter(
+        Funcionario.data_admissao <= dt_fim,
+        or_(Funcionario.data_demissao == None, Funcionario.data_demissao >= dt_inicio)
+    )
+    if str(estabelecimento_id).lower() != 'all':
+        query_func = query_func.filter(Funcionario.estabelecimento_id == estabelecimento_id)
+        
+    funcionarios = query_func.all()
+    mes_ref = dt_fim.strftime("%Y-%m")
+    
+    total_custo_real = 0.0
+    total_salarios = 0.0
+    total_provisoes = 0.0
+    total_encargos = 0.0
+    
+    lista_funcs = []
+    
+    for f in funcionarios:
+        prov = calcular_provisoes(f, mes_ref)
+        custo_mensal = float(prov.get("custo_real", 0))
+        salario = float(prov.get("salario_base", 0))
+        provisoes = float(prov.get("valor_ferias", 0)) + float(prov.get("valor_decimo_terceiro", 0))
+        encargos = float(prov.get("encargos_provisionados", 0))
+        
+        inicio_trab = max(dt_inicio, f.data_admissao) if f.data_admissao else dt_inicio
+        fim_trab = min(dt_fim, f.data_demissao) if f.data_demissao else dt_fim
+        dias_trab = (fim_trab - inicio_trab).days + 1
+        
+        if dias_trab > 0:
+            prop = dias_trab / 30.0
+            
+            total_custo_real += (custo_mensal * prop)
+            total_salarios += (salario * prop)
+            total_provisoes += (provisoes * prop)
+            total_encargos += (encargos * prop)
+            
+            lista_funcs.append({
+                "id": f.id,
+                "nome": f.nome,
+                "cargo": f.cargo,
+                "dias_trabalhados": dias_trab,
+                "custo_real_proporcional": round(custo_mensal * prop, 2)
+            })
+            
+    query_resc = db.session.query(func.sum(Rescisao.total_liquido)).filter(
+        Rescisao.data_demissao >= dt_inicio,
+        Rescisao.data_demissao <= dt_fim
+    )
+    if str(estabelecimento_id).lower() != 'all':
+        query_resc = query_resc.filter(Rescisao.estabelecimento_id == estabelecimento_id)
+        
+    total_rescisao = float(query_resc.scalar() or 0.0)
+    total_custo_real += total_rescisao
+    
+    return {
+        "custo_folha": {
+            "total_salarios": round(total_salarios, 2),
+            "total_provisoes": round(total_provisoes, 2),
+            "total_encargos": round(total_encargos, 2),
+            "total_rescisoes": round(total_rescisao, 2),
+            "custo_real_total": round(total_custo_real, 2),
+            "total_funcionarios_ativos": len([f for f in funcionarios if not f.data_demissao]),
+            "total_funcionarios_demitidos_periodo": len([f for f in funcionarios if f.data_demissao])
+        },
+        "funcionarios": lista_funcs
+    }
+
+
 
 
 despesas_bp = Blueprint("despesas", __name__)
@@ -294,6 +371,46 @@ def listar_despesas():
             ),
             500,
         )
+
+
+@despesas_bp.route("/custo-folha", methods=["GET"], strict_slashes=False)
+@despesas_bp.route("/custo-folha/", methods=["GET"], strict_slashes=False)
+@funcionario_required
+@plan_required('Pro')
+def obter_custo_folha():
+    """
+    Retorna o custo total da folha (salários + provisões + encargos + rescisões) para o DRE.
+    Pode filtrar por data (inicio e fim).
+    """
+    try:
+        from app.utils.query_helpers import get_authorized_establishment_id
+        from datetime import date, datetime
+        
+        estabelecimento_id = get_authorized_establishment_id()
+        if not estabelecimento_id:
+            return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
+
+        hoje = date.today()
+        inicio_str = request.args.get("inicio")
+        fim_str = request.args.get("fim")
+
+        if inicio_str and fim_str:
+            dt_inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date()
+            dt_fim = datetime.strptime(fim_str, "%Y-%m-%d").date()
+        else:
+            dt_inicio = hoje.replace(day=1)
+            dt_fim = hoje
+
+        resultado = _calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim)
+        resultado["success"] = True
+        resultado["periodo"] = {"inicio": dt_inicio.isoformat(), "fim": dt_fim.isoformat()}
+        return jsonify(resultado)
+
+    except Exception as e:
+        current_app.logger.error(f"Erro ao calcular custo folha: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @despesas_bp.route("/estatisticas", methods=["GET"], strict_slashes=False)
@@ -862,9 +979,12 @@ def resumo_financeiro():
             })
 
         # Fluxo de Caixa Real: inclui receita de vendas + suprimentos de caixa (entradas)
-        # e pagamentos de contas + despesas cadastradas + sangrias de caixa (saídas)
+        # e pagamentos de contas + despesas cadastradas + sangrias de caixa + custo da folha (saídas)
+        folha_detalhada = _calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim)
+        custo_folha_total = folha_detalhada.get("custo_folha", {}).get("custo_real_total", 0.0)
+        
         entradas_reais = vendas.get("total_recebido", 0.0) + caixa_pdv['suprimentos']
-        saidas_reais = cp['pago_periodo'] + desp['total'] + caixa_pdv['sangrias']
+        saidas_reais = cp['pago_periodo'] + desp['total'] + caixa_pdv['sangrias'] + custo_folha_total
 
         return jsonify({
             "success": True,
@@ -876,8 +996,10 @@ def resumo_financeiro():
                 "receita_bruta": vendas.get("revenue", 0.0),
                 "custo_mercadoria": vendas.get("cogs", 0.0),
                 "lucro_bruto": vendas.get("gross_profit", 0.0),
+                "despesas_pessoal": custo_folha_total,
                 "despesas_operacionais": desp['total'],
-                "lucro_liquido": vendas.get("gross_profit", 0.0) - desp['total']
+                "total_despesas": desp['total'] + custo_folha_total,
+                "lucro_liquido": vendas.get("gross_profit", 0.0) - desp['total'] - custo_folha_total
             },
             "indicadores_gestao": {
                 "indice_comprometimento": indice_comprometimento,

@@ -117,7 +117,9 @@ export interface ResumoFinanceiro {
         receita_bruta: number;
         custo_mercadoria: number;
         lucro_bruto: number;
+        despesas_pessoal: number;
         despesas_operacionais: number;
+        total_despesas: number;
         lucro_liquido: number;
     };
     caixa_pdv?: {

@@ -445,10 +445,12 @@ const ReportsPage: React.FC = () => {
             const faturamento = dreBackend.receita_bruta !== undefined ? parseFloat(dreBackend.receita_bruta) : parseFloat(stats.total_valor || 0);
             const lucroBruto = dreBackend.lucro_bruto !== undefined ? parseFloat(dreBackend.lucro_bruto) : parseFloat(stats.total_lucro || 0);
             const custoMercadoria = dreBackend.custo_mercadoria !== undefined ? parseFloat(dreBackend.custo_mercadoria) : (faturamento - lucroBruto);
-            const despesasMes = dreBackend.despesas_operacionais !== undefined ? parseFloat(dreBackend.despesas_operacionais) : parseFloat(resumo.data?.despesas_mes?.total || 0);
+            const despesasOperacionais = dreBackend.despesas_operacionais !== undefined ? parseFloat(dreBackend.despesas_operacionais) : parseFloat(resumo.data?.despesas_mes?.total || 0);
+            const despesasPessoal = dreBackend.despesas_pessoal !== undefined ? parseFloat(dreBackend.despesas_pessoal) : 0;
+            const despesasTotal = dreBackend.total_despesas !== undefined ? parseFloat(dreBackend.total_despesas) : (despesasOperacionais + despesasPessoal);
 
-            // Lucro Liquido = Lucro Bruto - Despesas
-            const lucroLiquido = lucroBruto - despesasMes;
+            // Lucro Liquido = Lucro Bruto - Despesas Totais
+            const lucroLiquido = lucroBruto - despesasTotal;
 
             const totalVendas = stats.total_vendas || 0;
 
@@ -457,7 +459,9 @@ const ReportsPage: React.FC = () => {
                 custo_mercadoria: custoMercadoria,
                 lucro_bruto: lucroBruto,
                 lucro_liquido: lucroLiquido,
-                despesas_total: despesasMes,
+                despesas_total: despesasTotal,
+                despesas_pessoal: despesasPessoal,
+                despesas_operacionais: despesasOperacionais,
                 total_vendas: totalVendas,
                 formas_pagamento: (analytics.formasPagamento || []).map((f: any) => ({
                     'Forma de Pagamento': f.forma.toUpperCase(),
@@ -762,7 +766,8 @@ const ReportsPage: React.FC = () => {
             { 'Descrição': '(+) Receita Bruta (Faturamento)', 'Valor (R$)': financeiroData.faturamento, 'Observação': `${financeiroData.total_vendas} vendas no período` },
             { 'Descrição': '(-) Custo da Mercadoria Vendida (CMV)', 'Valor (R$)': financeiroData.custo_mercadoria, 'Observação': '' },
             { 'Descrição': '(=) LUCRO BRUTO', 'Valor (R$)': financeiroData.lucro_bruto, 'Observação': `Margem: ${financeiroData.faturamento > 0 ? ((financeiroData.lucro_bruto / financeiroData.faturamento) * 100).toFixed(1) : '0'}%` },
-            { 'Descrição': '(-) Despesas Operacionais', 'Valor (R$)': financeiroData.despesas_total, 'Observação': `Fixas: ${fmtBRL(financeiroData.despesas_mes?.recorrentes || 0)} | Variáveis: ${fmtBRL(financeiroData.despesas_mes?.variaveis || 0)}` },
+            { 'Descrição': '(-) Despesas com Pessoal', 'Valor (R$)': financeiroData.despesas_pessoal, 'Observação': 'Salários, encargos, provisões e rescisões' },
+            { 'Descrição': '(-) Despesas Operacionais', 'Valor (R$)': financeiroData.despesas_operacionais, 'Observação': `Fixas: ${fmtBRL(financeiroData.despesas_mes?.recorrentes || 0)} | Variáveis: ${fmtBRL(financeiroData.despesas_mes?.variaveis || 0)}` },
             { 'Descrição': '(=) LUCRO LÍQUIDO', 'Valor (R$)': financeiroData.lucro_liquido, 'Observação': `Margem: ${financeiroData.faturamento > 0 ? ((financeiroData.lucro_liquido / financeiroData.faturamento) * 100).toFixed(1) : '0'}%` },
             { 'Descrição': '', 'Valor (R$)': '', 'Observação': '' },
             { 'Descrição': '--- CONTAS A PAGAR ---', 'Valor (R$)': '', 'Observação': '' },
@@ -1163,6 +1168,13 @@ const ReportsPage: React.FC = () => {
                         <div className="flex justify-between py-1 text-xs text-green-600 dark:text-green-400 pl-6">
                             <span>Margem bruta</span>
                             <span>{financeiroData.faturamento > 0 ? ((financeiroData.lucro_bruto / financeiroData.faturamento) * 100).toFixed(1) : '0'}%</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                            <span className="text-gray-500 dark:text-gray-400 pl-4">( - ) Despesas com Pessoal</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">{fmtBRL(financeiroData.despesas_pessoal || 0)}</span>
+                        </div>
+                        <div className="flex justify-between py-1 text-xs text-gray-400 dark:text-gray-500 pl-8 mb-2">
+                            <span>Salários, rescisões e provisões</span>
                         </div>
                         <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
                             <span className="text-gray-500 dark:text-gray-400 pl-4">( - ) Despesas Operacionais (mês)</span>
