@@ -19,9 +19,18 @@ export interface FuncionarioSimples {
   funcionario_nome: string;
 }
 
+export interface BeneficioCatalogo {
+  id: number;
+  nome: string;
+  descricao: string;
+  valor_padrao: number;
+  ativo: boolean;
+}
+
 export interface AtribuirBeneficioPayload {
   funcionario_id: number;
-  nome_beneficio: string;
+  nome_beneficio?: string;
+  beneficio_id?: number;
   valor_mensal: number;
   observacao?: string;
   data_inicio: string;
@@ -43,6 +52,26 @@ class BeneficiosService {
       funcionario_id: p.funcionario_id,
       funcionario_nome: p.funcionario_nome
     }));
+  }
+
+  // --- MÉTODOS DO CATÁLOGO DE BENEFÍCIOS ---
+  async listarCatalogo(): Promise<BeneficioCatalogo[]> {
+    const response = await apiClient.get('/rh/catalogo-beneficios');
+    return response.data?.data || [];
+  }
+
+  async criarBeneficioCatalogo(payload: { nome: string; descricao?: string; valor_padrao?: number }): Promise<BeneficioCatalogo> {
+    const response = await apiClient.post('/rh/catalogo-beneficios', payload);
+    return response.data?.data;
+  }
+
+  async editarBeneficioCatalogo(id: number, payload: { nome?: string; descricao?: string; valor_padrao?: number }): Promise<BeneficioCatalogo> {
+    const response = await apiClient.put(`/rh/catalogo-beneficios/${id}`, payload);
+    return response.data?.data;
+  }
+
+  async excluirBeneficioCatalogo(id: number): Promise<void> {
+    await apiClient.delete(`/rh/catalogo-beneficios/${id}`);
   }
 }
 

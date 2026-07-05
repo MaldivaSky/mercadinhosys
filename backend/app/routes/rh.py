@@ -401,28 +401,44 @@ def criar_beneficio_funcionario():
         valor_mensal = data.get("valor_mensal", 0)
         data_inicio = data.get("data_inicio")
 
-        if not funcionario_id or not nome_beneficio:
+        beneficio_id = data.get("beneficio_id")
+
+        if not funcionario_id or (not nome_beneficio and not beneficio_id):
             return jsonify({
                 "success": False,
-                "message": "Campos obrigatórios: funcionario_id, nome_beneficio",
+                "message": "Campos obrigatórios: funcionario_id, beneficio_id (ou nome_beneficio)",
             }), 400
 
-        # Buscar ou criar o benefício
-        beneficio = Beneficio.query.filter_by(
-            estabelecimento_id=estabelecimento_id,
-            nome=nome_beneficio,
-        ).first()
-
-        if not beneficio:
-            beneficio = Beneficio(
+        beneficio = None
+        if beneficio_id:
+            beneficio = Beneficio.query.filter_by(
+                id=beneficio_id,
+                estabelecimento_id=estabelecimento_id
+            ).first()
+        
+        # Fallback para o antigo (por nome_beneficio) se não tiver beneficio_id
+        if not beneficio and nome_beneficio:
+            beneficio = Beneficio.query.filter_by(
                 estabelecimento_id=estabelecimento_id,
                 nome=nome_beneficio,
-                descricao=data.get("observacao", ""),
-                valor_padrao=Decimal(str(valor_mensal)) if valor_mensal else Decimal("0"),
-                ativo=True,
-            )
-            db.session.add(beneficio)
-            db.session.flush()
+            ).first()
+
+            if not beneficio:
+                beneficio = Beneficio(
+                    estabelecimento_id=estabelecimento_id,
+                    nome=nome_beneficio,
+                    descricao=data.get("observacao", ""),
+                    valor_padrao=Decimal(str(valor_mensal)) if valor_mensal else Decimal("0"),
+                    ativo=True,
+                )
+                db.session.add(beneficio)
+                db.session.flush()
+                
+        if not beneficio:
+            return jsonify({
+                "success": False,
+                "message": "Benefício não encontrado no catálogo",
+            }), 404
 
         fb = FuncionarioBeneficio(
             funcionario_id=int(funcionario_id),
@@ -836,3 +852,102 @@ def listar_provisoes():
     except Exception as e:
         current_app.logger.error(f"Erro ao listar provisões: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+# ============================================
+# CATÁLOGO DE BENEFÍCIOS (CRUD)
+# ============================================
+
+@rh_bp.route("/catalogo-beneficios", methods=["GET"])
+@funcionario_required
+@plan_required('Pro')
+def listar_catalogo_beneficios():
+    """Lista todos os benefícios disponíveis para o estabelecimento."""
+    from app.utils.query_helpers import get_authorized_establishment_id
+    estab_id = get_authorized_establishment_id()
+    
+    query = Beneficio.query.filter_by(ativo=True)
+    if estab_id and str(estab_id).lower() != "all":
+        query = query.filter_by(estabelecimento_id=estab_id)
+        
+    beneficios = query.all()
+    return jsonify({"success": True, "data": [b.to_dict() for b in beneficios]}), 200
+
+@rh_bp.route("/catalogo-beneficios", methods=["POST"])
+@funcionario_required
+@plan_required('Pro')
+def criar_beneficio_catalogo():
+    """Cria um novo benefício no catálogo."""
+    if not _pode_ver_tudo_rh(_usuario_atual()):
+        return jsonify({"success": False, "message": "Apenas Gestores/RH podem criar benefícios"}), 403
+    
+    from app.utils.query_helpers import get_authorized_establishment_id
+    estab_id = get_authorized_establishment_id()
+    data = request.get_json() or {}
+    nome = data.get("nome")
+    if not nome:
+        return jsonify({"success": False, "message": "Nome do benefício é obrigatório"}), 400
+        
+    beneficio = Beneficio(
+        estabelecimento_id=estab_id if str(estab_id).lower() != "all" else None,
+        nome=nome,
+        descricao=data.get("descricao", ""),
+        valor_padrao=Decimal(str(data.get("valor_padrao", 0)))
+    )
+    db.session.add(beneficio)
+    db.session.commit()
+    
+    return jsonify({"success": True, "data": beneficio.to_dict()}), 201
+
+@rh_bp.route("/catalogo-beneficios/<int:id>", methods=["PUT"])
+@funcionario_required
+@plan_required('Pro')
+def editar_beneficio_catalogo(id):
+    """Edita um benefício existente."""
+    if not _pode_ver_tudo_rh(_usuario_atual()):
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+        
+    from app.utils.query_helpers import get_authorized_establishment_id
+    estab_id = get_authorized_establishment_id()
+    
+    query = Beneficio.query.filter_by(id=id)
+    if estab_id and str(estab_id).lower() != "all":
+        query = query.filter_by(estabelecimento_id=estab_id)
+        
+    beneficio = query.first()
+    if not beneficio:
+        return jsonify({"success": False, "message": "Benefício não encontrado"}), 404
+        
+    data = request.get_json() or {}
+    if "nome" in data:
+        beneficio.nome = data["nome"]
+    if "descricao" in data:
+        beneficio.descricao = data["descricao"]
+    if "valor_padrao" in data:
+        beneficio.valor_padrao = Decimal(str(data["valor_padrao"]))
+        
+    db.session.commit()
+    return jsonify({"success": True, "data": beneficio.to_dict()}), 200
+
+@rh_bp.route("/catalogo-beneficios/<int:id>", methods=["DELETE"])
+@funcionario_required
+@plan_required('Pro')
+def excluir_beneficio_catalogo(id):
+    """Exclui (inativa) um benefício."""
+    if not _pode_ver_tudo_rh(_usuario_atual()):
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+        
+    from app.utils.query_helpers import get_authorized_establishment_id
+    estab_id = get_authorized_establishment_id()
+    
+    query = Beneficio.query.filter_by(id=id)
+    if estab_id and str(estab_id).lower() != "all":
+        query = query.filter_by(estabelecimento_id=estab_id)
+        
+    beneficio = query.first()
+    if not beneficio:
+        return jsonify({"success": False, "message": "Benefício não encontrado"}), 404
+        
+    beneficio.ativo = False
+    db.session.commit()
+    return jsonify({"success": True, "message": "Benefício inativado com sucesso"}), 200
