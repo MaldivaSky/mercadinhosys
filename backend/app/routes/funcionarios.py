@@ -4,7 +4,7 @@ from app import db
 from app.models import Funcionario, Venda, Estabelecimento
 from datetime import datetime, date, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import or_, and_, func, case
+from sqlalchemy import or_, and_, func, case, true
 from flask_jwt_extended import get_jwt, jwt_required
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import quota_required, permission_required
@@ -68,6 +68,11 @@ def listar_funcionarios():
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
+        # SuperAdmin em visão global (header X-Impersonate-Tenant-Id: all) não filtra por estabelecimento
+        visao_global = str(estabelecimento_id).lower() == "all"
+        estab_cond_func = true() if visao_global else (Funcionario.estabelecimento_id == estabelecimento_id)
+        estab_cond_venda = true() if visao_global else (Venda.estabelecimento_id == estabelecimento_id)
+
         # Parâmetros de paginação
         pagina = request.args.get("pagina", 1, type=int)
         por_pagina = request.args.get("por_pagina", 20, type=int)
@@ -94,7 +99,7 @@ def listar_funcionarios():
         ordem = request.args.get("ordem", "asc").lower()
 
         # Construir query filtrando por estabelecimento
-        query = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id)
+        query = Funcionario.query.filter(estab_cond_func)
 
         # Aplicar filtro de busca textual
         if busca:
@@ -225,7 +230,7 @@ def listar_funcionarios():
                     ).label("vendas_30_dias"),
                 )
                 .filter(
-                    Venda.estabelecimento_id == estabelecimento_id,
+                    estab_cond_venda,
                     Venda.funcionario_id.in_(funcionario_ids),
                 )
                 .group_by(Venda.funcionario_id)
@@ -279,14 +284,14 @@ def listar_funcionarios():
         total_funcionarios = pagination.total
         
         # Consultas separadas para totais gerais (ignorando paginação mas mantendo filtro de estabelecimento)
-        base_query = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id)
+        base_query = Funcionario.query.filter(estab_cond_func)
         total_ativos = base_query.filter_by(ativo=True).count()
         total_inativos = base_query.filter_by(ativo=False).count()
 
         # Salário médio
         salario_medio = (
             db.session.query(func.avg(Funcionario.salario_base))
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .scalar()
             or 0.0
         )
@@ -296,7 +301,7 @@ def listar_funcionarios():
             db.session.query(
                 Funcionario.cargo, func.count(Funcionario.id).label("quantidade")
             )
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .group_by(Funcionario.cargo)
             .all()
         )
@@ -306,7 +311,7 @@ def listar_funcionarios():
             db.session.query(
                 Funcionario.role, func.count(Funcionario.id).label("quantidade")
             )
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .group_by(Funcionario.role)
             .all()
         )
@@ -314,7 +319,7 @@ def listar_funcionarios():
         # Cargos disponíveis para filtro
         cargos_disponiveis = (
             db.session.query(Funcionario.cargo)
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.cargo.isnot(None))
+            .filter(estab_cond_func, Funcionario.cargo.isnot(None))
             .distinct()
             .all()
         )
@@ -322,7 +327,7 @@ def listar_funcionarios():
         # Níveis de acesso disponíveis
         niveis_disponiveis = (
             db.session.query(Funcionario.role)
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.role.isnot(None))
+            .filter(estab_cond_func, Funcionario.role.isnot(None))
             .distinct()
             .all()
         )
@@ -400,10 +405,14 @@ def estatisticas_funcionarios():
         if not estabelecimento_id:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
 
+        # SuperAdmin em visão global (header X-Impersonate-Tenant-Id: all) não filtra por estabelecimento
+        visao_global = str(estabelecimento_id).lower() == "all"
+        estab_cond_func = true() if visao_global else (Funcionario.estabelecimento_id == estabelecimento_id)
+
         # Estatísticas gerais
-        total_funcionarios = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id).count()
-        total_ativos = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=True).count()
-        total_inativos = Funcionario.query.filter_by(estabelecimento_id=estabelecimento_id, ativo=False).count()
+        total_funcionarios = Funcionario.query.filter(estab_cond_func).count()
+        total_ativos = Funcionario.query.filter(estab_cond_func, Funcionario.ativo == True).count()
+        total_inativos = Funcionario.query.filter(estab_cond_func, Funcionario.ativo == False).count()
         
         # Se não há funcionários, retorna estatísticas vazias
         if total_funcionarios == 0:
@@ -433,21 +442,21 @@ def estatisticas_funcionarios():
         # Salários
         salario_medio = (
             db.session.query(func.avg(Funcionario.salario_base))
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .scalar()
             or 0.0
         )
 
         salario_maximo = (
             db.session.query(func.max(Funcionario.salario_base))
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id)
-            .scalar() 
+            .filter(estab_cond_func)
+            .scalar()
             or 0.0
         )
-        
+
         salario_minimo = (
             db.session.query(func.min(Funcionario.salario_base))
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .scalar()
             or 0.0
         )
@@ -459,7 +468,7 @@ def estatisticas_funcionarios():
                 func.count(Funcionario.id).label("quantidade"),
                 func.avg(Funcionario.salario_base).label("salario_medio"),
             )
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .group_by(Funcionario.cargo)
             .all()
         )
@@ -469,7 +478,7 @@ def estatisticas_funcionarios():
             db.session.query(
                 Funcionario.role, func.count(Funcionario.id).label("quantidade")
             )
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id, Funcionario.ativo == True)
+            .filter(estab_cond_func, Funcionario.ativo == True)
             .group_by(Funcionario.role)
             .all()
         )
@@ -501,7 +510,7 @@ def estatisticas_funcionarios():
             total_mes = (
                 db.session.query(func.count(Funcionario.id))
                 .filter(
-                    Funcionario.estabelecimento_id == estabelecimento_id,
+                    estab_cond_func,
                     Funcionario.data_admissao >= mes_data,
                     Funcionario.data_admissao <= mes_fim,
                 )
@@ -513,7 +522,7 @@ def estatisticas_funcionarios():
             demissoes_mes = (
                 db.session.query(func.count(Funcionario.id))
                 .filter(
-                    Funcionario.estabelecimento_id == estabelecimento_id,
+                    estab_cond_func,
                     Funcionario.data_demissao >= mes_data,
                     Funcionario.data_demissao <= mes_fim,
                 )
@@ -538,9 +547,9 @@ def estatisticas_funcionarios():
         admissoes_por_mes.reverse()  # Do mais antigo para o mais recente
 
         # Tempo médio de empresa
-        funcionarios_ativos = Funcionario.query.filter_by(
-            estabelecimento_id=estabelecimento_id, 
-            ativo=True
+        funcionarios_ativos = Funcionario.query.filter(
+            estab_cond_func,
+            Funcionario.ativo == True,
         ).all()
         
         tempo_total_dias = 0
@@ -559,7 +568,7 @@ def estatisticas_funcionarios():
                 func.sum(Venda.total).label("valor_total_vendas"),
             )
             .join(Venda, Funcionario.id == Venda.funcionario_id)
-            .filter(Funcionario.estabelecimento_id == estabelecimento_id)
+            .filter(estab_cond_func)
             .group_by(Funcionario.id)
             .order_by(func.count(Venda.id).desc())
             .limit(5)
