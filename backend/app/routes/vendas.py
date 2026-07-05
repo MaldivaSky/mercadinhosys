@@ -696,7 +696,21 @@ def analise_tendencia():
 def criar_venda():
     try:
         claims = get_jwt()
-        estabelecimento_id = int(claims.get("estabelecimento_id") or 1)
+        estabelecimento_id = claims.get("estabelecimento_id")
+        # Sem fallback para "estabelecimento 1": um token sem estabelecimento concreto
+        # (ausente ou "all", caso de super admin sem loja selecionada) não pode gerar venda.
+        if not estabelecimento_id or str(estabelecimento_id).lower() == "all":
+            current_app.logger.error(
+                f"criar_venda bloqueada: estabelecimento_id ausente ou não concreto no JWT (valor={estabelecimento_id!r})"
+            )
+            return jsonify({"error": "Estabelecimento não identificado no token de autenticação."}), 401
+        try:
+            estabelecimento_id = int(estabelecimento_id)
+        except (ValueError, TypeError):
+            current_app.logger.error(
+                f"criar_venda bloqueada: estabelecimento_id inválido no JWT (valor={estabelecimento_id!r})"
+            )
+            return jsonify({"error": "Estabelecimento inválido no token de autenticação."}), 401
         data = request.get_json()
         if not data or not data.get("items"):
             return jsonify({"error": "Dados inválidos ou carrinho vazio"}), 400

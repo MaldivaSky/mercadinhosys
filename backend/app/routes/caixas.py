@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.decorators.plan_guards import permission_required
 from app import db
@@ -25,7 +25,7 @@ def obter_caixa_atual():
 
         return jsonify({"success": True, "data": caixa.to_dict()}), 200
     except Exception as e:
-        print(f"Erro ao obter caixa atual: {e}")
+        current_app.logger.error(f"Erro ao obter caixa atual: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -101,7 +101,7 @@ def abrir_caixa():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao abrir caixa: {e}")
+        current_app.logger.error(f"Erro ao abrir caixa: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -210,7 +210,7 @@ def fechar_caixa():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao fechar caixa: {e}")
+        current_app.logger.error(f"Erro ao fechar caixa: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -285,7 +285,7 @@ def registrar_movimentacao():
 
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao registrar movimentação de caixa: {e}")
+        current_app.logger.error(f"Erro ao registrar movimentação de caixa: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -313,7 +313,7 @@ def obter_movimentacoes_caixa_atual():
             "data": [mov.to_dict() for mov in movimentacoes]
         }), 200
     except Exception as e:
-        print(f"Erro ao obter movimentações do caixa: {e}")
+        current_app.logger.error(f"Erro ao obter movimentações do caixa: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -411,5 +411,5 @@ def obter_resumo_caixa_atual():
             }
         }), 200
     except Exception as e:
-        print(f"Erro ao obter resumo do caixa: {e}")
+        current_app.logger.error(f"Erro ao obter resumo do caixa: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500

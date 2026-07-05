@@ -82,7 +82,8 @@ def listar_pedidos():
                         pedido_dict['itens'].append(item_data)
                 pedidos.append(pedido_dict)
             except Exception as e:
-                print(f"Erro ao processar pedido {pedido.id}: {str(e)}")
+                from flask import current_app
+                current_app.logger.error(f"Erro ao processar pedido {pedido.id}: {str(e)}", exc_info=True)
                 continue
         
         return jsonify({
