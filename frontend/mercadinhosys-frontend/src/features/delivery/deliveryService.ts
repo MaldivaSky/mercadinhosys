@@ -15,6 +15,7 @@ export interface Motorista {
     telefone?: string;
     email?: string;
     tipo_vinculo?: string;
+    percentual_comissao?: number;
     ativo: boolean;
     disponivel: boolean;
     total_entregas: number;
@@ -32,6 +33,7 @@ export interface Veiculo {
     motorista_id?: number | null;
     motorista_nome?: string | null;
     km_atual?: number;
+    consumo_medio?: number;
     data_vencimento_licenciamento?: string | null;
     data_vencimento_seguro?: string | null;
     data_ultima_manutencao?: string | null;
