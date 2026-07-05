@@ -6,19 +6,52 @@ Integração total com os modelos: Motorista, Veiculo, Entrega, TaxaEntrega
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.models import (
-    db, Motorista, Veiculo, TaxaEntrega, Entrega, 
+    db, Motorista, Veiculo, TaxaEntrega, Entrega,
     EntregaItem, RastreamentoEntrega, CustoEntrega,
-    Venda, Cliente, Produto, VendaItem, Caixa, MovimentacaoCaixa
+    Venda, Cliente, Produto, VendaItem, Caixa, MovimentacaoCaixa,
+    ChecklistVeiculo, ITENS_CHECKLIST_PADRAO,
 )
 from app.decorators.rbac import tenant_or_super_admin_required
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 import json
 import logging
+import os
+import uuid
 from sqlalchemy import or_, and_, func
 
 delivery_bp = Blueprint("delivery", __name__)
 logger = logging.getLogger(__name__)
+
+# ==================== UPLOAD DE DOCUMENTOS (CNH, CRLV) ====================
+
+EXTENSOES_DOCUMENTO = {"pdf", "jpg", "jpeg", "png"}
+TAMANHO_MAXIMO_DOCUMENTO = 5 * 1024 * 1024  # 5MB
+
+
+def _salvar_documento(arquivo, subpasta: str, prefixo: str):
+    """Valida e salva um documento (CNH/CRLV) com sanitização de nome,
+    whitelist de extensão e limite de tamanho. Retorna a URL pública ou
+    lança ValueError com a mensagem de validação."""
+    from werkzeug.utils import secure_filename
+
+    nome_original = arquivo.filename or ""
+    extensao = nome_original.rsplit(".", 1)[-1].lower() if "." in nome_original else ""
+    if extensao not in EXTENSOES_DOCUMENTO:
+        raise ValueError("Formato inválido. Envie PDF, JPG ou PNG.")
+
+    arquivo.stream.seek(0, os.SEEK_END)
+    tamanho = arquivo.stream.tell()
+    arquivo.stream.seek(0)
+    if tamanho > TAMANHO_MAXIMO_DOCUMENTO:
+        raise ValueError("Documento muito grande. Tamanho máximo: 5MB.")
+
+    nome_seguro = secure_filename(nome_original) or f"documento.{extensao}"
+    upload_dir = os.path.join(current_app.config.get("UPLOAD_FOLDER", "uploads"), subpasta)
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = f"{prefixo}_{uuid.uuid4().hex[:10]}_{nome_seguro}"
+    arquivo.save(os.path.join(upload_dir, filename))
+    return f"/uploads/{subpasta}/{filename}"
 
 # ==================== MOTORISTAS & VEÍCULOS ====================
 
@@ -43,6 +76,10 @@ def listar_motoristas():
         logger.error(f"Erro ao listar motoristas: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+def _parse_data(valor):
+    return datetime.strptime(valor, "%Y-%m-%d").date() if valor else None
+
+
 @delivery_bp.route("/motoristas", methods=["POST"])
 @tenant_or_super_admin_required
 def criar_motorista():
@@ -53,8 +90,10 @@ def criar_motorista():
             estabelecimento_id=request.allowed_estabelecimento_id,
             nome=data["nome"],
             cpf=data["cpf"],
+            rg=data.get("rg"),
             cnh=data.get("cnh"),
             categoria_cnh=data.get("categoria_cnh"),
+            validade_cnh=_parse_data(data.get("validade_cnh")),
             telefone=data.get("telefone"),
             celular=data.get("celular"),
             email=data.get("email"),
@@ -67,6 +106,61 @@ def criar_motorista():
         return jsonify({"success": True, "motorista": motorista.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@delivery_bp.route("/motoristas/<int:id>", methods=["PUT"])
+@tenant_or_super_admin_required
+def atualizar_motorista(id):
+    """Atualiza os dados de conformidade do motorista (CNH, categoria, validade etc.)."""
+    try:
+        motorista = Motorista.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+        data = request.get_json() or {}
+
+        campos_texto = ["nome", "cpf", "rg", "cnh", "categoria_cnh", "telefone", "celular", "email", "tipo_vinculo"]
+        for campo in campos_texto:
+            if campo in data:
+                setattr(motorista, campo, data[campo])
+        if "validade_cnh" in data:
+            motorista.validade_cnh = _parse_data(data["validade_cnh"])
+        if "percentual_comissao" in data:
+            motorista.percentual_comissao = Decimal(str(data["percentual_comissao"]))
+        if "ativo" in data:
+            motorista.ativo = bool(data["ativo"])
+        if "disponivel" in data:
+            motorista.disponivel = bool(data["disponivel"])
+
+        db.session.commit()
+        return jsonify({"success": True, "motorista": motorista.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar motorista {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@delivery_bp.route("/motoristas/<int:id>/documento", methods=["POST"])
+@tenant_or_super_admin_required
+def upload_documento_motorista(id):
+    """Upload da CNH digitalizada do motorista."""
+    try:
+        motorista = Motorista.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+        arquivo = request.files.get("documento")
+        if not arquivo:
+            return jsonify({"success": False, "error": "Nenhum arquivo enviado"}), 400
+
+        url = _salvar_documento(arquivo, "motoristas", f"cnh_{id}")
+        motorista.cnh_documento_url = url
+        db.session.commit()
+        return jsonify({"success": True, "cnh_documento_url": url})
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro no upload de CNH do motorista {id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @delivery_bp.route("/veiculos", methods=["GET"])
@@ -93,6 +187,7 @@ def criar_veiculo():
             estabelecimento_id=request.allowed_estabelecimento_id,
             motorista_id=data.get("motorista_id"),
             placa=(data.get("placa") or "").upper(),
+            renavam=data.get("renavam"),
             tipo=data.get("tipo", "carro"),
             marca=data.get("marca"),
             modelo=data.get("modelo"),
@@ -103,6 +198,10 @@ def criar_veiculo():
             proprietario=data.get("proprietario", "motorista"),
             valor_aluguel=Decimal(str(data.get("valor_aluguel", 0))),
             km_atual=Decimal(str(data.get("km_atual", 0))),
+            data_vencimento_licenciamento=_parse_data(data.get("data_vencimento_licenciamento")),
+            data_vencimento_seguro=_parse_data(data.get("data_vencimento_seguro")),
+            data_ultima_manutencao=_parse_data(data.get("data_ultima_manutencao")),
+            data_proxima_manutencao=_parse_data(data.get("data_proxima_manutencao")),
             consumo_medio=Decimal(str(data.get("consumo_medio", 15))),
             ativo=bool(data.get("ativo", True)),
             disponivel=bool(data.get("disponivel", True)),
@@ -115,6 +214,203 @@ def criar_veiculo():
         db.session.rollback()
         logger.error(f"Erro ao criar veículo: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@delivery_bp.route("/veiculos/<int:id>", methods=["PUT"])
+@tenant_or_super_admin_required
+def atualizar_veiculo(id):
+    """Atualiza os dados de conformidade do veículo (renavam, licenciamento, seguro etc.)."""
+    try:
+        veiculo = Veiculo.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+        data = request.get_json() or {}
+
+        campos_texto = ["placa", "renavam", "tipo", "marca", "modelo", "cor", "proprietario"]
+        for campo in campos_texto:
+            if campo in data and data[campo] is not None:
+                valor = data[campo].upper() if campo == "placa" else data[campo]
+                setattr(veiculo, campo, valor)
+        if "ano" in data:
+            veiculo.ano = data["ano"]
+        if "motorista_id" in data:
+            veiculo.motorista_id = data["motorista_id"]
+        if "km_atual" in data:
+            veiculo.km_atual = Decimal(str(data["km_atual"]))
+        if "consumo_medio" in data:
+            veiculo.consumo_medio = Decimal(str(data["consumo_medio"]))
+        for campo_data in ["data_vencimento_licenciamento", "data_vencimento_seguro",
+                          "data_ultima_manutencao", "data_proxima_manutencao"]:
+            if campo_data in data:
+                setattr(veiculo, campo_data, _parse_data(data[campo_data]))
+        if "ativo" in data:
+            veiculo.ativo = bool(data["ativo"])
+        if "disponivel" in data:
+            veiculo.disponivel = bool(data["disponivel"])
+
+        db.session.commit()
+        return jsonify({"success": True, "veiculo": veiculo.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar veículo {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@delivery_bp.route("/veiculos/<int:id>/documento", methods=["POST"])
+@tenant_or_super_admin_required
+def upload_documento_veiculo(id):
+    """Upload do CRLV (licenciamento) digitalizado do veículo."""
+    try:
+        veiculo = Veiculo.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+        arquivo = request.files.get("documento")
+        if not arquivo:
+            return jsonify({"success": False, "error": "Nenhum arquivo enviado"}), 400
+
+        url = _salvar_documento(arquivo, "veiculos", f"crlv_{id}")
+        veiculo.crlv_documento_url = url
+        db.session.commit()
+        return jsonify({"success": True, "crlv_documento_url": url})
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro no upload de CRLV do veículo {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== CHECKLIST DE SAÍDA DO VEÍCULO ====================
+
+@delivery_bp.route("/veiculos/<int:id>/checklist", methods=["GET"])
+@tenant_or_super_admin_required
+def listar_checklist_veiculo(id):
+    """Histórico de checklists de saída do veículo (mais recentes primeiro)."""
+    try:
+        veiculo = Veiculo.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+        limite = min(request.args.get("limite", 20, type=int), 100)
+        checklists = (ChecklistVeiculo.query.filter_by(veiculo_id=veiculo.id)
+                     .order_by(ChecklistVeiculo.created_at.desc()).limit(limite).all())
+        return jsonify({"success": True, "itens_padrao": ITENS_CHECKLIST_PADRAO,
+                        "checklists": [c.to_dict() for c in checklists]})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@delivery_bp.route("/veiculos/<int:id>/checklist", methods=["POST"])
+@tenant_or_super_admin_required
+def criar_checklist_veiculo(id):
+    """Registra o checklist de saída (pneus, freios, setas, farol etc.)."""
+    try:
+        veiculo = Veiculo.query.filter_by(
+            id=id, estabelecimento_id=request.allowed_estabelecimento_id
+        ).first_or_404()
+        data = request.get_json() or {}
+        itens = data.get("itens") or []
+        if not isinstance(itens, list) or not itens:
+            return jsonify({"success": False, "error": "Informe ao menos um item do checklist"}), 400
+
+        aprovado = all(bool(it.get("ok")) for it in itens)
+        checklist = ChecklistVeiculo(
+            estabelecimento_id=request.allowed_estabelecimento_id,
+            veiculo_id=veiculo.id,
+            motorista_id=data.get("motorista_id") or veiculo.motorista_id,
+            km_atual=Decimal(str(data["km_atual"])) if data.get("km_atual") is not None else None,
+            itens_json=itens,
+            aprovado=aprovado,
+            observacoes_gerais=data.get("observacoes_gerais"),
+        )
+        db.session.add(checklist)
+        # Atualiza o km_atual do veículo se informado (mantém rastro de uso real)
+        if data.get("km_atual") is not None and Decimal(str(data["km_atual"])) > (veiculo.km_atual or 0):
+            veiculo.km_atual = Decimal(str(data["km_atual"]))
+        db.session.commit()
+        return jsonify({"success": True, "checklist": checklist.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao registrar checklist do veículo {id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ==================== RELATÓRIO DE CONFORMIDADE ====================
+
+@delivery_bp.route("/conformidade", methods=["GET"])
+@tenant_or_super_admin_required
+def relatorio_conformidade():
+    """Relatório real de conformidade da frota: CNH vencida/a vencer,
+    licenciamento e seguro vencidos/a vencer, e o checklist mais recente
+    de cada veículo (para saber quem está com pendência de segurança)."""
+    try:
+        est_id = request.allowed_estabelecimento_id
+        dias_alerta = request.args.get("dias_alerta", 30, type=int)
+        hoje = date.today()
+        limite_alerta = hoje + timedelta(days=dias_alerta)
+
+        motoristas = Motorista.query.filter_by(estabelecimento_id=est_id, ativo=True).all()
+        veiculos = Veiculo.query.filter_by(estabelecimento_id=est_id, ativo=True).all()
+
+        cnh_vencidas, cnh_a_vencer = [], []
+        for m in motoristas:
+            if not m.validade_cnh:
+                continue
+            info = {"motorista_id": m.id, "nome": m.nome, "validade_cnh": m.validade_cnh.isoformat(),
+                    "dias": (m.validade_cnh - hoje).days}
+            if m.validade_cnh < hoje:
+                cnh_vencidas.append(info)
+            elif m.validade_cnh <= limite_alerta:
+                cnh_a_vencer.append(info)
+
+        licenciamento_vencido, licenciamento_a_vencer = [], []
+        seguro_vencido, seguro_a_vencer = [], []
+        sem_checklist_recente = []
+        for v in veiculos:
+            if v.data_vencimento_licenciamento:
+                info = {"veiculo_id": v.id, "placa": v.placa, "vencimento": v.data_vencimento_licenciamento.isoformat(),
+                        "dias": (v.data_vencimento_licenciamento - hoje).days}
+                if v.data_vencimento_licenciamento < hoje:
+                    licenciamento_vencido.append(info)
+                elif v.data_vencimento_licenciamento <= limite_alerta:
+                    licenciamento_a_vencer.append(info)
+            if v.data_vencimento_seguro:
+                info = {"veiculo_id": v.id, "placa": v.placa, "vencimento": v.data_vencimento_seguro.isoformat(),
+                        "dias": (v.data_vencimento_seguro - hoje).days}
+                if v.data_vencimento_seguro < hoje:
+                    seguro_vencido.append(info)
+                elif v.data_vencimento_seguro <= limite_alerta:
+                    seguro_a_vencer.append(info)
+
+            ultimo = (ChecklistVeiculo.query.filter_by(veiculo_id=v.id)
+                     .order_by(ChecklistVeiculo.created_at.desc()).first())
+            if not ultimo:
+                sem_checklist_recente.append({"veiculo_id": v.id, "placa": v.placa, "motivo": "nenhum checklist registrado"})
+            elif not ultimo.aprovado:
+                sem_checklist_recente.append({"veiculo_id": v.id, "placa": v.placa,
+                                              "motivo": "último checklist com item reprovado",
+                                              "data": ultimo.created_at.isoformat() if ultimo.created_at else None})
+
+        total_pendencias = (len(cnh_vencidas) + len(licenciamento_vencido) + len(seguro_vencido)
+                            + len(sem_checklist_recente))
+
+        return jsonify({
+            "success": True,
+            "gerado_em": datetime.utcnow().isoformat(),
+            "resumo": {
+                "total_motoristas": len(motoristas),
+                "total_veiculos": len(veiculos),
+                "total_pendencias_criticas": total_pendencias,
+                "conforme": total_pendencias == 0,
+            },
+            "cnh": {"vencidas": cnh_vencidas, "a_vencer": cnh_a_vencer},
+            "licenciamento": {"vencido": licenciamento_vencido, "a_vencer": licenciamento_a_vencer},
+            "seguro": {"vencido": seguro_vencido, "a_vencer": seguro_a_vencer},
+            "checklist_pendente": sem_checklist_recente,
+        })
+    except Exception as e:
+        logger.error(f"Erro no relatório de conformidade: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # ==================== TAXAS DE ENTREGA ====================
 
@@ -598,7 +894,9 @@ def detalhe_entrega(id):
         venda = entrega.venda
         venda_data = None
         itens = []
+        taxa_entrega = float(entrega.taxa_entrega or 0)
         if venda:
+            total_produtos = float(venda.total or 0)
             venda_data = {
                 "id": venda.id,
                 "codigo": venda.codigo,
@@ -607,7 +905,10 @@ def detalhe_entrega(id):
                 "status": venda.status,
                 "subtotal": float(venda.subtotal or 0),
                 "desconto": float(venda.desconto or 0),
-                "total": float(venda.total or 0),
+                "total": total_produtos,
+                # Valor que o entregador deve efetivamente cobrar na entrega
+                # (produtos + taxa) — evita cobrança errada faltando a taxa.
+                "total_com_taxa": round(total_produtos + taxa_entrega, 2),
                 "cliente_nome": venda.cliente.nome if venda.cliente else "Não informado",
                 "funcionario_nome": venda.funcionario.nome if venda.funcionario else None,
             }

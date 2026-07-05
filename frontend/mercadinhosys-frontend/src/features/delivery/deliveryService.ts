@@ -4,7 +4,17 @@ export interface Motorista {
     id: number;
     nome: string;
     cpf: string;
+    rg?: string;
+    cnh?: string;
+    categoria_cnh?: string;
+    validade_cnh?: string | null;
+    cnh_documento_url?: string | null;
+    cnh_dias_para_vencer?: number | null;
+    cnh_vencida?: boolean;
     celular?: string;
+    telefone?: string;
+    email?: string;
+    tipo_vinculo?: string;
     ativo: boolean;
     disponivel: boolean;
     total_entregas: number;
@@ -14,9 +24,52 @@ export interface Motorista {
 export interface Veiculo {
     id: number;
     placa: string;
+    renavam?: string | null;
     modelo: string;
+    marca?: string;
     tipo: string;
+    ano?: number;
+    motorista_id?: number | null;
+    motorista_nome?: string | null;
+    km_atual?: number;
+    data_vencimento_licenciamento?: string | null;
+    data_vencimento_seguro?: string | null;
+    data_ultima_manutencao?: string | null;
+    data_proxima_manutencao?: string | null;
+    crlv_documento_url?: string | null;
+    licenciamento_dias_para_vencer?: number | null;
+    licenciamento_vencido?: boolean;
+    seguro_dias_para_vencer?: number | null;
+    seguro_vencido?: boolean;
     ativo: boolean;
+    disponivel?: boolean;
+}
+
+export interface ChecklistItem { item: string; ok: boolean; observacao?: string; }
+
+export interface Checklist {
+    id: number;
+    veiculo_id: number;
+    veiculo_placa?: string;
+    motorista_id?: number | null;
+    motorista_nome?: string | null;
+    km_atual?: number | null;
+    itens_json: ChecklistItem[];
+    aprovado: boolean;
+    observacoes_gerais?: string | null;
+    created_at?: string | null;
+}
+
+export interface ConformidadeItem { motorista_id?: number; veiculo_id?: number; nome?: string; placa?: string; dias: number; [key: string]: any; }
+
+export interface RelatorioConformidade {
+    success: boolean;
+    gerado_em: string;
+    resumo: { total_motoristas: number; total_veiculos: number; total_pendencias_criticas: number; conforme: boolean };
+    cnh: { vencidas: ConformidadeItem[]; a_vencer: ConformidadeItem[] };
+    licenciamento: { vencido: ConformidadeItem[]; a_vencer: ConformidadeItem[] };
+    seguro: { vencido: ConformidadeItem[]; a_vencer: ConformidadeItem[] };
+    checklist_pendente: { veiculo_id: number; placa: string; motivo: string; data?: string }[];
 }
 
 export interface TaxaEntrega {
@@ -42,8 +95,10 @@ export interface Entrega {
 export interface CreateMotoristaData {
     nome: string;
     cpf: string;
+    rg?: string;
     cnh: string;
     categoria_cnh: string;
+    validade_cnh?: string;
     telefone?: string;
     celular?: string;
     email?: string;
@@ -53,11 +108,14 @@ export interface CreateMotoristaData {
 
 export interface CreateVeiculoData {
     placa: string;
+    renavam?: string;
     modelo: string;
     ano: number;
     tipo: string;
     cor: string;
     consumo_medio: number;
+    data_vencimento_licenciamento?: string;
+    data_vencimento_seguro?: string;
 }
 
 export const deliveryService = {
@@ -114,6 +172,49 @@ export const deliveryService = {
 
     criarVeiculo: async (data: CreateVeiculoData) => {
         const response = await apiClient.post('/delivery/veiculos', data);
+        return response.data;
+    },
+
+    atualizarMotorista: async (id: number, data: Partial<CreateMotoristaData>) => {
+        const response = await apiClient.put(`/delivery/motoristas/${id}`, data);
+        return response.data;
+    },
+
+    uploadDocumentoMotorista: async (id: number, arquivo: File) => {
+        const formData = new FormData();
+        formData.append('documento', arquivo);
+        const response = await apiClient.post(`/delivery/motoristas/${id}/documento`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    atualizarVeiculo: async (id: number, data: Partial<CreateVeiculoData>) => {
+        const response = await apiClient.put(`/delivery/veiculos/${id}`, data);
+        return response.data;
+    },
+
+    uploadDocumentoVeiculo: async (id: number, arquivo: File) => {
+        const formData = new FormData();
+        formData.append('documento', arquivo);
+        const response = await apiClient.post(`/delivery/veiculos/${id}/documento`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    listarChecklist: async (veiculoId: number) => {
+        const response = await apiClient.get<{ success: boolean; itens_padrao: string[]; checklists: Checklist[] }>(`/delivery/veiculos/${veiculoId}/checklist`);
+        return response.data;
+    },
+
+    criarChecklist: async (veiculoId: number, payload: { km_atual?: number; itens: ChecklistItem[]; observacoes_gerais?: string; motorista_id?: number }) => {
+        const response = await apiClient.post(`/delivery/veiculos/${veiculoId}/checklist`, payload);
+        return response.data;
+    },
+
+    getConformidade: async (diasAlerta = 30) => {
+        const response = await apiClient.get<RelatorioConformidade>('/delivery/conformidade', { params: { dias_alerta: diasAlerta } });
         return response.data;
     },
 
@@ -178,7 +279,8 @@ export interface DetalheEntregaResposta {
     };
     venda: {
         id: number; codigo: string; data_venda: string | null; tipo_venda: string; status: string;
-        subtotal: number; desconto: number; total: number; cliente_nome: string; funcionario_nome?: string;
+        subtotal: number; desconto: number; total: number; total_com_taxa: number;
+        cliente_nome: string; funcionario_nome?: string;
     } | null;
     itens: ItemPedido[];
     rastreamento: EventoRastreio[];

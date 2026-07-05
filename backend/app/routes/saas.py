@@ -406,6 +406,8 @@ def trial_status():
         eid = get_authorized_establishment_id()
         if not eid:
             return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
+        if str(eid).lower() == 'all':
+            return jsonify({"success": True, "data": None}), 200
 
         est = Estabelecimento.query.get(eid)
         if not est:

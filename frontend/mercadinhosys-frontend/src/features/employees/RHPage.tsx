@@ -61,7 +61,7 @@ export default function RHPage() {
         </div>
 
         {/* Tabs - Glassmorphism UI */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-2 flex flex-wrap lg:flex-nowrap gap-2">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-sm border border-gray-200/50 dark:border-gray-700/50 p-2 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -70,7 +70,7 @@ export default function RHPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 min-w-[150px] px-5 py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 relative overflow-hidden group ${isActive
+                className={`px-5 py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 relative overflow-hidden group ${isActive
                     ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/20'
                     : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                   }`}

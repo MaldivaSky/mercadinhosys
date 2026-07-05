@@ -2013,6 +2013,7 @@ class Motorista(db.Model, MultiTenantMixin):
     celular = db.Column(db.String(30), nullable=False)
     email = db.Column(db.String(100))
     foto_url = db.Column(db.String(500))
+    cnh_documento_url = db.Column(db.String(500))  # upload da CNH digitalizada
     tipo_vinculo = db.Column(db.String(20), default="terceirizado")
     percentual_comissao = db.Column(db.Numeric(5, 2), default=10.00)
     salario_fixo = db.Column(db.Numeric(10, 2), default=0)
@@ -2027,7 +2028,14 @@ class Motorista(db.Model, MultiTenantMixin):
                       db.UniqueConstraint("estabelecimento_id", "cpf", name="uq_motorista_estab_cpf"))
 
     def to_dict(self):
-        return {"id": self.id, "nome": self.nome, "cpf": self.cpf, "cnh": self.cnh, "categoria_cnh": self.categoria_cnh,
+        hoje = date.today()
+        dias_cnh = (self.validade_cnh - hoje).days if self.validade_cnh else None
+        return {"id": self.id, "nome": self.nome, "cpf": self.cpf, "rg": self.rg,
+                "cnh": self.cnh, "categoria_cnh": self.categoria_cnh,
+                "validade_cnh": self.validade_cnh.isoformat() if self.validade_cnh else None,
+                "cnh_documento_url": self.cnh_documento_url,
+                "cnh_dias_para_vencer": dias_cnh,
+                "cnh_vencida": dias_cnh is not None and dias_cnh < 0,
                 "telefone": self.telefone, "celular": self.celular, "email": self.email, "tipo_vinculo": self.tipo_vinculo,
                 "percentual_comissao": float(self.percentual_comissao) if self.percentual_comissao else 0.0,
                 "ativo": self.ativo, "disponivel": self.disponivel, "total_entregas": self.total_entregas,
@@ -2054,6 +2062,7 @@ class Veiculo(db.Model, MultiTenantMixin):
     data_proxima_manutencao = db.Column(db.Date)
     data_vencimento_licenciamento = db.Column(db.Date)
     data_vencimento_seguro = db.Column(db.Date)
+    crlv_documento_url = db.Column(db.String(500))  # upload do CRLV (licenciamento) digitalizado
     consumo_medio = db.Column(db.Numeric(10, 2), default=15.0)
     ativo = db.Column(db.Boolean, default=True)
     disponivel = db.Column(db.Boolean, default=True)
@@ -2066,12 +2075,58 @@ class Veiculo(db.Model, MultiTenantMixin):
                       db.UniqueConstraint("estabelecimento_id", "placa", name="uq_veiculo_estab_placa"))
 
     def to_dict(self):
-        return {"id": self.id, "placa": self.placa, "tipo": self.tipo, "marca": self.marca, "modelo": self.modelo,
+        hoje = date.today()
+        dias_licenc = (self.data_vencimento_licenciamento - hoje).days if self.data_vencimento_licenciamento else None
+        dias_seguro = (self.data_vencimento_seguro - hoje).days if self.data_vencimento_seguro else None
+        return {"id": self.id, "placa": self.placa, "renavam": self.renavam, "tipo": self.tipo,
+                "marca": self.marca, "modelo": self.modelo,
                 "ano": self.ano, "cor": self.cor, "proprietario": self.proprietario,
                 "motorista_id": self.motorista_id, "motorista_nome": self.motorista.nome if self.motorista else None,
                 "km_atual": float(self.km_atual) if self.km_atual else 0.0,
                 "consumo_medio": float(self.consumo_medio) if self.consumo_medio else 15.0,
+                "data_vencimento_licenciamento": self.data_vencimento_licenciamento.isoformat() if self.data_vencimento_licenciamento else None,
+                "data_vencimento_seguro": self.data_vencimento_seguro.isoformat() if self.data_vencimento_seguro else None,
+                "data_ultima_manutencao": self.data_ultima_manutencao.isoformat() if self.data_ultima_manutencao else None,
+                "data_proxima_manutencao": self.data_proxima_manutencao.isoformat() if self.data_proxima_manutencao else None,
+                "crlv_documento_url": self.crlv_documento_url,
+                "licenciamento_dias_para_vencer": dias_licenc,
+                "licenciamento_vencido": dias_licenc is not None and dias_licenc < 0,
+                "seguro_dias_para_vencer": dias_seguro,
+                "seguro_vencido": dias_seguro is not None and dias_seguro < 0,
                 "ativo": self.ativo, "disponivel": self.disponivel, "total_entregas": self.total_entregas if hasattr(self, 'total_entregas') else 0}
+
+
+# Itens padrão do checklist de saída (o front pode enviar um subconjunto/extra,
+# mas estes são sugeridos na UI — pneus, freios, seta, farol etc.)
+ITENS_CHECKLIST_PADRAO = [
+    "pneus", "freios", "setas", "farol", "lanterna_traseira", "buzina",
+    "espelhos_retrovisores", "oleo_motor", "agua_radiador", "extintor",
+]
+
+
+class ChecklistVeiculo(db.Model, MultiTenantMixin, AuditMixin, SerializableMixin):
+    """Checklist de saída do veículo (pneu, freios, seta, farol etc.) — o
+    entregador confere antes de sair e o sistema registra aprovado/reprovado
+    item a item, com a memória para auditoria de segurança da frota."""
+    __tablename__ = "checklists_veiculo"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    veiculo_id = db.Column(db.Integer, db.ForeignKey("veiculos.id", ondelete="CASCADE"), nullable=False, index=True)
+    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"), index=True)
+    km_atual = db.Column(db.Numeric(10, 2))
+    itens_json = db.Column(db.JSON, default=list)  # [{"item": "pneus", "ok": true, "observacao": ""}]
+    aprovado = db.Column(db.Boolean, default=True)  # False se algum item reprovado
+    observacoes_gerais = db.Column(db.Text)
+    veiculo = db.relationship("Veiculo", backref=db.backref("checklists", lazy=True, cascade="all, delete-orphan"))
+    motorista = db.relationship("Motorista", backref=db.backref("checklists", lazy=True))
+    __table_args__ = (db.Index("ix_checklist_veiculo", "veiculo_id"), db.Index("ix_checklist_created", "created_at"))
+
+    def to_dict(self, include_relationships: bool = False, depth: int = 0):
+        data = super().to_dict(include_relationships=include_relationships, depth=depth)
+        data["veiculo_placa"] = self.veiculo.placa if self.veiculo else None
+        data["motorista_nome"] = self.motorista.nome if self.motorista else None
+        return data
+
 
 class TaxaEntrega(db.Model, MultiTenantMixin):
     __tablename__ = "taxas_entrega"
