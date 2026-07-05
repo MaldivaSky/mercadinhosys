@@ -197,7 +197,7 @@ export default function RHDashboard() {
         </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
           <div className="flex items-center justify-between mb-4 relative z-10">
@@ -221,6 +221,20 @@ export default function RHDashboard() {
             R$ {rhData.custo_folha_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </h3>
           <p className="text-[10px] text-gray-400 font-semibold uppercase mt-2 relative z-10">Estimativa mensal atual</p>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 dark:bg-purple-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="p-3 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider mb-1 relative z-10">Benefícios</p>
+          <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight relative z-10">
+            R$ {(rhData.total_beneficios_mensal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </h3>
+          <p className="text-[10px] text-purple-500 dark:text-purple-400 font-bold uppercase tracking-wider mt-2 relative z-10">Total de Vales Ativos</p>
         </div>
 
         <div

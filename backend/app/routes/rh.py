@@ -800,9 +800,26 @@ def listar_provisoes():
             q = q.filter_by(estabelecimento_id=estab_id)
         funcionarios = q.all()
 
-        itens = [calcular_provisoes(f, ano_mes, regime) for f in funcionarios]
+        from sqlalchemy import func
+        from app.models import FuncionarioBeneficio
+        
+        query_ben = db.session.query(
+            FuncionarioBeneficio.funcionario_id,
+            func.sum(FuncionarioBeneficio.valor)
+        ).filter(FuncionarioBeneficio.ativo == True).group_by(FuncionarioBeneficio.funcionario_id)
+        beneficios_map = dict(query_ben.all())
+
+        itens = []
+        for f in funcionarios:
+            prov = calcular_provisoes(f, ano_mes, regime)
+            ben = float(beneficios_map.get(f.id, 0.0))
+            prov["beneficios"] = round(ben, 2)
+            prov["custo_real"] = round(prov["custo_real"] + ben, 2)
+            itens.append(prov)
+
         custo_total = round(sum(i["custo_real"] for i in itens), 2)
         folha_nominal = round(sum(i["salario_base"] for i in itens), 2)
+        total_beneficios = round(sum(i["beneficios"] for i in itens), 2)
 
         return jsonify({
             "success": True,
@@ -811,8 +828,9 @@ def listar_provisoes():
                 "ano_mes": ano_mes,
                 "funcionarios": len(itens),
                 "folha_nominal": folha_nominal,
+                "total_beneficios": total_beneficios,
                 "custo_real_total": custo_total,
-                "provisionamento_total": round(custo_total - folha_nominal, 2),
+                "provisionamento_total": round(custo_total - folha_nominal - total_beneficios, 2),
             },
         }), 200
     except Exception as e:

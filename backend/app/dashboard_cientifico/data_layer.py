@@ -1063,8 +1063,13 @@ class DataLayer:
             valor_hora_medio = (float(total_salarios) / 220) if total_salarios > 0 else 10.0
             custo_extras_estimado = (minutos_extras_estimados / 60) * valor_hora_medio * 1.5
 
-            # 5. Custo Total Estimado
-            custo_folha_estimado = float(total_salarios) + float(total_beneficios) + custo_extras_estimado
+            # 5. Custo Total Estimado (Agora usa a Fonte de Verdade Oficial)
+            try:
+                folha_real = calcular_custo_folha_detalhado(estabelecimento_id, inicio_mes, hoje_dia)
+                custo_folha_estimado = float(folha_real.get("custo_folha", {}).get("custo_real_total", 0.0))
+            except Exception as e_folha:
+                logger.error(f"Erro ao calcular folha real no RH Dashboard: {e_folha}")
+                custo_folha_estimado = float(total_salarios) + float(total_beneficios) + custo_extras_estimado
 
             # 6. Rotatividade (Turnover)
             # Admissões no período

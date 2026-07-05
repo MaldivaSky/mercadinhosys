@@ -676,7 +676,7 @@ def calcular_provisoes(funcionario, ano_mes: str, regime_tributario: str = None,
 
 def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
     """Calcula o custo real da folha (ativos, demitidos e rescisões) no período"""
-    from app.models import db, Funcionario, Rescisao
+    from app.models import db, Funcionario, Rescisao, FuncionarioBeneficio
     from sqlalchemy import func, or_
     
     dias_periodo = (dt_fim - dt_inicio).days + 1
@@ -697,15 +697,25 @@ def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
     total_salarios = 0.0
     total_provisoes = 0.0
     total_encargos = 0.0
+    total_beneficios_geral = 0.0
+    
+    # Busca benefícios ativos mapeados por funcionário
+    query_ben = db.session.query(
+        FuncionarioBeneficio.funcionario_id,
+        func.sum(FuncionarioBeneficio.valor)
+    ).filter(FuncionarioBeneficio.ativo == True).group_by(FuncionarioBeneficio.funcionario_id)
+    beneficios_map = dict(query_ben.all())
     
     lista_funcs = []
     
     for f in funcionarios:
         prov = calcular_provisoes(f, mes_ref)
-        custo_mensal = float(prov.get("custo_real", 0))
         salario = float(prov.get("salario_base", 0))
         provisoes = float(prov.get("valor_ferias", 0)) + float(prov.get("valor_decimo_terceiro", 0))
         encargos = float(prov.get("encargos_provisionados", 0))
+        beneficio_mensal = float(beneficios_map.get(f.id, 0.0))
+        
+        custo_mensal = salario + provisoes + encargos + beneficio_mensal
         
         inicio_trab = max(dt_inicio, f.data_admissao) if f.data_admissao else dt_inicio
         fim_trab = min(dt_fim, f.data_demissao) if f.data_demissao else dt_fim
@@ -718,6 +728,7 @@ def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
             total_salarios += (salario * prop)
             total_provisoes += (provisoes * prop)
             total_encargos += (encargos * prop)
+            total_beneficios_geral += (beneficio_mensal * prop)
             
             lista_funcs.append({
                 "id": f.id,
@@ -740,6 +751,7 @@ def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
     return {
         "custo_folha": {
             "total_salarios": round(total_salarios, 2),
+            "total_beneficios": round(total_beneficios_geral, 2),
             "total_provisoes": round(total_provisoes, 2),
             "total_encargos": round(total_encargos, 2),
             "total_rescisoes": round(total_rescisao, 2),

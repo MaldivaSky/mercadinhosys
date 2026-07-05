@@ -38,9 +38,8 @@ export default function RHTab({ data, onRefresh }: RHTabProps) {
   };
   const rh = data?.rh || {};
   // O backend (cientifico) entrega custo_folha_estimado, benefits_breakdown[] e
-  // listas por funcionário; os nomes antigos (total_salarios/resumo_mes) não existem
-  // e zeravam os cards. Mapeamos para os campos reais com fallback.
-  const totalSalarios = rh?.custo_folha_estimado ?? rh?.total_salarios ?? 0;
+  // O backend (cientifico) entrega custo_folha_estimado (agora 100% preciso, incluindo benefícios).
+  const custoTotal = rh?.custo_folha_estimado ?? rh?.total_salarios ?? 0;
   const totalBeneficios = Array.isArray(rh?.benefits_breakdown)
     ? rh.benefits_breakdown.reduce((a: number, b: any) => a + (b?.value || 0), 0)
     : (rh?.total_beneficios_mensal ?? 0);
@@ -55,7 +54,7 @@ export default function RHTab({ data, onRefresh }: RHTabProps) {
   return (
     <div className="space-y-8">
       {/* Resumo RH */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">
           <div className="flex items-center gap-3 mb-4">
              <div className="p-2 bg-blue-500/20 rounded-lg"><Users className="text-blue-400" /></div>
@@ -70,8 +69,17 @@ export default function RHTab({ data, onRefresh }: RHTabProps) {
              <div className="p-2 bg-purple-500/20 rounded-lg"><CheckCircle className="text-purple-400" /></div>
              <h3 className="text-slate-300 font-bold">Custo de Folha</h3>
           </div>
-          <div className="text-3xl font-black text-white">{formatCurrency(totalSalarios + totalBeneficios)}</div>
-          <p className="text-sm text-slate-400 mt-2 font-medium">Salários + Benefícios (Mês)</p>
+          <div className="text-3xl font-black text-white">{formatCurrency(custoTotal)}</div>
+          <p className="text-sm text-slate-400 mt-2 font-medium">Custo Real (Folha + Benefícios)</p>
+        </div>
+
+        <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">
+          <div className="flex items-center gap-3 mb-4">
+             <div className="p-2 bg-purple-500/20 rounded-lg"><CheckCircle className="text-purple-400" /></div>
+             <h3 className="text-slate-300 font-bold">Benefícios</h3>
+          </div>
+          <div className="text-3xl font-black text-purple-400">{formatCurrency(totalBeneficios)}</div>
+          <p className="text-sm text-purple-500/70 mt-2 font-medium">Total de Vales Ativos</p>
         </div>
 
         <div className="bg-slate-800/60 rounded-2xl p-6 border border-slate-700/60">

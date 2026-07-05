@@ -100,6 +100,7 @@ export interface ProvisaoItem {
     valor_ferias: number;
     valor_decimo_terceiro: number;
     encargos_provisionados: number;
+    beneficios?: number;
     custo_real: number;
 }
 

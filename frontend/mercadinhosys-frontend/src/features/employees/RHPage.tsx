@@ -7,13 +7,14 @@ import BancoHorasRH from './components/BancoHorasRH';
 import JustificativasRH from './components/JustificativasRH';
 import FolhaCustoReal from './components/FolhaCustoReal';
 import RescisaoWizard from './components/RescisaoWizard';
+import BeneficiosRH from './components/BeneficiosRH';
 import ConfigFolhaSettings from './components/ConfigFolhaSettings';
 import RetrospectivaGestao from './components/RetrospectivaGestao';
 import MeuRH from './components/MeuRH';
 import { authService } from '../auth/authService';
 import { getNivel } from '../../utils/permissions';
 
-type TabType = 'dashboard' | 'historico' | 'espelho' | 'banco-horas' | 'justificativas' | 'folha' | 'rescisao' | 'parametros' | 'retrospectiva';
+type TabType = 'dashboard' | 'historico' | 'espelho' | 'banco-horas' | 'justificativas' | 'beneficios' | 'folha' | 'rescisao' | 'parametros' | 'retrospectiva';
 
 export default function RHPage() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -36,6 +37,7 @@ export default function RHPage() {
     { id: 'espelho' as TabType, label: 'Espelho de Ponto', icon: FileText, description: 'Relatório individual' },
     { id: 'banco-horas' as TabType, label: 'Banco de Horas', icon: Timer, description: 'Saldos e créditos' },
     { id: 'justificativas' as TabType, label: 'Justificativas', icon: AlertTriangle, description: 'Atrasos e ausências' },
+    { id: 'beneficios' as TabType, label: 'Benefícios', icon: Sparkles, description: 'Vales e descontos' },
     { id: 'folha' as TabType, label: 'Folha & Custo Real', icon: Wallet, description: 'Provisões e custo da equipe' },
     { id: 'rescisao' as TabType, label: 'Demissão', icon: UserMinus, description: 'Rescisão e verbas' },
     { id: 'retrospectiva' as TabType, label: 'Retrospectiva', icon: Sparkles, description: 'Desempenho por colaborador' },
@@ -96,6 +98,7 @@ export default function RHPage() {
         {activeTab === 'espelho' && <EspelhoPonto />}
         {activeTab === 'banco-horas' && <BancoHorasRH />}
         {activeTab === 'justificativas' && <JustificativasRH />}
+        {activeTab === 'beneficios' && <BeneficiosRH />}
         {activeTab === 'folha' && <FolhaCustoReal />}
         {activeTab === 'rescisao' && <RescisaoWizard />}
         {activeTab === 'retrospectiva' && <RetrospectivaGestao />}
