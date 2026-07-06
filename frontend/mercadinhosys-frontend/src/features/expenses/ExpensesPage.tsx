@@ -52,7 +52,7 @@ const COR_POR_CATEGORIA: Record<string, string> = Object.fromEntries(
 const COR_ALIASES: Record<string, string> = {
     "folha": "#10b981", "folha de pagamento": "#10b981", "salario": "#10b981",
     "salário": "#10b981", "salários": "#10b981", "funcionarios": "#10b981",
-    "funcionários": "#10b981", "pessoal": "#10b981",
+    "funcionários": "#10b981", "pessoal": "#10b981", "salarios": "#10b981",
     "beneficio": "#14b8a6", "benefício": "#14b8a6", "benefícios": "#14b8a6",
     "vale transporte": "#14b8a6", "vale alimentacao": "#14b8a6", "plano de saude": "#14b8a6",
     "aluguel": "#6366f1", "aluguel comercial": "#6366f1", "locacao": "#6366f1", "locação": "#6366f1",
@@ -62,7 +62,7 @@ const COR_ALIASES: Record<string, string> = {
     "internet": "#3b82f6", "provedor": "#3b82f6", "banda larga": "#3b82f6",
     "telecomunicacoes": "#8b5cf6", "telecomunicações": "#8b5cf6", "comunicacao": "#8b5cf6", "comunicação": "#8b5cf6",
     "fornecedor": "#ef4444", "fornecedores": "#ef4444", "mercadoria": "#ef4444",
-    "boleto mercadoria": "#ef4444", "compras": "#ef4444", "estoque": "#ef4444", "boleto": "#ef4444",
+    "boleto de mercadoria": "#ef4444", "boleto mercadoria": "#ef4444", "compras": "#ef4444", "estoque": "#ef4444", "boleto": "#ef4444",
     "marketing": "#f97316", "publicidade": "#f97316", "propaganda": "#f97316", "divulgacao": "#f97316",
     "manutencao": "#78716c", "manutenção": "#78716c", "reparo": "#78716c", "conserto": "#78716c",
     "imposto": "#64748b", "impostos": "#64748b", "taxa": "#64748b", "taxas": "#64748b",
@@ -104,6 +104,8 @@ function getCor(cat: string): string {
     for (const [alias, cor] of Object.entries(COR_ALIASES)) {
         if (lower.includes(alias) || alias.includes(lower)) return cor;
     }
+    // Tratamento especial para Folha de Pagamento
+    if (lower === "folha de pagamento" || lower === "salarios") return "#10b981";
     // 4) fallback deterministico (mesma cor para mesma string)
     return PALETTE_FALLBACK[hashStr(lower) % PALETTE_FALLBACK.length];
 }

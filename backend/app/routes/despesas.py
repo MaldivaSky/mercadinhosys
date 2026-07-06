@@ -379,6 +379,32 @@ def obter_estatisticas_despesas():
             except Exception:
                 return Decimal('0')
 
+        def _get_contas_pagar(start_date, end_date):
+            if not start_date or not end_date:
+                return Decimal('0'), 0
+            from app.models import ContaPagar
+            q = db.session.query(
+                func.sum(ContaPagar.valor_pago).label("total"),
+                func.count(ContaPagar.id).label("qtd")
+            ).filter(
+                ContaPagar.data_pagamento >= start_date,
+                ContaPagar.data_pagamento <= end_date,
+                ContaPagar.status.in_(['pago', 'parcial'])
+            )
+            if estabelecimento_id != 'all':
+                q = q.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+            res = q.first()
+            return Decimal(str(res.total or 0)), (res.qtd or 0)
+            
+        def _get_todas_contas_pagas():
+            from app.models import ContaPagar
+            q = db.session.query(func.sum(ContaPagar.valor_pago)).filter(
+                ContaPagar.status.in_(['pago', 'parcial'])
+            )
+            if estabelecimento_id != 'all':
+                q = q.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
+            return Decimal(str(q.scalar() or 0))
+
         # ── Totais gerais (todos os registros do estabelecimento) ─────────────
         query_total = Despesa.query
         if estabelecimento_id != 'all':
@@ -390,7 +416,7 @@ def obter_estatisticas_despesas():
         if estabelecimento_id != 'all':
              query_soma = query_soma.filter(Despesa.estabelecimento_id == estabelecimento_id)
              
-        soma_total = Decimal(str(query_soma.scalar() or 0))
+        soma_total = Decimal(str(query_soma.scalar() or 0)) + _get_todas_contas_pagas()
 
         query_atual = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= mes_atual_inicio,
@@ -398,7 +424,7 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_atual = query_atual.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_mes_atual = Decimal(str(query_atual.scalar() or 0)) + _get_folha(mes_atual_inicio, hoje)
+        despesas_mes_atual = Decimal(str(query_atual.scalar() or 0)) + _get_folha(mes_atual_inicio, hoje) + _get_contas_pagar(mes_atual_inicio, hoje)[0]
 
         query_anterior = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= mes_anterior_inicio,
@@ -406,7 +432,7 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_anterior = query_anterior.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_mes_anterior = Decimal(str(query_anterior.scalar() or 0)) + _get_folha(mes_anterior_inicio, mes_anterior_fim)
+        despesas_mes_anterior = Decimal(str(query_anterior.scalar() or 0)) + _get_folha(mes_anterior_inicio, mes_anterior_fim) + _get_contas_pagar(mes_anterior_inicio, mes_anterior_fim)[0]
 
         # ── Variação — todos os operandos já são Decimal ─────────────────────
         if despesas_mes_anterior > 0:
@@ -423,12 +449,12 @@ def obter_estatisticas_despesas():
         query_hoje = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == hoje)
         if estabelecimento_id != 'all':
             query_hoje = query_hoje.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_hoje = Decimal(str(query_hoje.scalar() or 0)) + _get_folha(hoje, hoje)
+        despesas_hoje = Decimal(str(query_hoje.scalar() or 0)) + _get_folha(hoje, hoje) + _get_contas_pagar(hoje, hoje)[0]
 
         query_ontem = db.session.query(func.sum(Despesa.valor)).filter(Despesa.data_despesa == ontem)
         if estabelecimento_id != 'all':
              query_ontem = query_ontem.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_ontem = Decimal(str(query_ontem.scalar() or 0)) + _get_folha(ontem, ontem)
+        despesas_ontem = Decimal(str(query_ontem.scalar() or 0)) + _get_folha(ontem, ontem) + _get_contas_pagar(ontem, ontem)[0]
 
         query_semana = db.session.query(func.sum(Despesa.valor)).filter(
                 Despesa.data_despesa >= semana_inicio,
@@ -436,7 +462,7 @@ def obter_estatisticas_despesas():
             )
         if estabelecimento_id != 'all':
             query_semana = query_semana.filter(Despesa.estabelecimento_id == estabelecimento_id)
-        despesas_semana = Decimal(str(query_semana.scalar() or 0)) + _get_folha(semana_inicio, hoje)
+        despesas_semana = Decimal(str(query_semana.scalar() or 0)) + _get_folha(semana_inicio, hoje) + _get_contas_pagar(semana_inicio, hoje)[0]
 
         # ── Período filtrado: total e por categoria ───────────────────────────
         query_periodo = db.session.query(func.sum(Despesa.valor)).filter(
@@ -447,7 +473,8 @@ def obter_estatisticas_despesas():
              query_periodo = query_periodo.filter(Despesa.estabelecimento_id == estabelecimento_id)
         
         folha_periodo = _get_folha(cat_inicio, cat_fim)
-        soma_periodo = Decimal(str(query_periodo.scalar() or 0)) + folha_periodo
+        contas_periodo_valor, contas_periodo_qtd = _get_contas_pagar(cat_inicio, cat_fim)
+        soma_periodo = Decimal(str(query_periodo.scalar() or 0)) + folha_periodo + contas_periodo_valor
 
         query_cats = db.session.query(
                 Despesa.categoria,
@@ -489,7 +516,7 @@ def obter_estatisticas_despesas():
                     )
                 if estabelecimento_id != 'all':
                      query_mes = query_mes.filter(Despesa.estabelecimento_id == estabelecimento_id)
-                total_mes = Decimal(str(query_mes.scalar() or 0)) + _get_folha(mes_data, mes_fim)
+                total_mes = Decimal(str(query_mes.scalar() or 0)) + _get_folha(mes_data, mes_fim) + _get_contas_pagar(mes_data, mes_fim)[0]
             except Exception as e_inner:
                 current_app.logger.error(f"Erro ao calcular mês {mes_data}: {e_inner}")
                 total_mes = Decimal('0')
@@ -520,9 +547,22 @@ def obter_estatisticas_despesas():
                 "percentual": float(percentual_folha),
             })
             
+        if contas_periodo_valor > 0:
+            percentual_contas = (
+                (contas_periodo_valor / soma_periodo * Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if soma_periodo > 0 else Decimal('0')
+            )
+            despesas_por_categoria_list.append({
+                "categoria": "Boleto de Mercadoria",
+                "total": float(contas_periodo_valor),
+                "quantidade": contas_periodo_qtd,
+                "percentual": float(percentual_contas),
+            })
+            
         for categoria, total, quantidade in despesas_por_categoria_raw:
-            if categoria and categoria.strip().lower() == "folha de pagamento":
-                # Ignora a manual para dar preferência ao cálculo dinâmico da inteligência
+            cat_norm = categoria.strip().lower() if categoria else ""
+            if cat_norm in ["folha de pagamento", "boleto de mercadoria"]:
+                # Ignora manuais para evitar duplicatas com nosso cálculo integrado
                 continue
                 
             total_d = Decimal(str(total)) if total else Decimal('0')
