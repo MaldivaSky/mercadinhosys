@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+import os
 import random
 from app.models import db, Estabelecimento, Funcionario
 from app.simulation.chronicle import ChronicleSimulator
@@ -49,7 +50,7 @@ class MasterSeeder:
                 nivel_acesso=1,
                 is_super_admin=True,  # FIX: campo obrigatório para acesso superadmin
                 status="ativo",
-                cpf="00000000000",
+                cpf=os.environ.get("SEED_SUPERADMIN_CPF") or RealisticInjector.generate_cpf(),
                 email="rafaelmaldivas@gmail.com",
                 celular="(92) 99911-2233",
                 data_nascimento=date(1985, 5, 20),
@@ -57,11 +58,18 @@ class MasterSeeder:
                 ativo=True
                 # Funcionario não tem campos de endereço - removido **end_hq
             )
+            # Senha NUNCA hardcoded (já vazou no histórico do git uma vez).
+            _pwd = os.environ.get("SEED_SUPERADMIN_PASSWORD")
+            if not _pwd:
+                raise RuntimeError(
+                    "SEED_SUPERADMIN_PASSWORD não definida no ambiente — "
+                    "obrigatória para criar o super admin via seed."
+                )
             # Tenta set_senha primeiro (padrão do modelo), fallback para set_password
             if hasattr(rafael, 'set_senha'):
-                rafael.set_senha("***REMOVED-SUPERADMIN-PWD***")
+                rafael.set_senha(_pwd)
             else:
-                rafael.set_password("***REMOVED-SUPERADMIN-PWD***")
+                rafael.set_password(_pwd)
             db.session.add(rafael)
         else:
             # Garantir que um superadmin existente sempre tenha is_super_admin=True

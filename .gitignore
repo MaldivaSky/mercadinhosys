@@ -77,6 +77,23 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 
+# Certificados digitais — NUNCA versionar (A1/.p12 assina NFC-e em nome do CNPJ)
+backend/certs/
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Artefatos de debug na raiz do backend (nunca versionar)
+backend/test_final*.txt
+backend/test_delivery_*.txt
+backend/debug_*.txt
+backend/pt_log.txt
+backend/backend_finalizar_erro.txt
+backend/verify_output.txt
+backend/test_output.txt
+backend/*.log
+
 # Seeds (sensíveis)
 seed_*.py
 verify_system_*.py
