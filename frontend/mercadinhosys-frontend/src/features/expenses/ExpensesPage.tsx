@@ -294,6 +294,7 @@ function BoletoCard({ item, variant }: { item: BoletoItem; variant: "vencido" | 
 export default function ExpensesPage() {
     // ─── Tab ──────────────────────────────────────────────────────────────────
     const [activeTab, setActiveTab] = useState<TabId>("visao_geral");
+    const [filtroBoletos, setFiltroBoletos] = useState<"todos" | "vencidos" | "a_vencer" | "pagos">("todos");
 
     // ─── Período / filtros gerais ─────────────────────────────────────────────
     const [periodo, setPeriodo] = useState("mes");
@@ -696,7 +697,7 @@ export default function ExpensesPage() {
                                 </h3>
                                 {loadingStats ? <Sk cls="h-48 w-full" /> : chartCategorias ? (
                                     <div className="h-48">
-                                        <Doughnut data={chartCategorias} options={{ ...darkOpts, plugins: { legend: { display: true, position: "bottom" as const, labels: { font: { size: 10 }, boxWidth: 12, color: "#94a3b8" } } } }} />
+                                        <Doughnut data={chartCategorias} options={{ responsive: true, maintainAspectRatio: false, plugins: { tooltip: { intersect: false }, legend: { display: true, position: "bottom" as const, labels: { font: { size: 10 }, boxWidth: 12, color: "#94a3b8" } } } }} />
                                     </div>
                                 ) : (
                                     <div className="h-48 flex items-center justify-center text-slate-400 text-sm">Sem dados</div>
@@ -985,7 +986,10 @@ export default function ExpensesPage() {
                             <>
                                 {/* Resumo cards */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 rounded-2xl p-5">
+                                    <div 
+                                        onClick={() => setFiltroBoletos(f => f === "vencidos" ? "todos" : "vencidos")}
+                                        className={`cursor-pointer transition-all hover:scale-[1.02] ${filtroBoletos === "vencidos" ? 'ring-2 ring-red-500 scale-[1.02]' : filtroBoletos !== 'todos' ? 'opacity-50 grayscale' : ''} bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 rounded-2xl p-5`}
+                                    >
                                         <div className="flex items-center gap-3 mb-2">
                                             <BadgeAlert className="w-6 h-6 text-red-500" />
                                             <span className="font-bold text-red-700 dark:text-red-400">Vencidos</span>
@@ -993,7 +997,10 @@ export default function ExpensesPage() {
                                         <p className="text-2xl font-black text-red-700 dark:text-red-300">{fmt(boletos.resumo.total_vencidos)}</p>
                                         <p className="text-xs text-red-500 mt-1">{boletos.resumo.qtd_vencidos} boleto(s) — atenção urgente!</p>
                                     </div>
-                                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-5">
+                                    <div 
+                                        onClick={() => setFiltroBoletos(f => f === "a_vencer" ? "todos" : "a_vencer")}
+                                        className={`cursor-pointer transition-all hover:scale-[1.02] ${filtroBoletos === "a_vencer" ? 'ring-2 ring-amber-500 scale-[1.02]' : filtroBoletos !== 'todos' ? 'opacity-50 grayscale' : ''} bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-5`}
+                                    >
                                         <div className="flex items-center gap-3 mb-2">
                                             <Clock className="w-6 h-6 text-amber-500" />
                                             <span className="font-bold text-amber-700 dark:text-amber-400">A Vencer (30 dias)</span>
@@ -1001,7 +1008,10 @@ export default function ExpensesPage() {
                                         <p className="text-2xl font-black text-amber-700 dark:text-amber-300">{fmt(boletos.resumo.total_a_vencer)}</p>
                                         <p className="text-xs text-amber-500 mt-1">{boletos.resumo.qtd_a_vencer} boleto(s) no horizonte</p>
                                     </div>
-                                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-5">
+                                    <div 
+                                        onClick={() => setFiltroBoletos(f => f === "pagos" ? "todos" : "pagos")}
+                                        className={`cursor-pointer transition-all hover:scale-[1.02] ${filtroBoletos === "pagos" ? 'ring-2 ring-emerald-500 scale-[1.02]' : filtroBoletos !== 'todos' ? 'opacity-50 grayscale' : ''} bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-5`}
+                                    >
                                         <div className="flex items-center gap-3 mb-2">
                                             <BadgeCheck className="w-6 h-6 text-emerald-500" />
                                             <span className="font-bold text-emerald-700 dark:text-emerald-400">Pagos (30 dias)</span>
@@ -1012,7 +1022,7 @@ export default function ExpensesPage() {
                                 </div>
 
                                 {/* Vencidos */}
-                                {boletos.vencidos.items.length > 0 && (
+                                {(filtroBoletos === "todos" || filtroBoletos === "vencidos") && boletos.vencidos.items.length > 0 && (
                                     <div>
                                         <h3 className="font-bold text-red-600 dark:text-red-400 flex items-center gap-2 mb-3">
                                             <BadgeAlert className="w-5 h-5" />
@@ -1025,7 +1035,7 @@ export default function ExpensesPage() {
                                 )}
 
                                 {/* A vencer */}
-                                {boletos.a_vencer.items.length > 0 && (
+                                {(filtroBoletos === "todos" || filtroBoletos === "a_vencer") && boletos.a_vencer.items.length > 0 && (
                                     <div>
                                         <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2 mb-3">
                                             <Clock className="w-5 h-5" />
@@ -1038,7 +1048,7 @@ export default function ExpensesPage() {
                                 )}
 
                                 {/* Pagos */}
-                                {boletos.pagos.items.length > 0 && (
+                                {(filtroBoletos === "todos" || filtroBoletos === "pagos") && boletos.pagos.items.length > 0 && (
                                     <div>
                                         <h3 className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2 mb-3">
                                             <BadgeCheck className="w-5 h-5" />
