@@ -9,7 +9,8 @@ import {
     X,
     User,
     WifiOff,
-    CloudUpload
+    CloudUpload,
+    Truck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProdutoSearch from './components/ProdutoSearch';
@@ -22,6 +23,7 @@ import PesoInputModal from './components/PesoInputModal';
 import { usePDV } from '../../hooks/usePDV';
 import { formatCurrency } from '../../utils/formatters';
 import { pdvService } from './pdvService';
+import { apiClient } from '../../api/apiClient';
 import PDVSkeleton from './components/PDVSkeleton';
 import CaixaManager from './components/CaixaManager';
 import MultiPaymentManager from './components/MultiPaymentManager';
@@ -57,6 +59,10 @@ const PDVPage: React.FC = () => {
         finalizarVenda,
         caixaAberto,
         setCaixaAberto,
+        paraEntregar,
+        setParaEntregar,
+        dadosEntrega,
+        setDadosEntrega,
     } = usePDV();
 
     // Fila offline — vendas salvas localmente quando sem internet
@@ -478,7 +484,180 @@ const PDVPage: React.FC = () => {
                                                 className="p-5 pt-0 overflow-visible"
                                             >
                                                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                                                    <ClienteSelect cliente={cliente} onClienteSelecionado={(c: any) => { setCliente(c); setActiveSection('pagamento'); }} />
+                                                    <ClienteSelect 
+                                                        cliente={cliente} 
+                                                        onClienteSelecionado={async (c: any) => { 
+                                                            setCliente(c); 
+                                                            if (paraEntregar && c.cep) {
+                                                                const cepDest = c.cep || '00000-000';
+                                                                setDadosEntrega({
+                                                                    endereco: {
+                                                                        cep: cepDest,
+                                                                        logradouro: c.logradouro || '',
+                                                                        numero: c.numero || 'S/N',
+                                                                        bairro: c.bairro || '',
+                                                                        cidade: c.cidade || '',
+                                                                        estado: c.estado || 'XX'
+                                                                    }
+                                                                });
+                                                                
+                                                                // Calcula automático a distância/taxa pelo CEP
+                                                                try {
+                                                                    const api = await import('../../api/apiClient').then(m => m.default);
+                                                                    const res = await api.post('/logistica/estimar-taxa-cep', { 
+                                                                        cep_destino: cepDest,
+                                                                        veiculo: dadosEntrega?.veiculo || 'moto' 
+                                                                    });
+                                                                    if (res.data?.success) {
+                                                                        setDadosEntrega({ 
+                                                                            distancia_km: res.data.distancia_km,
+                                                                            taxa_entrega: res.data.taxa_sugerida 
+                                                                        });
+                                                                        import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                    } else {
+                                                                        import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa."));
+                                                                    }
+                                                                } catch (err: any) {
+                                                                    import('react-hot-toast').then(m => m.default.error(err.response?.data?.error || "Falha na comunicação"));
+                                                                }
+                                                            } else if (paraEntregar && (!c || !c.cep)) {
+                                                                import('react-hot-toast').then(m => m.default.error("Este cliente não tem CEP cadastrado ou os dados estão desatualizados."));
+                                                            }
+                                                            setActiveSection('pagamento'); 
+                                                        }} 
+                                                    />
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                                
+                                {/* SEÇÃO: ENTREGA */}
+                                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                                    <div className="w-full p-5 flex items-center justify-between transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${paraEntregar ? 'bg-orange-100 text-orange-600' : 'bg-slate-200 text-slate-500'}`}>
+                                                <Truck className="w-5 h-5" />
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Logística</p>
+                                                <p className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase">
+                                                    Venda p/ Entregar
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                className="sr-only peer" 
+                                                checked={paraEntregar}
+                                                onChange={async (e) => {
+                                                    if (e.target.checked && !cliente) {
+                                                        import('react-hot-toast').then(m => m.default.error("Selecione ou cadastre um cliente primeiro para calcular a entrega."));
+                                                        return;
+                                                    }
+                                                    setParaEntregar(e.target.checked);
+                                                    if (e.target.checked && cliente?.cep) {
+                                                        const cepDest = cliente.cep || '00000-000';
+                                                        setDadosEntrega({
+                                                            endereco: {
+                                                                cep: cepDest,
+                                                                logradouro: cliente.logradouro || '',
+                                                                numero: cliente.numero || 'S/N',
+                                                                bairro: cliente.bairro || '',
+                                                                cidade: cliente.cidade || '',
+                                                                estado: cliente.estado || 'XX'
+                                                            }
+                                                        });
+                                                        
+                                                        // Calcula automático
+                                                        try {
+                                                            const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
+                                                                cep_destino: cepDest,
+                                                                veiculo: dadosEntrega?.veiculo || 'moto'
+                                                            });
+                                                            if (res.data?.success) {
+                                                                setDadosEntrega({ 
+                                                                    distancia_km: res.data.distancia_km,
+                                                                    taxa_entrega: res.data.taxa_sugerida 
+                                                                });
+                                                                import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                            } else {
+                                                                import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa."));
+                                                            }
+                                                        } catch (err: any) {
+                                                            import('react-hot-toast').then(m => m.default.error(err.response?.data?.error || "Falha na comunicação"));
+                                                        }
+                                                    } else if (e.target.checked && !cliente?.cep) {
+                                                        import('react-hot-toast').then(m => m.default.error("Este cliente não tem CEP cadastrado ou os dados estão desatualizados. Remova e adicione novamente."));
+                                                    }
+                                                }}
+                                            />
+                                            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                                        </label>
+                                    </div>
+                                    <AnimatePresence>
+                                        {paraEntregar && (
+                                            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden p-5 pt-0">
+                                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+                                                    {!cliente && (
+                                                        <p className="text-xs text-orange-600 font-bold">⚠️ Recomendado selecionar o cliente acima para puxar o endereço automaticamente.</p>
+                                                    )}
+                                                    
+                                                    <div className="grid grid-cols-3 gap-3">
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Distância Estimada (KM)</label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="number"
+                                                                    disabled
+                                                                    value={dadosEntrega?.distancia_km !== undefined && dadosEntrega?.distancia_km !== 0 ? dadosEntrega.distancia_km : ''}
+                                                                    placeholder="Auto"
+                                                                    className="w-full p-3 pr-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-gray-100 dark:bg-gray-800/50 text-slate-700 dark:text-slate-300 text-sm font-bold opacity-80 cursor-not-allowed"
+                                                                />
+                                                                <span className="absolute right-2 top-3.5 px-2 py-0.5 rounded text-[8px] font-black bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 uppercase tracking-wider">Auto</span>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-1">Taxa de Entrega (R$)</label>
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={dadosEntrega?.taxa_entrega !== undefined ? dadosEntrega.taxa_entrega : ''}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setDadosEntrega({ taxa_entrega: (val === '' ? '' : parseFloat(val)) as any });
+                                                                }}
+                                                                className="w-full p-3 rounded-xl border border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-sm font-black focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Veículo</label>
+                                                            <select
+                                                                value={dadosEntrega?.veiculo || 'moto'}
+                                                                onChange={async (e) => {
+                                                                    const veiculo = e.target.value as 'moto' | 'carro';
+                                                                    setDadosEntrega({ veiculo });
+                                                                    if (cliente?.cep) {
+                                                                        const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
+                                                                            cep_destino: cliente.cep,
+                                                                            veiculo
+                                                                        });
+                                                                        if (res.data?.success) {
+                                                                            setDadosEntrega({ 
+                                                                                distancia_km: res.data.distancia_km,
+                                                                                taxa_entrega: res.data.taxa_sugerida 
+                                                                            });
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                                            >
+                                                                <option value="moto">🏍️ Moto</option>
+                                                                <option value="carro">🚗 Carro</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </motion.div>
                                         )}

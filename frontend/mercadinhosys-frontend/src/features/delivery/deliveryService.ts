@@ -126,6 +126,11 @@ export const deliveryService = {
         return response.data;
     },
 
+    getMetricasLogistica: async (filtro: string = 'hoje') => {
+        const response = await apiClient.get(`/logistica/dashboard/metricas?filtro=${filtro}`);
+        return response.data;
+    },
+
     getEntregas: async (status?: string) => {
         const params = status && status !== 'todos' ? `?status=${status}` : '';
         const response = await apiClient.get(`/delivery/entregas${params}`);
@@ -144,6 +149,21 @@ export const deliveryService = {
 
     getTaxas: async () => {
         const response = await apiClient.get('/delivery/taxas');
+        return response.data;
+    },
+
+    getTurnoAtual: async () => {
+        const response = await apiClient.get('/logistica/turno/atual');
+        return response.data;
+    },
+
+    iniciarTurno: async (data: { km_inicial: number, veiculo_id?: number, tipo_combustivel: string, checklist?: any[] }) => {
+        const response = await apiClient.post('/logistica/turno/iniciar', data);
+        return response.data;
+    },
+
+    finalizarTurno: async (data: { km_final: number }) => {
+        const response = await apiClient.post('/logistica/turno/finalizar', data);
         return response.data;
     },
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Navigation, Shield } from 'lucide-react';
@@ -26,6 +26,14 @@ interface LiveTrackingProps {
     entrega?: any;
 }
 
+const RecenterMap = ({ center }: { center: [number, number] }) => {
+    const map = useMap();
+    useEffect(() => {
+        map.flyTo(center, map.getZoom(), { animate: true, duration: 1.5 });
+    }, [center, map]);
+    return null;
+};
+
 const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega: _entrega }) => {
     const [eventos, setEventos] = useState<any[]>([]);
 
@@ -48,8 +56,8 @@ const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega: _entrega }) => {
         return () => clearInterval(interval);
     }, []);
 
-    // Coordenada padrão (ex: Manaus, AM ou Brasil central)
-    const defaultCenter: [number, number] = [-3.1190, -60.0217];
+    // Coordenada padrão (Guarulhos, SP - Próximo ao CEP da loja)
+    const defaultCenter: [number, number] = [-23.4475, -46.5450];
     // Centralizar no último evento ou no default
     const centerPoint = eventos.length > 0 && eventos[0].latitude && eventos[0].longitude 
         ? [eventos[0].latitude, eventos[0].longitude] 
@@ -88,6 +96,7 @@ const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega: _entrega }) => {
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                 >
+                    <RecenterMap center={centerPoint as [number, number]} />
                     <TileLayer
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         attribution='&copy; OpenStreetMap'

@@ -23,8 +23,8 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
         endereco_numero: '',
         endereco_complemento: '',
         endereco_bairro: '',
-        endereco_cidade: 'Manaus',
-        endereco_estado: 'AM',
+        endereco_cidade: 'Guarulhos',
+        endereco_estado: 'SP',
         endereco_referencia: '',
         motorista_id: '',
         taxa_entrega: 0,
@@ -71,8 +71,8 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
             endereco_logradouro: venda.cliente?.logradouro || '',
             endereco_numero: venda.cliente?.numero || '',
             endereco_bairro: venda.cliente?.bairro || '',
-            endereco_cidade: venda.cliente?.cidade || 'Manaus',
-            endereco_estado: venda.cliente?.estado || 'AM',
+            endereco_cidade: venda.cliente?.cidade || 'Guarulhos',
+            endereco_estado: venda.cliente?.estado || 'SP',
             pagamento_status: 'pago' // Assumindo pago se feito na loja
         });
         setStep(2);

@@ -35,6 +35,20 @@ export interface PDVSession {
     observacoes: string;
     descontoGeral: number;
     descontoPercentual: boolean;
+    paraEntregar: boolean;
+    dadosEntrega: {
+        distancia_km: number;
+        taxa_entrega: number;
+        veiculo?: 'moto' | 'carro';
+        endereco: {
+            cep: string;
+            logradouro: string;
+            numero: string;
+            bairro: string;
+            cidade: string;
+            estado: string;
+        } | null;
+    };
 }
 
 const createInitialSession = (): PDVSession => ({
@@ -46,6 +60,13 @@ const createInitialSession = (): PDVSession => ({
     observacoes: '',
     descontoGeral: 0,
     descontoPercentual: false,
+    paraEntregar: false,
+    dadosEntrega: {
+        distancia_km: 0,
+        taxa_entrega: 0,
+        endereco: null,
+        veiculo: 'moto'
+    },
 });
 
 // Persistência da sessão do caixa: sem isso, sair da tela do PDV (menu, notificação,
@@ -97,6 +118,8 @@ export const usePDV = () => {
     const observacoes = sessaoAtiva.observacoes;
     const descontoGeral = sessaoAtiva.descontoGeral;
     const descontoPercentual = sessaoAtiva.descontoPercentual;
+    const paraEntregar = sessaoAtiva.paraEntregar;
+    const dadosEntrega = sessaoAtiva.dadosEntrega;
 
     const updateSessao = useCallback((updates: Partial<PDVSession>) => {
         setSessoes(prev => prev.map(s => s.id === sessaoAtivaId ? { ...s, ...updates } : s));
@@ -149,6 +172,14 @@ export const usePDV = () => {
             if (s.id !== sessaoAtivaId) return s;
             const n = typeof dp === 'function' ? dp(s.descontoPercentual) : dp;
             return { ...s, descontoPercentual: n };
+        }));
+    }, [sessaoAtivaId]);
+    
+    const setParaEntregar = useCallback((p: boolean) => updateSessao({ paraEntregar: p }), [updateSessao]);
+    const setDadosEntrega = useCallback((d: Partial<PDVSession['dadosEntrega']>) => {
+        setSessoes(prev => prev.map(s => {
+            if (s.id !== sessaoAtivaId) return s;
+            return { ...s, dadosEntrega: { ...s.dadosEntrega, ...d } };
         }));
     }, [sessaoAtivaId]);
 
@@ -208,7 +239,9 @@ export const usePDV = () => {
         : descontoGeral);
 
     const descontoTotal = round(descontoItens + descontoGeralCalculado);
-    const total = Math.max(0, round(subtotal - descontoTotal));
+    
+    const taxaEntregaCalculada = paraEntregar ? (dadosEntrega?.taxa_entrega || 0) : 0;
+    const total = Math.max(0, round(subtotal - descontoTotal + taxaEntregaCalculada));
 
     const totalPago = round(pagamentos.reduce((sum, p) => sum + p.valor, 0));
 
@@ -388,6 +421,8 @@ export const usePDV = () => {
             observacoes: '',
             descontoGeral: 0,
             descontoPercentual: false,
+            paraEntregar: false,
+            dadosEntrega: { distancia_km: 0, taxa_entrega: 0, endereco: null }
         });
     }, [updateSessao]);
 
@@ -429,6 +464,7 @@ export const usePDV = () => {
                 cliente_id: cliente?.id ? Number(cliente.id) : null,
                 email_destino: emailRecibo.trim() || undefined,
                 observacoes: observacoes.trim() || undefined,
+                dados_entrega: paraEntregar ? dadosEntrega : undefined,
                 ...(extraData || {}),
             };
 
@@ -501,6 +537,10 @@ export const usePDV = () => {
         setDescontoGeral,
         descontoPercentual,
         setDescontoPercentual,
+        paraEntregar,
+        setParaEntregar,
+        dadosEntrega,
+        setDadosEntrega,
         configuracoes,
         loading,
         subtotal,

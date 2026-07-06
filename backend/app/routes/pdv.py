@@ -750,6 +750,46 @@ def finalizar_venda():
         desconto = to_decimal(data.get("desconto", 0))
         total = to_decimal(data.get("total", 0))
         
+        # LOGISTICA / DELIVERY INJECTION
+        dados_entrega = data.get("dados_entrega")
+        taxa_entrega = Decimal('0.00')
+        if dados_entrega:
+            taxa_entrega = to_decimal(dados_entrega.get("taxa_entrega", 0))
+            if taxa_entrega > 0:
+                produto_taxa = Produto.query.filter_by(nome="Taxa de Entrega", estabelecimento_id=estab_id).first()
+                if not produto_taxa:
+                    from app.models import CategoriaProduto
+                    categoria = CategoriaProduto.query.filter_by(estabelecimento_id=estab_id, nome="Serviços").first()
+                    if not categoria:
+                        categoria = CategoriaProduto(estabelecimento_id=estab_id, nome="Serviços")
+                        db.session.add(categoria)
+                        db.session.flush()
+
+                    produto_taxa = Produto(
+                        estabelecimento_id=estab_id,
+                        categoria_id=categoria.id,
+                        nome="Taxa de Entrega",
+                        tipo="servico",
+                        unidade_medida="SV",
+                        preco_venda=taxa_entrega,
+                        preco_custo=0,
+                        ativo=True,
+                        quantidade=9999,
+                        classificacao_abc="C"
+                    )
+                    db.session.add(produto_taxa)
+                    db.session.flush()
+                
+                # Adiciona como VendaItem se já não estiver no payload (previne duplicação caso front já envie)
+                if not any(str(i.get("id", i.get("productId", i.get("produto_id")))) == str(produto_taxa.id) for i in items):
+                    items.append({
+                        "id": produto_taxa.id,
+                        "quantidade": 1,
+                        "preco_unitario": float(taxa_entrega),
+                        "price": float(taxa_entrega)
+                    })
+        
+        
         # 🔥 NOVO: Suporte a múltiplos pagamentos
         pagamentos_data = data.get("pagamentos", [])
         
@@ -1027,6 +1067,31 @@ def finalizar_venda():
                 valor=total,
                 detalhes={"codigo": codigo_venda}
             )
+
+            if dados_entrega and to_decimal(dados_entrega.get("taxa_entrega", 0)) > 0:
+                from app.models import Entrega
+                from datetime import timedelta
+                
+                endereco = dados_entrega.get("endereco", {})
+                
+                nova_entrega = Entrega(
+                    estabelecimento_id=estab_id,
+                    venda_id=nova_venda.id,
+                    cliente_id=cliente_id,
+                    taxa_entrega=to_decimal(dados_entrega.get("taxa_entrega", 0)),
+                    endereco_cep=endereco.get("cep", "00000-000"),
+                    endereco_logradouro=endereco.get("logradouro", "Não informado"),
+                    endereco_numero=endereco.get("numero", "S/N"),
+                    endereco_bairro=endereco.get("bairro", "Não informado"),
+                    endereco_cidade=endereco.get("cidade", "Não informado"),
+                    endereco_estado=endereco.get("estado", "XX"),
+                    distancia_km=to_decimal(dados_entrega.get("distancia_km", 0)),
+                    pagamento_tipo="loja",
+                    pagamento_status="pago",
+                    status="pendente",
+                    data_prevista=data_venda + timedelta(hours=1)
+                )
+                db.session.add(nova_entrega)
 
             db.session.commit()
 

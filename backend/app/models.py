@@ -2369,7 +2369,7 @@ AuditoriaSincronia = SyncQueue
 # Módulo 8: App do Entregador e Logística
 # ==========================================
 
-class StatusPedidoLogistica(db.Model, TenantQuery):
+class StatusPedidoLogistica(db.Model):
     __tablename__ = "status_pedido_logistica"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(db.Integer, db.ForeignKey('estabelecimentos.id'), nullable=False, index=True)
@@ -2380,7 +2380,7 @@ class StatusPedidoLogistica(db.Model, TenantQuery):
     longitude = db.Column(db.Float, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-class AuditoriaQuilometragem(db.Model, TenantQuery):
+class AuditoriaQuilometragem(db.Model):
     __tablename__ = "auditoria_quilometragem"
     id = db.Column(db.Integer, primary_key=True)
     estabelecimento_id = db.Column(db.Integer, db.ForeignKey('estabelecimentos.id'), nullable=False, index=True)
@@ -2388,3 +2388,32 @@ class AuditoriaQuilometragem(db.Model, TenantQuery):
     turno_data = db.Column(db.Date, nullable=False, default=lambda: datetime.utcnow().date())
     pontos_gps = db.Column(db.JSON, nullable=True) # JSON array de coords offline
     distancia_total_km = db.Column(db.Float, default=0.0)
+
+class ConfiguracaoLogistica(db.Model):
+    __tablename__ = "configuracoes_logistica"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(db.Integer, db.ForeignKey('estabelecimentos.id'), nullable=False, index=True)
+    preco_gasolina = db.Column(db.Numeric(10, 2), default=6.00)
+    preco_alcool = db.Column(db.Numeric(10, 2), default=4.50)
+    preco_diesel = db.Column(db.Numeric(10, 2), default=5.00)
+    manutencao_moto_diaria = db.Column(db.Numeric(10, 2), default=100.00)
+    manutencao_carro_diaria = db.Column(db.Numeric(10, 2), default=200.00)
+    preco_por_km_moto = db.Column(db.Numeric(10, 2), default=1.00)
+    preco_por_km_carro = db.Column(db.Numeric(10, 2), default=2.00)
+
+class TurnoEntregador(db.Model):
+    __tablename__ = "turnos_entregador"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(db.Integer, db.ForeignKey('estabelecimentos.id'), nullable=False, index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionarios.id'), nullable=False, index=True)
+    veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculos.id'), nullable=True, index=True)
+    data_turno = db.Column(db.Date, nullable=False, default=lambda: datetime.utcnow().date())
+    horario_inicio = db.Column(db.DateTime, default=datetime.utcnow)
+    horario_fim = db.Column(db.DateTime, nullable=True)
+    km_inicial = db.Column(db.Numeric(10, 2), nullable=False)
+    km_final = db.Column(db.Numeric(10, 2), nullable=True)
+    distancia_percorrida = db.Column(db.Numeric(10, 2), default=0)
+    custo_combustivel = db.Column(db.Numeric(10, 2), default=0)
+    custo_manutencao = db.Column(db.Numeric(10, 2), default=0)
+    tipo_combustivel = db.Column(db.String(20), default="gasolina")
+    status = db.Column(db.String(20), default="aberto") # aberto, fechado

@@ -247,11 +247,139 @@ const GpsBadge: React.FC<{ status: string }> = ({ status }) => {
         </div>
     );
 };
+// ─── Abertura de Turno ───────────────────────────────────────────────────────────
+const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoIniciado }) => {
+    const [kmInicial, setKmInicial] = useState('');
+    const [veiculos, setVeiculos] = useState<any[]>([]);
+    const [veiculoId, setVeiculoId] = useState<number | ''>('');
+    const [combustivel, setCombustivel] = useState('gasolina');
+    const [loading, setLoading] = useState(false);
+    const [checklist, setChecklist] = useState([
+        { item: 'Pneus e Freios', ok: true },
+        { item: 'Farol e Setas', ok: true },
+        { item: 'Óleo e Água (se aplicável)', ok: true },
+        { item: 'Documentação (CNH e CRLV)', ok: true }
+    ]);
+
+    useEffect(() => {
+        deliveryService.getVeiculos().then(res => {
+            const veics = res.veiculos || res.data || [];
+            setVeiculos(veics);
+            if (veics.length === 1) setVeiculoId(veics[0].id);
+        }).catch(() => {});
+    }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!kmInicial || isNaN(Number(kmInicial))) return toast.error('KM Inicial inválido');
+        setLoading(true);
+        try {
+            await deliveryService.iniciarTurno({
+                km_inicial: Number(kmInicial),
+                veiculo_id: veiculoId ? Number(veiculoId) : undefined,
+                tipo_combustivel: combustivel,
+                checklist
+            });
+            toast.success('Turno iniciado com sucesso!');
+            onTurnoIniciado();
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Erro ao iniciar turno');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col p-5">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md mx-auto mt-10">
+                <div className="bg-blue-600 rounded-t-3xl p-6 text-white text-center">
+                    <Truck className="w-12 h-12 mx-auto mb-3 opacity-90" />
+                    <h1 className="text-2xl font-black">Iniciar Turno</h1>
+                    <p className="text-blue-200 text-sm mt-1">Preencha os dados para começar a rodar</p>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-900 rounded-b-3xl p-6 shadow-xl border border-t-0 border-gray-100 dark:border-gray-800 space-y-5">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">KM Inicial (Painel)</label>
+                        <input
+                            type="number"
+                            required
+                            value={kmInicial}
+                            onChange={e => setKmInicial(e.target.value)}
+                            placeholder="Ex: 12500"
+                            className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 font-bold text-gray-900 dark:text-white text-lg focus:border-blue-500 outline-none transition-colors"
+                        />
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Veículo Utilizado</label>
+                        <select
+                            value={veiculoId}
+                            onChange={e => setVeiculoId(Number(e.target.value))}
+                            className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 font-bold text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors"
+                        >
+                            <option value="">(Nenhum / Não Cadastrado)</option>
+                            {veiculos.map(v => (
+                                <option key={v.id} value={v.id}>{v.placa} - {v.modelo}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Tipo Combustível</label>
+                        <select
+                            value={combustivel}
+                            onChange={e => setCombustivel(e.target.value)}
+                            className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 font-bold text-gray-900 dark:text-white focus:border-blue-500 outline-none transition-colors"
+                        >
+                            <option value="gasolina">Gasolina</option>
+                            <option value="alcool">Álcool</option>
+                            <option value="diesel">Diesel</option>
+                        </select>
+                    </div>
+
+                    <div className="bg-amber-50 dark:bg-amber-900/10 rounded-2xl p-4 border border-amber-100 dark:border-amber-800/30">
+                        <h3 className="font-bold text-amber-800 dark:text-amber-400 mb-3 text-sm flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4" /> Checklist do Veículo
+                        </h3>
+                        <div className="space-y-3">
+                            {checklist.map((item, idx) => (
+                                <label key={idx} className="flex items-center gap-3 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        checked={item.ok}
+                                        onChange={e => {
+                                            const newC = [...checklist];
+                                            newC[idx].ok = e.target.checked;
+                                            setChecklist(newC);
+                                        }}
+                                        className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-600"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{item.item}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-lg py-4 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:animate-pulse"
+                    >
+                        {loading ? 'Iniciando...' : 'Bater Ponto & Iniciar Turno'}
+                    </button>
+                </form>
+            </motion.div>
+        </div>
+    );
+};
 
 // ─── Painel Mobile (operação real em campo) ───────────────────────────────────
 const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     const [entregas, setEntregas] = useState<Entrega[]>([]);
     const [loading, setLoading] = useState(true);
+    const [turno, setTurno] = useState<any>(undefined);
+    const [finalizando, setFinalizando] = useState(false);
     const [tab, setTab] = useState<'disponiveis' | 'ativas' | 'concluidas'>('ativas');
     const [detalheModalId, setDetalheModalId] = useState<number | null>(null);
     const [meuMotoristaId, setMeuMotoristaId] = useState<number | null>(null);
@@ -269,8 +397,12 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await deliveryService.getEntregas('todos');
-            if (res.success) setEntregas(res.entregas ?? []);
+            const [resEntregas, resTurno] = await Promise.all([
+                deliveryService.getEntregas('todos'),
+                deliveryService.getTurnoAtual().catch(() => ({ turno: null }))
+            ]);
+            if (resEntregas.success) setEntregas(resEntregas.entregas ?? []);
+            setTurno(resTurno?.turno || null);
         } finally {
             setLoading(false);
         }
@@ -287,6 +419,33 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     
     const lista = tab === 'ativas' ? ativas : tab === 'concluidas' ? concluidas : disponiveis;
 
+    const handleFinalizarTurno = async () => {
+        const kmFinal = window.prompt("Para finalizar o turno, digite o KM FINAL do painel do veículo:");
+        if (!kmFinal) return;
+        if (isNaN(Number(kmFinal))) return toast.error("KM inválido. Digite apenas números.");
+        
+        setFinalizando(true);
+        try {
+            await deliveryService.finalizarTurno({ km_final: Number(kmFinal) });
+            toast.success("Turno encerrado e custos calculados!");
+            setTurno(null);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Erro ao finalizar turno');
+        } finally {
+            setFinalizando(false);
+        }
+    };
+
+    // Splash Screen Loading
+    if (turno === undefined) {
+        return <div className="min-h-screen bg-blue-600 flex flex-col items-center justify-center text-white"><Truck className="w-12 h-12 animate-pulse mb-3" /><p className="font-bold">Carregando painel...</p></div>;
+    }
+
+    // Tela de Iniciar Turno (Trava)
+    if (turno === null) {
+        return <AberturaTurno onTurnoIniciado={load} />;
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
             <div className="bg-gradient-to-br from-blue-700 to-indigo-800 px-5 pt-10 pb-5 text-white">
@@ -294,14 +453,24 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                     <div>
                         <p className="text-blue-200 text-[10px] font-bold uppercase tracking-widest">Painel do Entregador</p>
                         <h1 className="text-xl font-black mt-0.5">Olá, {user?.nome?.split(' ')[0] || 'Motorista'}!</h1>
+                        <p className="text-xs text-blue-300 mt-1">KM Início: <b>{turno.km_inicial}</b></p>
                     </div>
-                    <button
-                        onClick={load}
-                        disabled={loading}
-                        className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleFinalizarTurno}
+                            disabled={finalizando}
+                            className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-100 text-xs font-bold border border-red-500/30 hover:bg-red-500 hover:text-white transition-all flex items-center gap-1"
+                        >
+                            {finalizando ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Finalizar Turno'}
+                        </button>
+                        <button
+                            onClick={load}
+                            disabled={loading}
+                            className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all shrink-0"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
                 </div>
 
                 {entregaEmRota && (
@@ -397,7 +566,17 @@ const AvisoDesktop: React.FC<{ user: any }> = ({ user }) => (
         </p>
         <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 w-full border border-gray-200 dark:border-gray-700 mb-4">
             <p className="text-xs text-gray-400 mb-1">Endereço do sistema</p>
-            <p className="font-mono text-sm font-bold text-blue-600 break-all">{window.location.origin}</p>
+            <p className="font-mono text-sm font-bold text-blue-600 break-all">
+                {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                    ? `http://[IP-DO-COMPUTADOR]:${window.location.port}`
+                    : window.location.origin}
+            </p>
+            {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                <p className="text-[10px] text-gray-500 mt-2 font-medium">
+                    Dica: Como você está no "localhost", o celular não vai encontrar a página. 
+                    Descubra o IP do seu computador na rede Wi-Fi (ex: 192.168.1.10) e digite no celular.
+                </p>
+            )}
         </div>
         <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 text-left w-full">
             <Radio className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />

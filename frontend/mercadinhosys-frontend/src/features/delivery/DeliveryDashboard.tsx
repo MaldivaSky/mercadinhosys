@@ -10,40 +10,81 @@ import {
     AlertCircle,
     Plus,
     Fuel,
-    Navigation
+    Navigation,
+    Settings,
+    X,
+    Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { deliveryService, Entrega } from './deliveryService';
 import LiveTracking from './LiveTracking';
 import CreateDeliveryModal from './CreateDeliveryModal';
 import UnifiedDeliverySaleModal from './UnifiedDeliverySaleModal';
+import { apiClient } from '../../api/apiClient';
 import toast from 'react-hot-toast';
 
 const DeliveryDashboard: React.FC = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState<any>(null);
+    const [metricas, setMetricas] = useState<any>(null);
     const [entregasRecentes, setEntregasRecentes] = useState<Entrega[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUnifiedModalOpen, setIsUnifiedModalOpen] = useState(false);
+    const [filtroData, setFiltroData] = useState('hoje');
+    const [detalheModalId, setDetalheModalId] = useState<number | null>(null);
+    
+    // Configurações
+    const [showConfig, setShowConfig] = useState(false);
+    const [config, setConfig] = useState({
+        preco_gasolina: 6.00, preco_alcool: 4.50, preco_diesel: 5.00,
+        preco_por_km_moto: 1.00, preco_por_km_carro: 2.00,
+        custo_manutencao_diario_moto: 10.00, custo_manutencao_diario_carro: 20.00
+    });
+    const [savingConfig, setSavingConfig] = useState(false);
 
     useEffect(() => {
         fetchData();
-    }, []);
+        carregarConfig();
+    }, [filtroData]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [statsRes, entregasRes] = await Promise.all([
+            const [statsRes, entregasRes, metricasRes] = await Promise.all([
                 deliveryService.getStats(),
-                deliveryService.getEntregas('todos')
+                deliveryService.getEntregas('todos'),
+                deliveryService.getMetricasLogistica(filtroData).catch(() => ({ metricas: null }))
             ]);
 
             if (statsRes.success) setStats(statsRes.stats);
             if (entregasRes.success) setEntregasRecentes(entregasRes.entregas.slice(0, 5));
+            if (metricasRes?.metricas) setMetricas(metricasRes.metricas);
         } catch (error) {
             toast.error('Erro ao carregar dados do delivery');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const carregarConfig = async () => {
+        try {
+            const res = await apiClient.get('/logistica/configuracao');
+            if (res.data?.success) setConfig(res.data.config);
+        } catch (error) {}
+    };
+
+    const salvarConfig = async () => {
+        setSavingConfig(true);
+        try {
+            await apiClient.put('/logistica/configuracao', config);
+            toast.success("Configurações de Logística salvas!");
+            setShowConfig(false);
+        } catch (error) {
+            toast.error("Erro ao salvar configurações.");
+        } finally {
+            setSavingConfig(false);
         }
     };
 
@@ -80,12 +121,30 @@ const DeliveryDashboard: React.FC = () => {
                         Monitoramento em tempo real da operação de entregas
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+                    <select
+                        value={filtroData}
+                        onChange={e => setFiltroData(e.target.value)}
+                        className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 outline-none focus:border-blue-500"
+                    >
+                        <option value="hoje">Hoje</option>
+                        <option value="ontem">Ontem</option>
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="15d">Últimos 15 dias</option>
+                        <option value="30d">Últimos 30 dias</option>
+                    </select>
+                    
+                    <button
+                        onClick={() => { carregarConfig(); setShowConfig(true); }}
+                        className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        <Settings className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={fetchData}
                         className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                        Atualizar Dados
+                        Atualizar
                     </button>
                     <button
                         onClick={() => setIsUnifiedModalOpen(true)}
@@ -99,29 +158,29 @@ const DeliveryDashboard: React.FC = () => {
             {/* Stats Grid - Magnitude Senior */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatusCard
-                    title="Pendentes"
-                    value={stats?.pendentes}
+                    title="Entregas (PDV / Físico)"
+                    value={metricas?.entregas_pdv || 0}
                     icon={Package}
                     color="bg-orange-500"
                     delay={0.1}
                 />
                 <StatusCard
-                    title="Em Rota"
-                    value={stats?.em_rota}
+                    title="Entregas (Online/Wpp)"
+                    value={metricas?.entregas_online || 0}
                     icon={Truck}
                     color="bg-blue-500"
                     delay={0.2}
                 />
                 <StatusCard
-                    title="Entregas (Hoje)"
-                    value={stats?.entregues_hoje}
+                    title="Total de Entregas"
+                    value={metricas?.total_entregas || 0}
                     icon={CheckCircle}
                     color="bg-green-500"
                     delay={0.3}
                 />
                 <StatusCard
-                    title="Ticket Médio Delivery"
-                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats?.ticket_medio || 0)}
+                    title="Total Taxas Arrecadadas"
+                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricas?.total_taxas || 0)}
                     icon={TrendingUp}
                     color="bg-indigo-500"
                     delay={0.4}
@@ -138,31 +197,30 @@ const DeliveryDashboard: React.FC = () => {
 
                 <div className="relative z-10">
                     <p className="text-blue-300/70 text-xs font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Navigation className="w-3 h-3" /> Distância Total
+                        <Navigation className="w-3 h-3" /> Distância Real (Turnos)
                     </p>
                     <div className="flex items-baseline gap-2 mt-3">
-                        <span className="text-5xl font-black">{(stats?.km_totais || 0).toFixed(1)}</span>
+                        <span className="text-5xl font-black">{metricas?.distancia_total || 0}</span>
                         <span className="text-blue-400 font-bold">KM</span>
                     </div>
                 </div>
 
                 <div className="relative z-10 md:border-l border-white/5 md:pl-8">
                     <p className="text-blue-300/70 text-xs font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Fuel className="w-3 h-3" /> Consumo Estimado
+                        <Fuel className="w-3 h-3" /> Gasto c/ Combustível
                     </p>
                     <div className="flex items-baseline gap-2 mt-3">
-                        <span className="text-5xl font-black text-emerald-400">{(stats?.combustivel_total || 0).toFixed(1)}</span>
-                        <span className="text-emerald-500/70 font-bold">LTS</span>
+                        <span className="text-5xl font-black text-emerald-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricas?.custo_combustivel || 0)}</span>
                     </div>
                 </div>
 
                 <div className="relative z-10 md:border-l border-white/5 md:pl-8">
-                    <p className="text-blue-300/70 text-xs font-bold uppercase tracking-[0.2em]">Top Produto Entregue</p>
+                    <p className="text-blue-300/70 text-xs font-bold uppercase tracking-[0.2em]">Custo Manutenção (Apuração)</p>
                     <div className="flex items-center gap-3 mt-4">
-                        <div className="p-2 bg-white/5 rounded-lg">
-                            <Package className="w-5 h-5 text-blue-400" />
+                        <div className="p-2 bg-red-500/20 rounded-lg">
+                            <AlertCircle className="w-5 h-5 text-red-400" />
                         </div>
-                        <span className="text-xl font-bold truncate max-w-[200px]">{stats?.top_produto || 'Processando...'}</span>
+                        <span className="text-3xl font-black text-red-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricas?.custo_manutencao || 0)}</span>
                     </div>
                 </div>
             </motion.div>
@@ -172,7 +230,10 @@ const DeliveryDashboard: React.FC = () => {
                 <div className="lg:col-span-2 space-y-4">
                     <div className="flex items-center justify-between px-2">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Fluxo de Entregas</h2>
-                        <button className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center">
+                        <button 
+                            onClick={() => navigate('/delivery')} 
+                            className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center cursor-pointer"
+                        >
                             Ver todas <ChevronRight className="w-4 h-4 ml-1" />
                         </button>
                     </div>
@@ -190,6 +251,7 @@ const DeliveryDashboard: React.FC = () => {
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: index * 0.1 }}
+                                        onClick={() => navigate('/delivery')}
                                         className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between group hover:border-blue-200 dark:hover:border-blue-900/30 transition-all cursor-pointer"
                                     >
                                         <div className="flex items-center gap-4">
@@ -227,35 +289,33 @@ const DeliveryDashboard: React.FC = () => {
 
                 {/* Top Drivers / Info Sidebar */}
                 <div className="space-y-6">
-                    {entregasRecentes.find(e => e.status === 'em_rota') ? (
-                        <LiveTracking entrega={entregasRecentes.find(e => e.status === 'em_rota')} />
-                    ) : (
-                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-xl shadow-blue-500/20">
-                            <div className="flex items-center gap-3 mb-6">
-                                <Users className="w-6 h-6" />
-                                <h3 className="font-bold">Equipe Ativa</h3>
-                            </div>
-                            <div className="space-y-4">
-                                {stats?.top_motoristas?.map((m: any, i: number) => (
-                                    <div key={i} className="flex items-center justify-between bg-white/10 p-3 rounded-2xl backdrop-blur-sm">
-                                        <span className="font-medium text-sm">{m.nome}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-blue-200 text-xs">{(m.total || 0)} ent.</span>
-                                            <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-blue-400"
-                                                    style={{ width: `${Math.min(100, (m.total / 10) * 100)}%` }}
-                                                />
-                                            </div>
+                    <LiveTracking entrega={entregasRecentes.find(e => e.status === 'em_rota')} />
+                    
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-xl shadow-blue-500/20">
+                        <div className="flex items-center gap-3 mb-6">
+                            <Users className="w-6 h-6" />
+                            <h3 className="font-bold">Equipe Ativa</h3>
+                        </div>
+                        <div className="space-y-4">
+                            {stats?.top_motoristas?.map((m: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between bg-white/10 p-3 rounded-2xl backdrop-blur-sm">
+                                    <span className="font-medium text-sm">{m.nome}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-blue-200 text-xs">{(m.total || 0)} ent.</span>
+                                        <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-blue-400"
+                                                style={{ width: `${Math.min(100, (m.total / 10) * 100)}%` }}
+                                            />
                                         </div>
                                     </div>
-                                ))}
-                                {(!stats?.top_motoristas || stats.top_motoristas.length === 0) && (
-                                    <p className="text-blue-100 text-sm opacity-80 italic">Aguardando dados da equipe...</p>
-                                )}
-                            </div>
+                                </div>
+                            ))}
+                            {(!stats?.top_motoristas || stats.top_motoristas.length === 0) && (
+                                <p className="text-blue-100 text-sm opacity-80 italic">Aguardando dados da equipe...</p>
+                            )}
                         </div>
-                    )}
+                    </div>
 
                     <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-3xl border border-amber-100 dark:border-amber-900/30">
                         <div className="flex items-start gap-4">
@@ -268,6 +328,76 @@ const DeliveryDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Modal de Configuração */}
+            <AnimatePresence>
+                {showConfig && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowConfig(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-6 overflow-hidden border border-gray-100 dark:border-gray-800"
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Settings className="w-6 h-6 text-blue-600" /> Configurações Logísticas
+                                </h2>
+                                <button onClick={() => setShowConfig(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 max-h-[60vh] overflow-y-auto p-1">
+                                <div className="space-y-4">
+                                    <h3 className="font-bold text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-800 pb-2">Preço Cobrado do Cliente</h3>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Taxa por KM (Moto)</label>
+                                        <input type="number" step="0.1" value={config.preco_por_km_moto} onChange={e => setConfig({...config, preco_por_km_moto: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Taxa por KM (Carro/Van)</label>
+                                        <input type="number" step="0.1" value={config.preco_por_km_carro} onChange={e => setConfig({...config, preco_por_km_carro: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                    
+                                    <h3 className="font-bold text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-800 pb-2 mt-6">Custo Manutenção (Diário)</h3>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Custo Moto/dia</label>
+                                        <input type="number" step="1" value={config.custo_manutencao_diario_moto} onChange={e => setConfig({...config, custo_manutencao_diario_moto: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Custo Carro/dia</label>
+                                        <input type="number" step="1" value={config.custo_manutencao_diario_carro} onChange={e => setConfig({...config, custo_manutencao_diario_carro: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <h3 className="font-bold text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-800 pb-2">Preço de Combustível (Litro)</h3>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Gasolina</label>
+                                        <input type="number" step="0.1" value={config.preco_gasolina} onChange={e => setConfig({...config, preco_gasolina: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Álcool</label>
+                                        <input type="number" step="0.1" value={config.preco_alcool} onChange={e => setConfig({...config, preco_alcool: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase">Diesel</label>
+                                        <input type="number" step="0.1" value={config.preco_diesel} onChange={e => setConfig({...config, preco_diesel: parseFloat(e.target.value) || 0})} className="w-full mt-1 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white font-medium" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 justify-end border-t border-gray-100 dark:border-gray-800 pt-4">
+                                <button onClick={() => setShowConfig(false)} className="px-5 py-2.5 rounded-xl font-bold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors">Cancelar</button>
+                                <button onClick={salvarConfig} disabled={savingConfig} className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-lg shadow-blue-500/30">
+                                    <Save className="w-4 h-4" /> {savingConfig ? 'Salvando...' : 'Salvar'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             <AnimatePresence>
                 {isModalOpen && (

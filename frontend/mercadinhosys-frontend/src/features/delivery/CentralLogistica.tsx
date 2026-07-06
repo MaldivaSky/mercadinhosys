@@ -119,12 +119,14 @@ export default function CentralLogistica() {
 
                     {/* Tops */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <TopLista titulo="Top clientes" icon={<Users className="w-4 h-4" />}
+                        <TopLista titulo="Top clientes (Entregas)" icon={<Users className="w-4 h-4" />}
                             itens={dados!.top_clientes.map(c => ({ nome: c.nome, valor: `${c.entregas} entregas`, extra: fmt(c.taxa) }))} />
-                        <TopLista titulo="Top bairros" icon={<MapPin className="w-4 h-4" />}
+                        <TopLista titulo="Top bairros (Regiões)" icon={<MapPin className="w-4 h-4" />}
                             itens={dados!.top_bairros.map(b => ({ nome: b.bairro, valor: `${b.entregas} entregas` }))} />
-                        <TopLista titulo="Top produtos" icon={<Package className="w-4 h-4" />}
-                            itens={dados!.top_produtos.map(p => ({ nome: p.produto, valor: `${fmtInt(p.quantidade)} un` }))} />
+                        {dados!.top_motoristas && (
+                            <TopLista titulo="Top Motoristas (Por Corridas)" icon={<Bike className="w-4 h-4" />}
+                                itens={dados!.top_motoristas.map((m: any) => ({ nome: m.nome, valor: `${m.entregas} entregas` }))} />
+                        )}
                     </div>
                 </>
             )}
