@@ -342,7 +342,7 @@ def obter_custo_folha():
 def obter_estatisticas_despesas():
     """Obtém estatísticas de despesas para o dashboard, com suporte a filtros de data."""
     from app.utils.query_helpers import ilike_unaccent, get_authorized_establishment_id
-    from app.services.folha_service import calcular_custo_folha_detalhado
+    from app.services.rh_calculator_service import calcular_custo_folha_detalhado
     estabelecimento_id = get_authorized_establishment_id()
     if not estabelecimento_id:
         return jsonify({"success": False, "error": "Estabelecimento não identificado"}), 400
