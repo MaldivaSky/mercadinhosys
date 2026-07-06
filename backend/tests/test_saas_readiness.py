@@ -122,3 +122,42 @@ def test_onboarding_atomic_flow(client, session):
         stored_admin = Fun.query.filter_by(email="admin@autostore.com").first()
         assert stored_admin is not None
         assert stored_admin.check_password("SecurePass123!") is True
+
+@pytest.mark.saas
+def test_trial_expiration_blocking(app, client, session):
+    from app.models import Estabelecimento, Funcionario
+    from flask_jwt_extended import create_access_token
+    from datetime import date, timedelta
+
+    estab_trial = Estabelecimento.query.first()
+    estab_trial.plano = "trial"
+    estab_trial.plano_status = "experimental"
+    estab_trial.vencimento_plano = date.today() - timedelta(days=1)
+    session.commit()
+    
+    admin = Funcionario.query.filter_by(estabelecimento_id=estab_trial.id).first()
+    token = create_access_token(identity=str(admin.id), additional_claims={
+        "is_super_admin": False,
+        "estabelecimento_id": estab_trial.id,
+        "role": "admin"
+    })
+    
+    from app import cache
+    cache.delete(f"plano_status:{estab_trial.id}")
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.get('/api/produtos/', headers=headers)
+    
+    assert response.status_code == 403
+
+@pytest.mark.billing
+def test_public_checkout_requires_existing_account(client):
+    payload = {
+        "email": "not_exists@email.com",
+        "plan_name": "Premium"
+    }
+    response = client.post('/api/billing/public-checkout', json=payload)
+    assert response.status_code == 404
+    data = response.get_json()
+    assert data['success'] is False
+    assert "conclua o cadastro" in data['error'].lower()

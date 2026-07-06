@@ -53,37 +53,12 @@ def public_checkout():
         if not plan_name or not email:
             return jsonify({"error": "Dados incompletos"}), 400
 
-        # Criar Estabelecimento temporário apenas para onboarding se não existir
         estab = Estabelecimento.query.filter_by(email=email).first()
         if not estab:
-            import random
-            # Gerar um CNPJ mock diferente
-            rand_id = str(random.randint(100, 999))
-            mock_cnpj = f"00.000.000/0001-{rand_id}" # Pode ser inválido matematicamente, mas no DB só precisa ser unico, e o validate_cnpj vai falhar? 
-            # Oh wait, if validate_cnpj fails, we can't save.
-            estab = Estabelecimento(
-                nome_fantasia="Novo Usuário Onboarding",
-                razao_social="Novo Usuário Onboarding",
-                email=email,
-                cnpj="00.000.000/0001-91",
-                telefone="00000000000",
-                cep="00000000",
-                logradouro="Não Informado",
-                numero="S/N",
-                bairro="Não Informado",
-                cidade="Não Informado",
-                estado="SP",
-                plano_status="experimental"
-            )
-            # Para evitar erro de unique do CNPJ mock 00.000.000/0001-91, desabilitamos se já existir, mas aqui o melhor é não testar cnpj fake
-            # Se já tem o 00.000.000/0001-91, mas não é deste email, podemos apenas deletar ou contornar
-            existing_mock = Estabelecimento.query.filter_by(cnpj="00000000000191").first()
-            if existing_mock:
-                estab = existing_mock
-                estab.email = email
-            else:
-                db.session.add(estab)
-            db.session.commit()
+            return jsonify({
+                "success": False, 
+                "error": "Estabelecimento não encontrado. Conclua o cadastro antes de assinar."
+            }), 404
 
         try:
             billing_svc = _get_billing_service()

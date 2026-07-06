@@ -270,15 +270,39 @@ def create_app(config_name=None):
                     # por 60s. Ativar/inativar loja invalida a chave (ver saas), então o
                     # bloqueio continua imediato quando o status muda de verdade.
                     status_key = f"plano_status:{tid}"
-                    plano_status = cache.get(status_key)
-                    if plano_status is None:
+                    cached_data = cache.get(status_key)
+                    
+                    if isinstance(cached_data, dict):
+                        plano_status = cached_data.get('status', 'ativo')
+                        venc_str = cached_data.get('vencimento')
+                        if venc_str:
+                            from datetime import datetime
+                            try:
+                                vencimento = datetime.fromisoformat(venc_str).date()
+                            except Exception:
+                                vencimento = None
+                        else:
+                            vencimento = None
+                    else:
                         from app.models import Estabelecimento
                         est = Estabelecimento.query.get(tid)
                         plano_status = (est.plano_status if est else "ativo") or "ativo"
-                        cache.set(status_key, plano_status, timeout=60)
+                        vencimento = est.vencimento_plano if est else None
+                        
+                        cache.set(status_key, {
+                            'status': plano_status,
+                            'vencimento': vencimento.isoformat() if vencimento else None
+                        }, timeout=60)
+                        
                     if plano_status in ['cancelado', 'inadimplente', 'suspenso']:
                         logger.warning(f"🚫 Acesso bloqueado para tenant {tid} devido a inadimplência ({plano_status}). Rota: {request.path}")
                         abort(403, description="Sua assinatura está inativa ou suspensa. Acesse o painel de cobrança para regularizar.")
+                        
+                    if plano_status == 'experimental' and vencimento:
+                        from datetime import date
+                        if vencimento < date.today():
+                            logger.warning(f"🚫 Acesso bloqueado para tenant {tid} devido a trial expirado ({vencimento}). Rota: {request.path}")
+                            abort(403, description="Seu período de teste expirou. Acesse o painel de cobrança para regularizar.")
         else:
             # FAIL-CLOSED: token de tenant autenticado SEM estabelecimento resolvido
             # é uma anomalia. Negar é mais seguro que vazar dados de todos os tenants.
