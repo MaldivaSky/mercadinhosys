@@ -678,6 +678,10 @@ def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
     """Calcula o custo real da folha (ativos, demitidos e rescisões) no período"""
     from app.models import db, Funcionario, Rescisao, FuncionarioBeneficio
     from sqlalchemy import func, or_
+    from datetime import datetime, date
+    
+    if hasattr(dt_inicio, 'date') and isinstance(dt_inicio, datetime): dt_inicio = dt_inicio.date()
+    if hasattr(dt_fim, 'date') and isinstance(dt_fim, datetime): dt_fim = dt_fim.date()
     
     dias_periodo = (dt_fim - dt_inicio).days + 1
     if dias_periodo <= 0:
@@ -717,8 +721,11 @@ def calcular_custo_folha_detalhado(estabelecimento_id, dt_inicio, dt_fim):
         
         custo_mensal = salario + provisoes + encargos + beneficio_mensal
         
-        inicio_trab = max(dt_inicio, f.data_admissao) if f.data_admissao else dt_inicio
-        fim_trab = min(dt_fim, f.data_demissao) if f.data_demissao else dt_fim
+        admissao = f.data_admissao.date() if hasattr(f.data_admissao, 'date') and isinstance(f.data_admissao, datetime) else f.data_admissao
+        demissao = f.data_demissao.date() if hasattr(f.data_demissao, 'date') and isinstance(f.data_demissao, datetime) else f.data_demissao
+        
+        inicio_trab = max(dt_inicio, admissao) if admissao else dt_inicio
+        fim_trab = min(dt_fim, demissao) if demissao else dt_fim
         dias_trab = (fim_trab - inicio_trab).days + 1
         
         if dias_trab > 0:
