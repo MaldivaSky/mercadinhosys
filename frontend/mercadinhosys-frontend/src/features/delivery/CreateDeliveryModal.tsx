@@ -15,6 +15,7 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [vendas, setVendas] = useState<any[]>([]);
+    const [motoristas, setMotoristas] = useState<any[]>([]);
     const [selectedVenda, setSelectedVenda] = useState<any>(null);
     const [form, setForm] = useState({
         endereco_cep: '',
@@ -25,6 +26,7 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
         endereco_cidade: 'Manaus',
         endereco_estado: 'AM',
         endereco_referencia: '',
+        motorista_id: '',
         taxa_entrega: 0,
         pagamento_tipo: 'loja', // loja ou entrega
         pagamento_status: 'pago',
@@ -34,10 +36,20 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
     useEffect(() => {
         if (isOpen) {
             fetchVendas();
+            fetchMotoristas();
             setStep(1);
             setSelectedVenda(null);
         }
     }, [isOpen]);
+
+    const fetchMotoristas = async () => {
+        try {
+            const res = await deliveryService.getMotoristas(true);
+            setMotoristas(res.motoristas || res.data || []);
+        } catch (error) {
+            console.error("Erro ao buscar motoristas", error);
+        }
+    };
 
     const fetchVendas = async () => {
         try {
@@ -92,10 +104,18 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
     const handleSubmit = async () => {
         try {
             setLoading(true);
-            const res = await deliveryService.criarEntrega({
+            const payload = {
                 venda_id: selectedVenda.id,
                 ...form
-            });
+            };
+            // Se não selecionou motorista, manda null ou tira do objeto
+            if (!payload.motorista_id) {
+                delete (payload as any).motorista_id;
+            } else {
+                payload.motorista_id = Number(payload.motorista_id) as any;
+            }
+
+            const res = await deliveryService.criarEntrega(payload);
             if (res.success) {
                 toast.success('Entrega criada com sucesso!');
                 onCreated();
@@ -265,23 +285,23 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
                                 </div>
                             </div>
 
-                            {/* Financial Section */}
+                            {/* Operação Section */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-gray-900 dark:text-white">
-                                    <DollarSign className="w-5 h-5 text-blue-600" />
-                                    <h3 className="font-bold">Pagamento & Taxas</h3>
+                                    <Truck className="w-5 h-5 text-blue-600" />
+                                    <h3 className="font-bold">Despacho & Operação</h3>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">Forma de Cobrança</label>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">Motorista (Opcional)</label>
                                         <select
-                                            value={form.pagamento_tipo}
-                                            onChange={(e) => setForm({ ...form, pagamento_tipo: e.target.value, pagamento_status: e.target.value === 'loja' ? 'pago' : 'pendente' })}
+                                            value={form.motorista_id}
+                                            onChange={(e) => setForm({ ...form, motorista_id: e.target.value })}
                                             className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer text-gray-900 dark:text-white"
                                         >
-                                            <option value="loja">Já Pago na Loja/App</option>
-                                            <option value="entrega">Pagar no Momento da Entrega</option>
+                                            <option value="">Deixar pendente...</option>
+                                            {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -292,6 +312,28 @@ const CreateDeliveryModal: React.FC<CreateDeliveryModalProps> = ({ isOpen, onClo
                                             onChange={(e) => setForm({ ...form, taxa_entrega: parseFloat(e.target.value) })}
                                             className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-bold text-blue-600"
                                         />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Financial Section */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-gray-900 dark:text-white">
+                                    <DollarSign className="w-5 h-5 text-blue-600" />
+                                    <h3 className="font-bold">Pagamento</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">Forma de Cobrança</label>
+                                        <select
+                                            value={form.pagamento_tipo}
+                                            onChange={(e) => setForm({ ...form, pagamento_tipo: e.target.value, pagamento_status: e.target.value === 'loja' ? 'pago' : 'pendente' })}
+                                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all appearance-none cursor-pointer text-gray-900 dark:text-white"
+                                        >
+                                            <option value="loja">Já Pago na Loja/App</option>
+                                            <option value="entrega">Pagar no Momento da Entrega</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>

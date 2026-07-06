@@ -92,31 +92,43 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; ico
     cancelada:  { label: 'Cancelada',   color: 'text-red-700',    bg: 'bg-red-100',     icon: AlertCircle },
 };
 
-const PROXIMO_STATUS: Record<string, string> = {
-    pendente: 'em_rota',
-    em_preparo: 'em_rota',
-    em_rota: 'entregue',
-};
-
-const LABEL_ACAO: Record<string, string> = {
-    pendente:   'Iniciar Entrega',
-    em_preparo: 'Iniciar Entrega',
-    em_rota:    'Confirmar Entrega',
-};
-
 // ─── Card de cada entrega ─────────────────────────────────────────────────────
-const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDetalhes: () => void }> = ({ entrega, onRefresh, onClickDetalhes }) => {
+const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDetalhes: () => void; assumindo?: boolean; meuMotoristaId?: number | null }> = ({ entrega, onRefresh, onClickDetalhes, assumindo = false, meuMotoristaId = null }) => {
     const [loading, setLoading] = useState(false);
+    
+    let next = '';
+    let labelAcao = '';
+    if (assumindo) {
+        labelAcao = 'Assumir e Iniciar';
+        next = 'em_rota';
+    } else if (entrega.status === 'em_preparo' || entrega.status === 'pendente') {
+        labelAcao = 'Iniciar Entrega';
+        next = 'em_rota';
+    } else if (entrega.status === 'em_rota') {
+        labelAcao = 'Confirmar Entrega';
+        next = 'entregue';
+    }
+
     const cfg = STATUS_CFG[entrega.status] ?? STATUS_CFG['pendente'];
     const Icon = cfg.icon;
-    const next = PROXIMO_STATUS[entrega.status];
-    const labelAcao = LABEL_ACAO[entrega.status];
 
-    const handleAcao = async () => {
+    const handleAcao = async (e: React.MouseEvent) => {
+        e.stopPropagation();
         if (!next) return;
+        
+        if (assumindo && !meuMotoristaId) {
+            toast.error("Motorista não identificado. O admin precisa cadastrar você com o mesmo nome exato em 'Frota & Motoristas'.");
+            return;
+        }
+
         setLoading(true);
         try {
-            await deliveryService.atualizarStatus(entrega.id, next, {});
+            const payload: any = {};
+            if (next === 'em_rota') {
+                payload.motorista_id = meuMotoristaId || (entrega as any).motorista_id;
+            }
+            
+            await deliveryService.atualizarStatus(entrega.id, next, payload);
             toast.success(
                 next === 'em_rota'
                     ? '🚀 Rota iniciada! GPS ativado automaticamente.'
@@ -144,7 +156,6 @@ const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDe
             animate={{ opacity: 1, y: 0 }}
             className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden"
         >
-            {/* Cabeçalho */}
             <div 
                 className="flex items-center justify-between px-4 py-3 border-b border-gray-50 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 onClick={onClickDetalhes}
@@ -159,7 +170,6 @@ const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDe
                 </span>
             </div>
 
-            {/* Endereço */}
             <div className="flex items-start gap-3 px-4 py-3">
                 <MapPin className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                 <div>
@@ -168,7 +178,6 @@ const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDe
                 </div>
             </div>
 
-            {/* Ações */}
             {entrega.status !== 'entregue' && entrega.status !== 'cancelada' && (
                 <div className="flex gap-2 p-3 bg-gray-50 dark:bg-gray-900/30 flex-wrap">
                     <button
@@ -215,13 +224,6 @@ const CardEntrega: React.FC<{ entrega: Entrega; onRefresh: () => void; onClickDe
                     )}
                 </div>
             )}
-
-            {entrega.status === 'entregue' && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400 text-sm font-semibold">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Entrega concluída!
-                </div>
-            )}
         </motion.div>
     );
 };
@@ -250,8 +252,19 @@ const GpsBadge: React.FC<{ status: string }> = ({ status }) => {
 const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
     const [entregas, setEntregas] = useState<Entrega[]>([]);
     const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState<'ativas' | 'concluidas'>('ativas');
+    const [tab, setTab] = useState<'disponiveis' | 'ativas' | 'concluidas'>('ativas');
     const [detalheModalId, setDetalheModalId] = useState<number | null>(null);
+    const [meuMotoristaId, setMeuMotoristaId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (user?.nome) {
+            deliveryService.getMotoristas(true).then(res => {
+                const mots = res.motoristas || res.data || [];
+                const match = mots.find((m: any) => m.nome.trim().toLowerCase() === user.nome.trim().toLowerCase());
+                if (match) setMeuMotoristaId(match.id);
+            }).catch(() => {});
+        }
+    }, [user?.nome]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -265,17 +278,17 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
 
     useEffect(() => { load(); }, [load]);
 
-    // Entrega atualmente em rota (só pode ter uma por vez no contexto do motorista)
-    const entregaEmRota = entregas.find(e => e.status === 'em_rota') ?? null;
+    const entregaEmRota = entregas.find(e => e.status === 'em_rota' && (e as any).motorista_id === meuMotoristaId) ?? null;
     const gpsStatus = useGpsTracker(entregaEmRota);
 
-    const ativas = entregas.filter(e => !['entregue', 'cancelada'].includes(e.status));
-    const concluidas = entregas.filter(e => e.status === 'entregue');
-    const lista = tab === 'ativas' ? ativas : concluidas;
+    const disponiveis = entregas.filter(e => (e.status === 'pendente' || e.status === 'em_preparo') && !(e as any).motorista_id);
+    const ativas = entregas.filter(e => !['entregue', 'cancelada', 'pendente', 'em_preparo'].includes(e.status) && (e as any).motorista_id === meuMotoristaId);
+    const concluidas = entregas.filter(e => e.status === 'entregue' && (e as any).motorista_id === meuMotoristaId);
+    
+    const lista = tab === 'ativas' ? ativas : tab === 'concluidas' ? concluidas : disponiveis;
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
-            {/* Header */}
             <div className="bg-gradient-to-br from-blue-700 to-indigo-800 px-5 pt-10 pb-5 text-white">
                 <div className="flex items-center justify-between mb-4">
                     <div>
@@ -291,7 +304,6 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                     </button>
                 </div>
 
-                {/* GPS Badge — só aparece quando há entrega em rota */}
                 {entregaEmRota && (
                     <div className="mb-3">
                         <GpsBadge status={gpsStatus} />
@@ -305,37 +317,47 @@ const PainelMobile: React.FC<{ user: any }> = ({ user }) => {
                     </div>
                     <div className="bg-white/10 rounded-2xl p-3 text-center">
                         <p className="text-2xl font-black text-green-300">{concluidas.length}</p>
-                        <p className="text-blue-200 text-xs">Concluídas Hoje</p>
+                        <p className="text-blue-200 text-xs">Concluídas</p>
                     </div>
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10">
-                {([['ativas', '🚚 Em Aberto'], ['concluidas', '✅ Concluídas']] as const).map(([t, label]) => (
+            <div className="bg-blue-800 p-2 sticky top-0 z-10">
+                <div className="grid grid-cols-3 gap-1 bg-blue-900/50 p-1 rounded-xl">
                     <button
-                        key={t}
-                        onClick={() => setTab(t)}
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-all ${
-                            tab === t
-                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                                : 'border-transparent text-gray-400 hover:text-gray-600'
-                        }`}
+                        onClick={() => setTab('disponiveis')}
+                        className={`px-2 py-2 rounded-lg text-[10px] font-bold transition-all relative ${tab === 'disponiveis' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
                     >
-                        {label}
+                        Disponíveis
+                        {disponiveis.length > 0 && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white border border-blue-700">
+                                {disponiveis.length}
+                            </span>
+                        )}
                     </button>
-                ))}
+                    <button
+                        onClick={() => setTab('ativas')}
+                        className={`px-2 py-2 rounded-lg text-[10px] font-bold transition-all ${tab === 'ativas' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                    >
+                        Minha Rota
+                    </button>
+                    <button
+                        onClick={() => setTab('concluidas')}
+                        className={`px-2 py-2 rounded-lg text-[10px] font-bold transition-all ${tab === 'concluidas' ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-200 hover:text-white'}`}
+                    >
+                        Concluídas
+                    </button>
+                </div>
             </div>
 
-            {/* Lista de pedidos */}
             <div className="flex-1 p-4 space-y-3 overflow-y-auto pb-8">
-                <AnimatePresence>
+                <AnimatePresence mode='wait'>
                     {loading ? (
                         [1, 2].map(i => (
                             <div key={i} className="h-36 rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
                         ))
                     ) : lista.length > 0 ? (
-                        lista.map(e => <CardEntrega key={e.id} entrega={e} onRefresh={load} onClickDetalhes={() => setDetalheModalId(e.id)} />)
+                        lista.map(e => <CardEntrega key={e.id} entrega={e} onRefresh={load} onClickDetalhes={() => setDetalheModalId(e.id)} assumindo={tab === 'disponiveis'} meuMotoristaId={meuMotoristaId} />)
                     ) : (
                         <motion.div
                             initial={{ opacity: 0 }}

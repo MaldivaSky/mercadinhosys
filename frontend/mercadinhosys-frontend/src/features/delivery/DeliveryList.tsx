@@ -37,15 +37,29 @@ const duracaoEntrega = (min?: number | null): string | null => {
 
 const DeliveryList: React.FC = () => {
     const [entregas, setEntregas] = useState<Entrega[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [filtroStatus, setFiltroStatus] = useState('todos');
     const [busca, setBusca] = useState('');
     const [acaoId, setAcaoId] = useState<number | null>(null);
+    const [motoristas, setMotoristas] = useState<any[]>([]);
+
+    // Modal de Despacho
+    const [despachoModalAberto, setDespachoModalAberto] = useState(false);
+    const [entregaParaDespacho, setEntregaParaDespacho] = useState<Entrega | null>(null);
+    const [motoristaDespachoId, setMotoristaDespachoId] = useState('');
     const [detalheId, setDetalheId] = useState<number | null>(null);
 
     useEffect(() => {
         carregarEntregas();
+        carregarMotoristas();
     }, [filtroStatus]);
+
+    const carregarMotoristas = async () => {
+        try {
+            const res = await deliveryService.getMotoristas(true);
+            setMotoristas(res.motoristas || res.data || []);
+        } catch { }
+    };
 
     const carregarEntregas = async () => {
         try {
@@ -67,11 +81,21 @@ const DeliveryList: React.FC = () => {
     };
 
     const avancarStatus = async (entrega: Entrega, novoStatus: string) => {
-        setAcaoId(entrega.id);
+        if (novoStatus === 'em_rota' && !(entrega as any).motorista_id) {
+            setEntregaParaDespacho(entrega);
+            setDespachoModalAberto(true);
+            return;
+        }
+        
+        executarAvanco(entrega.id, novoStatus, (entrega as any).motorista_id);
+    };
+
+    const executarAvanco = async (entregaId: number, novoStatus: string, motoristaId: number | null) => {
+        setAcaoId(entregaId);
         try {
             const payload: Record<string, unknown> = {};
-            if (novoStatus === 'em_rota') payload.motorista_id = (entrega as any).motorista_id ?? null;
-            const res = await deliveryService.atualizarStatus(entrega.id, novoStatus, payload);
+            if (novoStatus === 'em_rota') payload.motorista_id = motoristaId;
+            const res = await deliveryService.atualizarStatus(entregaId, novoStatus, payload);
             if (res.success) {
                 toast.success(`Entrega ${entrega.codigo_rastreamento}: ${STATUS_CONFIG[novoStatus]?.label || novoStatus}`);
                 await carregarEntregas();
@@ -278,6 +302,51 @@ const DeliveryList: React.FC = () => {
             )}
 
             <DetalheEntregaModal entregaId={detalheId} onClose={() => setDetalheId(null)} />
+
+            {/* Modal de Despacho (quando clica em Despachar e não tem motorista) */}
+            {despachoModalAberto && entregaParaDespacho && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-3xl shadow-2xl p-6">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                            Atribuir Motorista
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-6">
+                            Para despachar a entrega <b>#{entregaParaDespacho.codigo_rastreamento}</b>, selecione o motorista:
+                        </p>
+
+                        <select
+                            value={motoristaDespachoId}
+                            onChange={(e) => setMotoristaDespachoId(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 mb-6 text-gray-900 dark:text-white"
+                        >
+                            <option value="">Selecione um entregador...</option>
+                            {motoristas.map(m => (
+                                <option key={m.id} value={m.id}>{m.nome}</option>
+                            ))}
+                        </select>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => { setDespachoModalAberto(false); setMotoristaDespachoId(''); }}
+                                className="px-5 py-2.5 rounded-xl font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                disabled={!motoristaDespachoId}
+                                onClick={() => {
+                                    setDespachoModalAberto(false);
+                                    executarAvanco(entregaParaDespacho.id, 'em_rota', Number(motoristaDespachoId));
+                                    setMotoristaDespachoId('');
+                                }}
+                                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                                Confirmar Despacho
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

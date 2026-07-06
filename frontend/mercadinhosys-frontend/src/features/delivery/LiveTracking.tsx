@@ -4,7 +4,6 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Navigation, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { authService } from '../auth/authService';
 import { apiClient } from '../../api/apiClient';
 
 // Fix para os ícones padrão do leaflet não renderizarem no Webpack/Vite
@@ -23,7 +22,11 @@ const MotoIcon = new L.Icon({
     popupAnchor: [0, -35]
 });
 
-const LiveTracking: React.FC = () => {
+interface LiveTrackingProps {
+    entrega?: any;
+}
+
+const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega }) => {
     const [eventos, setEventos] = useState<any[]>([]);
 
     useEffect(() => {
