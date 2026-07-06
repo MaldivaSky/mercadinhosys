@@ -1,8 +1,5 @@
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models import db, StatusPedidoLogistica, AuditoriaQuilometragem
-from datetime import datetime
-from flask import g
+from flask import Blueprint, jsonify, request, g
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,9 +18,8 @@ def registrar_evento():
     if not all([status, lat, lon]):
         return jsonify({"success": False, "error": "Faltam dados do evento (lat/lon/status)"}), 400
 
-    # A ponte segura: pegamos o entregador e o tenant direto do Token JWT
-    funcionario_id = get_jwt_identity() 
-    est_id = getattr(g, 'estabelecimento_id', None)
+    funcionario_id = get_jwt_identity()
+    est_id = _get_est_id()
 
     novo_evento = StatusPedidoLogistica(
         estabelecimento_id=est_id,
@@ -50,7 +46,7 @@ def registrar_lote_rastreio():
     pontos = data.get('pontos_gps', [])
     
     funcionario_id = get_jwt_identity()
-    est_id = getattr(g, 'estabelecimento_id', None)
+    est_id = _get_est_id()
 
     # Salvamos o JSON massivo e retornamos "202 Accepted" super rápido pro App.
     # O processamento da distância total rodaria no Celery Worker.
@@ -71,8 +67,8 @@ def registrar_lote_rastreio():
 @jwt_required()
 def listar_eventos_recentes():
     """Retorna a última posição conhecida de cada entregador ativo hoje"""
-    est_id = getattr(g, 'estabelecimento_id', None)
-    
+    est_id = _get_est_id()
+
     # Pegamos os eventos, ordenados do mais recente pro mais antigo
     eventos = StatusPedidoLogistica.query.filter_by(
         estabelecimento_id=est_id

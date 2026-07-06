@@ -5,6 +5,7 @@ import L from 'leaflet';
 import { Navigation, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { authService } from '../auth/authService';
+import { apiClient } from '../../api/apiClient';
 
 // Fix para os ícones padrão do leaflet não renderizarem no Webpack/Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -28,12 +29,9 @@ const LiveTracking: React.FC = () => {
     useEffect(() => {
         const fetchEventos = async () => {
             try {
-                const token = authService.getToken();
-                // Utilizando a API em localhost para buscar os eventos mais recentes dos motoristas
-                const res = await fetch('http://localhost:5000/api/logistica/eventos/recentes', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
+                // Utilizando a apiClient para respeitar o ambiente (local/prod)
+                const res = await apiClient.get('/logistica/eventos/recentes');
+                const data = res.data;
                 if (data.success && data.eventos) {
                     setEventos(data.eventos);
                 }
