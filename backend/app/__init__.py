@@ -798,6 +798,14 @@ def create_app(config_name=None):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar pedidos_compra: {e}")
 
+    # Logística (App Entregador)
+    try:
+        from app.routes.logistica import logistica_bp
+        app.register_blueprint(logistica_bp, url_prefix="/api/logistica")
+        logger.info("✅ Blueprint logistica registrado em /api/logistica")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar logistica: {e}")
+
     # Monitoramento Global (SaaS Monitor)
     try:
         from app.routes.monitor import monitor_bp

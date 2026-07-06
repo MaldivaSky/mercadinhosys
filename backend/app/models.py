@@ -2364,3 +2364,27 @@ def get_model_by_table(table_name: str):
     return mapping.get(table_name)
 SyncLog = SyncQueue
 AuditoriaSincronia = SyncQueue
+
+# ==========================================
+# Módulo 8: App do Entregador e Logística
+# ==========================================
+
+class StatusPedidoLogistica(db.Model, TenantQuery):
+    __tablename__ = "status_pedido_logistica"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(db.Integer, db.ForeignKey('estabelecimentos.id'), nullable=False, index=True)
+    venda_id = db.Column(db.Integer, db.ForeignKey('vendas.id'), nullable=True, index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionarios.id'), nullable=False, index=True)
+    status = db.Column(db.String(50), nullable=False) # SAIU_PARA_ENTREGA, CHEGOU_NO_LOCAL, CONCLUIDO
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+class AuditoriaQuilometragem(db.Model, TenantQuery):
+    __tablename__ = "auditoria_quilometragem"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = db.Column(db.Integer, db.ForeignKey('estabelecimentos.id'), nullable=False, index=True)
+    funcionario_id = db.Column(db.Integer, db.ForeignKey('funcionarios.id'), nullable=False, index=True)
+    turno_data = db.Column(db.Date, nullable=False, default=lambda: datetime.utcnow().date())
+    pontos_gps = db.Column(db.JSON, nullable=True) # JSON array de coords offline
+    distancia_total_km = db.Column(db.Float, default=0.0)
