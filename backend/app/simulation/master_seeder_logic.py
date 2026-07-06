@@ -216,7 +216,7 @@ class MasterSeeder:
         print("\n[SEED] [MAGNITUDE SÊNIOR] SEED CONCLUÍDA COM SUCESSO!")
         print("-" * 60)
         print("ACESSOS PARA DEMONSTRAÇÃO (por nível de acesso RBAC):")
-        print("  Super Admin (SaaS)........: maldivas / ***REMOVED-SUPERADMIN-PWD***")
+        print("  Super Admin (SaaS)........: maldivas / (senha via SEED_SUPERADMIN_PASSWORD)")
         print("  Admin loja (nível 1)......: admin1..admin5 / admin123")
         print("  Caixa (nível 3)...........: caixa1..caixa5 / caixa123")
         print("  Estoque (nível 4).........: estoque1..estoque5 / estoque123")

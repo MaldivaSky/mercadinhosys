@@ -73,7 +73,7 @@ def run_reality_factory():
                     print(f"{scen_key:<15} | {est.nome_fantasia[:25]:<25} | {admin.username:<15} | {senha_admin}")
         
         print("="*80)
-        print("🚀 Super-Admin Global para ver consolidado: maldivas / ***REMOVED-SUPERADMIN-PWD***")
+        print("🚀 Super-Admin Global para ver consolidado: maldivas / (senha via SEED_SUPERADMIN_PASSWORD)")
         print("="*80)
         print("\n✅ [SUCESSO] Fábrica de Realidade concluída com dados industriais!")
 

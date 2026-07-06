@@ -250,7 +250,7 @@ def show_next_steps():
     print("4. Acesse: http://localhost:5000")
     
     print("\n👑 Credenciais de acesso:")
-    print("   Super Admin: maldivas | ***REMOVED-SUPERADMIN-PWD***")
+    print("   Super Admin: maldivas | (senha via SEED_SUPERADMIN_PASSWORD)")
     print("   Estab. 1: admin1 | admin123")
     print("   Estab. 2: admin2 | admin123")
     
