@@ -26,7 +26,7 @@ interface LiveTrackingProps {
     entrega?: any;
 }
 
-const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega }) => {
+const LiveTracking: React.FC<LiveTrackingProps> = ({ entrega: _entrega }) => {
     const [eventos, setEventos] = useState<any[]>([]);
 
     useEffect(() => {

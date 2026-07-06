@@ -97,7 +97,7 @@ const DeliveryList: React.FC = () => {
             if (novoStatus === 'em_rota') payload.motorista_id = motoristaId;
             const res = await deliveryService.atualizarStatus(entregaId, novoStatus, payload);
             if (res.success) {
-                toast.success(`Entrega ${entrega.codigo_rastreamento}: ${STATUS_CONFIG[novoStatus]?.label || novoStatus}`);
+                toast.success(`Entrega atualizada: ${STATUS_CONFIG[novoStatus]?.label || novoStatus}`);
                 await carregarEntregas();
             } else {
                 toast.error(res.error || 'Não foi possível atualizar a entrega');
