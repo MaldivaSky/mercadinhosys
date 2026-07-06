@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { showToast } from '../../utils/toast';
+import toast from 'react-hot-toast';
 import {
     ShoppingCart,
     Check,

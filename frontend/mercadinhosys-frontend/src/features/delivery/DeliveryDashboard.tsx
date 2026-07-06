@@ -417,10 +417,8 @@ const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({ onVerTodas }) => 
                 )}
                 {detalheModalId !== null && (
                     <DetalheEntregaModal
-                        isOpen={true}
                         onClose={() => setDetalheModalId(null)}
                         entregaId={detalheModalId}
-                        onUpdated={fetchData}
                     />
                 )}
             </AnimatePresence>
