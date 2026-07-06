@@ -1,63 +1,126 @@
-import React from 'react';
-import { MapPin, Truck, Navigation, Shield } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { Navigation, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { authService } from '../auth/authService';
 
-const LiveTracking: React.FC<{ entrega: any }> = ({ entrega }) => {
+// Fix para os ícones padrão do leaflet não renderizarem no Webpack/Vite
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+});
+
+// Ícone customizado de Moto
+const MotoIcon = new L.Icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/198/198337.png', // Placeholder moto icon
+    iconSize: [35, 35],
+    iconAnchor: [17, 35],
+    popupAnchor: [0, -35]
+});
+
+const LiveTracking: React.FC = () => {
+    const [eventos, setEventos] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchEventos = async () => {
+            try {
+                const token = authService.getToken();
+                // Utilizando a API em localhost para buscar os eventos mais recentes dos motoristas
+                const res = await fetch('http://localhost:5000/api/logistica/eventos/recentes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success && data.eventos) {
+                    setEventos(data.eventos);
+                }
+            } catch (error) {
+                console.error("Erro ao buscar GPS:", error);
+            }
+        };
+
+        fetchEventos();
+        const interval = setInterval(fetchEventos, 5000); // Polling a cada 5 segundos
+        return () => clearInterval(interval);
+    }, []);
+
+    // Coordenada padrão (ex: Manaus, AM ou Brasil central)
+    const defaultCenter: [number, number] = [-3.1190, -60.0217];
+    // Centralizar no último evento ou no default
+    const centerPoint = eventos.length > 0 && eventos[0].latitude && eventos[0].longitude 
+        ? [eventos[0].latitude, eventos[0].longitude] 
+        : defaultCenter;
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden relative group text-left"
+            className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col h-[500px]"
         >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-blue-500/20 transition-all" />
-
-            <div className="flex items-center justify-between mb-8">
+            <div className="p-6 pb-4 flex items-center justify-between z-10 bg-white dark:bg-gray-800 relative">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
                         <Navigation className="w-5 h-5 animate-pulse" />
                     </div>
                     <div>
-                        <h4 className="font-bold text-gray-900 dark:text-white">Rastreamento Live</h4>
-                        <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest">Sincronizado via Satélite</p>
+                        <h4 className="font-bold text-gray-900 dark:text-white">Mapa de Rastreio (Real-Time)</h4>
+                        <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest">Sincronizado via GPS</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full">
                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping" />
-                    <span className="text-[10px] font-bold text-green-600">ATIVO</span>
+                    <span className="text-[10px] font-bold text-green-600">LIVE</span>
                 </div>
             </div>
 
-            {/* Simulação de Map/Timeline */}
-            <div className="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-b before:from-blue-600 before:via-blue-200 before:to-gray-100 dark:before:via-blue-900 dark:before:to-gray-800">
-                <div className="relative">
-                    <div className="absolute -left-[29px] top-0 w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center border-4 border-white dark:border-gray-800 shadow-sm z-10">
-                        <Truck className="w-3 h-3 text-white" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-blue-600 uppercase">Saiu para Entrega</p>
-                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">Motorista em deslocamento</p>
-                        <p className="text-[10px] text-gray-400 mt-1">HÁ 12 MINUTOS • MANAUS, AM</p>
-                    </div>
-                </div>
-
-                <div className="relative opacity-50">
-                    <div className="absolute -left-[29px] top-0 w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center border-4 border-white dark:border-gray-800 shadow-sm z-10">
-                        <MapPin className="w-3 h-3 text-gray-400" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-gray-400 uppercase">Destino Final</p>
-                        <p className="text-sm font-bold text-gray-400">{entrega?.endereco_bairro || 'Endereço do Cliente'}</p>
-                        <p className="text-[10px] text-gray-300 mt-1">PREVISÃO: 14:45</p>
-                    </div>
-                </div>
+            <div className="flex-1 w-full relative z-0">
+                {/* 
+                  Usamos o MapContainer do React-Leaflet
+                  Ele não exige API Keys (Totalmente grátis via OpenStreetMap)
+                */}
+                <MapContainer 
+                    center={centerPoint as [number, number]} 
+                    zoom={13} 
+                    style={{ height: '100%', width: '100%' }}
+                    zoomControl={false}
+                >
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; OpenStreetMap'
+                    />
+                    {eventos.map((ev, idx) => {
+                        if (!ev.latitude || !ev.longitude) return null;
+                        return (
+                            <Marker 
+                                key={idx} 
+                                position={[ev.latitude, ev.longitude]}
+                                icon={MotoIcon}
+                            >
+                                <Popup>
+                                    <div className="text-center">
+                                        <b className="text-gray-900">Entregador #{ev.funcionario_id}</b><br/>
+                                        <span className="text-blue-600 font-bold uppercase text-[10px]">{ev.status}</span><br/>
+                                        <span className="text-xs text-gray-500">
+                                            Atualizado: {new Date(ev.timestamp).toLocaleTimeString()}
+                                        </span>
+                                    </div>
+                                </Popup>
+                            </Marker>
+                        );
+                    })}
+                </MapContainer>
             </div>
-
-            <div className="mt-8 pt-6 border-t border-gray-50 dark:border-gray-700 flex items-center justify-between">
+            
+            <div className="px-6 py-4 border-t border-gray-50 dark:border-gray-700 bg-white dark:bg-gray-800 z-10 flex justify-between items-center relative">
                 <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-emerald-500" />
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Entrega Segura</span>
+                    <span className="text-xs font-bold text-gray-500 uppercase">
+                        Motoristas Rastreáveis: {eventos.length}
+                    </span>
                 </div>
-                <button className="text-xs font-bold text-blue-600 hover:underline">ABRIR MAPA FULL</button>
             </div>
         </motion.div>
     );

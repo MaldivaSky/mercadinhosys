@@ -5,6 +5,8 @@ import DeliveryList from './DeliveryList';
 import DriverManagement from './DriverManagement';
 import CreateDeliveryModal from './CreateDeliveryModal';
 import CentralLogistica from './CentralLogistica';
+import PortalEntregador from './PortalEntregador';
+import { authService } from '../auth/authService';
 
 type DeliveryTab = 'dashboard' | 'central' | 'entregas' | 'frota';
 
@@ -49,6 +51,13 @@ const DeliveryPage: React.FC = () => {
         setCreateModalOpen(false);
         setRefreshKey((current) => current + 1);
     };
+
+    const user = authService.getCurrentUser();
+    const isEntregador = user?.role?.toLowerCase() === 'entregador' || user?.role?.toLowerCase() === 'motorista';
+
+    if (isEntregador) {
+        return <PortalEntregador />;
+    }
 
     return (
         <div className="space-y-6">
