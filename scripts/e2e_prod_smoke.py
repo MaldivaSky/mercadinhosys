@@ -14,9 +14,28 @@ except ImportError:
 API_URL = os.environ.get("API_URL", "http://localhost:5000").rstrip("/")
 
 def main():
-    print(f"🚀 Iniciando E2E Smoke Test contra {API_URL}")
+    print(f"--- Iniciando E2E Smoke Test contra {API_URL} ---")
     session = requests.Session()
     
+    # 0. LOGIN SUPER ADMIN (Obrigatório para provisionar tenant)
+    print("\n--- 0. LOGIN SUPER ADMIN ---")
+    super_admin_email = os.environ.get("SUPER_ADMIN_EMAIL", "super@admin.com")
+    super_admin_pass = os.environ.get("SUPER_ADMIN_PASS", "senha123")
+    
+    r_super = session.post(f"{API_URL}/api/auth/login", json={
+        "email": super_admin_email,
+        "password": super_admin_pass
+    })
+    
+    if r_super.status_code != 200:
+        print(f"[X] Falha no Login de Super Admin (Email: {super_admin_email}): {r_super.text}")
+        print("-> Configure as variáveis SUPER_ADMIN_EMAIL e SUPER_ADMIN_PASS se for diferente do padrão.")
+        sys.exit(1)
+        
+    super_token = r_super.json().get("access_token")
+    super_headers = {"Authorization": f"Bearer {super_token}"}
+    print("[OK] Login Super Admin realizado com sucesso.")
+
     # 1. ONBOARDING
     print("\n--- 1. ONBOARDING ---")
     random_suffix = uuid.uuid4().hex[:6]
@@ -36,14 +55,14 @@ def main():
     }
     
     print(f"Criando tenant: {onboarding_payload['nome_fantasia']}")
-    r = session.post(f"{API_URL}/api/saas/onboarding", json=onboarding_payload)
+    r = session.post(f"{API_URL}/api/saas/onboarding", json=onboarding_payload, headers=super_headers)
     if r.status_code != 201:
-        print(f"❌ Falha no Onboarding: {r.text}")
+        print(f"[X] Falha no Onboarding: {r.text}")
         sys.exit(1)
         
     data = r.json()
     estabelecimento_id = data["data"]["estabelecimento"]["id"]
-    print(f"✅ Tenant criado com ID: {estabelecimento_id}")
+    print(f"[OK] Tenant criado com ID: {estabelecimento_id}")
     
     # 1.1 LOGIN PARA PEGAR O TOKEN (apesar do onboarding já devolver logado, garantimos o fluxo padrão)
     print("\n--- 1.1 LOGIN ---")
@@ -53,16 +72,16 @@ def main():
     })
     
     if r_login.status_code != 200:
-        print(f"❌ Falha no Login: {r_login.text}")
+        print(f"[X] Falha no Login: {r_login.text}")
         sys.exit(1)
         
     token = r_login.json().get("access_token")
     if not token:
-        print("❌ Login não retornou access_token")
+        print("[X] Login não retornou access_token")
         sys.exit(1)
         
     headers = {"Authorization": f"Bearer {token}"}
-    print("✅ Login realizado com sucesso")
+    print("[OK] Login realizado com sucesso")
     
     # 2. PRÉ-REQS (Categoria, Produto e Caixa)
     print("\n--- 2. PRÉ-REQUISITOS (Categoria, Produto, Caixa) ---")
@@ -70,17 +89,17 @@ def main():
     # Criar categoria
     r_cat = session.post(f"{API_URL}/api/produtos/categorias", json={"nome": "Bebidas"}, headers=headers)
     if r_cat.status_code not in (200, 201):
-        print(f"❌ Falha ao criar categoria: {r_cat.text}")
+        print(f"[X] Falha ao criar categoria: {r_cat.text}")
         sys.exit(1)
     # Alguns endpoints retornam o objeto direto, outros dentro de 'data'
     cat_data = r_cat.json()
     # Pega o ID da categoria, lidando com diferentes formatos de resposta
     categoria_id = cat_data.get('id') or (cat_data.get('categoria', {}).get('id')) or (cat_data.get('data', {}).get('id'))
     if not categoria_id:
-        print(f"❌ Não foi possível extrair ID da categoria: {cat_data}")
+        print(f"[X] Não foi possível extrair ID da categoria: {cat_data}")
         sys.exit(1)
     
-    print(f"✅ Categoria criada (ID: {categoria_id})")
+    print(f"[OK] Categoria criada (ID: {categoria_id})")
     
     # Criar produto
     r_prod = session.post(f"{API_URL}/api/produtos/", json={
@@ -92,12 +111,12 @@ def main():
         "codigo_barras": f"789{random_suffix}"
     }, headers=headers)
     if r_prod.status_code not in (200, 201):
-        print(f"❌ Falha ao criar produto: {r_prod.text}")
+        print(f"[X] Falha ao criar produto: {r_prod.text}")
         sys.exit(1)
     
     prod_data = r_prod.json()
     produto_id = prod_data.get('id') or prod_data.get('produto', {}).get('id') or prod_data.get('data', {}).get('id')
-    print(f"✅ Produto criado (ID: {produto_id})")
+    print(f"[OK] Produto criado (ID: {produto_id})")
     
     # Abrir Caixa
     r_caixa = session.post(f"{API_URL}/api/pdv/caixa/abrir", json={
@@ -105,10 +124,10 @@ def main():
         "saldo_inicial": 100.00
     }, headers=headers)
     if r_caixa.status_code not in (200, 201):
-        print(f"❌ Falha ao abrir caixa: {r_caixa.text}")
+        print(f"[X] Falha ao abrir caixa: {r_caixa.text}")
         sys.exit(1)
     
-    print("✅ Caixa aberto com sucesso")
+    print("[OK] Caixa aberto com sucesso")
     
     # 3. VENDA PDV
     print("\n--- 3. VENDA PDV ---")
@@ -123,13 +142,13 @@ def main():
     }
     r_venda = session.post(f"{API_URL}/api/pdv/finalizar", json=venda_payload, headers=headers)
     if r_venda.status_code not in (200, 201):
-        print(f"❌ Falha ao realizar venda: {r_venda.text}")
+        print(f"[X] Falha ao realizar venda: {r_venda.text}")
         sys.exit(1)
         
     venda_resp = r_venda.json()
     venda_obj = venda_resp.get("venda") or venda_resp.get("data") or {}
     venda_id = venda_obj.get("id") or venda_resp.get("id")
-    print(f"✅ Venda finalizada com sucesso (ID: {venda_id})")
+    print(f"[OK] Venda finalizada com sucesso (ID: {venda_id})")
     
     # 4. NFC-e HOMOLOGAÇÃO
     print("\n--- 4. EMISSÃO NFC-E (Simulada/Homologação) ---")
@@ -142,9 +161,9 @@ def main():
     print(f"Resposta NFC-e (Status {r_nfce.status_code}): {r_nfce.text[:200]}")
     # Aceitamos 400 (sem config fiscal) ou 200 (sucesso)
     if r_nfce.status_code not in (200, 400):
-        print("⚠️ Endpoint de NFC-e com comportamento inesperado.")
+        print("[!] Endpoint de NFC-e com comportamento inesperado.")
     else:
-        print("✅ Endpoint NFC-e respondeu no padrão esperado.")
+        print("[OK] Endpoint NFC-e respondeu no padrão esperado.")
         
     # 5. CHECKOUT EFI + WEBHOOK
     print("\n--- 5. CHECKOUT SAAS (Efí) ---")
@@ -154,12 +173,12 @@ def main():
     })
     
     if r_checkout.status_code != 200:
-        print(f"❌ Falha no checkout (geração de Pix): {r_checkout.text}")
+        print(f"[X] Falha no checkout (geração de Pix): {r_checkout.text}")
         sys.exit(1)
         
     checkout_data = r_checkout.json()
     txid = checkout_data.get("txid")
-    print(f"✅ Cobrança Pix gerada (TXID: {txid})")
+    print(f"[OK] Cobrança Pix gerada (TXID: {txid})")
     
     print("\n--- 5.1 WEBHOOK EFI ---")
     # Simula o disparo que a Efí faria para o nosso webhook
@@ -175,17 +194,17 @@ def main():
         }
         r_webhook = session.post(f"{API_URL}/api/billing/webhook/efi", json=webhook_payload)
         if r_webhook.status_code == 200:
-            print("✅ Webhook processou pagamento com sucesso.")
+            print("[OK] Webhook processou pagamento com sucesso.")
         else:
-            print(f"❌ Falha no Webhook: {r_webhook.text}")
+            print(f"[X] Falha no Webhook: {r_webhook.text}")
     else:
-        print("⚠️ Não foi possível testar Webhook (TXID vazio).")
+        print("[!] Não foi possível testar Webhook (TXID vazio).")
         
-    print("\n🚀 E2E Smoke Test Concluído com Sucesso! O servidor está pronto para produção.")
+    print("\n--- E2E Smoke Test Concluído com Sucesso! O servidor está pronto para produção. ---")
     
     # Opcional: Não excluímos o tenant para que o Rafael possa logar e ver o que
     # o bot criou, usando as credenciais que printamos na tela.
-    print(f"\n💡 Credenciais de Teste Geradas:")
+    print(f"\n[INFO] Credenciais de Teste Geradas:")
     print(f"   Email: {email_admin}")
     print(f"   Senha: Smoke@123!")
 
