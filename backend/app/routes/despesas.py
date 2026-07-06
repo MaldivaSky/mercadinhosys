@@ -3,12 +3,11 @@ from sqlalchemy import or_, and_
 from decimal import Decimal, ROUND_HALF_UP
 
 from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import get_jwt_identity, get_jwt
 
 from app import db
 from app.decorators.decorator_jwt import funcionario_required
 from app.decorators.plan_guards import plan_required
-from app.models import Despesa, Funcionario, Rescisao
+from app.models import Despesa, Funcionario
 from app.dashboard_cientifico.data_layer import DataLayer
 from sqlalchemy import func, or_
 from app.services.rh_calculator_service import calcular_provisoes
@@ -796,7 +795,11 @@ def boletos_a_vencer():
         apenas_vencidos = request.args.get('apenas_vencidos') == 'true'
         
         # Query base
-        query = db.session.query(ContaPagar).join(Fornecedor).filter(ContaPagar.status == 'aberto')
+        from sqlalchemy.orm import joinedload
+        query = db.session.query(ContaPagar).options(
+            joinedload(ContaPagar.fornecedor),
+            joinedload(ContaPagar.pedido_compra)
+        ).filter(ContaPagar.status == 'aberto')
         if estabelecimento_id != 'all':
              query = query.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
         
@@ -1277,7 +1280,11 @@ def boletos_por_status():
 
         # Query base
         def base_query():
-            q = db.session.query(ContaPagar)
+            from sqlalchemy.orm import joinedload
+            q = db.session.query(ContaPagar).options(
+                joinedload(ContaPagar.fornecedor),
+                joinedload(ContaPagar.pedido_compra)
+            )
             if estabelecimento_id != 'all':
                 q = q.filter(ContaPagar.estabelecimento_id == estabelecimento_id)
             return q
