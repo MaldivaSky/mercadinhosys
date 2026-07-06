@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bike, Route, DollarSign, Fuel, Wallet, Clock, Users, MapPin, Package, Filter } from 'lucide-react';
+import { Bike, Route, DollarSign, Fuel, Wallet, Clock, Users, MapPin, Filter } from 'lucide-react';
 import deliveryService, { DashboardLogistica, DashboardFiltros, Motorista, Veiculo } from './deliveryService';
 import { showToast } from '../../utils/toast';
 

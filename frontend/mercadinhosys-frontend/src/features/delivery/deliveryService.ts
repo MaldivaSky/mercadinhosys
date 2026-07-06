@@ -280,6 +280,7 @@ export interface DashboardLogistica {
     top_clientes: { nome: string; entregas: number; taxa: number }[];
     top_bairros: { bairro: string; entregas: number }[];
     top_produtos: { produto: string; quantidade: number }[];
+    top_motoristas?: any[];
 }
 
 export interface ItemPedido {

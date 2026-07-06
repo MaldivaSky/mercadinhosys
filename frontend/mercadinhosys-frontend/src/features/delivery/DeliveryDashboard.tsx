@@ -21,10 +21,15 @@ import { deliveryService, Entrega } from './deliveryService';
 import LiveTracking from './LiveTracking';
 import CreateDeliveryModal from './CreateDeliveryModal';
 import UnifiedDeliverySaleModal from './UnifiedDeliverySaleModal';
+import DetalheEntregaModal from './DetalheEntregaModal';
 import { apiClient } from '../../api/apiClient';
 import toast from 'react-hot-toast';
 
-const DeliveryDashboard: React.FC = () => {
+interface DeliveryDashboardProps {
+    onVerTodas?: () => void;
+}
+
+const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({ onVerTodas }) => {
     const navigate = useNavigate();
     const [stats, setStats] = useState<any>(null);
     const [metricas, setMetricas] = useState<any>(null);
@@ -98,10 +103,6 @@ const DeliveryDashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
                 <div className={`p-3 rounded-xl ${color} bg-opacity-10 group-hover:scale-110 transition-transform`}>
                     <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
-                </div>
-                <div className="text-xs font-medium text-green-500 flex items-center bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full">
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    +12%
                 </div>
             </div>
             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</h3>
@@ -231,7 +232,7 @@ const DeliveryDashboard: React.FC = () => {
                     <div className="flex items-center justify-between px-2">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Fluxo de Entregas</h2>
                         <button 
-                            onClick={() => navigate('/delivery')} 
+                            onClick={onVerTodas || (() => navigate('/delivery'))} 
                             className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center cursor-pointer"
                         >
                             Ver todas <ChevronRight className="w-4 h-4 ml-1" />
@@ -251,7 +252,7 @@ const DeliveryDashboard: React.FC = () => {
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: index * 0.1 }}
-                                        onClick={() => navigate('/delivery')}
+                                        onClick={() => setDetalheModalId(entrega.id)}
                                         className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between group hover:border-blue-200 dark:hover:border-blue-900/30 transition-all cursor-pointer"
                                     >
                                         <div className="flex items-center gap-4">
@@ -412,6 +413,14 @@ const DeliveryDashboard: React.FC = () => {
                         isOpen={isUnifiedModalOpen}
                         onClose={() => setIsUnifiedModalOpen(false)}
                         onCreated={fetchData}
+                    />
+                )}
+                {detalheModalId !== null && (
+                    <DetalheEntregaModal
+                        isOpen={true}
+                        onClose={() => setDetalheModalId(null)}
+                        entregaId={detalheModalId}
+                        onUpdated={fetchData}
                     />
                 )}
             </AnimatePresence>

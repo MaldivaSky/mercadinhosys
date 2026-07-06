@@ -503,8 +503,7 @@ const PDVPage: React.FC = () => {
                                                                 
                                                                 // Calcula automático a distância/taxa pelo CEP
                                                                 try {
-                                                                    const api = await import('../../api/apiClient').then(m => m.default);
-                                                                    const res = await api.post('/logistica/estimar-taxa-cep', { 
+                                                                    const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
                                                                         cep_destino: cepDest,
                                                                         veiculo: dadosEntrega?.veiculo || 'moto' 
                                                                     });
@@ -513,15 +512,15 @@ const PDVPage: React.FC = () => {
                                                                             distancia_km: res.data.distancia_km,
                                                                             taxa_entrega: res.data.taxa_sugerida 
                                                                         });
-                                                                        import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                        toast.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`);
                                                                     } else {
-                                                                        import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa."));
+                                                                        toast.error(res.data?.error || "Erro ao calcular taxa.");
                                                                     }
                                                                 } catch (err: any) {
-                                                                    import('react-hot-toast').then(m => m.default.error(err.response?.data?.error || "Falha na comunicação"));
+                                                                    toast.error(err.response?.data?.error || "Falha na comunicação");
                                                                 }
                                                             } else if (paraEntregar && (!c || !c.cep)) {
-                                                                import('react-hot-toast').then(m => m.default.error("Este cliente não tem CEP cadastrado ou os dados estão desatualizados."));
+                                                                toast.error("Este cliente não tem CEP cadastrado ou os dados estão desatualizados.");
                                                             }
                                                             setActiveSection('pagamento'); 
                                                         }} 

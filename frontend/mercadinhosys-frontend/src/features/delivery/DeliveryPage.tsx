@@ -142,7 +142,7 @@ const DeliveryPage: React.FC = () => {
             </section>
 
             <section key={`${activeTab}-${refreshKey}`}>
-                {activeTab === 'dashboard' && <DeliveryDashboard />}
+                {activeTab === 'dashboard' && <DeliveryDashboard onVerTodas={() => setActiveTab('entregas')} />}
                 {activeTab === 'central' && <CentralLogistica />}
                 {activeTab === 'entregas' && <DeliveryList />}
                 {activeTab === 'frota' && <DriverManagement />}

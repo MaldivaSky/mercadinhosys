@@ -411,17 +411,20 @@ def dashboard_metricas():
         TurnoEntregador.horario_fim <= agora
     ).all()
     
-    distancia_total = sum(float(t.distancia_percorrida or 0) for t in turnos)
-    custo_combustivel = sum(float(t.custo_combustivel or 0) for t in turnos)
     custo_manutencao = sum(float(t.custo_manutencao or 0) for t in turnos)
+    distancia_total = 0
+    custo_combustivel = 0
 
     # 2. Entregas e Vendas Associadas
     from app.models import Entrega, Venda
+    from sqlalchemy import func
+    
+    data_ref = func.coalesce(Entrega.data_entrega, Entrega.data_saida, Entrega.created_at)
     entregas = db.session.query(Entrega, Venda).join(Venda, Entrega.venda_id == Venda.id).filter(
         Entrega.estabelecimento_id == est_id,
-        Entrega.status == 'entregue',
-        Entrega.data_entrega >= data_inicio,
-        Entrega.data_entrega <= agora
+        Entrega.deleted_at.is_(None),
+        data_ref >= data_inicio,
+        data_ref <= agora
     ).all()
     
     total_entregas = len(entregas)
@@ -433,6 +436,24 @@ def dashboard_metricas():
     for ent, vend in entregas:
         total_taxas += float(ent.taxa_entrega or 0)
         total_vendas_entregues += float(vend.total or 0)
+        
+        km = float(ent.km_percorridos or 0)
+        if km == 0:
+            km = float(ent.distancia_km or 0) * 2
+        distancia_total += km
+        
+        # Se a entrega ainda não tem custo de combustível calculado (ex: pendente no PDV sem veículo)
+        custo_fuel_real = float(ent.custo_combustivel or 0)
+        if custo_fuel_real == 0 and km > 0:
+            # Estimativa: Moto padrão (35 km/l) com Gasolina a R$ 5.80
+            custo_fuel_real = (km / 35.0) * 5.80
+            
+        custo_combustivel += custo_fuel_real
+        
+        # Estimativa de desgaste/manutenção por KM rodado (R$ 0,15/km)
+        # O dashboard soma isso à apuração dos turnos fechados
+        custo_manutencao += (km * 0.15)
+        
         if vend.tipo_venda == 'delivery':
             entregas_online += 1
         else:
