@@ -229,12 +229,34 @@ def criar_justificativa():
                 }), 400
 
             nome_seguro = secure_filename(documento.filename) or f"documento.{extensao}"
-            upload_dir = os.path.join(current_app.config.get("UPLOAD_FOLDER", "uploads"), "justificativas")
-            os.makedirs(upload_dir, exist_ok=True)
             filename = f"just_{funcionario_id}_{data_str}_{uuid.uuid4().hex[:8]}_{nome_seguro}"
-            filepath = os.path.join(upload_dir, filename)
-            documento.save(filepath)
-            documento_url = f"/uploads/justificativas/{filename}"
+
+            if os.getenv("CLOUDINARY_URL"):
+                try:
+                    import cloudinary.uploader
+                    import base64
+                    doc_bytes = documento.read()
+                    doc_b64 = f"data:{documento.content_type};base64,{base64.b64encode(doc_bytes).decode('utf-8')}"
+                    
+                    result = cloudinary.uploader.upload(
+                        doc_b64,
+                        folder="mercadinhosys/justificativas",
+                        public_id=filename.rsplit(".", 1)[0],
+                        resource_type="auto"
+                    )
+                    documento_url = result.get("secure_url")
+                except Exception as e:
+                    current_app.logger.error(f"Erro Cloudinary (justificativa): {e}")
+                    documento_url = None
+            
+            if not documento_url:
+                # Fallback local
+                documento.seek(0)
+                upload_dir = os.path.join(current_app.config.get("UPLOAD_FOLDER", "uploads"), "justificativas")
+                os.makedirs(upload_dir, exist_ok=True)
+                filepath = os.path.join(upload_dir, filename)
+                documento.save(filepath)
+                documento_url = f"/uploads/justificativas/{filename}"
 
         justificativa = JustificativaPonto(
             estabelecimento_id=estabelecimento_id,

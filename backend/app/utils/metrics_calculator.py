@@ -180,6 +180,23 @@ class MetricsCalculator:
         return net_profit.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     @staticmethod
+    def calculate_inventory_value_at_date(establishment_id: int, reference_date: datetime) -> Decimal:
+        """Calculate total inventory value at a specific date."""
+        from app.models import db, Produto
+        if reference_date.tzinfo is None:
+            reference_date = reference_date.replace(tzinfo=timezone.utc)
+        
+        value = db.session.query(
+            func.sum(Produto.preco_custo * Produto.quantidade)
+        ).filter(
+            Produto.estabelecimento_id == establishment_id,
+            Produto.created_at <= reference_date
+        ).scalar()
+        
+        result = Decimal(str(value)) if value is not None else Decimal('0.00')
+        return result.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @staticmethod
     def calculate_inventory_turnover(
         establishment_id: int,
         start_date: datetime,

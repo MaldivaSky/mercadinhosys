@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 # Start script for Render.com
 #
-# IMPORTANTE: NÃO usar `set -o errexit`. Um erro transitório em QUALQUER passo
-# de pré-boot (migração, create_all, checagem de seed) não pode derrubar o
-# deploy inteiro — era isso que gerava "Exited with status 1 while running your
-# code". O gunicorn precisa SEMPRE subir; a aplicação trata erros de banco por
-# requisição.
+# IMPORTANTE: NÃO usar `set -o errexit`. Um erro transitório de
+# seed não deve derrubar o deploy, mas a migração de banco (db upgrade)
+# agora é fatal para evitar schema drift no banco de produção.
 
 echo "🚀 Starting MercadinhoSys Backend..."
 export FLASK_APP=run:app
 
-# 1) Migrações Alembic (best-effort, nunca fatal)
+# 1) Migrações Alembic (fatal no deploy, para evitar schema drift)
 echo "📋 Applying database migrations (flask db upgrade)..."
-python -m flask db upgrade || echo "⚠️ Migration falhou — seguindo (não fatal)."
+python -m flask db upgrade
 
 # 2) NÃO chamamos db.create_all() aqui de propósito: create_app() (chamada por
 # qualquer import de run:app, inclusive o próprio `flask db upgrade` acima) já

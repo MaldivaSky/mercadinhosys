@@ -41,6 +41,9 @@ def client(app):
 def session(app):
     with app.app_context():
         # Complete clean state
+        from app import cache
+        cache.clear()
+        
         db.drop_all()
         db.create_all()
         
@@ -54,6 +57,7 @@ def session(app):
             telefone="92999999999",
             data_abertura=date(2024, 1, 1),
             plano="PREMIUM",
+            vencimento_plano=date(2030, 12, 31),
             # EnderecoMixin fields
             cep="69000-000",
             logradouro="Rua Industrial",

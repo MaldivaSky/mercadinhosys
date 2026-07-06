@@ -121,9 +121,9 @@ def register_commands(app):
             linhas = (
                 db.session.query(
                     VendaItem.produto_id.label("pid"),
-                    func.sum(VendaItem.quantidade).label("q"),
-                    func.sum(VendaItem.total_item).label("t"),
-                    func.max(Venda.data_venda).label("u"),
+                    func.sum(VendaItem.quantidade).label("qtd_val"),
+                    func.sum(VendaItem.total_item).label("total_val"),
+                    func.max(Venda.data_venda).label("max_data"),
                 )
                 .join(Venda, Venda.id == VendaItem.venda_id)
                 .filter(func.lower(func.coalesce(Venda.status, "")) != "cancelada")
@@ -136,11 +136,11 @@ def register_commands(app):
                 p = Produto.query.get(row.pid)
                 if not p:
                     continue
-                p.quantidade_vendida = row.q or 0
-                p.total_vendido = row.t or 0
-                p.ultima_venda = row.u
+                p.quantidade_vendida = row.qtd_val or 0
+                p.total_vendido = row.total_val or 0
+                p.ultima_venda = row.max_data
                 atualizados += 1
-                click.echo(f"  - {p.nome}: qtd={float(row.q or 0)}, total={float(row.t or 0)}")
+                click.echo(f"  - {p.nome}: qtd={float(row.qtd_val or 0)}, total={float(row.total_val or 0)}")
 
             if apply:
                 db.session.commit()

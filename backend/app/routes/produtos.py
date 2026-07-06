@@ -228,17 +228,6 @@ def verificar_validade_proxima(produto):
 # ROTAS DE PRODUTOS
 # ============================================
 
-
-@produtos_bp.route("/debug-counts", methods=["GET"])
-def debug_counts():
-    claims = get_jwt()
-    return jsonify({
-        "est_id_claim": claims.get("estabelecimento_id"),
-        "total_db": Produto.query.count(),
-        "est_counts": db.session.query(Produto.estabelecimento_id, func.count(Produto.id)).group_by(Produto.estabelecimento_id).all(),
-        "claims_all": {k: v for k, v in claims.items()}
-    })
-
 @produtos_bp.route("/ping", methods=["GET"])
 def ping_produtos():
     return jsonify({"status": "ok", "message": "Blueprint Produtos Ativo"})
