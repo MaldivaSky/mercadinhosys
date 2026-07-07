@@ -2188,6 +2188,46 @@ class Veiculo(db.Model, MultiTenantMixin):
                 "seguro_vencido": dias_seguro is not None and dias_seguro < 0,
                 "ativo": self.ativo, "disponivel": self.disponivel, "total_entregas": self.total_entregas if hasattr(self, 'total_entregas') else 0}
 
+class AbastecimentoVeiculo(db.Model, MultiTenantMixin):
+    __tablename__ = "abastecimentos_veiculos"
+    id = db.Column(db.Integer, primary_key=True)
+    estabelecimento_id = TenantID()
+    veiculo_id = db.Column(db.Integer, db.ForeignKey("veiculos.id"), index=True, nullable=False)
+    motorista_id = db.Column(db.Integer, db.ForeignKey("motoristas.id"), index=True, nullable=False)
+    
+    data_abastecimento = db.Column(db.DateTime, default=utcnow)
+    km_atual = db.Column(db.Numeric(10, 2), nullable=False) # KM at the time of refuel
+    litros = db.Column(db.Numeric(10, 2), nullable=False)
+    valor_total = db.Column(db.Numeric(10, 2), nullable=False)
+    preco_litro = db.Column(db.Numeric(10, 3), nullable=False)
+    tipo_combustivel = db.Column(db.String(20), default="gasolina")
+    
+    # Inteligência de consumo
+    km_rodados_desde_ultimo = db.Column(db.Numeric(10, 2), nullable=True) # Diferença do KM atual para o último
+    consumo_real_kml = db.Column(db.Numeric(10, 2), nullable=True) # km_rodados_desde_ultimo / litros
+    
+    veiculo = db.relationship("Veiculo", backref=db.backref("abastecimentos", lazy=True, order_by="desc(AbastecimentoVeiculo.data_abastecimento)"))
+    motorista = db.relationship("Motorista", backref=db.backref("abastecimentos", lazy=True))
+
+    __table_args__ = (
+        db.Index("ix_abast_veic_estab", "estabelecimento_id", "veiculo_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "veiculo_id": self.veiculo_id,
+            "motorista_id": self.motorista_id,
+            "data_abastecimento": self.data_abastecimento.isoformat() if self.data_abastecimento else None,
+            "km_atual": float(self.km_atual) if self.km_atual else 0.0,
+            "litros": float(self.litros) if self.litros else 0.0,
+            "valor_total": float(self.valor_total) if self.valor_total else 0.0,
+            "preco_litro": float(self.preco_litro) if self.preco_litro else 0.0,
+            "tipo_combustivel": self.tipo_combustivel,
+            "km_rodados_desde_ultimo": float(self.km_rodados_desde_ultimo) if self.km_rodados_desde_ultimo else None,
+            "consumo_real_kml": float(self.consumo_real_kml) if self.consumo_real_kml else None,
+        }
+
 
 # Itens padrão do checklist de saída (o front pode enviar um subconjunto/extra,
 # mas estes são sugeridos na UI — pneus, freios, seta, farol etc.)
