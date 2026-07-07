@@ -255,11 +255,16 @@ const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoInici
     const [combustivel, setCombustivel] = useState('gasolina');
     const [loading, setLoading] = useState(false);
     const [checklist, setChecklist] = useState([
-        { item: 'Pneus e Freios', ok: true },
-        { item: 'Farol e Setas', ok: true },
-        { item: 'Óleo e Água (se aplicável)', ok: true },
-        { item: 'Documentação (CNH e CRLV)', ok: true }
+        { item: 'Luzes e Farol', ok: false },
+        { item: 'Setas', ok: false },
+        { item: 'Pneus', ok: false },
+        { item: 'Freios', ok: false },
+        { item: 'EPIs (Capacete, Colete)', ok: false },
+        { item: 'Antena Corta Pipa', ok: false }
     ]);
+
+    const checklistProgress = checklist.length > 0 ? (checklist.filter(c => c.ok).length / checklist.length) * 100 : 100;
+    const isChecklistComplete = checklistProgress === 100;
 
     useEffect(() => {
         deliveryService.getVeiculos().then(res => {
@@ -339,9 +344,20 @@ const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoInici
                     </div>
 
                     <div className="bg-amber-50 dark:bg-amber-900/10 rounded-2xl p-4 border border-amber-100 dark:border-amber-800/30">
-                        <h3 className="font-bold text-amber-800 dark:text-amber-400 mb-3 text-sm flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4" /> Checklist do Veículo
-                        </h3>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-bold text-amber-800 dark:text-amber-400 text-sm flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4" /> Checklist Diário do Veículo
+                            </h3>
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-500">
+                                {Math.round(checklistProgress)}%
+                            </span>
+                        </div>
+                        <div className="w-full bg-amber-200/50 dark:bg-amber-800/30 rounded-full h-2 mb-4 overflow-hidden">
+                            <div 
+                                className="bg-amber-500 h-2 rounded-full transition-all duration-500 ease-out" 
+                                style={{ width: `${checklistProgress}%` }}
+                            ></div>
+                        </div>
                         <div className="space-y-3">
                             {checklist.map((item, idx) => (
                                 <label key={idx} className="flex items-center gap-3 cursor-pointer group">
@@ -349,13 +365,13 @@ const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoInici
                                         type="checkbox"
                                         checked={item.ok}
                                         onChange={e => {
-                                            const newC = [...checklist];
-                                            newC[idx].ok = e.target.checked;
-                                            setChecklist(newC);
+                                            setChecklist(checklist.map((c, i) => i === idx ? { ...c, ok: e.target.checked } : c));
                                         }}
                                         className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 bg-white border-gray-300 dark:bg-gray-800 dark:border-gray-600"
                                     />
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{item.item}</span>
+                                    <span className={`text-sm font-medium transition-colors ${item.ok ? 'text-gray-500 line-through dark:text-gray-500' : 'text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400'}`}>
+                                        {item.item}
+                                    </span>
                                 </label>
                             ))}
                         </div>
@@ -363,10 +379,10 @@ const AberturaTurno: React.FC<{ onTurnoIniciado: () => void }> = ({ onTurnoInici
 
                     <button
                         type="submit"
-                        disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-lg py-4 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:animate-pulse"
+                        disabled={loading || !isChecklistComplete}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-lg py-4 rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {loading ? 'Iniciando...' : 'Bater Ponto & Iniciar Turno'}
+                        {loading ? 'Iniciando...' : 'Iniciar Turno de Entregas'}
                     </button>
                 </form>
             </motion.div>
