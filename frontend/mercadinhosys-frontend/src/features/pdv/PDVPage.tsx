@@ -491,7 +491,7 @@ const PDVPage: React.FC = () => {
                                                         onClienteSelecionado={async (c: any) => { 
                                                             setCliente(c); 
                                                             if (paraEntregar && c.cep) {
-                                                                const cepDest = c.cep || '00000-000';
+                                                                const cepDest = c.cep;
                                                                 setDadosEntrega({
                                                                     endereco: {
                                                                         cep: cepDest,
@@ -504,7 +504,7 @@ const PDVPage: React.FC = () => {
                                                                 });
                                                                 
                                                                 // Calcula automático a distância/taxa pelo CEP
-                                                                if (cepDest && cepDest !== '00000-000') {
+                                                                if (cepDest) {
                                                                     try {
                                                                         const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
                                                                             cep_destino: cepDest,
@@ -515,13 +515,15 @@ const PDVPage: React.FC = () => {
                                                                                 distancia_km: res.data.distancia_km,
                                                                                 taxa_entrega: res.data.taxa_sugerida 
                                                                             });
-                                                                            toast.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`);
+                                                                            import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                        } else {
+                                                                            import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa pelo CEP."));
                                                                         }
                                                                     } catch (err: any) {
                                                                         console.warn("Não foi possível estimar a taxa: ", err.response?.data?.error);
                                                                     }
                                                                 } else {
-                                                                    toast.success("Cliente sem CEP. Insira a taxa de entrega manualmente.");
+                                                                    import('react-hot-toast').then(m => m.default.success("Cliente sem CEP. Insira a taxa de entrega manualmente."));
                                                                 }
                                                             } else if (paraEntregar && (!c || !c.cep)) {
                                                                 toast.success("Cliente sem CEP. Insira a taxa de entrega manualmente.");
@@ -561,7 +563,7 @@ const PDVPage: React.FC = () => {
                                                     }
                                                     setParaEntregar(e.target.checked);
                                                     if (e.target.checked && cliente?.cep) {
-                                                        const cepDest = cliente.cep || '00000-000';
+                                                        const cepDest = cliente.cep;
                                                         setDadosEntrega({
                                                             endereco: {
                                                                 cep: cepDest,
@@ -574,7 +576,7 @@ const PDVPage: React.FC = () => {
                                                         });
                                                         
                                                         // Calcula automático
-                                                        if (cepDest && cepDest !== '00000-000') {
+                                                        if (cepDest) {
                                                             try {
                                                                 const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
                                                                     cep_destino: cepDest,
@@ -586,6 +588,8 @@ const PDVPage: React.FC = () => {
                                                                         taxa_entrega: res.data.taxa_sugerida 
                                                                     });
                                                                     import('react-hot-toast').then(m => m.default.success(`Taxa calculada: R$ ${res.data.taxa_sugerida.toFixed(2)}`));
+                                                                } else {
+                                                                    import('react-hot-toast').then(m => m.default.error(res.data?.error || "Erro ao calcular taxa pelo CEP."));
                                                                 }
                                                             } catch (err: any) {
                                                                 console.warn("Não foi possível estimar a taxa: ", err.response?.data?.error);
@@ -624,13 +628,13 @@ const PDVPage: React.FC = () => {
                                                                         });
                                                                     }}
                                                                     placeholder="00000-000"
-                                                                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                                                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={async () => {
                                                                         const cep = dadosEntrega?.endereco?.cep;
-                                                                        if (cep && cep.length >= 8 && cep !== '00000-000') {
+                                                                        if (cep && cep.length >= 8) {
                                                                             try {
                                                                                 const res = await apiClient.post('/logistica/estimar-taxa-cep', {
                                                                                     cep_destino: cep,
@@ -667,7 +671,7 @@ const PDVPage: React.FC = () => {
                                                                     const veiculo = e.target.value as 'moto' | 'carro';
                                                                     setDadosEntrega({ veiculo });
                                                                     const cep = dadosEntrega?.endereco?.cep;
-                                                                    if (cep && cep !== '00000-000') {
+                                                                    if (cep) {
                                                                         try {
                                                                             const res = await apiClient.post('/logistica/estimar-taxa-cep', { 
                                                                                 cep_destino: cep,
@@ -684,23 +688,23 @@ const PDVPage: React.FC = () => {
                                                                         }
                                                                     }
                                                                 }}
-                                                                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                                                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                                             >
-                                                                <option value="moto">🏍️ Moto</option>
+                                                                <option value="moto">🏍 Moto</option>
                                                                 <option value="carro">🚗 Carro</option>
                                                             </select>
                                                         </div>
                                                         <div>
-                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Distância Estimada (KM)</label>
+                                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Distância (KM)</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="number"
                                                                     disabled
                                                                     value={dadosEntrega?.distancia_km !== undefined && dadosEntrega?.distancia_km !== 0 ? dadosEntrega.distancia_km : ''}
                                                                     placeholder="Auto"
-                                                                    className="w-full p-3 pr-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-gray-100 dark:bg-gray-800/50 text-slate-700 dark:text-slate-300 text-sm font-bold opacity-80 cursor-not-allowed"
+                                                                    className="w-full p-2.5 pr-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-gray-100 dark:bg-gray-800/50 text-slate-700 dark:text-slate-300 text-sm font-bold opacity-80 cursor-not-allowed"
                                                                 />
-                                                                <span className="absolute right-2 top-3.5 px-2 py-0.5 rounded text-[8px] font-black bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 uppercase tracking-wider">Auto</span>
+                                                                <span className="absolute right-2 top-2.5 px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 uppercase tracking-wider">Auto</span>
                                                             </div>
                                                         </div>
                                                         <div>
@@ -713,7 +717,7 @@ const PDVPage: React.FC = () => {
                                                                     const val = e.target.value;
                                                                     setDadosEntrega({ taxa_entrega: (val === '' ? '' : parseFloat(val)) as any });
                                                                 }}
-                                                                className="w-full p-3 rounded-xl border border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-sm font-black focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all"
+                                                                className="w-full p-2.5 rounded-xl border border-orange-300 dark:border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-sm font-black focus:outline-none focus:ring-2 focus:ring-orange-400 transition-all"
                                                             />
                                                         </div>
                                                     </div>
